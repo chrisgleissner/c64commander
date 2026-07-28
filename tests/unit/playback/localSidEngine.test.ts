@@ -378,6 +378,43 @@ describe("LocalSidEngine — overlapping seeks", () => {
  * first's resolver and strand that `play()` at its very first await, as well as posting a second
  * WASM init.
  */
+/**
+ * A worker that stops answering used to disable playback for the rest of the session, silently.
+ * `playStart` holds a single-flight guard and `isPlaylistLoading` across `playItem`, releasing both
+ * in a `finally`; an await that never settles means that `finally` never runs, so the guard stays
+ * acquired (every later play returns at it) and the transport goes disabled. Reproduced on a Pixel 4
+ * on rc4 as shipped: five back-to-back hold-to-seek gestures, then Stop/Play, and Play/Pause were
+ * both `disabled` until relaunch. Bounding the waits turns that into an ordinary reported failure.
+ */
+describe("LocalSidEngine — an unanswered worker", () => {
+  it("rejects the load instead of waiting forever", async () => {
+    vi.useFakeTimers();
+    try {
+      const { engine } = makeEngine();
+      const load = engine.load();
+      const assertion = expect(load).rejects.toThrow(/did not load/);
+      await vi.advanceTimersByTimeAsync(15_001);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects the open instead of waiting forever", async () => {
+    vi.useFakeTimers();
+    try {
+      const { engine, worker } = makeEngine();
+      const play = engine.play(new ArrayBuffer(120), 0, {});
+      const assertion = expect(play).rejects.toThrow(/did not open/);
+      worker.emit({ type: "ready", moduleLoadMs: 1 });
+      await vi.advanceTimersByTimeAsync(15_001);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("LocalSidEngine — overlapping loads", () => {
   it("shares one module load between overlapping callers", async () => {
     const { engine, worker } = makeEngine();

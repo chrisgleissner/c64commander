@@ -67,6 +67,28 @@ export interface LocalSidAudioSink {
 export type LocalSidAudioSinkFactory = (sampleRate: number) => LocalSidAudioSink;
 
 /**
+ * How long to wait for the worker to answer a module load or a tune open.
+ *
+ * Neither wait used to be bounded, and an unanswered one does far more than lose a track. The
+ * caller chain is `playStart` → `playItem` → here, and `playStart` holds a single-flight guard and
+ * `isPlaylistLoading` across the whole thing, releasing both in a `finally`. An await that never
+ * settles means that `finally` never runs: the guard stays acquired so every later play returns at
+ * it, and `isPlaylistLoading` stays true so `canTransport` is false — Play and Pause both go
+ * disabled and selecting another track does nothing. One unanswered message disables playback for
+ * the rest of the session, silently, with no error raised anywhere.
+ *
+ * Reproduced on a Pixel 4 against a c64u, on **rc4 as shipped** as well as with the scrub fixes:
+ * five back-to-back hold-to-seek gestures on one tune, then Stop/Play, and the transport is dead
+ * until the app is relaunched.
+ *
+ * Generous next to what these actually cost — an open measures 23-48 ms on that device — so this
+ * only ever fires when the worker has genuinely stopped answering. Rejecting then routes into the
+ * caller's existing PLAYBACK_START error path, which reports the failure and leaves the transport
+ * usable. Matches the 15 s the SID Radio worker client already applies to its own load.
+ */
+const WORKER_REPLY_TIMEOUT_MS = 15000;
+
+/**
  * Ownership of this device's speaker now lives in `@/lib/audio/phoneAudioOwnership`,
  * shared with the A/V mirror.
  *
@@ -461,9 +483,18 @@ export class LocalSidEngine {
         reject(error as Error);
         return;
       }
+      const timer = setTimeout(() => {
+        this.loadPending = null;
+        this.loadInFlight = null;
+        reject(new Error(`Local SID engine did not load within ${WORKER_REPLY_TIMEOUT_MS}ms`));
+      }, WORKER_REPLY_TIMEOUT_MS);
       this.loadPending = {
-        resolve,
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
         reject: (error: Error) => {
+          clearTimeout(timer);
           this.loadInFlight = null;
           reject(error);
         },
@@ -512,7 +543,17 @@ export class LocalSidEngine {
     }
 
     return new Promise<LocalSidPlayResult>((resolve, reject) => {
-      this.openPending = { resolve, reject };
+      const timer = setTimeout(() => {
+        this.openPending = null;
+        reject(new Error(`Local SID engine did not open the tune within ${WORKER_REPLY_TIMEOUT_MS}ms`));
+      }, WORKER_REPLY_TIMEOUT_MS);
+      const settle = <A extends unknown[], R>(fn: (...args: A) => R) => {
+        return (...args: A): R => {
+          clearTimeout(timer);
+          return fn(...args);
+        };
+      };
+      this.openPending = { resolve: settle(resolve), reject: settle(reject) };
       // Transfer the SID bytes to the worker (single owner).
       worker.postMessage(
         { type: "open", id, sidBytes, songIndex, sampleRate: this.requestedSampleRate, roms: romPayload },
