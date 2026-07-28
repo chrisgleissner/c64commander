@@ -27,6 +27,7 @@ interface Captured {
     renderFrame?: (frame: Uint8Array, height: number, arrivalMs?: number) => void;
     renderAudio?: (samples: Int16Array) => void;
     renderAudioForAnalysis?: (samples: Int16Array, arrivalMs: number) => void;
+    schedulePresent?: (present: () => void) => void;
   };
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
@@ -80,6 +81,30 @@ describe("AvMirrorSession", () => {
   beforeEach(() => {
     audioInstances.length = 0;
     videoInstances.length = 0;
+  });
+
+  /**
+   * `VideoMirrorController`'s drop-late queue only drops anything if presentation is DEFERRED: a
+   * synchronous scheduler consumes `pending` before the next frame can supersede it, so the queue
+   * degenerates to "present every frame inline" and `backlogReplacements` is structurally 0.
+   * The controller's own tests inject a deferring pump, so they passed while production wired no
+   * scheduler at all — the coalescing was dead in the app and only in the app. On a Pixel 4 that
+   * showed up as a 2.5 s JS stall being followed by a 174 fps burst from a 50 Hz source, as every
+   * bridge-buffered frame was decoded and painted in turn.
+   */
+  it("hands the video mirror a deferring present scheduler, so the drop-late queue can coalesce", async () => {
+    const { video } = makeSession();
+    expect(typeof video.deps.schedulePresent).toBe("function");
+
+    let presented = false;
+    video.deps.schedulePresent!(() => {
+      presented = true;
+    });
+    expect(presented).toBe(false); // must not present inline — that is what defeats the queue
+
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(presented).toBe(true); // but the frame must still reach the canvas
   });
 
   it("starts with an all-off snapshot and replays it to a new subscriber", () => {

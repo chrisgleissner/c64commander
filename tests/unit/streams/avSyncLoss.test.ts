@@ -174,6 +174,9 @@ const runScenario = async (seed: number, lossRate: number) => {
     createAudioReceiver: (_opts: StreamReceiverOptions) => audioRx,
     createVideoReceiver: (_opts: StreamReceiverOptions) => videoRx,
     createPlayer: fakePlayer,
+    // Present inline: this measures the A/V offset the analyzer derives from the simulated wire,
+    // not the scheduler. Production defers to rAF (drop-late coalescing of a post-stall burst).
+    schedulePresent: (present) => present(),
   });
 
   const analyzer = new AvSyncAnalyzer();
