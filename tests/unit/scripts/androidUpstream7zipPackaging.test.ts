@@ -8,11 +8,26 @@ const buildGradle = readFileSync(buildGradlePath, "utf8");
 
 describe("android upstream 7zip packaging", () => {
   it("keeps release packaging on arm device ABIs only", () => {
-    expect(buildGradle).toContain('def upstream7zipReleaseAbis = ["armeabi-v7a", "arm64-v8a"]');
+    // The default is still arm-only — a release must never carry the x86 slices that debug builds
+    // use for emulators. A variant may narrow this further (see below) but never widen it.
+    expect(buildGradle).toContain('def upstream7zipDefaultReleaseAbis = ["armeabi-v7a", "arm64-v8a"]');
     expect(buildGradle).toMatch(
       /release\s*\{\s*jniLibs\.srcDirs \+= \[upstream7zipGeneratedJniLibsDirForVariant\("release"\)\]/s,
     );
-    expect(buildGradle).toMatch(/release\s*\{[\s\S]*?ndk\s*\{\s*abiFilters "armeabi-v7a", "arm64-v8a"\s*\}/s);
+    // Packaged ABIs come from the resolved release list rather than a second hardcoded copy, so the
+    // filter and the libraries that get built can never disagree.
+    expect(buildGradle).toMatch(
+      /release\s*\{[\s\S]*?ndk\s*\{\s*abiFilters\(\*upstream7zipReleaseAbis\.toArray\(new String\[0\]\)\)\s*\}/s,
+    );
+  });
+
+  it("lets a variant narrow the release ABIs, and falls back when it says nothing", () => {
+    // An edition that targets a single 64-bit handset should not ship a 32-bit slice of the 7-Zip
+    // library (~2.3 MB) that none of its devices can load.
+    expect(buildGradle).toMatch(
+      /def upstream7zipReleaseAbis = \(declaredReleaseAbis instanceof List && !declaredReleaseAbis\.isEmpty\(\)\)\s*\?\s*declaredReleaseAbis\.collect \{ it\.toString\(\) \}\s*:\s*upstream7zipDefaultReleaseAbis/s,
+    );
+    expect(buildGradle).toContain("def declaredReleaseAbis = variantMetadata.platform.android.releaseAbis");
   });
 
   it("retains all development ABIs for debug variants", () => {

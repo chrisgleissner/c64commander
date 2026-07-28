@@ -347,7 +347,9 @@ test.describe("Disk management", () => {
     const diskList = getDiskList(page);
 
     await expect(diskList.getByText("Disk 1.d64", { exact: true })).toBeVisible();
-    await expect(diskList.getByTestId("disk-row-header").filter({ hasText: "/Usb0/Games/Sample Arcade/" })).toBeVisible();
+    await expect(
+      diskList.getByTestId("disk-row-header").filter({ hasText: "/Usb0/Games/Sample Arcade/" }),
+    ).toBeVisible();
     await expect(getDiskRow(page, "Disk 1.d64")).not.toContainText("/Usb0/Games/Sample Arcade/");
     await expect(diskList.getByLabel("C64U disk").first()).toBeVisible();
     await snap(page, testInfo, "disk-list");
