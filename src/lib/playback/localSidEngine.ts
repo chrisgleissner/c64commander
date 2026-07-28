@@ -89,6 +89,39 @@ export type LocalSidAudioSinkFactory = (sampleRate: number) => LocalSidAudioSink
 const WORKER_REPLY_TIMEOUT_MS = 15000;
 
 /**
+ * Liveness watchdog for on-device playback.
+ *
+ * The render loop is self-sustaining and has no other end: `pump()` asks the worker for a chunk,
+ * the chunk is scheduled, and the chunk finishing pumps the next one. Nothing supervises it. If the
+ * worker stops answering `render`, `inFlightRenders` stays pinned at its cap, no chunk ever
+ * arrives, the scheduler drains and the tune goes silent — with `endReceived` still false, so
+ * `maybeFireEnded` never fires either. The engine sits there, `isActive()` true, producing nothing,
+ * while the Play page's clock (a wall clock, independent of the engine) counts merrily on. The user
+ * sees a playing track and hears silence, until the songlength runs out and the playlist advances.
+ *
+ * Measured on a Pixel 4 against a c64u: after a burst of hold-to-seek gestures the scrubbed tune
+ * went silent for the rest of its duration — `dumpsys audio` showing no started player at all —
+ * and only the next track brought the sound back.
+ *
+ * So: while a tune should be producing audio, check that it is, and put it right if it is not.
+ */
+const WATCHDOG_TICK_MS = 1000;
+
+/**
+ * How long the engine may go without scheduling any audio, while it should be playing and its
+ * buffer is empty, before that counts as a stall. Comfortably longer than a chunk (the engine
+ * renders in `chunkSeconds` slices and keeps `targetBufferSeconds` queued ahead) so ordinary
+ * scheduling jitter, a slow render or a device under load can never trip it.
+ */
+const AUDIO_STALL_TIMEOUT_MS = 5000;
+
+/**
+ * Buffered audio below this counts as starved. Not zero: the scheduler reports what is queued
+ * *ahead of the audio clock*, which dips fractionally between chunks even when perfectly healthy.
+ */
+const STARVED_BUFFER_SECONDS = 0.05;
+
+/**
  * Ownership of this device's speaker now lives in `@/lib/audio/phoneAudioOwnership`,
  * shared with the A/V mirror.
  *
@@ -307,6 +340,17 @@ export class LocalSidEngine {
 
   private audio: LocalSidAudioSink | null = null;
   private scheduler: LocalSidChunkScheduler | null = null;
+  /** Liveness watchdog state (see WATCHDOG_TICK_MS). */
+  private watchdogTimer: ReturnType<typeof setInterval> | null = null;
+  /** When audio was last actually scheduled — the one signal that the pipeline is alive. */
+  private lastAudioAtMs = 0;
+  /** Paused explicitly, as opposed to starved: a suspended clock must never read as a stall. */
+  private paused = false;
+  /** One recovery per tune; a second stall is left to the playlist's own advance. */
+  private stallRecoveryUsed = false;
+  private stallRecoveryInFlight = false;
+  /** Kept so a stalled tune can be re-opened where it stopped; the played bytes are transferred away. */
+  private currentTune: { bytes: ArrayBuffer; songIndex: number } | null = null;
   /** Bumped per seek so chunks rendered for a superseded position are dropped. */
   private seekEpoch = 0;
   private seekPending: { id: number; resolve: () => void } | null = null;
@@ -548,6 +592,10 @@ export class LocalSidEngine {
     // Read per-play rather than cached, so revoking the ROMs in Settings takes
     // effect on the very next track instead of after a restart.
     const roms = loadStoredRoms();
+    // Copied before the transfer detaches it: the watchdog re-opens this tune if it ever stalls,
+    // and by then the buffer the caller handed us belongs to the worker.
+    this.currentTune = { bytes: sidBytes.slice(0), songIndex };
+    this.stallRecoveryUsed = false;
     const transfer: Transferable[] = [sidBytes];
     let romPayload: { kernal: ArrayBuffer; basic: ArrayBuffer } | undefined;
     if (roms.kernal && roms.basic) {
@@ -709,6 +757,9 @@ export class LocalSidEngine {
     this.scheduler = new LocalSidChunkScheduler(this.audio.sink, {
       onSourceEnded: () => this.onSourceEnded(),
     });
+    // Supervise from the moment there is something to supervise. The clock starts here rather than
+    // at the first chunk, so a tune that never produces one at all is caught too.
+    this.startWatchdog();
     this.pump();
 
     pending?.resolve({
@@ -784,6 +835,88 @@ export class LocalSidEngine {
     this.pump();
   }
 
+  /** Begin supervising liveness. Idempotent; a running watchdog is left alone. */
+  private startWatchdog(): void {
+    this.lastAudioAtMs = Date.now();
+    if (this.watchdogTimer !== null) return;
+    this.watchdogTimer = setInterval(() => this.checkLiveness(), WATCHDOG_TICK_MS);
+  }
+
+  private stopWatchdog(): void {
+    if (this.watchdogTimer === null) return;
+    clearInterval(this.watchdogTimer);
+    this.watchdogTimer = null;
+  }
+
+  /**
+   * Is the engine failing to produce audio it is supposed to be producing?
+   *
+   * Every condition here is a reason it is legitimately quiet, and is therefore NOT a stall:
+   * nothing loaded, the tune ended, deliberately paused, or a recovery already under way. What is
+   * left — supposed to be playing, buffer empty, and nothing scheduled for
+   * {@link AUDIO_STALL_TIMEOUT_MS} — cannot right itself, because the only thing that would pump
+   * the next chunk is the chunk that never came.
+   */
+  private checkLiveness(): void {
+    if (!this.scheduler || this.endReceived || this.paused || this.stallRecoveryInFlight) return;
+    if (this.scheduler.bufferedSeconds() > STARVED_BUFFER_SECONDS) return;
+    if (Date.now() - this.lastAudioAtMs < AUDIO_STALL_TIMEOUT_MS) return;
+    void this.recoverFromStall();
+  }
+
+  /**
+   * Put a stalled tune back on the air: throw the worker away and re-open the same tune where it
+   * fell silent.
+   *
+   * The bytes have to be kept for this — `play()` transfers ownership of the caller's buffer to the
+   * worker, so by the time it stalls there is nothing left to re-open with. A SID is a few KB, so
+   * the copy costs nothing worth counting.
+   *
+   * Once per tune. If a re-opened tune stalls again the fault is not transient, and retrying on a
+   * timer would spend the rest of the track restarting instead of playing; the playlist's own
+   * advance already moves on at the songlength. Recovery is announced either way — silence that
+   * repaired itself is still worth knowing about.
+   */
+  private async recoverFromStall(): Promise<void> {
+    const tune = this.currentTune;
+    const resumeAt = this.scheduler?.positionSeconds() ?? 0;
+    addErrorLog("Local SID playback stalled", {
+      service: "local-sid",
+      positionSeconds: Math.round(resumeAt),
+      recoverable: Boolean(tune) && !this.stallRecoveryUsed,
+    });
+    if (!tune || this.stallRecoveryUsed) {
+      // Nothing to re-open, or this tune has had its turn. Say the tune is over rather than leave
+      // the app showing a track that is playing nothing.
+      this.endReceived = true;
+      this.maybeFireEnded();
+      return;
+    }
+    this.stallRecoveryInFlight = true;
+    this.stallRecoveryUsed = true;
+    this.discardWorker("audio stalled");
+    try {
+      // `play()` resets the per-tune state, including the flag above, so restore it afterwards:
+      // this restart must not hand the same tune a second free recovery.
+      await this.play(tune.bytes.slice(0), tune.songIndex, this.callbacks);
+      this.stallRecoveryUsed = true;
+      if (resumeAt > 0) await this.seekTo(resumeAt);
+      addLog("info", "Local SID playback recovered from a stall", {
+        service: "local-sid",
+        resumedAtSeconds: Math.round(resumeAt),
+      });
+    } catch (error) {
+      addErrorLog("Local SID playback could not recover from a stall", {
+        service: "local-sid",
+        error: error instanceof Error ? error.message : String(error),
+      });
+      this.endReceived = true;
+      this.maybeFireEnded();
+    } finally {
+      this.stallRecoveryInFlight = false;
+    }
+  }
+
   /** Request renders until the buffer is full ahead of the clock. */
   private pump(): void {
     if (!this.scheduler || this.endReceived) return;
@@ -847,6 +980,10 @@ export class LocalSidEngine {
   }
 
   private recordRender(renderMs: number, samples: number): void {
+    // Both paths that put audio on the timeline — a worker chunk and a slice of a pre-rendered
+    // tune — come through here immediately before scheduling it, which makes this the one place
+    // that means "the pipeline is alive".
+    this.lastAudioAtMs = Date.now();
     const seconds = samples / Math.max(1, this.channels) / Math.max(1, this.audio?.sink.sampleRate ?? 1);
     if (seconds <= 0) return;
     const rate = renderMs / seconds;
@@ -913,11 +1050,16 @@ export class LocalSidEngine {
    * exactly there — no re-render, no drift. Safe to call when not playing.
    */
   async pause(): Promise<void> {
+    this.paused = true;
     await this.audio?.suspend?.();
   }
 
   /** Resume after {@link pause}. */
   async resume(): Promise<void> {
+    this.paused = false;
+    // The buffer drained while the clock was suspended; give the pipeline the same grace a fresh
+    // start gets rather than judging it on how long the pause lasted.
+    this.lastAudioAtMs = Date.now();
     await this.audio?.resume?.();
   }
 
@@ -1028,6 +1170,9 @@ export class LocalSidEngine {
       outgoing?.close();
     }
     this.activeId = 0;
+    this.stopWatchdog();
+    this.paused = false;
+    this.currentTune = null;
     // Settle an open that this stop just cancelled, rather than dropping its resolver.
     //
     // `onOpened` only answers a reply whose id is still `activeId`, and the line above has just
@@ -1064,6 +1209,7 @@ export class LocalSidEngine {
     // The pre-render thread holds a second WASM instance and would otherwise
     // keep rendering a tune nobody is listening to.
     this.abandonPrerender();
+    this.stopWatchdog();
     this.worker?.terminate();
     this.worker = null;
     this.moduleReady = false;
