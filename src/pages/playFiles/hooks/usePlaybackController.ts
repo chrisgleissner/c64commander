@@ -1124,6 +1124,16 @@ export function usePlaybackController({
                   error: playbackError.message,
                   item: item.label,
                 }),
+              // The engine has given up on this tune: it stalled and could not be restarted, so it
+              // will produce nothing for the rest of its length. Bring the auto-advance forward
+              // instead of leaving the listener with a track that is playing silence until its
+              // songlength runs out. Deliberately routed through the existing due-time rather than
+              // calling next directly, so every guard already on that path still applies — it will
+              // not fire onto a paused machine, past a user cancel, or onto a different track.
+              onUnrecoverable: () => {
+                addErrorLog("Local SID playback gave up; advancing", { item: item.label });
+                rescheduleAutoAdvance(durationMsRef.current ?? 0);
+              },
             },
             // Render the whole tune in the background so scrubbing inside it is
             // instant. Keyed by item + subsong so two subsongs of one file are

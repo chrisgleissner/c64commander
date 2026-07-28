@@ -250,6 +250,14 @@ export interface LocalSidPlayCallbacks {
   onEnded?: () => void;
   /** A fatal engine error during playback. */
   onError?: (error: Error) => void;
+  /**
+   * The engine has given up on this tune and no further audio is coming.
+   *
+   * Distinct from {@link onEnded}, which means the tune finished normally. This fires when a stall
+   * could not be repaired, so the caller can move on rather than leave a track that will produce
+   * nothing for the rest of its length.
+   */
+  onUnrecoverable?: () => void;
 }
 
 export interface LocalSidPlayResult {
@@ -890,6 +898,7 @@ export class LocalSidEngine {
       // the app showing a track that is playing nothing.
       this.endReceived = true;
       this.maybeFireEnded();
+      this.callbacks.onUnrecoverable?.();
       return;
     }
     this.stallRecoveryInFlight = true;
@@ -912,6 +921,7 @@ export class LocalSidEngine {
       });
       this.endReceived = true;
       this.maybeFireEnded();
+      this.callbacks.onUnrecoverable?.();
     } finally {
       this.stallRecoveryInFlight = false;
     }

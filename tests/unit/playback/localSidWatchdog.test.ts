@@ -250,6 +250,37 @@ describe("LocalSidEngine — liveness watchdog", () => {
     expect(workers.length).toBe(2);
   });
 
+  it("says it has given up, so the playlist can move on", async () => {
+    const { engine, workers, clock } = makeEngine();
+    const onUnrecoverable = vi.fn();
+
+    const play = engine.play(new ArrayBuffer(64), 0, { onUnrecoverable });
+    await vi.advanceTimersByTimeAsync(0);
+    workers[0].emit({ type: "ready", moduleLoadMs: 1 });
+    await vi.advanceTimersByTimeAsync(0);
+    workers[0].emit({
+      type: "opened",
+      id: 1,
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      tuneInfo: null,
+      romRequired: false,
+    });
+    await play;
+    deliverChunk(workers[0]);
+
+    // First stall: the engine tries to repair itself and says nothing yet.
+    clock.currentTime = 30;
+    await vi.advanceTimersByTimeAsync(STALL_MS + 1500);
+    expect(onUnrecoverable).not.toHaveBeenCalled();
+
+    // The replacement never answers either, so the tune is beyond saving. Silence for the rest of
+    // its length is the worst outcome, so the engine says so and the caller advances.
+    clock.currentTime = 90;
+    await vi.advanceTimersByTimeAsync(STALL_MS * 3);
+    expect(onUnrecoverable).toHaveBeenCalled();
+  });
+
   it("stops supervising once playback stops", async () => {
     const { engine, workers, clock } = makeEngine();
     await startTune(engine, workers);
