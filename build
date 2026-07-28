@@ -1758,7 +1758,7 @@ if [[ "$RUN_BUILD" == "true" ]]; then
 
   if [[ "$FAST_LOCAL_APK_INSTALL" == "true" ]]; then
     log "Building web app + syncing Android Capacitor"
-    (cd "$ROOT_DIR" && npm run build && npx cap sync android)
+    (cd "$ROOT_DIR" && npm run build && npx cap sync android && npm run native:prune-assets)
   else
     log "Building web app + syncing Capacitor"
     (cd "$ROOT_DIR" && npm run cap:build)

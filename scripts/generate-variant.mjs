@@ -236,6 +236,26 @@ const readSchemaVersion = (raw) => {
   return schemaVersion;
 };
 
+const SUPPORTED_ANDROID_ABIS = ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"];
+
+/** Validate a variant's declared release ABI list (non-empty, known, no duplicates). */
+const normalizeReleaseAbis = (variantId, value) => {
+  const label = `variants.${variantId}.platform.android.release_abis`;
+  if (!Array.isArray(value) || value.length === 0) {
+    fail(`${label} must be a non-empty sequence`);
+  }
+  const abis = value.map((entry, index) => requireNonEmptyString(entry, `${label}[${index}]`));
+  for (const abi of abis) {
+    if (!SUPPORTED_ANDROID_ABIS.includes(abi)) {
+      fail(`${label} contains an unknown ABI: ${abi}`);
+    }
+  }
+  if (new Set(abis).size !== abis.length) {
+    fail(`${label} must not repeat an ABI`);
+  }
+  return abis;
+};
+
 const normalizeVariant = (repoRoot, variantId, raw) => {
   if (!VARIANT_ID_PATTERN.test(variantId)) {
     fail(`variant id "${variantId}" must match ${VARIANT_ID_PATTERN}`);
@@ -339,6 +359,12 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
         raw.platform.android.custom_url_scheme,
         `variants.${variantId}.platform.android.custom_url_scheme`,
       ),
+      // Release ABIs this variant ships. Omitted means "whatever the build type
+      // defaults to", so a variant only states this when it targets a narrower
+      // set of devices than the general edition does.
+      ...(raw.platform.android.release_abis === undefined
+        ? {}
+        : { releaseAbis: normalizeReleaseAbis(variantId, raw.platform.android.release_abis) }),
     },
   };
   if (hasIos) {

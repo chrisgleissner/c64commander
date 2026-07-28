@@ -17,12 +17,10 @@ def upstream7zipBuildScript = rootProject.file("scripts/build-upstream-7zip.sh")
 def upstream7zipNdkVersion = "27.2.12479018"
 def upstream7zipApiLevel = 24
 def upstream7zipAllAbis = ["armeabi-v7a", "arm64-v8a", "x86", "x86_64"]
-def upstream7zipReleaseAbis = ["armeabi-v7a", "arm64-v8a"]
-def upstream7zipVariantAbis = [
-    debug: upstream7zipAllAbis,
-    minifiedDebug: upstream7zipAllAbis,
-    release: upstream7zipReleaseAbis,
-]
+// Release ABIs come from the active variant when it names them, so an edition that
+// targets a single 64-bit handset does not carry a 32-bit slice of the 7-Zip library
+// (~2.3 MB) that none of its devices can load. Editions that say nothing keep both.
+def upstream7zipDefaultReleaseAbis = ["armeabi-v7a", "arm64-v8a"]
 def upstream7zipGeneratedJniLibsDirForVariant = { String variantName ->
     new File(upstream7zipGeneratedJniLibsBaseDir, variantName)
 }
@@ -158,6 +156,16 @@ def loadVariantMetadata = {
 
 def variantMetadata = loadVariantMetadata()
 def androidApplicationId = variantMetadata.platform.android.applicationId.toString()
+def declaredReleaseAbis = variantMetadata.platform.android.releaseAbis
+def upstream7zipReleaseAbis = (declaredReleaseAbis instanceof List && !declaredReleaseAbis.isEmpty())
+    ? declaredReleaseAbis.collect { it.toString() }
+    : upstream7zipDefaultReleaseAbis
+logger.lifecycle("Release ABIs for variant ${androidApplicationId}: ${upstream7zipReleaseAbis.join(', ')}")
+def upstream7zipVariantAbis = [
+    debug: upstream7zipAllAbis,
+    minifiedDebug: upstream7zipAllAbis,
+    release: upstream7zipReleaseAbis,
+]
 def androidArtifactBasename = variantMetadata.exportedFileBasename.toString()
 
 // Variants that disable background execution (e.g. C64U Remote) use a reduced
@@ -274,7 +282,7 @@ android {
             minifyEnabled true
             shrinkResources true
             ndk {
-                abiFilters "armeabi-v7a", "arm64-v8a"
+                abiFilters(*upstream7zipReleaseAbis.toArray(new String[0]))
             }
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
