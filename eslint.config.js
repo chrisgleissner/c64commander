@@ -18,6 +18,12 @@ export default tseslint.config(
       "coverage/**",
       "playwright-report/**",
       ".worktrees/**",
+      // The libsidplayfp engine synced out of the npm package by
+      // scripts/sync-libsidplayfp-wasm.mjs. Vendored build output, gitignored and never written by
+      // hand, so linting it only reports on someone else's code — and it does: the package's
+      // `songlengths.d.ts` trips no-unused-private-class-members, which failed `npm run lint` (and
+      // so `./build`) on any working copy where the sync had already run.
+      "public/wasm/libsidplayfp/**",
     ],
   },
   {
