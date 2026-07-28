@@ -160,6 +160,14 @@ const LOCAL_ENGINE_STATS_POLL_MS = 1000;
  */
 const SCRUB_SEEK_INTERVAL_MS = 350;
 
+/**
+ * How long the scrub release waits for a catch-up seek that is still in flight
+ * before landing anyway. Generous next to a normal seek (a pre-rendered tune
+ * seeks in well under a second) and short enough that a wedged engine costs the
+ * user a moment rather than the rest of the session.
+ */
+const SCRUB_RELEASE_WAIT_MS = 3000;
+
 /** How long after the last drag movement the bar commits to that position. */
 const DRAG_SETTLE_MS = 220;
 
@@ -2201,8 +2209,12 @@ export function usePlaybackController({
       return;
     }
     // Land exactly where the user let go, even if a catch-up seek was still in
-    // flight for an older target.
-    while (scrubSeekInFlightRef.current) await new Promise((r) => setTimeout(r, 20));
+    // flight for an older target. Bounded: a catch-up seek that never settles
+    // must delay the release, not hold it forever — the release is what takes
+    // the UI out of the scrub and hands playback back.
+    for (let waited = 0; scrubSeekInFlightRef.current && waited < SCRUB_RELEASE_WAIT_MS; waited += 20) {
+      await new Promise((r) => setTimeout(r, 20));
+    }
     // Rebase the clocks to the TARGET *before* awaiting the seek.
     //
     // Two reasons, both learned the hard way. Reading the position back after
@@ -2219,13 +2231,27 @@ export function usePlaybackController({
     playedClockRef.current.hydrate(positionMs, isPausedRef.current ? null : now);
     setPlayedMs(positionMs);
     rescheduleAutoAdvance(positionMs);
-    await controller.seekTo(target / 1000);
-    // Only now stop showing the scrub target. Releasing it before the engine
-    // had landed made the timer snap back to the pre-scrub position for a frame
-    // (0:15 after scrubbing to 1:09) before jumping forward — a flicker that
-    // reads as the seek having failed and then corrected itself.
-    setScrubTargetMs(null);
-    scrubEndingRef.current = false;
+    try {
+      await controller.seekTo(target / 1000);
+    } catch (error) {
+      addLog("debug", "Local SID scrub seek failed on release", { error: (error as Error).message });
+    } finally {
+      // Always leave the scrub, whatever the seek did.
+      //
+      // These two lines used to sit after an unguarded await, so a seek that
+      // rejected — or never settled — left `scrubEndingRef` latched true and the
+      // scrub target on screen. That is not one lost gesture: the latch makes
+      // every later `endScrub` return at its re-entry guard, so hold-to-seek is
+      // dead for the rest of the session and the timer keeps showing a position
+      // playback has left. Releasing the gesture must not depend on the engine.
+      //
+      // Clearing the target last is still deliberate: releasing it before the
+      // engine lands makes the timer snap back to the pre-scrub position for a
+      // frame (0:15 after scrubbing to 1:09) before jumping forward, which reads
+      // as the seek having failed and corrected itself.
+      setScrubTargetMs(null);
+      scrubEndingRef.current = false;
+    }
     addLog("debug", "Local SID scrub ended", { toSeconds: positionMs / 1000 });
   }, [playedClockRef, setPlayedMs, trackStartedAtRef, rescheduleAutoAdvance]);
 

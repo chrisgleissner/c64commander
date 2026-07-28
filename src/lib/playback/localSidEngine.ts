@@ -679,6 +679,19 @@ export class LocalSidEngine {
     }
 
     await new Promise<void>((resolve) => {
+      // Hand the slot over rather than overwrite it. There is exactly one
+      // `seekPending`, and the `seeked` handler only resolves a reply whose id
+      // still matches it — so replacing an outstanding entry drops its resolver
+      // and that caller's await never settles. A scrub makes overlapping seeks
+      // the norm, not a corner case: hold-to-seek posts one every 350 ms and the
+      // release posts another.
+      //
+      // Worse than a stuck await: `seekPending` also gates "chunk" and "end", so
+      // while it is set every rendered chunk is discarded. A leaked entry
+      // therefore silences playback for good — on a Pixel 4 that read as the
+      // clock frozen mid-tune with no audio track left and the transport still
+      // claiming to play. The superseded seek is simply over; resolve it.
+      this.seekPending?.resolve();
       this.seekPending = { id, resolve };
       this.worker?.postMessage({ type: "seek", id, positionSeconds: target });
     });

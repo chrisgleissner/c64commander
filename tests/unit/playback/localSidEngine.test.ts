@@ -333,6 +333,39 @@ describe("LocalSidEngine", () => {
   });
 });
 
+/**
+ * A scrub posts a seek every 350 ms and another on release, so overlapping seeks are the norm.
+ * `seekPending` is a single slot and the `seeked` handler only resolves a reply whose id still
+ * matches it, so replacing an outstanding entry used to drop its resolver: that caller's await
+ * never settled, and because `seekPending` also gates "chunk"/"end", every rendered chunk after it
+ * was discarded. On a Pixel 4 that showed as the clock frozen mid-tune, no audio track left, and
+ * the transport still claiming to play — hold-to-seek wedged playback for good.
+ */
+describe("LocalSidEngine — overlapping seeks", () => {
+  it("settles a superseded seek and keeps scheduling chunks afterwards", async () => {
+    const { engine, worker, getAudioSink } = makeEngine({ chunkSeconds: 0.5, targetBufferSeconds: 1.0 });
+    const play = engine.play(new ArrayBuffer(120), 0, {});
+    await completeOpen(worker);
+    await play;
+
+    const first = engine.seekTo(10);
+    const second = engine.seekTo(20);
+    await flush();
+
+    // The superseded seek must not hang, whatever the worker does with its id.
+    await expect(first).resolves.toBeUndefined();
+
+    const seeks = worker.sentOfType("seek");
+    worker.emit({ type: "seeked", id: seeks[seeks.length - 1].id, positionSeconds: 20 });
+    await expect(second).resolves.toBeUndefined();
+
+    // And the gate is open again: a chunk delivered now reaches the sink.
+    const before = getAudioSink()!.sources.length;
+    worker.emit({ type: "chunk", id: 1, pcm: chunk(24000), samples: 48000, renderMs: 30 });
+    expect(getAudioSink()!.sources.length).toBeGreaterThan(before);
+  });
+});
+
 describe("LocalSidEngine — default environment factories", () => {
   it("reports isSupported from Worker + AudioContext availability (false under jsdom)", () => {
     expect(LocalSidEngine.isSupported()).toBe(false);
