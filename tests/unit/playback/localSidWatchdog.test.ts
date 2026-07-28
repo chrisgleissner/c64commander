@@ -30,6 +30,8 @@ import type { AudioScheduleSink, AudioScheduleSource } from "@/lib/playback/loca
 const SAMPLE_RATE = 48000;
 const CHANNELS = 2;
 const STALL_MS = 5000;
+/** Mirrors SEEK_ACK_TIMEOUT_MS: how long the engine waits for a seek before reopening the gate. */
+const SEEK_ACK_MS = 20_000;
 
 class FakeWorker implements LocalSidWorkerLike {
   readonly sent: LocalSidMainToWorker[] = [];
@@ -141,7 +143,7 @@ describe("LocalSidEngine — the seek gate", () => {
 
     // Seek, and let the worker never answer.
     const seek = engine.seekTo(10);
-    await vi.advanceTimersByTimeAsync(8_001);
+    await vi.advanceTimersByTimeAsync(SEEK_ACK_MS + 1);
     await seek;
 
     // Audio delivered after the gate reopened must reach the timeline again.
@@ -183,6 +185,90 @@ describe("LocalSidEngine — the seek gate", () => {
     });
     // The new tune must be audible; the old tune's abandoned seek is none of its business.
     expect(engine.getStats().chunksScheduled).toBeGreaterThan(before);
+  });
+});
+
+/**
+ * Silence with a reason, and a reason this timer is the wrong judge of.
+ *
+ * A seek is one call into the one stateful WASM engine: it renders and discards everything between
+ * here and the target, queued behind whatever renders are already in flight. Seeking a minute in is
+ * a minute of emulation with no message in the meantime, and the buffer is empty throughout —
+ * indistinguishable, to a five-second timer, from a worker that has died. On the Pixel 4 that is
+ * what a hold-to-seek looked like: a seek every 350 ms, each emptying the buffer, and five seconds
+ * later the watchdog discarded a worker that was doing exactly what it had been asked to do. The
+ * open and the seek each have a bound of their own, so whichever is outstanding owns the failure.
+ */
+describe("LocalSidEngine — silence that belongs to a transition", () => {
+  it("does not call an unfinished seek a stall, however long it takes", async () => {
+    const { engine, workers, clock } = makeEngine();
+    await startTune(engine, workers);
+    deliverChunk(workers[0]);
+
+    // Seek, and let the worker take its time. The buffer is empty and nothing is being scheduled,
+    // which is exactly the shape of a stall — but the seek is why, and the seek is not finished.
+    void engine.seekTo(120);
+    clock.currentTime = 30;
+    await vi.advanceTimersByTimeAsync(STALL_MS * 3);
+
+    expect(workers[0].terminated).toBe(false);
+    expect(workers.length).toBe(1);
+  });
+
+  it("gives the first chunk after a seek a full window rather than the seek's leftovers", async () => {
+    const { engine, workers, clock } = makeEngine();
+    await startTune(engine, workers);
+    deliverChunk(workers[0]);
+    const worker = workers[0];
+
+    void engine.seekTo(60);
+    clock.currentTime = 30;
+    // Nearly the whole grace period spent seeking, then the worker answers.
+    await vi.advanceTimersByTimeAsync(STALL_MS - 500);
+    const seekId = worker.sentOfType("seek")[0].id;
+    worker.emit({ type: "seeked", id: seekId, positionSeconds: 60 });
+    await vi.advanceTimersByTimeAsync(0);
+
+    // A tune that has just repositioned is not a tune that has stalled: the window starts here.
+    await vi.advanceTimersByTimeAsync(STALL_MS - 1500);
+    expect(worker.terminated).toBe(false);
+  });
+
+  it("judges a recovered tune from the restart, not from the silence that caused it", async () => {
+    const { engine, workers, clock } = makeEngine();
+    await startTune(engine, workers);
+    deliverChunk(workers[0]);
+
+    // Stall, and let the watchdog restart the tune.
+    clock.currentTime = 30;
+    await vi.advanceTimersByTimeAsync(STALL_MS + 1500);
+    expect(workers.length).toBe(2);
+    const second = workers[1];
+    second.emit({ type: "ready", moduleLoadMs: 1 });
+    await vi.advanceTimersByTimeAsync(0);
+    const opens = second.sentOfType("open");
+    second.emit({
+      type: "opened",
+      id: opens[0].id,
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      tuneInfo: null,
+      romRequired: false,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    const seeks = second.sentOfType("seek");
+    if (seeks.length > 0) {
+      second.emit({ type: "seeked", id: seeks[0].id, positionSeconds: seeks[0].positionSeconds });
+    }
+    await vi.advanceTimersByTimeAsync(0);
+
+    // The restart is itself seconds of quiet, and re-opening restarts the window (as does the seek
+    // acknowledgement above). Judged from before it, the very next tick called a second stall —
+    // and with the tune's one recovery already spent, a restart that had just worked was abandoned
+    // about half a second after succeeding, which is what the device log showed.
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(second.terminated).toBe(false);
+    expect(workers.length).toBe(2);
   });
 });
 

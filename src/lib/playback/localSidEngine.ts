@@ -127,10 +127,15 @@ const STARVED_BUFFER_SECONDS = 0.05;
  * `seekPending` suppresses every rendered chunk so the audio from the position just left is never
  * scheduled. That is correct while a seek is genuinely in flight and ruinous the moment it is not:
  * an unacknowledged seek would discard chunks for as long as the tune lasts. Generous next to a
- * seek that lands (a pre-rendered tune seeks from its buffer; a rewind re-renders and is the slow
- * case at a few seconds), so this only fires when the reply is genuinely never coming.
+ * seek that lands, so this only fires when the reply is genuinely never coming.
+ *
+ * Generous because a seek is not a quick acknowledgement: the worker serialises it behind the
+ * renders already queued, and then renders and discards everything between the current position
+ * and the target, so seeking deep into a long tune is real emulation work. Cutting it short would
+ * only trade a slow seek for a wrong one, and this is a recovery rather than a failure — the gate
+ * reopens and playback carries on from wherever the engine actually is.
  */
-const SEEK_ACK_TIMEOUT_MS = 8000;
+const SEEK_ACK_TIMEOUT_MS = 20_000;
 
 /**
  * Ownership of this device's speaker now lives in `@/lib/audio/phoneAudioOwnership`,
@@ -708,6 +713,11 @@ export class LocalSidEngine {
         if (this.seekPending?.id !== message.id) return;
         const pending = this.seekPending;
         this.seekPending = null;
+        // The worker has just proved it is alive AND finished repositioning, so the first chunk
+        // from the new position deserves a full window rather than what is left of the one the
+        // seek spent. Without this, a seek that took most of the grace period was declared a stall
+        // the moment it succeeded.
+        this.lastAudioAtMs = Date.now();
         pending.resolve();
         return;
       }
@@ -895,9 +905,20 @@ export class LocalSidEngine {
    * left — supposed to be playing, buffer empty, and nothing scheduled for
    * {@link AUDIO_STALL_TIMEOUT_MS} — cannot right itself, because the only thing that would pump
    * the next chunk is the chunk that never came.
+   *
+   * An outstanding open or seek is quiet for a reason too, and a reason this timer is the wrong
+   * judge of. Both are single calls into the one stateful WASM engine that take as long as the
+   * work takes: a seek renders and discards everything between here and the target, so seeking a
+   * minute into a tune is a minute of emulation with no message in the meantime, and it queues
+   * behind whatever renders are already in flight. Five seconds of silence is normal for both, and
+   * both already have a bound of their own — the open timeout and the seek acknowledgement — so
+   * whichever is outstanding owns the failure. Judging them here as well is what turned a healthy
+   * scrub into "playback stalled": a hold-to-seek posts a seek every 350 ms, each one empties the
+   * buffer, and five seconds in the watchdog killed a worker that was doing exactly what was asked.
    */
   private checkLiveness(): void {
     if (!this.scheduler || this.endReceived || this.paused || this.stallRecoveryInFlight) return;
+    if (this.openPending || this.seekPending) return;
     if (this.scheduler.bufferedSeconds() > STARVED_BUFFER_SECONDS) return;
     if (Date.now() - this.lastAudioAtMs < AUDIO_STALL_TIMEOUT_MS) return;
     void this.recoverFromStall();
