@@ -134,6 +134,21 @@ export class LocalSidPlaybackController {
     this.ensureEngine().warmLeadIn(key, sidBytes, songIndex, seconds);
   }
 
+  /** Position playback is waiting for the renderer to reach, or null. Drives the "catching up" state. */
+  awaitedSeekSeconds(): number | null {
+    return this.engine?.getAwaitedSeekSeconds() ?? null;
+  }
+
+  /** Seconds of the current tune already rendered; drives the progress bar's pre-render fill. */
+  renderedSeconds(): number | null {
+    return this.engine?.getRenderedSeconds() ?? null;
+  }
+
+  /** Engine internals for HIL diagnosis; see LocalSidEngine.debugState. */
+  debugState(): Record<string, unknown> | null {
+    return this.engine?.debugState() ?? null;
+  }
+
   /** 0..1 while a pre-render is running, else null. */
   prerenderProgress(): number | null {
     return this.engine?.getPrerenderProgress() ?? null;

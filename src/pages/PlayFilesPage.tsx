@@ -64,6 +64,7 @@ import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { buildSelectedDeviceBoundOrigin } from "@/lib/savedDevices/deviceBoundOrigin";
 
 import { buildEnabledSidMuteUpdates, sidVolumeStepGain } from "@/lib/config/sidVolumeControl";
+import { parseSidHeaderMetadata } from "@/lib/sid/sidUtils";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { redactTreeUri } from "@/lib/native/safUtils";
@@ -1447,6 +1448,70 @@ export default function PlayFilesPage() {
   // control feel dead for as long as a rewind takes to re-render.
   const isScrubbing = scrubTargetMs !== null;
   const displayElapsedMs = isScrubbing ? scrubTargetMs : elapsedMs;
+  // Composer and year, read from the tune's own SID header. Every SID carries them, so this works for
+  // every source rather than only the ones with a metadata database behind them; a tune that leaves
+  // the fields blank simply shows nothing.
+  const [currentItemCredits, setCurrentItemCredits] = useState<{ author: string | null; released: string | null }>({
+    author: null,
+    released: null,
+  });
+  useEffect(() => {
+    let cancelled = false;
+    setCurrentItemCredits({ author: null, released: null });
+    const file = currentItem?.request.file;
+    if (!file || currentItem?.category !== "sid") return;
+    void (async () => {
+      try {
+        const header = parseSidHeaderMetadata(new Uint8Array(await file.arrayBuffer()));
+        if (cancelled) return;
+        setCurrentItemCredits({ author: header.author || null, released: header.released || null });
+      } catch (error) {
+        // Not a readable SID header — nothing to show, which is the same as a tune that names nobody.
+        addLog("debug", "Could not read tune credits from the SID header", {
+          item: currentItem?.label,
+          error: (error as Error)?.message ?? String(error),
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentItem?.id, currentItem?.request.file, currentItem?.category]);
+
+  // How much of the tune the on-device engine has rendered, as a percentage of its length. Only the
+  // local engine has this: libsidplayfp cannot rewind, so a seek beyond what is rendered has to be
+  // rendered up to. Polled rather than pushed — it changes a few times a second at most.
+  const [renderedSeconds, setRenderedSeconds] = useState<number | null>(null);
+  /** Where a seek is waiting to land, while the renderer works towards it. */
+  const [awaitedSeconds, setAwaitedSeconds] = useState<number | null>(null);
+  const localEngineActive = playbackEngine.engine === "local";
+  useEffect(() => {
+    if (!localEngineActive) {
+      setRenderedSeconds(null);
+      setAwaitedSeconds(null);
+      return;
+    }
+    // Debug seam for HIL: the engine's own state, which the sink counters cannot show.
+    (globalThis as Record<string, unknown>).__localEngineDebug = () =>
+      getSharedLocalSidPlaybackController().debugState();
+    const read = () => {
+      const controller = getSharedLocalSidPlaybackController();
+      setRenderedSeconds(controller.renderedSeconds());
+      setAwaitedSeconds(controller.awaitedSeekSeconds());
+    };
+    read();
+    const timer = window.setInterval(read, 500);
+    return () => window.clearInterval(timer);
+  }, [localEngineActive, currentItem?.id]);
+  const awaitedPercent =
+    localEngineActive && awaitedSeconds !== null && currentDurationMs
+      ? Math.min(100, (awaitedSeconds * 1000 * 100) / currentDurationMs)
+      : undefined;
+  const renderedPercent =
+    localEngineActive && renderedSeconds !== null && currentDurationMs
+      ? Math.min(100, (renderedSeconds * 1000 * 100) / currentDurationMs)
+      : undefined;
+
   const progressPercent = currentDurationMs ? Math.min(100, (displayElapsedMs / currentDurationMs) * 100) : 0;
   const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - displayElapsedMs) : undefined;
   const remainingLabel = currentDurationMs !== undefined ? `-${formatTime(remainingMs)}` : "—";
@@ -1954,6 +2019,10 @@ export default function PlayFilesPage() {
                 onScrubEnd={() => void endScrub()}
                 isScrubbing={isScrubbing}
                 progressPercent={progressPercent}
+                renderedPercent={renderedPercent}
+                awaitedPercent={awaitedPercent}
+                currentItemAuthor={currentItemCredits.author}
+                currentItemReleased={currentItemCredits.released}
                 elapsedLabel={formatTime(displayElapsedMs)}
                 remainingLabel={remainingLabel}
                 totalLabel={formatTime(playlistTotals.total)}

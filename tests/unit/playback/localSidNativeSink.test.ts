@@ -103,10 +103,11 @@ describe("on-device playback through the native track", () => {
     scheduleChunk(sink, 0.5);
     await settle();
 
+    // Sized from how fast this device renders (see renderThroughput), so the figure is small relative
+    // to the target rather than a fixed number — what matters is that it is nowhere near it.
     const { primeMs, bufferMs } = backend.opens[0];
     expect(primeMs).toBeGreaterThan(0);
-    expect(primeMs).toBeLessThan(1000);
-    expect(primeMs!).toBeLessThan(bufferMs!);
+    expect(primeMs!).toBeLessThan(bufferMs! / 3);
   });
 
   it("asks for a deeper AudioTrack buffer than the mirror's four bursts", async () => {
@@ -171,6 +172,22 @@ describe("on-device playback through the native track", () => {
 
     expect(sink!.sink.currentTime).toBeLessThanOrEqual(4.001);
     expect(sink!.sink.currentTime).toBeGreaterThanOrEqual(0);
+  });
+
+  it("drops queued audio on a seek, so the old position stops at once", async () => {
+    // Stopping the scheduled sources is not enough here: the pipeline holds seconds of audio ahead of
+    // the speaker, so without this a seek went on playing where the listener had just left.
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend);
+    scheduleChunk(sink, 8);
+    await settle();
+    const before = backend.flushes;
+
+    sink!.flush?.();
+
+    expect(backend.flushes).toBeGreaterThan(before);
+    // And the clock restarts, so audio scheduled from the new position is not judged late.
+    expect(sink!.sink.currentTime).toBeLessThan(0.5);
   });
 
   it("flushes on pause, so a deep ring does not keep sounding", async () => {

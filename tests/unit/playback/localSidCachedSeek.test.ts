@@ -90,14 +90,25 @@ const makeSink = () => {
 
 describe("seeking inside a pre-rendered tune", () => {
   let worker: FakeWorker;
+  let warmWorker: FakeWorker;
   let written: Float32Array[];
 
   const makeEngine = () => {
     worker = new FakeWorker();
+    // A fresh worker per request. The engine now runs three: playback, the current tune's pre-render,
+    // and a separate one for neighbour lead-ins so the two renders never compete. Handing all three
+    // the same fake would have each overwrite the last one's message handler.
+    let handedOut = 0;
+    const factory = () => {
+      handedOut += 1;
+      if (handedOut === 1) return worker;
+      warmWorker = new FakeWorker();
+      return warmWorker;
+    };
     const { sink, written: w } = makeSink();
     written = w;
     return new LocalSidEngine({
-      workerFactory: () => worker,
+      workerFactory: factory,
       chunkSeconds: 0.5,
       targetBufferSeconds: 1.0,
       audioSinkFactory: (): LocalSidAudioSink => ({ sink, resume: vi.fn(), close: vi.fn() }),
@@ -119,10 +130,47 @@ describe("seeking inside a pre-rendered tune", () => {
     await play;
     engine.prerender("tune#0", new ArrayBuffer(8), 0, seconds);
     const prerenderId = engine as unknown as { prerenderId: number };
+    // PCM arrives as slices now, so the cache can grow while the render runs and a seek into the
+    // part already rendered is instant.
+    worker.emit({
+      type: "prerender-chunk",
+      id: prerenderId.prerenderId,
+      pcm: renderedPcm(seconds),
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      seconds,
+    } as never);
     worker.emit({
       type: "prerendered",
       id: prerenderId.prerenderId,
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      seconds,
+    } as never);
+  };
+
+  /** Open a tune and warm only its opening — what `warmLeadIn` leaves behind. */
+  const openAndWarm = async (engine: LocalSidEngine, seconds = 4, onEnded?: () => void) => {
+    const play = engine.play(new ArrayBuffer(8), 0, onEnded ? { onEnded } : {}, "tune#0");
+    worker.emit({ type: "ready", moduleLoadMs: 1 });
+    await Promise.resolve();
+    worker.emit({ type: "opened", id: 1, sampleRate: SAMPLE_RATE, channels: CHANNELS, tuneInfo: {} } as never);
+    await play;
+    engine.warmLeadIn("tune#0", new ArrayBuffer(8), 0, seconds);
+    // Lead-ins render on their own thread with their own ids, so they cannot be mistaken for the
+    // current tune's pre-render — or cancel it.
+    const warmId = (engine as unknown as { warmId: number }).warmId;
+    warmWorker.emit({
+      type: "prerender-chunk",
+      id: warmId,
       pcm: renderedPcm(seconds),
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      seconds,
+    } as never);
+    warmWorker.emit({
+      type: "prerendered",
+      id: warmId,
       sampleRate: SAMPLE_RATE,
       channels: CHANNELS,
       seconds,
@@ -179,19 +227,110 @@ describe("seeking inside a pre-rendered tune", () => {
     worker.emit({ type: "opened", id: 1, sampleRate: SAMPLE_RATE, channels: CHANNELS, tuneInfo: {} } as never);
     await play;
     e2.prerender("tune#0", new ArrayBuffer(8), 0, 4);
+    const e2Id = (e2 as unknown as { prerenderId: number }).prerenderId;
     worker.emit({
-      type: "prerendered",
-      id: (e2 as unknown as { prerenderId: number }).prerenderId,
+      type: "prerender-chunk",
+      id: e2Id,
       pcm: renderedPcm(4),
       sampleRate: SAMPLE_RATE,
       channels: CHANNELS,
       seconds: 4,
     } as never);
+    worker.emit({ type: "prerendered", id: e2Id, sampleRate: SAMPLE_RATE, channels: CHANNELS, seconds: 4 } as never);
 
     await e2.seekTo(4);
 
     expect(onEnded).toHaveBeenCalledTimes(1);
     void engine;
+  });
+
+  it("asks the worker for a seek past the end of a cached lead-in", async () => {
+    // The regression that broke fast-forward, rewind and the progress bar all at once. A warmed track
+    // only has its opening in memory, and the seek path treated any cache hit as the whole tune: the
+    // cursor clamped to the end of the cached span, so every seek past it resumed from the seam
+    // rather than where the listener asked.
+    const engine = makeEngine();
+    await openAndWarm(engine, 4);
+    const seeksBefore = worker.ofType("seek").length;
+
+    const seek = engine.seekTo(30);
+    await Promise.resolve();
+    const posted = worker.ofType("seek").at(-1) as { id: number; positionSeconds: number } | undefined;
+    worker.emit({ type: "seeked", id: posted!.id } as never);
+    await seek;
+
+    expect(worker.ofType("seek").length).toBeGreaterThan(seeksBefore);
+    expect(posted).toMatchObject({ positionSeconds: 30 });
+  });
+
+  it("caches a lead-in as a partial, so it is usable but never mistaken for the whole tune", async () => {
+    const engine = makeEngine();
+    await openAndWarm(engine, 4);
+
+    expect(engine.debugState()).toMatchObject({ cachedTunes: 1 });
+    // Marked partial: a seek past it must go to the worker, and running off its end must hand over to
+    // live rendering rather than end the song.
+    const cache = (engine as unknown as { renderCache: { get(k: string): { partial?: boolean } | undefined } })
+      .renderCache;
+    expect(cache.get("tune#0")).toMatchObject({ partial: true });
+  });
+
+  it("keeps playing past a lead-in instead of treating its end as the end of the tune", async () => {
+    // Running out of cached PCM used to fire "ended". For a warmed track that would cut the song off
+    // after a few seconds.
+    const engine = makeEngine();
+    const ended = vi.fn();
+    await openAndWarm(engine, 4, ended);
+
+    void engine.seekTo(3.9);
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+    expect(ended).not.toHaveBeenCalled();
+    // And it asked the worker to continue from the seam rather than stopping.
+    expect(worker.ofType("seek").length).toBeGreaterThan(0);
+  });
+
+  it("does not let warming a neighbour cancel the current tune's pre-render", async () => {
+    // `prerender` abandons whatever it finds in flight, so warming the next track used to kill the
+    // full pre-render of the one playing — and that pre-render is what makes seeking inside it
+    // instant. Losing it sent every seek to the worker, which cannot rewind, so it re-rendered from
+    // the start with audio gated shut: silence and thousands of underruns after every seek.
+    const engine = makeEngine();
+    const play = engine.play(new ArrayBuffer(8), 0, {}, "tune#0");
+    worker.emit({ type: "ready", moduleLoadMs: 1 });
+    await Promise.resolve();
+    worker.emit({ type: "opened", id: 1, sampleRate: SAMPLE_RATE, channels: CHANNELS, tuneInfo: {} } as never);
+    await play;
+
+    engine.prerender("tune#0", new ArrayBuffer(8), 0, 30);
+    const currentId = (engine as unknown as { prerenderId: number }).prerenderId;
+
+    engine.warmLeadIn("next#0", new ArrayBuffer(8), 0, 4);
+
+    // Still the same pre-render in flight — the neighbour waited its turn.
+    expect((engine as unknown as { prerenderId: number }).prerenderId).toBe(currentId);
+
+    // And it completes as a WHOLE tune, so seeking inside it stays instant.
+    worker.emit({
+      type: "prerender-chunk",
+      id: currentId,
+      pcm: renderedPcm(30),
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      seconds: 30,
+    } as never);
+    worker.emit({
+      type: "prerendered",
+      id: currentId,
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      seconds: 30,
+    } as never);
+    const seeksBefore = worker.ofType("seek").length;
+
+    await engine.seekTo(20);
+
+    expect(worker.ofType("seek")).toHaveLength(seeksBefore);
   });
 
   it("stops serving from the cache once playback is torn down", async () => {

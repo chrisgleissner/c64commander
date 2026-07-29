@@ -162,6 +162,24 @@ export interface LocalSidPrerenderMessage {
 }
 
 /** worker → main: how far a pre-render has got (0..1). */
+/**
+ * One slice of a pre-render, sent as it is produced.
+ *
+ * Streamed rather than held to the end so the cache grows while the render runs: a seek into the part
+ * already rendered is then instant, instead of waiting for the whole tune. libsidplayfp cannot rewind,
+ * so reaching a position means rendering everything before it — roughly 150 ms of CPU per second of
+ * audio on a Pixel 4, which is why what has been rendered is worth using the moment it exists.
+ */
+export interface LocalSidPrerenderChunkMessage {
+  type: "prerender-chunk";
+  id: number;
+  pcm: Int16Array;
+  sampleRate: number;
+  channels: number;
+  /** Seconds rendered so far, this slice included. */
+  seconds: number;
+}
+
 export interface LocalSidPrerenderProgressMessage {
   type: "prerender-progress";
   id: number;
@@ -172,7 +190,6 @@ export interface LocalSidPrerenderProgressMessage {
 export interface LocalSidPrerenderedMessage {
   type: "prerendered";
   id: number;
-  pcm: Int16Array;
   sampleRate: number;
   channels: number;
   seconds: number;
@@ -212,6 +229,7 @@ export type LocalSidWorkerToMain =
   | LocalSidChunkMessage
   | LocalSidSeekedMessage
   | LocalSidEndMessage
+  | LocalSidPrerenderChunkMessage
   | LocalSidPrerenderProgressMessage
   | LocalSidPrerenderedMessage
   | LocalSidErrorMessage;

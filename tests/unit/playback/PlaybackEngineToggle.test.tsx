@@ -140,4 +140,22 @@ describe("PlaybackEngineToggle listen targets", () => {
     expect(loadPlaybackEngine()).toBe("local");
     expect(mirror.session.stopAudio).toHaveBeenCalledTimes(1);
   });
+
+  it("labels the options Local, Remote, Both, in that order", () => {
+    // The row reads as a progression from this device outwards. "Remote" rather than the device's
+    // name: the header already says which device is connected, so repeating it here spent the row's
+    // width on something already on screen — and the wording now matches Remote Input.
+    render(<PlaybackEngineToggle />);
+
+    const labels = ["playback-engine-local", "playback-engine-c64", "playback-listen-both"].map((id) =>
+      screen.getByTestId(id).textContent?.trim(),
+    );
+    expect(labels).toEqual(["Local", "Remote", "Both"]);
+  });
+
+  it("does not put the connected device's name on the buttons", () => {
+    render(<PlaybackEngineToggle />);
+
+    expect(screen.getByTestId("playback-engine-toggle").textContent).not.toMatch(/192\.168|\.local/);
+  });
 });

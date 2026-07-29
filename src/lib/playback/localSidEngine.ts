@@ -10,13 +10,18 @@ import { LocalSidChunkScheduler, type AudioScheduleSink, type AudioScheduleSourc
 import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage } from "./localSidWorkerProtocol";
 import { hasCompleteRomSet, loadStoredRoms } from "@/lib/roms/romStore";
 import { Capacitor } from "@capacitor/core";
-import { effectiveSidEmulationEngine, loadPlaybackCrossfadeMs } from "@/lib/config/appSettings";
+import {
+  effectiveSidEmulationEngine,
+  loadPlaybackCrossfadeMs,
+  type SidEmulationEngine,
+} from "@/lib/config/appSettings";
 import { StreamUdp } from "@/lib/native/streamUdp";
 import {
   createNativeLocalSidSink,
   nativeLocalAudioAvailable,
   type NativeLocalAudioBackend,
 } from "./localSidNativeSink";
+import { accurateEngineViable, recordRenderMeasurement, renderRatio } from "./renderThroughput";
 import { addLog, addErrorLog } from "@/lib/logging";
 import { claimPhoneAudio, phoneAudioOwner, releasePhoneAudio } from "@/lib/audio/phoneAudioOwnership";
 import { clearLocalAudioHealth, reportLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
@@ -69,6 +74,15 @@ export interface LocalSidAudioSink {
   fadeIn?: (ms: number, toGain?: number) => void;
   /** Set output level, 0..1. Used by the Play page's volume control. */
   setGain?: (value: number) => void;
+  /**
+   * Throw away audio already handed to the output, for a seek.
+   *
+   * Web Audio needs nothing here — stopping the scheduled sources is enough. A native sink does:
+   * it holds seconds of audio the speaker has not reached yet, so without this a seek would go on
+   * playing the old position for as long as that buffer is deep. That is what broke fast-forward,
+   * rewind and the progress bar when on-device playback moved to the native path.
+   */
+  flush?: () => void;
   close: () => void;
 }
 
@@ -360,6 +374,7 @@ const defaultAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) =
 
 const RENDER_RATE_SAMPLES = 4096;
 
+const EMPTY_PCM = new Int16Array(0);
 const DEFAULT_CHUNK_SECONDS = 0.5;
 /**
  * How far ahead of the audio clock to keep the schedule.
@@ -444,6 +459,33 @@ export class LocalSidEngine {
   private prerenderKey: string | null = null;
   /** Set while the running pre-render is only a lead-in, not the whole tune. */
   private prerenderPartialSeconds: number | null = null;
+  /** Slices of the running pre-render, accumulated so the cache can grow as it goes. */
+  private prerenderAccumulated: Int16Array = EMPTY_PCM;
+  /**
+   * A second offline renderer, for the tracks either side of the one playing.
+   *
+   * Separate from the pre-render worker on purpose. `prerender` abandons whatever it finds in flight,
+   * so sharing one thread meant warming a neighbour cancelled the current tune's full render — and
+   * that render is what makes seeking inside it instant. Its own thread means the two never compete,
+   * which is also what lets a neighbour be warmed immediately rather than queued behind a tune that
+   * takes half a minute to render.
+   */
+  private warmWorker: LocalSidWorkerLike | null = null;
+  private warmId = 0;
+  private warmKey: string | null = null;
+  private warmAccumulated: Int16Array = EMPTY_PCM;
+  /**
+   * A seek waiting for the pre-render to reach it, in seconds.
+   *
+   * Set when a seek lands past what is rendered while a pre-render of this tune is already running.
+   * Playback resumes from the buffer the moment coverage passes it — which is what the progress bar's
+   * translucent fill is showing in the meantime.
+   */
+  private awaitedSeekSeconds: number | null = null;
+  /** The cache key of the tune being opened, re-applied after the teardown that clears it. */
+  private pendingCacheKey: string | null = null;
+  /** Lead-ins waiting for the renderer to be free, so they never displace the current tune's. */
+  private readonly pendingWarms = new Map<string, { sidBytes: ArrayBuffer; songIndex: number; seconds: number }>();
   /**
    * The pre-render's own worker — a separate thread from playback, because
    * sharing one starved playback into silence (see `ensurePrerenderWorker`).
@@ -642,7 +684,7 @@ export class LocalSidEngine {
       // render a note without them. The worker is loaded once, so a set of ROMs that arrives later
       // takes effect on the next worker rather than mid-tune — which is the same rule the emulation
       // preference itself already follows.
-      worker.postMessage({ type: "load", engine: effectiveSidEmulationEngine(hasCompleteRomSet()) });
+      worker.postMessage({ type: "load", engine: this.chosenEmulation() });
     });
     return this.loadInFlight;
   }
@@ -665,7 +707,15 @@ export class LocalSidEngine {
      */
     cacheKey?: string,
   ): Promise<LocalSidPlayResult> {
-    if (cacheKey) this.currentKey = cacheKey;
+    // Remembered, not just assigned. Opening a tune tears the previous one down, and that teardown
+    // clears `currentKey` — so setting it here and nothing else left it null for the whole tune. With it
+    // null the pre-render cache cannot be found by any of the three things that need it: the progress
+    // bar's rendered fill, a seek that could have been instant, and the seek that waits for the renderer
+    // instead of racing it. Every one of those silently took its slow path.
+    if (cacheKey) {
+      this.pendingCacheKey = cacheKey;
+      this.currentKey = cacheKey;
+    }
     // Keep a copy before `openTuneOnce` transfers ownership of the caller's buffer to the worker,
     // so a retry has something left to open with.
     const retryBytes = sidBytes.slice(0);
@@ -778,23 +828,68 @@ export class LocalSidEngine {
       case "prerender-progress":
         if (message.id === this.prerenderId) this.prerenderFraction = message.fraction;
         return;
-      case "prerendered": {
+      case "prerender-chunk": {
+        // Accumulate as it arrives, and publish the growing buffer to the cache each time. That is
+        // what makes a seek into the part already rendered instant instead of waiting for the whole
+        // tune, and it is what the progress bar's pre-render fill reads.
         if (message.id !== this.prerenderId || !this.prerenderKey) return;
-        this.prerenderFraction = null;
-        const partial = this.prerenderPartialSeconds !== null;
-        this.prerenderPartialSeconds = null;
+        const grown = new Int16Array(this.prerenderAccumulated.length + message.pcm.length);
+        grown.set(this.prerenderAccumulated, 0);
+        grown.set(message.pcm, this.prerenderAccumulated.length);
+        this.prerenderAccumulated = grown;
+        // A seek is waiting on this: hand playback the buffer the moment coverage reaches the target,
+        // rather than leaving it silent while a second render of the same audio catches up.
+        if (this.awaitedSeekSeconds !== null && message.seconds > this.awaitedSeekSeconds) {
+          const awaited = this.awaitedSeekSeconds;
+          this.awaitedSeekSeconds = null;
+          this.cached = {
+            partial: true,
+            pcm: grown,
+            sampleRate: message.sampleRate,
+            channels: message.channels,
+            durationSeconds: message.seconds,
+          };
+          this.cachedCursor = Math.min(grown.length, Math.floor(awaited * message.sampleRate) * message.channels);
+          this.beginPartialHandoff(message.seconds);
+          this.pump();
+        }
         this.renderCache.set(this.prerenderKey, {
-          partial,
-          pcm: message.pcm,
+          // Still growing, so it must not be mistaken for the whole tune: running off the end has to
+          // hand over to live rendering rather than fire "ended".
+          partial: true,
+          pcm: grown,
           sampleRate: message.sampleRate,
           channels: message.channels,
           durationSeconds: message.seconds,
         });
+        return;
+      }
+      case "prerendered": {
+        if (message.id !== this.prerenderId || !this.prerenderKey) return;
+        this.prerenderFraction = null;
+        // Only a lead-in was asked for, so what is cached remains a partial even though the render
+        // finished. A full render becomes authoritative: seeks inside it are pure buffer offsets and
+        // running off its end really is the end of the tune.
+        const partial = this.prerenderPartialSeconds !== null;
+        this.prerenderPartialSeconds = null;
+        const pcm = this.prerenderAccumulated;
+        this.prerenderAccumulated = EMPTY_PCM;
+        queueMicrotask(() => this.drainPendingWarms());
+        if (pcm.length > 0) {
+          this.renderCache.set(this.prerenderKey, {
+            partial,
+            pcm,
+            sampleRate: message.sampleRate,
+            channels: message.channels,
+            durationSeconds: message.seconds,
+          });
+        }
         addLog("debug", "Local SID tune pre-rendered", {
           service: "local-sid",
           key: this.prerenderKey,
           seconds: Math.round(message.seconds),
-          megabytes: +(message.pcm.byteLength / 1024 / 1024).toFixed(1),
+          partial,
+          megabytes: +(pcm.byteLength / 1024 / 1024).toFixed(1),
           cachedTunes: this.renderCache.size,
           cacheMegabytes: +(this.renderCache.bytes / 1024 / 1024).toFixed(1),
         });
@@ -808,6 +903,13 @@ export class LocalSidEngine {
         if (this.seekPending) return;
         this.inFlightRenders = Math.max(0, this.inFlightRenders - 1);
         this.recordRender(message.renderMs, message.samples);
+        // Learn how fast this device renders, so the next tune knows how much to buffer before it
+        // starts. Only real renders count — a chunk served from the cache took no time and would
+        // teach the wrong lesson.
+        recordRenderMeasurement(
+          message.samples / Math.max(1, this.channels) / this.requestedSampleRate,
+          message.renderMs,
+        );
         this.scheduler?.schedule(message.pcm, this.channels);
         this.emitPosition();
         this.pump();
@@ -843,6 +945,8 @@ export class LocalSidEngine {
 
   private onOpened(message: LocalSidOpenedMessage): void {
     if (message.id !== this.activeId) return;
+    // Re-applied here because the teardown between tunes cleared it.
+    if (this.pendingCacheKey) this.currentKey = this.pendingCacheKey;
     const pending = this.openPending;
     this.openPending = null;
     this.channels = Math.max(1, message.channels);
@@ -946,11 +1050,16 @@ export class LocalSidEngine {
 
     this.seekEpoch += 1;
     const epoch = this.seekEpoch;
+    // A newer seek replaces whatever an older one was waiting for.
+    this.awaitedSeekSeconds = null;
     this.inFlightRenders = 0;
     this.endReceived = false;
     this.endedFired = false;
     this.chunksEnded = 0;
     this.scheduler.resetTo(target);
+    // Stopping the scheduled sources is not enough on a native sink: the audio it has already been
+    // given is queued ahead of the speaker and would keep playing the old position.
+    this.audio?.flush?.();
     this.emitPosition();
 
     // If this tune has been rendered in full, the seek is a buffer offset and
@@ -959,14 +1068,43 @@ export class LocalSidEngine {
     // backwards costs ~150 ms of CPU per second of audio it has to replay —
     // seconds of silence for a seek the listener expects to be instant.
     const rendered = this.currentKey ? this.renderCache.get(this.currentKey) : null;
-    if (rendered) {
+    // A lead-in only covers the opening, so it can answer a seek that lands inside it and nothing
+    // else. Serving one as though it were the whole tune is how fast-forward, rewind and the progress
+    // bar all broke at once: the cursor clamped to the end of the cached span, so every seek past it
+    // resumed from the seam instead of where the listener asked.
+    const usable = rendered && (!rendered.partial || target < rendered.durationSeconds);
+    if (rendered && usable) {
       this.cached = rendered;
       this.cachedCursor = Math.min(rendered.pcm.length, Math.floor(target * rendered.sampleRate) * rendered.channels);
+      // Landing inside a lead-in still has to leave the tune able to continue past it, so the live
+      // renderer is sent to the seam while the cache plays out — the same hand-off as at open.
+      if (rendered.partial) this.beginPartialHandoff(rendered.durationSeconds);
       addLog("debug", "Local SID seek served from the pre-render cache", {
         service: "local-sid",
         seconds: target,
       });
       this.pump();
+      return;
+    }
+
+    // Nothing cached can answer this one yet. Before falling back to a worker seek — which re-renders
+    // the tune from the start with the audio gated shut, fifteen to twenty seconds of silence measured
+    // on a Pixel 4 — check whether the pre-render is already on its way there. It usually is: it began
+    // when the tune did, and it is rendering exactly the audio this seek needs. Racing it does the same
+    // work twice and plays nothing while both run.
+    this.cached = null;
+    this.cachedCursor = 0;
+    if (this.prerenderFraction !== null && this.prerenderKey === this.currentKey) {
+      this.awaitedSeekSeconds = target;
+      // Held at the target, not drifting on from where it was. Letting playback carry on meant the
+      // listener heard the old position while the bar showed the new one, which is worse than a pause:
+      // there is no way to tell whether the drag did anything. Silence with a visibly advancing
+      // pre-render fill says exactly what is happening.
+      this.audio?.flush?.();
+      addLog("debug", "Local SID seek waiting for the pre-render to reach it", {
+        service: "local-sid",
+        seconds: target,
+      });
       return;
     }
 
@@ -1116,14 +1254,18 @@ export class LocalSidEngine {
     if (this.cached) {
       const { pcm, channels, sampleRate } = this.cached;
       const chunkSamples = Math.floor(this.chunkSeconds * sampleRate) * channels;
+      // Set when a lead-in runs out, so the loop below falls through to live rendering rather than
+      // returning. Returning here was silence: the pump exited without asking the worker for
+      // anything, and nothing woke it again — a warmed tune played its opening and stopped.
+      let handedOff = false;
       while (this.scheduler.bufferedSeconds() < this.targetBufferSeconds) {
         if (this.cachedCursor >= pcm.length) {
           if (this.cached.partial) {
-            // Only the opening was cached. The rest of the tune is rendered live from the seam,
-            // which the worker was sent to when playback began. Treating this as the end instead
-            // would cut the song off after its lead-in.
+            // Only the opening was cached. The rest is rendered live from the seam, which the worker
+            // was sent to when playback began. Treating this as the end would cut the song off.
             this.cached = null;
             this.cachedCursor = 0;
+            handedOff = true;
             break;
           }
           this.endReceived = true;
@@ -1138,7 +1280,7 @@ export class LocalSidEngine {
         this.scheduler.schedule(slice, channels);
         this.emitPosition();
       }
-      return;
+      if (!handedOff) return;
     }
     if (!this.worker) return;
     while (
@@ -1311,10 +1453,30 @@ export class LocalSidEngine {
     if (!this.worker || seconds <= 0) return;
     this.seekEpoch += 1;
     const id = this.nextId;
+    this.nextId += 1;
     // Hand the slot over rather than overwrite it: `seekPending` gates chunk delivery, so a leaked
     // entry silences the tune. See the comment on the interactive seek path.
     this.seekPending?.resolve();
-    this.seekPending = { id, resolve: () => this.pump() };
+    // Bounded for the same reason the interactive seek is: while `seekPending` is set every rendered
+    // chunk is discarded, so a reply that never arrives would silence the rest of the tune. Giving up
+    // on the reply reopens the gate; the worst case is playing on from wherever the worker actually
+    // is, which is a great deal better than playing nothing.
+    const timer = setTimeout(() => {
+      if (this.seekPending?.id !== id) return;
+      this.seekPending = null;
+      addLog("warn", "Local SID lead-in hand-off was not acknowledged; resuming anyway", {
+        service: "local-sid",
+        seconds,
+      });
+      this.pump();
+    }, SEEK_ACK_TIMEOUT_MS);
+    this.seekPending = {
+      id,
+      resolve: () => {
+        clearTimeout(timer);
+        this.pump();
+      },
+    };
     this.worker.postMessage({ type: "seek", id, positionSeconds: seconds });
   }
 
@@ -1328,8 +1490,173 @@ export class LocalSidEngine {
    */
   warmLeadIn(key: string, sidBytes: ArrayBuffer, songIndex: number, seconds: number): void {
     if (this.renderCache.has(key) || seconds <= 0) return;
-    this.prerenderPartialSeconds = seconds;
-    this.prerender(key, sidBytes, songIndex, seconds);
+    const roms = loadStoredRoms();
+    if (!roms.kernal || !roms.basic) return;
+    // One at a time on this thread, but never behind the playing tune's render — that is the point of
+    // having a second thread. A warm still in flight is left alone rather than cancelled: the listener
+    // is more likely to skip forwards, which is warmed first.
+    if (this.warmKey !== null) {
+      this.pendingWarms.set(key, { sidBytes, songIndex, seconds });
+      return;
+    }
+    this.warmId += 1;
+    this.warmKey = key;
+    this.warmAccumulated = EMPTY_PCM;
+    this.ensureWarmWorker().postMessage(
+      {
+        type: "prerender",
+        id: this.warmId,
+        sidBytes,
+        songIndex,
+        seconds,
+        sampleRate: this.requestedSampleRate,
+        roms: { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer },
+      } as LocalSidMainToWorker,
+      [sidBytes],
+    );
+  }
+
+  /** Start the next queued lead-in, now that the warm thread is free. */
+  private drainPendingWarms(): void {
+    const next = this.pendingWarms.entries().next();
+    if (next.done) return;
+    const [key, request] = next.value;
+    this.pendingWarms.delete(key);
+    this.warmLeadIn(key, request.sidBytes, request.songIndex, request.seconds);
+  }
+
+  /** The lead-in renderer, created on first use. Its failures never affect playback. */
+  /**
+   * Which emulation to render with.
+   *
+   * The listener's choice, unless this device has been measured unable to keep up with the accurate
+   * one — at or below real time no amount of buffering helps, because the renderer can never get
+   * ahead. SIDLite does not sound the same, so this is a fallback rather than a preference; it is
+   * taken because a tune that pauses is worse than a tune that sounds a little different.
+   */
+  private chosenEmulation(): SidEmulationEngine {
+    const preferred = effectiveSidEmulationEngine(hasCompleteRomSet());
+    if (preferred === "sidlite" || accurateEngineViable()) return preferred;
+    addLog("warn", "Falling back to SIDLite: this device cannot render reSIDfp in real time", {
+      service: "local-sid",
+      renderRatio: +renderRatio().toFixed(2),
+    });
+    return "sidlite";
+  }
+
+  private ensureWarmWorker(): LocalSidWorkerLike {
+    if (!this.warmWorker) {
+      this.warmWorker = this.workerFactory();
+      this.warmWorker.addEventListener("message", (event: MessageEvent<LocalSidWorkerToMain>) =>
+        this.onWarmMessage(event.data),
+      );
+      this.warmWorker.addEventListener("error", (event: { message?: string }) => {
+        addLog("warn", "Local SID lead-in renderer failed", { service: "local-sid", error: event.message });
+        this.warmWorker = null;
+        this.warmKey = null;
+      });
+      this.warmWorker.addEventListener("messageerror", () => {
+        this.warmWorker = null;
+        this.warmKey = null;
+      });
+      this.warmWorker.postMessage({
+        type: "load",
+        engine: effectiveSidEmulationEngine(hasCompleteRomSet()),
+      } as LocalSidMainToWorker);
+    }
+    return this.warmWorker;
+  }
+
+  /**
+   * Replies from the lead-in renderer.
+   *
+   * Handled apart from the playback and pre-render traffic so a warm can never be mistaken for either
+   * — the ids are independent, and a warm must not touch what is playing.
+   */
+  private onWarmMessage(message: LocalSidWorkerToMain): void {
+    if (message.type === "prerender-chunk") {
+      if (message.id !== this.warmId || !this.warmKey) return;
+      const grown = new Int16Array(this.warmAccumulated.length + message.pcm.length);
+      grown.set(this.warmAccumulated, 0);
+      grown.set(message.pcm, this.warmAccumulated.length);
+      this.warmAccumulated = grown;
+      return;
+    }
+    if (message.type === "prerendered") {
+      if (message.id !== this.warmId || !this.warmKey) return;
+      const key = this.warmKey;
+      const pcm = this.warmAccumulated;
+      this.warmKey = null;
+      this.warmAccumulated = EMPTY_PCM;
+      if (pcm.length > 0) {
+        // Always a partial: it is only the opening, so running off its end has to hand over to live
+        // rendering rather than end the tune.
+        this.renderCache.set(key, {
+          partial: true,
+          pcm,
+          sampleRate: message.sampleRate,
+          channels: message.channels,
+          durationSeconds: message.seconds,
+        });
+        addLog("debug", "Local SID lead-in warmed", {
+          service: "local-sid",
+          key,
+          seconds: Math.round(message.seconds),
+          cachedTunes: this.renderCache.size,
+        });
+      }
+      this.drainPendingWarms();
+      return;
+    }
+    if (message.type === "error" && message.id === this.warmId) {
+      addLog("debug", "Local SID lead-in warm failed", { service: "local-sid", error: message.message });
+      this.warmKey = null;
+      this.warmAccumulated = EMPTY_PCM;
+      this.drainPendingWarms();
+    }
+  }
+
+  /**
+   * Internals a HIL session needs when playback stalls.
+   *
+   * `seekPending` is the one that matters: while it is set every rendered chunk is discarded, so a
+   * seek whose acknowledgement never arrives silences the rest of the tune. That is not visible from
+   * the sink's counters, which is why guessing at it cost several rounds.
+   */
+  debugState(): Record<string, unknown> {
+    return {
+      seekPending: this.seekPending?.id ?? null,
+      inFlightRenders: this.inFlightRenders,
+      endReceived: this.endReceived,
+      cached: this.cached ? { partial: Boolean(this.cached.partial), seconds: this.cached.durationSeconds } : null,
+      cachedCursor: this.cachedCursor,
+      currentKey: this.currentKey,
+      prerenderFraction: this.prerenderFraction,
+      pendingWarms: this.pendingWarms.size,
+      cachedTunes: this.renderCache.size,
+      scheduledAhead: this.scheduler?.bufferedSeconds() ?? null,
+    };
+  }
+
+  /**
+   * The position playback is waiting to reach, in seconds, or null when it is not waiting.
+   *
+   * Non-null means a seek landed past what is rendered, so playback is holding until the pre-render
+   * gets there. Surfaced because a listener must never be left guessing whether a drag did anything.
+   */
+  getAwaitedSeekSeconds(): number | null {
+    return this.awaitedSeekSeconds;
+  }
+
+  /**
+   * Seconds of the tune now playing that are already rendered, or null when none are.
+   *
+   * Drives the progress bar's pre-render fill: it is exactly how far a seek can land instantly.
+   */
+  getRenderedSeconds(): number | null {
+    if (!this.currentKey) return null;
+    const entry = this.renderCache.get(this.currentKey);
+    return entry ? entry.durationSeconds : null;
   }
 
   /** 0..1 while a pre-render is running, else null. */
@@ -1358,6 +1685,7 @@ export class LocalSidEngine {
     this.prerenderId += 1;
     this.prerenderKey = key;
     this.prerenderFraction = 0;
+    this.prerenderAccumulated = EMPTY_PCM;
     const kernal = roms.kernal.slice().buffer;
     const basic = roms.basic.slice().buffer;
     this.ensurePrerenderWorker().postMessage(

@@ -65,7 +65,18 @@ const ToggleRow = ({ id, testId, label, description, checked, onChange }: Toggle
  * toggles and the "Clear my rankings" action. The two-version bundle status
  * line is added in M4.
  */
-export const SidRadioSettingsSection = () => {
+export interface SidRadioSettingsSectionProps {
+  /**
+   * Whether the developer-only controls are shown.
+   *
+   * The section as a whole is not developer-only any more: SID Radio reached GA, so the shortest-tune
+   * setting — which decides what a station will even offer — has to be reachable by the people using
+   * it. The engine internals below it are a different matter and stay behind the flag.
+   */
+  developerMode?: boolean;
+}
+
+export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSettingsSectionProps = {}) => {
   const { sidRadioEnabled, sidRankingEnabled } = useSidRadioFlags();
   const { localEngineEnabled, engine: playbackEngine } = usePlaybackEngine();
   const { deviceHost } = useC64Connection();
@@ -98,15 +109,17 @@ export const SidRadioSettingsSection = () => {
       </div>
 
       <div className="space-y-3">
-        <ToggleRow
-          id="sid-radio-enabled"
-          testId="settings-sid-radio-enabled"
-          label="Enable SID Radio"
-          description="Endless stations of similar SIDs from HVSC and the tunes you like."
-          checked={sidRadioEnabled}
-          onChange={saveSidRadioEnabled}
-        />
-        {sidRadioEnabled ? (
+        {developerMode ? (
+          <ToggleRow
+            id="sid-radio-enabled"
+            testId="settings-sid-radio-enabled"
+            label="Enable SID Radio"
+            description="Endless stations of similar SIDs from HVSC and the tunes you like."
+            checked={sidRadioEnabled}
+            onChange={saveSidRadioEnabled}
+          />
+        ) : null}
+        {developerMode && sidRadioEnabled ? (
           <ToggleRow
             id="sid-ranking-enabled"
             testId="settings-sid-ranking-enabled"
@@ -144,15 +157,17 @@ export const SidRadioSettingsSection = () => {
           />
         </div>
 
-        <ToggleRow
-          id="local-engine-enabled"
-          testId="settings-local-engine-enabled"
-          label="On-device playback engine (experimental)"
-          description="Adds a “Listen on” choice on the Play screen, so a tune can play on your C64 or here. Playing here needs the C64 ROMs from your own machine — add them below."
-          checked={localEngineEnabled}
-          onChange={saveLocalEngineEnabled}
-        />
-        {localEngineEnabled ? (
+        {developerMode ? (
+          <ToggleRow
+            id="local-engine-enabled"
+            testId="settings-local-engine-enabled"
+            label="On-device playback engine (experimental)"
+            description="Adds a “Listen on” choice on the Play screen, so a tune can play on your C64 or here. Playing here needs the C64 ROMs from your own machine — add them below."
+            checked={localEngineEnabled}
+            onChange={saveLocalEngineEnabled}
+          />
+        ) : null}
+        {developerMode && localEngineEnabled ? (
           <div className="space-y-2 rounded-lg border border-border/70 p-3 min-w-0" data-testid="settings-sid-engine">
             <Label className="text-sm font-medium">SID emulation</Label>
             <p className="text-xs text-muted-foreground">
@@ -232,27 +247,30 @@ export const SidRadioSettingsSection = () => {
             </div>
           </div>
         ) : null}
-        {localEngineEnabled ? <LocalEngineRomsRow deviceHost={deviceHost ?? ""} /> : null}
+        {developerMode && localEngineEnabled ? <LocalEngineRomsRow deviceHost={deviceHost ?? ""} /> : null}
 
-        <div
-          className="space-y-1 rounded-lg border border-border/70 p-3 text-xs"
-          data-testid="settings-sid-radio-status"
-        >
-          <p className="text-muted-foreground">
-            <span className="font-medium text-foreground">Similarity corpus:</span> {SIDCORR_SCHEMA_VERSION} ·{" "}
-            {SIDCORR_EXPECTED.fileCount.toLocaleString()} files / {SIDCORR_EXPECTED.trackCount.toLocaleString()} tracks
-            · sha {SIDCORR_BUNDLE_SHA256.slice(0, 8)}… · {SIDCORR_RELEASE_TAG}
-          </p>
-          <p className="text-muted-foreground">
-            <span className="font-medium text-foreground">Installed HVSC:</span> baseline{" "}
-            {loadHvscState().installedBaselineVersion ?? "—"} + update {loadHvscState().installedVersion}
-          </p>
-          <p className="text-muted-foreground">
-            The two version lines are decoupled — HVSC self-updates; the corpus re-pins per release. Content-addressing
-            (MD5) reconciles any skew.
-          </p>
-        </div>
+        {developerMode ? (
+          <div
+            className="space-y-1 rounded-lg border border-border/70 p-3 text-xs"
+            data-testid="settings-sid-radio-status"
+          >
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">Similarity corpus:</span> {SIDCORR_SCHEMA_VERSION} ·{" "}
+              {SIDCORR_EXPECTED.fileCount.toLocaleString()} files / {SIDCORR_EXPECTED.trackCount.toLocaleString()}{" "}
+              tracks · sha {SIDCORR_BUNDLE_SHA256.slice(0, 8)}… · {SIDCORR_RELEASE_TAG}
+            </p>
+            <p className="text-muted-foreground">
+              <span className="font-medium text-foreground">Installed HVSC:</span> baseline{" "}
+              {loadHvscState().installedBaselineVersion ?? "—"} + update {loadHvscState().installedVersion}
+            </p>
+            <p className="text-muted-foreground">
+              The two version lines are decoupled — HVSC self-updates; the corpus re-pins per release.
+              Content-addressing (MD5) reconciles any skew.
+            </p>
+          </div>
+        ) : null}
 
+        {/* Kept visible: ranking is a feature people use, so undoing it is not a developer concern. */}
         <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 p-3 min-w-0">
           <div className="min-w-0">
             <Label className="text-sm font-medium">Clear my rankings</Label>

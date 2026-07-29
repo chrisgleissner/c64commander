@@ -28,14 +28,14 @@ beforeEach(async () => {
 
 describe("SidRadioSettingsSection", () => {
   it("renders the SID Radio group", () => {
-    render(<SidRadioSettingsSection />);
+    render(<SidRadioSettingsSection developerMode />);
     expect(screen.getByTestId("settings-sid-radio")).toBeInTheDocument();
     expect(screen.getByTestId("settings-sid-radio-enabled")).toBeInTheDocument();
     expect(screen.getByTestId("settings-clear-rankings")).toBeInTheDocument();
   });
 
   it("master flag is on by default (GA); toggling it off hides the ranking toggle", async () => {
-    render(<SidRadioSettingsSection />);
+    render(<SidRadioSettingsSection developerMode />);
     // GA default: master on, so the ranking sub-toggle is visible.
     expect(loadSidRadioEnabled()).toBe(true);
     expect(screen.getByTestId("settings-sid-ranking-enabled")).toBeInTheDocument();
@@ -45,14 +45,14 @@ describe("SidRadioSettingsSection", () => {
   });
 
   it("toggling the on-device engine row persists the gate (Track B; on by default)", async () => {
-    render(<SidRadioSettingsSection />);
+    render(<SidRadioSettingsSection developerMode />);
     expect(loadLocalEngineEnabled()).toBe(true); // GA default
     fireEvent.click(screen.getByTestId("settings-local-engine-enabled"));
     await waitFor(() => expect(loadLocalEngineEnabled()).toBe(false));
   });
 
   it("shows the two-version status line (§6.4)", () => {
-    render(<SidRadioSettingsSection />);
+    render(<SidRadioSettingsSection developerMode />);
     const status = screen.getByTestId("settings-sid-radio-status");
     expect(status).toHaveTextContent("Similarity corpus");
     expect(status).toHaveTextContent("sidcorr-tiny-1");
@@ -61,7 +61,7 @@ describe("SidRadioSettingsSection", () => {
 
   it("Clear my rankings wipes every ranking", async () => {
     await setRanking("0123456789abcdef0123456789abcdef", "like");
-    render(<SidRadioSettingsSection />);
+    render(<SidRadioSettingsSection developerMode />);
     fireEvent.click(screen.getByTestId("settings-clear-rankings"));
     await waitFor(() => expect(getRanking("0123456789abcdef0123456789abcdef")).toBeNull());
     expect(screen.getByTestId("settings-clear-rankings")).toHaveTextContent("Cleared");
@@ -70,7 +70,7 @@ describe("SidRadioSettingsSection", () => {
 
 describe("SidRadioSettingsSection — C64 ROMs", () => {
   it("offers to read the ROMs and says they are needed", () => {
-    render(<SidRadioSettingsSection />);
+    render(<SidRadioSettingsSection developerMode />);
     expect(screen.getByTestId("settings-local-engine-roms")).toBeInTheDocument();
     expect(screen.getByTestId("settings-roms-fetch")).toHaveTextContent("Read from C64");
     expect(screen.getByTestId("settings-roms-status")).toHaveTextContent("No ROMs stored");
@@ -80,14 +80,14 @@ describe("SidRadioSettingsSection — C64 ROMs", () => {
     // This wording is a product requirement, not decoration: reading ROM images
     // from a machine the user is not entitled to use is not sanctioned by this
     // feature, and the user has to be told so where they act.
-    render(<SidRadioSettingsSection />);
+    render(<SidRadioSettingsSection developerMode />);
     const row = screen.getByTestId("settings-local-engine-roms");
     expect(row).toHaveTextContent(/only connect .* to devices you own or have been given permission to use/i);
     expect(row).toHaveTextContent(/never shared, uploaded or included in diagnostics/i);
   });
 
   it("hides the ROM row when the on-device engine is switched off", async () => {
-    render(<SidRadioSettingsSection />);
+    render(<SidRadioSettingsSection developerMode />);
     fireEvent.click(screen.getByTestId("settings-local-engine-enabled"));
     await waitFor(() => expect(screen.queryByTestId("settings-local-engine-roms")).toBeNull());
   });
@@ -105,7 +105,7 @@ describe("SidRadioSettingsSection crossfade availability", () => {
     localStorage.setItem("c64u_playback_engine", engine);
     const { SidRadioSettingsSection } = await import("@/pages/settings/SidRadioSettingsSection");
     const { render } = await import("@testing-library/react");
-    return render(<SidRadioSettingsSection />);
+    return render(<SidRadioSettingsSection developerMode />);
   };
 
   it("disables every crossfade option while playback is routed to the C64", async () => {
@@ -121,5 +121,23 @@ describe("SidRadioSettingsSection crossfade availability", () => {
     for (const ms of [0, 600, 1500, 3000]) {
       expect(getByTestId(`settings-crossfade-${ms}`)).not.toBeDisabled();
     }
+  });
+
+  it("offers the shortest-tune setting without developer mode", () => {
+    // SID Radio reached GA, so what a station will even offer has to be reachable by the people using
+    // it. Only the engine internals below it stay behind the developer flag.
+    render(<SidRadioSettingsSection />);
+
+    expect(screen.getByTestId("settings-sid-radio-min-seconds-input")).toBeVisible();
+    expect(screen.getByTestId("settings-sid-radio-min-seconds-input")).toHaveValue("15");
+  });
+
+  it("keeps the engine internals out of the way unless developer mode is on", () => {
+    render(<SidRadioSettingsSection />);
+
+    expect(screen.queryByTestId("settings-local-engine-enabled")).toBeNull();
+    expect(screen.queryByTestId("settings-sid-radio-status")).toBeNull();
+    // Undoing your own rankings is not a developer concern.
+    expect(screen.getByTestId("settings-clear-rankings")).toBeVisible();
   });
 });

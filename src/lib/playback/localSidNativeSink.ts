@@ -44,6 +44,7 @@
  */
 
 import { addLog } from "@/lib/logging";
+import { startupBufferMs } from "./renderThroughput";
 import type { AudioScheduleBuffer, AudioScheduleSink, AudioScheduleSource } from "./localSidChunkScheduler";
 import type { LocalSidAudioSink } from "./localSidEngine";
 
@@ -63,7 +64,11 @@ const TARGET_BUFFER_MS = 15000;
 const MAX_RING_MS = 20000;
 
 /**
- * How much audio the pipeline holds before the first sound.
+ * How much audio the pipeline holds before the first sound — learned, not fixed.
+ *
+ * See `renderThroughput`: the figure is derived from how fast this device has been measured to render,
+ * so a quick device barely waits and a slow one waits enough not to run dry. A tune that starts and
+ * then pauses half a second later sounds broken; one that starts a moment later sounds like loading.
  *
  * Small, and separate from the target on purpose. The pipeline primes to its target by default, which
  * is right when the target is a fraction of a second and absurd when it is fifteen: playback would
@@ -77,7 +82,7 @@ const MAX_RING_MS = 20000;
  * second the ring could still touch zero before it got ahead — heard as a single ~0.2 s pause about
  * two seconds into a tune, and then never again.
  */
-const PRIME_MS = 700;
+const primeMs = () => startupBufferMs();
 
 /**
  * HAL bursts in the AudioTrack's own buffer. The mirror uses 4, sized for input latency it cannot
@@ -398,7 +403,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
         bufferMs: TARGET_BUFFER_MS,
         maxRingMs: MAX_RING_MS,
         trackBursts: TRACK_BURSTS,
-        primeMs: PRIME_MS,
+        primeMs: primeMs(),
       })
       .then(() => {
         this.opened = true;
@@ -425,6 +430,25 @@ class NativeLocalSidSink implements AudioScheduleSink {
       return;
     }
     this.fade = { to, perSecond: ((to - this.gain) * 1000) / ms };
+  }
+
+  /**
+   * Drop everything queued, here and in the pipeline, and restart the clock.
+   *
+   * The clock has to go back to zero with it: the scheduler resets its own position on a seek and
+   * then schedules against `currentTime`, so a playhead still counting the old position would put the
+   * new audio in the past and have it discarded as late.
+   */
+  flush(): void {
+    this.queue = [];
+    this.endings = [];
+    this.writtenFrames = 0;
+    this.queuedSec = 0;
+    this.playheadSec = 0;
+    this.playheadAtMs = performance.now();
+    void this.backend.flushAudioTrack?.().catch((error) => {
+      addLog("debug", "Native audio: flush failed", { error: (error as Error)?.message ?? String(error) });
+    });
   }
 
   suspend(): void {
@@ -492,6 +516,7 @@ export const createNativeLocalSidSink = (
     fadeOut: (ms: number) => sink.fadeTo(0, ms),
     fadeIn: (ms: number, toGain = 1) => sink.fadeTo(toGain, ms),
     setGain: (value: number) => sink.setGain(value),
+    flush: () => sink.flush(),
     close: () => sink.close(),
   };
 };

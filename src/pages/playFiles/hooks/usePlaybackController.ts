@@ -171,18 +171,6 @@ export const USER_TRANSPORT_COALESCE_MS = 120;
 const LOCAL_ENGINE_STATS_POLL_MS = 1000;
 
 /**
- * How often a scrub sends the engine to the finger's current position.
- *
- * Not once per visual step. Seeking backwards reloads the tune and re-renders
- * up to the target, so a seek per 200 ms repeat queues work faster than it can
- * finish and the audio ends up chasing a target from seconds ago. ~350 ms is
- * slow enough for each catch-up to land — giving a short audible burst of the
- * tune at the new position, the way a CD player previews a scrub — and quick
- * enough to stay roughly with the moving progress bar.
- */
-const SCRUB_SEEK_INTERVAL_MS = 350;
-
-/**
  * How long the scrub release waits for a catch-up seek that is still in flight
  * before landing anyway. Generous next to a normal seek (a pre-rendered tune
  * seeks in well under a second) and short enough that a wedged engine costs the
@@ -2276,25 +2264,6 @@ export function usePlaybackController({
   const scrubEndingRef = useRef(false);
   const dragSettleRef = useRef<number | null>(null);
 
-  const runScrubSeek = useCallback(async () => {
-    // The SHARED controller, never the per-page ref. The ref starts null on every fresh mount and is
-    // only filled by whoever starts a tune — so a page that adopted an already-running session (a tab
-    // switch away from Play and back, or the transient second instance one creates) had none, and
-    // every scrub silently did nothing while the tune carried on. Reproduced on hardware: tab to Home,
-    // back to Play, tap the progress bar, and the elapsed time does not move.
-    const controller = getLocalSidPlayback();
-    const target = scrubTargetMsRef.current;
-    if (!controller || target === null || scrubSeekInFlightRef.current) return;
-    scrubSeekInFlightRef.current = true;
-    try {
-      await controller.seekTo(target / 1000);
-    } catch (error) {
-      addLog("debug", "Local SID scrub seek failed", { error: (error as Error).message });
-    } finally {
-      scrubSeekInFlightRef.current = false;
-    }
-  }, [getLocalSidPlayback]);
-
   const beginScrub = useCallback(
     (durationMs?: number) => {
       const controller = getLocalSidPlayback();
@@ -2304,10 +2273,13 @@ export function usePlaybackController({
       scrubTargetMsRef.current = startMs;
       setScrubTargetMs(startMs);
       if (scrubTimerRef.current === null) {
-        scrubTimerRef.current = window.setInterval(() => void runScrubSeek(), SCRUB_SEEK_INTERVAL_MS);
+        // No repeating seek while the gesture is held, for the same reason the drag does not: each one
+        // re-renders the tune from the start, so a held gesture queued far more work than it completed
+        // and playback stayed silent. The release seeks once, to where the listener actually stopped.
+        scrubTimerRef.current = null;
       }
     },
-    [runScrubSeek, getLocalSidPlayback],
+    [getLocalSidPlayback],
   );
 
   const scrubBy = useCallback((deltaSeconds: number) => {
@@ -2407,9 +2379,11 @@ export function usePlaybackController({
       scrubDurationMsRef.current = durationMs;
       scrubTargetMsRef.current = target;
       setScrubTargetMs(target);
-      if (scrubTimerRef.current === null) {
-        scrubTimerRef.current = window.setInterval(() => void runScrubSeek(), SCRUB_SEEK_INTERVAL_MS);
-      }
+      // NO seek while the finger is down — only the bar moves. Every seek costs a full re-render from
+      // the start of the tune, because libsidplayfp cannot rewind: on a Pixel 4 that is ten to twenty
+      // seconds for a position deep into a tune. Issuing one per settle interval queued minutes of work
+      // for positions the listener had already dragged past, and playback stayed silent throughout —
+      // reproduced on the device as a drag that never resumed. Only where the finger is lifted matters.
       // Land shortly after the finger stops moving; another move restarts it.
       if (dragSettleRef.current !== null) window.clearTimeout(dragSettleRef.current);
       dragSettleRef.current = window.setTimeout(() => {
@@ -2417,7 +2391,7 @@ export function usePlaybackController({
         void endScrub();
       }, DRAG_SETTLE_MS);
     },
-    [runScrubSeek, endScrub, getLocalSidPlayback],
+    [endScrub, getLocalSidPlayback],
   );
 
   const handleSeekBy = useCallback(

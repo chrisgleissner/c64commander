@@ -2303,8 +2303,10 @@ export default function SettingsPage() {
             </motion.div>
           ))}
 
-          {/* 5. SID Radio (developer-only during rollout; ungated at GA when flags default on) */}
-          {isDeveloperModeEnabled ? <SidRadioSettingsSection /> : null}
+          {/* 5. SID Radio. SHOWN TO EVERYONE: the feature itself reached GA, so the minimum song length
+              — which decides what the radio will even offer — has to be reachable by the people using
+              it. The controls inside it that are still developer-only stay gated there. */}
+          <SidRadioSettingsSection developerMode={isDeveloperModeEnabled} />
 
           {/* 6. HVSC (hidden when the HVSC feature is disabled for the variant) */}
           {hvscEnabled && (

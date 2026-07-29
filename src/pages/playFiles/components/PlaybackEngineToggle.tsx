@@ -17,12 +17,10 @@ import { addLog } from "@/lib/logging";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { useAvMirror } from "@/hooks/useAvMirror";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
-import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
 import { saveMirrorC64Audio } from "@/lib/config/appSettings";
-import { LOCAL_DEVICE_LABEL, connectedDeviceLabel } from "@/lib/sourceNavigation/sourceTerms";
 
 /**
- * "Listen on: [<device>] [Both] [Local]" (spec §12.5, Track B / LE2).
+ * "Listen on: [Local] [Remote] [Both]" (spec §12.5, Track B / LE2).
  *
  * The control asks ONE question — which speakers you hear the tune on — and
  * every option names speakers, so the middle one is simply the union of the
@@ -127,10 +125,20 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
     >
       <Label className="text-xs font-medium text-muted-foreground">Listen on</Label>
       <div className="flex flex-wrap gap-2">
+        {/* Local, Remote, Both — in that order, so the row reads as a progression from this device
+            outwards to both. "Remote" rather than the device's name or host: the header already says
+            which device is connected, repeating it here spent the row's width on something already on
+            screen, and the wording now matches Remote Input. */}
+        {option(
+          "local",
+          <FileOriginIcon origin="local" className="h-3.5 w-3.5" label="" />,
+          "Local",
+          "playback-engine-local",
+        )}
         {option(
           "c64",
           <FileOriginIcon origin="ultimate" className="h-3.5 w-3.5" label="" />,
-          connectedDeviceLabel(getSelectedSavedDevice()?.name),
+          "Remote",
           "playback-engine-c64",
         )}
         {canStreamBack
@@ -141,12 +149,6 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
               "playback-listen-both",
             )
           : null}
-        {option(
-          "local",
-          <FileOriginIcon origin="local" className="h-3.5 w-3.5" label="" />,
-          LOCAL_DEVICE_LABEL,
-          "playback-engine-local",
-        )}
       </div>
     </div>
   );

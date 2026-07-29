@@ -156,12 +156,18 @@ describe("scrub feedback contract", () => {
     expect(page).toContain("elapsedLabel={formatTime(displayElapsedMs)}");
   });
 
-  it("sends the engine to the latest target on a bounded cadence", async () => {
+  it("does not seek at all while the finger is down", async () => {
+    // Amended. Seeking on a cadence during the gesture was still one full re-render per tick, because
+    // libsidplayfp cannot rewind: on a Pixel 4 that is fifteen to twenty seconds of silence per seek,
+    // for positions the listener had already dragged past. Only where the finger is LIFTED matters, so
+    // the gesture moves the bar and the release seeks once.
     const { readFileSync } = await import("node:fs");
     const hook = readFileSync("src/pages/playFiles/hooks/usePlaybackController.ts", "utf8");
-    // One seek in flight at a time, aimed at wherever the finger is now.
-    expect(hook).toContain("if (!controller || target === null || scrubSeekInFlightRef.current) return");
-    expect(hook).toContain("SCRUB_SEEK_INTERVAL_MS");
+    expect(hook).not.toContain("SCRUB_SEEK_INTERVAL_MS");
+    expect(hook).not.toContain("runScrubSeek");
+    // The release is what seeks, and it still lands exactly where the finger left off.
+    expect(hook).toContain("const endScrub = useCallback(");
+    expect(hook).toContain("scrubTargetMsRef.current");
   });
 });
 
