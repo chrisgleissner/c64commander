@@ -653,6 +653,11 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
           url: downloadUrl,
           directory: Directory.Data,
           path: `${cacheDir}/${archivePath}`,
+          // Without this the plugin dispatches NO progress events at all, so the listener registered
+          // above never fired and the bar sat at zero for the whole download — which, for the full
+          // 81 MiB archive, is most of the wait. The 400 ms stat poll below cannot cover for it
+          // either: the file is not readable at its final path until the transfer completes.
+          progress: true,
         });
         nativeArchiveDownloads.set(archivePath, nativeDownload);
         try {

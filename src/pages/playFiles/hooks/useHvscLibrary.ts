@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { overallPreparationPercent, type HvscArchiveKind } from "@/lib/hvsc/hvscProgressModel";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { markHvscUpdateCheckAt, shouldCheckForHvscUpdates } from "@/lib/hvsc/hvscReleaseService";
@@ -1287,16 +1288,29 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
       hvscStatusSummary.metadata.status,
     ],
   );
+  // ONE figure across the whole install, not one per stage. Showing whichever stage was running meant
+  // the bar filled during the download, snapped back to nothing, filled again through extraction,
+  // snapped back, and filled a third time while indexing — reaching 100% three times without
+  // finishing. It is weighted by the two things actually being counted, bytes and songs, against the
+  // expected totals for a full archive or an update so it means something before either total is
+  // known.
+  const hvscArchiveKind: HvscArchiveKind = hvscStatus?.installedVersion ? "update" : "full";
+  const hvscOverallPercent =
+    hvscPreparationSnapshot.state === "DOWNLOADING" || hvscPreparationSnapshot.state === "INGESTING"
+      ? overallPreparationPercent({
+          kind: hvscArchiveKind,
+          downloadedBytes: hvscDownloadBytes,
+          totalBytes: hvscDownloadTotalBytes,
+          downloadComplete: hvscPreparationSnapshot.state === "INGESTING",
+          indexedSongs: hvscIngestionIngestedSongs ?? hvscSummaryFilesExtracted,
+          totalSongs: hvscIngestionTotalSongs ?? hvscExtractionTotalFiles,
+        })
+      : null;
+  // Held to its high-water mark: a Content-Length arriving mid-download, or enumeration replacing an
+  // estimated song count with a real one, legitimately moves the underlying number backwards, and a
+  // bar that retreats reads as a fault.
   const hvscPreparationProgressPercent =
-    hvscPreparationSnapshot.state === "DOWNLOADING"
-      ? capActivePreparationProgress(hvscDownloadPercent)
-      : hvscPreparationSnapshot.state === "INGESTING"
-        ? capActivePreparationProgress(
-            hvscStatusSummary.metadata.status === "in-progress"
-              ? (hvscStatusSummary.metadata.percent ?? hvscExtractionPercent)
-              : hvscExtractionPercent,
-          )
-        : null;
+    hvscOverallPercent === null ? null : capActivePreparationProgress(hvscOverallPercent);
   const hvscPreparationThroughputLabel = (() => {
     if (hvscPreparationSnapshot.state === "DOWNLOADING" && hvscDownloadBytes && hvscDownloadElapsedMs) {
       const mbPerSecond = hvscDownloadBytes / 1024 / 1024 / Math.max(hvscDownloadElapsedMs / 1000, 0.001);

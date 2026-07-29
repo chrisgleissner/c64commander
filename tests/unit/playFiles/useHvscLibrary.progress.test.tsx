@@ -345,7 +345,13 @@ describe("useHvscLibrary progress coverage", () => {
     });
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
-    expect(result.current.hvscPreparationProgressPercent).toBe(99);
+    // Assert the PROPERTY, not the number. A stage reporting its own 100% must not fill the bar,
+    // because the install is not finished — that is what made it reach 100% three times. The exact
+    // figure is a function of how the download and indexing shares are weighted, which is the
+    // progress model's business and has its own tests.
+    const percent = result.current.hvscPreparationProgressPercent ?? 0;
+    expect(percent).toBeGreaterThan(0);
+    expect(percent).toBeLessThan(100);
   });
 
   it("treats database insertion as indexing progress instead of falling back to extract", async () => {

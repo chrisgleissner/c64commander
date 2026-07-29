@@ -201,7 +201,11 @@ describe("useHvscLibrary preparation state coverage", () => {
     vi.useRealTimers();
   });
 
-  it("reports DOWNLOADING state and derives preparation progress percent from download percent", async () => {
+  it("reports DOWNLOADING state and weights the download into one overall figure", async () => {
+    // Amended: the bar used to show each stage's own 0-100, so it filled during the download, snapped
+    // back to nothing, and filled again through extraction and indexing — reaching 100% three times
+    // without finishing. It is now ONE figure across the whole install, weighted by bytes and songs,
+    // so half the bytes of a full archive is the download's share of the total, not half the bar.
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({
         download: {
@@ -218,7 +222,8 @@ describe("useHvscLibrary preparation state coverage", () => {
     const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("DOWNLOADING"));
-    expect(result.current.hvscPreparationProgressPercent).toBe(50);
+    // 500 of 1000 bytes = half the download, which is DOWNLOAD_WEIGHT.full (0.55) of the whole job.
+    expect(result.current.hvscPreparationProgressPercent).toBe(28);
   });
 
   it("returns null preparation progress percent when state is NOT_PRESENT", async () => {
@@ -293,7 +298,10 @@ describe("useHvscLibrary preparation state coverage", () => {
     expect(result.current.hvscPreparationThroughputLabel).toBeNull();
   });
 
-  it("reports INGESTING state and derives preparation progress from metadata percent when metadata is in-progress", async () => {
+  it("reports INGESTING state and keeps the download's share already earned", async () => {
+    // Amended with the one-bar change: during ingest the download is finished, so the bar holds the
+    // share the download earned and grows from there as songs are indexed. It used to restart at the
+    // metadata stage's own 0-100, which is why it reached 100% more than once per install.
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({
         metadata: {
@@ -308,10 +316,12 @@ describe("useHvscLibrary preparation state coverage", () => {
     const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
-    expect(result.current.hvscPreparationProgressPercent).toBe(75);
+    expect(result.current.hvscPreparationProgressPercent).toBe(55);
   });
 
-  it("derives preparation progress from extraction percent when INGESTING and metadata not in-progress", async () => {
+  it("holds the download's share while extracting, rather than restarting at zero", async () => {
+    // Amended with the one-bar change: extraction no longer drives its own 0-100. The download is
+    // done, so the bar is already past halfway and advances as songs are indexed.
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({
         extraction: {
@@ -328,7 +338,7 @@ describe("useHvscLibrary preparation state coverage", () => {
     const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
-    expect(result.current.hvscPreparationProgressPercent).toBe(20);
+    expect(result.current.hvscPreparationProgressPercent).toBe(55);
   });
 
   it("computes items/s throughput label when INGESTING with metadata in-progress and processedSongs", async () => {
@@ -617,7 +627,9 @@ describe("useHvscLibrary preparation state coverage", () => {
     });
   });
 
-  it("derives download progress percent from progress event when download status in-progress via event", async () => {
+  it("weights a download progress event into the overall figure", async () => {
+    // Amended with the one-bar change: a download that is 42% through is 42% of the download's
+    // share of the whole install, not 42% of the bar.
     const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(progressListener).not.toBeNull());
@@ -634,7 +646,7 @@ describe("useHvscLibrary preparation state coverage", () => {
     });
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("DOWNLOADING"));
-    expect(result.current.hvscPreparationProgressPercent).toBe(42);
+    expect(result.current.hvscPreparationProgressPercent).toBe(23);
   });
 
   it("derives INGESTING progress from metadata percent when progress event sets metadata in-progress summary", async () => {
