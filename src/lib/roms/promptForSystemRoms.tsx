@@ -20,9 +20,7 @@
  * app's, to discharge.
  */
 
-import { createElement } from "react";
-
-import { ToastAction } from "@/components/ui/toast";
+import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
 import { toast } from "@/hooks/use-toast";
 import { saveLocalEngineAutoRoms } from "@/lib/config/appSettings";
 import { ensureSystemRoms } from "@/lib/roms/ensureSystemRoms";
@@ -42,16 +40,19 @@ export const promptForSystemRoms = (): void => {
     description:
       "Reading them from the machine you're connected to is switched off, so this is playing with " +
       "the lighter SID emulation. Only do this with a machine you own or are permitted to use.",
-    action: createElement(
-      ToastAction,
-      {
-        altText: "Read the C64 ROMs from the connected machine",
-        onClick: () => {
+    // Cast because `ToastActionElement` is declared as `ReactElement<typeof ToastAction>`, which
+    // describes the component rather than its props — so nothing that is actually rendered satisfies
+    // it. Every call site has the same problem; this is the shape the type was meant to express.
+    action: (
+      <ToastAction
+        altText="Read the C64 ROMs from the connected machine"
+        onClick={() => {
           saveLocalEngineAutoRoms(true);
           void ensureSystemRoms();
-        },
-      },
-      "Read them now",
-    ),
+        }}
+      >
+        Read them now
+      </ToastAction>
+    ) as ToastActionElement,
   });
 };
