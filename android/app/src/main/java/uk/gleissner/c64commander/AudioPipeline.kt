@@ -92,6 +92,16 @@ internal class AudioPipeline(
      * because the ring cannot help once the audio has been handed to the track.
      */
     trackBursts: Int = 0,
+    /**
+     * Ring depth to reach before playback starts, in ms. Defaults to the full target.
+     *
+     * Priming to the target is right for a live stream, whose target is a fraction of a second. It is
+     * wrong for a deep on-device ring: waiting for fifteen seconds before the first sound is not a
+     * start-up delay anyone would accept, and if the producer stops short of the target — as it must,
+     * or it would overfill — playback never begins at all. That deadlock was silence on the device
+     * with twelve seconds sitting in a ring that was waiting for fifteen.
+     */
+    primeMs: Int = 0,
 ) {
   data class Stats(
       /** PCM queued ahead of the speaker (ring + track), i.e. the current output latency. */
@@ -127,6 +137,8 @@ internal class AudioPipeline(
   private val writeFramesPerChunk: Int
 
   /** Steady-state ring depth, in SOURCE frames. Adapts to how bursty this link turns out to be. */
+  /** Ring depth to prime to when the caller wants one shallower than the target; 0 = use the target. */
+  private val explicitPrimeFrames: Int
   @Volatile private var targetFrames: Int
   private val minTargetFrames: Int
   private val maxTargetFrames: Int
@@ -213,6 +225,7 @@ internal class AudioPipeline(
     minTargetFrames =
         msToFrames(sourceRate, (targetLatencyMs - trackMs).coerceAtLeast(MIN_RING_MS))
     maxTargetFrames = msToFrames(sourceRate, if (maxRingMs > 0) maxOf(maxRingMs, MIN_RING_MS) else MAX_RING_MS)
+    explicitPrimeFrames = if (primeMs > 0) msToFrames(sourceRate, primeMs) else 0
     targetFrames = minTargetFrames
     hardMaxFrames = maxTargetFrames * 2
     ringFrames = hardMaxFrames * 2
@@ -549,7 +562,9 @@ internal class AudioPipeline(
 
   /** Ring depth to reach before playback starts: the cushion plus what the speaker's buffer will take. */
   private val primeFrames: Int
-    get() = targetFrames + (trackBufferFrames.toLong() * sourceRate / outputRate).toInt()
+    get() =
+        (if (explicitPrimeFrames > 0) explicitPrimeFrames else targetFrames) +
+            (trackBufferFrames.toLong() * sourceRate / outputRate).toInt()
 
   /** Fractional read position within the ring, in source frames past [readFrames]. */
   private var fraction = 0.0

@@ -230,8 +230,26 @@ not in the delivery path. Web Audio had the same property for a different reason
 only had to be _early_. Pushing PCM across the Capacitor bridge puts JS back _in_ the delivery path,
 on the same thread as the WASM renderer and the UI, where it has to be _punctual_. Several attempts
 to fix the resulting stutter by adjusting punctuality — slice sizes, write lead times, estimating the
-drain between writes — all failed, because punctuality was the wrong thing to adjust. What works is a
-ring holding **seconds**, so JS only has to be roughly on time again.
+drain between writes — all failed, because punctuality was the wrong thing to adjust. The direction
+that helps is a ring holding **seconds**, so JS only has to be roughly on time again.
+
+Two further pieces are needed to make a deep ring work, and both were learned the hard way:
+
+- **Priming must be separate from the target** (`primeMs`). The pipeline waits for its target depth
+  before the first sound, which is right at 120 ms and absurd at 15 s. Worse, the writer has to stop
+  short of the target or it would overfill — so playback never began at all. That was silence on the
+  device, twelve seconds sitting in a ring waiting for fifteen. Priming at ~200 ms starts playback
+  promptly and the ring fills behind it, like the anti-shock buffer in a portable CD player.
+- **Counters are necessary, not sufficient.** A steady ring with zero underruns and zero drops was
+  reported through two builds a listener could plainly hear dropping out. Confirm by ear, or with the
+  barcode SID graded per note.
+
+Detectors that do NOT work here, each tried and each wrong: an envelope/level dropout detector cannot
+see a stall that repeats audio, because the level stays flat; spectral self-similarity does see a
+freeze but flags sustained chords too, reporting 140 "freezes" in a minute of ordinary music; and
+aligning a recording against a reference render to find pauses reports phantom stalls, because
+repetitive music matches in several places at once. The barcode SID remains the only instrument that
+settles it, and a listener remains the arbiter.
 
 Consequences to respect when touching this path:
 

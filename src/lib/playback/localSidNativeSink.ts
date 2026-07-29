@@ -63,6 +63,23 @@ const TARGET_BUFFER_MS = 15000;
 const MAX_RING_MS = 20000;
 
 /**
+ * How much audio the pipeline holds before the first sound.
+ *
+ * Small, and separate from the target on purpose. The pipeline primes to its target by default, which
+ * is right when the target is a fraction of a second and absurd when it is fifteen: playback would
+ * not start for fifteen seconds, and because the writer stops short of the target — it has to, or it
+ * would overfill — it never started at all. That was silence on the device, with twelve seconds
+ * sitting in a ring waiting for fifteen. Playback begins under a second in, and the ring goes on
+ * filling behind it.
+ *
+ * Not smaller than this. The engine renders about 2.3x faster than real time once warm, so in the
+ * first seconds the margin between filling the ring and draining it is thin, and at a fifth of a
+ * second the ring could still touch zero before it got ahead — heard as a single ~0.2 s pause about
+ * two seconds into a tune, and then never again.
+ */
+const PRIME_MS = 700;
+
+/**
  * HAL bursts in the AudioTrack's own buffer. The mirror uses 4, sized for input latency it cannot
  * afford to add; on-device playback has none to protect, and the deeper buffer is what absorbs the
  * native player thread being descheduled.
@@ -118,6 +135,7 @@ export interface NativeLocalAudioBackend {
     bufferMs?: number;
     maxRingMs?: number;
     trackBursts?: number;
+    primeMs?: number;
   }): Promise<{ sampleRate: number; bufferMs: number }>;
   writeAudioTrack(options: { data: string }): Promise<{ bufferedMs?: number } | undefined>;
   closeAudioTrack(options?: Record<string, never>): Promise<void>;
@@ -380,6 +398,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
         bufferMs: TARGET_BUFFER_MS,
         maxRingMs: MAX_RING_MS,
         trackBursts: TRACK_BURSTS,
+        primeMs: PRIME_MS,
       })
       .then(() => {
         this.opened = true;

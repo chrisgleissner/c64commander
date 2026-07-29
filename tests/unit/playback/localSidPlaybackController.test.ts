@@ -63,8 +63,21 @@ describe("LocalSidPlaybackController", () => {
     const controller = new LocalSidPlaybackController(() => engine);
     const bytes = new Uint8Array([1, 2, 3, 4]).buffer;
     const result = await controller.play(byteSource(bytes), 2, {});
-    expect(engine.play).toHaveBeenCalledWith(bytes, 2, {});
+    // The cache key goes in with the tune, not after it: opening is where a warmed lead-in is poured
+    // into the buffer, so a key that arrives later is a warm cache that is never found.
+    expect(engine.play).toHaveBeenCalledWith(bytes, 2, {}, undefined);
     expect(result).toEqual(RESULT);
+  });
+
+  it("hands the engine the cache key before the tune opens", async () => {
+    const engine = fakeEngine();
+    const controller = new LocalSidPlaybackController(() => engine);
+    const bytes = new Uint8Array([1, 2, 3, 4]).buffer;
+
+    engine.prerender = vi.fn();
+    await controller.play(byteSource(bytes), 1, {}, { prerenderKey: "tune#1", durationSeconds: 30 });
+
+    expect(engine.play).toHaveBeenCalledWith(expect.anything(), 1, {}, "tune#1");
   });
 
   it("reuses the same engine across plays", async () => {

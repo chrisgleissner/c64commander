@@ -258,6 +258,8 @@ class StreamUdpPlugin : Plugin() {
     // the mirror: it has no input latency to protect, and a deeper track buffer is what absorbs the
     // player thread being descheduled.
     val trackBursts = call.getInt("trackBursts") ?: 0
+    // Depth to reach before the first sound. Kept small on a deep ring so playback starts promptly.
+    val primeMs = call.getInt("primeMs") ?: 0
     try {
       synchronized(audioLifecycleLock) {
         audioPipeline?.close()
@@ -269,6 +271,7 @@ class StreamUdpPlugin : Plugin() {
                 nativeFramesPerBurst(),
                 maxRingMs = maxRingMs,
                 trackBursts = trackBursts,
+                primeMs = primeMs,
             )
         pipeline.start()
         audioPipeline = pipeline

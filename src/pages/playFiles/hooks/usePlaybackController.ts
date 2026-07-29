@@ -93,6 +93,19 @@ import type { SidEnablement } from "@/lib/config/sidVolumeControl";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { featureFlagManager } from "@/lib/config/featureFlags";
 
+/**
+ * How much of an upcoming track to render ahead.
+ *
+ * Matched to the native buffer's depth, and that is the trick. The cached opening is poured into the
+ * ring as fast as the ring will take it, so when it runs out and live rendering takes over, the ring
+ * is holding roughly this much — exactly the margin the renderer needs to get ahead. Measured with a
+ * six-second lead-in the ring fell to 0.44 s at the seam; matched to the ring it does not dip.
+ *
+ * Not more: output is 192 KB per second, so two warmed neighbours at this depth already cost a few
+ * megabytes.
+ */
+const LEAD_IN_SECONDS = 15;
+
 type HandledUiError = Error & { c64uHandled?: boolean };
 
 const markHandledUiError = (error: unknown) => {
@@ -803,6 +816,49 @@ export function usePlaybackController({
     ],
   );
 
+  /**
+   * Render the opening of the next and previous tracks, so skipping to either starts instantly.
+   *
+   * Only the opening — a few seconds is all that is needed to cover the gap before the buffer is
+   * ahead of the speaker, and caching whole tunes costs 192 KB per second.
+   *
+   * Skipped for tracks whose bytes are not already to hand. Resolving those means going to the
+   * network or the Ultimate, and doing that speculatively for tracks nobody has asked for would
+   * spend the listener's bandwidth and the device's attention on a guess.
+   */
+  const warmNeighbouringTracks = useCallback(async () => {
+    const playlist = playlistRef.current;
+    const index = currentIndexRef.current;
+    for (const offset of [1, -1]) {
+      const neighbour = playlist[index + offset];
+      if (!neighbour) continue;
+      // HVSC entries carry no bytes until they are played — resolving one reads from the on-device
+      // library, which is local and cheap. Anything still without a file after that is coming over
+      // the network, and is left alone rather than fetched on a guess.
+      const resolved = neighbour.request.file
+        ? neighbour.request
+        : ((await resolveHvscRuntimeRequest(neighbour).catch(() => null))?.request ?? neighbour.request);
+      const file = resolved.file;
+      if (!file) continue;
+      try {
+        const bytes = await file.arrayBuffer();
+        getLocalSidPlayback().warmLeadIn(
+          `${neighbour.id}#${resolved.songNr ?? 0}`,
+          bytes,
+          resolved.songNr ?? 0,
+          LEAD_IN_SECONDS,
+        );
+      } catch (error) {
+        // A track that cannot be read now is simply not warmed; it will be read when it is played.
+        addLog("debug", "Lead-in warm skipped", {
+          service: "local-sid",
+          item: neighbour.label,
+          error: (error as Error)?.message ?? String(error),
+        });
+      }
+    }
+  }, []);
+
   const playItem = useCallback(
     async (
       item: PlaylistItem,
@@ -1190,6 +1246,10 @@ export function usePlaybackController({
               durationSeconds: resolvedDuration ? resolvedDuration / 1000 : undefined,
             },
           );
+          // Warm the tracks either side of this one. A track started from a warmed opening plays out
+          // of memory while the renderer catches up, instead of having to out-run the speaker from a
+          // standing start — which it only just manages, and audibly failed to a second or two in.
+          void warmNeighbouringTracks();
         } else {
           await executePlayPlan(api, plan, executionOptions);
           // The tune is now running on the Ultimate. Recorded here, at the real

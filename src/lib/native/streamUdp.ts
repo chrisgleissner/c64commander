@@ -138,6 +138,8 @@ export interface StreamUdpPlugin {
     maxRingMs?: number;
     /** HAL bursts in the AudioTrack's own buffer; deeper absorbs player-thread descheduling. */
     trackBursts?: number;
+    /** Ring depth before the first sound. Keeps start-up instant on a deep ring. */
+    primeMs?: number;
   }): Promise<{ sampleRate: number; bufferMs: number }>;
   /**
    * Queue one chunk of base64 interleaved-stereo-S16LE PCM into the native pipeline.

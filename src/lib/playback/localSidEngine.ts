@@ -442,6 +442,8 @@ export class LocalSidEngine {
   private readonly renderCache = new RenderedTuneCache();
   private prerenderId = 0;
   private prerenderKey: string | null = null;
+  /** Set while the running pre-render is only a lead-in, not the whole tune. */
+  private prerenderPartialSeconds: number | null = null;
   /**
    * The pre-render's own worker — a separate thread from playback, because
    * sharing one starved playback into silence (see `ensurePrerenderWorker`).
@@ -654,7 +656,16 @@ export class LocalSidEngine {
     sidBytes: ArrayBuffer,
     songIndex: number,
     callbacks: LocalSidPlayCallbacks = {},
+    /**
+     * Cache key for this tune, if the caller has one.
+     *
+     * Given here rather than only to `prerender` because the engine has to know it *before* the tune
+     * opens: opening is where a warmed lead-in gets poured into the buffer, and a key that only
+     * arrives afterwards is a warm cache that is never found.
+     */
+    cacheKey?: string,
   ): Promise<LocalSidPlayResult> {
+    if (cacheKey) this.currentKey = cacheKey;
     // Keep a copy before `openTuneOnce` transfers ownership of the caller's buffer to the worker,
     // so a retry has something left to open with.
     const retryBytes = sidBytes.slice(0);
@@ -770,7 +781,10 @@ export class LocalSidEngine {
       case "prerendered": {
         if (message.id !== this.prerenderId || !this.prerenderKey) return;
         this.prerenderFraction = null;
+        const partial = this.prerenderPartialSeconds !== null;
+        this.prerenderPartialSeconds = null;
         this.renderCache.set(this.prerenderKey, {
+          partial,
           pcm: message.pcm,
           sampleRate: message.sampleRate,
           channels: message.channels,
@@ -889,6 +903,21 @@ export class LocalSidEngine {
     // Supervise from the moment there is something to supervise. The clock starts here rather than
     // at the first chunk, so a tune that never produces one at all is caught too.
     this.startWatchdog();
+    // Start from whatever of this tune is already rendered. Without this the engine has to out-render
+    // the speaker from a standing start — it manages only about 2.3x real time while warming up — so
+    // the ring could still run dry a second or two in, heard as a single short pause right at the
+    // beginning of a track. That is the worst possible moment for one: it is where a listener decides
+    // whether the player is trustworthy.
+    const warmed = this.currentKey ? this.renderCache.get(this.currentKey) : null;
+    if (warmed) {
+      this.cached = warmed;
+      this.cachedCursor = 0;
+      if (warmed.partial) {
+        // Position the live renderer at the seam NOW, while the cache is still playing, so the
+        // hand-off costs nothing when it arrives.
+        this.beginPartialHandoff(warmed.durationSeconds);
+      }
+    }
     this.pump();
 
     pending?.resolve({
@@ -1089,6 +1118,14 @@ export class LocalSidEngine {
       const chunkSamples = Math.floor(this.chunkSeconds * sampleRate) * channels;
       while (this.scheduler.bufferedSeconds() < this.targetBufferSeconds) {
         if (this.cachedCursor >= pcm.length) {
+          if (this.cached.partial) {
+            // Only the opening was cached. The rest of the tune is rendered live from the seam,
+            // which the worker was sent to when playback began. Treating this as the end instead
+            // would cut the song off after its lead-in.
+            this.cached = null;
+            this.cachedCursor = 0;
+            break;
+          }
           this.endReceived = true;
           this.maybeFireEnded();
           return;
@@ -1262,6 +1299,37 @@ export class LocalSidEngine {
   /** A fully-rendered tune, when this one has been cached. */
   getRenderedTune(key: string): RenderedTune | null {
     return this.renderCache.get(key);
+  }
+
+  /**
+   * Send the live renderer to where the cached opening ends, while that opening is still playing.
+   *
+   * Seeking is not free — libsidplayfp cannot rewind, so it re-renders from the start to get there —
+   * which is precisely why it is started early rather than when the buffer runs out.
+   */
+  private beginPartialHandoff(seconds: number): void {
+    if (!this.worker || seconds <= 0) return;
+    this.seekEpoch += 1;
+    const id = this.nextId;
+    // Hand the slot over rather than overwrite it: `seekPending` gates chunk delivery, so a leaked
+    // entry silences the tune. See the comment on the interactive seek path.
+    this.seekPending?.resolve();
+    this.seekPending = { id, resolve: () => this.pump() };
+    this.worker.postMessage({ type: "seek", id, positionSeconds: seconds });
+  }
+
+  /**
+   * Render the opening of a tune the listener has not asked for yet.
+   *
+   * The next and previous tracks are warmed so that skipping to one starts from memory instead of
+   * from a cold renderer. Only the opening: that is all that is needed to cover the gap before the
+   * buffer is ahead, and caching whole tunes at 192 KB per second would cost far more memory than
+   * the problem is worth.
+   */
+  warmLeadIn(key: string, sidBytes: ArrayBuffer, songIndex: number, seconds: number): void {
+    if (this.renderCache.has(key) || seconds <= 0) return;
+    this.prerenderPartialSeconds = seconds;
+    this.prerender(key, sidBytes, songIndex, seconds);
   }
 
   /** 0..1 while a pre-render is running, else null. */
