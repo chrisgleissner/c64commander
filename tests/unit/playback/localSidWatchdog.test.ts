@@ -162,7 +162,9 @@ describe("LocalSidEngine — the seek gate", () => {
     void engine.seekTo(200);
     await vi.advanceTimersByTimeAsync(0);
 
-    void engine.play(new ArrayBuffer(64), 0, {});
+    // Swallowed: this play is never answered, so it would reject if the timers ever reached its
+    // open timeout, and an unattached rejection fails the whole run.
+    engine.play(new ArrayBuffer(64), 0, {}).catch(() => undefined);
     await vi.advanceTimersByTimeAsync(0);
 
     expect(workers[0].terminated).toBe(true);
@@ -255,6 +257,9 @@ describe("LocalSidEngine — an open that times out", () => {
   it("gives up after the second, rather than restarting for the rest of the track", async () => {
     const { engine, workers } = makeEngine();
     const play = engine.play(new ArrayBuffer(64), 0, {});
+    // Attached before the timers run: the rejection lands mid-advance, and an unattached one is an
+    // unhandled rejection that fails the run even though every assertion passed.
+    const rejects = expect(play).rejects.toThrow(/did not open the tune/);
     await vi.advanceTimersByTimeAsync(0);
     workers[0].emit({ type: "ready", moduleLoadMs: 1 });
     await vi.advanceTimersByTimeAsync(0);
@@ -266,7 +271,7 @@ describe("LocalSidEngine — an open that times out", () => {
     // The retry goes unanswered too. A second timeout is not bad luck.
     await vi.advanceTimersByTimeAsync(15_001);
 
-    await expect(play).rejects.toThrow(/did not open the tune/);
+    await rejects;
     const workersAfter = workers.length;
     await vi.advanceTimersByTimeAsync(60_000);
     expect(workers.length).toBe(workersAfter);
