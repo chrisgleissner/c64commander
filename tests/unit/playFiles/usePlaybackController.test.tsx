@@ -227,6 +227,9 @@ const renderPlaybackController = (
             resume: vi.fn(),
             reset: vi.fn(),
             current: vi.fn().mockReturnValue(0),
+            // A seek rebases the played clock, so the stub needs this or any test that seeks throws
+            // inside the hook and takes the whole render down with it.
+            hydrate: vi.fn(),
           },
         } as const),
       trackStartedAtRef: options?.trackStartedAtRef ?? { current: null },
@@ -2926,6 +2929,35 @@ describe("usePlaybackController", () => {
 
       expect(machineResume).toHaveBeenCalled();
     });
+  });
+});
+
+describe("scrubbing a tune this page did not start", () => {
+  /*
+   * `localSidPlaybackRef` starts null on every fresh mount and is only filled by whoever starts a
+   * tune. A page that ADOPTED an already-running session therefore had none — tab away from Play and
+   * back, or the transient second instance a tab switch creates — and every seek entry point read
+   * that null and returned. The scrub did nothing at all while the tune carried on playing, which is
+   * indistinguishable from a broken progress bar.
+   *
+   * Reproduced on hardware: play a SID on the device, tab to Home, tab back to Play, tap the progress
+   * bar. Before this fix the elapsed time did not move.
+   */
+  it("seeks through the shared controller, not the page's own reference", async () => {
+    // Spy on the prototype rather than mocking the module: the shared controller IS a
+    // LocalSidPlaybackController, and mocking the whole module changes what every other test in this
+    // file resolves.
+    const seekTo = vi.spyOn(LocalSidPlaybackController.prototype, "seekTo").mockResolvedValue(undefined);
+    vi.spyOn(LocalSidPlaybackController.prototype, "positionSeconds").mockReturnValue(10);
+    localStorage.setItem("c64u_playback_engine", "local");
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    // No `localSidPlaybackController` injected: exactly the state of a page that adopted a session.
+    const { result } = renderPlaybackController(playlist, { currentIndex: 0 });
+
+    result.current.seekToFraction(0.5, 60_000);
+    await vi.waitFor(() => expect(seekTo).toHaveBeenCalled());
   });
 });
 

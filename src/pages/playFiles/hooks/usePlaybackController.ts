@@ -2217,7 +2217,12 @@ export function usePlaybackController({
   const dragSettleRef = useRef<number | null>(null);
 
   const runScrubSeek = useCallback(async () => {
-    const controller = localSidPlaybackRef.current;
+    // The SHARED controller, never the per-page ref. The ref starts null on every fresh mount and is
+    // only filled by whoever starts a tune — so a page that adopted an already-running session (a tab
+    // switch away from Play and back, or the transient second instance one creates) had none, and
+    // every scrub silently did nothing while the tune carried on. Reproduced on hardware: tab to Home,
+    // back to Play, tap the progress bar, and the elapsed time does not move.
+    const controller = getLocalSidPlayback();
     const target = scrubTargetMsRef.current;
     if (!controller || target === null || scrubSeekInFlightRef.current) return;
     scrubSeekInFlightRef.current = true;
@@ -2228,11 +2233,11 @@ export function usePlaybackController({
     } finally {
       scrubSeekInFlightRef.current = false;
     }
-  }, []);
+  }, [getLocalSidPlayback]);
 
   const beginScrub = useCallback(
     (durationMs?: number) => {
-      const controller = localSidPlaybackRef.current;
+      const controller = getLocalSidPlayback();
       if (!controller) return;
       scrubDurationMsRef.current = durationMs;
       const startMs = Math.max(0, controller.positionSeconds() * 1000);
@@ -2242,7 +2247,7 @@ export function usePlaybackController({
         scrubTimerRef.current = window.setInterval(() => void runScrubSeek(), SCRUB_SEEK_INTERVAL_MS);
       }
     },
-    [runScrubSeek],
+    [runScrubSeek, getLocalSidPlayback],
   );
 
   const scrubBy = useCallback((deltaSeconds: number) => {
@@ -2265,7 +2270,7 @@ export function usePlaybackController({
       window.clearInterval(scrubTimerRef.current);
       scrubTimerRef.current = null;
     }
-    const controller = localSidPlaybackRef.current;
+    const controller = getLocalSidPlayback();
     const target = scrubTargetMsRef.current;
     scrubTargetMsRef.current = null;
     if (!controller || target === null) {
@@ -2336,7 +2341,7 @@ export function usePlaybackController({
    */
   const seekToFraction = useCallback(
     (fraction: number, durationMs?: number) => {
-      const controller = localSidPlaybackRef.current;
+      const controller = getLocalSidPlayback();
       if (!controller || !durationMs) return;
       const target = Math.max(0, Math.min(durationMs, fraction * durationMs));
       scrubDurationMsRef.current = durationMs;
@@ -2352,12 +2357,12 @@ export function usePlaybackController({
         void endScrub();
       }, DRAG_SETTLE_MS);
     },
-    [runScrubSeek, endScrub],
+    [runScrubSeek, endScrub, getLocalSidPlayback],
   );
 
   const handleSeekBy = useCallback(
     async (deltaSeconds: number) => {
-      const controller = localSidPlaybackRef.current;
+      const controller = getLocalSidPlayback();
       if (!controller) {
         addLog("debug", "Local SID seek ignored: no on-device controller", { deltaSeconds });
         return;
