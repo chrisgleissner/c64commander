@@ -63,7 +63,7 @@ import type { SelectedItem, SourceLocation } from "@/lib/sourceNavigation/types"
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { buildSelectedDeviceBoundOrigin } from "@/lib/savedDevices/deviceBoundOrigin";
 
-import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
+import { buildEnabledSidMuteUpdates, sidVolumeStepGain } from "@/lib/config/sidVolumeControl";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { redactTreeUri } from "@/lib/native/safUtils";
@@ -1456,10 +1456,11 @@ export default function PlayFilesPage() {
   const [localMuted, setLocalMuted] = useState(false);
   const setLocalVolumeFromIndex = useCallback(
     (index: number) => {
-      const steps = Math.max(1, volumeSteps.length - 1);
-      getSharedLocalSidPlaybackController().setVolume(Math.min(1, Math.max(0, index / steps)));
+      // The step's decibels, not its position in the list — see sidVolumeStepGain. The scale is
+      // uneven, so the index fraction never matched the figure the listener was reading.
+      getSharedLocalSidPlaybackController().setVolume(sidVolumeStepGain(volumeSteps[index]));
     },
-    [volumeSteps.length],
+    [volumeSteps],
   );
   const toggleLocalMute = useCallback(() => {
     setLocalMuted((muted) => {

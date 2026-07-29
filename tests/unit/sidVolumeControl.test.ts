@@ -8,8 +8,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  buildEnabledSidMutedToTargetUpdates,
   buildEnabledSidMuteUpdates,
+  buildEnabledSidMutedToTargetUpdates,
   buildEnabledSidRestoreUpdates,
   buildEnabledSidUnmuteUpdates,
   buildEnabledSidVolumeSnapshot,
@@ -19,6 +19,7 @@ import {
   filterEnabledSidVolumeItems,
   isSidEnabledForName,
   resolveSidMutedVolumeOption,
+  sidVolumeStepGain,
   type SidEnablement,
   type SidVolumeItem,
 } from "@/lib/config/sidVolumeControl";
@@ -287,5 +288,48 @@ describe("sid volume control helpers", () => {
     const result = buildSidEnablement({ "SID Sockets Configuration": "not-an-object" } as any, {});
     expect(result.socket1).toBeUndefined();
     expect(result.socket2).toBeUndefined();
+  });
+});
+
+describe("what a volume step asks on-device playback for", () => {
+  /**
+   * On-device playback used the step's INDEX as its linear gain. The scale is in decibels and
+   * unevenly spaced, so the fraction bore no relation to the figure on screen. Measured against a
+   * c64u: "0 dB" is index 24 of 30, so local played at 0.8 linear — nearly 2 dB down — while the
+   * same setting reached the Ultimate's mixer as unity.
+   */
+  const steps = buildSidVolumeSteps([
+    "OFF",
+    "-42 dB",
+    "-36 dB",
+    "-30 dB",
+    "-24 dB",
+    "-12 dB",
+    "-6 dB",
+    " 0 dB",
+    "+6 dB",
+  ]);
+
+  it("gives unity at 0 dB, where the index fraction gave 0.8", () => {
+    const zero = steps.find((step) => step.numeric === 0);
+    expect(sidVolumeStepGain(zero)).toBeCloseTo(1, 6);
+    // The old behaviour, kept explicit so the regression cannot come back quietly.
+    expect(steps.indexOf(zero!) / (steps.length - 1)).toBeCloseTo(0.875, 3);
+  });
+
+  it("converts decibels rather than counting positions", () => {
+    expect(sidVolumeStepGain(steps.find((s) => s.numeric === -6))).toBeCloseTo(0.5012, 3);
+    expect(sidVolumeStepGain(steps.find((s) => s.numeric === -12))).toBeCloseTo(0.2512, 3);
+    // -42 dB asked for 1/8 of full scale under the old mapping; it means far less than that.
+    expect(sidVolumeStepGain(steps.find((s) => s.numeric === -42))).toBeCloseTo(0.0079, 4);
+  });
+
+  it("is silent at OFF", () => {
+    expect(sidVolumeStepGain(steps.find((step) => step.isOff))).toBe(0);
+    expect(sidVolumeStepGain(undefined)).toBe(0);
+  });
+
+  it("does not boost past unity, which would clip a rendered signal", () => {
+    expect(sidVolumeStepGain(steps.find((step) => step.numeric === 6))).toBe(1);
   });
 });
