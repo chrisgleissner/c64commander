@@ -298,10 +298,11 @@ describe("useHvscLibrary preparation state coverage", () => {
     expect(result.current.hvscPreparationThroughputLabel).toBeNull();
   });
 
-  it("reports INGESTING state and keeps the download's share already earned", async () => {
-    // Amended with the one-bar change: during ingest the download is finished, so the bar holds the
-    // share the download earned and grows from there as songs are indexed. It used to restart at the
-    // metadata stage's own 0-100, which is why it reached 100% more than once per install.
+  it("reports INGESTING state and advances past the download's share as indexing proceeds", async () => {
+    // During ingest the download is finished, so the bar holds the share the download earned and
+    // grows from there. It used to restart at the metadata stage's own 0-100 (reaching 100% more than
+    // once per install), and then briefly sat frozen at exactly the download's share because the song
+    // counters it was reading are only written once ingestion has finished.
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({
         metadata: {
@@ -316,12 +317,12 @@ describe("useHvscLibrary preparation state coverage", () => {
     const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
-    expect(result.current.hvscPreparationProgressPercent).toBe(55);
+    expect(result.current.hvscPreparationProgressPercent).toBe(75);
   });
 
-  it("holds the download's share while extracting, rather than restarting at zero", async () => {
-    // Amended with the one-bar change: extraction no longer drives its own 0-100. The download is
-    // done, so the bar is already past halfway and advances as songs are indexed.
+  it("advances through extraction rather than restarting at zero", async () => {
+    // Extraction no longer drives its own 0-100. The download is done, so the bar is already past
+    // halfway, and unpacking moves it on within the indexing half rather than from scratch.
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({
         extraction: {
@@ -338,7 +339,7 @@ describe("useHvscLibrary preparation state coverage", () => {
     const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
-    expect(result.current.hvscPreparationProgressPercent).toBe(55);
+    expect(result.current.hvscPreparationProgressPercent).toBe(59);
   });
 
   it("computes items/s throughput label when INGESTING with metadata in-progress and processedSongs", async () => {

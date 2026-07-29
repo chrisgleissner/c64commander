@@ -1296,21 +1296,33 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
   // known.
   const hvscArchiveKind: HvscArchiveKind = hvscStatus?.installedVersion ? "update" : "full";
   const hvscOverallPercent =
-    hvscPreparationSnapshot.state === "DOWNLOADING" || hvscPreparationSnapshot.state === "INGESTING"
-      ? overallPreparationPercent({
-          kind: hvscArchiveKind,
-          downloadedBytes: hvscDownloadBytes,
-          totalBytes: hvscDownloadTotalBytes,
-          downloadComplete: hvscPreparationSnapshot.state === "INGESTING",
-          indexedSongs: hvscIngestionIngestedSongs ?? hvscSummaryFilesExtracted,
-          totalSongs: hvscIngestionTotalSongs ?? hvscExtractionTotalFiles,
-        })
-      : null;
+    hvscPreparationSnapshot.state === "READY"
+      ? 100
+      : hvscPreparationSnapshot.state === "DOWNLOADING" || hvscPreparationSnapshot.state === "INGESTING"
+        ? overallPreparationPercent({
+            kind: hvscArchiveKind,
+            downloadedBytes: hvscDownloadBytes,
+            totalBytes: hvscDownloadTotalBytes,
+            downloadComplete: hvscPreparationSnapshot.state === "INGESTING",
+            extractedFiles: hvscSummaryFilesExtracted,
+            totalFiles: hvscExtractionTotalFiles,
+            // `||`, not `??`: these counters default to 0 rather than null, so `??` never falls through
+            // and the bar sat at exactly the download's share for the whole of the ingest, looking stuck.
+            indexedSongs: hvscIngestionIngestedSongs || null,
+            totalSongs: hvscIngestionTotalSongs || null,
+            // The song counters are only written when ingestion finishes, so for the whole of the
+            // metadata pass they read zero. Its own percentage is what actually moves meanwhile.
+            indexPercent: hvscStatusSummary.metadata.percent ?? null,
+            // 100 belongs to the moment the library is usable, not to the last stage reporting done.
+            indexComplete: false,
+          })
+        : null;
   // Held to its high-water mark: a Content-Length arriving mid-download, or enumeration replacing an
   // estimated song count with a real one, legitimately moves the underlying number backwards, and a
   // bar that retreats reads as a fault.
-  const hvscPreparationProgressPercent =
-    hvscOverallPercent === null ? null : capActivePreparationProgress(hvscOverallPercent);
+  // No extra clamp here: the model already holds itself below 100 until the library is reachable, and
+  // clamping again would stop it ever showing the 100 the user is waiting to see.
+  const hvscPreparationProgressPercent = hvscOverallPercent;
   const hvscPreparationThroughputLabel = (() => {
     if (hvscPreparationSnapshot.state === "DOWNLOADING" && hvscDownloadBytes && hvscDownloadElapsedMs) {
       const mbPerSecond = hvscDownloadBytes / 1024 / 1024 / Math.max(hvscDownloadElapsedMs / 1000, 0.001);

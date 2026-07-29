@@ -61,6 +61,16 @@ export const DOWNLOAD_WEIGHT: Record<HvscArchiveKind, number> = {
   update: 0.15,
 };
 
+/**
+ * Share of the indexing half that unpacking the archive accounts for, the rest being the pass that
+ * reads each tune's metadata.
+ *
+ * Split because they are two separate counters that each run 0 to 100 of their own. Feeding whichever
+ * was moving straight to the bar reproduced the original fault one level down: it would fill through
+ * extraction and then start again from nothing for the metadata pass.
+ */
+export const EXTRACTION_SHARE = 0.4;
+
 export interface HvscProgressInput {
   kind: HvscArchiveKind;
   /** Bytes fetched so far, if known. */
@@ -69,11 +79,23 @@ export interface HvscProgressInput {
   totalBytes?: number | null;
   /** True once the archive is fully fetched, whatever the byte counters say. */
   downloadComplete?: boolean;
+  /** Files unpacked so far, if known. */
+  extractedFiles?: number | null;
+  /** Total files in the archive, once enumeration reports it. */
+  totalFiles?: number | null;
   /** Songs indexed so far, if known. */
   indexedSongs?: number | null;
   /** Total songs, once enumeration reports it. Falls back to {@link EXPECTED_SONG_COUNT}. */
   totalSongs?: number | null;
-  /** True once indexing has finished. */
+  /**
+   * The metadata pass's own percentage, used when no song counts are available yet.
+   *
+   * The counters that would be preferred (`ingestionSummary.ingestedSongs`) are only written when
+   * ingestion finishes, so for the whole of the pass they read zero — which is what pinned the bar at
+   * the download's share and made it look stuck.
+   */
+  indexPercent?: number | null;
+  /** True once indexing has finished and the library is actually reachable. */
   indexComplete?: boolean;
 }
 
@@ -99,15 +121,36 @@ export const overallPreparationFraction = (input: HvscProgressInput): number => 
   const indexTotal = input.totalSongs && input.totalSongs > 0 ? input.totalSongs : EXPECTED_SONG_COUNT[input.kind];
 
   const downloaded = fraction(input.downloadedBytes, downloadTotal, input.downloadComplete);
-  const indexed = fraction(input.indexedSongs, indexTotal, input.indexComplete);
 
+  // The indexing half is itself two counters. Compose them the same way rather than showing whichever
+  // is moving, or the bar refills from zero when the metadata pass takes over from extraction.
+  const extracted =
+    input.totalFiles && input.totalFiles > 0 ? fraction(input.extractedFiles, input.totalFiles, false) : 0;
+  const metadata =
+    input.indexedSongs && input.indexedSongs > 0
+      ? fraction(input.indexedSongs, indexTotal, false)
+      : input.indexPercent !== null && input.indexPercent !== undefined
+        ? Math.min(0.999, Math.max(0, input.indexPercent / 100))
+        : 0;
+  const indexed = input.indexComplete ? 1 : EXTRACTION_SHARE * extracted + (1 - EXTRACTION_SHARE) * metadata;
+
+  // Only ever 100 when the library is genuinely usable — the whole point is that a stage finishing is
+  // not the job finishing.
   if (input.downloadComplete && input.indexComplete) return 1;
-  return weight * downloaded + (1 - weight) * indexed;
+  return Math.min(0.999, weight * downloaded + (1 - weight) * indexed);
 };
 
-/** The same as a rounded percentage. */
-export const overallPreparationPercent = (input: HvscProgressInput): number =>
-  Math.round(overallPreparationFraction(input) * 100);
+/**
+ * The same as a rounded percentage, held below 100 until the library is genuinely reachable.
+ *
+ * The clamp on the fraction is not enough on its own: 0.9996 rounds to 100, so a bar that is very
+ * nearly there would announce it had finished a moment before it had. 100 must mean "you can use it".
+ */
+export const overallPreparationPercent = (input: HvscProgressInput): number => {
+  const fractionComplete = overallPreparationFraction(input);
+  if (fractionComplete >= 1) return 100;
+  return Math.min(99, Math.round(fractionComplete * 100));
+};
 
 /**
  * Keep a displayed percentage from ever going backwards.

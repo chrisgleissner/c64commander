@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 import {
   DOWNLOAD_WEIGHT,
   EXPECTED_ARCHIVE_BYTES,
+  EXTRACTION_SHARE,
   EXPECTED_SONG_COUNT,
   monotonicPercent,
   overallPreparationPercent,
@@ -94,8 +95,68 @@ describe("one progress figure for installing HVSC", () => {
       indexedSongs: EXPECTED_SONG_COUNT.full / 2,
       totalSongs: null,
     });
-    // The whole download share, plus half of the indexing share.
-    expect(percent).toBeCloseTo(Math.round((DOWNLOAD_WEIGHT.full + (1 - DOWNLOAD_WEIGHT.full) * 0.5) * 100), -1);
+    // The whole download share, plus the metadata pass's part of the indexing share. The indexing
+    // half is itself split between unpacking and reading metadata, so half the songs indexed with
+    // nothing extracted is half of the metadata portion, not half of indexing.
+    const expected = DOWNLOAD_WEIGHT.full + (1 - DOWNLOAD_WEIGHT.full) * (1 - EXTRACTION_SHARE) * 0.5;
+    expect(percent).toBe(Math.round(expected * 100));
+  });
+});
+
+describe("it keeps advancing all the way through", () => {
+  /**
+   * The bar reached the download's share and then stopped dead for the whole ingest. Two counters
+   * were at fault: the song totals it read are only written once ingestion FINISHES, so they were
+   * zero throughout, and they default to 0 rather than null so the fallback never engaged.
+   */
+  const at = (input: Parameters<typeof overallPreparationPercent>[0]) => overallPreparationPercent(input);
+
+  it("rises monotonically across a whole full install", () => {
+    const timeline = [
+      // Fetching.
+      { kind: "full" as const, downloadedBytes: 0, totalBytes: EXPECTED_ARCHIVE_BYTES.full },
+      { kind: "full" as const, downloadedBytes: 20 * 1024 * 1024, totalBytes: EXPECTED_ARCHIVE_BYTES.full },
+      { kind: "full" as const, downloadedBytes: 81 * 1024 * 1024, totalBytes: EXPECTED_ARCHIVE_BYTES.full },
+      // Unpacking.
+      { kind: "full" as const, downloadComplete: true, extractedFiles: 0, totalFiles: 62_000 },
+      { kind: "full" as const, downloadComplete: true, extractedFiles: 31_000, totalFiles: 62_000 },
+      { kind: "full" as const, downloadComplete: true, extractedFiles: 62_000, totalFiles: 62_000 },
+      // Reading metadata — the stretch that used to be frozen.
+      { kind: "full" as const, downloadComplete: true, extractedFiles: 62_000, totalFiles: 62_000, indexPercent: 1 },
+      { kind: "full" as const, downloadComplete: true, extractedFiles: 62_000, totalFiles: 62_000, indexPercent: 50 },
+      { kind: "full" as const, downloadComplete: true, extractedFiles: 62_000, totalFiles: 62_000, indexPercent: 99 },
+      // Reachable.
+      { kind: "full" as const, downloadComplete: true, indexComplete: true },
+    ];
+    const seen = timeline.map(at);
+    for (let i = 1; i < seen.length; i += 1) {
+      expect(seen[i]).toBeGreaterThanOrEqual(seen[i - 1]);
+    }
+    // And it genuinely travels rather than nudging: no two-thirds of the run stuck on one number.
+    expect(new Set(seen).size).toBeGreaterThan(6);
+    expect(seen[seen.length - 1]).toBe(100);
+    expect(seen[seen.length - 2]).toBeLessThan(100);
+  });
+
+  it("does not stall at the download's share once the download is done", () => {
+    // The exact symptom: 55% and then nothing for the entire ingest.
+    const justDownloaded = at({ kind: "full", downloadComplete: true });
+    const partwayThroughIndexing = at({ kind: "full", downloadComplete: true, indexPercent: 40 });
+    expect(partwayThroughIndexing).toBeGreaterThan(justDownloaded);
+  });
+
+  it("reaches 100 only when the library is actually reachable", () => {
+    // Every stage reporting done is not the same as the job being done.
+    expect(
+      at({
+        kind: "full",
+        downloadComplete: true,
+        extractedFiles: 62_000,
+        totalFiles: 62_000,
+        indexPercent: 100,
+      }),
+    ).toBeLessThan(100);
+    expect(at({ kind: "full", downloadComplete: true, indexComplete: true })).toBe(100);
   });
 });
 
