@@ -365,6 +365,71 @@ class StreamUdpPlugin : Plugin() {
       fallback
     }
 
+  /**
+   * Arm a recording of exactly what the pipeline hands the speaker.
+   *
+   * Diagnostics: it lets an end-to-end probe be graded without a microphone, covering the network,
+   * the jitter buffer, the resampler and the concealment — everything the app is responsible for.
+   */
+  @PluginMethod
+  fun startAudioCapture(call: PluginCall) {
+    audioPipeline?.startCapture(call.getInt("seconds") ?: 10)
+    call.resolve(JSObject())
+  }
+
+  /**
+   * Write the captured PCM to a WAV in the app's external files directory and return its path.
+   *
+   * A file rather than a base64 payload: ten seconds of stereo 48 kHz is nearly three megabytes, and
+   * handing that back through a single bridge call returns a truncated string that is not valid JSON.
+   * The external files directory is chosen because `adb pull` can read it without the app being
+   * debuggable, so a diagnostic capture works against a release build.
+   */
+  @PluginMethod
+  fun readAudioCapture(call: PluginCall) {
+    val pipeline = audioPipeline
+    val pcm = pipeline?.takeCapture() ?: ByteArray(0)
+    val rate = pipeline?.stats()?.trackSampleRate ?: 0
+    val result = JSObject()
+    result.put("bytes", pcm.size)
+    result.put("sampleRate", rate)
+    if (pcm.isEmpty() || rate <= 0) {
+      call.resolve(result)
+      return
+    }
+    try {
+      val file = java.io.File(context.getExternalFilesDir(null), "audio-capture.wav")
+      java.io.FileOutputStream(file).use { out ->
+        out.write(wavHeader(pcm.size, rate))
+        out.write(pcm)
+      }
+      result.put("path", file.absolutePath)
+    } catch (error: Exception) {
+      Log.w(logTag, "audio capture write failed", error)
+      call.reject("audio capture write failed: ${error.message}", error)
+      return
+    }
+    call.resolve(result)
+  }
+
+  /** A 44-byte canonical WAV header for interleaved stereo S16LE. */
+  private fun wavHeader(dataBytes: Int, rate: Int): ByteArray {
+    val header = java.nio.ByteBuffer.allocate(44).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+    header.put("RIFF".toByteArray())
+    header.putInt(36 + dataBytes)
+    header.put("WAVEfmt ".toByteArray())
+    header.putInt(16)
+    header.putShort(1)
+    header.putShort(2)
+    header.putInt(rate)
+    header.putInt(rate * 4)
+    header.putShort(4)
+    header.putShort(16)
+    header.put("data".toByteArray())
+    header.putInt(dataBytes)
+    return header.array()
+  }
+
   @PluginMethod
   fun setAudioAnalysis(call: PluginCall) {
     // Turning this on re-enables the per-packet bridge hop for audio (A/V-sync analyser only).

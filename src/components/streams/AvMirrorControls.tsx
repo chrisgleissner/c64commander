@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAvMirror } from "@/hooks/useAvMirror";
 import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
+import { saveMirrorC64Audio } from "@/lib/config/appSettings";
 
 /** A subtle pulsing "live" dot, so an active-but-invisible stream isn't ambiguous. */
 export const LiveDot = ({ className }: { className?: string }) => (
@@ -53,7 +54,13 @@ export function AvMirrorControls({
           size={size}
           variant={audioLive ? "default" : "outline"}
           aria-pressed={audioLive}
-          onClick={() => void toggleAudio()}
+          onClick={() => {
+            // The same question the Play page's "Listen on" asks, so it records the same answer.
+            // Turning listening off here and having the next track switch it back on again is the
+            // identical defect wearing a different hat.
+            saveMirrorC64Audio(!audioLive);
+            void toggleAudio();
+          }}
           data-testid="av-audio-toggle"
           data-state={audio.state}
         >

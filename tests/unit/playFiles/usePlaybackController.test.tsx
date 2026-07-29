@@ -5,7 +5,8 @@ import { seededShuffleIds } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { executePlayPlan, tryFetchUltimateSidBlob } from "@/lib/playback/playbackRouter";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
-import { savePlaybackEngine } from "@/lib/config/appSettings";
+import { saveMirrorC64Audio, savePlaybackEngine } from "@/lib/config/appSettings";
+import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { getSidRadioStats, resetSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import { clearArchivePlaybackCacheForTests } from "@/lib/archive/archivePlaybackCache";
 import { getC64API } from "@/lib/c64api";
@@ -71,6 +72,19 @@ vi.mock("@/lib/uiErrors", () => ({
 
 vi.mock("@/hooks/use-toast", () => ({
   toast: vi.fn(),
+}));
+
+// The Live View audio mirror, stubbed so a test can see whether playback asked it to start.
+// The Live View audio mirror, stubbed so a test can see whether playback asked it to start.
+// The implementations are passed to vi.fn() rather than set with mockResolvedValue: the suite calls
+// vi.clearAllMocks() between tests, and a stub that forgets how to return a promise makes the
+// caller's `.catch(...)` blow up in every later test.
+vi.mock("@/lib/streams/avMirrorSession", () => ({
+  avMirrorSession: {
+    audioLive: false,
+    startAudio: vi.fn(() => Promise.resolve()),
+    stopAudio: vi.fn(() => Promise.resolve()),
+  },
 }));
 
 vi.mock("@/lib/config/applyConfigFileReference", () => ({
@@ -2892,5 +2906,36 @@ describe("usePlaybackController", () => {
 
       expect(machineResume).toHaveBeenCalled();
     });
+  });
+});
+
+describe("playback and the Listen-on choice", () => {
+  /*
+   * Starting a tune on the C64 also starts the Live View audio mirror, so it is audible from the
+   * phone without the listener having to know that Home has a switch for it. That default stays.
+   * What it must not do is overrule someone who has said otherwise — and it did: the auto-start was
+   * written when the control had two options and the C64 one meant "hear it via Live View", and was
+   * never revisited once a third option split those apart. On hardware, choosing the C64's own
+   * speakers lasted exactly one track (or one tap, coming from Local) before the phone began
+   * streaming again.
+   */
+  const sidItem = () =>
+    createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" });
+
+  it("starts the mirror by default, so a tune is audible from the phone", async () => {
+    vi.mocked(avMirrorSession.startAudio).mockClear();
+    const { result } = renderPlaybackController([sidItem()], { currentIndex: 0 });
+    await result.current.handlePlay();
+    expect(avMirrorSession.startAudio).toHaveBeenCalled();
+  });
+
+  it("leaves the mirror alone once the C64's own speakers have been chosen", async () => {
+    // Without the preference check this switches the mirror straight back on, which is the defect:
+    // the listener turned phone audio off and the very next track turned it back on.
+    vi.mocked(avMirrorSession.startAudio).mockClear();
+    saveMirrorC64Audio(false);
+    const { result } = renderPlaybackController([sidItem()], { currentIndex: 0 });
+    await result.current.handlePlay();
+    expect(avMirrorSession.startAudio).not.toHaveBeenCalled();
   });
 });

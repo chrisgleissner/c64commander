@@ -18,6 +18,7 @@ import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { useAvMirror } from "@/hooks/useAvMirror";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
+import { saveMirrorC64Audio } from "@/lib/config/appSettings";
 import { LOCAL_DEVICE_LABEL, connectedDeviceLabel } from "@/lib/sourceNavigation/sourceTerms";
 
 /**
@@ -35,6 +36,11 @@ import { LOCAL_DEVICE_LABEL, connectedDeviceLabel } from "@/lib/sourceNavigation
  *   <device>  engine = c64,   audio mirror off
  *   Both      engine = c64,   audio mirror on
  *   Local     engine = local  (rendered here; there is no C64 audio to mirror)
+ *
+ * The first two persist that choice (`saveMirrorC64Audio`), because playback starts the mirror by
+ * itself whenever a tune moves to the C64 and would otherwise overrule the listener on the very
+ * next track. "Local" deliberately does not touch it: it answers a different question, and the
+ * C64 route should be as it was left when playback returns to it.
  *
  * Naming and icons come from `sourceTerms` and `FileOriginIcon`, the same pair
  * the "Choose source" dialog, the playlist rows and the disks list use. This
@@ -71,6 +77,10 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
     }
     setEngine("c64");
     const wantMirror = target === "both";
+    // Remember the answer, don't just act on it. Playback starts the mirror for you when a tune goes
+    // to the C64, and without a recorded preference it did that even to a listener who had just
+    // chosen the C64's own speakers — so "<device>" lasted until the next track and no longer.
+    saveMirrorC64Audio(wantMirror);
     if (wantMirror === audioLive) return;
     void (wantMirror ? session.startAudio() : session.stopAudio()).catch((error) => {
       // A start that fails means this device cannot stream its audio here, so

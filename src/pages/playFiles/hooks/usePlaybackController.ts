@@ -47,7 +47,7 @@ import {
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 
 import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
-import { loadLocalEngineEnabled, loadPlaybackEngine } from "@/lib/config/appSettings";
+import { loadLocalEngineEnabled, loadMirrorC64Audio, loadPlaybackEngine } from "@/lib/config/appSettings";
 import {
   LocalSidPlaybackController,
   getSharedLocalSidPlaybackController,
@@ -1149,13 +1149,21 @@ export function usePlaybackController({
           // launch, so a device switch can stop it no matter which page is
           // mounted (see activePlaybackSession).
           markRemotePlaybackStarted();
-          // The engine toggle promises "C64 — hear via Live View", so make that
-          // true. Without this the tune plays on the Ultimate in silence as far
-          // as the phone is concerned, and the listener has to know to go to
-          // Home and switch Listen on by hand. Best-effort: the mirror is a
-          // convenience, and a device that will not stream must not stop the
-          // tune from playing.
-          if (featureFlagManager.getSnapshot().flags.audio_mirror_enabled && !avMirrorSession.audioLive) {
+          // Bring the tune to this device's speakers too, unless the listener has said not to.
+          // Without this the tune plays on the Ultimate in silence as far as the phone is concerned,
+          // and the listener has to know to go to Home and switch Listen on by hand. Best-effort:
+          // the mirror is a convenience, and a device that will not stream must not stop the tune
+          // from playing.
+          //
+          // The preference check is what makes "Listen on: <device>" mean anything. This used to run
+          // unconditionally — written when the toggle had only two options and the C64 one promised
+          // "hear via Live View" — so after the control grew a third option, choosing the C64's own
+          // speakers was undone by the next track change, or by the single tap that got you there.
+          if (
+            featureFlagManager.getSnapshot().flags.audio_mirror_enabled &&
+            loadMirrorC64Audio() &&
+            !avMirrorSession.audioLive
+          ) {
             void avMirrorSession.startAudio().catch((error) => {
               addLog("warn", "Playback: could not start Live View audio for C64 playback", {
                 service: "playback",

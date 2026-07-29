@@ -9,7 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { PlaybackEngineToggle } from "@/pages/playFiles/components/PlaybackEngineToggle";
-import { loadPlaybackEngine } from "@/lib/config/appSettings";
+import { loadMirrorC64Audio, loadPlaybackEngine } from "@/lib/config/appSettings";
 
 // The toggle hides "Both" unless the C64's audio can actually reach this
 // device, which it decides from the Live View / audio-mirror flags. These tests
@@ -50,6 +50,33 @@ describe("PlaybackEngineToggle", () => {
     fireEvent.click(screen.getByTestId("playback-engine-c64"));
     expect(loadPlaybackEngine()).toBe("c64");
     expect(screen.getByTestId("playback-engine-c64")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("remembers that the C64's own speakers were chosen, so playback cannot undo it", () => {
+    // The bug this pins: playback starts the Live View audio mirror by itself whenever a tune moves
+    // to the C64, and it used to do that unconditionally. So choosing "<device>" — which means the
+    // C64's speakers and nothing else — survived until the next track change, at which point the
+    // phone started streaming audio the listener had just switched off. Reproduced on hardware two
+    // ways: one tap from Local, and one press of Next.
+    localStorage.setItem("c64u_playback_engine", "local");
+    render(<PlaybackEngineToggle />);
+    fireEvent.click(screen.getByTestId("playback-engine-c64"));
+    expect(loadMirrorC64Audio()).toBe(false);
+  });
+
+  it("remembers that Both was chosen", () => {
+    render(<PlaybackEngineToggle />);
+    fireEvent.click(screen.getByTestId("playback-listen-both"));
+    expect(loadMirrorC64Audio()).toBe(true);
+  });
+
+  it("leaves the C64 route's preference alone when moving to this device", () => {
+    // "Local" answers a different question. A listener who had the mirror off on the C64 route
+    // should still find it off when playback goes back there.
+    localStorage.setItem("c64u_mirror_c64_audio", "0");
+    render(<PlaybackEngineToggle />);
+    fireEvent.click(screen.getByTestId("playback-engine-local"));
+    expect(loadMirrorC64Audio()).toBe(false);
   });
 
   it("stays in sync when the engine changes elsewhere (broadcast)", () => {

@@ -16,6 +16,7 @@ const STARTUP_DISCOVERY_WINDOW_MS_KEY = "c64u_startup_discovery_window_ms";
 const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = "c64u_background_rediscovery_interval_ms";
 const DISCOVERY_PROBE_TIMEOUT_MS_KEY = "c64u_discovery_probe_timeout_ms";
 const DISK_AUTOSTART_MODE_KEY = "c64u_disk_autostart_mode";
+const MIRROR_C64_AUDIO_KEY = "c64u_mirror_c64_audio";
 const VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY = "c64u_volume_slider_preview_interval_ms";
 const NOTIFICATION_VISIBILITY_KEY = "c64u_notification_visibility";
 const NOTIFICATION_DURATION_MS_KEY = "c64u_notification_duration_ms";
@@ -421,6 +422,27 @@ export const saveStreamNativeVideoAssembly = (enabled: boolean) => {
  * the speaker" step is native. Off falls back to the WebAudio player (also the web/Docker path,
  * which has no plugin). Native-only.
  */
+/**
+ * Whether a tune playing on the C64 should also be heard on this device.
+ *
+ * This is the "Listen on" control's middle question, and it has to be REMEMBERED rather than read
+ * back off the live stream. "Listen on: <device>" means the C64's speakers only, and playback used
+ * to start the mirror on every launch regardless — so choosing it lasted exactly until the next
+ * track, or until one tap took you there from Local, and the phone began streaming audio the
+ * listener had just turned off.
+ *
+ * Default on: a tune started from the phone should be audible from the phone unless asked otherwise.
+ */
+export const DEFAULT_MIRROR_C64_AUDIO = true;
+
+export const loadMirrorC64Audio = () => readBoolean(MIRROR_C64_AUDIO_KEY, DEFAULT_MIRROR_C64_AUDIO);
+
+export const saveMirrorC64Audio = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(MIRROR_C64_AUDIO_KEY, enabled ? "1" : "0");
+  broadcast(MIRROR_C64_AUDIO_KEY, enabled);
+};
+
 export const DEFAULT_STREAM_NATIVE_AUDIO = true;
 
 export const loadStreamNativeAudio = () => readBoolean(STREAM_NATIVE_AUDIO_KEY, DEFAULT_STREAM_NATIVE_AUDIO);
