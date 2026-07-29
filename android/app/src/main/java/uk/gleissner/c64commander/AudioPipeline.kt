@@ -73,6 +73,25 @@ internal class AudioPipeline(
     framesPerBurst: Int = 0,
     /** Test seam: builds the real `AudioTrack` (mocked in unit tests). */
     trackFactory: (Int, Int) -> AudioTrack = ::buildAudioTrack,
+    /**
+     * Ceiling on the jitter ring, in ms.
+     *
+     * The default suits a live stream, where depth is latency and latency is the point. On-device
+     * playback is not live — nothing is waiting on it — so it can afford a far deeper ring, and wants
+     * one: the samples come from a WASM engine on the JS thread, and that thread also runs the UI. A
+     * shallow ring turns any scheduling hiccup there into an audible cut.
+     */
+    maxRingMs: Int = 0,
+    /**
+     * How many HAL bursts the `AudioTrack`'s own buffer holds.
+     *
+     * The default is sized for the live mirror, where every millisecond in this buffer is a
+     * millisecond of input latency. On-device playback has no such constraint, and a deeper track
+     * buffer is what stops the OS reporting underruns when the player thread is descheduled — those
+     * were still accruing at roughly one every four seconds with a two-second ring behind them,
+     * because the ring cannot help once the audio has been handed to the track.
+     */
+    trackBursts: Int = 0,
 ) {
   data class Stats(
       /** PCM queued ahead of the speaker (ring + track), i.e. the current output latency. */
@@ -162,7 +181,7 @@ internal class AudioPipeline(
     // A whole number of HAL bursts, at or above the platform minimum. Both conditions matter: the
     // fast mixer wants burst alignment, and a buffer under the minimum is refused outright.
     val burstBytes = burst * BYTES_PER_FRAME
-    val wantBytes = maxOf(minBufferBytes, burstBytes * TRACK_BURSTS)
+    val wantBytes = maxOf(minBufferBytes, burstBytes * if (trackBursts > 0) trackBursts else TRACK_BURSTS)
     val trackBytes = ((wantBytes + burstBytes - 1) / burstBytes) * burstBytes
     requestedBufferFrames = trackBytes / BYTES_PER_FRAME
     track = trackFactory(outputRate, trackBytes)
@@ -193,7 +212,7 @@ internal class AudioPipeline(
     val trackMs = trackBufferFrames * 1000 / outputRate
     minTargetFrames =
         msToFrames(sourceRate, (targetLatencyMs - trackMs).coerceAtLeast(MIN_RING_MS))
-    maxTargetFrames = msToFrames(sourceRate, MAX_RING_MS)
+    maxTargetFrames = msToFrames(sourceRate, if (maxRingMs > 0) maxOf(maxRingMs, MIN_RING_MS) else MAX_RING_MS)
     targetFrames = minTargetFrames
     hardMaxFrames = maxTargetFrames * 2
     ringFrames = hardMaxFrames * 2
@@ -220,6 +239,19 @@ internal class AudioPipeline(
    * (a long stall, or no speaker at all), so the audio is counted and discarded rather than blocking
    * the producer: for a live stream, being late is worse than being short.
    */
+  /**
+   * Drop everything queued but not yet played.
+   *
+   * On-device playback runs a deep ring — a second or two — so that a busy JS thread cannot starve
+   * the speaker. The cost of that depth is that pausing or seeking would otherwise keep playing what
+   * is already queued, for as long as the ring is deep. Flushing makes those immediate again.
+   */
+  fun flush() {
+    synchronized(producerLock) {
+      readFrames = writeFrames
+    }
+  }
+
   fun offer(data: ByteArray, offset: Int, length: Int) {
     if (length <= 0 || !running) return
     val frames = length / BYTES_PER_FRAME
@@ -668,7 +700,7 @@ internal class AudioPipeline(
    */
   private fun driftAuthority(depth: Long): Double {
     val floor = msToFrames(sourceRate, CUSHION_FLOOR_MS)
-    val far = targetFrames + msToFrames(sourceRate, MAX_RING_MS) / 4
+    val far = targetFrames + maxTargetFrames / 4
     return if (depth < floor || depth > far) REBUILD_DRIFT else MAX_DRIFT
   }
 

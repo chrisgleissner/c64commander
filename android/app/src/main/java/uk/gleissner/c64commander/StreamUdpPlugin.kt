@@ -250,10 +250,26 @@ class StreamUdpPlugin : Plugin() {
     // Target output latency (ms). The pipeline splits it between its jitter ring and the speaker
     // track's own buffer; absent → its floor.
     val bufferMs = call.getInt("bufferMs") ?: 0
+    // How deep the ring may go. On-device playback asks for far more than the mirror does: it is not
+    // a live stream, so depth costs nothing anyone can hear, and it is what makes the feed survive a
+    // busy JS thread.
+    val maxRingMs = call.getInt("maxRingMs") ?: 0
+    // How deep the AudioTrack's own buffer is, in HAL bursts. On-device playback asks for more than
+    // the mirror: it has no input latency to protect, and a deeper track buffer is what absorbs the
+    // player thread being descheduled.
+    val trackBursts = call.getInt("trackBursts") ?: 0
     try {
       synchronized(audioLifecycleLock) {
         audioPipeline?.close()
-        val pipeline = AudioPipeline(sampleRate, bufferMs, nativeOutputRate(), nativeFramesPerBurst())
+        val pipeline =
+            AudioPipeline(
+                sampleRate,
+                bufferMs,
+                nativeOutputRate(),
+                nativeFramesPerBurst(),
+                maxRingMs = maxRingMs,
+                trackBursts = trackBursts,
+            )
         pipeline.start()
         audioPipeline = pipeline
         nativeAudioOwnsPlayback = true
@@ -288,6 +304,13 @@ class StreamUdpPlugin : Plugin() {
     val pipeline = audioPipeline
     pipeline?.offer(pcm, 0, pcm.size)
     call.resolve(audioStatsPayload(pipeline?.stats() ?: AudioPipeline.Stats.ZERO))
+  }
+
+  /** Drop queued-but-unplayed audio, so a pause or a seek takes effect at once. */
+  @PluginMethod
+  fun flushAudioTrack(call: PluginCall) {
+    audioPipeline?.flush()
+    call.resolve(JSObject())
   }
 
   @PluginMethod

@@ -131,7 +131,14 @@ export interface StreamUdpPlugin {
    * with the AudioTrack's small fast-mixer buffer. All jitter buffering / concealment / batching stay
    * in JS; this sink only plays already-decided PCM. Idempotent: re-opening closes the previous track.
    */
-  openAudioTrack(options: { sampleRate: number; bufferMs?: number }): Promise<{ sampleRate: number; bufferMs: number }>;
+  openAudioTrack(options: {
+    sampleRate: number;
+    bufferMs?: number;
+    /** Ceiling on the jitter ring. On-device playback asks for far more than the mirror. */
+    maxRingMs?: number;
+    /** HAL bursts in the AudioTrack's own buffer; deeper absorbs player-thread descheduling. */
+    trackBursts?: number;
+  }): Promise<{ sampleRate: number; bufferMs: number }>;
   /**
    * Queue one chunk of base64 interleaved-stereo-S16LE PCM into the native pipeline.
    *
@@ -141,6 +148,8 @@ export interface StreamUdpPlugin {
    * scheduled chunk-by-chunk from the JS thread. No-op (zeroed stats) if no pipeline is open.
    */
   writeAudioTrack(options: { data: string }): Promise<StreamUdpAudioStats>;
+  /** Drop queued-but-unplayed audio, so a pause or seek is immediate despite a deep ring. */
+  flushAudioTrack(options?: Record<string, never>): Promise<void>;
   /**
    * Read the pipeline's live depth, underruns and arrival evenness — the governor's audio-headroom
    * signal, polled periodically since native (not JS) drives playback. Zeroed if none is open.

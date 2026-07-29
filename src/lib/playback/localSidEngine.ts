@@ -9,7 +9,14 @@
 import { LocalSidChunkScheduler, type AudioScheduleSink, type AudioScheduleSource } from "./localSidChunkScheduler";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage } from "./localSidWorkerProtocol";
 import { hasCompleteRomSet, loadStoredRoms } from "@/lib/roms/romStore";
+import { Capacitor } from "@capacitor/core";
 import { effectiveSidEmulationEngine, loadPlaybackCrossfadeMs } from "@/lib/config/appSettings";
+import { StreamUdp } from "@/lib/native/streamUdp";
+import {
+  createNativeLocalSidSink,
+  nativeLocalAudioAvailable,
+  type NativeLocalAudioBackend,
+} from "./localSidNativeSink";
 import { addLog, addErrorLog } from "@/lib/logging";
 import { claimPhoneAudio, phoneAudioOwner, releasePhoneAudio } from "@/lib/audio/phoneAudioOwnership";
 import { clearLocalAudioHealth, reportLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
@@ -180,7 +187,22 @@ const defaultWorkerFactory: LocalSidWorkerFactory = () => {
   return new Worker(new URL("./localSid.worker.ts", import.meta.url), { type: "module" });
 };
 
-const defaultAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) => {
+/**
+ * The native track, when this platform has one.
+ *
+ * Preferred over Web Audio because the two do not sound the same. Web Audio inside the WebView lands
+ * on a direct output that bypasses the mixer's effect chain — on a Pixel 4 that chain is the
+ * speaker's own EQ, and without it on-device playback measured 7.5 dB quieter with a thirtieth of the
+ * energy in 120-300 Hz, against the identical PCM sent through the mirror's native track. See
+ * `localSidNativeSink` for the measurements. Null on the web build and on iOS, where the plugin does
+ * not exist ([[streamudp-android-only]]): those fall back to Web Audio, which is all they have.
+ */
+const nativeAudioBackend = (): NativeLocalAudioBackend | null => {
+  if (!Capacitor.isNativePlatform() || !Capacitor.isPluginAvailable("StreamUdp")) return null;
+  return StreamUdp as unknown as NativeLocalAudioBackend;
+};
+
+const webAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) => {
   const Ctor =
     typeof AudioContext !== "undefined"
       ? AudioContext
@@ -326,6 +348,16 @@ interface OpenPending {
  * chunk this is ~34 min of audio — longer than any HIL soak, so the p99 covers
  * the whole run while staying a fixed, tiny allocation.
  */
+/**
+ * Native where it exists, Web Audio everywhere else.
+ *
+ * Not a preference — the two paths measurably do not sound alike, and the native one is the same
+ * path the A/V mirror uses, which is the whole point: "Listen on: this device" and "Both" should
+ * reach the speaker through identical processing.
+ */
+const defaultAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) =>
+  createNativeLocalSidSink(sampleRate, nativeAudioBackend()) ?? webAudioSinkFactory(sampleRate);
+
 const RENDER_RATE_SAMPLES = 4096;
 
 const DEFAULT_CHUNK_SECONDS = 0.5;
@@ -346,14 +378,24 @@ const DEFAULT_CHUNK_SECONDS = 0.5;
  * is to stop allocating so hard on the Play page, but the audio path should not
  * be hostage to that in the first place.
  */
-const DEFAULT_TARGET_BUFFER_SECONDS = 4;
+/**
+ * How far ahead the engine renders.
+ *
+ * Deep on the native path, and deliberately so. The mirror never drops out because its PCM arrives on
+ * a native receive thread and goes straight into the native ring — JavaScript is not in the path at
+ * all. On-device playback renders in WASM and has to hand the samples over the bridge from the JS
+ * thread, which also runs the UI, the renderer and garbage collection. Pacing that finely was tried
+ * and failed repeatedly; the answer is not finer pacing but a buffer deep enough that JS only has to
+ * be roughly on time. Web Audio keeps the shallower figure: it has no bridge to cross.
+ */
+const DEFAULT_TARGET_BUFFER_SECONDS = nativeLocalAudioAvailable() ? 20 : 4;
 const DEFAULT_SAMPLE_RATE = 48000;
 /**
  * Cap concurrent render requests so a slow device cannot queue unboundedly.
  * Must be high enough to actually fill {@link DEFAULT_TARGET_BUFFER_SECONDS}
  * promptly after a stall — at 0.5 s chunks, 4 in flight is 2 s of catch-up.
  */
-const MAX_IN_FLIGHT_RENDERS = 4;
+const MAX_IN_FLIGHT_RENDERS = 8;
 
 export class LocalSidEngine {
   private readonly workerFactory: LocalSidWorkerFactory;
