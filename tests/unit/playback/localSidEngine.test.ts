@@ -434,6 +434,11 @@ describe("LocalSidEngine — an unanswered worker", () => {
       const play = engine.play(new ArrayBuffer(120), 0, {});
       const assertion = expect(play).rejects.toThrow(/did not open/);
       worker.emit({ type: "ready", moduleLoadMs: 1 });
+      // Twice, because an open that times out gets one retry: on a busy device the first attempt
+      // is often the only one that fails, and losing the track over it stops playback for good.
+      // Two silences in a row is not bad luck, and that is where the engine gives up.
+      await vi.advanceTimersByTimeAsync(15_001);
+      worker.emit({ type: "ready", moduleLoadMs: 1 });
       await vi.advanceTimersByTimeAsync(15_001);
       await assertion;
     } finally {

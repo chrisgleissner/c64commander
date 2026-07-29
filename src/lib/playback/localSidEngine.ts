@@ -88,6 +88,11 @@ export type LocalSidAudioSinkFactory = (sampleRate: number) => LocalSidAudioSink
  */
 const WORKER_REPLY_TIMEOUT_MS = 15000;
 
+/** The one failure `play` retries: see there for why, and why only once. */
+const OPEN_TIMEOUT_MESSAGE = `Local SID engine did not open the tune within ${WORKER_REPLY_TIMEOUT_MS}ms`;
+
+const isOpenTimeoutError = (error: unknown) => error instanceof Error && error.message === OPEN_TIMEOUT_MESSAGE;
+
 /**
  * Liveness watchdog for on-device playback.
  *
@@ -373,6 +378,8 @@ export class LocalSidEngine {
   /** One recovery per tune; a second stall is left to the playlist's own advance. */
   private stallRecoveryUsed = false;
   private stallRecoveryInFlight = false;
+  /** Guards {@link play}'s single retry after an open timeout, so a retry can never retry itself. */
+  private openRetryInFlight = false;
   /** Kept so a stalled tune can be re-opened where it stopped; the played bytes are transferred away. */
   private currentTune: { bytes: ArrayBuffer; songIndex: number } | null = null;
   /** Bumped per seek so chunks rendered for a superseded position are dropped. */
@@ -601,6 +608,41 @@ export class LocalSidEngine {
     songIndex: number,
     callbacks: LocalSidPlayCallbacks = {},
   ): Promise<LocalSidPlayResult> {
+    // Keep a copy before `openTuneOnce` transfers ownership of the caller's buffer to the worker,
+    // so a retry has something left to open with.
+    const retryBytes = sidBytes.slice(0);
+    try {
+      return await this.openTuneOnce(sidBytes, songIndex, callbacks);
+    } catch (error) {
+      // An open that times out is nearly always transient: the device was busy — often finishing
+      // the seek this tune replaced, or emulating for a worker that has been told to stop but has
+      // not yet — and the very next attempt succeeds within a couple of seconds. Measured on a
+      // Pixel 4, one open in a scrub-heavy session exceeded 15 s while every other took about two.
+      //
+      // Failing outright is far worse than the wait: the track change is lost, playback stops, and
+      // it stays stopped until the listener works out that they have to start it again. So try
+      // once more on the worker the timeout has already discarded. Once only — a second timeout is
+      // not bad luck, and retrying on a timer would spend the track restarting instead of playing.
+      if (this.openRetryInFlight || !isOpenTimeoutError(error)) throw error;
+      addLog("warn", "Local SID engine: tune open timed out; retrying once", {
+        service: "local-sid",
+        songIndex,
+      });
+      this.openRetryInFlight = true;
+      try {
+        return await this.openTuneOnce(retryBytes, songIndex, callbacks);
+      } finally {
+        this.openRetryInFlight = false;
+      }
+    }
+  }
+
+  /** One attempt at {@link play}. See there for why there can be a second. */
+  private async openTuneOnce(
+    sidBytes: ArrayBuffer,
+    songIndex: number,
+    callbacks: LocalSidPlayCallbacks = {},
+  ): Promise<LocalSidPlayResult> {
     // A seek still running belongs to a tune nobody is listening to any more, and it cannot be
     // called off: seeking reloads the tune and fast-forwards to the target, so a seek near the end
     // of a long one re-emulates minutes of C64 in a single call the worker cannot interrupt. The
@@ -646,7 +688,7 @@ export class LocalSidEngine {
       const timer = setTimeout(() => {
         this.openPending = null;
         this.discardWorker("tune open timed out");
-        reject(new Error(`Local SID engine did not open the tune within ${WORKER_REPLY_TIMEOUT_MS}ms`));
+        reject(new Error(OPEN_TIMEOUT_MESSAGE));
       }, WORKER_REPLY_TIMEOUT_MS);
       const settle = <A extends unknown[], R>(fn: (...args: A) => R) => {
         return (...args: A): R => {

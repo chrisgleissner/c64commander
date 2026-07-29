@@ -216,6 +216,63 @@ describe("LocalSidEngine — the seek gate", () => {
  * later the watchdog discarded a worker that was doing exactly what it had been asked to do. The
  * open and the seek each have a bound of their own, so whichever is outstanding owns the failure.
  */
+/**
+ * An open that times out is nearly always transient — the device was busy, often with the very
+ * seek this tune replaced. On a Pixel 4 one open in a scrub-heavy session took over 15 s where
+ * every other took about two, and the next attempt thirty seconds later succeeded. Failing
+ * outright cost the track change and left playback stopped until the listener noticed.
+ */
+describe("LocalSidEngine — an open that times out", () => {
+  it("tries once more rather than losing the track", async () => {
+    const { engine, workers } = makeEngine();
+    const play = engine.play(new ArrayBuffer(64), 0, {});
+    await vi.advanceTimersByTimeAsync(0);
+    workers[0].emit({ type: "ready", moduleLoadMs: 1 });
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Let the first open go unanswered.
+    await vi.advanceTimersByTimeAsync(15_001);
+    expect(workers[0].terminated).toBe(true);
+
+    // The retry runs on a fresh worker, which answers.
+    const second = workers[workers.length - 1];
+    second.emit({ type: "ready", moduleLoadMs: 1 });
+    await vi.advanceTimersByTimeAsync(0);
+    const opens = second.sentOfType("open");
+    expect(opens.length).toBeGreaterThan(0);
+    second.emit({
+      type: "opened",
+      id: opens[opens.length - 1].id,
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      tuneInfo: null,
+      romRequired: false,
+    });
+
+    await expect(play).resolves.toMatchObject({ romRequired: false });
+  });
+
+  it("gives up after the second, rather than restarting for the rest of the track", async () => {
+    const { engine, workers } = makeEngine();
+    const play = engine.play(new ArrayBuffer(64), 0, {});
+    await vi.advanceTimersByTimeAsync(0);
+    workers[0].emit({ type: "ready", moduleLoadMs: 1 });
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(15_001);
+
+    const second = workers[workers.length - 1];
+    second.emit({ type: "ready", moduleLoadMs: 1 });
+    await vi.advanceTimersByTimeAsync(0);
+    // The retry goes unanswered too. A second timeout is not bad luck.
+    await vi.advanceTimersByTimeAsync(15_001);
+
+    await expect(play).rejects.toThrow(/did not open the tune/);
+    const workersAfter = workers.length;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(workers.length).toBe(workersAfter);
+  });
+});
+
 describe("LocalSidEngine — silence that belongs to a transition", () => {
   it("does not call an unfinished seek a stall, however long it takes", async () => {
     const { engine, workers, clock } = makeEngine();
