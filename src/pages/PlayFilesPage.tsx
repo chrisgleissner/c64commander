@@ -2254,7 +2254,11 @@ export default function PlayFilesPage() {
             state={hvsc.hvscPreparationState}
             statusLabel={hvsc.hvscPreparationStatusLabel}
             failedPhase={hvsc.hvscPreparationFailedPhase}
-            progressPercent={hvsc.hvscPreparationProgressPercent}
+            stage={hvsc.hvscStage}
+            step={hvsc.hvscStageStep}
+            stagePercent={hvsc.hvscStagePercent}
+            stageDone={hvsc.hvscStageDone}
+            stageTotal={hvsc.hvscStageTotal}
             throughputLabel={hvsc.hvscPreparationThroughputLabel}
             readySongCount={hvsc.hvscReadySongCount}
             errorReason={hvsc.hvscPreparationErrorReason}

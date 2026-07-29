@@ -30,9 +30,14 @@ export function HvscManager({ hvscControlsEnabled, hvsc }: HvscManagerProps) {
       hvscCanIngest={hvsc.hvscCanIngest}
       hvscPreparationState={hvsc.hvscPreparationState}
       hvscPreparationStatusLabel={hvsc.hvscPreparationStatusLabel}
-      hvscPreparationProgressPercent={hvsc.hvscPreparationProgressPercent}
+      hvscStage={hvsc.hvscStage}
+      hvscStageStep={hvsc.hvscStageStep}
+      hvscStagePercent={hvsc.hvscStagePercent}
+      hvscStageDone={hvsc.hvscStageDone}
+      hvscStageTotal={hvsc.hvscStageTotal}
       hvscPreparationThroughputLabel={hvsc.hvscPreparationThroughputLabel}
       hvscPreparationErrorReason={hvsc.hvscPreparationErrorReason}
+      hvscPreparationFailedPhase={hvsc.hvscPreparationFailedPhase}
       hvscReadySongCount={hvsc.hvscReadySongCount}
       hvscSummaryFilesExtracted={hvsc.hvscSummaryFilesExtracted}
       hvscSummaryDurationMs={hvsc.hvscSummaryDurationMs}

@@ -10,7 +10,8 @@ const buildProps = (overrides: Partial<ComponentProps<typeof HvscPreparationShee
   state: "DOWNLOADING" as const,
   statusLabel: "Downloading",
   failedPhase: null,
-  progressPercent: 25,
+  stage: "download" as string | null,
+  stagePercent: 25 as number | null,
   throughputLabel: "8.4 MB/s",
   readySongCount: 0,
   errorReason: null,
@@ -26,7 +27,8 @@ describe("HvscPreparationSheet", () => {
 
     expect(screen.getByTestId("hvsc-preparation-sheet")).toBeVisible();
     expect(screen.getByText("Preparing HVSC library")).toBeVisible();
-    expect(screen.getByTestId("hvsc-preparation-progress-label")).toHaveTextContent("25%");
+    expect(screen.getByTestId("hvsc-preparation-progress-download")).toHaveAttribute("data-status", "active");
+    expect(screen.getByTestId("hvsc-preparation-progress-detail")).toHaveTextContent("25%");
     expect(screen.getByTestId("hvsc-preparation-phase")).toHaveTextContent("Downloading");
     expect(screen.getByTestId("hvsc-preparation-throughput")).toHaveTextContent("8.4 MB/s");
     expect(screen.getByTestId("hvsc-preparation-cancel")).toBeVisible();
@@ -42,7 +44,8 @@ describe("HvscPreparationSheet", () => {
         {...buildProps({
           state: "READY",
           statusLabel: "Ready",
-          progressPercent: null,
+          stage: null,
+          stagePercent: null,
           throughputLabel: null,
           readySongCount: 65890,
           onBrowse,
@@ -50,7 +53,11 @@ describe("HvscPreparationSheet", () => {
       />,
     );
 
-    expect(screen.getByTestId("hvsc-preparation-progress-label")).toHaveTextContent("100%");
+    // Every step finished, which is the resting state — the old bar hid itself on completion, so the
+    // one thing the user was waiting for was never rendered.
+    for (const step of ["download", "unpack", "scan", "details"]) {
+      expect(screen.getByTestId(`hvsc-preparation-progress-${step}`)).toHaveAttribute("data-status", "done");
+    }
     expect(screen.getByTestId("hvsc-preparation-success-count")).toHaveTextContent("65,890 songs ready");
 
     fireEvent.click(screen.getByTestId("hvsc-preparation-browse"));

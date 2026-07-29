@@ -20,7 +20,9 @@ const buildProps = (overrides: Partial<HvscControlsProps> = {}): HvscControlsPro
   hvscCanIngest: false,
   hvscPreparationState: "NOT_PRESENT",
   hvscPreparationStatusLabel: "Not installed",
-  hvscPreparationProgressPercent: null,
+  hvscStage: null,
+  hvscStagePercent: null,
+  hvscPreparationFailedPhase: null,
   hvscPreparationThroughputLabel: null,
   hvscPreparationErrorReason: null,
   hvscReadySongCount: 0,
@@ -41,6 +43,20 @@ const buildProps = (overrides: Partial<HvscControlsProps> = {}): HvscControlsPro
 });
 
 describe("HvscControls", () => {
+  it("holds the finished steps on screen once the library is reachable", async () => {
+    // Measured on the device: the display vanished the instant preparation finished, so the
+    // completion the user had been waiting for was never shown. It went 73%, then gone.
+    const { rerender } = render(
+      <HvscControls {...buildProps({ hvscPreparationState: "INGESTING", hvscStage: "sid_metadata_hydration" })} />,
+    );
+
+    rerender(<HvscControls {...buildProps({ hvscPreparationState: "READY", hvscStage: null })} />);
+
+    for (const step of ["download", "unpack", "scan", "details"]) {
+      expect(screen.getByTestId(`hvsc-stage-steps-${step}`)).toHaveAttribute("data-status", "done");
+    }
+  });
+
   it("exposes stable ids for the primary and advanced actions", () => {
     render(<HvscControls {...buildProps({ hvscCanIngest: true })} />);
 
@@ -110,7 +126,8 @@ describe("HvscControls", () => {
           hvscCanIngest: true,
           hvscPreparationState: "INGESTING",
           hvscPreparationStatusLabel: "Indexing",
-          hvscPreparationProgressPercent: 67,
+          hvscStage: "sid_metadata_parsing",
+          hvscStagePercent: 67,
           hvscPreparationThroughputLabel: "42 items/s",
         })}
       />,
@@ -119,8 +136,11 @@ describe("HvscControls", () => {
     expect(screen.getByTestId("hvsc-progress")).toBeTruthy();
     expect(screen.getByText("Status: Indexing")).toBeTruthy();
     expect(screen.getByText("HVSC summary")).toBeTruthy();
-    expect(screen.getByText("67%")).toBeTruthy();
-    expect(screen.getByTestId("hvsc-download-bytes")).toHaveTextContent("42 items/s");
+    // The named stage, and that stage's own figure. There is no install-wide percentage to assert:
+    // two attempts at one both failed on hardware, so what is shown is which step is running.
+    expect(screen.getByTestId("hvsc-stage-steps-details")).toHaveAttribute("data-status", "active");
+    expect(screen.getByTestId("hvsc-stage-steps-download")).toHaveAttribute("data-status", "done");
+    expect(screen.getByTestId("hvsc-stage-steps-detail")).toHaveTextContent("67% · 42 items/s");
     expect(screen.getByRole("button", { name: "Download HVSC" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Ingest HVSC" })).toBeDisabled();
     expect(screen.getByTestId("hvsc-stop")).toBeVisible();

@@ -7,7 +7,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { overallPreparationPercent, type HvscArchiveKind } from "@/lib/hvsc/hvscProgressModel";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { markHvscUpdateCheckAt, shouldCheckForHvscUpdates } from "@/lib/hvsc/hvscReleaseService";
@@ -46,6 +45,7 @@ import {
   type HvscStatusSummary,
   type HvscStatus,
 } from "@/lib/hvsc";
+import { stepForStage, type HvscStageId } from "@/lib/hvsc/hvscStageModel";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 
 export type HvscSong = {
@@ -62,7 +62,6 @@ export type HvscLibraryState = {
   hvscPreparationStatusLabel: string;
   hvscPreparationErrorReason: string | null;
   hvscPreparationFailedPhase: HvscPreparationPhase;
-  hvscPreparationProgressPercent: number | null;
   hvscPreparationThroughputLabel: string | null;
   hvscReadySongCount: number;
   hvscStatusSummary: HvscStatusSummary;
@@ -114,6 +113,13 @@ export type HvscLibraryState = {
   hvscCurrentFile: string | null;
   hvscActionLabel: string | null;
   hvscStage: string | null;
+  /** The running step, resolved from the live stage or the persisted summary. */
+  hvscStageStep: HvscStageId | null;
+  /** The running stage's own percentage. Meaningful within one stage; not across the install. */
+  hvscStagePercent: number | null;
+  /** Items finished in the running stage, and how many there are. */
+  hvscStageDone: number | null;
+  hvscStageTotal: number | null;
   hvscVisibleFolders: string[];
 };
 
@@ -1288,41 +1294,35 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
       hvscStatusSummary.metadata.status,
     ],
   );
-  // ONE figure across the whole install, not one per stage. Showing whichever stage was running meant
-  // the bar filled during the download, snapped back to nothing, filled again through extraction,
-  // snapped back, and filled a third time while indexing — reaching 100% three times without
-  // finishing. It is weighted by the two things actually being counted, bytes and songs, against the
-  // expected totals for a full archive or an update so it means something before either total is
-  // known.
-  const hvscArchiveKind: HvscArchiveKind = hvscStatus?.installedVersion ? "update" : "full";
-  const hvscOverallPercent =
-    hvscPreparationSnapshot.state === "READY"
-      ? 100
-      : hvscPreparationSnapshot.state === "DOWNLOADING" || hvscPreparationSnapshot.state === "INGESTING"
-        ? overallPreparationPercent({
-            kind: hvscArchiveKind,
-            downloadedBytes: hvscDownloadBytes,
-            totalBytes: hvscDownloadTotalBytes,
-            downloadComplete: hvscPreparationSnapshot.state === "INGESTING",
-            extractedFiles: hvscSummaryFilesExtracted,
-            totalFiles: hvscExtractionTotalFiles,
-            // `||`, not `??`: these counters default to 0 rather than null, so `??` never falls through
-            // and the bar sat at exactly the download's share for the whole of the ingest, looking stuck.
-            indexedSongs: hvscIngestionIngestedSongs || null,
-            totalSongs: hvscIngestionTotalSongs || null,
-            // The song counters are only written when ingestion finishes, so for the whole of the
-            // metadata pass they read zero. Its own percentage is what actually moves meanwhile.
-            indexPercent: hvscStatusSummary.metadata.percent ?? null,
-            // 100 belongs to the moment the library is usable, not to the last stage reporting done.
-            indexComplete: false,
-          })
-        : null;
-  // Held to its high-water mark: a Content-Length arriving mid-download, or enumeration replacing an
-  // estimated song count with a real one, legitimately moves the underlying number backwards, and a
-  // bar that retreats reads as a fault.
-  // No extra clamp here: the model already holds itself below 100 until the library is reachable, and
-  // clamping again would stop it ever showing the 100 the user is waiting to see.
-  const hvscPreparationProgressPercent = hvscOverallPercent;
+  // The running stage's own counters, chosen by which stage is running. Shown in preference to its
+  // percentage because they move from the very first item: 61,157 songs rounds to 0% for the first
+  // six hundred of them, which on the device was indistinguishable from being stuck.
+  // The live stage where there is one; otherwise what the persisted summary implies. Reopening the
+  // app mid-install restores state from the summary without replaying progress events, so the raw
+  // stage is null and the step has to be inferred or the display falls back to the first ingest step.
+  const hvscStageStep =
+    stepForStage(hvscStage) ??
+    (hvscStatusSummary.metadata.status === "in-progress"
+      ? "details"
+      : hvscStatusSummary.extraction.status === "in-progress"
+        ? "unpack"
+        : hvscStatusSummary.download.status === "in-progress"
+          ? "download"
+          : null);
+  const [hvscStageDone, hvscStageTotal] =
+    hvscStageStep === "download"
+      ? [hvscDownloadBytes, hvscDownloadTotalBytes]
+      : hvscStageStep === "unpack"
+        ? [hvscSummaryFilesExtracted ?? null, hvscExtractionTotalFiles]
+        : hvscStageStep === "scan" || hvscStageStep === "details"
+          ? [hvscStatusSummary.metadata.processedSongs ?? null, hvscStatusSummary.metadata.totalSongs ?? null]
+          : [null, null];
+
+  // NOTE: there is deliberately no single install-wide percentage here. Two attempts at one both
+  // failed on hardware, because the stage counters are in different units and disappear at each
+  // handover, so any single figure has to be guessed across them — it read 73%, fell to 58%, froze,
+  // and vanished without reaching 100%. The UI shows the four named stages instead; see
+  // `lib/hvsc/hvscStageModel`.
   const hvscPreparationThroughputLabel = (() => {
     if (hvscPreparationSnapshot.state === "DOWNLOADING" && hvscDownloadBytes && hvscDownloadElapsedMs) {
       const mbPerSecond = hvscDownloadBytes / 1024 / 1024 / Math.max(hvscDownloadElapsedMs / 1000, 0.001);
@@ -1427,7 +1427,6 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     hvscPreparationStatusLabel: hvscPreparationSnapshot.statusLabel,
     hvscPreparationErrorReason: hvscPreparationSnapshot.errorReason,
     hvscPreparationFailedPhase: hvscPreparationSnapshot.failedPhase,
-    hvscPreparationProgressPercent,
     hvscPreparationThroughputLabel,
     hvscReadySongCount,
     hvscStatusSummary,
@@ -1479,6 +1478,12 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     hvscCurrentFile,
     hvscActionLabel,
     hvscStage,
+    hvscStageStep,
+    hvscStagePercent: hvscProgress,
+    // Bytes are not items; showing "12,345,678 / 84,827,547" helps nobody, so the download keeps its
+    // percentage and its MB/s.
+    hvscStageDone: hvscStageStep === "download" ? null : hvscStageDone,
+    hvscStageTotal: hvscStageStep === "download" ? null : hvscStageTotal,
     hvscVisibleFolders,
   };
 };
