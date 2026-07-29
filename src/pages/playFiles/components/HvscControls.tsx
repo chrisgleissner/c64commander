@@ -102,7 +102,11 @@ export const HvscControls = ({
     return () => window.clearTimeout(timer);
   }, [working, hvscPreparationState]);
 
+  // Two different questions, which used to share one answer. The steps are shown whenever there is
+  // something to show, including the moment everything finishes and after a failure; Stop belongs
+  // only to work that is actually running. Conflating them left Stop on screen after a cancel.
   const isPreparing = working || justCompleted;
+  const isRunning = hvscInProgress || hvscPreparationState === "DOWNLOADING" || hvscPreparationState === "INGESTING";
   const isDownloaded = hvscPreparationState === "DOWNLOADED";
   const canDownload = hvscAvailable && !hvscUpdating;
   const canIngest = hvscAvailable && hvscCanIngest && !hvscUpdating;
@@ -131,7 +135,7 @@ export const HvscControls = ({
           <Button id="hvsc-ingest" variant="outline" size="sm" onClick={onIngest} disabled={!canIngest}>
             Ingest HVSC
           </Button>
-          {hvscInProgress || isPreparing ? (
+          {isRunning ? (
             <Button variant="outline" size="sm" onClick={onCancel} data-testid="hvsc-stop">
               Stop
             </Button>

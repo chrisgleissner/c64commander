@@ -43,6 +43,21 @@ const buildProps = (overrides: Partial<HvscControlsProps> = {}): HvscControlsPro
 });
 
 describe("HvscControls", () => {
+  it("hides Stop once work has stopped, while still showing where it got to", () => {
+    // Showing the steps for more states than the old bar also kept Stop on screen after a cancel:
+    // "is there something to show" and "is work running" are different questions.
+    render(<HvscControls {...buildProps({ hvscPreparationState: "ERROR", hvscStage: "archive_extraction" })} />);
+
+    expect(screen.queryByTestId("hvsc-stop")).toBeNull();
+    expect(screen.getByTestId("hvsc-stage-steps-unpack")).toHaveAttribute("data-status", "failed");
+  });
+
+  it("shows Stop while work is actually running", () => {
+    render(<HvscControls {...buildProps({ hvscPreparationState: "INGESTING", hvscStage: "archive_extraction" })} />);
+
+    expect(screen.getByTestId("hvsc-stop")).toBeVisible();
+  });
+
   it("holds the finished steps on screen once the library is reachable", async () => {
     // Measured on the device: the display vanished the instant preparation finished, so the
     // completion the user had been waiting for was never shown. It went 73%, then gone.
