@@ -174,6 +174,100 @@ def build_prg() -> bytes:
     return load_address.to_bytes(2, "little") + stub + body
 
 
+def build_sid() -> bytes:
+    """The same barcode as a PSID, so the on-device engine can be graded by the identical rig.
+
+    The PRG counts raster lines itself; a PSID cannot, because the player owns the machine and calls
+    `play` once a frame. So the state machine is driven by that call instead — which is the same clock,
+    just handed over rather than taken. Anything that renders this file and gets the barcode back
+    wrong has a fault, whether it is a C64, an emulator or the app's own engine.
+    """
+    load = 0x1000
+    a = Assembler(load)
+    a.abs_ref(0x4C, "init_body")  # $1000 JMP init
+    a.abs_ref(0x4C, "play_body")  # $1003 JMP play
+
+    a.label("init_body")
+    a.emit(0xA9, 0x0F)
+    a.emit(0x8D, 0x18, 0xD4)  # volume 15
+    a.emit(0xA9, 0x00)
+    a.emit(0x8D, 0x05, 0xD4)  # attack 0, decay 0
+    a.emit(0xA9, 0xF0)
+    a.emit(0x8D, 0x06, 0xD4)  # sustain 15, release 0
+    a.emit(0xA9, 0x00)
+    a.abs_ref(0x8D, "phase")
+    a.abs_ref(0x8D, "slot")
+    a.emit(0x60)  # RTS
+
+    a.label("play_body")
+    a.abs_ref(0xAE, "slot")  # LDX slot
+    a.abs_ref(0xAD, "phase")  # LDA phase
+    a.rel_ref(0xD0, "not_start")  # BNE not_start
+    a.abs_ref(0xBD, "freqlo")  # LDA freqlo,X
+    a.emit(0x8D, 0x00, 0xD4)
+    a.abs_ref(0xBD, "freqhi")  # LDA freqhi,X
+    a.emit(0x8D, 0x01, 0xD4)
+    a.emit(0xA9, 0x11)
+    a.emit(0x8D, 0x04, 0xD4)  # gate on
+    a.abs_ref(0x4C, "advance")
+    a.label("not_start")
+    a.emit(0xC9, ON_FRAMES)  # CMP #ON_FRAMES
+    a.rel_ref(0xD0, "advance")
+    a.emit(0xA9, 0x10)
+    a.emit(0x8D, 0x04, 0xD4)  # gate off
+    a.label("advance")
+    a.abs_ref(0xEE, "phase")  # INC phase
+    a.abs_ref(0xAD, "phase")
+    a.emit(0xC9, SLOT_FRAMES)
+    a.rel_ref(0xD0, "done")
+    a.emit(0xA9, 0x00)
+    a.abs_ref(0x8D, "phase")
+    a.emit(0xE8)  # INX
+    a.emit(0xE0, len(TONES_HZ))
+    a.rel_ref(0xD0, "store_slot")
+    a.emit(0xA2, 0x00)  # LDX #0
+    a.label("store_slot")
+    a.abs_ref(0x8E, "slot")  # STX slot
+    a.label("done")
+    a.emit(0x60)  # RTS
+
+    a.label("phase")
+    a.emit(0x00)
+    a.label("slot")
+    a.emit(0x00)
+    a.label("freqlo")
+    for hz in TONES_HZ:
+        a.emit(sid_freq(hz) & 0xFF)
+    a.label("freqhi")
+    for hz in TONES_HZ:
+        a.emit((sid_freq(hz) >> 8) & 0xFF)
+
+    body = a.link()
+    data = load.to_bytes(2, "little") + body  # PSID with loadAddress 0 takes it from the data
+
+    def text(value: str) -> bytes:
+        return value.encode("latin-1")[:31].ljust(32, b"\x00")
+
+    header = bytearray()
+    header += b"PSID"
+    header += (2).to_bytes(2, "big")  # version
+    header += (0x7C).to_bytes(2, "big")  # data offset
+    header += (0).to_bytes(2, "big")  # load address: take from the data
+    header += (0x1000).to_bytes(2, "big")  # init
+    header += (0x1003).to_bytes(2, "big")  # play
+    header += (1).to_bytes(2, "big")  # songs
+    header += (1).to_bytes(2, "big")  # start song
+    header += (0).to_bytes(4, "big")  # speed: vertical blank (50 Hz PAL)
+    header += text("C64 Commander timing barcode")
+    header += text("C64 Commander HIL")
+    header += text("2026")
+    header += (0b100100).to_bytes(2, "big")  # flags: PAL, 6581
+    header += bytes([0, 0])  # start page, page length
+    header += bytes([0, 0])  # second SID address, third SID address (one byte each)
+    assert len(header) == 0x7C, len(header)
+    return bytes(header) + data
+
+
 def play(host: str, password: str, prg: bytes) -> None:
     boundary = "----c64probe"
     parts = (
@@ -361,6 +455,7 @@ def analyse(path: str) -> int:
     # and an average over eighty of them hides every one. So each note is graded on its own and the
     # worst offenders are named.
     notes: list[dict] = []
+    fine_for_notes = int(rate * 5 / 1000)
     for start, end, tone in bursts:
         hz = float(TONES_HZ[tone])
         offset = end
@@ -381,7 +476,17 @@ def analyse(path: str) -> int:
                     best, at = level, probe_hz
             cents_span = max(cents_span, abs(1200 * math.log2(at / hz)))
             pos += hop
-        notes.append({"tone": tone, "ms": duration_ms, "cents": cents_span, "start": start})
+        body = [
+            goertzel(samples, rate, hz, pos, fine_for_notes)
+            for pos in range(start + 2 * fine_for_notes, offset - 2 * fine_for_notes, fine_for_notes)
+        ]
+        drops = 0
+        if len(body) >= 6:
+            med = sorted(body)[len(body) // 2]
+            drops = sum(1 for level in body if level < med * 0.4)
+        notes.append(
+            {"tone": tone, "ms": duration_ms, "cents": cents_span, "start": start, "dropWindows": drops}
+        )
 
     durations = [n["ms"] for n in notes]
     dur_median = sorted(durations)[len(durations) // 2]
@@ -401,6 +506,27 @@ def analyse(path: str) -> int:
     print(f"DROPOUTS        {dropout_pct:.2f}% of held tone ({dropouts} of {graded} x {fine_ms:.0f}ms windows)")
     print(f"timing          mean slot {mean_interval:.1f}ms vs {SLOT_MS:.1f}ms, jitter {jitter:.1f}ms, worst {worst:.1f}ms")
     print(f"pitch           {measured:.1f} Hz vs {expected:.0f} Hz = {cents:+.1f} cents")
+
+    # Name every defective note, with the time it happened. A summary answers "is it broken"; a
+    # listener who can hear three distinct faults needs to know WHICH notes, so the recording can be
+    # listened to at that point and the count compared honestly between builds.
+    faults = []
+    for n in notes:
+        why = []
+        if abs(n["ms"] - ON_MS) > 10:
+            why.append(f"length {n['ms']:.0f}ms")
+        if n["cents"] > 10:
+            why.append(f"pitch {n['cents']:.0f} cents")
+        if n["dropWindows"]:
+            why.append(f"{n['dropWindows']} dropout windows")
+        if why:
+            faults.append(f"    t={n['start'] / rate:6.2f}s tone {TONES_HZ[n['tone']]:4d}Hz  " + ", ".join(why))
+    if faults:
+        print(f"defective notes  {len(faults)} of {len(notes)}:")
+        for line in faults[:25]:
+            print(line)
+    else:
+        print(f"defective notes  none of {len(notes)}")
 
     ok = (
         sequence_errors == 0
@@ -468,7 +594,7 @@ def record(path: str, seconds: float, device: str) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("build", "play", "record", "wire", "analyse", "run"):
+    for name in ("build", "build-sid", "play", "record", "wire", "analyse", "run"):
         p = sub.add_parser(name)
         p.add_argument("--host", default="192.168.1.148")
         p.add_argument("--password", default="pwd")
@@ -486,6 +612,13 @@ def main() -> int:
         with open(out, "wb") as fh:
             fh.write(prg)
         print(f"{out}  {len(prg)} bytes, {len(TONES_HZ)} tones, slot {SLOT_MS:.2f}ms")
+        return 0
+    if args.cmd == "build-sid":
+        sid = build_sid()
+        out = args.out if args.out.endswith(".sid") else "/tmp/audio-e2e-probe.sid"
+        with open(out, "wb") as fh:
+            fh.write(sid)
+        print(f"{out}  {len(sid)} bytes")
         return 0
     if args.cmd == "play":
         play(args.host, args.password, build_prg())

@@ -336,7 +336,55 @@ internal class AudioPipeline(
       }
       lag++
     }
+    return refinePeriod(bestLag, stride, window, available)
+  }
+
+  /**
+   * Sharpen the period estimate to a single frame, around the decimated search's answer.
+   *
+   * The coarse search steps four frames at a time, so it can be two frames out — and two frames of a
+   * 1350 Hz tone is a fifth of a period, which is a real step in the waveform where the repeat joins.
+   * Concealment is only as good as this number: get it wrong and the hole is filled with something
+   * audibly at the wrong pitch, which is exactly what a listener reports as a note briefly going off.
+   */
+  private fun refinePeriod(coarseLag: Int, stride: Int, window: Int, available: Int): Int {
+    val lowest = maxOf(1, coarseLag - stride)
+    val highest = minOf(available / 2, coarseLag + stride)
+    if (highest <= lowest) return coarseLag.coerceIn(1, available)
+    var bestLag = coarseLag
+    var bestScore = -1.0
+    val base = writeFrames - window
+    var lag = lowest
+    while (lag <= highest) {
+      var num = 0.0
+      var energyLag = 0.0
+      var energyCur = 0.0
+      var i = lag
+      while (i < window) {
+        val cur = sampleAt(base + i)
+        val prev = sampleAt(base + i - lag)
+        num += cur * prev
+        energyLag += prev * prev
+        energyCur += cur * cur
+        i += 2
+      }
+      val denom = Math.sqrt(energyLag * energyCur)
+      val score = if (denom > 0) num / denom else 0.0
+      if (score > bestScore) {
+        bestScore = score
+        bestLag = lag
+      }
+      lag++
+    }
     return bestLag.coerceIn(1, available)
+  }
+
+  /** Mono sum of one ring frame, for the period search. */
+  private fun sampleAt(frame: Long): Double {
+    val idx = ((frame % ringFrames + ringFrames) % ringFrames).toInt() * BYTES_PER_FRAME
+    val l = ((ring[idx].toInt() and 0xFF) or (ring[idx + 1].toInt() shl 8)).toShort().toInt()
+    val r = ((ring[idx + 2].toInt() and 0xFF) or (ring[idx + 3].toInt() shl 8)).toShort().toInt()
+    return (l + r).toDouble()
   }
 
   /**
@@ -370,17 +418,33 @@ internal class AudioPipeline(
       // was outside the range the estimator could ever return, and it settled on a fraction of it.
       val period = estimatePeriod(available)
       val from = writeFrames - period
+      // Held at full level for a short fill: fading the repeat out and then splicing the next real
+      // packet in at full level trades one discontinuity for two, and the second — arriving exactly
+      // when the audio comes back — is the more audible of the pair. The far seam is handled by
+      // [blendIntoConcealment] as a cross-fade.
+      //
+      // A LONG fill is different. Repeating one period for a fifth of a second would hold a note the
+      // C64 has already released, so past a threshold the repeat fades towards silence: the timeline
+      // is still preserved — which is the whole point, since an unfilled gap drags everything after
+      // it earlier — but the invention does not outstay its welcome.
+      val fadeFrom = msToFrames(sourceRate, CONCEAL_HOLD_MS)
       for (i in 0 until fill) {
         val src = ((from + (i % period)) % ringFrames).toInt() * BYTES_PER_FRAME
         val dst = ((writeFrames + i) % ringFrames).toInt() * BYTES_PER_FRAME
-        // Held at full level, deliberately. Fading the repeat out and then splicing the next real
-        // packet in at full level trades one discontinuity for two, and the second one — arriving
-        // exactly when the audio comes back — is the more audible of the pair. The seam at the far
-        // end is handled properly by [blendInto], as a cross-fade.
+        val gain =
+            if (i <= fadeFrom) 1.0
+            else maxOf(0.0, 1.0 - (i - fadeFrom).toDouble() / maxOf(1, fill - fadeFrom))
         for (c in 0 until CHANNELS) {
           val o = c * 2
-          ring[dst + o] = ring[src + o]
-          ring[dst + o + 1] = ring[src + o + 1]
+          if (gain >= 1.0) {
+            ring[dst + o] = ring[src + o]
+            ring[dst + o + 1] = ring[src + o + 1]
+          } else {
+            val sample = ((ring[src + o].toInt() and 0xFF) or (ring[src + o + 1].toInt() shl 8)).toShort()
+            val faded = (sample * gain).toInt().coerceIn(-32768, 32767)
+            ring[dst + o] = (faded and 0xFF).toByte()
+            ring[dst + o + 1] = ((faded shr 8) and 0xFF).toByte()
+          }
         }
       }
       writeFrames += fill.toLong()
@@ -520,7 +584,17 @@ internal class AudioPipeline(
   private fun renderChunk(outFrames: Int) {
     val depth = (writeFrames - readFrames).coerceAtLeast(0)
     adaptCushion(depth)
-    val ratio = nominalRatio() * (1.0 + driftAuthority(depth) * cushionError(depth))
+    // Slew-limited, never stepped. The correction IS a change of playback rate, so moving it abruptly
+    // is an abrupt change of pitch — and the authority below can change fivefold when the cushion
+    // crosses a threshold, which put an audible lurch in the middle of a held note. Ramping it over
+    // tens of milliseconds makes the same correction inaudible.
+    val wanted = nominalRatio() * (1.0 + driftAuthority(depth) * cushionError(depth))
+    val ratio =
+        when {
+          appliedRatio <= 0.0 -> wanted
+          wanted > appliedRatio -> minOf(wanted, appliedRatio + RATIO_SLEW_PER_CHUNK)
+          else -> maxOf(wanted, appliedRatio - RATIO_SLEW_PER_CHUNK)
+        }
     appliedRatio = ratio
 
     // How many output frames the ring can actually support, leaving the one extra source frame the
@@ -786,8 +860,18 @@ internal class AudioPipeline(
     /** The wider authority allowed only while the cushion is below its floor — see [driftAuthority]. */
     private const val REBUILD_DRIFT = 0.005
 
+    /**
+     * The most the playback rate may change per written chunk. At one HAL burst per chunk this takes
+     * the ratio across its whole range in a few tens of milliseconds — fast enough to correct, slow
+     * enough that the change itself cannot be picked out.
+     */
+    private const val RATIO_SLEW_PER_CHUNK = 0.00005
+
     /** Overlap used to rejoin real audio after a concealment — long enough to hide the seam. */
     private const val CONCEAL_BLEND_MS = 2
+
+    /** How long a concealment may hold at full level before fading out. */
+    private const val CONCEAL_HOLD_MS = 30
 
     /**
      * How far the cushion may sit from target before the rate is touched at all. Without a deadband

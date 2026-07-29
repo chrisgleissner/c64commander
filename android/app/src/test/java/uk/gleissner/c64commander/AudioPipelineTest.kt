@@ -461,6 +461,10 @@ class AudioPipelineTest {
 
   @Test
   fun aConcealedPacketDoesNotLeaveAClick() {
+    assertNoClick(440.0)
+  }
+
+  private fun assertNoClick(hz: Double) {
     // Wi-Fi multicast is unacknowledged, so ~2% of the mirror's audio simply never arrives and the
     // only question is what replaces it. A click is a step in the waveform, so that is what this
     // measures: the largest sample-to-sample jump in what reached the speaker, against the largest
@@ -471,7 +475,6 @@ class AudioPipelineTest {
     val pipeline = AudioPipeline(sampleRate, 120, outputRate, 0, speaker.factory)
     try {
       pipeline.start()
-      val hz = 440.0
       var phase = 0.0
       val advance = 2 * Math.PI * hz / sampleRate
       val buf = ByteArray(packetFrames * bytesPerFrame)
@@ -516,13 +519,48 @@ class AudioPipelineTest {
       }
       // The tone's own steepest slope, i.e. the largest step that is legitimately part of the signal.
       val signalSlope = TONE_AMPLITUDE * advance
+      // Tightened from 4x once the period estimate was refined to a single frame. A step of a few
+      // times the signal's own slope is still a transient a listener can pick out on a held tone;
+      // the bar is what the waveform itself does, not merely better than the splice it replaced.
       assertTrue(
           "concealment left a step of $worstStep against a signal slope of $signalSlope — that is a click",
-          worstStep < signalSlope * 4,
+          worstStep < signalSlope * 2,
       )
     } finally {
       pipeline.close()
     }
+  }
+
+  @Test
+  fun aBurstLossKeepsTheTimeline() {
+    // Wi-Fi does not lose multicast one packet at a time; it loses it in clumps. A gap that is left
+    // unfilled does not merely omit itself — it pulls everything after it earlier, so a note the C64
+    // held for 160 ms arrives as 78 ms and every later onset is wrong too. A probe of fixed-length
+    // tones caught exactly that on hardware. So the pipeline must account for a burst loss in full:
+    // what it plays there is a judgement call, but HOW LONG it plays is not.
+    val speaker = FakeSpeaker(sampleRate)
+    val pipeline = AudioPipeline(sampleRate, 120, sampleRate, 0, speaker.factory)
+    try {
+      repeat(40) { pipeline.offer(packet, 0, packet.size) }
+      val before = pipeline.stats().jitterBufferMs
+      // 25 packets lost at once — 100 ms, far more than a single-packet drop.
+      pipeline.concealLostPackets(25 * packetFrames)
+      val after = pipeline.stats().jitterBufferMs
+      val added = after - before
+      val expected = 25 * packetFrames * 1000.0 / sampleRate
+      assertEquals("a burst loss must be accounted for in full", expected, added, 2.0)
+    } finally {
+      pipeline.close()
+    }
+  }
+
+  @Test
+  fun aConcealedHighToneDoesNotLeaveAClick() {
+    // The same click gate as below, but on a tone whose period is short. At 1350 Hz one period is 35
+    // frames, so the period search's four-frame stride is a fifth of a period — an error that is
+    // negligible at 440 Hz and a clearly audible step up here. This is the case that makes refining
+    // the estimate to a single frame worth doing.
+    assertNoClick(1350.0)
   }
 
   @Test

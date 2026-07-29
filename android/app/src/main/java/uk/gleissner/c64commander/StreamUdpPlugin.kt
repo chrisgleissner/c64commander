@@ -860,11 +860,17 @@ class StreamUdpPlugin : Plugin() {
     private const val AUDIO_BYTES_PER_FRAME = 4
 
     /**
-     * Beyond this a "gap" is an outage rather than a lost packet, and papering over it would invent
-     * a long stretch of audio nobody sent. The jitter buffer handles those; concealment is for the
-     * single packets Wi-Fi drops.
+     * How large a gap is still worth filling. Generous on purpose.
+     *
+     * It was eight packets, on the reasoning that a longer gap is an outage and papering over it
+     * would invent audio nobody sent. That was the wrong trade: leaving a gap unfilled does not
+     * merely omit it, it pulls everything after it EARLIER, and a probe of fixed-length tones showed
+     * exactly that — notes arriving at 78 ms and 132 ms where the C64 held them for 160 ms. Wi-Fi
+     * loses multicast in bursts, so gaps of twenty-odd packets are ordinary here. Filling them keeps
+     * the timeline honest, and [AudioPipeline.concealLostPackets] fades a long fill towards silence
+     * so it cannot turn into a drone.
      */
-    private const val MAX_CONCEALED_PACKETS = 8
+    private const val MAX_CONCEALED_PACKETS = 50
 
     // Default native keep-rate: present every assembled frame.
     private const val DEFAULT_KEEP_PERMILLE = 1000
