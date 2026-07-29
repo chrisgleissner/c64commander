@@ -59,6 +59,27 @@ describe("playbackEngineRouting", () => {
   });
 
   describe("romFallbackDecision", () => {
+    it("still plays an ordinary tune here without ROMs, on the lighter emulation", () => {
+      // The accurate engine needs the kernal and basic images to run ANY tune, not only an RSID, and
+      // nothing fetched them — so a fresh install that chose "listen on this device" got silence.
+      // Measured on a Pixel 4: engine local, no stored ROMs, zero audio players, microphone at room
+      // noise.
+      //
+      // Amended from an earlier fix that sent these to the C64 instead. Redirecting is defensible but
+      // it is not what the listener asked for, and it is unnecessary: the lighter emulation carries
+      // its own kernal-free playback. So the tune plays where it was asked to play, the substitution
+      // is explained, and the images are fetched in the background for the next one.
+      expect(romFallbackDecision(false, false)).toEqual({ route: "local", notice: "rom-lite-engine" });
+    });
+
+    it("plays an ordinary tune on the device once the ROMs are there", () => {
+      expect(romFallbackDecision(false, true)).toEqual({ route: "local", notice: null });
+    });
+
+    it("still sends an RSID to the C64 even with the ROMs stored", () => {
+      expect(romFallbackDecision(true, true)).toEqual({ route: "c64", notice: "rom-on-c64" });
+    });
+
     it("keeps a ROM-independent SID on the local engine", () => {
       expect(romFallbackDecision(false)).toEqual({ route: "local", notice: null });
     });

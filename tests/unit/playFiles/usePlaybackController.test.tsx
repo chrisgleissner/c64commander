@@ -2588,6 +2588,26 @@ describe("usePlaybackController", () => {
       expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
     });
 
+    it("reads a tune off the Ultimate so the on-device engine can have it", async () => {
+      // `effectiveRequest.file` is resolved for the commoserve, HVSC and local sources and for no
+      // other, so an Ultimate-hosted SID reached the engine decision with no bytes — and the local
+      // branch is guarded on having them. "Listen on: this device" therefore played every such tune
+      // on the C64, with no error and nothing in the log to say the choice had been ignored. The
+      // fetch it needed already existed; it was only ever used to look a duration up.
+      enableLocal();
+      const controller = fakeController();
+      vi.mocked(tryFetchUltimateSidBlob).mockResolvedValue(new Blob([psid]) as never);
+      const playlist = [
+        createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+      ];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+      expect(controller.play).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+    });
+
     it("falls a ROM-dependent RSID back to the C64", async () => {
       enableLocal();
       const controller = fakeController();

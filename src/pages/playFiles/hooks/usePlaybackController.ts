@@ -47,7 +47,12 @@ import {
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 
 import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
-import { loadLocalEngineEnabled, loadMirrorC64Audio, loadPlaybackEngine } from "@/lib/config/appSettings";
+import {
+  loadLocalEngineAutoRoms,
+  loadLocalEngineEnabled,
+  loadMirrorC64Audio,
+  loadPlaybackEngine,
+} from "@/lib/config/appSettings";
 import {
   LocalSidPlaybackController,
   getSharedLocalSidPlaybackController,
@@ -59,12 +64,16 @@ import {
   markRemotePlaybackStopped,
 } from "@/lib/playback/activePlaybackSession";
 import { LocalEngineStatsAccumulator } from "@/lib/playback/localEngineStatsBridge";
+import { hasCompleteRomSet } from "@/lib/roms/romStore";
+import { ensureSystemRoms } from "@/lib/roms/ensureSystemRoms";
+import { promptForSystemRoms } from "@/lib/roms/promptForSystemRoms";
 import { detectRomRequired } from "@/lib/playback/localSidWorkerCore";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import {
   ENGINE_FALLBACK_MESSAGES,
   preRouteEngine,
   type EngineFallbackNotice,
+  romFallbackDecision,
 } from "@/lib/playback/playbackEngineRouting";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { resolveSidMutedVolumeOption } from "@/lib/config/sidVolumeControl";
@@ -937,14 +946,52 @@ export function usePlaybackController({
             engine: loadPlaybackEngine(),
             localSupported: LocalSidPlaybackController.isSupported(),
           });
+          // A tune that lives on the Ultimate has no local blob — `file` is resolved for the
+          // commoserve, HVSC and local sources and for no other. The on-device engine needs the
+          // bytes, so without this the local branch was skipped for every Ultimate-hosted SID and
+          // "Listen on: this device" quietly played it on the C64 instead. The fetch already existed;
+          // it was only ever used to look a duration up.
+          if (selection.route === "local" && !effectiveRequest.file && effectiveRequest.source === "ultimate") {
+            try {
+              const blob = await tryFetchUltimateSidBlob(effectivePath);
+              if (blob) {
+                effectiveRequest = {
+                  ...effectiveRequest,
+                  file: new File([blob], effectivePath.split("/").pop() || "tune.sid"),
+                };
+              }
+            } catch (error) {
+              addLog("debug", "Could not read the SID off the Ultimate for on-device playback", {
+                path: effectivePath,
+                error: (error as Error).message,
+              });
+            }
+          }
           if (selection.route === "local" && effectiveRequest.file) {
             try {
               const sidBytes = new Uint8Array(await effectiveRequest.file.arrayBuffer());
-              if (detectRomRequired(sidBytes)) {
-                emitEngineNotice("rom-on-c64");
-              } else {
+              // Ask BOTH questions: does this tune drive the kernal, and do we hold the ROM images at
+              // all. The engine needs them either way — without them it renders silence — and nothing
+              // fetches them unprompted, so a fresh install answering only the first question sent
+              // every tune to an engine that could not make a sound, without saying so.
+              const romsReady = hasCompleteRomSet();
+              const decision = romFallbackDecision(detectRomRequired(sidBytes), romsReady);
+              if (decision.route === "local") {
                 routeToLocal = true;
+                if (!romsReady) {
+                  if (loadLocalEngineAutoRoms()) {
+                    // Read the images from the connected machine, but do not wait: the tune plays now
+                    // on the kernal-free emulation and the next worker picks them up. Waiting would
+                    // put a network round trip in front of the first note.
+                    void ensureSystemRoms();
+                  } else {
+                    // Switched off deliberately, so ask rather than override — but ask where the
+                    // problem is, with one button that turns it back on and reads them.
+                    promptForSystemRoms();
+                  }
+                }
               }
+              if (decision.notice) emitEngineNotice(decision.notice);
             } catch (error) {
               addErrorLog("Local engine could not read the SID; using the C64", {
                 error: (error as Error).message,

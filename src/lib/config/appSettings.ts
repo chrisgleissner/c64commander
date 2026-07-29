@@ -17,6 +17,7 @@ const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = "c64u_background_rediscovery_inte
 const DISCOVERY_PROBE_TIMEOUT_MS_KEY = "c64u_discovery_probe_timeout_ms";
 const DISK_AUTOSTART_MODE_KEY = "c64u_disk_autostart_mode";
 const MIRROR_C64_AUDIO_KEY = "c64u_mirror_c64_audio";
+const LOCAL_ENGINE_AUTO_ROMS_KEY = "c64u_local_engine_auto_roms";
 const VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY = "c64u_volume_slider_preview_interval_ms";
 const NOTIFICATION_VISIBILITY_KEY = "c64u_notification_visibility";
 const NOTIFICATION_DURATION_MS_KEY = "c64u_notification_duration_ms";
@@ -680,6 +681,38 @@ export const DEFAULT_SID_EMULATION_ENGINE: SidEmulationEngine =
   // literal the ACTIVE variant declares, so a direct comparison against the other
   // value is a type error whenever every variant happens to agree.
   (variant.runtime.defaultSidEmulationEngine as string) === "sidlite" ? "sidlite" : "residfp";
+
+/**
+ * Read the C64's KERNAL and BASIC from the machine you are connected to, without being asked.
+ *
+ * On by default, because the alternative is worse than the permission question it avoids: the images
+ * cannot be shipped, the accurate engine cannot render a single tune without them, and nothing else
+ * fetches them — so a fresh install that chose "listen on this device" simply produced silence.
+ *
+ * The obligation this carries has not gone away: only connect to machines you own or are permitted
+ * to use. It is stated at the control in Settings, where it can also be turned off.
+ */
+export const DEFAULT_LOCAL_ENGINE_AUTO_ROMS = true;
+
+export const loadLocalEngineAutoRoms = () => readBoolean(LOCAL_ENGINE_AUTO_ROMS_KEY, DEFAULT_LOCAL_ENGINE_AUTO_ROMS);
+
+export const saveLocalEngineAutoRoms = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(LOCAL_ENGINE_AUTO_ROMS_KEY, enabled ? "1" : "0");
+  broadcast(LOCAL_ENGINE_AUTO_ROMS_KEY, enabled);
+};
+
+/**
+ * The emulation to actually instantiate, given whether the ROMs are in hand.
+ *
+ * reSIDfp is libsidplayfp's accurate model and it needs the C64's own KERNAL and BASIC to advance a
+ * tune at all — without them it initialises and then renders nothing, which on a Pixel 4 measured as
+ * zero audio players and a microphone at room noise. SIDLite carries its own kernal-free playback,
+ * so it is the honest thing to fall back to: worse timbre, but audible, and it costs a third of the
+ * CPU. The preference is untouched — as soon as the images arrive, the next worker uses them.
+ */
+export const effectiveSidEmulationEngine = (romsAvailable: boolean): SidEmulationEngine =>
+  romsAvailable ? loadSidEmulationEngine() : "sidlite";
 
 export const loadSidEmulationEngine = (): SidEmulationEngine => {
   if (typeof localStorage === "undefined") return DEFAULT_SID_EMULATION_ENGINE;

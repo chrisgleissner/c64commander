@@ -8,8 +8,8 @@
 
 import { LocalSidChunkScheduler, type AudioScheduleSink, type AudioScheduleSource } from "./localSidChunkScheduler";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage } from "./localSidWorkerProtocol";
-import { loadStoredRoms } from "@/lib/roms/romStore";
-import { loadSidEmulationEngine, loadPlaybackCrossfadeMs } from "@/lib/config/appSettings";
+import { hasCompleteRomSet, loadStoredRoms } from "@/lib/roms/romStore";
+import { effectiveSidEmulationEngine, loadPlaybackCrossfadeMs } from "@/lib/config/appSettings";
 import { addLog, addErrorLog } from "@/lib/logging";
 import { claimPhoneAudio, phoneAudioOwner, releasePhoneAudio } from "@/lib/audio/phoneAudioOwnership";
 import { notifyPlaybackActivityChanged } from "./playbackActivitySignal";
@@ -593,7 +593,11 @@ export class LocalSidEngine {
       };
       // Read at load time, not construction: the worker is torn down between
       // sessions, so a change in Settings takes effect on the next play.
-      worker.postMessage({ type: "load", engine: loadSidEmulationEngine() });
+      // Chosen against the ROMs actually stored, not just the preference: the accurate engine cannot
+      // render a note without them. The worker is loaded once, so a set of ROMs that arrives later
+      // takes effect on the next worker rather than mid-tune — which is the same rule the emulation
+      // preference itself already follows.
+      worker.postMessage({ type: "load", engine: effectiveSidEmulationEngine(hasCompleteRomSet()) });
     });
     return this.loadInFlight;
   }
