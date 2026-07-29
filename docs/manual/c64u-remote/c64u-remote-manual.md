@@ -775,7 +775,7 @@ Preferred locations are marked first.
 | Full configuration tree | **Config** | Use search, open a category, edit rows. |
 | Add playlist items | **Play > Add items** | Sources: Local, C64U, HVSC, CommoServe. |
 | Playback controls | **Play** | Play, pause, previous/next, shuffle, repeat, duration, and volume. |
-| HVSC preparation | **Play**, Settings > HVSC | Optional. Enable it in Settings > Stable Features. |
+| HVSC preparation | **Play**, Settings > HVSC | On by default. You can change it in Settings > Stable Features. |
 | CommoServe | **Play > Add items**, Disks > Add disks, Settings > Online Archive | On by default. You can change it in Settings > Stable Features. |
 | Background playback scheduling | **Play**, Android app permissions | On by default. You can change it in Settings > Experimental Features. |
 | Display profile and theme | **Settings > Appearance** | Compact screenshots in this manual match this guide's presentation. |
@@ -842,7 +842,7 @@ Press Menu when no focused control has its own menu. The Quick Menu offers page 
 | --- | --- | --- |
 | Local | Play, Disks | Files and folders available to your phone running the app. |
 | C64U | Play, Disks | Files on the Commodore 64 Ultimate through FTP. |
-| HVSC | Play | Optional. Enable it in Settings > Stable Features. SID library browsing after preparation. |
+| HVSC | Play | On by default. You can change it in Settings > Stable Features. SID library browsing after preparation. |
 | CommoServe | Play, Disks | On by default. You can change it in Settings > Stable Features. Online archive search. |
 
 Supported playback/import types include SID, MOD, PRG, CRT, D64, G64, D71, G71, and D81. Disk collection workflows focus on disk images: D64, G64, D71, G71, and D81.
