@@ -149,3 +149,74 @@ describe("stationEngine — determinism (G11)", () => {
     expect(first).toEqual(second);
   });
 });
+
+describe("the walk widens when admission is thin", () => {
+  /**
+   * A chain: 0 <- 1 <- 2 <- ... <- 11. From a seed at one end, three hops reach only a handful of
+   * ordinals. If a filter then rejects everything within those three hops, a fixed-depth walk reports
+   * the station exhausted while most of the chain is still reachable — which is exactly what the
+   * minimum-length rule does to a neighbourhood full of sound effects.
+   */
+  const chainBundle = (): SidcorrTinyBundle => {
+    const md5s = Array.from({ length: 12 }, (_, i) => `${i}`.padStart(12, "e"));
+    return parseSidcorrTiny(
+      buildTinyFixture({
+        files: md5s.map((md5_48, i) => ({
+          md5_48,
+          tracks: [{ styleMask: 0b001, neighbors: i === 0 ? [] : [i - 1] }],
+        })),
+      }),
+    );
+  };
+
+  it("keeps walking past a neighbourhood the filter has emptied", () => {
+    const bundle = chainBundle();
+    // Everything within easy reach of the seed is rejected; only the far end is admissible.
+    const admit = (ordinal: number) => ordinal >= 8;
+    const result = computeStation({
+      bundle,
+      seed: { kind: "song", md5_48: "eeeeeeeeeee0" },
+      shuffleSeed: 1,
+      limit: 2,
+      admit,
+    });
+    // Without widening this is `{ candidates: [], empty: "exhausted" }` — the station telling the
+    // listener it has played everything it could find, having looked at a twelfth of the graph.
+    expect(result.empty).toBeUndefined();
+    expect(result.candidates.length).toBeGreaterThan(0);
+    for (const candidate of result.candidates) expect(candidate.trackOrdinal).toBeGreaterThanOrEqual(8);
+  });
+
+  it("still reports exhausted when nothing anywhere is admissible", () => {
+    // Widening is not the same as never giving up: a graph with no admissible track must still say so,
+    // or the queue would spin instead of telling the listener to pick another station.
+    const result = computeStation({
+      bundle: chainBundle(),
+      seed: { kind: "song", md5_48: "eeeeeeeeeee0" },
+      shuffleSeed: 1,
+      limit: 2,
+      admit: () => false,
+    });
+    expect(result.empty).toBe("exhausted");
+  });
+
+  it("does not change what a healthy station returns", () => {
+    // The widening must be invisible when the first hops already yield enough, or every station pays
+    // for a problem only some of them have.
+    const bundle = chainBundle();
+    const withPredicate = computeStation({
+      bundle,
+      seed: { kind: "song", md5_48: "eeeeeeeeeee0" },
+      shuffleSeed: 7,
+      limit: 3,
+      admit: () => true,
+    });
+    const without = computeStation({
+      bundle,
+      seed: { kind: "song", md5_48: "eeeeeeeeeee0" },
+      shuffleSeed: 7,
+      limit: 3,
+    });
+    expect(withPredicate.candidates.map((c) => c.trackOrdinal)).toEqual(without.candidates.map((c) => c.trackOrdinal));
+  });
+});

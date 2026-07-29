@@ -456,6 +456,11 @@ vi.mock("@/lib/config/settingsTransfer", () => ({
 }));
 
 vi.mock("@/lib/config/appSettings", () => ({
+  // SID Radio's minimum-tune-length control reads and writes these; a partial mock that omits them
+  // throws at render, and the whole page fails rather than the control.
+  DEFAULT_SID_RADIO_MIN_SECONDS: 15,
+  loadSidRadioMinSeconds: vi.fn(() => 15),
+  saveSidRadioMinSeconds: vi.fn(),
   clampConfigWriteIntervalMs: (value: number) => value,
   clampDiscoveryProbeTimeoutMs: (value: number) => value,
   clampVolumeSliderPreviewIntervalMs: (value: number) => value,

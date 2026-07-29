@@ -20,6 +20,7 @@ import {
 } from "@/lib/sidRadio/rankingStore";
 import { SidRadioWorkerClient } from "@/lib/sidRadio/sidRadioWorkerClient";
 import type { SidRadioStylePopulations } from "@/lib/sidRadio/sidRadioWorkerProtocol";
+import { loadSidRadioMinSeconds } from "@/lib/config/appSettings";
 import { StationQueueProvider } from "@/lib/sidRadio/stationQueueProvider";
 import type { StationSeed } from "@/lib/sidRadio/stationEngine";
 import {
@@ -62,6 +63,14 @@ export interface UseSidRadioParams {
   /** Test seams. */
   clientFactory?: () => SidRadioWorkerClient;
   resolvePath?: (md5_48: string) => string | null;
+  /**
+   * Songlength lookup, so the station can leave out sound effects.
+   *
+   * HVSC is not only music — it carries jingles, one-shot effects and test tones, and a station that
+   * serves them between pieces reads as broken. Optional: without it the station plays everything,
+   * which is what the tests and the web build do.
+   */
+  resolveDurationSeconds?: (virtualPath: string, songIndex: number) => number | null | Promise<number | null>;
   randomSeed?: () => number;
 }
 
@@ -221,6 +230,8 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       return new StationQueueProvider({
         lookahead: LOOKAHEAD,
         initialExclude,
+        minSeconds: loadSidRadioMinSeconds(),
+        resolveDuration: params.resolveDurationSeconds,
         computeCandidates: (exclude, count) =>
           client.compute({
             seed,

@@ -1363,6 +1363,12 @@ export default function PlayFilesPage() {
     advanceToNext: handleNext,
     currentIndex,
     playlistLength: playlist.length,
+    // Lets the station leave out sound effects. HVSC carries jingles, one-shot effects and test
+    // tones alongside the music, and a station that serves them between pieces reads as broken.
+    resolveDurationSeconds: async (virtualPath, songIndex) => {
+      const ms = await resolveSonglengthDurationMsForPath(virtualPath, null, songIndex);
+      return ms === null || ms === undefined ? null : ms / 1000;
+    },
   });
   const sidRadioWhyThisTune = sidRadio.station
     ? sidRadio.station.seedKind === "song"

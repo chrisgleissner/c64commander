@@ -18,6 +18,7 @@ const DISCOVERY_PROBE_TIMEOUT_MS_KEY = "c64u_discovery_probe_timeout_ms";
 const DISK_AUTOSTART_MODE_KEY = "c64u_disk_autostart_mode";
 const MIRROR_C64_AUDIO_KEY = "c64u_mirror_c64_audio";
 const LOCAL_ENGINE_AUTO_ROMS_KEY = "c64u_local_engine_auto_roms";
+const SID_RADIO_MIN_SECONDS_KEY = "c64u_sid_radio_min_seconds";
 const VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY = "c64u_volume_slider_preview_interval_ms";
 const NOTIFICATION_VISIBILITY_KEY = "c64u_notification_visibility";
 const NOTIFICATION_DURATION_MS_KEY = "c64u_notification_duration_ms";
@@ -692,6 +693,36 @@ export const DEFAULT_SID_EMULATION_ENGINE: SidEmulationEngine =
  * The obligation this carries has not gone away: only connect to machines you own or are permitted
  * to use. It is stated at the control in Settings, where it can also be turned off.
  */
+/**
+ * Shortest tune SID Radio will play, in seconds.
+ *
+ * HVSC is not only music. It carries jingles, one-shot sound effects and test tones, and a station
+ * that serves them between tunes reads as broken rather than eclectic. Fifteen seconds is comfortably
+ * longer than an effect and comfortably shorter than anything anyone would call a piece.
+ *
+ * The filter has a cost worth naming: it removes candidates the similarity walk had already found,
+ * and if enough of a neighbourhood goes, the station can look exhausted while the graph around it is
+ * untouched. That is why the engine takes this as an admission predicate and keeps widening its walk
+ * until enough of the RIGHT tracks are in reach, rather than filtering after the fact.
+ *
+ * 0 disables it.
+ */
+export const DEFAULT_SID_RADIO_MIN_SECONDS = 15;
+export const MAX_SID_RADIO_MIN_SECONDS = 600;
+
+export const loadSidRadioMinSeconds = () => {
+  const raw = readNumber(SID_RADIO_MIN_SECONDS_KEY, DEFAULT_SID_RADIO_MIN_SECONDS);
+  if (Number.isNaN(raw)) return DEFAULT_SID_RADIO_MIN_SECONDS;
+  return Math.min(MAX_SID_RADIO_MIN_SECONDS, Math.max(0, Math.round(raw)));
+};
+
+export const saveSidRadioMinSeconds = (seconds: number) => {
+  if (typeof localStorage === "undefined") return;
+  const clamped = Math.min(MAX_SID_RADIO_MIN_SECONDS, Math.max(0, Math.round(seconds)));
+  localStorage.setItem(SID_RADIO_MIN_SECONDS_KEY, String(clamped));
+  broadcast(SID_RADIO_MIN_SECONDS_KEY, clamped);
+};
+
 export const DEFAULT_LOCAL_ENGINE_AUTO_ROMS = true;
 
 export const loadLocalEngineAutoRoms = () => readBoolean(LOCAL_ENGINE_AUTO_ROMS_KEY, DEFAULT_LOCAL_ENGINE_AUTO_ROMS);

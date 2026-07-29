@@ -12,6 +12,7 @@ import { hasCompleteRomSet, loadStoredRoms } from "@/lib/roms/romStore";
 import { effectiveSidEmulationEngine, loadPlaybackCrossfadeMs } from "@/lib/config/appSettings";
 import { addLog, addErrorLog } from "@/lib/logging";
 import { claimPhoneAudio, phoneAudioOwner, releasePhoneAudio } from "@/lib/audio/phoneAudioOwnership";
+import { clearLocalAudioHealth, reportLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
 import { notifyPlaybackActivityChanged } from "./playbackActivitySignal";
 import { RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
 
@@ -1152,6 +1153,16 @@ export class LocalSidEngine {
 
   getStats(): LocalSidStats {
     const stats = this.scheduler?.getStats();
+    // Publish the engine's health where the Live View governor can see it. It already sheds video to
+    // protect audio — that is what the priority order is for — but it could only see the MIRROR's
+    // audio, so a tune rendered here was invisible and Live View kept painting at full rate while
+    // this engine starved. Measured with the timing barcode: one bad note in 102 alone, eleven in
+    // forty seconds with video also running.
+    reportLocalAudioHealth({
+      active: this.scheduler !== null && !this.paused,
+      bufferedMs: (stats?.bufferedSeconds ?? 0) * 1000,
+      underruns: stats?.underruns ?? 0,
+    });
     return {
       renderMsPerSec: this.totalRenderedSeconds > 0 ? this.totalRenderMs / this.totalRenderedSeconds : 0,
       renderMsPerSecP99: this.renderRateP99(),
@@ -1263,6 +1274,9 @@ export class LocalSidEngine {
    * registry calls it to evict a stale owner (see claimAudioOwnership).
    */
   stopPlayback(options: { crossfadeMs?: number } = {}): void {
+    // Stop asking the mirror to protect audio that is no longer playing, or Live View would stay
+    // demoted for the rest of the session.
+    clearLocalAudioHealth();
     releaseAudioOwnership(this);
     // Reopen the seek gate. `seekPending` suppresses every "chunk" and "end" so audio rendered for
     // the position we just left is never scheduled, and it is cleared only by a `seeked` reply whose

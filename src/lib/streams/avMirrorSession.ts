@@ -41,6 +41,7 @@ import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions }
 import { NativeAudioSink } from "./audioNativeSink";
 import { AudioMirrorController, type AudioMirrorSignals, type AudioMirrorState } from "./audioMirrorController";
 import { VideoMirrorController, type VideoMirrorState } from "./videoMirrorController";
+import { readLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
 import { StreamGovernor, type FrameRateMode, type GovernorState, type GovernorTransition } from "./streamGovernor";
 import { StreamTelemetry, type TelemetryBucket, type TelemetrySessionSummary } from "./streamTelemetry";
 import { onInputActivity } from "./inputActivitySignal";
@@ -177,6 +178,7 @@ export class AvMirrorSession {
   private readonly now: () => number;
   /** Last observed cumulative player-underrun count, for per-tick delta. */
   private lastAudioUnderruns = 0;
+  private lastLocalAudioUnderruns = 0;
   /** Wall time (ms) until which the user is treated as actively driving the C64 → video stays shed. */
   private inputActiveUntilMs = 0;
   /** Video keep-fraction cap applied while input is active. */
@@ -344,17 +346,32 @@ export class AvMirrorSession {
         : { audioBufferMs: 0, audioUnderruns: 0, audioConcealed: 0, audioLostPackets: 0 };
     const video = this.video.getSnapshot();
 
+    // On-device playback competes for the same main thread the video path paints on, and the governor
+    // exists precisely to shed video for audio — it simply could not see this engine. Take whichever
+    // audio is in more trouble: if a tune is rendering here and running thin, video must give way for
+    // it exactly as it would for the mirror.
+    const local = readLocalAudioHealth();
+    const localUnderruns = Math.max(0, local.underruns - this.lastLocalAudioUnderruns);
+    this.lastLocalAudioUnderruns = local.underruns;
+    const audioActive = this.audioLive || local.active;
+    const audioBufferMs = local.active
+      ? this.audioLive
+        ? Math.min(signals.audioBufferMs, local.bufferedMs)
+        : local.bufferedMs
+      : signals.audioBufferMs;
+
     const governor = this.governor.update(
       {
-        audioBufferMs: signals.audioBufferMs,
+        audioBufferMs,
         // Native low-latency sink runs a smaller buffer; pass its nominal so the governor scales its
         // health thresholds and doesn't misread a healthy native buffer as starvation.
-        audioNominalBufferMs: signals.audioNominalBufferMs,
+        audioNominalBufferMs: local.active ? undefined : signals.audioNominalBufferMs,
         // Feed the underruns SINCE the last tick as the demote trigger; the cumulative total goes to telemetry.
-        audioUnderruns: Math.max(0, signals.audioUnderruns - this.lastAudioUnderruns),
+        audioUnderruns: Math.max(0, signals.audioUnderruns - this.lastAudioUnderruns) + localUnderruns,
         // Only let the audio buffer/underrun signals drive video when audio is actually playing —
         // a video-only mirror has no player (bufferedMs = 0) and must not be pegged to the floor.
-        audioActive: this.audioLive,
+        // On-device playback counts as audio playing, because it is.
+        audioActive,
         videoQueueAgeMs: video.renderResidenceMs,
         frameProcessingP95Ms: undefined,
         localLatencyP99Ms: undefined,

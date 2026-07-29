@@ -24,6 +24,13 @@ import type { StationCandidate, StationReason, StationResult } from "@/lib/sidRa
 
 export type ComputeCandidatesFn = (excludeOrdinals: number[], count: number) => Promise<StationResult>;
 export type ResolvePathFn = (md5_48: string) => string | null;
+/**
+ * Length of a track in seconds, or null when unknown.
+ *
+ * Keyed by the resolved virtual path rather than the md5, because that is what the songlengths index
+ * is keyed by and what the provider has in hand at the moment it decides.
+ */
+export type ResolveDurationFn = (virtualPath: string, songIndex: number) => number | null | Promise<number | null>;
 export type BuildStationItemFn = (input: {
   virtualPath: string;
   songIndex: number;
@@ -39,6 +46,17 @@ export interface StationQueueProviderOptions {
   initialExclude?: Iterable<number>;
   /** Target items to keep queued ahead of the cursor (default 10). */
   lookahead?: number;
+  /**
+   * Shortest track the station will emit, in seconds. 0 (the default here) admits everything.
+   *
+   * The engine applies the same rule while it walks, which is what stops a filtered-out neighbourhood
+   * looking like an exhausted station. This second pass exists because the walk runs in a worker
+   * against a bundle that carries no durations, so the authoritative check has to happen where the
+   * songlengths actually live.
+   */
+  minSeconds?: number;
+  /** Songlength lookup for {@link minSeconds}. Absent → no length filtering here. */
+  resolveDuration?: ResolveDurationFn;
 }
 
 export interface StationRefillResult {
@@ -55,9 +73,13 @@ export class StationQueueProvider {
   private buffer: StationCandidate[] = [];
   private exhausted: "no-neighbours" | "exhausted" | null = null;
   readonly lookahead: number;
+  private readonly minSeconds: number;
+  /** Tracks dropped for being too short — reported so a thin station is explicable, not mysterious. */
+  private tooShortSkipped = 0;
 
   constructor(private readonly options: StationQueueProviderOptions) {
     this.lookahead = options.lookahead ?? DEFAULT_LOOKAHEAD;
+    this.minSeconds = Math.max(0, options.minSeconds ?? 0);
     for (const ordinal of options.initialExclude ?? []) this.excluded.add(ordinal);
   }
 
@@ -94,6 +116,17 @@ export class StationQueueProvider {
       this.excluded.add(candidate.trackOrdinal); // consumed exactly once (emit or skip)
       const virtualPath = this.options.resolvePath(candidate.md5_48);
       if (!virtualPath) continue; // removed tune — skip, no gap (§2.5)
+      if (this.minSeconds > 0 && this.options.resolveDuration) {
+        // A tune of a second or two is a sound effect, not music, and a station that serves them
+        // between pieces reads as broken. Skipped exactly like a removed tune: the ordinal is already
+        // consumed, so the next refill asks the engine for somewhere else rather than offering it
+        // again. An unknown length is admitted — never drop a tune because the songlengths are thin.
+        const seconds = await this.options.resolveDuration(virtualPath, candidate.songIndex);
+        if (seconds !== null && seconds < this.minSeconds) {
+          this.tooShortSkipped += 1;
+          continue;
+        }
+      }
       items.push(
         this.options.buildItem({
           virtualPath,
@@ -106,6 +139,11 @@ export class StationQueueProvider {
     }
 
     return { items, reason: items.length === 0 && this.exhausted ? this.exhausted : undefined };
+  }
+
+  /** How many candidates were dropped for being shorter than {@link StationQueueProviderOptions.minSeconds}. */
+  get shortTracksSkipped(): number {
+    return this.tooShortSkipped;
   }
 
   /** Reset the exhausted flag (e.g. after a steer changes the candidate space). */

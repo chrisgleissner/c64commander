@@ -12,6 +12,7 @@ import { Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   saveSidRadioEnabled,
   saveSidRankingEnabled,
@@ -21,6 +22,9 @@ import {
   loadPlaybackCrossfadeMs,
   savePlaybackCrossfadeMs,
   type SidEmulationEngine,
+  DEFAULT_SID_RADIO_MIN_SECONDS,
+  loadSidRadioMinSeconds,
+  saveSidRadioMinSeconds,
 } from "@/lib/config/appSettings";
 import { clearAllRankings } from "@/lib/sidRadio/rankingStore";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
@@ -66,6 +70,7 @@ export const SidRadioSettingsSection = () => {
   const { localEngineEnabled, engine: playbackEngine } = usePlaybackEngine();
   const { deviceHost } = useC64Connection();
   const [sidEngine, setSidEngine] = useState<SidEmulationEngine>(() => loadSidEmulationEngine());
+  const [minSeconds, setMinSeconds] = useState<number>(loadSidRadioMinSeconds);
   const [crossfadeMs, setCrossfadeMs] = useState<number>(() => loadPlaybackCrossfadeMs());
   // Crossfading needs two tunes sounding at once. The C64 has one SID and
   // renders in real time, so on that engine it is not merely unimplemented --
@@ -111,6 +116,33 @@ export const SidRadioSettingsSection = () => {
             onChange={saveSidRankingEnabled}
           />
         ) : null}
+
+        <div
+          className="space-y-2 rounded-lg border border-border/70 p-3 min-w-0"
+          data-testid="settings-sid-radio-min-seconds"
+        >
+          <Label htmlFor="settings-sid-radio-min-seconds-input" className="text-sm font-medium">
+            Shortest tune to play (seconds)
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            HVSC holds jingles, one-shot sound effects and test tones alongside the music, and a station that serves
+            those between pieces feels broken. Anything shorter than this is passed over. The station looks further
+            through the similarity graph to make up the difference, so raising it does not make a station run dry.
+            Default {DEFAULT_SID_RADIO_MIN_SECONDS} seconds; 0 plays everything.
+          </p>
+          <Input
+            id="settings-sid-radio-min-seconds-input"
+            data-testid="settings-sid-radio-min-seconds-input"
+            inputMode="numeric"
+            className="max-w-28"
+            value={String(minSeconds)}
+            onChange={(event) => setMinSeconds(Number(event.target.value) || 0)}
+            onBlur={() => {
+              saveSidRadioMinSeconds(minSeconds);
+              setMinSeconds(loadSidRadioMinSeconds());
+            }}
+          />
+        </div>
 
         <ToggleRow
           id="local-engine-enabled"
