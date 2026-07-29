@@ -2095,9 +2095,10 @@ export default function SettingsPage() {
                         }}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Jitter buffer depth for Live View audio. Holds each packet briefly so a slightly-late or
-                        reordered packet still plays in order, and a lost packet is smoothly concealed instead of
-                        clicking. Default 5 ms; 0 = lowest latency, least resilient.
+                        Jitter buffer depth for Live View audio, so a late, reordered or bursty delivery still plays in
+                        order and a lost packet is concealed instead of clicking. On Android this is a floor — the
+                        native pipeline deepens it by itself if the network turns out to need it. Default 60 ms; 0 =
+                        lowest latency, least resilient.
                       </p>
                     </div>
                     {isDeveloperModeEnabled ? (

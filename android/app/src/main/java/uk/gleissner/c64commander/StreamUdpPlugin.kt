@@ -9,8 +9,6 @@
 package uk.gleissner.c64commander
 
 import android.content.Context
-import android.media.AudioAttributes
-import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.net.wifi.WifiManager
@@ -59,10 +57,9 @@ class StreamUdpPlugin : Plugin() {
   private val executor = Executors.newCachedThreadPool()
 
   /**
-   * True while a native AudioTrack owns audio playback. Read on the receive hot path to decide
-   * whether the packet still has to cross the bridge, so it is a plain @Volatile rather than
-   * something that needs `audioSinkLock` — the lock is for mutating the sink, not for asking
-   * whether one exists.
+   * True while the native pipeline owns audio playback. Read on the receive hot path to decide
+   * whether the packet still has to cross the bridge, so it is a plain @Volatile: asking whether a
+   * pipeline exists must never wait on whoever is opening or closing one.
    */
   @Volatile private var nativeAudioOwnsPlayback = false
 
@@ -88,14 +85,27 @@ class StreamUdpPlugin : Plugin() {
   private val logTag = "StreamUdpPlugin"
   private var multicastLock: WifiManager.MulticastLock? = null
 
+  /** Held for the life of a stream so Wi-Fi stops batching our real-time packets — see [acquireLowLatencyWifi]. */
+  private var wifiLock: WifiManager.WifiLock? = null
+
   /**
-   * Native low-latency audio sink. The whole audio pipeline (jitter/reorder buffer, loss
-   * concealment, batching, health stats, A/V-sync analyzer) stays in the TypeScript layer; this is
-   * only the final speaker sink, opened/written/closed by JS. Guarded by `audioSinkLock` because
-   * open/write/close arrive on the Capacitor bridge thread(s).
+   * The native audio path: ring buffer, player thread and speaker track, all in Kotlin (see
+   * [AudioPipeline]). JS only opens it, closes it and reads its stats — every PCM byte, whether it
+   * came off the UDP socket or out of the on-device SID engine, is paced natively.
+   *
+   * `@Volatile` rather than lock-guarded on purpose. The receive thread reads this field for every
+   * packet, and the previous design had it take the same lock that a JS stats poll held while
+   * calling into AudioFlinger — a bridge poll could therefore stall packet reception. Publication of
+   * a fully-constructed pipeline is all the receive thread needs, and that is exactly what volatile
+   * gives; the pipeline's own internals are thread-safe.
    */
-  private val audioSinkLock = Any()
-  private var audioSink: AudioSink? = null
+  @Volatile private var audioPipeline: AudioPipeline? = null
+
+  /** Serialises open/close against each other (never against the receive path). */
+  private val audioLifecycleLock = Any()
+
+  /** Arrival evenness of the audio stream as this device sees it (see [StreamArrivalMonitor]). */
+  private val audioArrivals = StreamArrivalMonitor()
 
   /** Test seam: monotonic clock (nanoseconds) stamped at socket receive. Default: `System.nanoTime`. */
   internal var clockNanos: () -> Long = { System.nanoTime() }
@@ -237,18 +247,20 @@ class StreamUdpPlugin : Plugin() {
   @PluginMethod
   fun openAudioTrack(call: PluginCall) {
     val sampleRate = call.getInt("sampleRate") ?: DEFAULT_AUDIO_SAMPLE_RATE
-    // Requested buffer depth (ms). With non-blocking writes the buffer fills to ~this depth, so it is
-    // the audio latency the sink targets, floored at the platform minimum. Absent → the platform min.
+    // Target output latency (ms). The pipeline splits it between its jitter ring and the speaker
+    // track's own buffer; absent → its floor.
     val bufferMs = call.getInt("bufferMs") ?: 0
     try {
-      synchronized(audioSinkLock) {
-        audioSink?.close()
-        val sink = AudioSink(sampleRate, bufferMs)
-        audioSink = sink
+      synchronized(audioLifecycleLock) {
+        audioPipeline?.close()
+        val pipeline = AudioPipeline(sampleRate, bufferMs, nativeOutputRate(), nativeFramesPerBurst())
+        pipeline.start()
+        audioPipeline = pipeline
         nativeAudioOwnsPlayback = true
+        audioArrivals.reset()
         val result = JSObject()
         result.put("sampleRate", sampleRate)
-        result.put("bufferMs", sink.bufferCapacityMs)
+        result.put("bufferMs", pipeline.bufferCapacityMs)
         call.resolve(result)
       }
     } catch (error: Exception) {
@@ -257,6 +269,14 @@ class StreamUdpPlugin : Plugin() {
     }
   }
 
+  /**
+   * Feed PCM from JS — the on-device SID engine's path to the speaker.
+   *
+   * It lands in the same [AudioPipeline] the A/V mirror feeds, so a rendered tune is paced by the
+   * DAC through the same ring and the same blocking writer as a mirrored one. Before this the two
+   * sounded different because they *were* different: the mirror had a native sink while the engine
+   * scheduled a Web Audio `BufferSource` per chunk from the JS thread.
+   */
   @PluginMethod
   fun writeAudioTrack(call: PluginCall) {
     val data = call.getString("data")
@@ -264,50 +284,86 @@ class StreamUdpPlugin : Plugin() {
       call.reject("data is required")
       return
     }
-    // Decode outside the lock (base64 is the only heavy step); the write itself is non-blocking.
     val pcm = Base64.decode(data, Base64.NO_WRAP)
-    val stats: AudioSink.Stats =
-      synchronized(audioSinkLock) { audioSink?.write(pcm) } ?: AudioSink.Stats.ZERO
-    val result = JSObject()
-    result.put("bufferedMs", stats.bufferedMs)
-    result.put("underruns", stats.underruns)
-    // Audio the track refused because its buffer was full. Reported so a stream that is breaking
-    // up cannot show a clean underrun count and look healthy.
-    result.put("droppedBytes", stats.droppedBytes)
-    // What the track is ACTUALLY doing, not what was requested. A track running at a different rate
-    // or channel count than the stream plays it at the wrong speed and pitch while quietly
-    // overflowing its buffer, and nothing else in the stats would show it.
-    result.put("trackSampleRate", stats.trackSampleRate)
-    result.put("trackChannels", stats.trackChannels)
-    result.put("trackBufferFrames", stats.trackBufferFrames)
-    val senders = JSArray()
-    streamSenders["audio"]?.forEach { senders.put(it) }
-    result.put("senders", senders)
-    call.resolve(result)
+    val pipeline = audioPipeline
+    pipeline?.offer(pcm, 0, pcm.size)
+    call.resolve(audioStatsPayload(pipeline?.stats() ?: AudioPipeline.Stats.ZERO))
   }
 
   @PluginMethod
   fun readAudioStats(call: PluginCall) {
-    // The governor's audio-headroom signal. Cheap read (buffer depth + underruns); polled ~4 Hz by JS
-    // since native now feeds playback and JS no longer sees per-write stats.
-    val stats = synchronized(audioSinkLock) { audioSink?.stats() } ?: AudioSink.Stats.ZERO
+    // The governor's audio-headroom signal, and the diagnostics read. Plain field reads — no lock the
+    // receive path shares, and no AudioFlinger round trip on the caller's thread.
+    val stats = audioPipeline?.stats() ?: AudioPipeline.Stats.ZERO
+    val result = audioStatsPayload(stats)
+    // `reset:true` starts a fresh arrival window. The governor polls without it, so its routine read
+    // never clears the maxima a measurement is collecting.
+    if (call.getBoolean("reset", false) == true) audioArrivals.reset()
+    call.resolve(result)
+  }
+
+  /**
+   * Everything a caller can learn about the audio path, in one shape for both entry points.
+   *
+   * It deliberately reports the two failures separately. Audio the pipeline could not accept
+   * (`droppedBytes`) and silence it had to invent (`concealedMs`) are opposite faults — arriving too
+   * fast versus not arriving at all — and a stream that is breaking up used to be able to show a
+   * clean underrun count and look healthy because only one of them was counted.
+   */
+  private fun audioStatsPayload(stats: AudioPipeline.Stats): JSObject {
     val result = JSObject()
     result.put("bufferedMs", stats.bufferedMs)
     result.put("underruns", stats.underruns)
-    // Audio the track refused because its buffer was full. Reported so a stream that is breaking
-    // up cannot show a clean underrun count and look healthy.
     result.put("droppedBytes", stats.droppedBytes)
+    result.put("concealedMs", stats.concealedMs)
+    result.put("jitterBufferMs", stats.jitterBufferMs)
+    // The cushion the pipeline decided this link needs, and how hard the converter is working to
+    // hold it. Reported because "how deep is the buffer" alone cannot tell a healthy stream from one
+    // that is only staying afloat by playing everything fractionally fast.
+    result.put("targetJitterMs", stats.targetJitterMs)
+    result.put("driftCorrection", stats.driftCorrection)
     // What the track is ACTUALLY doing, not what was requested. A track running at a different rate
     // or channel count than the stream plays it at the wrong speed and pitch while quietly
     // overflowing its buffer, and nothing else in the stats would show it.
     result.put("trackSampleRate", stats.trackSampleRate)
     result.put("trackChannels", stats.trackChannels)
     result.put("trackBufferFrames", stats.trackBufferFrames)
+    val arrivals = audioArrivals.snapshot()
+    val arrival = JSObject()
+    arrival.put("packets", arrivals.packets)
+    arrival.put("meanGapMs", arrivals.meanGapMs)
+    arrival.put("maxGapMs", arrivals.maxGapMs)
+    arrival.put("gapsOver20ms", arrivals.gapsOver20ms)
+    arrival.put("gapsOver50ms", arrivals.gapsOver50ms)
+    arrival.put("maxClump", arrivals.maxClump)
+    arrival.put("lostPackets", arrivals.lostPackets)
+    result.put("arrival", arrival)
     val senders = JSArray()
     streamSenders["audio"]?.forEach { senders.put(it) }
     result.put("senders", senders)
-    call.resolve(result)
+    return result
   }
+
+  /**
+   * The rate the device's mixer actually runs at.
+   *
+   * An `AudioTrack` opened at any other rate is resampled inside AudioFlinger, and a resampled track
+   * is excluded from the fast mixer — so asking for the C64's 47983 Hz cost both the low-latency path
+   * and a conversion per frame in the audio server. The pipeline converts to this rate itself.
+   */
+  private fun nativeOutputRate(): Int = audioProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE, DEFAULT_OUTPUT_SAMPLE_RATE)
+
+  /** The HAL's buffer quantum. A track buffer that is a whole number of these can take the fast path. */
+  private fun nativeFramesPerBurst(): Int = audioProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER, 0)
+
+  private fun audioProperty(name: String, fallback: Int): Int =
+    try {
+      val audio = context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+      audio?.getProperty(name)?.toIntOrNull()?.takeIf { it > 0 } ?: fallback
+    } catch (error: Exception) {
+      Log.d(logTag, "audio property $name unavailable", error)
+      fallback
+    }
 
   @PluginMethod
   fun setAudioAnalysis(call: PluginCall) {
@@ -319,9 +375,9 @@ class StreamUdpPlugin : Plugin() {
   @PluginMethod
   fun closeAudioTrack(call: PluginCall) {
     nativeAudioOwnsPlayback = false
-    synchronized(audioSinkLock) {
-      audioSink?.close()
-      audioSink = null
+    synchronized(audioLifecycleLock) {
+      audioPipeline?.close()
+      audioPipeline = null
     }
     call.resolve(JSObject())
   }
@@ -360,21 +416,35 @@ class StreamUdpPlugin : Plugin() {
         }
         // PLAYBACK FIRST, telemetry second — the order matters on this thread.
         //
-        // This is the URGENT_AUDIO receive thread, and the AudioTrack it feeds is the real-time
-        // path. The base64 encode + Capacitor bridge hop below is analysis, and it used to run
-        // BEFORE this write: every audio packet paid a JSON serialisation and a WebView dispatch
-        // before a single sample reached the mixer. Whenever the JS thread was busy — and it often
-        // is, painting video or hydrating HVSC — that delay landed directly on playback, which is
-        // audible as roughness. Feeding the track first costs nothing and removes the bridge from
-        // the playback critical path entirely. Strip the 2-byte seq and keep whole stereo frames.
+        // This is the URGENT_AUDIO receive thread and it is the real-time path. The base64 encode +
+        // Capacitor bridge hop below is analysis, and it used to run BEFORE the PCM was handed on:
+        // every audio packet paid a JSON serialisation and a WebView dispatch before a single sample
+        // reached the mixer. Whenever the JS thread was busy — and it often is, painting video or
+        // hydrating HVSC — that delay landed directly on playback, which is audible as roughness.
+        //
+        // The handoff is now a memcpy into the pipeline's ring and nothing else: no AudioTrack call,
+        // no AudioFlinger round trip, and no lock a JS stats poll can be holding. Strip the 2-byte
+        // seq and keep whole stereo frames; the seq itself goes to the arrival monitor, which is
+        // what makes real packet loss distinguishable from this app losing its own audio.
         if (name == "audio") {
-          synchronized(audioSinkLock) {
-            audioSink?.let { sink ->
-              val pcmOffset = packet.offset + AUDIO_SEQ_BYTES
-              val avail = packet.length - AUDIO_SEQ_BYTES
-              val pcmLen = avail - (avail % AUDIO_BYTES_PER_FRAME)
-              if (pcmLen > 0) sink.writeRaw(packet.data, pcmOffset, pcmLen)
+          val seq =
+            if (packet.length >= AUDIO_SEQ_BYTES) u16(packet.data, packet.offset) else -1
+          val lostBefore = audioArrivals.lostPackets
+          audioArrivals.record(arrivalNanos, seq)
+          audioPipeline?.let { pipeline ->
+            val pcmOffset = packet.offset + AUDIO_SEQ_BYTES
+            val avail = packet.length - AUDIO_SEQ_BYTES
+            val pcmLen = avail - (avail % AUDIO_BYTES_PER_FRAME)
+            // Multicast over Wi-Fi is sent once, at the basic rate, with no acknowledgement and no
+            // retry, so a percent or two of it simply does not arrive — 183 packets in half a minute
+            // on this rig. Splicing the next packet straight on turns each of those into a waveform
+            // discontinuity, which is a click. Filling the hole with a fading repeat of what came
+            // before keeps the timeline honest and makes the loss much harder to hear.
+            val lost = (audioArrivals.lostPackets - lostBefore).toInt()
+            if (lost in 1..MAX_CONCEALED_PACKETS && pcmLen > 0) {
+              pipeline.concealLostPackets(lost * (pcmLen / AUDIO_BYTES_PER_FRAME))
             }
+            if (pcmLen > 0) pipeline.offer(packet.data, pcmOffset, pcmLen)
           }
         }
         // The per-packet bridge hop is the most expensive thing on this thread, and for audio it is
@@ -591,16 +661,55 @@ class StreamUdpPlugin : Plugin() {
   }
 
   private fun acquireMulticastLock() {
-    if (multicastLock?.isHeld == true) return
+    val wifi =
+      try {
+        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+      } catch (error: Exception) {
+        Log.w(logTag, "WifiManager unavailable", error)
+        null
+      }
+    // Independently, both of them: the mirror binds two streams, and guarding the pair behind one
+    // "already held" check meant the second lock was silently skipped whenever the first was up.
+    if (multicastLock?.isHeld != true) {
+      try {
+        multicastLock =
+          wifi?.createMulticastLock("c64commander-avmirror")?.apply {
+            setReferenceCounted(false)
+            acquire()
+          }
+      } catch (error: Exception) {
+        Log.w(logTag, "MulticastLock acquire failed", error)
+      }
+    }
+    acquireLowLatencyWifi(wifi)
+  }
+
+  /**
+   * Ask Wi-Fi to stop batching our packets for the duration of the mirror.
+   *
+   * A `MulticastLock` only stops the driver *filtering* multicast; it says nothing about when the
+   * packets are handed up. In power-save the chip parks multicast at the access point and releases it
+   * in a clump after a beacon, and that is precisely what was measured on this rig: a stream that
+   * left the Ultimate every 4.00 ms (p99 4.14 ms, no loss, no clumping — sampled on the wire from a
+   * host) reached the phone with **119 ms gaps and 29-packet bursts**. No jitter buffer sized for a
+   * 4 ms cadence survives that, and the listener hears it as crackling.
+   *
+   * `WIFI_MODE_FULL_LOW_LATENCY` is the platform's way to say "this is real-time traffic". It only
+   * takes effect while the screen is on and the app is in the foreground, which is exactly the window
+   * Live View is used in, and it is released the moment the last stream closes so it cannot quietly
+   * cost battery afterwards.
+   */
+  private fun acquireLowLatencyWifi(wifi: WifiManager?) {
+    if (wifiLock?.isHeld == true) return
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
     try {
-      val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-      multicastLock =
-        wifi?.createMulticastLock("c64commander-avmirror")?.apply {
+      wifiLock =
+        wifi?.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "c64commander-avmirror")?.apply {
           setReferenceCounted(false)
           acquire()
         }
     } catch (error: Exception) {
-      Log.w(logTag, "MulticastLock acquire failed", error)
+      Log.w(logTag, "Low-latency Wi-Fi lock unavailable; streams may arrive in bursts", error)
     }
   }
 
@@ -611,6 +720,12 @@ class StreamUdpPlugin : Plugin() {
       Log.d(logTag, "MulticastLock release ignored", error)
     }
     multicastLock = null
+    try {
+      wifiLock?.let { if (it.isHeld) it.release() }
+    } catch (error: Exception) {
+      Log.d(logTag, "Wi-Fi lock release ignored", error)
+    }
+    wifiLock = null
   }
 
   /** The active site-local IPv4 interface (Wi-Fi), used to join multicast on the right NIC. */
@@ -654,185 +769,12 @@ class StreamUdpPlugin : Plugin() {
       }
     }
     sockets.clear()
-    synchronized(audioSinkLock) {
-      audioSink?.close()
-      audioSink = null
+    synchronized(audioLifecycleLock) {
+      audioPipeline?.close()
+      audioPipeline = null
     }
     releaseMulticastLock()
     executor.shutdownNow()
-  }
-
-  /**
-   * The native low-latency speaker sink: a thin wrapper over an `AudioTrack` in streaming +
-   * (API 26+) `PERFORMANCE_MODE_LOW_LATENCY` mode. Deliberately dumb — it plays whatever interleaved
-   * stereo S16LE PCM JS hands it and reports its buffer depth. All sequencing / concealment / jitter
-   * buffering is the TypeScript layer's job, so this stays a small adapter.
-   *
-   * PCM is fed at the source rate ({@link DEFAULT_AUDIO_SAMPLE_RATE}); AudioTrack resamples to the
-   * device output rate internally (continuous, drift-free — no clicks), so there is no clock-recovery
-   * logic to own here. Writes are NON-blocking: in steady state the realtime source fits the buffer;
-   * a transient burst that overflows is dropped (we are ahead, never starving) and the sink re-levels.
-   */
-  private class AudioSink(sampleRate: Int, requestedBufferMs: Int = 0) {
-    data class Stats(
-      val bufferedMs: Double,
-      val underruns: Int,
-      val droppedBytes: Long,
-      val trackSampleRate: Int,
-      val trackChannels: Int,
-      val trackBufferFrames: Int,
-    ) {
-      companion object {
-        val ZERO = Stats(0.0, 0, 0L, 0, 0, 0)
-      }
-    }
-
-    private val sampleRate = sampleRate
-    private val track: AudioTrack
-    private val bufferFrames: Int
-    /** Frames to pre-buffer before starting playback — the cushion that absorbs JS-feed stalls. */
-    private val primeFrames: Int
-    /** Total stereo frames handed to AudioTrack (for the buffer-depth estimate). */
-    private var framesWritten: Long = 0
-    /** PCM bytes the track could not accept (buffer full) — audio the listener lost. */
-    private var droppedBytes: Long = 0
-    /** False until enough is buffered to start playback with a cushion (deferred `play()`). */
-    private var started = false
-
-    /** How much audio the AudioTrack buffer can hold (ms) — its worst-case added latency. */
-    val bufferCapacityMs: Double
-
-    init {
-      val minBytes = AudioTrack.getMinBufferSize(sampleRate, CHANNEL_CONFIG, ENCODING)
-      // getMinBufferSize returns ERROR (-1) / ERROR_BAD_VALUE (-2) on an unsupported config. With
-      // non-blocking writes the buffer fills to ~capacity, so the capacity IS the added latency. The
-      // platform minimum is the lowest-latency depth, but under concurrent VIDEO the JS thread paints
-      // frames and stalls the audio feed, so too small a buffer underruns and the governor thrashes;
-      // the caller requests a depth (floored at the platform min) that trades a little latency for a
-      // stall margin — measured on the Pixel 4 to stay well under the WebAudio player's ~109 ms.
-      val minBufferBytes = if (minBytes > 0) minBytes else FALLBACK_BUFFER_BYTES
-      val bufferBytes = if (requestedBufferMs > 0) maxOf(minBufferBytes, msToBytes(sampleRate, requestedBufferMs)) else minBufferBytes
-      bufferFrames = bufferBytes / BYTES_PER_FRAME
-      bufferCapacityMs = bufferFrames * 1000.0 / sampleRate
-      // Pre-roll a small cushion before play() so the mixer never pulls silence at start (that would
-      // count HAL underruns); capped at the capacity so a tiny min buffer still starts.
-      primeFrames = (msToBytes(sampleRate, PRIME_MS) / BYTES_PER_FRAME).coerceAtMost(bufferFrames)
-      val builder =
-        AudioTrack.Builder()
-          .setAudioAttributes(
-            AudioAttributes.Builder()
-              .setUsage(AudioAttributes.USAGE_MEDIA)
-              .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-              .build(),
-          )
-          .setAudioFormat(
-            AudioFormat.Builder()
-              .setEncoding(ENCODING)
-              .setSampleRate(sampleRate)
-              .setChannelMask(CHANNEL_CONFIG)
-              .build(),
-          )
-          .setBufferSizeInBytes(bufferBytes)
-          .setTransferMode(AudioTrack.MODE_STREAM)
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        builder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
-      }
-      track = builder.build()
-      // NB: play() is deferred to the first write that fills the prime cushion (see write()).
-    }
-
-    /** Write already-decoded interleaved S16LE PCM (base64 path from JS). */
-    fun write(pcm: ByteArray): Stats {
-      writeRaw(pcm, 0, pcm.size)
-      return stats()
-    }
-
-    /**
-     * Feed a seq-stripped, frame-aligned PCM slice straight from the native receive thread — the
-     * low-latency path that never crosses the JS bridge. Non-blocking: a short write means the buffer
-     * is full (we are ahead of realtime), and the unwritten tail is intentionally dropped, not retried.
-     */
-    fun writeRaw(data: ByteArray, offset: Int, length: Int) {
-      if (length <= 0) return
-      val written = track.write(data, offset, length, AudioTrack.WRITE_NON_BLOCKING)
-      if (written > 0) framesWritten += (written / BYTES_PER_FRAME).toLong()
-      // A short write means the track buffer was full and the tail is gone. That is audio the
-      // listener will not hear, so it is counted: dropping it silently is why the Stats panel could
-      // report zero underruns while the stream was audibly breaking up.
-      if (written in 0 until length) droppedBytes += (length - maxOf(written, 0)).toLong()
-      // Start playback only once a cushion is buffered, so the first feed hiccup can't dry the track
-      // immediately — the whole point of a low-latency buffer is to stay just barely ahead.
-      if (!started && framesWritten >= primeFrames) {
-        track.play()
-        started = true
-      }
-    }
-
-    /** Current buffer depth + underruns (read by the governor via readAudioStats). */
-    fun stats(): Stats =
-      Stats(bufferedMs(), underruns(), droppedBytes, track.sampleRate, track.channelCount, realBufferFrames())
-
-    /**
-     * The buffer the framework ACTUALLY gave us, which is not what was requested.
-     * `PERFORMANCE_MODE_LOW_LATENCY` in particular can hand back a far smaller buffer than
-     * `setBufferSizeInBytes` asked for, and priming against the requested size then overfills it on
-     * the first writes — every later write is refused and the audio arrives in fragments.
-     */
-    private fun realBufferFrames(): Int =
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-        try {
-          track.bufferSizeInFrames
-        } catch (error: Exception) {
-          bufferFrames
-        }
-      } else {
-        bufferFrames
-      }
-
-    /** PCM still queued ahead of the playback head (ms). 0 when drained. */
-    private fun bufferedMs(): Double {
-      // playbackHeadPosition is a 32-bit frame counter; it will not wrap within a session
-      // (2^31 frames / 48 kHz ≈ 12 h). framesWritten − head = frames not yet played.
-      val head = track.playbackHeadPosition.toLong()
-      val queued = (framesWritten - head).coerceAtLeast(0)
-      return queued * 1000.0 / sampleRate
-    }
-
-    private fun underruns(): Int =
-      // underrunCount is API 24+; wrap defensively — a few HALs (and test shadows) don't back it.
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-        try {
-          track.underrunCount
-        } catch (error: Exception) {
-          0
-        }
-      } else {
-        0
-      }
-
-    fun close() {
-      try {
-        if (started) track.pause()
-        track.flush()
-        track.release()
-      } catch (error: Exception) {
-        Log.d("StreamUdpPlugin", "AudioSink close ignored", error)
-      }
-    }
-
-    private companion object {
-      private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_OUT_STEREO
-      private const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
-      private const val BYTES_PER_FRAME = 4 // 2 channels * S16
-      // Only used if getMinBufferSize reports an error: ~40 ms of stereo S16 @ ~48 kHz.
-      private const val FALLBACK_BUFFER_BYTES = 8192
-      // Pre-roll before playback starts — just enough to avoid pulling silence at the very start.
-      private const val PRIME_MS = 24
-
-      // Frame-aligned by construction (frames first, then × frame size): AudioTrack rejects a buffer
-      // size that is not a whole number of stereo frames with "Invalid audio buffer size".
-      private fun msToBytes(sampleRate: Int, ms: Int): Int = (sampleRate.toLong() * ms / 1000).toInt() * BYTES_PER_FRAME
-    }
   }
 
   companion object {
@@ -842,12 +784,22 @@ class StreamUdpPlugin : Plugin() {
 
     // C64U PAL audio sample rate (rounded to int for AudioTrack; source of truth: audioStream.ts).
     private const val DEFAULT_AUDIO_SAMPLE_RATE = 47983
+    // Used only if the platform will not name its own output rate; 48 kHz is the near-universal
+    // Android mixer rate and the one this device reports.
+    private const val DEFAULT_OUTPUT_SAMPLE_RATE = 48000
     // Audio wire format: u16 LE seq prefix, then interleaved stereo S16 (4 bytes/frame).
     /** Enough to notice a second (or third) sender without letting a spoofing flood grow the set. */
     private const val MAX_TRACKED_SENDERS = 4
 
     private const val AUDIO_SEQ_BYTES = 2
     private const val AUDIO_BYTES_PER_FRAME = 4
+
+    /**
+     * Beyond this a "gap" is an outage rather than a lost packet, and papering over it would invent
+     * a long stretch of audio nobody sent. The jitter buffer handles those; concealment is for the
+     * single packets Wi-Fi drops.
+     */
+    private const val MAX_CONCEALED_PACKETS = 8
 
     // Default native keep-rate: present every assembled frame.
     private const val DEFAULT_KEEP_PERMILLE = 1000

@@ -26,7 +26,7 @@ import { StreamUdp } from "@/lib/native/streamUdp";
 import {
   loadStreamAudioPort,
   loadStreamNativeAudio,
-  loadStreamNativeAudioBufferMs,
+  loadStreamNetworkBufferMs,
   loadStreamInputPriority,
   loadStreamNativeVideoAssembly,
   loadStreamVideoFrameRateMode,
@@ -209,7 +209,7 @@ export class AvMirrorSession {
       // evaluated at start (not import) so the live setting wins. Returns null → WebAudio fallback.
       createNativeSink: (sampleRate) =>
         loadStreamNativeAudio() && isNativePlatform()
-          ? new NativeAudioSink(sampleRate, undefined, loadStreamNativeAudioBufferMs())
+          ? new NativeAudioSink(sampleRate, undefined, loadStreamNetworkBufferMs())
           : null,
       renderAudioForAnalysis: (samples, arrivalMs) => this.emitAudio(samples, arrivalMs),
       // Who we EXPECT to hear from, and how to silence anyone else. The mirror's groups are

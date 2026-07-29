@@ -42,7 +42,6 @@ const STREAM_AUDIO_PORT_KEY = "c64u_stream_audio_port";
 const STREAM_NETWORK_BUFFER_MS_KEY = "c64u_stream_network_buffer_ms";
 const STREAM_NATIVE_VIDEO_ASSEMBLY_KEY = "c64u_stream_native_video_assembly";
 const STREAM_NATIVE_AUDIO_KEY = "c64u_stream_native_audio";
-const STREAM_NATIVE_AUDIO_BUFFER_MS_KEY = "c64u_stream_native_audio_buffer_ms";
 const STREAM_VIDEO_FRAME_RATE_MODE_KEY = "c64u_stream_video_frame_rate_mode";
 const STREAM_INPUT_PRIORITY_KEY = "c64u_stream_input_priority";
 const STREAM_AUDIO_ROUTE_KEY = "c64u_stream_audio_route";
@@ -357,13 +356,25 @@ export const saveStreamAudioPort = (value: number) => {
 };
 
 /**
- * Audio jitter / network buffer depth (ms). The Live View player holds each received audio
- * packet this long before playback, so a slightly-late or reordered packet still lands in
- * order (and a genuine gap is known in time to be concealed rather than clicking). Default 5 ms
- * — one-and-a-bit audio packets (~4 ms each) — trades a hair of latency for glitch-free audio
- * on a healthy LAN. 0 disables buffering (lowest latency, least resilient).
+ * Audio jitter buffer depth (ms) for Live View — how much audio is held back so a late, reordered
+ * or bursty delivery still plays in order instead of clicking.
+ *
+ * ONE setting for one idea, whichever path is playing. There used to be two: this one, which had the
+ * Settings control and a 5 ms default, and an invisible second key for the native path. On Android
+ * the native path always wins, so the control the user could see governed nothing they could hear,
+ * and the number that actually mattered could not be reached at all.
+ *
+ * The two paths spend it differently, and that is fine:
+ *  - the **native pipeline** treats it as a floor and deepens it when the link turns out to be
+ *    bursty (see `AudioPipeline`), so it provisions itself rather than depending on this being
+ *    guessed correctly in advance;
+ *  - the **WebAudio fallback** holds each packet exactly this long before playback.
+ *
+ * The default is 60 ms rather than the old 5 ms because 5 ms was chosen for "a healthy LAN" and a
+ * phone on Wi-Fi is not one: the same stream a wired host received every 4.00 ms reached the Pixel 4
+ * in clumps of up to 29 packets after gaps of 119 ms. 0 disables buffering.
  */
-export const DEFAULT_STREAM_NETWORK_BUFFER_MS = 5;
+export const DEFAULT_STREAM_NETWORK_BUFFER_MS = 60;
 export const MAX_STREAM_NETWORK_BUFFER_MS = 400; // matches c64stream C64_MAX_JITTER_MS
 
 const clampNetworkBufferMs = (value: number) => {
@@ -418,26 +429,6 @@ export const saveStreamNativeAudio = (enabled: boolean) => {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(STREAM_NATIVE_AUDIO_KEY, enabled ? "1" : "0");
   broadcast(STREAM_NATIVE_AUDIO_KEY, enabled);
-};
-
-/**
- * Native audio buffer depth target (ms) — the native audio latency (with the AudioTrack's non-blocking
- * writes the buffer fills to ~this depth). The native AudioTrack is fed straight from the plugin's
- * URGENT_AUDIO receive thread, NOT from JS, so the video paint on the JS thread can't stall the audio
- * feed — a small buffer holds without underrunning. That lets this sit far below the WebAudio player,
- * whose buffer BALLOONS under concurrent video (its scheduler queues ahead through every JS-thread
- * jank): measured ~192 ms watching on the Pixel 4 vs the native target here. 60 ms floors to the
- * platform-minimum AudioTrack buffer on the Pixel 4 (~52 ms). Internal tunable (no UI), clamped to a
- * safe range; the AudioTrack always floors it at the platform minimum buffer.
- */
-export const DEFAULT_STREAM_NATIVE_AUDIO_BUFFER_MS = 60;
-export const MIN_STREAM_NATIVE_AUDIO_BUFFER_MS = 20;
-export const MAX_STREAM_NATIVE_AUDIO_BUFFER_MS = 240;
-
-export const loadStreamNativeAudioBufferMs = () => {
-  const raw = readNumber(STREAM_NATIVE_AUDIO_BUFFER_MS_KEY, DEFAULT_STREAM_NATIVE_AUDIO_BUFFER_MS);
-  if (Number.isNaN(raw)) return DEFAULT_STREAM_NATIVE_AUDIO_BUFFER_MS;
-  return Math.min(MAX_STREAM_NATIVE_AUDIO_BUFFER_MS, Math.max(MIN_STREAM_NATIVE_AUDIO_BUFFER_MS, Math.round(raw)));
 };
 
 /**
