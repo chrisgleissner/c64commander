@@ -768,9 +768,21 @@ live fps and timer readouts — or the scroll position a capture happened to set
 lot buries a real change in noise and can commit a worse screenshot than the one it replaced (one
 capture landed mid-scroll, mostly empty).
 
-So: regenerate, then measure per-file diffs, **open the handful you intend to keep and check each one
-shows the change it is meant to show**, and `git checkout -- docs/img/` the rest. Four kept out of 207
-was the right ratio for a change touching two screens.
+So: regenerate, then measure per-file diffs, and **open the handful you intend to keep and check each
+one shows the change it is meant to show**. Four kept out of 207 was the right ratio for a change
+touching two screens.
+
+Revert the rest **scopedly**, never with a bulk `git checkout -- docs/img/`. That path is shared, a
+concurrent agent may have legitimate work in it, and this file tells you elsewhere to leave unexpected
+worktree changes alone — a bulk revert there quietly breaks that promise. `npm run screenshots` already
+runs `scripts/revert-identical-pngs.mjs` for the byte-identical ones; for the drifted files it missed,
+list them explicitly:
+
+    git checkout -- docs/img/app/<each>/<file>.png
+
+If the list is long enough that naming the files feels tedious, derive it from the per-file diff
+measurement you have already taken and exclude your keepers — still explicit, still incapable of
+touching anything you did not measure.
 
 ## Build an exact instrument when the complaint is subjective
 
