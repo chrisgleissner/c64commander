@@ -103,6 +103,36 @@ const INITIAL: AvMirrorSnapshot = {
 
 const isLiveState = (state: AudioMirrorState | VideoMirrorState) => state === "connecting" || state === "live";
 
+/**
+ * Which audio buffer the governor is judged on, and the nominal depth that describes it.
+ *
+ * Whichever path is closer to running dry is the one to protect — and the nominal has to come from
+ * THAT path, or the governor scales its health thresholds for one buffer while reading another. A
+ * reported nominal moves the "critical" bar from 25 ms to 0, because a small native buffer is expected
+ * rather than starvation; so dropping it while feeding the mirror's shallow depth is exactly how a
+ * healthy native buffer gets read as starving.
+ *
+ * Not academic: the two depths differ by three orders of magnitude by design. On-device playback holds
+ * seconds so a busy JS thread cannot starve it; the native mirror sink holds tens of milliseconds so
+ * input stays in step. The minimum is therefore almost always the mirror's — which is precisely the
+ * case where the nominal used to be dropped.
+ *
+ * Exported so a test can exercise this decision directly. It was previously inline, and the tests for
+ * it reimplemented the arithmetic, which left them green against the unfixed wiring.
+ */
+export const chooseAudioBufferSignals = (input: {
+  localActive: boolean;
+  localBufferedMs: number;
+  mirrorLive: boolean;
+  mirrorBufferedMs: number;
+  mirrorNominalBufferMs?: number;
+}): { audioBufferMs: number; audioNominalBufferMs?: number } => {
+  const mirrorIsTighter = !input.localActive || (input.mirrorLive && input.mirrorBufferedMs <= input.localBufferedMs);
+  return mirrorIsTighter
+    ? { audioBufferMs: input.mirrorBufferedMs, audioNominalBufferMs: input.mirrorNominalBufferMs }
+    : { audioBufferMs: input.localBufferedMs, audioNominalBufferMs: undefined };
+};
+
 export interface AvMirrorSessionDeps {
   startStream?: (name: "audio" | "video", destination: string, options?: { wifi?: boolean }) => Promise<unknown>;
   stopStream?: (name: "audio" | "video") => Promise<unknown>;
@@ -354,14 +384,14 @@ export class AvMirrorSession {
     const localUnderruns = Math.max(0, local.underruns - this.lastLocalAudioUnderruns);
     this.lastLocalAudioUnderruns = local.underruns;
     const audioActive = this.audioLive || local.active;
-    // Whichever path is closer to running dry is the one to protect — and the nominal depth has to
-    // come from THAT path, or the governor scales its health thresholds for one buffer while reading
-    // another. Getting this wrong is not academic now that the two depths differ by three orders of
-    // magnitude: on-device playback holds seconds by design, the native mirror sink tens of
-    // milliseconds by design, so the minimum is almost always the mirror's — which is precisely when
-    // its nominal was being dropped, leaving a healthy native buffer read as starvation.
-    const mirrorIsTighter = !local.active || (this.audioLive && signals.audioBufferMs <= local.bufferedMs);
-    const audioBufferMs = mirrorIsTighter ? signals.audioBufferMs : local.bufferedMs;
+    const chosen = chooseAudioBufferSignals({
+      localActive: local.active,
+      localBufferedMs: local.bufferedMs,
+      mirrorLive: this.audioLive,
+      mirrorBufferedMs: signals.audioBufferMs,
+      mirrorNominalBufferMs: signals.audioNominalBufferMs,
+    });
+    const audioBufferMs = chosen.audioBufferMs;
 
     const governor = this.governor.update(
       {
@@ -369,7 +399,7 @@ export class AvMirrorSession {
         // Native low-latency sink runs a smaller buffer; pass its nominal so the governor scales its
         // health thresholds and doesn't misread a healthy native buffer as starvation. Paired with the
         // buffer above: the nominal describes the same path the reading came from.
-        audioNominalBufferMs: mirrorIsTighter ? signals.audioNominalBufferMs : undefined,
+        audioNominalBufferMs: chosen.audioNominalBufferMs,
         // Feed the underruns SINCE the last tick as the demote trigger; the cumulative total goes to telemetry.
         audioUnderruns: Math.max(0, signals.audioUnderruns - this.lastAudioUnderruns) + localUnderruns,
         // Only let the audio buffer/underrun signals drive video when audio is actually playing —

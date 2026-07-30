@@ -696,6 +696,28 @@ were all instances of it, so treat these as rules rather than advice. The instan
   `open` waits out every render and seek in front of it, then blows its own timeout and is written
   off as unresponsive. Skip superseded work; still answer it, so no caller waits out a timeout.
 
+## A test that does not fail without the fix is not a test
+
+The repo already requires a regression test per bug fix. This is the failure mode that requirement
+does not catch on its own: a test that **reimplements** the logic it is meant to guard. Four tests for
+an audio-signal decision recomputed the arithmetic locally and passed against the unfixed production
+code — reviewed, merged, and worthless.
+
+- **Call the production symbol.** If the logic is inline and unreachable, export it. A small exported
+  pure function is a better answer than a test that models what the code is believed to do.
+- **Revert the fix and watch the test fail.** Every time. It is thirty seconds and it is the only thing
+  that distinguishes a regression test from a description.
+- **Pick inputs where the fixed and broken code actually differ.** Two of these tests were rewritten
+  twice before that was true: the buffer selection turned out to be arithmetically identical to the
+  `min()` it replaced, so only one input range could tell them apart, and it needed a dependency the
+  harness could not inject.
+- **Abandon a test that cannot discriminate rather than adding production seams to prop it up.** A
+  seam whose only purpose is a test that still does not work is worse than the honest, smaller test.
+
+Applies to generated fixtures too: a corrected value in a build script needs something reading it
+back. A stimulus whose declared hardware was wrong for months could not be caught by anything grading
+playback, because the property was never exercised by the signal.
+
 ## Diagnostics that cannot report the fault
 
 - **Ask whether a metric is structurally able to be non-zero.** A "Dropped pkts" readout sat at zero
@@ -737,6 +759,30 @@ Rules that follow from it:
 - **Zero underruns does not mean healthy audio.** An over-full buffer never underruns; it silently
   discards what it cannot accept. If a counter can only show starvation, add the one that shows
   overflow before trusting either.
+
+## The screenshot corpus does not reproduce byte-identically here
+
+`npm run screenshots` rewrote **207 of 208** PNGs on this machine, and the prune step reverted one.
+Almost none of that is UI change: the largest diffs are non-deterministic _content_ — a mock VIC frame,
+live fps and timer readouts — or the scroll position a capture happened to settle at. Committing the
+lot buries a real change in noise and can commit a worse screenshot than the one it replaced (one
+capture landed mid-scroll, mostly empty).
+
+So: regenerate, then measure per-file diffs, and **open the handful you intend to keep and check each
+one shows the change it is meant to show**. Four kept out of 207 was the right ratio for a change
+touching two screens.
+
+Revert the rest **scopedly**, never with a bulk `git checkout -- docs/img/`. That path is shared, a
+concurrent agent may have legitimate work in it, and this file tells you elsewhere to leave unexpected
+worktree changes alone — a bulk revert there quietly breaks that promise. `npm run screenshots` already
+runs `scripts/revert-identical-pngs.mjs` for the byte-identical ones; for the drifted files it missed,
+list them explicitly:
+
+    git checkout -- docs/img/app/<each>/<file>.png
+
+If the list is long enough that naming the files feels tedious, derive it from the per-file diff
+measurement you have already taken and exclude your keepers — still explicit, still incapable of
+touching anything you did not measure.
 
 ## Build an exact instrument when the complaint is subjective
 
