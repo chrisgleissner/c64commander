@@ -996,19 +996,15 @@ export function usePlaybackController({
           // "Listen on: this device" quietly played it on the C64 instead. The fetch already existed;
           // it was only ever used to look a duration up.
           if (selection.route === "local" && !effectiveRequest.file && effectiveRequest.source === "ultimate") {
-            try {
-              const blob = await tryFetchUltimateSidBlob(effectivePath);
-              if (blob) {
-                effectiveRequest = {
-                  ...effectiveRequest,
-                  file: new File([blob], effectivePath.split("/").pop() || "tune.sid"),
-                };
-              }
-            } catch (error) {
-              addLog("debug", "Could not read the SID off the Ultimate for on-device playback", {
-                path: effectivePath,
-                error: (error as Error).message,
-              });
+            // No try/catch: the fetch reports its own failures and answers with null, so a wrapper here
+            // could only ever catch something it does not throw — and the log inside it read as though
+            // it were the place a failed fetch is reported, which it was not.
+            const blob = await tryFetchUltimateSidBlob(effectivePath);
+            if (blob) {
+              effectiveRequest = {
+                ...effectiveRequest,
+                file: new File([blob], effectivePath.split("/").pop() || "tune.sid"),
+              };
             }
           }
           if (selection.route === "local" && effectiveRequest.file) {

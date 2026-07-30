@@ -212,7 +212,9 @@ const defaultWorkerFactory: LocalSidWorkerFactory = () => {
  * not exist ([[streamudp-android-only]]): those fall back to Web Audio, which is all they have.
  */
 const nativeAudioBackend = (): NativeLocalAudioBackend | null => {
-  if (!Capacitor.isNativePlatform() || !Capacitor.isPluginAvailable("StreamUdp")) return null;
+  // The same predicate the buffer sizes are chosen from, so the two can never disagree about which
+  // sink this platform is going to get.
+  if (!nativeLocalAudioAvailable()) return null;
   return StreamUdp as unknown as NativeLocalAudioBackend;
 };
 
@@ -406,11 +408,18 @@ const DEFAULT_CHUNK_SECONDS = 0.5;
 const DEFAULT_TARGET_BUFFER_SECONDS = nativeLocalAudioAvailable() ? 20 : 4;
 const DEFAULT_SAMPLE_RATE = 48000;
 /**
- * Cap concurrent render requests so a slow device cannot queue unboundedly.
- * Must be high enough to actually fill {@link DEFAULT_TARGET_BUFFER_SECONDS}
- * promptly after a stall — at 0.5 s chunks, 4 in flight is 2 s of catch-up.
+ * Cap concurrent render requests, so a slow device cannot queue work unboundedly.
+ *
+ * Derived from the target rather than picked, because the two are the same decision: it has to be high
+ * enough to refill the buffer promptly after a stall, and low enough that a device which cannot keep up
+ * does not accumulate a backlog it will never work through. A fifth of the target is the balance — at
+ * half-second chunks that is 2 s of catch-up on the shallow Web Audio target and 4 s on the deep native
+ * one — with a floor so the shallow case keeps the four it always had.
+ *
+ * It used to be a bare number written for the 4-second target, and doubling it when the native target
+ * became 20 s left the relationship between them implicit and wrong on one of the two paths.
  */
-const MAX_IN_FLIGHT_RENDERS = 8;
+const MAX_IN_FLIGHT_RENDERS = Math.max(4, Math.ceil(DEFAULT_TARGET_BUFFER_SECONDS / DEFAULT_CHUNK_SECONDS / 5));
 
 export class LocalSidEngine {
   private readonly workerFactory: LocalSidWorkerFactory;
