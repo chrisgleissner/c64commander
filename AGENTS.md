@@ -266,6 +266,35 @@ Consequences to respect when touching this path:
 Going further would mean rendering the SID natively too (an NDK build of libsidplayfp), which would
 remove JS from the path entirely, as it already is for the mirror.
 
+### Seeking costs a full re-render, so design around that rather than into it
+
+libsidplayfp cannot rewind. Reaching a position means rendering everything before it and discarding
+it — roughly 150 ms of CPU per second of audio on a Pixel 4, so a position a minute in is fifteen to
+twenty seconds of work with chunk delivery gated shut throughout. Consequences that were each learned
+by shipping the opposite:
+
+- **Never seek on a gesture sample.** A drag emits a position per pointer move; one seek each queued
+  minutes of work for positions the listener had already passed. The gesture moves the bar; the
+  release seeks once.
+- **Do not race the pre-render — wait for it.** A full pre-render of the tune is usually already
+  running and rendering exactly the audio a forward seek needs. Waiting for it to reach the target
+  costs nothing extra and plays sooner than a second render of the same span.
+- **Say so while it waits.** The progress bar carries a translucent fill for how far the tune is
+  rendered (which is exactly how far a seek can land instantly) and a marker at a target being waited
+  for. Silence with visible progress is loading; silence without it is a fault.
+- **A partial cache must hand over, not end.** Running off the end of a cached lead-in is not the end
+  of the tune, and treating it as one cut every warmed song off after its opening.
+- **Cache keys outlive the tune that set them.** Opening a tune tears the previous one down, and that
+  teardown clears the key — so a key assigned before opening is null for the whole tune, and every
+  consumer of the cache silently takes its slow path.
+
+### Concealment: an unfilled gap does not merely omit itself
+
+It pulls everything after it earlier. Capping concealment at eight packets on the reasoning that a
+longer gap is "an outage we should not invent audio for" turned notes the C64 held for 160 ms into
+78 ms and 132 ms — the timeline compressed. Wi-Fi loses multicast in clumps, so twenty-packet gaps
+are ordinary here. Fill them, fading toward silence past ~30 ms so a long gap cannot become a drone.
+
 ## Build, test, and screenshot decision rules
 
 This section exists to make agent behavior explicit.
@@ -637,6 +666,45 @@ Set `JAVA_HOME` to a valid JDK install and avoid hardcoded system paths.
 - Prefer proving Android/device fixes against a real-device path before treating emulator-only evidence as sufficient.
 - For hardware-backed validation, use the adb-attached Pixel 4 when it is present.
 - Record which hardware target was chosen and do not claim device validation when neither host is reachable.
+
+## Async guards, gates and supervisors
+
+Most "playback wedged" reports in this repo have been one shape: something that suppresses work, left
+set by a path nobody wrote a release for. Ten separate defects across two rounds of hardware testing
+were all instances of it, so treat these as rules rather than advice. The instances are in
+[[local-sid-stall-root-causes]]; what follows is what they have in common.
+
+- **A guard is released in `finally`, or it is not released.** Single-flight flags, loading flags and
+  "gesture in progress" refs all latched on an await that never returned, and each one disabled a
+  control until relaunch.
+- **Every wait is bounded.** A promise with no timeout is a permanent state change waiting for a bad
+  network, a busy worker or a dozing WebView.
+- **A single-slot pending resolver must be handed over, not dropped.** Replacing `pending` with a
+  newer request orphans the old resolver and its caller awaits forever. Resolve the superseded one —
+  it genuinely is over.
+- **A gate that suppresses output needs a reopener that is not its happy path.** A flag that
+  discards rendered audio until a matching reply arrives will, the one time that reply is lost,
+  discard everything for the rest of the session. Ask what reopens it when the reply never comes.
+- **Prefer engine-owned cadence to caller-driven polling.** Anything published as a side effect of a
+  getter stops being published when the page that polls it unmounts — while the subsystem keeps
+  running. State that outlives a page must be produced by something that also outlives it.
+- **A supervisor must exempt every legitimate silence, and each exemption must carry its own bound.**
+  A stall detector that cannot tell "working, slowly" from "dead" will kill the work: an open, a seek
+  and a deliberate wait for a pre-render all look identical to a five-second timer. Whichever is
+  outstanding owns that failure, and owns bounding it.
+- **A strictly-ordered worker supersedes, it does not queue.** One promise chain means a new tune's
+  `open` waits out every render and seek in front of it, then blows its own timeout and is written
+  off as unresponsive. Skip superseded work; still answer it, so no caller waits out a timeout.
+
+## Diagnostics that cannot report the fault
+
+- **Ask whether a metric is structurally able to be non-zero.** A "Dropped pkts" readout sat at zero
+  for the life of the feature because it counted sequence gaps in packets the native plugin had
+  stopped forwarding once it owned playback. A reassuring number from a counter with nothing to count
+  is worse than no number.
+- **Log transitions, not state.** "This library is too large for a snapshot" is a state, and
+  re-announcing it on every five-second save put **313 of the log's 500 entries** on one sentence,
+  pushing out everything worth reading. Announce on the edge, and again on the way back.
 
 ## Debugging a signal: measure the wire before you read the code
 
