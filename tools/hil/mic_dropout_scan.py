@@ -21,8 +21,14 @@ release envelope decays to nothing many times a minute. The discriminator is the
 release falls over tens of milliseconds; a pipeline that stops handing over samples falls within one
 hop. So a candidate has to fall fast, stay down, and come back fast.
 
+The analysis is band-limited to 300-6000 Hz and this is not optional. The room's noise is almost all
+rumble below 300 Hz, which a phone speaker barely reproduces, so a broadband reading judges the
+signal against noise it is not actually competing with: the same recording measured 11-17 dB SNR
+broadband and 43-49 dB in-band, and the broadband pass produced 17 dropout candidates per file where
+the band-limited pass produced 1. Sixteen of those seventeen were the floor, not the music.
+
 Usage:
-  mic_dropout_scan.py FILE [FILE ...] [--floor-dbfs -40.7] [--min-gap-ms 10] [--max-edge-ms 15]
+  mic_dropout_scan.py FILE [FILE ...] [--floor-dbfs -73] [--min-gap-ms 10] [--max-edge-ms 15]
 """
 from __future__ import annotations
 
@@ -30,9 +36,20 @@ import argparse
 import wave
 
 import numpy as np
+from scipy.signal import butter, sosfiltfilt
 
 HOP_MS = 5.0
 FULL_SCALE = 32768.0
+
+# The band a phone speaker actually reproduces. The room's noise is almost all desk and fan rumble
+# below 300 Hz, which the speaker barely emits, so a broadband RMS reads a ~-41 dBFS floor while the
+# floor in this band is ~-73 dBFS. Judging signal-to-noise broadband understates it by more than
+# 30 dB and makes a perfectly usable recording look hopeless.
+BAND_LOW_HZ = 300.0
+BAND_HIGH_HZ = 6000.0
+
+# Band-limited room floor, measured 4 mm from a Pixel 4 grille in silence.
+DEFAULT_FLOOR_DBFS = -73.0
 
 
 def read_wav(path: str) -> tuple[np.ndarray, int]:
@@ -49,22 +66,19 @@ def read_wav(path: str) -> tuple[np.ndarray, int]:
     return samples / FULL_SCALE, rate
 
 
-def high_pass(samples: np.ndarray, rate: int, cutoff_hz: float = 60.0) -> np.ndarray:
-    """One-pole high pass.
+def band_limit(samples: np.ndarray, rate: int) -> np.ndarray:
+    """Keep only the band the phone speaker reproduces.
 
-    A DC step through the speaker's own blocker rings for the best part of a second and reads as
-    signal to an unweighted RMS, which is exactly how a click gets scored as a note. ITU-R BS.1770
-    starts with a high pass for the same reason; treat it as mandatory rather than polish.
+    Mandatory, not polish. Two separate reasons: a DC step through the speaker's own blocker rings
+    for the best part of a second and reads as signal to an unweighted RMS (which is why ITU-R
+    BS.1770 starts with a high pass), and the room's noise floor lives almost entirely below the
+    speaker's usable range, so leaving it in buries the signal under noise that is not competing
+    with it acoustically at all.
     """
-    alpha = 1.0 / (1.0 + 2.0 * np.pi * cutoff_hz / rate)
-    out = np.empty_like(samples)
-    previous_in = 0.0
-    previous_out = 0.0
-    for index, value in enumerate(samples):
-        previous_out = alpha * (previous_out + value - previous_in)
-        previous_in = value
-        out[index] = previous_out
-    return out
+    nyquist = rate / 2.0
+    high = min(BAND_HIGH_HZ, nyquist * 0.99)
+    sos = butter(4, [BAND_LOW_HZ / nyquist, high / nyquist], btype="bandpass", output="sos")
+    return sosfiltfilt(sos, samples).astype(np.float32)
 
 
 def envelope_dbfs(samples: np.ndarray, rate: int, hop_ms: float = HOP_MS) -> np.ndarray:
@@ -77,7 +91,7 @@ def envelope_dbfs(samples: np.ndarray, rate: int, hop_ms: float = HOP_MS) -> np.
 
 def scan(path: str, floor_dbfs: float, min_gap_ms: float, max_edge_ms: float) -> dict:
     samples, rate = read_wav(path)
-    filtered = high_pass(samples, rate)
+    filtered = band_limit(samples, rate)
     env = envelope_dbfs(filtered, rate)
     if env.size == 0:
         raise SystemExit(f"{path}: recording too short to analyse")
@@ -141,7 +155,12 @@ def scan(path: str, floor_dbfs: float, min_gap_ms: float, max_edge_ms: float) ->
 def main() -> int:
     parser = argparse.ArgumentParser(description="Scan a mic recording for playback dropouts")
     parser.add_argument("files", nargs="+")
-    parser.add_argument("--floor-dbfs", type=float, default=-40.7, help="measured room noise floor")
+    parser.add_argument(
+        "--floor-dbfs",
+        type=float,
+        default=DEFAULT_FLOOR_DBFS,
+        help="band-limited room noise floor (300-6000 Hz), not a broadband figure",
+    )
     parser.add_argument("--min-gap-ms", type=float, default=10.0)
     parser.add_argument("--max-edge-ms", type=float, default=15.0)
     args = parser.parse_args()
