@@ -162,6 +162,33 @@ Before declaring any task complete, deploy the most recent built APK from `andro
 - Launch the newly deployed build on that Pixel 4 and validate the user-visible behavior there for the touched feature area before closing the task.
 - Record the deployment and on-device validation result in the completion summary; do not claim the work is finished until this deploy-and-validate step has succeeded or a concrete hardware/adb blocker is documented.
 
+#### Never raise the Pixel 4's media volume above 10 of 25
+
+**Hard limit. 10 is the maximum the device may ever be set to, for any reason.**
+
+Someone sits next to that phone and listens to it directly. This rule exists because an agent raised
+the volume from 14 to 23 to improve the signal-to-noise ratio of a microphone measurement, and had to
+be stopped: "This is much too loud. I cannot deal with such volume." It is a comfort and
+hearing-safety constraint, so it outranks any measurement that would be easier with more level.
+
+If you change it at all, restore it to 10 or below immediately and say so in your report.
+
+The constraint has a real, measured cost, and the answer is to work around it rather than argue with
+it. Microphone SNR against a room floor of -41 dBFS: **25 dB at volume 23, 13 dB at 14, 6 dB at 10**
+(11 dB on loud passages). Below about 20 dB a 100 ms audio dropout cannot be told apart from a
+musical rest, because SID music's quiet passages already reach the room floor — a threshold detector
+at 16 dB SNR produced 400 false candidates. So at the permitted volume the microphone is not a usable
+dropout detector from a normal distance.
+
+Get the signal another way instead:
+
+- put the microphone against the speaker grille — millimetres, not centimetres, which is worth about
+  +20 dB and recovers a usable SNR at volume 10;
+- take a line feed out of the phone rather than measuring acoustically;
+- better than either, instrument the audio path in the app and timestamp the buffer callbacks, which
+  measures an underrun directly instead of inferring it through a speaker, a room and a microphone,
+  works at any volume, and yields exact durations.
+
 ### Phase 5c - Version identity must match Git
 
 The app version shown by built APK/IPA artifacts and in-app diagnostics must be
