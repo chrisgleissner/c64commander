@@ -58,6 +58,17 @@ export type LocalSidWorkerFactory = () => LocalSidWorkerLike;
 /** An audio sink instance plus its teardown. */
 export interface LocalSidAudioSink {
   sink: AudioScheduleSink;
+  /**
+   * Cumulative underruns the OUTPUT itself reported, where the sink can see them.
+   *
+   * The chunk scheduler counts a chunk handed over after the previous one finished, which is the
+   * right measure for the Web Audio sink because there the schedule *is* the output. The native sink
+   * writes into a ring the speaker drains on its own thread, so the ring can run dry while every
+   * chunk was handed over on time — the scheduler sees nothing and the listener hears a gap. That is
+   * the shape of defect this repo has already been caught by once (AGENTS.md, "Diagnostics that
+   * cannot report the fault"), so the pinned `audioUnderruns` budget takes the worse of the two.
+   */
+  audioUnderruns?: () => number;
   /** Resume a suspended context (browsers start suspended until a gesture). */
   resume?: () => Promise<void> | void;
   /** Suspend the audio clock, freezing the schedule where it stands. */
@@ -1189,7 +1200,7 @@ export class LocalSidEngine {
     reportLocalAudioHealth({
       active: this.scheduler !== null && !this.paused,
       bufferedMs: (source?.bufferedSeconds ?? 0) * 1000,
-      underruns: source?.underruns ?? 0,
+      underruns: Math.max(source?.underruns ?? 0, this.audio?.audioUnderruns?.() ?? 0),
     });
   }
 
@@ -1425,7 +1436,7 @@ export class LocalSidEngine {
       renderMsPerSec: this.totalRenderedSeconds > 0 ? this.totalRenderMs / this.totalRenderedSeconds : 0,
       renderMsPerSecP99: this.renderRateP99(),
       peakRenderMsPerSec: this.peakRenderMsPerSec,
-      audioUnderruns: stats?.underruns ?? 0,
+      audioUnderruns: Math.max(stats?.underruns ?? 0, this.audio?.audioUnderruns?.() ?? 0),
       bufferedSeconds: stats?.bufferedSeconds ?? 0,
       positionSeconds: this.scheduler?.positionSeconds() ?? 0,
       chunksScheduled: stats?.chunksScheduled ?? 0,

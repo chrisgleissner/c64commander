@@ -24,6 +24,8 @@ interface FakeBackend extends NativeLocalAudioBackend {
   closes: number;
   /** Queue depth the pipeline reports back, in ms. */
   bufferedMs: number;
+  /** Cumulative AudioTrack underruns the pipeline reports back. */
+  underruns: number;
 }
 
 const createBackend = (): FakeBackend => {
@@ -33,13 +35,14 @@ const createBackend = (): FakeBackend => {
     flushes: 0,
     closes: 0,
     bufferedMs: 0,
+    underruns: 0,
     openAudioTrack: async (options) => {
       backend.opens.push(options);
       return { sampleRate: options.sampleRate, bufferMs: options.bufferMs ?? 0 };
     },
     writeAudioTrack: async ({ data }) => {
       backend.writes.push(data.length);
-      return { bufferedMs: backend.bufferedMs };
+      return { bufferedMs: backend.bufferedMs, underruns: backend.underruns };
     },
     closeAudioTrack: async () => {
       backend.closes += 1;
@@ -47,7 +50,7 @@ const createBackend = (): FakeBackend => {
     flushAudioTrack: async () => {
       backend.flushes += 1;
     },
-    readAudioStats: async () => ({ bufferedMs: backend.bufferedMs }),
+    readAudioStats: async () => ({ bufferedMs: backend.bufferedMs, underruns: backend.underruns }),
   };
   return backend;
 };
@@ -378,5 +381,45 @@ describe("on-device playback through the native track", () => {
     await settle(200);
 
     expect(backend.writes).toHaveLength(0);
+  });
+});
+
+/**
+ * The speaker running dry is the user-facing failure, and only the pipeline can see it: the chunk
+ * scheduler counts chunks it handed over late, which on this sink says nothing about whether the
+ * ring drained underneath it. `AudioTrack.underrunCount` was already on the wire and nothing read
+ * it, so the pinned `audioUnderruns` budget of 0 could not fail for the fault it exists to catch.
+ */
+describe("the native ring's own underruns reach the engine", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("starts at zero and reports what the pipeline reports", async () => {
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend)!;
+    scheduleChunk(sink, 0.5);
+    await settle();
+    expect(sink.audioUnderruns!()).toBe(0);
+
+    backend.underruns = 4;
+    scheduleChunk(sink, 0.5, 0.5);
+    await settle();
+
+    expect(sink.audioUnderruns!()).toBe(4);
+  });
+
+  it("never walks the count backwards when a read arrives out of order", async () => {
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend)!;
+    backend.underruns = 7;
+    scheduleChunk(sink, 0.5);
+    await settle();
+    expect(sink.audioUnderruns!()).toBe(7);
+
+    backend.underruns = 2;
+    scheduleChunk(sink, 0.5, 0.5);
+    await settle();
+
+    expect(sink.audioUnderruns!()).toBe(7);
   });
 });

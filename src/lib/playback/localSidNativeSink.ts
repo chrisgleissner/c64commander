@@ -48,6 +48,20 @@ import { startupBufferMs } from "./renderThroughput";
 import type { AudioScheduleBuffer, AudioScheduleSink, AudioScheduleSource } from "./localSidChunkScheduler";
 import type { LocalSidAudioSink } from "./localSidEngine";
 
+/**
+ * What the native pipeline reports back from a write or a stats read.
+ *
+ * `underruns` is `AudioTrack.underrunCount` — AudioFlinger's own count of the output running dry,
+ * i.e. the speaker had nothing to play. It has always been on the wire; nothing read it, so the
+ * pinned `audioUnderruns` budget was reporting the chunk scheduler's JS-side accounting instead.
+ * Those are different events: the scheduler counts a chunk handed over after the previous one
+ * finished, which on this sink is decoupled from whether the native ring drained.
+ */
+export interface NativeAudioStats {
+  bufferedMs?: number;
+  underruns?: number;
+}
+
 /** Int16 full scale — the scheduler hands out floats in [-1, 1). */
 const INT16_SCALE = 32768;
 
@@ -142,12 +156,12 @@ export interface NativeLocalAudioBackend {
     trackBursts?: number;
     primeMs?: number;
   }): Promise<{ sampleRate: number; bufferMs: number }>;
-  writeAudioTrack(options: { data: string }): Promise<{ bufferedMs?: number } | undefined>;
+  writeAudioTrack(options: { data: string }): Promise<NativeAudioStats | undefined>;
   closeAudioTrack(options?: Record<string, never>): Promise<void>;
   /** Drop queued-but-unplayed audio, so a pause or seek is immediate despite the deep ring. */
   flushAudioTrack?(options?: Record<string, never>): Promise<void>;
   /** Current pipeline state. Plain field reads, so cheap enough to poll while waiting. */
-  readAudioStats?(options?: Record<string, never>): Promise<{ bufferedMs?: number } | undefined>;
+  readAudioStats?(options?: Record<string, never>): Promise<NativeAudioStats | undefined>;
 }
 
 const toBase64 = (bytes: Uint8Array): string => {
@@ -183,6 +197,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
   private playheadAtMs = performance.now();
   /** Queue depth the pipeline last reported, in seconds. */
   private queuedSec = 0;
+  private nativeUnderruns = 0;
   private suspended = false;
   private closed = false;
   private opening: Promise<boolean> | null = null;
@@ -348,8 +363,8 @@ class NativeLocalSidSink implements AudioScheduleSink {
   private async readQueuedSec(): Promise<number> {
     try {
       const stats = await this.backend.readAudioStats?.({});
+      this.noteStats(stats);
       if (stats && typeof stats.bufferedMs === "number") {
-        this.noteDepth(stats.bufferedMs);
         return Math.max(0, stats.bufferedMs / 1000);
       }
     } catch (error) {
@@ -360,6 +375,25 @@ class NativeLocalSidSink implements AudioScheduleSink {
       });
     }
     return 0;
+  }
+
+  /**
+   * The pipeline's cumulative underrun count, as AudioFlinger reports it.
+   *
+   * Cumulative since `openAudioTrack`, so it only ever rises within a tune; kept as a max so a
+   * reordered or stale read cannot walk it backwards.
+   */
+  underruns(): number {
+    return this.nativeUnderruns;
+  }
+
+  /** Take whatever the pipeline reported, from a write or a stats read. */
+  private noteStats(stats: NativeAudioStats | undefined): void {
+    if (!stats) return;
+    if (typeof stats.bufferedMs === "number") this.noteDepth(stats.bufferedMs);
+    if (typeof stats.underruns === "number") {
+      this.nativeUnderruns = Math.max(this.nativeUnderruns, stats.underruns);
+    }
   }
 
   /** Record a depth reading against the playhead, whatever call produced it. */
@@ -377,6 +411,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
       // The playhead is what has been written less what is still queued, which ties the clock to the
       // DAC rather than to wall time.
       this.noteDepth(stats?.bufferedMs ?? 0);
+      this.noteStats(stats);
     } catch (error) {
       addLog("warn", "Native audio: on-device write failed", {
         error: (error as Error)?.message ?? String(error),
@@ -515,6 +550,7 @@ export const createNativeLocalSidSink = (
   (globalThis as Record<string, unknown>).__localSinkDebug = () => sink.debug();
   return {
     sink,
+    audioUnderruns: () => sink.underruns(),
     resume: () => sink.resume(),
     suspend: () => sink.suspend(),
     fadeOut: (ms: number) => sink.fadeTo(0, ms),
