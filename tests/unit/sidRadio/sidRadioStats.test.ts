@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  EMITTED_SEQUENCE_CAP,
   SID_RADIO_STATS_TESTID,
   getSidRadioStats,
   readSidRadioStatsFromDom,
@@ -95,5 +96,24 @@ describe("sidRadioStats DOM mirror cost", () => {
     document.querySelector(`[data-testid="${SID_RADIO_STATS_TESTID}"]`)?.remove();
     updateSidRadioStats({ stationActive: true });
     expect(readSidRadioStatsFromDom()).toMatchObject({ stationActive: true });
+  });
+});
+
+/**
+ * A station now reaches ~60k tracks rather than ~1.4k, and this sequence is appended to immutably —
+ * one copy of the whole array per emitted track. Unbounded that is ~1.8 billion element copies of
+ * allocation churn on the thread rendering audio, for a determinism proof that only ever reads a
+ * 30-track prefix.
+ */
+describe("emittedSequence is bounded", () => {
+  it("keeps the first EMITTED_SEQUENCE_CAP ordinals and stops growing", () => {
+    resetSidRadioStats();
+    for (let index = 0; index < EMITTED_SEQUENCE_CAP + 50; index += 1) recordEmitted(1000 + index);
+
+    const sequence = getSidRadioStats().emittedSequence;
+
+    expect(sequence).toHaveLength(EMITTED_SEQUENCE_CAP);
+    expect(sequence[0]).toBe(1000);
+    expect(sequence.at(-1)).toBe(1000 + EMITTED_SEQUENCE_CAP - 1);
   });
 });

@@ -15,6 +15,9 @@
 
 export const SID_RADIO_STATS_TESTID = "sid-radio-stats";
 
+/** How many emitted ordinals {@link SidRadioStats.emittedSequence} keeps. */
+export const EMITTED_SEQUENCE_CAP = 512;
+
 export interface SidRadioStats {
   bundleLoadMs: number;
   reverseIndexMs: number;
@@ -32,7 +35,12 @@ export interface SidRadioStats {
   seedKind: "song" | "style" | "taste" | null;
   styleBit: number | null;
   shuffleSeed: number | null;
-  /** Emitted track-ordinal sequence — the `--shuffle-replay` determinism proof (§9.3). */
+  /**
+   * The first {@link EMITTED_SEQUENCE_CAP} emitted track ordinals — the `--shuffle-replay`
+   * determinism proof (§9.3). A prefix is all that proof needs: the gate starts one station twice
+   * with the same pinned `shuffleSeed` and compares `seq[:tracks]`, with `--soak-tracks` defaulting
+   * to 30.
+   */
   emittedSequence: number[];
   /** True while a station drives the queue → transport Shuffle/Repeat are disabled (§5.3). */
   transportShuffleDisabled: boolean;
@@ -152,6 +160,12 @@ export const recordEmitted = (trackOrdinal: number): void => {
   // with an audio underrun against a pinned budget of 0 where earlier runs had
   // none. The refill that emitted these items calls recordRefill immediately
   // afterwards, which flushes the sequence along with the rest.
+  //
+  // The copy is what bounds the sequence: appending immutably costs one copy of
+  // the whole array per emitted track, which was ~1M element copies over the
+  // ~1.4k tracks a station used to reach and would be 1.8 billion over the ~60k
+  // it reaches now — sustained allocation churn on the thread rendering audio.
+  if (stats.emittedSequence.length >= EMITTED_SEQUENCE_CAP) return;
   stats = { ...stats, emittedSequence: [...stats.emittedSequence, trackOrdinal] };
 };
 
