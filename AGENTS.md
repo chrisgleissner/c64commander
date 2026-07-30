@@ -173,21 +173,31 @@ hearing-safety constraint, so it outranks any measurement that would be easier w
 
 If you change it at all, restore it to 10 or below immediately and say so in your report.
 
-The constraint has a real, measured cost, and the answer is to work around it rather than argue with
-it. Microphone SNR against a room floor of -41 dBFS: **25 dB at volume 23, 13 dB at 14, 6 dB at 10**
-(11 dB on loud passages). Below about 20 dB a 100 ms audio dropout cannot be told apart from a
-musical rest, because SID music's quiet passages already reach the room floor — a threshold detector
-at 16 dB SNR produced 400 false candidates. So at the permitted volume the microphone is not a usable
-dropout detector from a normal distance.
+Measuring at this volume is entirely possible, but **only if the analysis is band-limited**. Get this
+wrong and you will wrongly conclude the microphone is unusable — an earlier agent did exactly that.
 
-Get the signal another way instead:
+The room's noise is almost all below 300 Hz (desk and fan rumble), which is a band a phone speaker
+barely reproduces. Measured with the microphone 4 mm from a Pixel 4 grille, in silence:
 
-- put the microphone against the speaker grille — millimetres, not centimetres, which is worth about
-  +20 dB and recovers a usable SNR at volume 10;
-- take a line feed out of the phone rather than measuring acoustically;
-- better than either, instrument the audio path in the app and timestamp the buffer callbacks, which
-  measures an underrun directly instead of inferring it through a speaker, a room and a microphone,
-  works at any volume, and yields exact durations.
+```
+    0- 120 Hz   -40.8 dBFS     <- the rumble that dominates a broadband reading
+  120- 300 Hz   -46.7 dBFS
+  300- 700 Hz   -83.9 dBFS
+    3-   6 kHz  -77.1 dBFS
+```
+
+So a broadband RMS reads a -41 dBFS floor while the floor **in the 300-6000 Hz band the speaker
+actually uses** is -73 dBFS. Judging signal-to-noise broadband understates it by more than 30 dB.
+
+Band-limited to 300-6000 Hz, at phone volume 10 with the microphone 4 mm from the grille, a real
+measurement over 98 s of SID playback gave **27 dB median SNR and 33 dB on loud passages** — ample.
+The same recording judged broadband looked like 6 dB and appeared hopeless. `local_vs_mirror_mic.py`
+already band-limits for this reason; follow it.
+
+Detecting a dropout still needs more than a level threshold, because SID music has real rests that
+reach the floor. Require a fast collapse *and* a fast recovery *and* loud music either side: an
+underrun is a step within about a buffer period, where a musical decay is exponential over tens to
+hundreds of milliseconds. A plain threshold at 16 dB broadband SNR produced 400 false candidates.
 
 ### Phase 5c - Version identity must match Git
 
