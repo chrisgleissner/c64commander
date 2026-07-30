@@ -607,6 +607,53 @@ If it is GC, then making the code faster is not sufficient; it has to allocate l
 V8 GC events from `logcat` during playback and correlate them against refills. "We made it 20x
 faster" is not evidence the dropout is gone.
 
+### 8b.2a MEASURED AFTER THIS SECTION WAS WRITTEN — read before acting on 8b.2
+
+The hypotheses above were written before the device measurements existed. Several are now settled or
+refuted. **Trust this subsection over 8b.2 where they disagree.**
+
+**The `audioUnderruns` counter was structurally blind, and the listener was right.** It reported 0
+because `localSidNativeSink` read `bufferedMs` out of the plugin payload and discarded the rest,
+so `AudioTrack.underrunCount` — AudioFlinger's own count of the output running dry, which
+`AudioPipeline.kt` has always reported — never crossed the plugin boundary. What the metric actually
+reported was `LocalSidChunkScheduler` accounting, which is correct for the Web Audio sink where the
+schedule *is* the output, and meaningless on the native sink where a ring drains on its own thread.
+Fixed in `a4d82efa`. On otherwise identical builds it now reads **2 underruns at depth 1,000 and 2 at
+depth 60,000**, where it read 0 before.
+
+**So the strong form of the depth prediction in 8b.2 is refuted.** Underruns occur at depth 1,000 as
+well as 60,000. Depth aggravates; it is not necessary. Do not go looking only at deep sessions.
+
+**The main-thread budget is not the problem.** Measured on device: 0.5 ms at depth 1,000 rising to
+5.8-11.1 ms at 60,000, against the 16 ms `refillMainThreadMaxMs` pin. Never breached. The desktop
+extrapolations that suggested 24-40 ms were wrong. A bitset is still worth doing, but not to rescue
+this budget, and shipping it will not on its own remove the underruns.
+
+**`lastRefillMs` is breached at every depth, including 1,000** — 1.4 s at depth 1,000 rising to
+3.9 s, against a 150 ms pin. That is where the CPU actually goes, and it is not the per-compute cost:
+a single `computeStation` at 84k exclusions is about 14 ms, so a 3.8 s refill is roughly **25
+computes**. `StationQueueProvider.refill` recomputes whenever its 24-candidate buffer empties, and at
+depth most candidates are consumed without being emitted, because path resolution against a partial
+HVSC and the `minSeconds` rule discard them. **The multiplier is the defect, not the per-compute
+cost.** Shrinking each compute helps a little; dividing the number of computes helps a lot. Raising
+the refill batch, or lifting path resolution and the length filter into the engine so the walk stops
+producing candidates that will be thrown away, are the two obvious directions.
+
+**Worker CPU at depth: about 99% + 50% of a core, with the main thread at 72%** — roughly 2.2 cores
+in the renderer process, contending with the SID render on a thermally throttled device.
+`renderMsPerSec` stayed 497-593 against its 850 pin throughout, so the early warning never fired.
+
+**One unresolved contradiction, and the first thing to investigate.** `__localSinkDebug()` reported
+`queuedSec: 0` with `pumping: 1` — a 15 s ring showing empty while live — and over a 300 s trace the
+ring was at <=0.05 s in 104 of 215 samples while the elapsed clock advanced. That is far more severe
+than two underruns. Either the ring is genuinely running dry far more often than `underrunCount`
+says, or that debug field is stale or cached. Settle which before optimising anything, because the
+two readings imply very different problems.
+
+**Station depth when the user heard the gap: 84,282 exclusions.** Read over CDP. But that was a
+depth-probe descriptor installed by the measurement harness, so his listening and the test load
+coincided — it supports the depth hypothesis without isolating it.
+
 ### 8b.3 The costs, measured on desktop
 
 87,868-track corpus, scattered ordinals, 20 repeats after a warm-up:
