@@ -18,6 +18,26 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+/**
+ * Wait for the connection to settle before asserting on anything the device supplies.
+ *
+ * This spec used to assert straight after `goto("/config")`, which races the connection handoff: the
+ * config tree is only rendered from the mock's `/v1/info` once that has landed, so under CI load
+ * (instrumented bundle, four workers) the menu-page testids could be looked for before they could
+ * possibly exist. It failed intermittently on main and passed in isolation — the signature of a race,
+ * not of a product regression.
+ *
+ * REAL_CONNECTED specifically, not `DEMO_ACTIVE|REAL_CONNECTED` as the two sibling specs accept: this
+ * test asserts the C64U hierarchy that the *mock server* reports, and demo mode serves its own
+ * fixtures instead. Gating on the real connection means a failover surfaces as "expected
+ * REAL_CONNECTED" rather than as a puzzling absent testid.
+ */
+const waitForRealConnection = async (page: Page) => {
+  const badge = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
+  await expect(badge).toBeVisible({ timeout: 15000 });
+  await expect(badge).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 15000 });
+};
+
 test.describe("Demo config from YAML", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -42,6 +62,7 @@ test.describe("Demo config from YAML", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/config");
+    await waitForRealConnection(page);
     await snap(page, testInfo, "config-open");
 
     // The C64U device (mock /v1/info reports "C64 Ultimate") renders the menu-aligned
