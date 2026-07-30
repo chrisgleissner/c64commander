@@ -15,6 +15,7 @@ import {
   getNotForMeMd5s,
   getRankingSnapshot,
   getLikedMd5s,
+  loadRankings,
   setRanking,
   type RankingSignal,
 } from "@/lib/sidRadio/rankingStore";
@@ -22,7 +23,7 @@ import { SidRadioWorkerClient } from "@/lib/sidRadio/sidRadioWorkerClient";
 import type { SidRadioStylePopulations } from "@/lib/sidRadio/sidRadioWorkerProtocol";
 import { loadSidRadioMinSeconds } from "@/lib/config/appSettings";
 import { StationQueueProvider } from "@/lib/sidRadio/stationQueueProvider";
-import type { StationSeed } from "@/lib/sidRadio/stationEngine";
+import { DEFAULT_STATION_BALANCE, type StationSeed } from "@/lib/sidRadio/stationEngine";
 import {
   recordAutoAdvance,
   recordEmitted,
@@ -34,6 +35,7 @@ import {
 import {
   clearSidRadioSession,
   loadSidRadioSession,
+  resumeRecentOrdinals,
   saveSidRadioSession,
   type SidRadioSessionDescriptor,
 } from "@/lib/sidRadio/sidRadioSession";
@@ -224,24 +226,38 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   }, [enabled, ensureClient, rememberStylePopulations]);
 
   const buildProvider = useCallback(
-    (seed: StationSeed, styleFilter: number | null, shuffleSeed: number, initialExclude: number[] = []) => {
+    (
+      seed: StationSeed,
+      styleFilter: number | null,
+      shuffleSeed: number,
+      initialExclude: number[] = [],
+      initialRecent: number[] = [],
+    ) => {
       const client = ensureClient();
       seedRef.current = { seed, styleFilter, shuffleSeed };
       return new StationQueueProvider({
         lookahead: LOOKAHEAD,
         initialExclude,
+        initialRecent,
         minSeconds: loadSidRadioMinSeconds(),
         resolveDuration: params.resolveDurationSeconds,
-        computeCandidates: (exclude, count) =>
-          client.compute({
+        computeCandidates: async (exclude, recent, count) => {
+          // The ♥/✕ signal is durable but the in-memory cache is not, and nothing else on the
+          // resume path reads it back: without this a relaunched app steered every station from an
+          // empty likes/not-for-me list until the user happened to rate something. Idempotent, so
+          // every later refill pays nothing.
+          await loadRankings();
+          return client.compute({
             seed,
             styleFilter,
             shuffleSeed,
             likes: getLikedMd5s(),
             notForMe: getNotForMeMd5s(),
             exclude,
+            recent,
             count,
-          }),
+          });
+        },
         resolvePath,
         buildItem: ({ virtualPath, songIndex, trackOrdinal }) => {
           // The determinism proof behind G11: emission order is a pure function
@@ -264,6 +280,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       shuffleSeed: descriptor.shuffleSeed,
       rankingSnapshotId: descriptor.rankingSnapshotId,
       excludeOrdinals: providerRef.current?.excludedOrdinals ?? [],
+      recentOrdinals: providerRef.current?.recentOrdinals ?? [],
     });
   }, []);
 
@@ -373,7 +390,13 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     restoredRef.current = true;
     const saved: SidRadioSessionDescriptor | null = loadSidRadioSession();
     if (!saved) return;
-    providerRef.current = buildProvider(saved.seed, saved.styleFilter, saved.shuffleSeed, saved.excludeOrdinals);
+    providerRef.current = buildProvider(
+      saved.seed,
+      saved.styleFilter,
+      saved.shuffleSeed,
+      saved.excludeOrdinals,
+      resumeRecentOrdinals(saved, DEFAULT_STATION_BALANCE.recentWindow),
+    );
     setStation({
       seedKind: saved.seedKind,
       seedLabel: saved.seedLabel,
@@ -430,6 +453,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
             shuffleSeed: station.shuffleSeed,
             rankingSnapshotId: station.rankingSnapshotId,
             excludeOrdinals: provider.excludedOrdinals,
+            recentOrdinals: provider.recentOrdinals,
           });
         } else if (reason) {
           updateSidRadioStats({ stationActive: true });

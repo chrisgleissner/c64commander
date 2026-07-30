@@ -267,11 +267,32 @@ The spec's own recipe, which we adopt:
 4. **Score** by multi-seed aggregation `Σ seedWeight × (3 − rank)`; Likes raise
    `seedWeight`, Not-for-me removes/penalises. Emit an ordered candidate stream.
 
+**The query drifts (E1).** The seeds are not only what the listener asked for: the tracks
+they just heard are seeds too, at a recency-decayed weight, so the retrieval centre moves
+with the listener. A fixed seed makes a station a sphere of one radius around one point,
+whose size is set by the branching factor rather than by how far the graph reaches —
+measured on the pinned 0.8.0 bundle it served a median of **1,676** distinct tracks before
+reporting itself exhausted, against **59,704** once the query drifts (of a 61,157-file
+ceiling). Every weight that trades "sounds like what you asked for" against "explores" is
+stated in one place, `DEFAULT_STATION_BALANCE` in `stationEngine.ts`, and swept by
+`scripts/sidRadio/measure-station-depth.ts`.
+
+**One tune, not one ordinal (E2).** Exclusion is by `.sid` file, not by track ordinal: a
+listener hears subsongs 1, 2 and 3 of one file as the same tune three times. Each candidate
+carries its file's track ordinals (the file→track mapping lives in the bundle, which only
+the worker holds) and the queue provider retires all of them when it consumes one. The
+corpus averages 1.44 subsongs per file, so retiring the siblings outright costs the station
+almost nothing and needs no rule the UI has to explain.
+
 **Determinism (an internal engine property — see §5.3 for the UX).** The candidate order
-is a **pure function of `(seed, rankingSnapshot, shuffleSeed)`**: stable tie-break by
-ascending ordinal, no wall-clock, insertion-order, or Set-iteration inputs. The only knob
-is the explicit `shuffleSeed`. This determinism is **not** exposed as a user "shuffle
-toggle" (§5.3 explains why); it exists to buy three concrete things:
+is a **pure function of `(seed, recent, rankingSnapshot, shuffleSeed, exclude)`**: stable
+tie-break by ascending ordinal, no wall-clock, insertion-order, or Set-iteration inputs.
+`recent` is ordered (the weight decays along it) and always supplied by the caller — the
+queue provider keeps an explicit consumption order rather than reading the tail of its
+exclude `Set`, which would make the order an accident of the runtime and, since that set
+also holds retired subsong siblings, the wrong answer as well. The only knob is the
+explicit `shuffleSeed`. This determinism is **not** exposed as a user "shuffle toggle"
+(§5.3 explains why); it exists to buy three concrete things:
 
 - **Fresh variety by default** — each station start draws a _random_ `shuffleSeed`, so the
   same mood/seed feels new each time (the radio norm).
@@ -626,10 +647,23 @@ tiny and inherits every hardening fix already in `usePlaybackController`.
 `PlaylistItem` needs no schema change: station items are ordinary `hvsc` items
 (`category: "sid"`). We add one **optional** field to the session/UI state (not the
 item): the active station descriptor
-(`{ seedKind, seedLabel, styleBit?, shuffleSeed, rankingSnapshotId, excludeSet }`) — the
-exact tuple needed to show the chip and **recompute an identical continuation** on
-restart (Q7/D15), persisted via the existing `usePlaybackPersistence` /
-`playlistRepository` session record. The full scored queue is _not_ stored.
+(`{ seedKind, seedLabel, styleBit?, shuffleSeed, rankingSnapshotId, excludeSet, recentOrdinals }`)
+— the exact tuple needed to show the chip and **recompute the continuation** on restart
+(Q7/D15), persisted via the existing `usePlaybackPersistence` / `playlistRepository`
+session record. The full scored queue is _not_ stored.
+
+`recentOrdinals` is the drifting query's aim (§2.3). A resumed station is aimed by what it
+just played, and the exclude set cannot stand in for it: that set also holds the retired
+subsong siblings, which were never played. Descriptors written before the query could drift
+have no such field and resume from the tail of `excludeOrdinals`, which for those sessions
+genuinely was the consumption order.
+
+What a resume guarantees is that the continuation is a **pure function of the persisted
+descriptor**, and that nothing is repeated or lost across the interruption. It is _not_ that
+the resumed sequence equals the one an uninterrupted station would have produced: a refill
+computes a larger batch than it emits, and the un-emitted tail of that batch is in memory
+only. Those candidates were never consumed, so they stay eligible and the station recomputes
+from the state it saved.
 
 ### 6.4 Settings & flags (`src/lib/config/appSettings.ts`)
 

@@ -86,6 +86,7 @@ export const computeStationResponse = (
     notForMe: request.notForMe,
     shuffleSeed: request.shuffleSeed,
     exclude: request.exclude,
+    recent: request.recent,
     limit: request.count,
   });
   if (result.candidates.length === 0) {

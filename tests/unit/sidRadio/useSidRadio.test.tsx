@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SID_RADIO_STYLE_TILES, useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { rebuildMd548PathIndex, resetMd548PathIndex } from "@/lib/sidRadio/md5PathIndex";
-import { clearAllRankings, getRanking } from "@/lib/sidRadio/rankingStore";
+import { clearAllRankings, getRanking, setRanking, simulateRankingRestartForTests } from "@/lib/sidRadio/rankingStore";
 import { loadSidRadioSession, saveSidRadioSession } from "@/lib/sidRadio/sidRadioSession";
 import { SidRadioWorkerClient } from "@/lib/sidRadio/sidRadioWorkerClient";
 import type {
@@ -20,7 +20,7 @@ import type {
   SidRadioStylePopulations,
   StationRequest,
 } from "@/lib/sidRadio/sidRadioWorkerProtocol";
-import type { StationResult } from "@/lib/sidRadio/stationEngine";
+import { DEFAULT_STATION_BALANCE, type StationResult } from "@/lib/sidRadio/stationEngine";
 
 beforeEach(async () => {
   localStorage.clear();
@@ -54,6 +54,7 @@ const makeClient = (stylePopulations: SidRadioStylePopulations = populationsWith
           songIndex: 1,
           score: 10 - trackOrdinal,
           reason: "similar" as const,
+          fileTrackOrdinals: [trackOrdinal],
         })),
       };
     }),
@@ -376,6 +377,7 @@ describe("useSidRadio launcher preload overlapping a station start", () => {
                 songIndex: 1,
                 score: 1,
                 reason: "similar" as const,
+                fileTrackOrdinals: [index + 1],
               })),
             },
           }),
@@ -428,6 +430,134 @@ describe("useSidRadio launcher preload overlapping a station start", () => {
 });
 
 /**
+ * Feedback has to shape a station whatever seeded it (E3), and it has to survive an app restart.
+ *
+ * The ♥/✕ signal is durable, but only a *write* used to hydrate the in-memory cache it is read from,
+ * and nothing on the start or resume path wrote. So a relaunched app steered every station from an
+ * empty likes/not-for-me list until the user happened to rate something in that session.
+ */
+describe("useSidRadio feedback reaches the engine", () => {
+  const LIKED = "0123456789abcdef0123456789abcdef";
+  const REJECTED = "fedcba9876543210fedcba9876543210";
+
+  const requestFor = (client: ReturnType<typeof makeClient>): StationRequest =>
+    client.compute.mock.calls[0][0] as StationRequest;
+
+  const withStoredFeedbackAfterRelaunch = async () => {
+    await setRanking(LIKED, "like");
+    await setRanking(REJECTED, "notForMe");
+    await simulateRankingRestartForTests();
+  };
+
+  it("shapes a Song station with the stored likes and rejections", async () => {
+    await withStoredFeedbackAfterRelaunch();
+    const client = makeClient();
+    const { result } = renderHook(() => useSidRadio(baseParams(client)));
+    await act(async () => {
+      await result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+    expect(requestFor(client).seed).toEqual({ kind: "song", md5_48: "aabbccddeeff" });
+    expect(requestFor(client).likes).toEqual([LIKED]);
+    expect(requestFor(client).notForMe).toEqual([REJECTED]);
+  });
+
+  it("shapes a category station with the same stored likes and rejections", async () => {
+    await withStoredFeedbackAfterRelaunch();
+    const client = makeClient();
+    const { result } = renderHook(() => useSidRadio(baseParams(client)));
+    await act(async () => {
+      await result.current.startStyleRadio(1, "Chill / Ambient");
+    });
+    expect(requestFor(client).seed).toEqual({ kind: "style", styleBit: 1 });
+    expect(requestFor(client).styleFilter).toBe(1);
+    expect(requestFor(client).likes).toEqual([LIKED]);
+    expect(requestFor(client).notForMe).toEqual([REJECTED]);
+  });
+
+  it("shapes a category station composed over Likes", async () => {
+    await withStoredFeedbackAfterRelaunch();
+    const client = makeClient();
+    const { result } = renderHook(() => useSidRadio(baseParams(client)));
+    await act(async () => {
+      await result.current.startStyleRadio(1, "Chill / Ambient", true);
+    });
+    expect(requestFor(client).seed).toEqual({ kind: "taste" });
+    expect(requestFor(client).styleFilter).toBe(1);
+    expect(requestFor(client).likes).toEqual([LIKED]);
+  });
+});
+
+describe("useSidRadio drifts the query and persists its aim", () => {
+  it("sends nothing recent on the first compute and the played tail thereafter", async () => {
+    const client = makeClient();
+    let queued = 0;
+    const params = baseParams(client, {
+      playlistLength: 0,
+      currentIndex: 0,
+      startPlaylist: vi.fn((items: unknown[]) => {
+        queued = items.length;
+      }),
+      appendItems: vi.fn((items: unknown[]) => {
+        queued += items.length;
+      }),
+    });
+    const { result, rerender } = renderHook((p: ReturnType<typeof baseParams>) => useSidRadio(p), {
+      initialProps: params,
+    });
+    await act(async () => {
+      await result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+    expect((client.compute.mock.calls[0][0] as StationRequest).recent).toEqual([]);
+
+    // Walk the cursor to the tail repeatedly until the lookahead buffer is spent and the station has
+    // to ask the engine again — that second ask is the one carrying the drift.
+    for (let round = 0; round < 8 && client.compute.mock.calls.length < 2; round += 1) {
+      await act(async () => {
+        rerender({ ...params, currentIndex: queued - 1, playlistLength: queued });
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+
+    const later = client.compute.mock.calls.at(-1)![0] as StationRequest;
+    expect(later.recent).toHaveLength(DEFAULT_STATION_BALANCE.recentWindow);
+    // Most recent first, and the mock pool is emitted in ascending order, so the tail counts down.
+    expect(later.recent).toEqual([...later.recent].sort((a, b) => b - a));
+  });
+
+  it("persists the recent window so a resumed station keeps its aim (D15)", async () => {
+    const client = makeClient();
+    const { result } = renderHook(() => useSidRadio(baseParams(client)));
+    await act(async () => {
+      await result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+    const saved = loadSidRadioSession();
+    expect(saved?.recentOrdinals?.length).toBeGreaterThan(0);
+    expect(saved?.excludeOrdinals).toEqual(expect.arrayContaining(saved!.recentOrdinals!));
+  });
+
+  it("hands a resumed provider its saved aim, not the tail of the exclude set", async () => {
+    saveSidRadioSession({
+      seedKind: "song",
+      seedLabel: "Commando",
+      seed: { kind: "song", md5_48: "aabbccddeeff" },
+      styleFilter: null,
+      shuffleSeed: 777,
+      rankingSnapshotId: "snap",
+      excludeOrdinals: [1, 2, 3, 4, 5, 6, 7],
+      recentOrdinals: [3, 2, 1],
+    });
+    const client = makeClient();
+    const params = baseParams(client, { playlistLength: 10, currentIndex: 8 });
+    const { result } = renderHook(() => useSidRadio(params));
+    expect(result.current.active).toBe(true);
+    await waitFor(() => expect(client.compute).toHaveBeenCalled());
+    expect((client.compute.mock.calls[0][0] as StationRequest).recent).toEqual([3, 2, 1]);
+  });
+});
+
+/**
  * `emittedSequence` is the evidence behind the G11 `--shuffle-replay` gate:
  * the HIL starts a station twice with the same pinned `shuffleSeed` and
  * asserts the sequences match, then with a different seed and asserts they
@@ -452,6 +582,7 @@ describe("useSidRadio emittedSequence identity", () => {
           songIndex: 1,
           score: 1,
           reason: "similar" as const,
+          fileTrackOrdinals: [trackOrdinal],
         })),
     }));
 

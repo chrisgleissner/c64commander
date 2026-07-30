@@ -150,6 +150,50 @@ describe("stationEngine — determinism (G11)", () => {
   });
 });
 
+describe("stationEngine — the drifting query (E1)", () => {
+  const bundle = engineBundle();
+  const base = { bundle, seed: { kind: "song" as const, md5_48: MD5_48[3] }, shuffleSeed: 99 };
+
+  it("aims the walk at the recently played tracks, not only at the seed", () => {
+    const fixed = computeStation({ ...base, exclude: [4, 5] }).candidates.map((c) => c.trackOrdinal);
+    const drifted = computeStation({ ...base, exclude: [4, 5], recent: [5, 4] }).candidates.map((c) => c.trackOrdinal);
+    // Same graph, same seed, same exclusions — a different region, because the query moved.
+    expect(drifted).not.toEqual(fixed);
+    // 6 and 7 are only reachable from the far end of the chain the listener has walked to.
+    expect(drifted).toEqual(expect.arrayContaining([6]));
+  });
+
+  it("emits a byte-identical sequence for a fixed (seed, recent, rankingSnapshot, shuffleSeed, exclude)", () => {
+    const options = { ...base, exclude: [4, 5], recent: [5, 4] };
+    expect(computeStation(options).candidates.map((c) => c.trackOrdinal)).toEqual(
+      computeStation(options).candidates.map((c) => c.trackOrdinal),
+    );
+  });
+
+  it("treats the order of `recent` as load-bearing", () => {
+    // The weight decays along the list, so the same two tracks in the other order aim differently.
+    // This is why the provider keeps an explicit consumption order instead of reading a `Set`.
+    const newest5 = computeStation({ ...base, exclude: [4, 5], recent: [5, 4] }).candidates.map((c) => c.score);
+    const newest4 = computeStation({ ...base, exclude: [4, 5], recent: [4, 5] }).candidates.map((c) => c.score);
+    expect(newest5).not.toEqual(newest4);
+  });
+
+  it("ignores a recent ordinal from outside the bundle rather than scoring undefined", () => {
+    // A session saved against a differently-sized bundle resumes with ordinals that no longer exist.
+    const result = computeStation({ ...base, recent: [bundle.trackCount + 500, -1] });
+    expect(result.candidates.length).toBeGreaterThan(0);
+    for (const candidate of result.candidates) expect(Number.isFinite(candidate.score)).toBe(true);
+  });
+
+  it("carries every subsong of a candidate's file so the queue can retire the tune (E2)", () => {
+    const result = computeStation({ ...base, recent: [4] });
+    for (const candidate of result.candidates) {
+      expect(candidate.fileTrackOrdinals).toEqual(bundle.trackOrdinalsForMd548(candidate.md5_48));
+      expect(candidate.fileTrackOrdinals).toContain(candidate.trackOrdinal);
+    }
+  });
+});
+
 describe("the walk widens when admission is thin", () => {
   /**
    * A chain: 0 <- 1 <- 2 <- ... <- 11. From a seed at one end, three hops reach only a handful of

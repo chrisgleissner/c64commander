@@ -31,6 +31,8 @@ export interface StationRequest {
   likes: string[];
   notForMe: string[];
   exclude: number[];
+  /** Most recently played track ordinals, most recent first — the drifting query (order is load-bearing). */
+  recent: number[];
   count: number;
 }
 

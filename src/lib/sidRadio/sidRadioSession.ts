@@ -13,8 +13,8 @@ import type { StationSeed } from "@/lib/sidRadio/stationEngine";
  * Persisted active-station descriptor (spec §6.3, D15). Only the tiny tuple
  * needed to **recompute an identical continuation** on restart is stored — never
  * the full scored queue. The engine is deterministic in
- * `(seed, rankingSnapshot, shuffleSeed)`, so replaying with the same tuple + the
- * saved exclude set resumes exactly where the user left off.
+ * `(seed, recent, rankingSnapshot, shuffleSeed, exclude)`, so replaying with the
+ * same tuple + the saved exclude set resumes exactly where the user left off.
  */
 export interface SidRadioSessionDescriptor {
   seedKind: "song" | "style" | "taste";
@@ -24,7 +24,23 @@ export interface SidRadioSessionDescriptor {
   shuffleSeed: number;
   rankingSnapshotId: string;
   excludeOrdinals: number[];
+  /**
+   * The most recently played ordinals, most recent first — the aim of the drifting query.
+   *
+   * Absent in sessions written before the query could drift. Those resume from the tail of
+   * `excludeOrdinals`, which for such a session genuinely was the consumption order, so an in-flight
+   * station survives the upgrade rather than snapping back to its original seed.
+   */
+  recentOrdinals?: number[];
 }
+
+/**
+ * The recent-ordinal window a saved session resumes with.
+ *
+ * Reversed because `excludeOrdinals` is oldest-first and the engine wants most-recent-first.
+ */
+export const resumeRecentOrdinals = (descriptor: SidRadioSessionDescriptor, window: number): number[] =>
+  descriptor.recentOrdinals ?? descriptor.excludeOrdinals.slice(-window).reverse();
 
 const SESSION_KEY = "c64u_sid_radio_session";
 
