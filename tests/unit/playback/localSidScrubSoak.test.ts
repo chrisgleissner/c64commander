@@ -36,6 +36,7 @@ import type {
 } from "@/lib/playback/localSidChunkScheduler";
 import { __resetPhoneAudioOwnership } from "@/lib/audio/phoneAudioOwnership";
 import { __resetRenderThroughput } from "@/lib/playback/renderThroughput";
+import { readLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
 
 vi.mock("@/lib/roms/romStore", () => ({
   loadStoredRoms: () => ({ kernal: new Uint8Array(8192), basic: new Uint8Array(8192) }),
@@ -371,5 +372,23 @@ describe("scrubbing under abuse", () => {
 
     expect(recover).not.toHaveBeenCalled();
     expect(h.engine.getAwaitedSeekSeconds()).toBeCloseTo(90, 1);
+  });
+
+  it("keeps telling the governor how audio is doing after the Play page goes away", async () => {
+    // The signal used to ride along inside getStats(), whose only regular caller is the Play page's
+    // interval — and that interval is removed on tab navigation while this engine deliberately keeps
+    // playing. A listener who left Play for Live View froze the governor on the last sample it saw, so
+    // later starvation could not demote video and an old low-buffer reading could keep it demoted.
+    vi.useFakeTimers();
+    try {
+      const h = await start();
+      // Nobody asks for stats from here on — exactly the situation after a tab switch.
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      const health = readLocalAudioHealth();
+      expect(health.active).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

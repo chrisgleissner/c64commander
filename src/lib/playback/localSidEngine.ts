@@ -1155,7 +1155,33 @@ export class LocalSidEngine {
   private startWatchdog(): void {
     this.lastAudioAtMs = Date.now();
     if (this.watchdogTimer !== null) return;
-    this.watchdogTimer = setInterval(() => this.checkLiveness(), WATCHDOG_TICK_MS);
+    this.watchdogTimer = setInterval(() => {
+      // Published from the engine's own cadence, not from whoever happens to be asking for stats.
+      // It used to ride along inside getStats(), whose only regular caller is the Play page's
+      // interval — and that interval is removed on tab navigation while this engine deliberately
+      // keeps playing. So a listener who left Play for Live View froze the governor on the last
+      // sample it happened to see: later starvation could not demote video, and an old low-buffer
+      // reading could keep it demoted for good. This timer lives as long as the tune does.
+      this.publishAudioHealth();
+      this.checkLiveness();
+    }, WATCHDOG_TICK_MS);
+  }
+
+  /**
+   * Tell the A/V governor how this engine's audio is doing.
+   *
+   * The governor sheds video to protect audio, and it can only do that for a tune rendered here if it
+   * is told about it — a locally-rendered tune was invisible to it, and Live View kept painting at full
+   * rate while this engine starved. Measured with the timing barcode: one bad note in 102 alone,
+   * eleven in forty seconds with video also running.
+   */
+  private publishAudioHealth(stats?: { bufferedSeconds?: number; underruns?: number }): void {
+    const source = stats ?? this.scheduler?.getStats();
+    reportLocalAudioHealth({
+      active: this.scheduler !== null && !this.paused,
+      bufferedMs: (source?.bufferedSeconds ?? 0) * 1000,
+      underruns: source?.underruns ?? 0,
+    });
   }
 
   private stopWatchdog(): void {
@@ -1385,11 +1411,7 @@ export class LocalSidEngine {
     // audio, so a tune rendered here was invisible and Live View kept painting at full rate while
     // this engine starved. Measured with the timing barcode: one bad note in 102 alone, eleven in
     // forty seconds with video also running.
-    reportLocalAudioHealth({
-      active: this.scheduler !== null && !this.paused,
-      bufferedMs: (stats?.bufferedSeconds ?? 0) * 1000,
-      underruns: stats?.underruns ?? 0,
-    });
+    this.publishAudioHealth(stats ?? undefined);
     return {
       renderMsPerSec: this.totalRenderedSeconds > 0 ? this.totalRenderMs / this.totalRenderedSeconds : 0,
       renderMsPerSecP99: this.renderRateP99(),
