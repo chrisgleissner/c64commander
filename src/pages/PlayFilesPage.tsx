@@ -90,7 +90,7 @@ import { LikedTunesSheet } from "@/pages/playFiles/components/LikedTunesSheet";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
-import { getLikedMd5s } from "@/lib/sidRadio/rankingStore";
+import { useLikedTuneCount } from "@/lib/sidRadio/useLikedTuneCount";
 import { recordSkip } from "@/lib/sidRadio/sidRadioStats";
 import { Radio as RadioIcon } from "lucide-react";
 import { PlaybackSettingsPanel } from "@/pages/playFiles/components/PlaybackSettingsPanel";
@@ -307,6 +307,7 @@ export default function PlayFilesPage() {
   const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
   const [likedTunesSheetOpen, setLikedTunesSheetOpen] = useState(false);
   const [sidRadioLauncherOpen, setSidRadioLauncherOpen] = useState(false);
+  const likedTuneCount = useLikedTuneCount();
 
   const {
     volumeSliderPreviewIntervalMs,
@@ -2388,7 +2389,7 @@ export default function PlayFilesPage() {
           <SidRadioLauncherSheet
             open={sidRadioLauncherOpen}
             onOpenChange={setSidRadioLauncherOpen}
-            likeCount={getLikedMd5s().length}
+            likeCount={likedTuneCount}
             stylePopulations={sidRadio.stylePopulations}
             onStartStyle={(bit, label, fromLikes) => void sidRadio.startStyleRadio(bit, label, fromLikes)}
             onStartTaste={() => void sidRadio.startTasteRadio()}

@@ -152,7 +152,13 @@ const broadcast = () => {
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(RANKING_CHANGED_EVENT));
 };
 
-/** Hydrate the in-memory cache from durable storage (idempotent). */
+/**
+ * Hydrate the in-memory cache from durable storage (idempotent).
+ *
+ * Broadcasts when hydration actually brought ratings in, so surfaces that read the cache
+ * synchronously — the ♥/✕ affordance, Liked Tunes — re-read it instead of showing an unrated app
+ * until the first write of the session hydrates it as a side effect.
+ */
 export const loadRankings = async (): Promise<void> => {
   if (loaded) return;
   if (!loadPromise) {
@@ -164,6 +170,7 @@ export const loadRankings = async (): Promise<void> => {
       }
       loaded = true;
       loadPromise = null;
+      if (cache.size > 0) broadcast();
     })();
   }
   await loadPromise;

@@ -10,7 +10,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NowPlayingRanking } from "@/pages/playFiles/components/NowPlayingRanking";
-import { clearAllRankings, getRanking } from "@/lib/sidRadio/rankingStore";
+import { clearAllRankings, getRanking, setRanking, simulateRankingRestartForTests } from "@/lib/sidRadio/rankingStore";
 
 const MD5 = "0123456789abcdef0123456789abcdef";
 
@@ -35,6 +35,20 @@ describe("NowPlayingRanking", () => {
     render(<NowPlayingRanking md5={null} enabled />);
     expect(screen.getByTestId("now-playing-like")).toBeDisabled();
     expect(screen.getByTestId("now-playing-notforme")).toBeDisabled();
+  });
+
+  /**
+   * The ratings are durable but the cache they are read from is not, and only a *write* used to
+   * hydrate it. So a relaunched app showed every previously rated tune as unrated, and the first
+   * rating of the session then made a stale ♥ appear on whatever happened to be playing.
+   */
+  it("shows a ♥ stored before the app was relaunched", async () => {
+    await setRanking(MD5, "like");
+    await simulateRankingRestartForTests();
+
+    render(<NowPlayingRanking md5={MD5} enabled />);
+
+    await waitFor(() => expect(screen.getByTestId("now-playing-like")).toHaveAttribute("aria-pressed", "true"));
   });
 
   it("toggles Like on and off, persisting to the store", async () => {

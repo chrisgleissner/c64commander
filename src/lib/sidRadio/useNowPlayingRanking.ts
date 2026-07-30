@@ -8,10 +8,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { addErrorLog } from "@/lib/logging";
 import {
   type RankingSignal,
   clearRanking,
   getRanking,
+  loadRankings,
   setRanking,
   subscribeRankings,
 } from "@/lib/sidRadio/rankingStore";
@@ -34,6 +36,15 @@ export interface NowPlayingRankingState {
  */
 export const useNowPlayingRanking = (md5: string | null): NowPlayingRankingState => {
   const [ranking, setRankingState] = useState<RankingSignal | null>(() => (md5 ? getRanking(md5) : null));
+
+  // The ratings are durable but the cache they are read from is not, and only a *write* used to
+  // hydrate it. So a relaunched app showed every previously rated tune as unrated until the user
+  // rated something, and then a stale ♥ appeared on whatever was playing at that moment.
+  useEffect(() => {
+    loadRankings().catch((error: unknown) => {
+      addErrorLog("Failed to hydrate SID rankings", { error: (error as Error).message });
+    });
+  }, []);
 
   useEffect(() => {
     setRankingState(md5 ? getRanking(md5) : null);
