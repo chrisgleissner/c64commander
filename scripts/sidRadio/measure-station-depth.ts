@@ -29,7 +29,7 @@
  * Both only ever remove tracks, so they can lower a depth and never raise it.
  */
 
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { EMPTY_NEIGHBOR_HOT, parseSidcorrTiny, type SidcorrTinyBundle } from "@/lib/sidRadio/sidcorrTiny";
@@ -368,8 +368,70 @@ const sweepArms = (): Arm[] => [
   })),
 ];
 
+/**
+ * Write the persisted session descriptor a station reaches after serving `depth` tracks.
+ *
+ * A deep session is where the per-refill costs that scale with the exclusion set actually bite, and
+ * no soak can reach it — 60,000 tracks is weeks of listening. Replaying a real run to that depth and
+ * handing the device the descriptor puts the app in exactly the state a resumed deep session is in,
+ * which is a state the resume path already has to serve correctly.
+ *
+ * The exclusions are the ordinals a real station really served, not a random sample: they are
+ * graph-local clusters, so the engine's walk sees the same "my neighbourhood is used up" pressure a
+ * genuine deep session applies.
+ */
+const emitSessions = async (bundle: SidcorrTinyBundle, depths: number[], outDir: string): Promise<void> => {
+  mkdirSync(outDir, { recursive: true });
+  const fileOrdinal = mix(1) % bundle.fileCount;
+  const seed: StationSeed = { kind: "song", md5_48: bundle.md548ByFileOrdinal[fileOrdinal] };
+  const shuffleSeed = mix(0x5bf03635);
+
+  for (const depth of depths) {
+    const served: number[] = [];
+    const excluded: number[] = [];
+    const provider = new StationQueueProvider({
+      lookahead: REFILL_LOOKAHEAD,
+      computeCandidates: async (exclude, recent, count) =>
+        computeStation({ bundle, seed, shuffleSeed, exclude, recent, limit: count }),
+      resolvePath: (md5_48) => `/${md5_48}.sid`,
+      buildItem: ({ virtualPath, trackOrdinal }) => {
+        served.push(trackOrdinal);
+        return { id: `radio:${trackOrdinal}`, path: virtualPath } as never;
+      },
+    });
+    for (;;) {
+      const { items, reason } = await provider.refill(REFILL_LOOKAHEAD);
+      if (reason || items.length === 0) break;
+      if (served.length >= depth) break;
+    }
+    excluded.push(...provider.excludedOrdinals);
+    const descriptor = {
+      seedKind: "song",
+      seedLabel: "depth probe",
+      seed,
+      styleFilter: null,
+      shuffleSeed,
+      rankingSnapshotId: "depth-probe",
+      excludeOrdinals: excluded,
+      recentOrdinals: provider.recentOrdinals,
+    };
+    const file = path.join(outDir, `session-${depth}.json`);
+    writeFileSync(file, JSON.stringify(descriptor));
+    process.stdout.write(
+      `${file}: served ${served.length}, ${excluded.length} exclusions, ${statSync(file).size} bytes of JSON\n`,
+    );
+  }
+};
+
 const main = async (): Promise<void> => {
   const bundle = loadPinnedBundle();
+  const emit = process.argv.find((argument) => argument.startsWith("--emit-sessions="));
+  if (emit) {
+    const depths = emit.slice("--emit-sessions=".length).split(",").map(Number).filter(Number.isFinite);
+    const outArg = process.argv.find((argument) => argument.startsWith("--out="));
+    await emitSessions(bundle, depths, outArg ? outArg.slice("--out=".length) : "tmp/deep-sessions");
+    return;
+  }
   const stations = numberArg("stations", 60);
   const cap = numberArg("cap", 25000);
   const arms: Arm[] = process.argv.includes("--sweep")
