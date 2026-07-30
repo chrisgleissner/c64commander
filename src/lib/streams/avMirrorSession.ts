@@ -354,18 +354,22 @@ export class AvMirrorSession {
     const localUnderruns = Math.max(0, local.underruns - this.lastLocalAudioUnderruns);
     this.lastLocalAudioUnderruns = local.underruns;
     const audioActive = this.audioLive || local.active;
-    const audioBufferMs = local.active
-      ? this.audioLive
-        ? Math.min(signals.audioBufferMs, local.bufferedMs)
-        : local.bufferedMs
-      : signals.audioBufferMs;
+    // Whichever path is closer to running dry is the one to protect — and the nominal depth has to
+    // come from THAT path, or the governor scales its health thresholds for one buffer while reading
+    // another. Getting this wrong is not academic now that the two depths differ by three orders of
+    // magnitude: on-device playback holds seconds by design, the native mirror sink tens of
+    // milliseconds by design, so the minimum is almost always the mirror's — which is precisely when
+    // its nominal was being dropped, leaving a healthy native buffer read as starvation.
+    const mirrorIsTighter = !local.active || (this.audioLive && signals.audioBufferMs <= local.bufferedMs);
+    const audioBufferMs = mirrorIsTighter ? signals.audioBufferMs : local.bufferedMs;
 
     const governor = this.governor.update(
       {
         audioBufferMs,
         // Native low-latency sink runs a smaller buffer; pass its nominal so the governor scales its
-        // health thresholds and doesn't misread a healthy native buffer as starvation.
-        audioNominalBufferMs: local.active ? undefined : signals.audioNominalBufferMs,
+        // health thresholds and doesn't misread a healthy native buffer as starvation. Paired with the
+        // buffer above: the nominal describes the same path the reading came from.
+        audioNominalBufferMs: mirrorIsTighter ? signals.audioNominalBufferMs : undefined,
         // Feed the underruns SINCE the last tick as the demote trigger; the cumulative total goes to telemetry.
         audioUnderruns: Math.max(0, signals.audioUnderruns - this.lastAudioUnderruns) + localUnderruns,
         // Only let the audio buffer/underrun signals drive video when audio is actually playing —

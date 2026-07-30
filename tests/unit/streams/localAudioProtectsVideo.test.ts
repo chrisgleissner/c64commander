@@ -78,4 +78,39 @@ describe("the governor sheds video for a starving on-device tune", () => {
     ).effectiveFraction;
     expect(fraction).toBe(1);
   });
+
+  describe("which buffer the governor is told about when both paths play", () => {
+    /**
+     * The two depths differ by three orders of magnitude, on purpose: on-device playback holds seconds
+     * so a busy JS thread cannot starve it, the native mirror sink holds tens of milliseconds so input
+     * stays in step. Whichever is closer to running dry is the one to protect — but the nominal depth
+     * has to describe THAT path, or the governor scales its thresholds for one buffer while reading
+     * another. It used to drop the mirror's nominal whenever a local tune was playing, which is exactly
+     * the case where the mirror's tiny buffer wins the minimum: a healthy native buffer read as
+     * starvation, and video demoted for nothing.
+     */
+    const pick = (localActive: boolean, mirrorLive: boolean, mirrorMs: number, localMs: number) => {
+      const mirrorIsTighter = !localActive || (mirrorLive && mirrorMs <= localMs);
+      return {
+        audioBufferMs: mirrorIsTighter ? mirrorMs : localMs,
+        audioNominalBufferMs: mirrorIsTighter ? 40 : undefined,
+      };
+    };
+
+    it("takes the mirror's buffer AND its nominal when the mirror is the tighter of the two", () => {
+      expect(pick(true, true, 35, 12_000)).toEqual({ audioBufferMs: 35, audioNominalBufferMs: 40 });
+    });
+
+    it("takes the local buffer and drops the mirror's nominal when local is the tighter", () => {
+      expect(pick(true, true, 900, 120)).toEqual({ audioBufferMs: 120, audioNominalBufferMs: undefined });
+    });
+
+    it("uses the mirror alone when no tune is playing here", () => {
+      expect(pick(false, true, 35, 0)).toEqual({ audioBufferMs: 35, audioNominalBufferMs: 40 });
+    });
+
+    it("uses the local buffer alone when the mirror is not live", () => {
+      expect(pick(true, false, 0, 8_000)).toEqual({ audioBufferMs: 8_000, audioNominalBufferMs: undefined });
+    });
+  });
 });

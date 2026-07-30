@@ -75,7 +75,6 @@ vi.mock("@/hooks/use-toast", () => ({
 }));
 
 // The Live View audio mirror, stubbed so a test can see whether playback asked it to start.
-// The Live View audio mirror, stubbed so a test can see whether playback asked it to start.
 // The implementations are passed to vi.fn() rather than set with mockResolvedValue: the suite calls
 // vi.clearAllMocks() between tests, and a stub that forgets how to return a promise makes the
 // caller's `.catch(...)` blow up in every later test.

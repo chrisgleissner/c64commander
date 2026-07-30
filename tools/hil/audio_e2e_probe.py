@@ -261,7 +261,11 @@ def build_sid() -> bytes:
     header += text("C64 Commander timing barcode")
     header += text("C64 Commander HIL")
     header += text("2026")
-    header += (0b100100).to_bytes(2, "big")  # flags: PAL, 6581
+    # PAL, and 6581 — bits 4-5 are the SID model, so 6581 is 0b01 there, not 0b10. This said 8580
+    # while its comment said 6581. It went unnoticed because the barcode is a bare triangle wave with
+    # the filter untouched, and the two models only diverge once the filter is in play — but a stimulus
+    # whose declared hardware does not match its description is a trap for whoever reads it next.
+    header += (0b010100).to_bytes(2, "big")
     header += bytes([0, 0])  # start page, page length
     header += bytes([0, 0])  # second SID address, third SID address (one byte each)
     assert len(header) == 0x7C, len(header)

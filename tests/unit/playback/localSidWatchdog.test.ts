@@ -208,17 +208,6 @@ describe("LocalSidEngine — the seek gate", () => {
 });
 
 /**
- * Silence with a reason, and a reason this timer is the wrong judge of.
- *
- * A seek is one call into the one stateful WASM engine: it renders and discards everything between
- * here and the target, queued behind whatever renders are already in flight. Seeking a minute in is
- * a minute of emulation with no message in the meantime, and the buffer is empty throughout —
- * indistinguishable, to a five-second timer, from a worker that has died. On the Pixel 4 that is
- * what a hold-to-seek looked like: a seek every 350 ms, each emptying the buffer, and five seconds
- * later the watchdog discarded a worker that was doing exactly what it had been asked to do. The
- * open and the seek each have a bound of their own, so whichever is outstanding owns the failure.
- */
-/**
  * An open that times out is nearly always transient — the device was busy, often with the very
  * seek this tune replaced. On a Pixel 4 one open in a scrub-heavy session took over 15 s where
  * every other took about two, and the next attempt thirty seconds later succeeded. Failing
@@ -278,6 +267,17 @@ describe("LocalSidEngine — an open that times out", () => {
   });
 });
 
+/**
+ * Silence with a reason, and a reason this timer is the wrong judge of.
+ *
+ * A seek is one call into the one stateful WASM engine: it renders and discards everything between
+ * here and the target, queued behind whatever renders are already in flight. Seeking a minute in is
+ * a minute of emulation with no message in the meantime, and the buffer is empty throughout —
+ * indistinguishable, to a five-second timer, from a worker that has died. On the Pixel 4 that is
+ * what a hold-to-seek looked like: a seek every 350 ms, each emptying the buffer, and five seconds
+ * later the watchdog discarded a worker that was doing exactly what it had been asked to do. The
+ * open and the seek each have a bound of their own, so whichever is outstanding owns the failure.
+ */
 describe("LocalSidEngine — silence that belongs to a transition", () => {
   it("does not call an unfinished seek a stall, however long it takes", async () => {
     const { engine, workers, clock } = makeEngine();

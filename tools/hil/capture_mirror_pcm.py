@@ -30,7 +30,7 @@ SEQ_HEADER_BYTES = 2
 SAMPLE_RATE = 47983
 
 
-def capture(seconds: float, iface: str | None) -> tuple[bytes, int, int]:
+def capture(seconds: float, iface: str | None) -> tuple[bytes, int, int, list[str]]:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("", AUDIO_PORT))
@@ -42,11 +42,17 @@ def capture(seconds: float, iface: str | None) -> tuple[bytes, int, int]:
     chunks: list[bytes] = []
     packets = 0
     lost = 0
+    # Sequence gaps alone cannot tell loss from a second sender or from reordering: the group is shared
+    # by every Ultimate on the network, and two of them interleave into deltas whose sum is about 65536
+    # rather than 1. So the senders are counted as well, and the loss figure is only reported as loss
+    # when exactly one sender was seen.
+    senders: set[str] = set()
     previous_seq: int | None = None
     deadline = None
     while True:
         try:
-            data = sock.recv(4096)
+            data, source = sock.recvfrom(4096)
+            senders.add(source[0])
         except socket.timeout:
             break
         now = __import__("time").monotonic()
@@ -68,7 +74,7 @@ def capture(seconds: float, iface: str | None) -> tuple[bytes, int, int]:
             break
 
     sock.close()
-    return b"".join(chunks), packets, lost
+    return b"".join(chunks), packets, lost, sorted(senders)
 
 
 def report(pcm: bytes) -> None:
@@ -112,7 +118,7 @@ def main() -> int:
     parser.add_argument("--report", action="store_true", help="print channel and spectrum statistics")
     args = parser.parse_args()
 
-    pcm, packets, lost = capture(args.seconds, args.iface)
+    pcm, packets, lost, senders = capture(args.seconds, args.iface)
     if not packets:
         print("no audio datagrams arrived — is the mirror running?", file=sys.stderr)
         return 1
@@ -123,7 +129,16 @@ def main() -> int:
         handle.setframerate(SAMPLE_RATE)
         handle.writeframes(pcm)
 
-    print(f"wrote {args.out}: {packets:,} packets, {lost} lost")
+    if len(senders) > 1:
+        # Reported rather than counted: interleaved streams from two machines corrupt the audio AND make
+        # the sequence gaps meaningless, so a loss figure here would be worse than none.
+        print(
+            f"wrote {args.out}: {packets:,} packets — {len(senders)} SENDERS {senders}: "
+            "the capture is two interleaved streams, and its loss count is meaningless",
+            file=sys.stderr,
+        )
+    else:
+        print(f"wrote {args.out}: {packets:,} packets, {lost} lost (1 sender)")
     if args.report:
         report(pcm)
     return 0
