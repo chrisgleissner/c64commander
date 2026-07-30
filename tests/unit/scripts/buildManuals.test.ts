@@ -25,7 +25,9 @@ describe("manual generator", () => {
     expect(c64Commander).not.toContain("Callback 8020");
     expect(c64uRemote).toContain("profiles/compact/04-app-ready.png");
     expect(c64uRemote).toContain("HVSC preparation");
-    expect(c64uRemote).toContain("Optional. Enable it in Settings > Stable Features.");
+    // HVSC ships on in the keypad edition too, so the manual states that rather than telling the
+    // reader to go and switch on a library the app already has.
+    expect(c64uRemote).toContain("On by default. You can change it in Settings > Stable Features.");
     expect(c64uRemote).not.toMatch(/lighting/i);
 
     expect(c64Commander).toContain("# C64 Commander Manual");

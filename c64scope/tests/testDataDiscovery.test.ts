@@ -64,7 +64,7 @@ describe("test-data discovery", () => {
       )
       .mockImplementationOnce(
         (_file: string, _args: string[], callback: (error: null, result: { stdout: string }) => void) => {
-          callback(null, { stdout: "last-ninja\nturrican2\nDisk 1.d64\n" });
+          callback(null, { stdout: "sample-quest\nsample-arcade\nDisk 1.d64\n" });
         },
       )
       .mockImplementationOnce(
@@ -110,7 +110,7 @@ describe("test-data discovery", () => {
 
     expect(discovery.sidPath).toBe("/USB2/test-data/SID");
     expect(discovery.sidCandidates).toEqual(["10_Orbyte.sid", "12th_Sector_Music.sid"]);
-    expect(discovery.multiDiskDirectories).toEqual(["last-ninja", "turrican2"]);
+    expect(discovery.multiDiskDirectories).toEqual(["sample-quest", "sample-arcade"]);
     expect(discovery.approximateFileCount).toBe(60759);
     expect(discovery.approximateDirectoryCount).toBe(1996);
   });

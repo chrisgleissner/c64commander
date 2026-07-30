@@ -17,11 +17,10 @@ import { addLog } from "@/lib/logging";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { useAvMirror } from "@/hooks/useAvMirror";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
-import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
-import { LOCAL_DEVICE_LABEL, connectedDeviceLabel } from "@/lib/sourceNavigation/sourceTerms";
+import { saveMirrorC64Audio } from "@/lib/config/appSettings";
 
 /**
- * "Listen on: [<device>] [Both] [Local]" (spec §12.5, Track B / LE2).
+ * "Listen on: [Local] [Remote] [Both]" (spec §12.5, Track B / LE2).
  *
  * The control asks ONE question — which speakers you hear the tune on — and
  * every option names speakers, so the middle one is simply the union of the
@@ -35,6 +34,11 @@ import { LOCAL_DEVICE_LABEL, connectedDeviceLabel } from "@/lib/sourceNavigation
  *   <device>  engine = c64,   audio mirror off
  *   Both      engine = c64,   audio mirror on
  *   Local     engine = local  (rendered here; there is no C64 audio to mirror)
+ *
+ * The first two persist that choice (`saveMirrorC64Audio`), because playback starts the mirror by
+ * itself whenever a tune moves to the C64 and would otherwise overrule the listener on the very
+ * next track. "Local" deliberately does not touch it: it answers a different question, and the
+ * C64 route should be as it was left when playback returns to it.
  *
  * Naming and icons come from `sourceTerms` and `FileOriginIcon`, the same pair
  * the "Choose source" dialog, the playlist rows and the disks list use. This
@@ -71,6 +75,10 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
     }
     setEngine("c64");
     const wantMirror = target === "both";
+    // Remember the answer, don't just act on it. Playback starts the mirror for you when a tune goes
+    // to the C64, and without a recorded preference it did that even to a listener who had just
+    // chosen the C64's own speakers — so "<device>" lasted until the next track and no longer.
+    saveMirrorC64Audio(wantMirror);
     if (wantMirror === audioLive) return;
     void (wantMirror ? session.startAudio() : session.stopAudio()).catch((error) => {
       // A start that fails means this device cannot stream its audio here, so
@@ -117,10 +125,20 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
     >
       <Label className="text-xs font-medium text-muted-foreground">Listen on</Label>
       <div className="flex flex-wrap gap-2">
+        {/* Local, Remote, Both — in that order, so the row reads as a progression from this device
+            outwards to both. "Remote" rather than the device's name or host: the header already says
+            which device is connected, repeating it here spent the row's width on something already on
+            screen, and the wording now matches Remote Input. */}
+        {option(
+          "local",
+          <FileOriginIcon origin="local" className="h-3.5 w-3.5" label="" />,
+          "Local",
+          "playback-engine-local",
+        )}
         {option(
           "c64",
           <FileOriginIcon origin="ultimate" className="h-3.5 w-3.5" label="" />,
-          connectedDeviceLabel(getSelectedSavedDevice()?.name),
+          "Remote",
           "playback-engine-c64",
         )}
         {canStreamBack
@@ -131,12 +149,6 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
               "playback-listen-both",
             )
           : null}
-        {option(
-          "local",
-          <FileOriginIcon origin="local" className="h-3.5 w-3.5" label="" />,
-          LOCAL_DEVICE_LABEL,
-          "playback-engine-local",
-        )}
       </div>
     </div>
   );

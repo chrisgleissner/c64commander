@@ -76,6 +76,10 @@ const makeSession = () => {
     createVideoReceiver: () => videoReceiver,
     createPlayer: () => player as unknown as AudioMirrorPlayer,
     now: () => 0,
+    // Present inline. Production defers to rAF so the drop-late queue can coalesce a post-stall
+    // burst; here the subject is the governor and its telemetry, and deferring would only mean
+    // driving an animation frame between every pushed frame and its assertion.
+    schedulePresent: (present) => present(),
   });
   return { session, audioReceiver, videoReceiver, player };
 };

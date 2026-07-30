@@ -53,6 +53,22 @@ export interface StreamUdpVideoFrameEvent {
   present?: boolean;
 }
 
+/** Arrival evenness of the audio stream as the device's own socket sees it. */
+export interface StreamUdpArrivalStats {
+  /** Packets seen since the window opened. */
+  packets: number;
+  /** Mean inter-arrival gap (ms). The source cadence is 4 ms; well above that means loss. */
+  meanGapMs: number;
+  /** Longest silence between two packets (ms) — what the jitter buffer has to cover. */
+  maxGapMs: number;
+  gapsOver20ms: number;
+  gapsOver50ms: number;
+  /** Most packets delivered back-to-back as one burst. */
+  maxClump: number;
+  /** Packets missing from the 16-bit wire sequence: real network loss. */
+  lostPackets: number;
+}
+
 /** Live buffer/underrun stats returned by each {@link StreamUdpPlugin.writeAudioTrack} write. */
 export interface StreamUdpAudioStats {
   /** PCM still queued ahead of the AudioTrack playback head (ms) — the native player buffer depth. */
@@ -60,13 +76,26 @@ export interface StreamUdpAudioStats {
   /** Cumulative AudioTrack underruns (output ran dry) since {@link StreamUdpPlugin.openAudioTrack}. */
   underruns: number;
   /**
-   * PCM bytes the AudioTrack refused because its buffer was full — audio the listener lost.
+   * PCM bytes the pipeline could not play — refused by a full jitter ring, or trimmed off to stop
+   * latency creeping after a burst.
    *
    * Separate from {@link underruns}, which counts the opposite failure (the buffer running dry).
    * A stream can break up audibly with zero underruns if it is losing tails here instead, which is
    * exactly why this is reported rather than dropped silently.
    */
   droppedBytes?: number;
+  /** Silence the native player had to invent because nothing had arrived (ms). */
+  concealedMs?: number;
+  /** The jitter cushion alone (ms) — {@link bufferedMs} minus the speaker track's own buffer. */
+  jitterBufferMs?: number;
+  /**
+   * How evenly the stream is arriving at this device, measured natively at the socket.
+   *
+   * The Ultimate emits one packet every 4 ms, and a wired capture of the same stream showed p99
+   * 4.14 ms with zero loss — so a large `maxGapMs` beside a large `maxClump` here means the packets
+   * are reaching the app in bursts, which the jitter buffer has to absorb, not a bandwidth problem.
+   */
+  arrival?: StreamUdpArrivalStats;
   /** What the AudioTrack is actually doing (not what was requested). */
   trackSampleRate?: number;
   trackChannels?: number;
@@ -102,18 +131,35 @@ export interface StreamUdpPlugin {
    * with the AudioTrack's small fast-mixer buffer. All jitter buffering / concealment / batching stay
    * in JS; this sink only plays already-decided PCM. Idempotent: re-opening closes the previous track.
    */
-  openAudioTrack(options: { sampleRate: number }): Promise<{ sampleRate: number; bufferMs: number }>;
+  openAudioTrack(options: {
+    sampleRate: number;
+    bufferMs?: number;
+    /** Ceiling on the jitter ring. On-device playback asks for far more than the mirror. */
+    maxRingMs?: number;
+    /** HAL bursts in the AudioTrack's own buffer; deeper absorbs player-thread descheduling. */
+    trackBursts?: number;
+    /** Ring depth before the first sound. Keeps start-up instant on a deep ring. */
+    primeMs?: number;
+  }): Promise<{ sampleRate: number; bufferMs: number }>;
   /**
-   * Legacy JS-fed path: queue one chunk of base64 interleaved-stereo-S16LE PCM to the open AudioTrack.
-   * The shipping path feeds the track natively from the receive thread (no bridge traffic); this
-   * remains for completeness/testing. No-op (zeroed stats) if no track is open.
+   * Queue one chunk of base64 interleaved-stereo-S16LE PCM into the native pipeline.
+   *
+   * The A/V mirror does not use this — its packets are handed over natively, without a bridge hop.
+   * The on-device SID engine does: it is the point at which a locally rendered tune joins the same
+   * ring buffer, the same player thread and the same DAC pacing as a mirrored one, instead of being
+   * scheduled chunk-by-chunk from the JS thread. No-op (zeroed stats) if no pipeline is open.
    */
   writeAudioTrack(options: { data: string }): Promise<StreamUdpAudioStats>;
+  /** Drop queued-but-unplayed audio, so a pause or seek is immediate despite a deep ring. */
+  flushAudioTrack(options?: Record<string, never>): Promise<void>;
   /**
-   * Read the open AudioTrack's live buffer depth + underrun count — the governor's audio-headroom
-   * signal, polled periodically since native (not JS) now drives playback. Zeroed if no track is open.
+   * Read the pipeline's live depth, underruns and arrival evenness — the governor's audio-headroom
+   * signal, polled periodically since native (not JS) drives playback. Zeroed if none is open.
+   *
+   * `reset` starts a fresh arrival-measurement window. The governor's routine poll must not pass it,
+   * or it would keep clearing the maxima a diagnostic run is collecting.
    */
-  readAudioStats(options?: Record<string, never>): Promise<StreamUdpAudioStats>;
+  readAudioStats(options?: { reset?: boolean }): Promise<StreamUdpAudioStats>;
   /** Stop + release the native audio sink. Safe to call when none is open. */
   closeAudioTrack(options?: Record<string, never>): Promise<void>;
   /**

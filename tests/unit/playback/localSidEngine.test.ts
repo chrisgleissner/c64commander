@@ -333,6 +333,160 @@ describe("LocalSidEngine", () => {
   });
 });
 
+/**
+ * A scrub posts a seek every 350 ms and another on release, so overlapping seeks are the norm.
+ * `seekPending` is a single slot and the `seeked` handler only resolves a reply whose id still
+ * matches it, so replacing an outstanding entry used to drop its resolver: that caller's await
+ * never settled, and because `seekPending` also gates "chunk"/"end", every rendered chunk after it
+ * was discarded. On a Pixel 4 that showed as the clock frozen mid-tune, no audio track left, and
+ * the transport still claiming to play — hold-to-seek wedged playback for good.
+ */
+describe("LocalSidEngine — overlapping seeks", () => {
+  it("settles a superseded seek and keeps scheduling chunks afterwards", async () => {
+    const { engine, worker, getAudioSink } = makeEngine({ chunkSeconds: 0.5, targetBufferSeconds: 1.0 });
+    const play = engine.play(new ArrayBuffer(120), 0, {});
+    await completeOpen(worker);
+    await play;
+
+    const first = engine.seekTo(10);
+    const second = engine.seekTo(20);
+    await flush();
+
+    // The superseded seek must not hang, whatever the worker does with its id.
+    await expect(first).resolves.toBeUndefined();
+
+    const seeks = worker.sentOfType("seek");
+    worker.emit({ type: "seeked", id: seeks[seeks.length - 1].id, positionSeconds: 20 });
+    await expect(second).resolves.toBeUndefined();
+
+    // And the gate is open again: a chunk delivered now reaches the sink.
+    const before = getAudioSink()!.sources.length;
+    worker.emit({ type: "chunk", id: 1, pcm: chunk(24000), samples: 48000, renderMs: 30 });
+    expect(getAudioSink()!.sources.length).toBeGreaterThan(before);
+  });
+});
+
+/**
+ * Skipping quickly through a playlist overlaps opens: `play()` awaits `load()` before it registers
+ * `openPending`, so a second press gets there while the first is still waiting. The slot is single
+ * and `onOpened` only settles a reply whose id is still `activeId`, so the first play's resolver
+ * used to be dropped and its await — sitting in the middle of starting a track — never returned.
+ */
+/**
+ * Two tracks starting close together both `await load()` before they open anything, and the `ready`
+ * handler resolves `loadPending` without matching an id — so the second call used to displace the
+ * first's resolver and strand that `play()` at its very first await, as well as posting a second
+ * WASM init.
+ */
+/**
+ * A worker that stops answering used to disable playback for the rest of the session, silently.
+ * `playStart` holds a single-flight guard and `isPlaylistLoading` across `playItem`, releasing both
+ * in a `finally`; an await that never settles means that `finally` never runs, so the guard stays
+ * acquired (every later play returns at it) and the transport goes disabled. Reproduced on a Pixel 4
+ * on rc4 as shipped: five back-to-back hold-to-seek gestures, then Stop/Play, and Play/Pause were
+ * both `disabled` until relaunch. Bounding the waits turns that into an ordinary reported failure.
+ */
+describe("LocalSidEngine — an unanswered worker", () => {
+  it("rejects the load instead of waiting forever", async () => {
+    vi.useFakeTimers();
+    try {
+      const { engine } = makeEngine();
+      const load = engine.load();
+      const assertion = expect(load).rejects.toThrow(/did not load/);
+      await vi.advanceTimersByTimeAsync(15_001);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("throws the unresponsive worker away, so the next play starts clean", async () => {
+    vi.useFakeTimers();
+    try {
+      // A factory that hands out a fresh worker each time, so "did the engine build a new one?"
+      // is observable — the shared harness returns one fixed instance.
+      const built: FakeWorker[] = [new FakeWorker()];
+      let handed = 0;
+      const engine = new LocalSidEngine({ workerFactory: () => built[Math.min(handed++, built.length - 1)] });
+      const worker = built[0];
+      const load = engine.load();
+      const assertion = expect(load).rejects.toThrow(/did not load/);
+      await vi.advanceTimersByTimeAsync(15_001);
+      await assertion;
+      expect(worker.terminated).toBe(true);
+
+      // The next attempt must reach a NEW worker, not spend another 15 s against the dead one.
+      const fresh = new FakeWorker();
+      built.push(fresh);
+      const retry = engine.load();
+      fresh.emit({ type: "ready", moduleLoadMs: 1 });
+      await expect(retry).resolves.toBeUndefined();
+      expect(built.length).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects the open instead of waiting forever", async () => {
+    vi.useFakeTimers();
+    try {
+      const { engine, worker } = makeEngine();
+      const play = engine.play(new ArrayBuffer(120), 0, {});
+      const assertion = expect(play).rejects.toThrow(/did not open/);
+      worker.emit({ type: "ready", moduleLoadMs: 1 });
+      // Twice, because an open that times out gets one retry: on a busy device the first attempt
+      // is often the only one that fails, and losing the track over it stops playback for good.
+      // Two silences in a row is not bad luck, and that is where the engine gives up.
+      await vi.advanceTimersByTimeAsync(15_001);
+      worker.emit({ type: "ready", moduleLoadMs: 1 });
+      await vi.advanceTimersByTimeAsync(15_001);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("LocalSidEngine — overlapping loads", () => {
+  it("shares one module load between overlapping callers", async () => {
+    const { engine, worker } = makeEngine();
+    const first = engine.load();
+    const second = engine.load();
+    expect(worker.sentOfType("load").length).toBe(1);
+    worker.emit({ type: "ready", moduleLoadMs: 1 });
+    await expect(first).resolves.toBeUndefined();
+    await expect(second).resolves.toBeUndefined();
+  });
+});
+
+describe("LocalSidEngine — overlapping opens", () => {
+  it("settles a superseded play instead of leaving its caller awaiting forever", async () => {
+    const { engine, worker } = makeEngine();
+    const first = engine.play(new ArrayBuffer(120), 0, {});
+    await completeOpen(worker, { id: 1 });
+    await first;
+
+    // A second track starts while a third press lands right behind it.
+    const second = engine.play(new ArrayBuffer(120), 0, {});
+    await flush();
+    const third = engine.play(new ArrayBuffer(120), 0, {});
+    await flush();
+
+    await expect(second).resolves.toMatchObject({ started: false });
+
+    const opens = worker.sentOfType("open");
+    worker.emit({
+      type: "opened",
+      id: opens[opens.length - 1].id,
+      sampleRate: 48000,
+      channels: 2,
+      tuneInfo: null,
+      romRequired: false,
+    });
+    await expect(third).resolves.toMatchObject({ started: true });
+  });
+});
+
 describe("LocalSidEngine — default environment factories", () => {
   it("reports isSupported from Worker + AudioContext availability (false under jsdom)", () => {
     expect(LocalSidEngine.isSupported()).toBe(false);

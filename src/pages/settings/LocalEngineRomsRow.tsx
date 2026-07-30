@@ -10,10 +10,12 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { getC64API } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
 import { fetchSystemRomsFromDevice, type RomFetchOutcome } from "@/lib/roms/romFetchService";
 import { clearStoredRoms, loadRomSummaries, type RomSummary } from "@/lib/roms/romStore";
+import { loadLocalEngineAutoRoms, saveLocalEngineAutoRoms } from "@/lib/config/appSettings";
 
 /**
  * "C64 ROMs" row for on-device playback (spec §12, Track B).
@@ -33,6 +35,7 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
   const [summaries, setSummaries] = useState<RomSummary[]>(() => loadRomSummaries());
   const [busy, setBusy] = useState(false);
   const [outcomes, setOutcomes] = useState<RomFetchOutcome[] | null>(null);
+  const [autoRead, setAutoRead] = useState<boolean>(() => loadLocalEngineAutoRoms());
 
   const complete = summaries.length === 2;
 
@@ -63,8 +66,8 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
         <div className="min-w-0">
           <Label className="text-sm font-medium">C64 ROMs for on-device playback</Label>
           <p className="text-xs text-muted-foreground">
-            On-device playback uses the C64 ROM images from the Ultimate you are connected to. Without them, tunes play
-            on the C64 instead.
+            On-device playback uses the C64 ROM images from the Ultimate you are connected to. Without them the accurate
+            emulation cannot sound a note, so tunes fall back to the lighter one.
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -86,6 +89,27 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
         </div>
       </div>
 
+      <div className="flex items-start justify-between gap-3 min-w-0">
+        <div className="min-w-0">
+          <Label htmlFor="settings-roms-auto" className="text-sm">
+            Read them automatically
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Fetch the images from the connected machine the first time a tune plays on this device. On by default,
+            because without them the accurate emulation produces nothing at all.
+          </p>
+        </div>
+        <Switch
+          id="settings-roms-auto"
+          data-testid="settings-roms-auto"
+          checked={autoRead}
+          onCheckedChange={(next) => {
+            setAutoRead(next);
+            saveLocalEngineAutoRoms(next);
+          }}
+        />
+      </div>
+
       <p className="text-xs text-muted-foreground">
         Only connect C64 Commander to devices you own or have been given permission to use. ROM images stay on this
         phone and are never shared, uploaded or included in diagnostics.
@@ -102,7 +126,7 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
         </ul>
       ) : (
         <p className="text-xs text-muted-foreground" data-testid="settings-roms-status">
-          No ROMs stored — SIDs play on the C64.
+          No ROMs stored — tunes play here on the lighter SID emulation.
         </p>
       )}
 

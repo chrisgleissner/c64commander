@@ -54,6 +54,27 @@ export type PlaybackControlsCardProps = {
    */
   onSeekToFraction?: (fraction: number) => void;
   progressPercent: number;
+  /**
+   * Where playback is waiting to reach, as a percentage, or undefined when it is not waiting.
+   *
+   * A seek past what is rendered cannot be instant — libsidplayfp cannot rewind — so playback holds
+   * here while the renderer catches up. Shown explicitly, because a listener who has just dragged the
+   * bar must never be left wondering whether anything happened.
+   */
+  awaitedPercent?: number;
+  /** The tune's composer, from its SID header, when known. */
+  currentItemAuthor?: string | null;
+  /** The tune's release line, from its SID header, when known — often "1987 Hewson" or just a year. */
+  currentItemReleased?: string | null;
+  /**
+   * How much of the tune is already rendered, 0-100, or undefined when that is not a thing here.
+   *
+   * Only on-device playback has this: libsidplayfp cannot rewind, so reaching a position means
+   * rendering everything before it. Shown as a translucent fill behind the played portion so the
+   * listener can see how far a seek will land instantly, and see the renderer catching up when it
+   * will not.
+   */
+  renderedPercent?: number;
   elapsedLabel: string;
   remainingLabel: string;
   totalLabel: string;
@@ -223,6 +244,10 @@ export const PlaybackControlsCard = ({
   isScrubbing = false,
   onSeekToFraction,
   progressPercent,
+  renderedPercent,
+  currentItemAuthor,
+  currentItemReleased,
+  awaitedPercent,
   elapsedLabel,
   remainingLabel,
   totalLabel,
@@ -281,15 +306,24 @@ export const PlaybackControlsCard = ({
     <div className="flex flex-col items-stretch gap-3" data-testid="playback-controls-layout">
       <div className="w-full text-xs text-muted-foreground" data-testid="playback-current-track">
         {hasCurrentItem ? (
-          <div className="flex flex-wrap items-center gap-1">
-            {currentItemIcon ? <span className="shrink-0">{currentItemIcon}</span> : null}
-            <span className="text-sm font-medium text-foreground">{currentItemLabel}</span>
-            {currentDurationLabel ? (
-              <span className="text-xs text-muted-foreground">({currentDurationLabel})</span>
+          <>
+            <div className="flex flex-wrap items-center gap-1">
+              {currentItemIcon ? <span className="shrink-0">{currentItemIcon}</span> : null}
+              <span className="text-base font-semibold text-foreground">{currentItemLabel}</span>
+              {currentDurationLabel ? (
+                <span className="text-sm text-muted-foreground">({currentDurationLabel})</span>
+              ) : null}
+              {subsongLabel ? <span className="text-sm text-muted-foreground">{subsongLabel}</span> : null}
+              {rankingControls ? <span className="ml-auto shrink-0">{rankingControls}</span> : null}
+            </div>
+            {/* Composer and year on their own line under the title, smaller. Both come from the SID
+                header, so a tune that names neither shows nothing rather than a placeholder. */}
+            {currentItemAuthor || currentItemReleased ? (
+              <p className="mt-0.5 text-sm leading-snug text-muted-foreground" data-testid="playback-current-credits">
+                {[currentItemAuthor, currentItemReleased].filter(Boolean).join(" · ")}
+              </p>
             ) : null}
-            {subsongLabel ? <span className="text-xs text-muted-foreground">{subsongLabel}</span> : null}
-            {rankingControls ? <span className="ml-auto shrink-0">{rankingControls}</span> : null}
-          </div>
+          </>
         ) : (
           "Select a playlist item to start"
         )}
@@ -380,7 +414,7 @@ export const PlaybackControlsCard = ({
               className={cn("shrink-0 tabular-nums", isScrubbing && "font-semibold text-foreground")}
               data-testid="playback-elapsed"
             >
-              {isScrubbing ? `⏵ ${elapsedLabel}` : elapsedLabel}
+              {awaitedPercent !== undefined ? `⏳ ${elapsedLabel}` : isScrubbing ? `⏵ ${elapsedLabel}` : elapsedLabel}
             </span>
             {onSeekToFraction ? (
               // A tap or drag anywhere on the bar jumps there. Wrapped in a
@@ -408,12 +442,42 @@ export const PlaybackControlsCard = ({
                   onSeekToFraction(Math.min(1, Math.max(0, progressPercent / 100 + step)));
                 }}
               >
-                <Progress
-                  value={progressPercent}
-                  className={cn("w-full transition-none", isScrubbing && "ring-2 ring-primary/60")}
-                  data-testid="playback-progress"
-                  data-scrubbing={isScrubbing ? "true" : undefined}
-                />
+                <div className="relative w-full">
+                  {/* Behind the played portion, so the two read as one bar: solid where the tune has
+                      played, translucent as far as it is rendered. */}
+                  {/* Shown whenever the tune is not fully rendered — including, and especially, when
+                      rendering is BEHIND the playhead. Hiding it then was backwards: that is exactly
+                      the moment the listener needs to see the renderer catching up rather than wonder
+                      whether playback has died. */}
+                  {renderedPercent !== undefined && renderedPercent < 100 ? (
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute inset-y-0 left-0 rounded-full bg-primary/25"
+                      style={{ width: `${Math.min(100, Math.max(0, renderedPercent))}%` }}
+                      data-testid="playback-rendered-ahead"
+                      data-rendered-percent={Math.round(renderedPercent)}
+                    />
+                  ) : null}
+                  {/* Where the drag landed, while the renderer works towards it. */}
+                  {awaitedPercent !== undefined ? (
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute inset-y-0 w-0.5 bg-primary"
+                      style={{ left: `${Math.min(100, Math.max(0, awaitedPercent))}%` }}
+                      data-testid="playback-awaited-marker"
+                      data-awaited-percent={Math.round(awaitedPercent)}
+                    />
+                  ) : null}
+                  <Progress
+                    value={progressPercent}
+                    className={cn(
+                      "relative w-full bg-transparent transition-none",
+                      isScrubbing && "ring-2 ring-primary/60",
+                    )}
+                    data-testid="playback-progress"
+                    data-scrubbing={isScrubbing ? "true" : undefined}
+                  />
+                </div>
               </button>
             ) : (
               <Progress

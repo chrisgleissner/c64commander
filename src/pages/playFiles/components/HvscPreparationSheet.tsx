@@ -8,8 +8,9 @@ import {
   AppSheetTitle,
 } from "@/components/ui/app-surface";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import type { HvscPreparationPhase, HvscPreparationState } from "@/lib/hvsc";
+import type { HvscStageId } from "@/lib/hvsc/hvscStageModel";
+import { HvscStageSteps } from "./HvscStageSteps";
 
 type HvscPreparationSheetProps = {
   open: boolean;
@@ -17,7 +18,15 @@ type HvscPreparationSheetProps = {
   state: HvscPreparationState;
   statusLabel: string;
   failedPhase: HvscPreparationPhase;
-  progressPercent: number | null;
+  /** The most recent raw progress stage, which says which step is running. */
+  stage: string | null;
+  /** The resolved running step, preferred over the raw stage. */
+  step?: HvscStageId | null;
+  /** The running step's own percentage. */
+  stagePercent: number | null;
+  /** Items finished in the running step, and how many there are. */
+  stageDone?: number | null;
+  stageTotal?: number | null;
   throughputLabel: string | null;
   readySongCount: number;
   errorReason: string | null;
@@ -34,7 +43,11 @@ export const HvscPreparationSheet = ({
   state,
   statusLabel,
   failedPhase,
-  progressPercent,
+  stage,
+  step = null,
+  stagePercent,
+  stageDone = null,
+  stageTotal = null,
   throughputLabel,
   readySongCount,
   errorReason,
@@ -45,8 +58,6 @@ export const HvscPreparationSheet = ({
   const isInProgress = state === "DOWNLOADING" || state === "INGESTING" || state === "DOWNLOADED";
   const isSuccess = state === "READY";
   const isError = state === "ERROR";
-  const normalizedProgress =
-    typeof progressPercent === "number" ? Math.max(0, Math.min(100, progressPercent)) : isSuccess ? 100 : 0;
 
   return (
     <AppSheet
@@ -81,12 +92,22 @@ export const HvscPreparationSheet = ({
                   </p>
                 ) : null}
               </div>
-              <p className="text-sm font-medium text-foreground" data-testid="hvsc-preparation-progress-label">
-                {isSuccess ? "100%" : `${Math.round(normalizedProgress)}%`}
-              </p>
             </div>
 
-            <Progress value={normalizedProgress} data-testid="hvsc-preparation-progress" />
+            {/* Four named steps rather than one percentage — the counters behind the stages are in
+                different units and vanish at each handover, so a single figure could only ever be a
+                guess. It showed 73%, fell to 58%, then disappeared without reaching 100%. */}
+            <HvscStageSteps
+              state={state}
+              stage={stage}
+              step={step}
+              failedPhase={failedPhase}
+              stagePercent={stagePercent}
+              stageDone={stageDone}
+              stageTotal={stageTotal}
+              detailLabel={throughputLabel}
+              testId="hvsc-preparation-progress"
+            />
 
             {isSuccess ? (
               <p className="text-sm font-medium text-foreground" data-testid="hvsc-preparation-success-count">

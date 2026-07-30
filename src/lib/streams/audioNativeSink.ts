@@ -7,21 +7,20 @@
  */
 
 /**
- * Native low-latency audio sink — the TypeScript face of the Android `AudioTrack` adapter in
- * StreamUdpPlugin. It replaces the WebAudio player, but crucially it does NOT feed audio from the JS
- * thread: the plugin's native receive thread (URGENT_AUDIO) writes each decoded audio packet straight
- * into the AudioTrack. So opening this sink simply arms that native feed — playback never crosses the
- * Capacitor bridge.
+ * Native audio pipeline — the TypeScript face of `AudioPipeline` in StreamUdpPlugin. It replaces the
+ * WebAudio player, and crucially it does NOT feed audio from the JS thread: the plugin's native
+ * receive thread (URGENT_AUDIO) hands each arriving packet to a native ring buffer, and a native
+ * player thread writes it to the speaker. Opening this sink simply arms that path — playback never
+ * crosses the Capacitor bridge.
  *
  * Why native-fed and not JS-fed: feeding the track from JS (one bridge write per ~16 ms) measurably
  * stalled the JS event loop — the A/V-sync analyzer callback was delayed ~50 ms (press→hear 68→120 ms
  * on the Pixel 4) — and the JS↔video-paint contention forced a large jitter buffer. Feeding natively
- * removes the bridge traffic (press→hear stays ~68 ms) and the contention (a small, low-latency buffer
- * holds without underruns while video paints), so the audio latency actually drops.
+ * removes the bridge traffic (press→hear stays ~68 ms) and the contention.
  *
- * All the audio SMARTS still live in TypeScript: the A/V-sync analyzer is fed from the same datagrams
- * (the plugin still emits them); only the final speaker sink is native. This class just opens the
- * track (with a buffer-depth target), polls its depth/underruns for the governor, and closes it.
+ * Nothing on the audio path is timed from TypeScript any more, deliberately: the jitter buffer, the
+ * pacing and the concealment are all native, because every one of them has to hold while the JS thread
+ * is painting a video frame. JS opens the pipeline, reads its stats for the governor, and closes it.
  */
 
 import { addLog } from "@/lib/logging";
@@ -36,11 +35,30 @@ export interface NativeAudioStats {
   /** Cumulative AudioTrack underruns since {@link NativeAudioSink.open}. */
   underruns: number;
   /**
-   * PCM bytes the track refused because its buffer was full — audio the listener lost.
-   * The opposite failure to {@link underruns}, and invisible without it: a stream arriving at twice
-   * the expected rate keeps the buffer over-full, so it breaks up audibly with zero underruns.
+   * PCM bytes the pipeline could not play — refused by a full ring, or trimmed off to stop latency
+   * creeping. The opposite failure to {@link underruns}, and invisible without it: a stream arriving
+   * faster than it drains keeps the buffer over-full, so it breaks up audibly with zero underruns.
    */
   droppedBytes?: number;
+  /** Silence the pipeline had to invent because nothing had arrived (ms). */
+  concealedMs?: number;
+  /** The jitter cushion alone (ms), i.e. {@link bufferedMs} minus the speaker track's own buffer. */
+  jitterBufferMs?: number;
+  /**
+   * How evenly the stream is arriving at THIS device. The Ultimate emits one packet every 4 ms; a
+   * mean far above that means loss, and a large `maxGapMs` next to a large `maxClump` means the
+   * packets are being delivered in bursts, which is a jitter-buffer problem rather than a bandwidth
+   * one. Measured natively at the socket, so it is not skewed by anything downstream.
+   */
+  arrival?: {
+    packets: number;
+    meanGapMs: number;
+    maxGapMs: number;
+    gapsOver20ms: number;
+    gapsOver50ms: number;
+    maxClump: number;
+    lostPackets: number;
+  };
   /**
    * Distinct source IPs seen on the audio group. More than one means another machine is streaming
    * into it uninvited (see `foreignSenderGuard`).

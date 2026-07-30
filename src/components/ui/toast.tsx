@@ -24,7 +24,14 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      "fixed left-4 top-[calc(var(--safe-area-inset-top)+var(--app-bar-height,3.5rem)+0.5rem)] z-[100] flex w-auto max-w-[min(90vw,22rem)] flex-col-reverse pb-[calc(1rem+var(--safe-area-inset-bottom))] sm:bottom-[var(--safe-area-inset-bottom)] sm:left-auto sm:right-4 sm:top-auto sm:max-w-[26rem] sm:flex-col",
+      // pointer-events-none, because the viewport is a container and not a surface. It is a fixed
+      // box the height of every stacked toast plus its own bottom padding, sitting at z-100 over
+      // the page — on a phone that lands squarely on the Play/Pause/Next row. Without this it
+      // swallowed taps in its gaps and padding, so after an error the transport stopped responding
+      // until the toast expired: precisely when the listener is trying to recover from it, and
+      // indistinguishable from a dead button. Each toast sets pointer-events-auto for itself (see
+      // toastVariants), so tapping and swiping a toast still work.
+      "pointer-events-none fixed left-4 top-[calc(var(--safe-area-inset-top)+var(--app-bar-height,3.5rem)+0.5rem)] z-[100] flex w-auto max-w-[min(90vw,22rem)] flex-col-reverse pb-[calc(1rem+var(--safe-area-inset-bottom))] sm:bottom-[var(--safe-area-inset-bottom)] sm:left-auto sm:right-4 sm:top-auto sm:max-w-[26rem] sm:flex-col",
       className,
     )}
     {...props}

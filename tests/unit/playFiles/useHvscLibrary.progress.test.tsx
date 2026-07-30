@@ -329,7 +329,7 @@ describe("useHvscLibrary progress coverage", () => {
     expect(result.current.hvscMetadataProgressLabel).toBe("HVSC META 12/60 running");
   });
 
-  it("keeps active indexing preparation progress below 100 until completion", async () => {
+  it("keeps a stage reporting its own 100% from being read as the install finishing", async () => {
     const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(progressListener).not.toBeNull());
@@ -345,7 +345,11 @@ describe("useHvscLibrary progress coverage", () => {
     });
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
-    expect(result.current.hvscPreparationProgressPercent).toBe(99);
+    // A stage at its own 100% is one stage finishing, not the install. The state is what says whether
+    // the library is usable, and it still reads INGESTING; the stage percentage is scoped to the
+    // running step and belongs to it alone.
+    expect(result.current.hvscStagePercent).toBe(100);
+    expect(result.current.hvscPreparationState).not.toBe("READY");
   });
 
   it("treats database insertion as indexing progress instead of falling back to extract", async () => {

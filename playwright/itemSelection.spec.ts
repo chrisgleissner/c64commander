@@ -672,7 +672,7 @@ test.describe("Item Selection Dialog UX", () => {
       await ensureRemoteRoot(dialog);
       await openRemoteFolder(dialog, "Usb0");
       await openRemoteFolder(dialog, "Games");
-      await openRemoteFolder(dialog, "Turrican II");
+      await openRemoteFolder(dialog, "Sample Arcade");
       await selectEntryCheckbox(dialog, diskName);
       await page.getByTestId("add-items-confirm").click();
       await page.waitForSelector('[role="dialog"]', {
@@ -709,7 +709,7 @@ test.describe("Item Selection Dialog UX", () => {
       await ensureRemoteRoot(dialog);
       await openRemoteFolder(dialog, "Usb0");
       await openRemoteFolder(dialog, "Games");
-      await openRemoteFolder(dialog, "Turrican II");
+      await openRemoteFolder(dialog, "Sample Arcade");
       await selectEntryCheckbox(dialog, diskName);
       await page.getByTestId("add-items-confirm").click();
       await page.waitForSelector('[role="dialog"]', {

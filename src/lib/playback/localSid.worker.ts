@@ -207,26 +207,22 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
           // Rendered in slices so progress can be reported and the worker stays
           // responsive to a cancel; one giant renderSeconds() would block it.
           const slice = 5;
-          const parts: Int16Array[] = [];
           let done = 0;
           while (done < message.seconds) {
             const want = Math.min(slice, message.seconds - done);
             const pcm = await offline.renderSeconds(want);
             if (!pcm || pcm.length === 0) break;
-            parts.push(pcm);
             done += want;
+            // Sent as it is produced rather than held to the end, so the cache grows while the render
+            // runs and a seek into what is already rendered is instant. Transferred, not copied.
+            ctx.postMessage({ type: "prerender-chunk", id: message.id, pcm, sampleRate, channels, seconds: done }, [
+              pcm.buffer,
+            ]);
             ctx.postMessage({ type: "prerender-progress", id: message.id, fraction: done / message.seconds });
           }
-          const total = parts.reduce((sum, part) => sum + part.length, 0);
-          const merged = new Int16Array(total);
-          let at = 0;
-          for (const part of parts) {
-            merged.set(part, at);
-            at += part.length;
-          }
-          ctx.postMessage({ type: "prerendered", id: message.id, pcm: merged, sampleRate, channels, seconds: done }, [
-            merged.buffer,
-          ]);
+          // No PCM here any more — the slices carried it. This just says the tune is complete, which
+          // is what lets the cache stop treating it as a partial.
+          ctx.postMessage({ type: "prerendered", id: message.id, sampleRate, channels, seconds: done });
         } catch (error) {
           ctx.postMessage({
             type: "error",
@@ -257,8 +253,39 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
   }
 };
 
+/**
+ * Which tune the queue is working for. Bumped the moment an `open` is *received*, not when it is
+ * handled, so anything already queued can be recognised as belonging to the tune being replaced.
+ */
+let openGeneration = 0;
+
 ctx.onmessage = (event: MessageEvent<LocalSidMainToWorker>) => {
   const message = event.data;
-  // Never let a rejection break the chain for subsequent messages.
-  workQueue = workQueue.then(() => handleMessage(message)).catch(() => undefined);
+  if (message?.type === "open") openGeneration += 1;
+  const generation = openGeneration;
+  workQueue = workQueue
+    .then(() => {
+      // Rendering and seeking for a tune the listener has already left is work nobody will hear:
+      // the main thread discards every reply whose id is stale. Doing it anyway is not merely
+      // wasted — the queue is strictly ordered, so the new tune's `open` waits behind all of it,
+      // and a seek renders and discards everything between here and its target. On a Pixel 4 a
+      // scrub-then-skip put enough of that in front of an open to blow its 15 s timeout, and the
+      // track change failed with the worker discarded as unresponsive. Skipping costs the caller
+      // nothing it was going to use.
+      if (generation < openGeneration && (message.type === "render" || message.type === "seek")) {
+        // Answer the seek regardless. The reply is free, and a caller waiting on this one rather
+        // than a newer seek should not have to wait out its timeout to find that out.
+        if (message.type === "seek") {
+          ctx.postMessage({
+            type: "seeked",
+            id: message.id,
+            positionSeconds: Math.max(0, message.positionSeconds),
+          });
+        }
+        return undefined;
+      }
+      return handleMessage(message);
+    })
+    // Never let a rejection break the chain for subsequent messages.
+    .catch(() => undefined);
 };

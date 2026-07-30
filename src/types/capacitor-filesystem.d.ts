@@ -57,7 +57,15 @@ declare module "@capacitor/filesystem" {
       url: string;
       directory: Directory;
       path: string;
-      progress?: (status: ProgressStatus) => void;
+      /**
+       * Ask the plugin to report progress. It is a FLAG, not a callback: the events arrive through
+       * `addListener("progress", ...)` below, and without this set the plugin dispatches none at all.
+       *
+       * It was declared here as a callback, which is why nobody ever set it — the download reported
+       * nothing until it finished, and the progress bar sat at zero through the longest part of an
+       * 81 MiB install while a listener waited for events that were never going to come.
+       */
+      progress?: boolean;
     }) => Promise<{ path?: string }>;
     addListener?: (
       eventName: "progress",

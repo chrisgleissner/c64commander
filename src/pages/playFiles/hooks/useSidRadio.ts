@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { getPlayCategory } from "@/lib/playback/fileTypes";
-import { resolveVirtualPath } from "@/lib/sidRadio/md5PathIndex";
+import { getMd548PathIndexStats, resolveVirtualPath } from "@/lib/sidRadio/md5PathIndex";
 import {
   getNotForMeMd5s,
   getRankingSnapshot,
@@ -20,6 +20,7 @@ import {
 } from "@/lib/sidRadio/rankingStore";
 import { SidRadioWorkerClient } from "@/lib/sidRadio/sidRadioWorkerClient";
 import type { SidRadioStylePopulations } from "@/lib/sidRadio/sidRadioWorkerProtocol";
+import { loadSidRadioMinSeconds } from "@/lib/config/appSettings";
 import { StationQueueProvider } from "@/lib/sidRadio/stationQueueProvider";
 import type { StationSeed } from "@/lib/sidRadio/stationEngine";
 import {
@@ -62,6 +63,14 @@ export interface UseSidRadioParams {
   /** Test seams. */
   clientFactory?: () => SidRadioWorkerClient;
   resolvePath?: (md5_48: string) => string | null;
+  /**
+   * Songlength lookup, so the station can leave out sound effects.
+   *
+   * HVSC is not only music — it carries jingles, one-shot effects and test tones, and a station that
+   * serves them between pieces reads as broken. Optional: without it the station plays everything,
+   * which is what the tests and the web build do.
+   */
+  resolveDurationSeconds?: (virtualPath: string, songIndex: number) => number | null | Promise<number | null>;
   randomSeed?: () => number;
 }
 
@@ -81,7 +90,7 @@ export interface UseSidRadioResult {
   steer: (md5: string, signal: RankingSignal) => void;
   stop: () => void;
   /** A transient empty/degraded notice (spec §5.2 Q5), or null. */
-  notice: "no-radio-for-tune" | "no-radio" | null;
+  notice: "no-radio-for-tune" | "no-radio" | "no-hvsc" | "station-ended" | null;
   dismissNotice: () => void;
 }
 
@@ -169,7 +178,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   const randomSeed = params.randomSeed ?? defaultRandomSeed;
 
   const [station, setStation] = useState<ActiveStation | null>(null);
-  const [notice, setNotice] = useState<"no-radio-for-tune" | "no-radio" | null>(null);
+  const [notice, setNotice] = useState<"no-radio-for-tune" | "no-radio" | "no-hvsc" | "station-ended" | null>(null);
   const [stylePopulations, setStylePopulations] = useState<SidRadioStylePopulations | null>(null);
   const stylePopulationsRef = useRef<SidRadioStylePopulations | null>(null);
   const stylePopulationsLoadRef = useRef<Promise<SidRadioStylePopulations | null> | null>(null);
@@ -221,6 +230,8 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       return new StationQueueProvider({
         lookahead: LOOKAHEAD,
         initialExclude,
+        minSeconds: loadSidRadioMinSeconds(),
+        resolveDuration: params.resolveDurationSeconds,
         computeCandidates: (exclude, count) =>
           client.compute({
             seed,
@@ -302,7 +313,13 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       });
       if (items.length === 0) {
         providerRef.current = null;
-        setNotice(seedKind === "song" ? "no-radio-for-tune" : "no-radio");
+        // Candidates resolve to a path through the md5→path index, which HVSC fills. An empty index
+        // means nothing is installed, so NO station can produce a track whatever its seed — and the
+        // usual wording then sends the user somewhere that cannot help: there is nothing installed
+        // to like, and liking would not make a station playable. Name the real blocker. Once music
+        // is installed, an empty station is a genuine one and keeps its taste/tune wording.
+        if (getMd548PathIndexStats().size === 0) setNotice("no-hvsc");
+        else setNotice(seedKind === "song" ? "no-radio-for-tune" : "no-radio");
         return;
       }
       setNotice(null);
@@ -416,6 +433,14 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
           });
         } else if (reason) {
           updateSidRadioStats({ stationActive: true });
+          // Say so. A station that runs out does it at the tail of the queue, which is exactly
+          // where the user cannot tell an ended station from a broken one: playback stops on the
+          // last track and Next does nothing, because there is no next. (Next stays *enabled*
+          // whenever hold-to-seek is available, so it does not even grey out.) Observed on a Pixel
+          // 4 — a Chill / Ambient station advertised as holding 17,574 tracks stopped dead after 25
+          // and left no way to tell why. The provider latches this, so it will not resolve itself:
+          // the station is over and picking another is the only way on.
+          setNotice("station-ended");
         }
         recordRefill({
           lastRefillMs: settledAt - started,

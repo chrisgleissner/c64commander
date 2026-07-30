@@ -47,7 +47,12 @@ import {
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 
 import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from "@/lib/playback/fileLibraryUtils";
-import { loadLocalEngineEnabled, loadPlaybackEngine } from "@/lib/config/appSettings";
+import {
+  loadLocalEngineAutoRoms,
+  loadLocalEngineEnabled,
+  loadMirrorC64Audio,
+  loadPlaybackEngine,
+} from "@/lib/config/appSettings";
 import {
   LocalSidPlaybackController,
   getSharedLocalSidPlaybackController,
@@ -59,12 +64,16 @@ import {
   markRemotePlaybackStopped,
 } from "@/lib/playback/activePlaybackSession";
 import { LocalEngineStatsAccumulator } from "@/lib/playback/localEngineStatsBridge";
+import { hasCompleteRomSet } from "@/lib/roms/romStore";
+import { ensureSystemRoms } from "@/lib/roms/ensureSystemRoms";
+import { promptForSystemRoms } from "@/lib/roms/promptForSystemRoms";
 import { detectRomRequired } from "@/lib/playback/localSidWorkerCore";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import {
   ENGINE_FALLBACK_MESSAGES,
   preRouteEngine,
   type EngineFallbackNotice,
+  romFallbackDecision,
 } from "@/lib/playback/playbackEngineRouting";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { resolveSidMutedVolumeOption } from "@/lib/config/sidVolumeControl";
@@ -83,6 +92,19 @@ import type { VolumeAction } from "@/pages/playFiles/volumeState";
 import type { SidEnablement } from "@/lib/config/sidVolumeControl";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { featureFlagManager } from "@/lib/config/featureFlags";
+
+/**
+ * How much of an upcoming track to render ahead.
+ *
+ * Matched to the native buffer's depth, and that is the trick. The cached opening is poured into the
+ * ring as fast as the ring will take it, so when it runs out and live rendering takes over, the ring
+ * is holding roughly this much — exactly the margin the renderer needs to get ahead. Measured with a
+ * six-second lead-in the ring fell to 0.44 s at the seam; matched to the ring it does not dip.
+ *
+ * Not more: output is 192 KB per second, so two warmed neighbours at this depth already cost a few
+ * megabytes.
+ */
+const LEAD_IN_SECONDS = 15;
 
 type HandledUiError = Error & { c64uHandled?: boolean };
 
@@ -149,16 +171,12 @@ export const USER_TRANSPORT_COALESCE_MS = 120;
 const LOCAL_ENGINE_STATS_POLL_MS = 1000;
 
 /**
- * How often a scrub sends the engine to the finger's current position.
- *
- * Not once per visual step. Seeking backwards reloads the tune and re-renders
- * up to the target, so a seek per 200 ms repeat queues work faster than it can
- * finish and the audio ends up chasing a target from seconds ago. ~350 ms is
- * slow enough for each catch-up to land — giving a short audible burst of the
- * tune at the new position, the way a CD player previews a scrub — and quick
- * enough to stay roughly with the moving progress bar.
+ * How long the scrub release waits for a catch-up seek that is still in flight
+ * before landing anyway. Generous next to a normal seek (a pre-rendered tune
+ * seeks in well under a second) and short enough that a wedged engine costs the
+ * user a moment rather than the rest of the session.
  */
-const SCRUB_SEEK_INTERVAL_MS = 350;
+const SCRUB_RELEASE_WAIT_MS = 3000;
 
 /** How long after the last drag movement the bar commits to that position. */
 const DRAG_SETTLE_MS = 220;
@@ -786,6 +804,49 @@ export function usePlaybackController({
     ],
   );
 
+  /**
+   * Render the opening of the next and previous tracks, so skipping to either starts instantly.
+   *
+   * Only the opening — a few seconds is all that is needed to cover the gap before the buffer is
+   * ahead of the speaker, and caching whole tunes costs 192 KB per second.
+   *
+   * Skipped for tracks whose bytes are not already to hand. Resolving those means going to the
+   * network or the Ultimate, and doing that speculatively for tracks nobody has asked for would
+   * spend the listener's bandwidth and the device's attention on a guess.
+   */
+  const warmNeighbouringTracks = useCallback(async () => {
+    const playlist = playlistRef.current;
+    const index = currentIndexRef.current;
+    for (const offset of [1, -1]) {
+      const neighbour = playlist[index + offset];
+      if (!neighbour) continue;
+      // HVSC entries carry no bytes until they are played — resolving one reads from the on-device
+      // library, which is local and cheap. Anything still without a file after that is coming over
+      // the network, and is left alone rather than fetched on a guess.
+      const resolved = neighbour.request.file
+        ? neighbour.request
+        : ((await resolveHvscRuntimeRequest(neighbour).catch(() => null))?.request ?? neighbour.request);
+      const file = resolved.file;
+      if (!file) continue;
+      try {
+        const bytes = await file.arrayBuffer();
+        getLocalSidPlayback().warmLeadIn(
+          `${neighbour.id}#${resolved.songNr ?? 0}`,
+          bytes,
+          resolved.songNr ?? 0,
+          LEAD_IN_SECONDS,
+        );
+      } catch (error) {
+        // A track that cannot be read now is simply not warmed; it will be read when it is played.
+        addLog("debug", "Lead-in warm skipped", {
+          service: "local-sid",
+          item: neighbour.label,
+          error: (error as Error)?.message ?? String(error),
+        });
+      }
+    }
+  }, []);
+
   const playItem = useCallback(
     async (
       item: PlaylistItem,
@@ -929,14 +990,48 @@ export function usePlaybackController({
             engine: loadPlaybackEngine(),
             localSupported: LocalSidPlaybackController.isSupported(),
           });
+          // A tune that lives on the Ultimate has no local blob — `file` is resolved for the
+          // commoserve, HVSC and local sources and for no other. The on-device engine needs the
+          // bytes, so without this the local branch was skipped for every Ultimate-hosted SID and
+          // "Listen on: this device" quietly played it on the C64 instead. The fetch already existed;
+          // it was only ever used to look a duration up.
+          if (selection.route === "local" && !effectiveRequest.file && effectiveRequest.source === "ultimate") {
+            // No try/catch: the fetch reports its own failures and answers with null, so a wrapper here
+            // could only ever catch something it does not throw — and the log inside it read as though
+            // it were the place a failed fetch is reported, which it was not.
+            const blob = await tryFetchUltimateSidBlob(effectivePath);
+            if (blob) {
+              effectiveRequest = {
+                ...effectiveRequest,
+                file: new File([blob], effectivePath.split("/").pop() || "tune.sid"),
+              };
+            }
+          }
           if (selection.route === "local" && effectiveRequest.file) {
             try {
               const sidBytes = new Uint8Array(await effectiveRequest.file.arrayBuffer());
-              if (detectRomRequired(sidBytes)) {
-                emitEngineNotice("rom-on-c64");
-              } else {
+              // Ask BOTH questions: does this tune drive the kernal, and do we hold the ROM images at
+              // all. The engine needs them either way — without them it renders silence — and nothing
+              // fetches them unprompted, so a fresh install answering only the first question sent
+              // every tune to an engine that could not make a sound, without saying so.
+              const romsReady = hasCompleteRomSet();
+              const decision = romFallbackDecision(detectRomRequired(sidBytes), romsReady);
+              if (decision.route === "local") {
                 routeToLocal = true;
+                if (!romsReady) {
+                  if (loadLocalEngineAutoRoms()) {
+                    // Read the images from the connected machine, but do not wait: the tune plays now
+                    // on the kernal-free emulation and the next worker picks them up. Waiting would
+                    // put a network round trip in front of the first note.
+                    void ensureSystemRoms();
+                  } else {
+                    // Switched off deliberately, so ask rather than override — but ask where the
+                    // problem is, with one button that turns it back on and reads them.
+                    promptForSystemRoms();
+                  }
+                }
               }
+              if (decision.notice) emitEngineNotice(decision.notice);
             } catch (error) {
               addErrorLog("Local engine could not read the SID; using the C64", {
                 error: (error as Error).message,
@@ -1116,6 +1211,16 @@ export function usePlaybackController({
                   error: playbackError.message,
                   item: item.label,
                 }),
+              // The engine has given up on this tune: it stalled and could not be restarted, so it
+              // will produce nothing for the rest of its length. Bring the auto-advance forward
+              // instead of leaving the listener with a track that is playing silence until its
+              // songlength runs out. Deliberately routed through the existing due-time rather than
+              // calling next directly, so every guard already on that path still applies — it will
+              // not fire onto a paused machine, past a user cancel, or onto a different track.
+              onUnrecoverable: () => {
+                addErrorLog("Local SID playback gave up; advancing", { item: item.label });
+                rescheduleAutoAdvance(durationMsRef.current ?? 0);
+              },
             },
             // Render the whole tune in the background so scrubbing inside it is
             // instant. Keyed by item + subsong so two subsongs of one file are
@@ -1125,19 +1230,31 @@ export function usePlaybackController({
               durationSeconds: resolvedDuration ? resolvedDuration / 1000 : undefined,
             },
           );
+          // Warm the tracks either side of this one. A track started from a warmed opening plays out
+          // of memory while the renderer catches up, instead of having to out-run the speaker from a
+          // standing start — which it only just manages, and audibly failed to a second or two in.
+          void warmNeighbouringTracks();
         } else {
           await executePlayPlan(api, plan, executionOptions);
           // The tune is now running on the Ultimate. Recorded here, at the real
           // launch, so a device switch can stop it no matter which page is
           // mounted (see activePlaybackSession).
           markRemotePlaybackStarted();
-          // The engine toggle promises "C64 — hear via Live View", so make that
-          // true. Without this the tune plays on the Ultimate in silence as far
-          // as the phone is concerned, and the listener has to know to go to
-          // Home and switch Listen on by hand. Best-effort: the mirror is a
-          // convenience, and a device that will not stream must not stop the
-          // tune from playing.
-          if (featureFlagManager.getSnapshot().flags.audio_mirror_enabled && !avMirrorSession.audioLive) {
+          // Bring the tune to this device's speakers too, unless the listener has said not to.
+          // Without this the tune plays on the Ultimate in silence as far as the phone is concerned,
+          // and the listener has to know to go to Home and switch Listen on by hand. Best-effort:
+          // the mirror is a convenience, and a device that will not stream must not stop the tune
+          // from playing.
+          //
+          // The preference check is what makes "Listen on: <device>" mean anything. This used to run
+          // unconditionally — written when the toggle had only two options and the C64 one promised
+          // "hear via Live View" — so after the control grew a third option, choosing the C64's own
+          // speakers was undone by the next track change, or by the single tap that got you there.
+          if (
+            featureFlagManager.getSnapshot().flags.audio_mirror_enabled &&
+            loadMirrorC64Audio() &&
+            !avMirrorSession.audioLive
+          ) {
             void avMirrorSession.startAudio().catch((error) => {
               addLog("warn", "Playback: could not start Live View audio for C64 playback", {
                 service: "playback",
@@ -2143,33 +2260,22 @@ export function usePlaybackController({
   const scrubEndingRef = useRef(false);
   const dragSettleRef = useRef<number | null>(null);
 
-  const runScrubSeek = useCallback(async () => {
-    const controller = localSidPlaybackRef.current;
-    const target = scrubTargetMsRef.current;
-    if (!controller || target === null || scrubSeekInFlightRef.current) return;
-    scrubSeekInFlightRef.current = true;
-    try {
-      await controller.seekTo(target / 1000);
-    } catch (error) {
-      addLog("debug", "Local SID scrub seek failed", { error: (error as Error).message });
-    } finally {
-      scrubSeekInFlightRef.current = false;
-    }
-  }, []);
-
   const beginScrub = useCallback(
     (durationMs?: number) => {
-      const controller = localSidPlaybackRef.current;
+      const controller = getLocalSidPlayback();
       if (!controller) return;
       scrubDurationMsRef.current = durationMs;
       const startMs = Math.max(0, controller.positionSeconds() * 1000);
       scrubTargetMsRef.current = startMs;
       setScrubTargetMs(startMs);
       if (scrubTimerRef.current === null) {
-        scrubTimerRef.current = window.setInterval(() => void runScrubSeek(), SCRUB_SEEK_INTERVAL_MS);
+        // No repeating seek while the gesture is held, for the same reason the drag does not: each one
+        // re-renders the tune from the start, so a held gesture queued far more work than it completed
+        // and playback stayed silent. The release seeks once, to where the listener actually stopped.
+        scrubTimerRef.current = null;
       }
     },
-    [runScrubSeek],
+    [getLocalSidPlayback],
   );
 
   const scrubBy = useCallback((deltaSeconds: number) => {
@@ -2192,7 +2298,7 @@ export function usePlaybackController({
       window.clearInterval(scrubTimerRef.current);
       scrubTimerRef.current = null;
     }
-    const controller = localSidPlaybackRef.current;
+    const controller = getLocalSidPlayback();
     const target = scrubTargetMsRef.current;
     scrubTargetMsRef.current = null;
     if (!controller || target === null) {
@@ -2201,8 +2307,12 @@ export function usePlaybackController({
       return;
     }
     // Land exactly where the user let go, even if a catch-up seek was still in
-    // flight for an older target.
-    while (scrubSeekInFlightRef.current) await new Promise((r) => setTimeout(r, 20));
+    // flight for an older target. Bounded: a catch-up seek that never settles
+    // must delay the release, not hold it forever — the release is what takes
+    // the UI out of the scrub and hands playback back.
+    for (let waited = 0; scrubSeekInFlightRef.current && waited < SCRUB_RELEASE_WAIT_MS; waited += 20) {
+      await new Promise((r) => setTimeout(r, 20));
+    }
     // Rebase the clocks to the TARGET *before* awaiting the seek.
     //
     // Two reasons, both learned the hard way. Reading the position back after
@@ -2219,13 +2329,33 @@ export function usePlaybackController({
     playedClockRef.current.hydrate(positionMs, isPausedRef.current ? null : now);
     setPlayedMs(positionMs);
     rescheduleAutoAdvance(positionMs);
-    await controller.seekTo(target / 1000);
-    // Only now stop showing the scrub target. Releasing it before the engine
-    // had landed made the timer snap back to the pre-scrub position for a frame
-    // (0:15 after scrubbing to 1:09) before jumping forward — a flicker that
-    // reads as the seek having failed and then corrected itself.
-    setScrubTargetMs(null);
-    scrubEndingRef.current = false;
+    try {
+      // Raced, not just guarded. A `try/finally` only covers a seek that *rejects*; one that never
+      // settles never returns from the await, so the `finally` would not run either and the scrub
+      // would latch exactly as before. The release has to be able to happen without the engine.
+      await Promise.race([
+        controller.seekTo(target / 1000),
+        new Promise<void>((resolve) => setTimeout(resolve, SCRUB_RELEASE_WAIT_MS)),
+      ]);
+    } catch (error) {
+      addLog("debug", "Local SID scrub seek failed on release", { error: (error as Error).message });
+    } finally {
+      // Always leave the scrub, whatever the seek did.
+      //
+      // These two lines used to sit after a bare await, so a seek that rejected —
+      // or never settled — left `scrubEndingRef` latched true and the scrub
+      // target on screen. That is not one lost gesture: the latch makes
+      // every later `endScrub` return at its re-entry guard, so hold-to-seek is
+      // dead for the rest of the session and the timer keeps showing a position
+      // playback has left. Releasing the gesture must not depend on the engine.
+      //
+      // Clearing the target last is still deliberate: releasing it before the
+      // engine lands makes the timer snap back to the pre-scrub position for a
+      // frame (0:15 after scrubbing to 1:09) before jumping forward, which reads
+      // as the seek having failed and corrected itself.
+      setScrubTargetMs(null);
+      scrubEndingRef.current = false;
+    }
     addLog("debug", "Local SID scrub ended", { toSeconds: positionMs / 1000 });
   }, [playedClockRef, setPlayedMs, trackStartedAtRef, rescheduleAutoAdvance]);
 
@@ -2239,15 +2369,17 @@ export function usePlaybackController({
    */
   const seekToFraction = useCallback(
     (fraction: number, durationMs?: number) => {
-      const controller = localSidPlaybackRef.current;
+      const controller = getLocalSidPlayback();
       if (!controller || !durationMs) return;
       const target = Math.max(0, Math.min(durationMs, fraction * durationMs));
       scrubDurationMsRef.current = durationMs;
       scrubTargetMsRef.current = target;
       setScrubTargetMs(target);
-      if (scrubTimerRef.current === null) {
-        scrubTimerRef.current = window.setInterval(() => void runScrubSeek(), SCRUB_SEEK_INTERVAL_MS);
-      }
+      // NO seek while the finger is down — only the bar moves. Every seek costs a full re-render from
+      // the start of the tune, because libsidplayfp cannot rewind: on a Pixel 4 that is ten to twenty
+      // seconds for a position deep into a tune. Issuing one per settle interval queued minutes of work
+      // for positions the listener had already dragged past, and playback stayed silent throughout —
+      // reproduced on the device as a drag that never resumed. Only where the finger is lifted matters.
       // Land shortly after the finger stops moving; another move restarts it.
       if (dragSettleRef.current !== null) window.clearTimeout(dragSettleRef.current);
       dragSettleRef.current = window.setTimeout(() => {
@@ -2255,12 +2387,12 @@ export function usePlaybackController({
         void endScrub();
       }, DRAG_SETTLE_MS);
     },
-    [runScrubSeek, endScrub],
+    [endScrub, getLocalSidPlayback],
   );
 
   const handleSeekBy = useCallback(
     async (deltaSeconds: number) => {
-      const controller = localSidPlaybackRef.current;
+      const controller = getLocalSidPlayback();
       if (!controller) {
         addLog("debug", "Local SID seek ignored: no on-device controller", { deltaSeconds });
         return;

@@ -91,11 +91,11 @@
     "cap:init": "cap init \"C64 Commander\" \"uk.gleissner.c64commander\" --web-dir dist",
     "cap:add:android": "cap add android",
     "cap:add:ios": "cap add ios",
-    "cap:sync": "cap sync",
-    "cap:sync:ios": "cap sync ios",
+    "cap:sync": "cap sync && npm run native:prune-assets",
+    "cap:sync:ios": "cap sync ios && npm run native:prune-assets",
     "cap:open:android": "cap open android",
     "cap:open:ios": "cap open ios",
-    "cap:build": "npm run build && cap sync",
+    "cap:build": "npm run build && npm run cap:sync",
     "ios:build:sim": "bash scripts/ios-build.sh sim",
     "ios:build:device": "bash scripts/ios-build.sh device",
     "android:apk": "cd android && ./gradlew assembleDebug",
@@ -137,7 +137,8 @@
     "scope:mcp": "cd c64scope && npm run mcp",
     "scope:preflight": "node c64scope/dist/preflight.js",
     "scope:hil:evidence": "cd c64scope && npm run hil:evidence --",
-    "wasm:sync": "node scripts/sync-libsidplayfp-wasm.mjs"
+    "wasm:sync": "node scripts/sync-libsidplayfp-wasm.mjs",
+    "native:prune-assets": "node scripts/prune-native-assets.mjs"
   },
   "dependencies": {
     "7z-wasm": "^1.2.0",

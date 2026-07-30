@@ -577,7 +577,7 @@
       {
         "type": "FTP",
         "operation": "list",
-        "path": "/Usb0/Games/Turrican II",
+        "path": "/Usb0/Games/Sample Arcade",
         "target": "external-mock",
         "result": "success"
       }
@@ -585,7 +585,7 @@
   },
   {
     "correlationId": "COR-0032",
-    "actionName": "click Open Turrican II",
+    "actionName": "click Open Sample Arcade",
     "origin": "user",
     "durationMs": 0,
     "outcome": "success"
@@ -630,7 +630,7 @@
       {
         "type": "FTP",
         "operation": "list",
-        "path": "/Usb0/Games/Turrican II/",
+        "path": "/Usb0/Games/Sample Arcade/",
         "target": "external-mock",
         "result": "success"
       }
@@ -664,7 +664,7 @@
       {
         "type": "REST",
         "method": "PUT",
-        "path": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
+        "path": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FSample%20Arcade%2FDisk%201.d64&type=d64&mode=readwrite",
         "target": "external-mock",
         "status": 200
       }

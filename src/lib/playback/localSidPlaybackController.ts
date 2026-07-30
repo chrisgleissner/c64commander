@@ -100,7 +100,7 @@ export class LocalSidPlaybackController {
       readMs: performance.now() - readStartedAt,
       bytes: buffer.byteLength,
     });
-    const result = await engine.play(buffer, songIndex, callbacks);
+    const result = await engine.play(buffer, songIndex, callbacks, options?.prerenderKey);
     // Kick off a full render of this tune in the background so seeking inside
     // it becomes a buffer offset rather than a re-render from the start. Uses a
     // COPY of the bytes: `play` transferred the original to the worker, and the
@@ -122,6 +122,31 @@ export class LocalSidPlaybackController {
    */
   prerender(key: string, sidBytes: ArrayBuffer, songIndex: number, seconds: number): void {
     this.ensureEngine().prerender(key, sidBytes, songIndex, seconds);
+  }
+
+  /**
+   * Render the opening of a track the listener has not asked for yet.
+   *
+   * Skipping to a warmed track starts from memory rather than from a cold renderer, which is what
+   * removes the short pause a second or two into a fresh tune.
+   */
+  warmLeadIn(key: string, sidBytes: ArrayBuffer, songIndex: number, seconds: number): void {
+    this.ensureEngine().warmLeadIn(key, sidBytes, songIndex, seconds);
+  }
+
+  /** Position playback is waiting for the renderer to reach, or null. Drives the "catching up" state. */
+  awaitedSeekSeconds(): number | null {
+    return this.engine?.getAwaitedSeekSeconds() ?? null;
+  }
+
+  /** Seconds of the current tune already rendered; drives the progress bar's pre-render fill. */
+  renderedSeconds(): number | null {
+    return this.engine?.getRenderedSeconds() ?? null;
+  }
+
+  /** Engine internals for HIL diagnosis; see LocalSidEngine.debugState. */
+  debugState(): Record<string, unknown> | null {
+    return this.engine?.debugState() ?? null;
   }
 
   /** 0..1 while a pre-render is running, else null. */

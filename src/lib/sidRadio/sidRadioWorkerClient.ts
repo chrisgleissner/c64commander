@@ -183,8 +183,19 @@ export class SidRadioWorkerClient {
     });
   }
 
-  /** Compute the next candidate batch for a station request (off the main thread). */
-  compute(request: StationRequest, timeoutMs = 15000): Promise<StationResult> {
+  /**
+   * Compute the next candidate batch for a station request (off the main thread).
+   *
+   * Waits for the bundle first. Only a worker that holds the bundle can answer a `compute` — it
+   * replies `not-loaded` otherwise — and `load()` is memoised, so once the bundle is in this costs
+   * nothing. It matters on the **resume** path: a station restored at launch rebuilds its queue
+   * provider and refills straight away, and nothing on that path had loaded the bundle, so the
+   * first refill raced the load and lost. On a Pixel 4 that surfaced as a burst of uncaught
+   * "SID Radio worker error [not-loaded]: bundle not loaded" and, in Diagnostics, unhandled
+   * promise rejections. Awaiting here fixes every caller rather than each new one remembering to.
+   */
+  async compute(request: StationRequest, timeoutMs = 15000): Promise<StationResult> {
+    await this.load();
     return new Promise<StationResult>((resolve, reject) => {
       let worker: Worker;
       try {

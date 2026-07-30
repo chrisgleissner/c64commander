@@ -196,6 +196,74 @@ describe("localSid.worker message serialization", () => {
     expect(peakConcurrent).toBe(1);
   });
 
+  /**
+   * The queue is strictly ordered, which is what makes it safe — and what made a track change
+   * fail. A scrub leaves renders and seeks queued for the tune being left; the next tune's `open`
+   * waits behind every one of them, and a seek renders and discards everything between the
+   * current position and its target. On a Pixel 4 that was enough to blow the open's 15 s timeout,
+   * and the app reported "Local SID engine did not open the tune within 15000ms" with the worker
+   * thrown away as unresponsive. Nobody can hear work done for a tune already left, so it is
+   * skipped rather than merely ignored on arrival.
+   */
+  it("drops the outgoing tune's queued renders so the next open is not stuck behind them", async () => {
+    send({ type: "load" } as LocalSidMainToWorker);
+    send({
+      type: "open",
+      id: 1,
+      sidBytes: new Uint8Array([0x50, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer,
+      songIndex: 0,
+      sampleRate: 48000,
+      roms: FAKE_ROMS(),
+    } as LocalSidMainToWorker);
+    await drain();
+
+    // A scrub's worth of backlog, then the listener skips to the next tune.
+    for (let i = 0; i < 4; i += 1) send({ type: "render", id: 1, seconds: 0.5 } as LocalSidMainToWorker);
+    send({ type: "seek", id: 2, positionSeconds: 120 } as LocalSidMainToWorker);
+    send({
+      type: "open",
+      id: 3,
+      sidBytes: new Uint8Array([0x50, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer,
+      songIndex: 0,
+      sampleRate: 48000,
+      roms: FAKE_ROMS(),
+    } as LocalSidMainToWorker);
+    await drain();
+
+    // At most the one call already running when the open was received; the rest are skipped.
+    expect(renderOrder.length).toBeLessThanOrEqual(1);
+    const opened = posted.filter((m) => m.type === "opened") as Extract<LocalSidWorkerToMain, { type: "opened" }>[];
+    expect(opened.map((m) => m.id)).toContain(3);
+  });
+
+  it("still answers a superseded seek rather than leaving its caller waiting", async () => {
+    send({ type: "load" } as LocalSidMainToWorker);
+    send({
+      type: "open",
+      id: 1,
+      sidBytes: new Uint8Array([0x50, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer,
+      songIndex: 0,
+      sampleRate: 48000,
+      roms: FAKE_ROMS(),
+    } as LocalSidMainToWorker);
+    await drain();
+
+    send({ type: "seek", id: 7, positionSeconds: 90 } as LocalSidMainToWorker);
+    send({
+      type: "open",
+      id: 8,
+      sidBytes: new Uint8Array([0x50, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer,
+      songIndex: 0,
+      sampleRate: 48000,
+      roms: FAKE_ROMS(),
+    } as LocalSidMainToWorker);
+    await drain();
+
+    // The reply costs nothing, and a caller awaiting this seek should not sit out its timeout.
+    const seeked = posted.filter((m) => m.type === "seeked") as Extract<LocalSidWorkerToMain, { type: "seeked" }>[];
+    expect(seeked.map((m) => m.id)).toContain(7);
+  });
+
   it("a failing message does not break the chain for later ones", async () => {
     send({ type: "load" } as LocalSidMainToWorker);
     // No engine open yet → render reports `end` rather than throwing.

@@ -42,20 +42,24 @@ describe("device naming and iconography", () => {
   });
   afterEach(() => cleanup());
 
-  it("names the connected machine after itself when it has a name", () => {
-    // Two saved machines are told apart by their names, not by a generic word —
-    // and "C64U" is wrong outright for a U64 Elite.
+  it("does not name the machine on the listen-target buttons", () => {
+    // Amended deliberately. These three buttons now read Local / Remote / Both, a progression rather
+    // than a device list: the header already says which machine is connected, so naming it here spent
+    // the row's width on something already on screen — and "Remote" matches Remote Input. Which
+    // machine is which is still told apart by name everywhere the choice is actually between machines.
     savedDevice.current = { name: "u64" };
 
     render(<PlaybackEngineToggle />);
 
-    expect(screen.getByTestId("playback-engine-c64")).toHaveTextContent("u64");
+    expect(screen.getByTestId("playback-engine-c64")).toHaveTextContent("Remote");
+    expect(screen.getByTestId("playback-engine-c64")).not.toHaveTextContent("u64");
   });
 
-  it("falls back to C64U when no device name is known", () => {
+  it("uses the same wording whether or not a device name is known", () => {
     render(<PlaybackEngineToggle />);
 
-    expect(screen.getByTestId("playback-engine-c64")).toHaveTextContent(SOURCE_LABELS.c64u);
+    expect(screen.getByTestId("playback-engine-c64")).toHaveTextContent("Remote");
+    expect(screen.getByTestId("playback-engine-c64")).not.toHaveTextContent(SOURCE_LABELS.c64u);
   });
 
   it("calls this device Local, as the source picker and disks list do", () => {

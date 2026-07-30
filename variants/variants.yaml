@@ -59,6 +59,11 @@ variants:
       android:
         application_id: uk.gleissner.c64uremote
         custom_url_scheme: uk.gleissner.c64uremote
+        # This edition targets one keypad handset, which is 64-bit. Shipping a
+        # 32-bit slice of the 7-Zip native library for it adds ~2.3 MB that no
+        # supported device can load. The general edition keeps both.
+        release_abis:
+          - arm64-v8a
     theme:
       theme_color: "#2F6B8B"
       background_color: "#2F6B8B"

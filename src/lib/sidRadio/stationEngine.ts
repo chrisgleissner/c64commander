@@ -33,7 +33,29 @@ const BASE_SEED_WEIGHT = 1.0;
 const LIKE_BOOST = 1.6;
 const REVERSE_EDGE_WEIGHT = 2;
 const HOP_DECAY = 0.7;
+/**
+ * Hops the walk takes before it even looks at the yield. Three is what a healthy neighbourhood needs.
+ */
 const MAX_HOPS = 3;
+
+/**
+ * How far the walk may go when the first three hops do not yield enough.
+ *
+ * Admission drops a lot: the seeds themselves, everything already played, anything the style filter
+ * rejects, and — since tunes under a few seconds are sound effects rather than music — anything too
+ * short. Each of those can empty a neighbourhood that the graph itself has not exhausted at all, and
+ * a fixed hop count then reports "this station has played everything it could find" while most of the
+ * corpus sits one hop further out.
+ *
+ * So the walk keeps going while it is short of candidates and the frontier still has somewhere to go.
+ * That is the cheap half of backtracking: rather than retreating and re-choosing, widen the hull until
+ * it contains enough admissible tracks. It costs nothing on a healthy station, because the loop stops
+ * as soon as the yield is sufficient — which, on the first three hops, it normally already is.
+ */
+const EXTENDED_MAX_HOPS = 8;
+
+/** Stop expanding once admission would yield this multiple of what was asked for. */
+const SUFFICIENCY_FACTOR = 3;
 const FRONTIER_CAP = 256;
 const NOT_FOR_ME_PENALTY = 2.5;
 const STYLE_SEED_SAMPLE = 32;
@@ -67,6 +89,15 @@ export interface StationEngineOptions {
   exclude?: Iterable<number>;
   /** Max candidates to emit. */
   limit?: number;
+  /**
+   * Extra admission test, applied to a track ordinal.
+   *
+   * Used for the minimum-length rule: a tune of a second or two is a sound effect, not music, and a
+   * station that plays them feels broken. The engine takes it as a predicate rather than a duration
+   * table because durations live outside the similarity bundle — but it must be applied HERE, not
+   * only after the fact, or the walk stops widening while it still could.
+   */
+  admit?: (trackOrdinal: number) => boolean;
 }
 
 export interface StationCandidate {
@@ -150,6 +181,7 @@ export const computeStation = (options: StationEngineOptions): StationResult => 
   const exclude = new Set<number>(options.exclude ?? []);
   const likeOrdinals = md5sToOrdinals(bundle, options.likes ?? []);
   const notForMeOrdinals = md5sToOrdinals(bundle, options.notForMe ?? []);
+  const admit = options.admit;
 
   // 1. Seed ordinals + initial strengths. `primaryExclude` are the "you started
   // here" seeds we must not replay; likes-steer / style-sample seeds may appear.
@@ -190,10 +222,29 @@ export const computeStation = (options: StationEngineOptions): StationResult => 
     for (const ordinal of likeOrdinals) addSeed(ordinal, steerWeight);
   }
 
-  // 2. BFS scoring over forward + reverse edges.
+  // 2. BFS scoring over forward + reverse edges, widened while the yield is thin.
+  //
+  // The walk used to run a fixed three hops and then let admission throw most of it away. Every
+  // filter — style, already-played, and now a minimum length that rules out sound effects — narrows
+  // what survives, and once enough of them bite, three hops can admit nothing at all. The station
+  // then says it has played everything it could find while the graph around it is barely touched.
+  //
+  // Now the walk widens while it is short. `admissibleCount` is the same test admission applies
+  // below, so "enough" means enough of the RIGHT tracks, not merely enough reached.
   const scores = new Map<number, number>();
   let frontier = new Map(seedStrength);
-  for (let hop = 0; hop < MAX_HOPS && frontier.size > 0; hop += 1) {
+  const excludeForCount = new Set<number>(exclude);
+  for (const ordinal of primaryExclude) excludeForCount.add(ordinal);
+  for (const ordinal of notForMeOrdinals) excludeForCount.add(ordinal);
+  const styleMaskBitForCount = styleFilter !== null ? 1 << styleFilter : 0;
+  const admissible = (ordinal: number, score: number): boolean => {
+    if (score <= 0 || excludeForCount.has(ordinal)) return false;
+    if (styleFilter !== null && (bundle.styleMask[ordinal] & styleMaskBitForCount) === 0) return false;
+    return admit ? admit(ordinal) : true;
+  };
+  const enough = Math.max(limit, 1) * SUFFICIENCY_FACTOR;
+  let hop = 0;
+  while (hop < EXTENDED_MAX_HOPS && frontier.size > 0) {
     const decay = Math.pow(HOP_DECAY, hop);
     const next = new Map<number, number>();
     const bump = (ordinal: number, weight: number) => {
@@ -211,6 +262,17 @@ export const computeStation = (options: StationEngineOptions): StationResult => 
       }
     }
     frontier = capFrontier(next, FRONTIER_CAP);
+    hop += 1;
+    if (hop >= MAX_HOPS) {
+      let admissibleCount = 0;
+      for (const [ordinal, score] of scores) {
+        if (admissible(ordinal, score)) {
+          admissibleCount += 1;
+          if (admissibleCount >= enough) break;
+        }
+      }
+      if (admissibleCount >= enough) break;
+    }
   }
 
   // 3. Not-for-me down-weight (future refills only, D8) — penalise the neighbourhood.
@@ -236,6 +298,7 @@ export const computeStation = (options: StationEngineOptions): StationResult => 
   for (const [ordinal, score] of scores) {
     if (score <= 0 || excludeAll.has(ordinal)) continue;
     if (styleFilter !== null && (bundle.styleMask[ordinal] & styleMaskBit) === 0) continue;
+    if (admit && !admit(ordinal)) continue;
     admitted.push({ ordinal, score });
   }
   if (admitted.length === 0) return { candidates: [], empty: "exhausted" };

@@ -367,11 +367,16 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   Dynamic; firmware wifi=true — Wi‑Fi for audio-only, Ethernet with video, or
   Always Wi‑Fi / Always Ethernet)_
   `[developer-mode only — firmware wifi=true not yet in released firmware; the session forces Ethernet unless dev mode is on]`
-- **SID Radio** (`settings-sid-radio`) _(flag `c64u_sid_radio_enabled`)_: Enable SID
-  Radio — checkbox — `settings-sid-radio-enabled` — R✅ I✅ ; Show ♥/✕ ranking —
-  checkbox — `settings-sid-ranking-enabled` — R✅ I✅ _(shown only when SID Radio is
-  on)_ ; Clear my rankings — button — `settings-clear-rankings` — R✅ I✅ ;
-  On-device playback engine — checkbox — `settings-local-engine-enabled` — R✅ I✅ ;
+- **SID Radio** (`settings-sid-radio`): Shortest tune to play — number input —
+  `settings-sid-radio-min-seconds-input` (`settings-sid-radio-min-seconds`) — R✅ I✅
+  _(always shown: SID Radio reached GA, so what a station will offer is a listener's
+  setting, not a developer one)_ ; Clear my rankings — button —
+  `settings-clear-rankings` — R✅ I✅ ; Enable SID Radio — checkbox —
+  `settings-sid-radio-enabled` — R✅ I✅ `[developer-mode only]` ; Show ♥/✕ ranking —
+  checkbox — `settings-sid-ranking-enabled` — R✅ I✅ `[developer-mode only; shown only
+when SID Radio is on]` ;
+  On-device playback engine — checkbox — `settings-local-engine-enabled` — R✅ I✅
+  `[developer-mode only]` ;
   SID emulation — button group — `settings-sid-engine-residfp|sidlite`
   (`settings-sid-engine`) — R✅ I✅ _(on-device engine only)_ ; Crossfade — button
   group — `settings-crossfade-0|600|1500|3000` (`settings-crossfade`) — R✅ I✅

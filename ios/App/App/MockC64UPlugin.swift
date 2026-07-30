@@ -91,9 +91,9 @@ public final class MockC64UPlugin: CAPPlugin, CAPBridgedPlugin {
 
         let directories = [
             "Usb0/Music",
-            "Usb0/Games/Last Ninja",
-            "Usb0/Games/Turrican II",
-            "Usb0/Demos/Krestage 3",
+            "Usb0/Games/Sample Quest",
+            "Usb0/Games/Sample Arcade",
+            "Usb0/Demos/Demo Collection",
         ]
 
         for dir in directories {
@@ -103,13 +103,13 @@ public final class MockC64UPlugin: CAPPlugin, CAPBridgedPlugin {
 
         let files: [String: Data] = [
             "Usb0/Music/Mock_Tune_0001.sid": createMinimalSidData(),
-            "Usb0/Games/Last Ninja/Side A.d64": Data(count: 174848),
-            "Usb0/Games/Last Ninja/Side B.d64": Data(count: 174848),
-            "Usb0/Games/Turrican II/Disk 1.d64": Data(count: 174848),
-            "Usb0/Games/Turrican II/Disk 2.d64": Data(count: 174848),
-            "Usb0/Games/Turrican II/Disk 3.d64": Data(count: 174848),
-            "Usb0/Demos/Krestage 3/Part 1.d64": Data(count: 174848),
-            "Usb0/Demos/Krestage 3/Part 2.d64": Data(count: 174848),
+            "Usb0/Games/Sample Quest/Side A.d64": Data(count: 174848),
+            "Usb0/Games/Sample Quest/Side B.d64": Data(count: 174848),
+            "Usb0/Games/Sample Arcade/Disk 1.d64": Data(count: 174848),
+            "Usb0/Games/Sample Arcade/Disk 2.d64": Data(count: 174848),
+            "Usb0/Games/Sample Arcade/Disk 3.d64": Data(count: 174848),
+            "Usb0/Demos/Demo Collection/Part 1.d64": Data(count: 174848),
+            "Usb0/Demos/Demo Collection/Part 2.d64": Data(count: 174848),
         ]
 
         for (path, data) in files {

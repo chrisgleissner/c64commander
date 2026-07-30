@@ -6,10 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import type { HvscPreparationState } from "@/lib/hvsc";
+import type { HvscPreparationPhase, HvscPreparationState } from "@/lib/hvsc";
+import type { HvscStageId } from "@/lib/hvsc/hvscStageModel";
+import { HvscStageSteps } from "./HvscStageSteps";
+
+/** How long the finished steps stay on screen, so the completion is actually seen. */
+const COMPLETION_HOLD_MS = 4000;
 
 export type HvscControlsProps = {
   hvscInstalledVersion?: number | string | null;
@@ -19,7 +24,12 @@ export type HvscControlsProps = {
   hvscCanIngest: boolean;
   hvscPreparationState: HvscPreparationState;
   hvscPreparationStatusLabel: string;
-  hvscPreparationProgressPercent: number | null;
+  hvscStage: string | null;
+  hvscStageStep?: HvscStageId | null;
+  hvscStagePercent: number | null;
+  hvscStageDone?: number | null;
+  hvscStageTotal?: number | null;
+  hvscPreparationFailedPhase?: HvscPreparationPhase;
   hvscPreparationThroughputLabel: string | null;
   hvscPreparationErrorReason: string | null;
   hvscReadySongCount: number;
@@ -46,7 +56,12 @@ export const HvscControls = ({
   hvscCanIngest,
   hvscPreparationState,
   hvscPreparationStatusLabel,
-  hvscPreparationProgressPercent,
+  hvscStage,
+  hvscStageStep = null,
+  hvscStagePercent,
+  hvscStageDone = null,
+  hvscStageTotal = null,
+  hvscPreparationFailedPhase = null,
   hvscPreparationThroughputLabel,
   hvscPreparationErrorReason,
   hvscReadySongCount,
@@ -67,7 +82,31 @@ export const HvscControls = ({
   const readyToUseLabel = "Ready to use: Add items -> HVSC.";
   const isReady = hvscPreparationState === "READY";
   const isError = hvscPreparationState === "ERROR";
-  const isPreparing = hvscPreparationState === "DOWNLOADING" || hvscPreparationState === "INGESTING";
+  const working = hvscPreparationState !== "NOT_PRESENT" && hvscPreparationState !== "READY";
+
+  // Keep the steps up for a moment once everything is done. The bar this replaced hid itself the
+  // instant the state left DOWNLOADING/INGESTING, so the completion the user had been waiting for was
+  // the one frame never rendered — measured on the device, it went from 73% straight to gone.
+  const [justCompleted, setJustCompleted] = useState(false);
+  const wasWorkingRef = useRef(false);
+  useEffect(() => {
+    if (working) {
+      wasWorkingRef.current = true;
+      setJustCompleted(false);
+      return;
+    }
+    if (!wasWorkingRef.current || hvscPreparationState !== "READY") return;
+    wasWorkingRef.current = false;
+    setJustCompleted(true);
+    const timer = window.setTimeout(() => setJustCompleted(false), COMPLETION_HOLD_MS);
+    return () => window.clearTimeout(timer);
+  }, [working, hvscPreparationState]);
+
+  // Two different questions, which used to share one answer. The steps are shown whenever there is
+  // something to show, including the moment everything finishes and after a failure; Stop belongs
+  // only to work that is actually running. Conflating them left Stop on screen after a cancel.
+  const isPreparing = working || justCompleted;
+  const isRunning = hvscInProgress || hvscPreparationState === "DOWNLOADING" || hvscPreparationState === "INGESTING";
   const isDownloaded = hvscPreparationState === "DOWNLOADED";
   const canDownload = hvscAvailable && !hvscUpdating;
   const canIngest = hvscAvailable && hvscCanIngest && !hvscUpdating;
@@ -96,7 +135,7 @@ export const HvscControls = ({
           <Button id="hvsc-ingest" variant="outline" size="sm" onClick={onIngest} disabled={!canIngest}>
             Ingest HVSC
           </Button>
-          {hvscInProgress || isPreparing ? (
+          {isRunning ? (
             <Button variant="outline" size="sm" onClick={onCancel} data-testid="hvsc-stop">
               Stop
             </Button>
@@ -127,14 +166,17 @@ export const HvscControls = ({
           <div className="space-y-2" data-testid="hvsc-progress">
             <div className="flex items-center justify-between gap-2">
               <span>{hvscPreparationStatusLabel}</span>
-              <span>{Math.round(hvscPreparationProgressPercent ?? 0)}%</span>
             </div>
-            <Progress value={hvscPreparationProgressPercent ?? 0} />
-            {hvscPreparationThroughputLabel ? (
-              <p className="text-[11px] text-muted-foreground" data-testid="hvsc-download-bytes">
-                {hvscPreparationThroughputLabel}
-              </p>
-            ) : null}
+            <HvscStageSteps
+              state={hvscPreparationState}
+              stage={hvscStage}
+              step={hvscStageStep}
+              failedPhase={hvscPreparationFailedPhase}
+              stagePercent={hvscStagePercent}
+              stageDone={hvscStageDone}
+              stageTotal={hvscStageTotal}
+              detailLabel={hvscPreparationThroughputLabel}
+            />
           </div>
         ) : null}
 
@@ -148,7 +190,7 @@ export const HvscControls = ({
         {hvscMetadataProgressLabel ? <p>{hvscMetadataProgressLabel}</p> : null}
         <p>Duration: {formatHvscDuration(hvscSummaryDurationMs)}</p>
         <p>Last updated: {formatHvscTimestamp(hvscSummaryUpdatedAt)}</p>
-        {hvscMetadataUpdatedAt ? <p>Metadata updated: {formatHvscTimestamp(hvscMetadataUpdatedAt)}</p> : null}
+        {hvscMetadataUpdatedAt ? <p>Song details updated: {formatHvscTimestamp(hvscMetadataUpdatedAt)}</p> : null}
       </div>
 
       {!hvscAvailable && (

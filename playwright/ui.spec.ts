@@ -296,7 +296,7 @@ test.describe("UI coverage", () => {
     await snap(page, testInfo, "c64u-root");
     await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Usb0" }).first().click();
     await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Games" }).first().click();
-    await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Turrican II" }).first().click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Sample Arcade" }).first().click();
     await dialog
       .locator('[data-testid="source-entry-row"]', { hasText: "Disk 1.d64" })
       .first()
@@ -327,8 +327,8 @@ test.describe("UI coverage", () => {
     await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Usb0" }).first().click();
     await expect(dialog.getByText("Games", { exact: true })).toBeVisible();
     await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Games" }).first().click();
-    await expect(dialog.getByText("Turrican II", { exact: true })).toBeVisible();
-    await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Turrican II" }).first().click();
+    await expect(dialog.getByText("Sample Arcade", { exact: true })).toBeVisible();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Sample Arcade" }).first().click();
     await expect(dialog.getByText("Disk 1.d64", { exact: true })).toBeVisible();
     await dialog
       .locator('[data-testid="source-entry-row"]', { hasText: "Disk 1.d64" })
@@ -359,7 +359,7 @@ test.describe("UI coverage", () => {
     await ensureRemoteRoot(page);
     await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Usb0" }).first().click();
     await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Games" }).first().click();
-    await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Turrican II" }).first().click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: "Sample Arcade" }).first().click();
     await snap(page, testInfo, "deep-folder");
 
     const hasOverflow = await page.evaluate(

@@ -117,6 +117,24 @@ export const buildSidVolumeSteps = (options: string[]): SidVolumeOption[] => {
   return steps;
 };
 
+/**
+ * The linear output gain a volume step asks for, 0..1.
+ *
+ * On-device playback used the step's INDEX as its gain — `index / (steps - 1)`. The scale it was
+ * indexing into is in decibels and unevenly spaced ("OFF, -42, -36, -30, -27, -24, -18, -17 …"), so
+ * the fraction bore no relation to the figure on screen anywhere along it. Measured against a c64u:
+ * the slider reading "0 dB" sits at index 24 of 30 and played on-device at 0.8 linear, nearly 2 dB
+ * down, while the same setting reached the Ultimate's mixer as unity. Lower down it is far worse —
+ * "-42 dB" asked for 1/30, which is -29.5 dB.
+ *
+ * Decibels are what the control means, so convert them rather than counting positions. Steps above
+ * 0 dB clamp to unity: this is a digital gain on a rendered signal, and boosting it would clip.
+ */
+export const sidVolumeStepGain = (step: SidVolumeOption | undefined): number => {
+  if (!step || step.isOff || step.numeric === null || step.numeric === undefined) return 0;
+  return Math.min(1, 10 ** (step.numeric / 20));
+};
+
 // HARD18-018: "Vol Master" (U64 fw 3.15+) scales/mutes every audio source on
 // the device (SIDs, sockets, drives, tape, sampler), not just SID channels -
 // its own explicit "OFF" option is real silence, so it is preferred over the

@@ -118,9 +118,9 @@ describe("createSnapshot – program", () => {
   });
 
   it("includes trimmed content_name in metadata when provided", async () => {
-    await createSnapshot(mockApi, { type: "program", contentName: "  Last Ninja.d64  " });
+    await createSnapshot(mockApi, { type: "program", contentName: "  Sample Quest.d64  " });
     const saved = saveSnapshotToStoreMock.mock.calls[0][0];
-    expect(saved.metadata.content_name).toBe("Last Ninja.d64");
+    expect(saved.metadata.content_name).toBe("Sample Quest.d64");
   });
 });
 

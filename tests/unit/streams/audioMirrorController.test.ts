@@ -64,13 +64,13 @@ const audioPacket = (seq: number) => {
   return p;
 };
 
-const fakeNativeSink = (opens = true) => {
+const fakeNativeSink = (opens = true, arrival?: { lostPackets: number }) => {
   let closed = false;
   // Option C: the sink has no JS write path — the native receive thread feeds the AudioTrack. JS only
   // opens it, polls stats for the governor, and closes it.
   const sink = {
     open: vi.fn(async () => opens),
-    getStats: vi.fn(() => ({ bufferedMs: 30, underruns: 2 })),
+    getStats: vi.fn(() => ({ bufferedMs: 30, underruns: 2, concealedMs: 12, arrival })),
     close: vi.fn(async () => {
       closed = true;
     }),
@@ -142,6 +142,28 @@ describe("AudioMirrorController", () => {
 
     await controller.stop();
     expect(native.sink.close).toHaveBeenCalled();
+  });
+
+  it("reports the loss the NATIVE receiver measured, not the packets JS never sees", async () => {
+    // The plugin stops emitting audio datagrams once it owns playback, so counting seq gaps from
+    // those events yields zero on every shipping build — and "Dropped pkts" read 0 while Wi-Fi was
+    // in fact losing about 3% of the audio to the video stream sharing the air. The native side
+    // counts loss at the socket, which is the only place it can still be seen.
+    const receiver = new FakeReceiver();
+    const native = fakeNativeSink(true, { lostPackets: 137 });
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createNativeSink: () => native.sink,
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+    // No datagrams reach JS at all, exactly as in production.
+    expect(controller.getSignals().audioLostPackets).toBe(137);
+    expect(controller.getSignals().audioConcealed).toBe(12);
+    await controller.stop();
   });
 
   it("counts native audio seq-gap loss for the health counter", async () => {

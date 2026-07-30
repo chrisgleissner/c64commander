@@ -153,7 +153,7 @@ test.describe("Navigation boundaries and edge cases", () => {
 
     await openRemoteFolder(page, "Usb0");
     await openRemoteFolder(page, "Games");
-    await openRemoteFolder(page, "Turrican II");
+    await openRemoteFolder(page, "Sample Arcade");
     await snap(page, testInfo, "deep-folder");
 
     const breadcrumbs = page
@@ -226,20 +226,20 @@ test.describe("Navigation boundaries and edge cases", () => {
         JSON.stringify({
           disks: [
             {
-              id: "ultimate:/Usb0/Games/Turrican II/Disk 1.d64",
+              id: "ultimate:/Usb0/Games/Sample Arcade/Disk 1.d64",
               name: "Disk 1.d64",
-              path: "/Usb0/Games/Turrican II/Disk 1.d64",
+              path: "/Usb0/Games/Sample Arcade/Disk 1.d64",
               location: "ultimate",
-              group: "Turrican II",
+              group: "Sample Arcade",
               importOrder: 1,
               importedAt: new Date().toISOString(),
             },
             {
-              id: "ultimate:/Usb0/Games/Turrican II/Disk 2.d64",
+              id: "ultimate:/Usb0/Games/Sample Arcade/Disk 2.d64",
               name: "Disk 2.d64",
-              path: "/Usb0/Games/Turrican II/Disk 2.d64",
+              path: "/Usb0/Games/Sample Arcade/Disk 2.d64",
               location: "ultimate",
-              group: "Turrican II",
+              group: "Sample Arcade",
               importOrder: 2,
               importedAt: new Date().toISOString(),
             },

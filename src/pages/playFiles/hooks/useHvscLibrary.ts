@@ -45,6 +45,7 @@ import {
   type HvscStatusSummary,
   type HvscStatus,
 } from "@/lib/hvsc";
+import { stepForStage, type HvscStageId } from "@/lib/hvsc/hvscStageModel";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 
 export type HvscSong = {
@@ -61,7 +62,6 @@ export type HvscLibraryState = {
   hvscPreparationStatusLabel: string;
   hvscPreparationErrorReason: string | null;
   hvscPreparationFailedPhase: HvscPreparationPhase;
-  hvscPreparationProgressPercent: number | null;
   hvscPreparationThroughputLabel: string | null;
   hvscReadySongCount: number;
   hvscStatusSummary: HvscStatusSummary;
@@ -113,6 +113,13 @@ export type HvscLibraryState = {
   hvscCurrentFile: string | null;
   hvscActionLabel: string | null;
   hvscStage: string | null;
+  /** The running step, resolved from the live stage or the persisted summary. */
+  hvscStageStep: HvscStageId | null;
+  /** The running stage's own percentage. Meaningful within one stage; not across the install. */
+  hvscStagePercent: number | null;
+  /** Items finished in the running stage, and how many there are. */
+  hvscStageDone: number | null;
+  hvscStageTotal: number | null;
   hvscVisibleFolders: string[];
 };
 
@@ -1247,8 +1254,6 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
       : hvscStage && HVSC_EXTRACTION_STAGES.has(hvscStage)
         ? hvscProgress
         : null;
-  const capActivePreparationProgress = (value: number | null | undefined): number | null =>
-    typeof value === "number" ? Math.min(99, Math.max(0, value)) : (value ?? null);
   const hvscReadySongCount = hvscIngestionIngestedSongs || hvscIngestionTotalSongs;
   const hvscPreparationSnapshot: HvscPreparationSnapshot = useMemo(
     () =>
@@ -1287,16 +1292,35 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
       hvscStatusSummary.metadata.status,
     ],
   );
-  const hvscPreparationProgressPercent =
-    hvscPreparationSnapshot.state === "DOWNLOADING"
-      ? capActivePreparationProgress(hvscDownloadPercent)
-      : hvscPreparationSnapshot.state === "INGESTING"
-        ? capActivePreparationProgress(
-            hvscStatusSummary.metadata.status === "in-progress"
-              ? (hvscStatusSummary.metadata.percent ?? hvscExtractionPercent)
-              : hvscExtractionPercent,
-          )
-        : null;
+  // The running stage's own counters, chosen by which stage is running. Shown in preference to its
+  // percentage because they move from the very first item: 61,157 songs rounds to 0% for the first
+  // six hundred of them, which on the device was indistinguishable from being stuck.
+  // The live stage where there is one; otherwise what the persisted summary implies. Reopening the
+  // app mid-install restores state from the summary without replaying progress events, so the raw
+  // stage is null and the step has to be inferred or the display falls back to the first ingest step.
+  const hvscStageStep =
+    stepForStage(hvscStage) ??
+    (hvscStatusSummary.metadata.status === "in-progress"
+      ? "details"
+      : hvscStatusSummary.extraction.status === "in-progress"
+        ? "unpack"
+        : hvscStatusSummary.download.status === "in-progress"
+          ? "download"
+          : null);
+  const [hvscStageDone, hvscStageTotal] =
+    hvscStageStep === "download"
+      ? [hvscDownloadBytes, hvscDownloadTotalBytes]
+      : hvscStageStep === "unpack"
+        ? [hvscSummaryFilesExtracted ?? null, hvscExtractionTotalFiles]
+        : hvscStageStep === "scan" || hvscStageStep === "details"
+          ? [hvscStatusSummary.metadata.processedSongs ?? null, hvscStatusSummary.metadata.totalSongs ?? null]
+          : [null, null];
+
+  // NOTE: there is deliberately no single install-wide percentage here. Two attempts at one both
+  // failed on hardware, because the stage counters are in different units and disappear at each
+  // handover, so any single figure has to be guessed across them — it read 73%, fell to 58%, froze,
+  // and vanished without reaching 100%. The UI shows the four named stages instead; see
+  // `lib/hvsc/hvscStageModel`.
   const hvscPreparationThroughputLabel = (() => {
     if (hvscPreparationSnapshot.state === "DOWNLOADING" && hvscDownloadBytes && hvscDownloadElapsedMs) {
       const mbPerSecond = hvscDownloadBytes / 1024 / 1024 / Math.max(hvscDownloadElapsedMs / 1000, 0.001);
@@ -1401,7 +1425,6 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     hvscPreparationStatusLabel: hvscPreparationSnapshot.statusLabel,
     hvscPreparationErrorReason: hvscPreparationSnapshot.errorReason,
     hvscPreparationFailedPhase: hvscPreparationSnapshot.failedPhase,
-    hvscPreparationProgressPercent,
     hvscPreparationThroughputLabel,
     hvscReadySongCount,
     hvscStatusSummary,
@@ -1453,6 +1476,12 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     hvscCurrentFile,
     hvscActionLabel,
     hvscStage,
+    hvscStageStep,
+    hvscStagePercent: hvscProgress,
+    // Bytes are not items; showing "12,345,678 / 84,827,547" helps nobody, so the download keeps its
+    // percentage and its MB/s.
+    hvscStageDone: hvscStageStep === "download" ? null : hvscStageDone,
+    hvscStageTotal: hvscStageStep === "download" ? null : hvscStageTotal,
     hvscVisibleFolders,
   };
 };

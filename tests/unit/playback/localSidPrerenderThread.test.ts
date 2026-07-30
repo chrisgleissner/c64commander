@@ -30,6 +30,9 @@ import type { LocalSidMainToWorker, LocalSidWorkerToMain } from "@/lib/playback/
 // the work lands on, not the ROMs themselves.
 vi.mock("@/lib/roms/romStore", () => ({
   loadStoredRoms: () => ({ kernal: new Uint8Array(8192), basic: new Uint8Array(8192) }),
+  // The engine now picks its emulation from whether the images are actually in hand, so the stub has
+  // to answer that too — a mock that reports no ROMs would silently downgrade every test to SIDLite.
+  hasCompleteRomSet: () => true,
 }));
 
 class FakeWorker implements LocalSidWorkerLike {

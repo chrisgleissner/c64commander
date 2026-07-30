@@ -399,7 +399,9 @@ describe("real c64u-remote feature-flag overlay", () => {
     expect(byId.ram_snapshots_enabled.enabled).toBe(true);
     expect(byId.ram_snapshots_enabled.visible_to_user).toBe(true);
 
-    expect(byId.hvsc_enabled.enabled).toBe(false);
+    // The keypad edition is a music remote as much as a machine remote: with the library off there
+    // is nothing for SID Radio, the on-device engine or "Listen on" to play.
+    expect(byId.hvsc_enabled.enabled).toBe(true);
     expect(byId.hvsc_enabled.visible_to_user).toBe(true);
 
     expect(byId.commoserve_enabled.enabled).toBe(true);
@@ -457,7 +459,7 @@ describe("real c64u-remote feature-flag overlay", () => {
       publishVariants: ["c64commander", "c64u-remote"],
     }) as any;
     expect(selection.variant.featureFlags.hvsc_enabled).toEqual({
-      enabled: false,
+      enabled: true,
       visible_to_user: true,
       developer_only: false,
     });

@@ -70,8 +70,9 @@ describe.skipIf(!synced)("synced libsidplayfp-wasm engine", () => {
    */
   it("resolves every relative import inside the served tree", async () => {
     const index = await fs.readFile(path.join(SERVED, "index.js"), "utf8");
-    const specifiers = [...index.matchAll(/from\s+"(\.[^"]+)"|import\("(\.[^"]+)"\)/g)]
-      .map((match) => match[1] ?? match[2]);
+    const specifiers = [...index.matchAll(/from\s+"(\.[^"]+)"|import\("(\.[^"]+)"\)/g)].map(
+      (match) => match[1] ?? match[2],
+    );
     const unresolved = specifiers.filter((s) => !existsSync(path.resolve(SERVED, s)));
 
     expect(specifiers.length).toBeGreaterThan(0);

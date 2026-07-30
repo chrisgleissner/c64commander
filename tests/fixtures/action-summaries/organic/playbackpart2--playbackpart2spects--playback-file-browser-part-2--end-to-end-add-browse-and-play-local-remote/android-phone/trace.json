@@ -2949,8 +2949,8 @@
       "body": {
         "entries": [
           {
-            "name": "Last Ninja",
-            "path": "/Usb0/Games/Last Ninja",
+            "name": "Sample Quest",
+            "path": "/Usb0/Games/Sample Quest",
             "type": "dir",
             "size": 80
           },
@@ -2961,8 +2961,8 @@
             "size": 900
           },
           {
-            "name": "Turrican II",
-            "path": "/Usb0/Games/Turrican II",
+            "name": "Sample Arcade",
+            "path": "/Usb0/Games/Sample Arcade",
             "type": "dir",
             "size": 100
           }
@@ -3063,7 +3063,7 @@
         "host": "127.0.0.1",
         "port": 40373,
         "password": "***",
-        "path": "/Usb0/Games/Turrican II"
+        "path": "/Usb0/Games/Sample Arcade"
       },
       "target": "real-device"
     }
@@ -3076,7 +3076,7 @@
     "origin": "user",
     "correlationId": "COR-0032",
     "data": {
-      "name": "click Open Turrican II",
+      "name": "click Open Sample Arcade",
       "component": "GlobalInteraction",
       "context": {
         "ui": {
@@ -3127,19 +3127,19 @@
         "entries": [
           {
             "name": "Disk 1.d64",
-            "path": "/Usb0/Games/Turrican II/Disk 1.d64",
+            "path": "/Usb0/Games/Sample Arcade/Disk 1.d64",
             "type": "file",
             "size": 18
           },
           {
             "name": "Disk 2.d64",
-            "path": "/Usb0/Games/Turrican II/Disk 2.d64",
+            "path": "/Usb0/Games/Sample Arcade/Disk 2.d64",
             "type": "file",
             "size": 18
           },
           {
             "name": "Disk 3.d64",
-            "path": "/Usb0/Games/Turrican II/Disk 3.d64",
+            "path": "/Usb0/Games/Sample Arcade/Disk 3.d64",
             "type": "file",
             "size": 18
           }
@@ -3158,7 +3158,7 @@
     "correlationId": "COR-0031",
     "data": {
       "operation": "list",
-      "path": "/Usb0/Games/Turrican II",
+      "path": "/Usb0/Games/Sample Arcade",
       "result": "success",
       "error": null,
       "target": "external-mock"
@@ -3378,7 +3378,7 @@
         "host": "127.0.0.1",
         "port": 40373,
         "password": "***",
-        "path": "/Usb0/Games/Turrican II/"
+        "path": "/Usb0/Games/Sample Arcade/"
       },
       "target": "real-device"
     }
@@ -3396,19 +3396,19 @@
         "entries": [
           {
             "name": "Disk 1.d64",
-            "path": "/Usb0/Games/Turrican II/Disk 1.d64",
+            "path": "/Usb0/Games/Sample Arcade/Disk 1.d64",
             "type": "file",
             "size": 18
           },
           {
             "name": "Disk 2.d64",
-            "path": "/Usb0/Games/Turrican II/Disk 2.d64",
+            "path": "/Usb0/Games/Sample Arcade/Disk 2.d64",
             "type": "file",
             "size": 18
           },
           {
             "name": "Disk 3.d64",
-            "path": "/Usb0/Games/Turrican II/Disk 3.d64",
+            "path": "/Usb0/Games/Sample Arcade/Disk 3.d64",
             "type": "file",
             "size": 18
           }
@@ -3427,7 +3427,7 @@
     "correlationId": "COR-0036",
     "data": {
       "operation": "list",
-      "path": "/Usb0/Games/Turrican II/",
+      "path": "/Usb0/Games/Sample Arcade/",
       "result": "success",
       "error": null,
       "target": "external-mock"
@@ -3593,8 +3593,8 @@
     "correlationId": "COR-0038",
     "data": {
       "method": "PUT",
-      "url": "http://127.0.0.1:41423/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
-      "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
+      "url": "http://127.0.0.1:41423/v1/drives/a:mount?image=%2FUsb0%2FGames%2FSample%20Arcade%2FDisk%201.d64&type=d64&mode=readwrite",
+      "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FSample%20Arcade%2FDisk%201.d64&type=d64&mode=readwrite",
       "headers": {
         "Content-Type": "application/json",
         "X-C64U-Host": "127.0.0.1:41423"

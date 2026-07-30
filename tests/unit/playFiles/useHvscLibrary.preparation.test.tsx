@@ -201,7 +201,10 @@ describe("useHvscLibrary preparation state coverage", () => {
     vi.useRealTimers();
   });
 
-  it("reports DOWNLOADING state and derives preparation progress percent from download percent", async () => {
+  it("reports DOWNLOADING while the archive is being fetched", async () => {
+    // Amended twice. A single install-wide percentage was tried and withdrawn — the stage counters
+    // are in different units and vanish at each handover, so the figure fell backwards and froze on
+    // hardware. What is reported now is which stage is running, which is known exactly.
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({
         download: {
@@ -218,17 +221,17 @@ describe("useHvscLibrary preparation state coverage", () => {
     const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("DOWNLOADING"));
-    expect(result.current.hvscPreparationProgressPercent).toBe(50);
   });
 
-  it("returns null preparation progress percent when state is NOT_PRESENT", async () => {
+  it("reports NOT_PRESENT with no stage running when the bridge is unavailable", async () => {
     mocks.isHvscBridgeAvailableMock.mockReturnValue(false);
     mocks.isHvscIngestionBridgeAvailableMock.mockReturnValue(false);
 
     const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("NOT_PRESENT"));
-    expect(result.current.hvscPreparationProgressPercent).toBeNull();
+    expect(result.current.hvscStage).toBeNull();
+    expect(result.current.hvscStagePercent).toBeNull();
   });
 
   it("computes MB/s throughput label when DOWNLOADING with bytes and elapsed time", async () => {
@@ -293,7 +296,7 @@ describe("useHvscLibrary preparation state coverage", () => {
     expect(result.current.hvscPreparationThroughputLabel).toBeNull();
   });
 
-  it("reports INGESTING state and derives preparation progress from metadata percent when metadata is in-progress", async () => {
+  it("reports INGESTING once the archive is fetched and the songs are being read", async () => {
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({
         metadata: {
@@ -308,10 +311,9 @@ describe("useHvscLibrary preparation state coverage", () => {
     const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
-    expect(result.current.hvscPreparationProgressPercent).toBe(75);
   });
 
-  it("derives preparation progress from extraction percent when INGESTING and metadata not in-progress", async () => {
+  it("reports INGESTING while the archive is being unpacked", async () => {
     mocks.loadHvscStatusSummaryMock.mockImplementation(() =>
       createSummary({
         extraction: {
@@ -328,7 +330,6 @@ describe("useHvscLibrary preparation state coverage", () => {
     const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("INGESTING"));
-    expect(result.current.hvscPreparationProgressPercent).toBe(20);
   });
 
   it("computes items/s throughput label when INGESTING with metadata in-progress and processedSongs", async () => {
@@ -617,7 +618,7 @@ describe("useHvscLibrary preparation state coverage", () => {
     });
   });
 
-  it("derives download progress percent from progress event when download status in-progress via event", async () => {
+  it("surfaces a download progress event as the download stage and its own percentage", async () => {
     const { result } = renderHook(() => useHvscLibrary(true));
 
     await waitFor(() => expect(progressListener).not.toBeNull());
@@ -634,7 +635,10 @@ describe("useHvscLibrary preparation state coverage", () => {
     });
 
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("DOWNLOADING"));
-    expect(result.current.hvscPreparationProgressPercent).toBe(42);
+    // The stage's own figure, passed through untouched. No weighting against other stages is applied,
+    // because there is no longer a combined number for it to be weighted into.
+    expect(result.current.hvscStage).toBe("download");
+    expect(result.current.hvscStagePercent).toBe(42);
   });
 
   it("derives INGESTING progress from metadata percent when progress event sets metadata in-progress summary", async () => {

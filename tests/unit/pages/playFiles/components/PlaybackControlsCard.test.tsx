@@ -191,4 +191,66 @@ describe("PlaybackControlsCard", () => {
     expect(props.onPauseResume).not.toHaveBeenCalled();
     expect(props.onReshuffle).not.toHaveBeenCalled();
   });
+
+  it("shows composer and year under the title, smaller than it", () => {
+    render(
+      <PlaybackControlsCard
+        {...buildProps({
+          hasCurrentItem: true,
+          currentItemLabel: "Commando",
+          currentItemAuthor: "Rob Hubbard",
+          currentItemReleased: "1985 Elite",
+        })}
+      />,
+    );
+
+    const credits = screen.getByTestId("playback-current-credits");
+    expect(credits).toHaveTextContent("Rob Hubbard");
+    expect(credits).toHaveTextContent("1985 Elite");
+    // Readable: a step below the title rather than the smallest type on the page. The title is
+    // text-base, so credits are text-sm — the same primary/secondary pairing used elsewhere.
+    expect(credits.className).toContain("text-sm");
+  });
+
+  it("shows nothing extra for a tune that names neither", () => {
+    render(<PlaybackControlsCard {...buildProps({ hasCurrentItem: true, currentItemLabel: "Untitled" })} />);
+
+    expect(screen.queryByTestId("playback-current-credits")).toBeNull();
+    // And the empty-state text does not leak in just because there are no credits.
+    expect(screen.getByTestId("playback-current-track")).not.toHaveTextContent("Select a playlist item");
+  });
+
+  it("shows how far the tune is rendered ahead of where it is playing", () => {
+    // libsidplayfp cannot rewind, so this is exactly how far a seek can land instantly. A translucent
+    // fill behind the played portion says so without a spinner or a number.
+    render(
+      <PlaybackControlsCard
+        {...buildProps({ hasCurrentItem: true, progressPercent: 20, renderedPercent: 65, onSeekToFraction: () => {} })}
+      />,
+    );
+
+    expect(screen.getByTestId("playback-rendered-ahead")).toHaveAttribute("data-rendered-percent", "65");
+  });
+
+  it("still shows the fill when rendering is BEHIND the playhead, which is when it matters most", () => {
+    // Hiding it then was backwards: a listener who has just dragged past what is rendered needs to see
+    // the renderer catching up, not wonder whether playback has died.
+    render(
+      <PlaybackControlsCard
+        {...buildProps({ hasCurrentItem: true, progressPercent: 60, renderedPercent: 30, onSeekToFraction: () => {} })}
+      />,
+    );
+
+    expect(screen.getByTestId("playback-rendered-ahead")).toHaveAttribute("data-rendered-percent", "30");
+  });
+
+  it("omits the fill once the whole tune is rendered, since there is nothing left to report", () => {
+    render(
+      <PlaybackControlsCard
+        {...buildProps({ hasCurrentItem: true, progressPercent: 40, renderedPercent: 100, onSeekToFraction: () => {} })}
+      />,
+    );
+
+    expect(screen.queryByTestId("playback-rendered-ahead")).toBeNull();
+  });
 });

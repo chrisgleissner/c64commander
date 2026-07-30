@@ -26,7 +26,7 @@ import { StreamUdp } from "@/lib/native/streamUdp";
 import {
   loadStreamAudioPort,
   loadStreamNativeAudio,
-  loadStreamNativeAudioBufferMs,
+  loadStreamNetworkBufferMs,
   loadStreamInputPriority,
   loadStreamNativeVideoAssembly,
   loadStreamVideoFrameRateMode,
@@ -41,6 +41,7 @@ import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions }
 import { NativeAudioSink } from "./audioNativeSink";
 import { AudioMirrorController, type AudioMirrorSignals, type AudioMirrorState } from "./audioMirrorController";
 import { VideoMirrorController, type VideoMirrorState } from "./videoMirrorController";
+import { readLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
 import { StreamGovernor, type FrameRateMode, type GovernorState, type GovernorTransition } from "./streamGovernor";
 import { StreamTelemetry, type TelemetryBucket, type TelemetrySessionSummary } from "./streamTelemetry";
 import { onInputActivity } from "./inputActivitySignal";
@@ -110,7 +111,29 @@ export interface AvMirrorSessionDeps {
   createPlayer?: () => AudioMirrorPlayer;
   videoFrameThrottle?: number;
   now?: () => number;
+  /** Present scheduler for the video mirror (defaults to requestAnimationFrame where it exists). */
+  schedulePresent?: (present: () => void) => void;
 }
+
+/**
+ * Present on the next animation frame, so the video mirror's depth-one present queue can actually
+ * coalesce.
+ *
+ * `VideoMirrorController` is built around a drop-late queue: a frame that arrives while another is
+ * still waiting REPLACES it, so only the newest survives. That only works if presentation is
+ * deferred. With the controller's synchronous default every arriving frame is decoded and drawn
+ * inline, `pending` is consumed before the next frame can supersede it, and the queue never drops
+ * anything — `backlogReplacements` is structurally always 0.
+ *
+ * That is not academic. Capacitor queues `videoframe` events across the bridge while the JS thread
+ * is busy (the on-device SID engine, a GC pause, a heavy route), so a stall is followed by a burst
+ * of every buffered frame. Measured on a Pixel 4 against a c64u: a 2.5 s stall made the mirror
+ * present at 174 fps from a 50 Hz source — ~125 stale frames decoded and painted, one after another,
+ * extending the very stall that caused them. Deferring to rAF collapses that burst to the single
+ * newest frame, which is the only one anybody can see.
+ */
+const rafPresentScheduler = (): ((present: () => void) => void) | undefined =>
+  typeof requestAnimationFrame === "function" ? (present) => void requestAnimationFrame(() => present()) : undefined;
 
 const FRAME_RATE_MODE: Record<StreamVideoFrameRateMode, FrameRateMode> = {
   auto: "auto",
@@ -155,6 +178,7 @@ export class AvMirrorSession {
   private readonly now: () => number;
   /** Last observed cumulative player-underrun count, for per-tick delta. */
   private lastAudioUnderruns = 0;
+  private lastLocalAudioUnderruns = 0;
   /** Wall time (ms) until which the user is treated as actively driving the C64 → video stays shed. */
   private inputActiveUntilMs = 0;
   /** Video keep-fraction cap applied while input is active. */
@@ -187,7 +211,7 @@ export class AvMirrorSession {
       // evaluated at start (not import) so the live setting wins. Returns null → WebAudio fallback.
       createNativeSink: (sampleRate) =>
         loadStreamNativeAudio() && isNativePlatform()
-          ? new NativeAudioSink(sampleRate, undefined, loadStreamNativeAudioBufferMs())
+          ? new NativeAudioSink(sampleRate, undefined, loadStreamNetworkBufferMs())
           : null,
       renderAudioForAnalysis: (samples, arrivalMs) => this.emitAudio(samples, arrivalMs),
       // Who we EXPECT to hear from, and how to silence anyone else. The mirror's groups are
@@ -223,6 +247,7 @@ export class AvMirrorSession {
       // Start at the governor's effective divisor (from the saved frame-rate mode); the tick keeps it live.
       frameThrottle: deps.videoFrameThrottle ?? 1,
       now: deps.now,
+      schedulePresent: deps.schedulePresent ?? rafPresentScheduler(),
     });
   }
 
@@ -321,17 +346,36 @@ export class AvMirrorSession {
         : { audioBufferMs: 0, audioUnderruns: 0, audioConcealed: 0, audioLostPackets: 0 };
     const video = this.video.getSnapshot();
 
+    // On-device playback competes for the same main thread the video path paints on, and the governor
+    // exists precisely to shed video for audio — it simply could not see this engine. Take whichever
+    // audio is in more trouble: if a tune is rendering here and running thin, video must give way for
+    // it exactly as it would for the mirror.
+    const local = readLocalAudioHealth();
+    const localUnderruns = Math.max(0, local.underruns - this.lastLocalAudioUnderruns);
+    this.lastLocalAudioUnderruns = local.underruns;
+    const audioActive = this.audioLive || local.active;
+    // Whichever path is closer to running dry is the one to protect — and the nominal depth has to
+    // come from THAT path, or the governor scales its health thresholds for one buffer while reading
+    // another. Getting this wrong is not academic now that the two depths differ by three orders of
+    // magnitude: on-device playback holds seconds by design, the native mirror sink tens of
+    // milliseconds by design, so the minimum is almost always the mirror's — which is precisely when
+    // its nominal was being dropped, leaving a healthy native buffer read as starvation.
+    const mirrorIsTighter = !local.active || (this.audioLive && signals.audioBufferMs <= local.bufferedMs);
+    const audioBufferMs = mirrorIsTighter ? signals.audioBufferMs : local.bufferedMs;
+
     const governor = this.governor.update(
       {
-        audioBufferMs: signals.audioBufferMs,
+        audioBufferMs,
         // Native low-latency sink runs a smaller buffer; pass its nominal so the governor scales its
-        // health thresholds and doesn't misread a healthy native buffer as starvation.
-        audioNominalBufferMs: signals.audioNominalBufferMs,
+        // health thresholds and doesn't misread a healthy native buffer as starvation. Paired with the
+        // buffer above: the nominal describes the same path the reading came from.
+        audioNominalBufferMs: mirrorIsTighter ? signals.audioNominalBufferMs : undefined,
         // Feed the underruns SINCE the last tick as the demote trigger; the cumulative total goes to telemetry.
-        audioUnderruns: Math.max(0, signals.audioUnderruns - this.lastAudioUnderruns),
+        audioUnderruns: Math.max(0, signals.audioUnderruns - this.lastAudioUnderruns) + localUnderruns,
         // Only let the audio buffer/underrun signals drive video when audio is actually playing —
         // a video-only mirror has no player (bufferedMs = 0) and must not be pegged to the floor.
-        audioActive: this.audioLive,
+        // On-device playback counts as audio playing, because it is.
+        audioActive,
         videoQueueAgeMs: video.renderResidenceMs,
         frameProcessingP95Ms: undefined,
         localLatencyP99Ms: undefined,

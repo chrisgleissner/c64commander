@@ -33,6 +33,9 @@ for attempt in $(seq 1 "$max_attempts"); do
 
   if run_cap_sync "$attempt" "$log_file"; then
     rm -f "$log_file"
+    # `cap sync` copies the shared web bundle in verbatim; drop what this artifact cannot reach.
+    # Every other sync path routes through `npm run cap:sync` for the same reason.
+    npm run native:prune-assets
     exit 0
   fi
 

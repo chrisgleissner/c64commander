@@ -41,6 +41,60 @@ const buildItem = ({ virtualPath, trackOrdinal }: { virtualPath: string; trackOr
   }) as never;
 
 describe("StationQueueProvider", () => {
+  it("leaves out tunes shorter than the minimum, and keeps going past them", async () => {
+    // HVSC is not only music: it carries jingles, one-shot sound effects and test tones. A station
+    // that serves them between pieces reads as broken. Skipped exactly like a tune whose path no
+    // longer resolves — the ordinal is consumed, so the next refill asks the engine for somewhere
+    // else rather than offering the same effect again.
+    const provider = new StationQueueProvider({
+      computeCandidates: scriptedEngine([1, 2, 3, 4, 5, 6]),
+      resolvePath: (md5) => `/hvsc/${md5}.sid`,
+      buildItem,
+      minSeconds: 15,
+      // Ordinals 1, 3 and 5 are two-second effects.
+      resolveDuration: (virtualPath) =>
+        [1, 3, 5].some((o) => virtualPath.includes(String(o).padStart(10, "0"))) ? 2 : 120,
+      lookahead: 3,
+    });
+
+    const { items } = await provider.refill();
+
+    expect(items).toHaveLength(3);
+    expect(provider.shortTracksSkipped).toBe(3);
+    // Every candidate it looked at is consumed, short ones included, so none comes round again.
+    expect(provider.excludedOrdinals).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it("admits a tune whose length is unknown", async () => {
+    // Never drop a tune because the songlengths are thin: an absent duration is not a short one.
+    const provider = new StationQueueProvider({
+      computeCandidates: scriptedEngine([1, 2]),
+      resolvePath: (md5) => `/hvsc/${md5}.sid`,
+      buildItem,
+      minSeconds: 15,
+      resolveDuration: () => null,
+      lookahead: 2,
+    });
+
+    const { items } = await provider.refill();
+
+    expect(items).toHaveLength(2);
+    expect(provider.shortTracksSkipped).toBe(0);
+  });
+
+  it("plays everything when the minimum is switched off", async () => {
+    const provider = new StationQueueProvider({
+      computeCandidates: scriptedEngine([1, 2]),
+      resolvePath: (md5) => `/hvsc/${md5}.sid`,
+      buildItem,
+      minSeconds: 0,
+      resolveDuration: () => 1,
+      lookahead: 2,
+    });
+
+    expect((await provider.refill()).items).toHaveLength(2);
+  });
+
   it("resolves the next `count` items and advances the exclude set", async () => {
     const provider = new StationQueueProvider({
       computeCandidates: scriptedEngine([0, 1, 2, 3, 4, 5]),

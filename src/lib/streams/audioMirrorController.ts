@@ -129,10 +129,18 @@ export class AudioMirrorController {
       // Only the native sink reports a nominal depth; WebAudio leaves it undefined (default thresholds).
       audioNominalBufferMs: this.nativeSink?.bufferCapacityMs,
       audioUnderruns: nativeStats?.underruns ?? this.player?.underrunCount ?? 0,
-      // Native plays raw from the receive thread (no JS concealment); its health signal is the seq-gap
-      // loss counter. WebAudio uses the jitter buffer's conceal/loss stats.
-      audioConcealed: this.nativeSink ? 0 : (this.playbackBuffer?.stats.concealed ?? 0),
-      audioLostPackets: this.nativeSink ? this.nativeLostPackets : (this.playbackBuffer?.stats.packetsLost ?? 0),
+      // Both counters come from the NATIVE side when native is playing, because JS no longer sees the
+      // packets: the plugin stopped emitting them once it owned playback, so `nativeLostPackets` —
+      // which is counted here from those events — is structurally zero on the shipping path. The
+      // "Dropped pkts" readout was therefore always 0, which is exactly the number that would have
+      // explained the crackling: Wi-Fi loses about 3% of the audio while Live View video is also
+      // streaming, because the two multicast streams share the air.
+      audioConcealed: this.nativeSink
+        ? Math.round(nativeStats?.concealedMs ?? 0)
+        : (this.playbackBuffer?.stats.concealed ?? 0),
+      audioLostPackets: this.nativeSink
+        ? (nativeStats?.arrival?.lostPackets ?? this.nativeLostPackets)
+        : (this.playbackBuffer?.stats.packetsLost ?? 0),
     };
   }
 

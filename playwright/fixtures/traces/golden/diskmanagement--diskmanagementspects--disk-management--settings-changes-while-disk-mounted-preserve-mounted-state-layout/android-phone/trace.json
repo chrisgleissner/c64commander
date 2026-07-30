@@ -3996,7 +3996,7 @@
     "origin": "system",
     "correlationId": "COR-0021",
     "data": {
-      "name": "rest.put /v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
+      "name": "rest.put /v1/drives/a:mount?image=%2FUsb0%2FGames%2FSample%20Arcade%2FDisk%201.d64&type=d64&mode=readwrite",
       "component": null,
       "context": {
         "ui": {
@@ -4081,13 +4081,13 @@
     "correlationId": "COR-0021",
     "data": {
       "method": "PUT",
-      "url": "http://127.0.0.1:43487/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
-      "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican+II%2FDisk+1.d64&mode=readwrite&type=d64",
+      "url": "http://127.0.0.1:43487/v1/drives/a:mount?image=%2FUsb0%2FGames%2FSample%20Arcade%2FDisk%201.d64&type=d64&mode=readwrite",
+      "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FSample+Arcade%2FDisk+1.d64&mode=readwrite&type=d64",
       "protocol": "http",
       "hostname": "127.0.0.1",
       "port": 43487,
       "path": "/v1/drives/a:mount",
-      "query": "?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
+      "query": "?image=%2FUsb0%2FGames%2FSample%20Arcade%2FDisk%201.d64&type=d64&mode=readwrite",
       "headers": {
         "Content-Type": "application/json",
         "X-C64U-Host": "127.0.0.1:43487"
@@ -4146,13 +4146,13 @@
     "correlationId": "COR-0021",
     "data": {
       "method": "PUT",
-      "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
+      "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FSample%20Arcade%2FDisk%201.d64&type=d64&mode=readwrite",
       "protocol": "http",
       "hostname": "127.0.0.1",
       "port": 43487,
       "path": "/v1/drives/a:mount",
-      "query": "?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
-      "url": "http://127.0.0.1:43487/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
+      "query": "?image=%2FUsb0%2FGames%2FSample%20Arcade%2FDisk%201.d64&type=d64&mode=readwrite",
+      "url": "http://127.0.0.1:43487/v1/drives/a:mount?image=%2FUsb0%2FGames%2FSample%20Arcade%2FDisk%201.d64&type=d64&mode=readwrite",
       "status": 200,
       "headers": {
         "content-length": "13",
@@ -8787,7 +8787,7 @@
               "bus_id": 8,
               "type": "1541",
               "image_file": "Disk 1.d64",
-              "image_path": "/Usb0/Games/Turrican II"
+              "image_path": "/Usb0/Games/Sample Arcade"
             }
           },
           {
@@ -8824,7 +8824,7 @@
         "byteCount": 393,
         "previewByteCount": 256,
         "hex": "7b 22 64 72 69 76 65 73 22 3a 5b 7b 22 61 22 3a 7b 22 65 6e 61 62 6c 65 64 22 3a 74 72 75 65 2c 22 62 75 73 5f 69 64 22 3a 38 2c 22 74 79 70 65 22 3a 22 31 35 34 31 22 2c 22 69 6d 61 67 65 5f 66 69 6c 65 22 3a 22 44 69 73 6b 20 31 2e 64 36 34 22 2c 22 69 6d 61 67 65 5f 70 61 74 68 22 3a 22 2f 55 73 62 30 2f 47 61 6d 65 73 2f 54 75 72 72 69 63 61 6e 20 49 49 22 7d 7d 2c 7b 22 62 22 3a 7b 22 65 6e 61 62 6c 65 64 22 3a 66 61 6c 73 65 2c 22 62 75 73 5f 69 64 22 3a 39 2c 22 74 79 70 65 22 3a 22 31 35 34 31 22 7d 7d 2c 7b 22 49 45 43 20 44 72 69 76 65 22 3a 7b 22 65 6e 61 62 6c 65 64 22 3a 66 61 6c 73 65 2c 22 62 75 73 5f 69 64 22 3a 31 31 2c 22 74 79 70 65 22 3a 22 44 4f 53 20 65 6d 75 6c 61 74 69 6f 6e 22 2c 22 6c 61 73 74 5f 65 72 72 6f 72 22 3a 22 37 33 2c 55",
-        "ascii": "{\"drives\":[{\"a\":{\"enabled\":true,\"bus_id\":8,\"type\":\"1541\",\"image_file\":\"Disk 1.d64\",\"image_path\":\"/Usb0/Games/Turrican II\"}},{\"b\":{\"enabled\":false,\"bus_id\":9,\"type\":\"1541\"}},{\"IEC Drive\":{\"enabled\":false,\"bus_id\":11,\"type\":\"DOS emulation\",\"last_error\":\"73,U",
+        "ascii": "{\"drives\":[{\"a\":{\"enabled\":true,\"bus_id\":8,\"type\":\"1541\",\"image_file\":\"Disk 1.d64\",\"image_path\":\"/Usb0/Games/Sample Arcade\"}},{\"b\":{\"enabled\":false,\"bus_id\":9,\"type\":\"1541\"}},{\"IEC Drive\":{\"enabled\":false,\"bus_id\":11,\"type\":\"DOS emulation\",\"last_error\":\"73,U",
         "truncated": true
       },
       "durationMs": 20,

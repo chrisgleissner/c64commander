@@ -10,6 +10,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SID_RADIO_STYLE_TILES, useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
+import { rebuildMd548PathIndex, resetMd548PathIndex } from "@/lib/sidRadio/md5PathIndex";
 import { clearAllRankings, getRanking } from "@/lib/sidRadio/rankingStore";
 import { loadSidRadioSession, saveSidRadioSession } from "@/lib/sidRadio/sidRadioSession";
 import { SidRadioWorkerClient } from "@/lib/sidRadio/sidRadioWorkerClient";
@@ -24,7 +25,19 @@ import type { StationResult } from "@/lib/sidRadio/stationEngine";
 beforeEach(async () => {
   localStorage.clear();
   await clearAllRankings();
+  resetMd548PathIndex();
 });
+
+/**
+ * Put one entry in the md5→path index, i.e. "HVSC is installed". The index is what resolves a
+ * station's candidates to playable paths, so an empty one means nothing can play at all — a
+ * distinct condition from a station that legitimately came back empty.
+ */
+const installMusic = () => {
+  rebuildMd548PathIndex(";/MUSICIANS/H/Hubbard_Rob/Commando.sid\naabbccddeeff00112233445566778899=0:30\n", {
+    force: true,
+  });
+};
 
 const populationsWith = (overrides: Record<string, number>): SidRadioStylePopulations =>
   Object.fromEntries(SID_RADIO_STYLE_TILES.map((tile) => [tile.key, overrides[tile.key] ?? 1000]));
@@ -166,6 +179,9 @@ describe("useSidRadio", () => {
   it("surfaces a 'no radio for this tune' notice when the seed has no neighbours (Q5)", async () => {
     const client = makeClient();
     client.compute = vi.fn(async () => ({ candidates: [], empty: "no-neighbours" }));
+    // Music IS installed here — this is a tune with no neighbours, not an app with nothing to play.
+    // Without the index the honest answer is the HVSC one, which the next test covers.
+    installMusic();
     const params = baseParams(client);
     const { result } = renderHook(() => useSidRadio(params));
     await act(async () => {
@@ -228,6 +244,57 @@ describe("useSidRadio", () => {
     expect(result.current.active).toBe(false);
     expect(result.current.notice).toBe("no-radio");
     expect(params.startPlaylist).not.toHaveBeenCalled();
+  });
+
+  /**
+   * With no HVSC installed the md5→path index is empty, so every candidate the station produces
+   * resolves to nothing and NO station can play — including the Likes one. The old wording told the
+   * user to like a few tunes, which cannot help: there is nothing installed to like, and liking
+   * would not make a station playable. Observed on a Pixel 4 by tapping a style tile that the
+   * launcher had just advertised as holding 17,574 tracks.
+   */
+  it("names HVSC, not likes, when candidates resolve to nothing because none are installed", async () => {
+    const client = makeClient();
+    const params = baseParams(client, { resolvePath: () => null });
+    const { result } = renderHook(() => useSidRadio(params));
+    await act(async () => {
+      await result.current.startStyleRadio(1, "Chill / Ambient");
+    });
+    expect(result.current.active).toBe(false);
+    expect(result.current.notice).toBe("no-hvsc");
+    expect(params.startPlaylist).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A station that runs out does it at the tail of the queue — the one place the user cannot tell
+   * "ended" from "broken": playback stops on the last track and Next does nothing because there is
+   * no next, while staying enabled (hold-to-seek keeps it live). Seen on a Pixel 4: a station the
+   * launcher sized at 17,574 tracks stopped after 25 with no explanation at all.
+   */
+  it("says the station has ended when a refill comes back empty", async () => {
+    installMusic();
+    const client = makeClient();
+    const params = baseParams(client, { playlistLength: 10, currentIndex: 0 });
+    const { result, rerender } = renderHook((p: ReturnType<typeof baseParams>) => useSidRadio(p), {
+      initialProps: params,
+    });
+    await act(async () => {
+      await result.current.startStyleRadio(1, "Chill / Ambient");
+    });
+    expect(result.current.notice).toBeNull();
+
+    // The station dries up. Drain whatever the provider still holds buffered, then keep the cursor
+    // at the tail until the empty compute is what a refill actually sees.
+    client.compute = vi.fn(async () => ({ candidates: [], empty: "exhausted" as const }));
+    for (let cursor = 6; cursor <= 9 && result.current.notice === null; cursor += 1) {
+      await act(async () => {
+        rerender({ ...params, currentIndex: cursor, playlistLength: 10 });
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+    await waitFor(() => expect(result.current.notice).toBe("station-ended"));
   });
 
   it("resumes the chip from a saved session on mount (D15)", () => {

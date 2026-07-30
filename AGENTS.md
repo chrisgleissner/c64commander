@@ -205,6 +205,67 @@ At completion, summarize:
 - **Android HVSC engine**: `android/app/src/main/java/com/c64/commander/hvsc/`
 - **SID playback utilities**: `src/lib/sid/`
 
+## Audio output: on-device playback and the A/V mirror share one native path
+
+Both routes reach the speaker through the same native `AudioPipeline`. This is not a tidiness
+preference — they sounded materially different when they did not, and the reasons are worth keeping.
+
+**Timbre and loudness come from which AudioFlinger path is used, not from the SID emulation.**
+On-device playback used to go out through Web Audio in the WebView, which lands on a _direct_ output
+that bypasses the mixer's effect chain; on a Pixel 4 that chain is the speaker's own EQ and loudness
+processing. Measured with a microphone at the speaker, same tune, same volume: Web Audio was 7.5 dB
+quieter with **0.10%** of its energy in 120–300 Hz against the mirror's **3.33%**. Both declared
+`AUDIO_CONTENT_TYPE_MUSIC` / `AUDIO_USAGE_MEDIA`; the difference was `Flags: 00004001` (MMAP/direct)
+versus `00000004` (`AUDIO_OUTPUT_FLAG_FAST`). Before blaming a filter or a chip model for how
+something sounds, check `dumpsys media.audio_policy` for which output the track actually got.
+
+The SID settings were ruled out by measurement, twice, with two tools: the filter curve moved the
+spectral distance from 0.160 to 0.164 dB across its whole range, `combinedWaveforms` changed nothing
+at all, and the model default already in use was closer to the Ultimate than any alternative.
+
+**Buffer deeply on the on-device path; do not try to be punctual.** The mirror never drops out
+because its PCM arrives on a native receive thread and goes straight into the ring — JavaScript is
+not in the delivery path. Web Audio had the same property for a different reason: once
+`AudioBufferSourceNode.start(when)` is called, Chrome's audio thread owns playback and the JS thread
+only had to be _early_. Pushing PCM across the Capacitor bridge puts JS back _in_ the delivery path,
+on the same thread as the WASM renderer and the UI, where it has to be _punctual_. Several attempts
+to fix the resulting stutter by adjusting punctuality — slice sizes, write lead times, estimating the
+drain between writes — all failed, because punctuality was the wrong thing to adjust. The direction
+that helps is a ring holding **seconds**, so JS only has to be roughly on time again.
+
+Two further pieces are needed to make a deep ring work, and both were learned the hard way:
+
+- **Priming must be separate from the target** (`primeMs`). The pipeline waits for its target depth
+  before the first sound, which is right at 120 ms and absurd at 15 s. Worse, the writer has to stop
+  short of the target or it would overfill — so playback never began at all. That was silence on the
+  device, twelve seconds sitting in a ring waiting for fifteen. Priming at ~200 ms starts playback
+  promptly and the ring fills behind it, like the anti-shock buffer in a portable CD player.
+- **Counters are necessary, not sufficient.** A steady ring with zero underruns and zero drops was
+  reported through two builds a listener could plainly hear dropping out. Confirm by ear, or with the
+  barcode SID graded per note.
+
+Detectors that do NOT work here, each tried and each wrong: an envelope/level dropout detector cannot
+see a stall that repeats audio, because the level stays flat; spectral self-similarity does see a
+freeze but flags sustained chords too, reporting 140 "freezes" in a minute of ordinary music; and
+aligning a recording against a reference render to find pauses reports phantom stalls, because
+repetitive music matches in several places at once. The barcode SID remains the only instrument that
+settles it, and a listener remains the arbiter.
+
+Consequences to respect when touching this path:
+
+- Writes cost per _call_, not per byte: a payload carrying 43 ms of audio cost 17 ms, one carrying
+  1067 ms cost 36 ms. Small writes starve the pipeline.
+- Never estimate the queue depth by subtracting elapsed time from your own last figure. That puts
+  pacing back on `setTimeout` on a busy thread. Ask the pipeline (`readAudioStats`) instead.
+- A deep ring makes pause, seek and track changes lag by its depth unless flushed —
+  `flushAudioTrack` exists for exactly that.
+- The pipeline's ring depth and `AudioTrack` buffer are parameters (`maxRingMs`, `trackBursts`), not
+  constants: the mirror wants them shallow because depth is input latency, on-device playback wants
+  them deep because nothing is waiting on it.
+
+Going further would mean rendering the SID natively too (an NDK build of libsidplayfp), which would
+remove JS from the path entirely, as it already is for the mirror.
+
 ## Build, test, and screenshot decision rules
 
 This section exists to make agent behavior explicit.
@@ -579,7 +640,7 @@ Set `JAVA_HOME` to a valid JDK install and avoid hardcoded system paths.
 
 ## Debugging a signal: measure the wire before you read the code
 
-When something *sounds*, *looks* or *feels* wrong on a device — audio, video, input latency — measure
+When something _sounds_, _looks_ or _feels_ wrong on a device — audio, video, input latency — measure
 the signal at its source before forming a theory about the code. A whole afternoon went into a
 "streamed audio is rough" report that was diagnosed from the code four different ways (ordering on
 the real-time thread, buffer priming, sample-rate mismatch, channel mismatch) and was none of them.
@@ -588,13 +649,13 @@ Five minutes of `socket.recvfrom` on the multicast group had the answer:
     250 pkt/s expected · 500 observed · two interleaved 16-bit sequence counters
 
 **Two Ultimates were streaming into the same multicast group.** Every packet arrived, in order, with
-zero loss *from each sender's point of view*, so nothing in the receive path looked wrong.
+zero loss _from each sender's point of view_, so nothing in the receive path looked wrong.
 
 Rules that follow from it:
 
 - **Count what arrives first.** Packet rate, payload size, and the implied sample rate against the
   expected one. `tools/hil/` has the harnesses; a ten-line `recvfrom` loop is often faster.
-- **A/B by removing senders, not by editing code.** Stop the stream on *every* machine, then start
+- **A/B by removing senders, not by editing code.** Stop the stream on _every_ machine, then start
   one, and measure again.
 - **Sequence deltas name the fault.** All `+1` = a clean single sender. Two alternating large deltas
   summing to ~65536 = two senders sharing a group, not packet loss.
@@ -612,7 +673,7 @@ Rules that follow from it:
 ## Build an exact instrument when the complaint is subjective
 
 "It sounds rough" cannot be graded against real music, whose spectrum moves constantly — a
-correlation score says only that *something* differs. `tools/hil/make_tone_ladder_sid.py` emits a
+correlation score says only that _something_ differs. `tools/hil/make_tone_ladder_sid.py` emits a
 307-byte PSID playing a known C3→C4→C3 ladder that also steps the screen colour in unison with the
 notes, and `analyse_tone_ladder.py` reports per-note pitch error in cents and per-note duration.
 That turns "rough" into "notes are 0.965 s instead of 0.500 s", which points at a rate problem in
@@ -621,7 +682,7 @@ one reading. Prefer building that instrument early over another round of reasoni
 ### Calibrate the instrument before you trust it
 
 An instrument that has not been checked against a known-good signal will report faults that are its
-own. Every one of these was a *measurement* bug that looked exactly like a device bug:
+own. Every one of these was a _measurement_ bug that looked exactly like a device bug:
 
 - **AC-couple before measuring level.** Gating the SID leaves a DC step, and through the chip's DC
   blocker it rings for ~0.6 s at about 1 Hz. Unweighted that ring measured -13 dBFS — louder than
@@ -632,7 +693,7 @@ own. Every one of these was a *measurement* bug that looked exactly like a devic
   "expected" 500. The signal was right and the expectation was wrong: PAL is 985248/19656 =
   50.1245 Hz, so 25 frames is 498.76 ms. A constant 1 ms bias, invented by the measurement.
 - **Reference a threshold to the thing you are measuring.** Half-rise between the note and the
-  preceding floor made onset placement depend on how quiet the *previous* slot was, so notes after a
+  preceding floor made onset placement depend on how quiet the _previous_ slot was, so notes after a
   silence were called tens of ms early. Half power below the note's own plateau is the same place on
   every attack.
 - **A filter that happens to hide a problem is not a fix.** A `>= 0.12 s` length filter was silently
@@ -640,7 +701,7 @@ own. Every one of these was a *measurement* bug that looked exactly like a devic
   fixed the real defect; the accidental filter would have hidden the next one.
 
 Validate against `sidplayfp` renders and a 6502 trace of the player (a ~90-line simulator over the
-handful of opcodes involved proves colour and note writes land on the same frame) *before* pointing
+handful of opcodes involved proves colour and note writes land on the same frame) _before_ pointing
 the instrument at hardware. Grade against published standards — ITU-R BT.1359-1 for A/V sync,
 BS.1770/EBU R128 for level — so the verdict means something outside this repo, and report median
 with IQR rather than a bare mean so one dropout cannot move the headline.
@@ -659,7 +720,7 @@ SailfishOS can be tested on, now or by waiting — so:
   item is not blocked, it is unrunnable, and it has repeatedly been re-created and
   re-carried across sessions as though hardware were about to arrive.
 - Where a spec names the 8020 (e.g. keypad-first / low-power sizing), treat it as a
-  *design constraint to build for*, not a device to measure on: satisfy it by
+  _design constraint to build for_, not a device to measure on: satisfy it by
   construction, prove what is provable on the Pixel 4, and say plainly which part is
   unverifiable until the handset ships.
 - The same applies to the `c64u-remote` variant's manual, which names the 8020 as the

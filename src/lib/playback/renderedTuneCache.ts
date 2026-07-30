@@ -33,6 +33,15 @@ export interface RenderedTune {
   channels: number;
   /** Rendered length in seconds (pcm.length / channels / sampleRate). */
   durationSeconds: number;
+  /**
+   * True when this is only the opening of the tune, not the whole of it.
+   *
+   * A lead-in is cached for tracks the listener has not asked for yet — the next and the previous —
+   * so that starting one does not have to out-render the speaker from a standing start. Playback must
+   * hand over to live rendering when it runs out rather than treating the end of the buffer as the
+   * end of the tune, which would cut the song off after a few seconds.
+   */
+  partial?: boolean;
 }
 
 /** previous / current / next — the window a listener can actually reach quickly. */

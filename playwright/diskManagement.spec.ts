@@ -135,30 +135,30 @@ const seedDiskLibrary = async (page: Page, disks: SeedDisk[]) => {
   );
 };
 
-const seedUltimateTurricanDisks = async (page: Page) => {
+const seedUltimateSampleArcadeDisks = async (page: Page) => {
   await seedDiskLibrary(page, [
     {
-      id: "ultimate:/Usb0/Games/Turrican II/Disk 1.d64",
+      id: "ultimate:/Usb0/Games/Sample Arcade/Disk 1.d64",
       name: "Disk 1.d64",
-      path: "/Usb0/Games/Turrican II/Disk 1.d64",
+      path: "/Usb0/Games/Sample Arcade/Disk 1.d64",
       location: "ultimate",
-      group: "Turrican II",
+      group: "Sample Arcade",
       importOrder: 1,
     },
     {
-      id: "ultimate:/Usb0/Games/Turrican II/Disk 2.d64",
+      id: "ultimate:/Usb0/Games/Sample Arcade/Disk 2.d64",
       name: "Disk 2.d64",
-      path: "/Usb0/Games/Turrican II/Disk 2.d64",
+      path: "/Usb0/Games/Sample Arcade/Disk 2.d64",
       location: "ultimate",
-      group: "Turrican II",
+      group: "Sample Arcade",
       importOrder: 2,
     },
     {
-      id: "ultimate:/Usb0/Games/Turrican II/Disk 3.d64",
+      id: "ultimate:/Usb0/Games/Sample Arcade/Disk 3.d64",
       name: "Disk 3.d64",
-      path: "/Usb0/Games/Turrican II/Disk 3.d64",
+      path: "/Usb0/Games/Sample Arcade/Disk 3.d64",
       location: "ultimate",
-      group: "Turrican II",
+      group: "Sample Arcade",
       importOrder: 3,
     },
   ]);
@@ -216,17 +216,17 @@ test.describe("Disk management", () => {
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       await page.goto("/disks", { waitUntil: "domcontentloaded" });
       await snap(page, testInfo, "disks-open");
-      await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Turrican II"), [
+      await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Sample Arcade"), [
         "Disk 1.d64",
         "Disk 2.d64",
       ]);
       await snap(page, testInfo, "disks-added");
 
       const diskList = getDiskList(page);
-      await expect(diskList.getByTestId("disk-row-header").filter({ hasText: "/Turrican II/" })).toBeVisible();
+      await expect(diskList.getByTestId("disk-row-header").filter({ hasText: "/Sample Arcade/" })).toBeVisible();
       const diskRow = getDiskRow(page, "Disk 1.d64");
       await expect(diskRow).toBeVisible();
-      await expect(diskRow).not.toContainText("/Turrican II/");
+      await expect(diskRow).not.toContainText("/Sample Arcade/");
       await expect(getDiskRow(page, "Disk 2.d64")).toBeVisible();
       await snap(page, testInfo, "disk-list-grouped");
     },
@@ -336,7 +336,7 @@ test.describe("Disk management", () => {
     await clickSourceSelectionButton(dialog, "C64 Ultimate");
     await openRemoteFolder(page, "Usb0");
     await openRemoteFolder(page, "Games");
-    await openRemoteFolder(page, "Turrican II");
+    await openRemoteFolder(page, "Sample Arcade");
     await snap(page, testInfo, "c64u-folder");
     await selectEntryCheckbox(page, "Disk 1.d64");
     await selectEntryCheckbox(page, "Disk 2.d64");
@@ -347,8 +347,10 @@ test.describe("Disk management", () => {
     const diskList = getDiskList(page);
 
     await expect(diskList.getByText("Disk 1.d64", { exact: true })).toBeVisible();
-    await expect(diskList.getByTestId("disk-row-header").filter({ hasText: "/Usb0/Games/Turrican II/" })).toBeVisible();
-    await expect(getDiskRow(page, "Disk 1.d64")).not.toContainText("/Usb0/Games/Turrican II/");
+    await expect(
+      diskList.getByTestId("disk-row-header").filter({ hasText: "/Usb0/Games/Sample Arcade/" }),
+    ).toBeVisible();
+    await expect(getDiskRow(page, "Disk 1.d64")).not.toContainText("/Usb0/Games/Sample Arcade/");
     await expect(diskList.getByLabel("C64U disk").first()).toBeVisible();
     await snap(page, testInfo, "disk-list");
   });
@@ -358,7 +360,7 @@ test.describe("Disk management", () => {
   }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
     await snap(page, testInfo, "disks-open");
-    await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Turrican II"), [
+    await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Sample Arcade"), [
       "Disk 1.d64",
       "Disk 2.d64",
     ]);
@@ -411,7 +413,7 @@ test.describe("Disk management", () => {
       "foo2.d64",
       "DiskA.d64",
       "DiskB.d64",
-      "Last Ninja 3-1.d64",
+      "Sample Quest 3-1.d64",
     ]);
     await snap(page, testInfo, "disks-grouped");
 
@@ -435,7 +437,7 @@ test.describe("Disk management", () => {
   });
 
   test("mounting ultimate disks uses mount endpoint @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await seedUltimateTurricanDisks(page);
+    await seedUltimateSampleArcadeDisks(page);
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
     await snap(page, testInfo, "disks-open");
 
@@ -447,7 +449,7 @@ test.describe("Disk management", () => {
     await expect.poll(() => Boolean(mountDriveRequest(server.requests, "a"))).toBe(true);
     const remoteMount = mountDriveRequest(server.requests, "a");
     expect(remoteMount?.method).toBe("PUT");
-    expect(remoteMount?.url).toContain("image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64");
+    expect(remoteMount?.url).toContain("image=%2FUsb0%2FGames%2FSample%20Arcade%2FDisk%201.d64");
     await snap(page, testInfo, "mount-requested");
   });
 
@@ -455,7 +457,7 @@ test.describe("Disk management", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
-    await seedUltimateTurricanDisks(page);
+    await seedUltimateSampleArcadeDisks(page);
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
 
     const diskRow = getDiskRow(page, "Disk 1.d64");
@@ -482,7 +484,7 @@ test.describe("Disk management", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, "Expected mount failure warnings.");
-    await seedUltimateTurricanDisks(page);
+    await seedUltimateSampleArcadeDisks(page);
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
 
     await getDiskRow(page, "Disk 1.d64").getByRole("button", { name: "Mount Disk 1.d64" }).click();
@@ -508,7 +510,7 @@ test.describe("Disk management", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, "Expected mount failure warnings for unreachable device.");
-    await seedUltimateTurricanDisks(page);
+    await seedUltimateSampleArcadeDisks(page);
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
 
     await getDiskRow(page, "Disk 1.d64").getByRole("button", { name: "Mount Disk 1.d64" }).click();
@@ -528,7 +530,7 @@ test.describe("Disk management", () => {
   test("multi-drive mounting and rotation within group @layout", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    await seedUltimateTurricanDisks(page);
+    await seedUltimateSampleArcadeDisks(page);
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
     await snap(page, testInfo, "disks-open");
 
@@ -547,7 +549,7 @@ test.describe("Disk management", () => {
   });
 
   test("mount dialog shows a single close button @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await seedUltimateTurricanDisks(page);
+    await seedUltimateSampleArcadeDisks(page);
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
     await snap(page, testInfo, "disks-open");
 
@@ -566,7 +568,7 @@ test.describe("Disk management", () => {
     await snap(page, testInfo, "disks-open");
     await addLocalFolder(
       page,
-      path.resolve("playwright/fixtures/disks-local/Turrican II"),
+      path.resolve("playwright/fixtures/disks-local/Sample Arcade"),
       ["Disk 1.d64", "Disk 2.d64"],
       false,
     );
@@ -648,8 +650,8 @@ test.describe("Disk management", () => {
   test("disk presence indicator and deletion ejects mounted disks @layout", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    await seedUltimateTurricanDisks(page);
-    const encodedPath = encodeURIComponent("/Usb0/Games/Turrican II/Disk 1.d64");
+    await seedUltimateSampleArcadeDisks(page);
+    const encodedPath = encodeURIComponent("/Usb0/Games/Sample Arcade/Disk 1.d64");
     await page.request.put(`${server.baseUrl}/v1/drives/a:mount?image=${encodedPath}`);
     await page.goto("/disks", { waitUntil: "commit" });
     await snap(page, testInfo, "disks-open");
@@ -676,7 +678,7 @@ test.describe("Disk management", () => {
   test("disk menu shows size/date and rename works @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
     await snap(page, testInfo, "disks-open");
-    await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Turrican II"), ["Disk 1.d64"]);
+    await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Sample Arcade"), ["Disk 1.d64"]);
     await snap(page, testInfo, "disks-added");
 
     await openDiskMenu(page, "Disk 1.d64");
@@ -693,7 +695,7 @@ test.describe("Disk management", () => {
   test("disk list select all removes selected items @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
     await snap(page, testInfo, "disks-open");
-    await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Turrican II"), [
+    await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Sample Arcade"), [
       "Disk 1.d64",
       "Disk 2.d64",
     ]);
@@ -737,7 +739,7 @@ test.describe("Disk management", () => {
   test("disk removal wording is non-destructive @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
     await snap(page, testInfo, "disks-open");
-    await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Turrican II"), ["Disk 1.d64"]);
+    await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Sample Arcade"), ["Disk 1.d64"]);
 
     await openDiskMenu(page, "Disk 1.d64");
     await expect(page.getByRole("menuitem", { name: /Remove from collection/i })).toBeVisible();
@@ -749,7 +751,7 @@ test.describe("Disk management", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
-    await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Turrican II"), ["Disk 1.d64"]);
+    await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Sample Arcade"), ["Disk 1.d64"]);
 
     await openDiskMenu(page, "Disk 1.d64");
     const sizeItem = page.getByRole("menuitem", { name: /Size:/i });
@@ -770,7 +772,7 @@ test.describe("Disk management", () => {
     await clickSourceSelectionButton(dialog, "C64 Ultimate");
     await openRemoteFolder(page, "Usb0");
     await openRemoteFolder(page, "Games");
-    await openRemoteFolder(page, "Turrican II");
+    await openRemoteFolder(page, "Sample Arcade");
     await selectEntryCheckbox(page, "Disk 1.d64");
     await page.getByRole("button", { name: "Add to library" }).click();
     await expect(page.getByRole("dialog")).toBeHidden();
