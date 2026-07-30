@@ -17,13 +17,23 @@
  *
  * Refresh cadence is decoupled from HVSC updates (spec D4/D9): re-pin only when
  * a newer `sidflow-data` release is adopted, updating the tag + sha256 here.
+ *
+ * **0.8.2 changed what a neighbour edge means.** Through 0.8.0 the exported edges formed a
+ * directed acyclic graph, every target a lower track ordinal. 0.8.2 replaces that with a
+ * Vamana (DiskANN) searchable index: every slot carries a real edge, cycles are permitted and
+ * present, and the largest undirected component covers 99.995% of the corpus. Slot order is
+ * still descending similarity, so the `NEIGHBORS_PER_TRACK - slot` weighting in
+ * `stationEngine` is unaffected. Nothing else in the bundle changed — the STYLE_TABLE,
+ * FILE_IDENTITY_TABLE, FILE_TRACK_COUNT_TABLE, STYLE_MASK_TABLE and packed ratings are
+ * byte-identical to 0.8.0, so every track ordinal resolves to the same identity and a station
+ * descriptor persisted under 0.8.0 stays valid.
  */
 
 /** GitHub repo hosting the published similarity exports. */
 export const SIDCORR_REPO = "chrisgleissner/sidflow-data";
 
 /** Release tag the bundle is pinned to. */
-export const SIDCORR_RELEASE_TAG = "0.8.0";
+export const SIDCORR_RELEASE_TAG = "0.8.2";
 
 /** Release asset name for the Tiny bundle. */
 export const SIDCORR_BUNDLE_ASSET = "sidcorr-hvsc-full-sidcorr-tiny-1.sidcorr";
@@ -35,7 +45,7 @@ export const SIDCORR_MANIFEST_ASSET = "sidcorr-hvsc-full-sidcorr-tiny-1.manifest
  * Committed sha256 of the pinned bundle. A build fails loudly if the fetched
  * asset drifts from this pin (spec §3).
  */
-export const SIDCORR_BUNDLE_SHA256 = "64bee4464c89f605ea15e468168ff39b9f00bb8bf659da2af59ad0004f7c9c6d";
+export const SIDCORR_BUNDLE_SHA256 = "10db2838831bb2386f6dd19041a7ae8525878c401afa6eaf932d9b1610c1c0bc";
 
 /**
  * Path under `public/` where the fetched bundle lands. Vite copies `public/`
@@ -63,3 +73,14 @@ export const SIDCORR_EXPECTED = {
   neighborsPerTrack: 3,
   styleCount: 9,
 } as const;
+
+/**
+ * `graph_flags` the pinned bundle is expected to carry (header offset 30).
+ *
+ * `0x0006` is the two legacy reserved bits and nothing else. Bit 0 (acyclic) and bit 3
+ * (flow successor) are both clear, and the golden test asserts that — not because the app
+ * needs either property, but because their absence is what makes the corpus safe to traverse
+ * only with a bounded walk and a played-set, which is what `computeStation` and
+ * `StationQueueProvider` do. 0.8.0 carried `0x0007`.
+ */
+export const SIDCORR_EXPECTED_GRAPH_FLAGS = 0x0006;

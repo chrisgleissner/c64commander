@@ -6,7 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import { Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,11 +21,21 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { addLog } from "@/lib/logging";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
+import { SidChipBadge } from "@/components/playback/SidChipBadge";
+import type { SidChipCount } from "@/lib/playback/sidDisplayName";
+import {
+  nextPoliteAnnouncement,
+  PENDING_ANNOUNCEMENT_INTERVAL_MS,
+  type PendingSeekPresentation,
+  type PoliteAnnouncement,
+} from "@/lib/playback/pendingSeekStatus";
 
 export type PlaybackControlsCardProps = {
   hasCurrentItem: boolean;
   currentItemIcon?: ReactNode;
   currentItemLabel: string | null;
+  /** 1, 2 or 3 when the tune's SID chip count is known; `null` suppresses the badge. */
+  currentItemChipCount?: SidChipCount | null;
   currentDurationLabel: string | null;
   subsongLabel: string | null;
   canTransport: boolean;
@@ -55,13 +72,14 @@ export type PlaybackControlsCardProps = {
   onSeekToFraction?: (fraction: number) => void;
   progressPercent: number;
   /**
-   * Where playback is waiting to reach, as a percentage, or undefined when it is not waiting.
+   * Everything shown about a seek that is waiting for the renderer, or undefined when none is.
    *
    * A seek past what is rendered cannot be instant — libsidplayfp cannot rewind — so playback holds
-   * here while the renderer catches up. Shown explicitly, because a listener who has just dragged the
-   * bar must never be left wondering whether anything happened.
+   * while the renderer catches up. Shown explicitly and determinately, because a listener who has
+   * just dragged the bar must never be left wondering whether anything happened, and because a wait
+   * with no end in sight is indistinguishable from a fault.
    */
-  awaitedPercent?: number;
+  pendingSeek?: PendingSeekPresentation;
   /** The tune's composer, from its SID header, when known. */
   currentItemAuthor?: string | null;
   /** The tune's release line, from its SID header, when known — often "1987 Hewson" or just a year. */
@@ -126,6 +144,39 @@ const fractionFromPointer = (event: ReactPointerEvent<HTMLElement>): number => {
   const rect = event.currentTarget.getBoundingClientRect();
   if (rect.width <= 0) return 0;
   return Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+};
+
+/** Percentages arrive from a duration that may be an estimate, so pin them to the bar. */
+const clampPercent = (value: number): number => Math.min(100, Math.max(0, value));
+
+/**
+ * Hold `text` in a live region, but no more often than the announcement interval.
+ *
+ * The pending status refreshes twice a second. Handed straight to a live region that becomes a
+ * screen reader talking over itself continuously, which drowns the rest of the page and tells the
+ * listener less than saying it once every few seconds would. Clearing is immediate — a wait that has
+ * ended must not keep being announced — and a message held back by the throttle is said when the
+ * window opens rather than dropped, so the last state of a wait is always announced.
+ */
+const usePoliteAnnouncement = (text: string | null): string => {
+  const [announcement, setAnnouncement] = useState<PoliteAnnouncement | null>(null);
+  const announcementRef = useRef<PoliteAnnouncement | null>(null);
+  announcementRef.current = announcement;
+
+  useEffect(() => {
+    const apply = (): PoliteAnnouncement | null => {
+      const next = nextPoliteAnnouncement(announcementRef.current, text, Date.now());
+      if (next !== announcementRef.current) setAnnouncement(next);
+      return next;
+    };
+    const settled = apply();
+    if (text === null || settled?.text === text) return;
+    const waitMs = Math.max(0, PENDING_ANNOUNCEMENT_INTERVAL_MS - (Date.now() - (settled?.atMs ?? 0)));
+    const timer = window.setTimeout(apply, waitMs);
+    return () => window.clearTimeout(timer);
+  }, [text]);
+
+  return announcement?.text ?? "";
 };
 
 /** A short tick so a scrub is felt as well as seen; silently ignored where unsupported. */
@@ -222,6 +273,7 @@ export const PlaybackControlsCard = ({
   hasCurrentItem,
   currentItemIcon,
   currentItemLabel,
+  currentItemChipCount = null,
   currentDurationLabel,
   subsongLabel,
   canTransport,
@@ -247,7 +299,7 @@ export const PlaybackControlsCard = ({
   renderedPercent,
   currentItemAuthor,
   currentItemReleased,
-  awaitedPercent,
+  pendingSeek,
   elapsedLabel,
   remainingLabel,
   totalLabel,
@@ -267,6 +319,7 @@ export const PlaybackControlsCard = ({
   rankingControls,
   stationActive = false,
 }: PlaybackControlsCardProps) => {
+  const pendingAnnouncement = usePoliteAnnouncement(pendingSeek?.liveText ?? null);
   const scrubHandlers = { start: onScrubStart, step: onScrubStep, end: onScrubEnd };
   const holdRewind = useHoldToSeek(-SEEK_STEP_SECONDS, onSeek, scrubHandlers);
   const holdForward = useHoldToSeek(SEEK_STEP_SECONDS, onSeek, scrubHandlers);
@@ -310,6 +363,7 @@ export const PlaybackControlsCard = ({
             <div className="flex flex-wrap items-center gap-1">
               {currentItemIcon ? <span className="shrink-0">{currentItemIcon}</span> : null}
               <span className="text-base font-semibold text-foreground">{currentItemLabel}</span>
+              {currentItemChipCount ? <SidChipBadge chipCount={currentItemChipCount} /> : null}
               {currentDurationLabel ? (
                 <span className="text-sm text-muted-foreground">({currentDurationLabel})</span>
               ) : null}
@@ -411,15 +465,27 @@ export const PlaybackControlsCard = ({
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span
-              className={cn("shrink-0 tabular-nums", isScrubbing && "font-semibold text-foreground")}
+              className={cn("shrink-0 tabular-nums", (isScrubbing || pendingSeek) && "font-semibold text-foreground")}
               data-testid="playback-elapsed"
+              // Held, not merely lagging. While the renderer works towards a target the engine is
+              // silent, and this clock stays at the last position that was genuinely audible. A
+              // clock ticking on through that silence is the single thing this whole state exists
+              // to prevent — it is indistinguishable from playback that has died.
+              data-elapsed-held={pendingSeek ? "true" : undefined}
             >
-              {awaitedPercent !== undefined ? `⏳ ${elapsedLabel}` : isScrubbing ? `⏵ ${elapsedLabel}` : elapsedLabel}
+              {pendingSeek ? `⏸ ${elapsedLabel}` : isScrubbing ? `⏵ ${elapsedLabel}` : elapsedLabel}
             </span>
             {onSeekToFraction ? (
-              // A tap or drag anywhere on the bar jumps there. Wrapped in a
-              // button so it is reachable by keyboard and by the keypad-first
-              // C64U Remote variant, where there is no pointer at all.
+              // A tap or drag anywhere on the bar moves the playback target there. Wrapped in a
+              // button so it is reachable by keyboard and by the keypad-first C64U Remote variant,
+              // where there is no pointer at all.
+              //
+              // Every pointer move is reported, and that is deliberate rather than an oversight of
+              // "never seek on a gesture sample": the handler this calls does NOT seek per sample.
+              // It moves the displayed target — which is what makes the bar follow the finger — and
+              // debounces a single seek to where the finger came to rest. Withholding the samples
+              // here would only make the bar lag the finger; the coalescing has to live where the
+              // engine is driven, and it does.
               <button
                 type="button"
                 data-testid="playback-progress-seek"
@@ -458,15 +524,54 @@ export const PlaybackControlsCard = ({
                       data-rendered-percent={Math.round(renderedPercent)}
                     />
                   ) : null}
-                  {/* Where the drag landed, while the renderer works towards it. */}
-                  {awaitedPercent !== undefined ? (
+                  {/* The span still to be rendered, from the render head towards the target.
+                      Striped as well as tinted: this app is read at arm's length, and one
+                      translucent fill beside a slightly different translucent fill is not a
+                      distinction anybody can make. The stripes march while the renderer works, and
+                      stop under `prefers-reduced-motion` leaving the texture behind. */}
+                  {pendingSeek ? (
                     <div
                       aria-hidden
-                      className="pointer-events-none absolute inset-y-0 w-0.5 bg-primary"
-                      style={{ left: `${Math.min(100, Math.max(0, awaitedPercent))}%` }}
-                      data-testid="playback-awaited-marker"
-                      data-awaited-percent={Math.round(awaitedPercent)}
+                      className="playback-pending-region pointer-events-none absolute inset-y-0 rounded-full"
+                      style={{
+                        left: `${clampPercent(pendingSeek.renderedPercent)}%`,
+                        width: `${Math.max(0, clampPercent(pendingSeek.targetPercent) - clampPercent(pendingSeek.renderedPercent))}%`,
+                      }}
+                      data-testid="playback-pending-region"
+                      data-pending-progress={pendingSeek.progressPercent}
+                      // Where the render head stood when the target was accepted — the denominator
+                      // of the percentage beside it, and the one number a HIL session needs to tell
+                      // a progress figure that is going somewhere from one that only looks like it.
+                      data-started-percent={Math.round(pendingSeek.startedAtPercent)}
                     />
+                  ) : null}
+                  {/* Where the drag landed, while the renderer works towards it.
+                      Named and dated rather than a bare line: a 2 px rule with no label is the one
+                      element on this bar that a listener cannot interpret, and the position it
+                      stands for is exactly the thing they are waiting to hear. */}
+                  {pendingSeek ? (
+                    <div
+                      role="img"
+                      aria-label={`Waiting to continue at ${pendingSeek.targetLabel}, ${pendingSeek.progressPercent}% ready`}
+                      className="pointer-events-none absolute inset-y-0"
+                      style={{ left: `${clampPercent(pendingSeek.targetPercent)}%` }}
+                      data-testid="playback-awaited-marker"
+                      data-awaited-percent={Math.round(pendingSeek.targetPercent)}
+                    >
+                      <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 -translate-x-1/2 bg-primary" />
+                      {/* A distinct cap, so the target is a shape and not only a colour. */}
+                      <span
+                        aria-hidden
+                        className="absolute -top-1 left-0 h-2 w-2 -translate-x-1/2 rotate-45 rounded-[1px] bg-primary"
+                      />
+                      <span
+                        aria-hidden
+                        className="absolute -top-5 left-0 -translate-x-1/2 whitespace-nowrap rounded bg-primary px-1 text-[10px] font-medium leading-4 tabular-nums text-primary-foreground"
+                        data-testid="playback-awaited-timestamp"
+                      >
+                        {pendingSeek.targetLabel}
+                      </span>
+                    </div>
                   ) : null}
                   <Progress
                     value={progressPercent}
@@ -493,6 +598,27 @@ export const PlaybackControlsCard = ({
               {remainingLabel}
             </span>
           </div>
+          {/* Inline and always visible, never a tooltip: there is no hover on a phone, and this is
+              the only place that says why the tune has gone quiet. Determinate — a percentage and,
+              once the device's render rate has actually been measured, a duration. */}
+          {pendingSeek ? (
+            <p
+              // Hidden from assistive technology on purpose: the live region below says the same
+              // thing in sentences, and exposing both makes a screen reader read the wait twice.
+              aria-hidden
+              className="text-xs font-medium text-foreground"
+              data-testid="playback-pending-status"
+              data-pending-progress={pendingSeek.progressPercent}
+              data-pending-eta={pendingSeek.etaSeconds ?? undefined}
+            >
+              {pendingSeek.statusText}
+            </p>
+          ) : null}
+          {/* Present whether or not anything is pending: a live region added to the DOM at the same
+              moment as its content is frequently not announced at all. */}
+          <span className="sr-only" aria-live="polite" data-testid="playback-pending-announcement">
+            {pendingAnnouncement}
+          </span>
           <div
             className="flex items-center justify-between text-xs text-muted-foreground"
             data-testid="playback-counters"

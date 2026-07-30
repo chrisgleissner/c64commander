@@ -76,6 +76,7 @@ import {
   romFallbackDecision,
 } from "@/lib/playback/playbackEngineRouting";
 import type { PlaylistItem } from "@/pages/playFiles/types";
+import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
 import { resolveSidMutedVolumeOption } from "@/lib/config/sidVolumeControl";
 import {
   applyConfigFileReference,
@@ -1494,7 +1495,7 @@ export function usePlaybackController({
   }, [playItem, setCurrentPlaybackIsLocal, addErrorLog, STOP_MACHINE_TIMEOUT_MS]);
 
   const startPlaylist = useCallback(
-    async (items: PlaylistItem[], startIndex = 0) => {
+    async (items: PlaylistItem[], startIndex = 0, options?: { replaceQueue?: boolean }) => {
       if (!items.length) return;
       // Playlist row/title taps call this directly, so it needs the same
       // duplicate-start drop as handlePlay, and it must invalidate the
@@ -1510,12 +1511,7 @@ export function usePlaybackController({
         setPlaylistEnded(false);
         writeMachineExecutionFromPlay("running");
         const resolvedItems = await applySonglengthsToItems(items);
-        setPlaylist((prev) => {
-          if (!prev.length) return resolvedItems;
-          const baseIds = new Set(resolvedItems.map((item) => item.id));
-          const extras = prev.filter((item) => !baseIds.has(item.id));
-          return extras.length ? [...resolvedItems, ...extras] : resolvedItems;
-        });
+        setPlaylist((prev) => mergeStartedPlaylist(prev, resolvedItems, options));
         setIsPaused(false);
         try {
           await playItem(resolvedItems[startIndex], {

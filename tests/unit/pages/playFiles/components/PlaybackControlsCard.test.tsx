@@ -6,8 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { PENDING_ANNOUNCEMENT_INTERVAL_MS, type PendingSeekPresentation } from "@/lib/playback/pendingSeekStatus";
 import { CTA_HIGHLIGHT_DURATION_MS, CTA_PERSISTENT_ACTIVE_ATTR } from "@/lib/ui/buttonInteraction";
 import {
   PlaybackControlsCard,
@@ -103,6 +104,26 @@ describe("PlaybackControlsCard", () => {
       />,
     );
     expect(screen.getByTestId("open-controller-slot")).toBeInTheDocument();
+  });
+
+  it("badges the SID chip count beside the now-playing title", () => {
+    render(
+      <PlaybackControlsCard
+        {...buildProps({ hasCurrentItem: true, currentItemLabel: "Bossa in Do", currentItemChipCount: 2 })}
+      />,
+    );
+
+    const track = screen.getByTestId("playback-current-track");
+    expect(track).toHaveTextContent("Bossa in Do");
+    expect(within(track).getByTestId("sid-chip-badge-2")).toHaveTextContent("2SID");
+  });
+
+  it("draws no chip badge when the chip count is unknown", () => {
+    render(<PlaybackControlsCard {...buildProps({ hasCurrentItem: true, currentItemLabel: "Bossa in Do" })} />);
+
+    expect(screen.queryByTestId("sid-chip-badge-1")).toBeNull();
+    expect(screen.queryByTestId("sid-chip-badge-2")).toBeNull();
+    expect(screen.queryByTestId("sid-chip-badge-3")).toBeNull();
   });
 
   it("keeps track metadata and transport controls stacked full-width", () => {
@@ -252,5 +273,153 @@ describe("PlaybackControlsCard", () => {
     );
 
     expect(screen.queryByTestId("playback-rendered-ahead")).toBeNull();
+  });
+});
+
+/**
+ * Waiting for the renderer to reach a seek.
+ *
+ * A phone has no hover, so none of this may live in a tooltip, and a wait with no visible end is
+ * what a listener reads as a fault. Everything here is therefore inline, determinate, and says the
+ * same thing twice — once for the eye and once, more slowly, for a screen reader.
+ */
+describe("PlaybackControlsCard pending seek", () => {
+  const pending = (overrides: Partial<PendingSeekPresentation> = {}): PendingSeekPresentation => ({
+    targetPercent: 40,
+    startedAtPercent: 10,
+    renderedPercent: 24,
+    audibleMs: 12_000,
+    progress: 0.68,
+    progressPercent: 68,
+    etaSeconds: 4,
+    almostReady: false,
+    targetLabel: "0:27",
+    statusText: "Preparing audio for 0:27 · 68% · about 4 s",
+    liveText: "Rendering audio for position 27 seconds. 68 percent ready. About 4 seconds remaining.",
+    ...overrides,
+  });
+
+  const renderPending = (overrides: Partial<PendingSeekPresentation> = {}) =>
+    render(
+      <PlaybackControlsCard
+        {...buildProps({
+          hasCurrentItem: true,
+          progressPercent: 8,
+          renderedPercent: 24,
+          onSeekToFraction: () => {},
+          pendingSeek: pending(overrides),
+        })}
+      />,
+    );
+
+  it("states the position, the percentage and the estimate under the bar rather than in a tooltip", () => {
+    renderPending();
+
+    const status = screen.getByTestId("playback-pending-status");
+    expect(status).toHaveTextContent("Preparing audio for 0:27 · 68% · about 4 s");
+    expect(status).toHaveAttribute("data-pending-progress", "68");
+    // Not a `title` anywhere: there is no hover on the device this runs on.
+    expect(status).not.toHaveAttribute("title");
+  });
+
+  it("gives the target marker a cap, the requested time and a name of its own", () => {
+    renderPending();
+
+    const marker = screen.getByTestId("playback-awaited-marker");
+    expect(marker).toHaveAttribute("data-awaited-percent", "40");
+    expect(marker).toHaveAccessibleName("Waiting to continue at 0:27, 68% ready");
+    expect(screen.getByTestId("playback-awaited-timestamp")).toHaveTextContent("0:27");
+  });
+
+  it("draws the span still to render from the head towards the target", () => {
+    renderPending({ renderedPercent: 24, targetPercent: 40 });
+
+    const region = screen.getByTestId("playback-pending-region");
+    expect(region.style.left).toBe("24%");
+    expect(region.style.width).toBe("16%");
+    // A texture as well as a tint, so the state is not distinguished by colour alone.
+    expect(region.className).toContain("playback-pending-region");
+  });
+
+  it("marks the elapsed clock as held, and never with an hourglass", () => {
+    renderPending();
+
+    const elapsed = screen.getByTestId("playback-elapsed");
+    expect(elapsed).toHaveAttribute("data-elapsed-held", "true");
+    expect(elapsed.textContent).not.toContain("⏳");
+  });
+
+  it("shows none of it once nothing is pending", () => {
+    render(
+      <PlaybackControlsCard
+        {...buildProps({ hasCurrentItem: true, progressPercent: 8, renderedPercent: 24, onSeekToFraction: () => {} })}
+      />,
+    );
+
+    expect(screen.queryByTestId("playback-pending-status")).toBeNull();
+    expect(screen.queryByTestId("playback-awaited-marker")).toBeNull();
+    expect(screen.queryByTestId("playback-pending-region")).toBeNull();
+    expect(screen.getByTestId("playback-elapsed")).not.toHaveAttribute("data-elapsed-held");
+  });
+
+  it("keeps the estimate out of the status when there is no valid one", () => {
+    renderPending({
+      etaSeconds: null,
+      statusText: "Preparing audio for 0:27 · 68%",
+      liveText: "Rendering audio for position 27 seconds. 68 percent ready.",
+    });
+
+    const status = screen.getByTestId("playback-pending-status");
+    expect(status).toHaveTextContent("Preparing audio for 0:27 · 68%");
+    expect(status).not.toHaveAttribute("data-pending-eta");
+  });
+
+  it("announces the wait politely, and throttles a changing message", () => {
+    vi.useFakeTimers();
+    try {
+      const { rerender } = render(
+        <PlaybackControlsCard
+          {...buildProps({ hasCurrentItem: true, onSeekToFraction: () => {}, pendingSeek: pending() })}
+        />,
+      );
+      const region = screen.getByTestId("playback-pending-announcement");
+      expect(region).toHaveAttribute("aria-live", "polite");
+      expect(region).toHaveTextContent("Rendering audio for position 27 seconds. 68 percent ready.");
+
+      // The status refreshes twice a second; a live region given that talks over itself.
+      rerender(
+        <PlaybackControlsCard
+          {...buildProps({
+            hasCurrentItem: true,
+            onSeekToFraction: () => {},
+            pendingSeek: pending({
+              progressPercent: 71,
+              liveText: "Rendering audio for position 27 seconds. 71 percent ready.",
+            }),
+          })}
+        />,
+      );
+      expect(region).toHaveTextContent("68 percent ready");
+
+      act(() => {
+        vi.advanceTimersByTime(PENDING_ANNOUNCEMENT_INTERVAL_MS + 10);
+      });
+      expect(region).toHaveTextContent("71 percent ready");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops announcing the moment the wait ends", () => {
+    const { rerender } = render(
+      <PlaybackControlsCard
+        {...buildProps({ hasCurrentItem: true, onSeekToFraction: () => {}, pendingSeek: pending() })}
+      />,
+    );
+    expect(screen.getByTestId("playback-pending-announcement")).toHaveTextContent("68 percent ready");
+
+    rerender(<PlaybackControlsCard {...buildProps({ hasCurrentItem: true, onSeekToFraction: () => {} })} />);
+
+    expect(screen.getByTestId("playback-pending-announcement")).toHaveTextContent("");
   });
 });

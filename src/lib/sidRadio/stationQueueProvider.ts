@@ -45,6 +45,15 @@ export type BuildStationItemFn = (input: {
   reason: StationReason;
   trackOrdinal: number;
   md5_48: string;
+  /**
+   * The length this tune was admitted on, or null when nothing could resolve it.
+   *
+   * Passed on rather than discarded: the provider has just looked it up to decide whether the tune
+   * is long enough, and an item built without it falls back to the three-minute default. That is
+   * what the whole queue displayed, and the default also drives the progress bar and the end of the
+   * track, so a thirty-second tune both read and behaved as three minutes.
+   */
+  durationSeconds: number | null;
 }) => PlaylistItem;
 
 export interface StationQueueProviderOptions {
@@ -85,7 +94,31 @@ export interface StationRefillResult {
 }
 
 const DEFAULT_LOOKAHEAD = 10;
-const REFILL_BATCH = 24;
+
+/**
+ * Candidate batch sizing.
+ *
+ * A refill asks the engine for a batch, then throws away every candidate whose `md5_48` does not
+ * resolve against the installed HVSC or whose length is below {@link
+ * StationQueueProviderOptions.minSeconds}. When the batch runs out before `count` items have been
+ * built, it asks again — so the number of engine computes per refill is `count / yield`, not 1.
+ *
+ * At a fixed batch of 24 that ratio is what made a deep station expensive. Measured on the Pixel 4
+ * at ~60,000 exclusions, one refill cost 3.9 s against a 150 ms budget, which is roughly 25
+ * computes of ~14 ms each rather than one slow compute. The per-compute cost was never the defect;
+ * the multiplier was.
+ *
+ * So the batch is sized from the yield this station has actually observed, rather than fixed. A
+ * station whose candidates nearly all resolve keeps asking for ~24; one discarding 90% of them asks
+ * for ten times as many in a single compute. `OVERSHOOT` covers the variance in a small sample, and
+ * the ceiling stops a pathological yield asking for a batch whose sort costs more than the extra
+ * computes would have.
+ */
+const REFILL_BATCH_MIN = 24;
+const REFILL_BATCH_MAX = 512;
+const REFILL_BATCH_OVERSHOOT = 1.5;
+/** Floor on the observed yield, so a run of discards cannot ask for an unbounded batch. */
+const MIN_ASSUMED_YIELD = 0.02;
 
 export class StationQueueProvider {
   private readonly excluded = new Set<number>();
@@ -98,6 +131,23 @@ export class StationQueueProvider {
   private readonly minSeconds: number;
   /** Tracks dropped for being too short — reported so a thin station is explicable, not mysterious. */
   private tooShortSkipped = 0;
+  /** Tracks dropped because `md5_48` did not resolve against the installed HVSC. */
+  private unresolvedSkipped = 0;
+  /**
+   * Tracks admitted with no known length.
+   *
+   * Counted separately from an admitted tune of known-good length, because "we checked and it is
+   * long enough" and "we could not find out" are different facts and only the second one can put a
+   * three-second tune in front of a listener. Without this the minimum-length rule looks like it is
+   * working whenever the songlengths are thin.
+   */
+  private unknownDurationAdmitted = 0;
+  /** Candidates taken out of the buffer, whether or not they became items — the yield denominator. */
+  private candidatesConsumed = 0;
+  /** Items actually queued — the yield numerator. */
+  private itemsEmitted = 0;
+  /** Engine computes issued, so a refill's cost can be attributed to count rather than guessed. */
+  private computeCalls = 0;
 
   constructor(private readonly options: StationQueueProviderOptions) {
     this.lookahead = options.lookahead ?? DEFAULT_LOOKAHEAD;
@@ -128,13 +178,18 @@ export class StationQueueProvider {
     const items: PlaylistItem[] = [];
     // Bound the work: even if every candidate is unresolved, we cannot loop forever.
     let guard = 0;
-    const maxGuard = Math.max(count, 1) * 50 + REFILL_BATCH * 4;
+    const maxGuard = Math.max(count, 1) * 50 + REFILL_BATCH_MAX * 4;
 
     while (items.length < count && guard < maxGuard) {
       guard += 1;
       if (this.buffer.length === 0) {
         if (this.exhausted) break;
-        const result = await this.options.computeCandidates(this.excludedOrdinals, this.recentOrdinals, REFILL_BATCH);
+        this.computeCalls += 1;
+        const result = await this.options.computeCandidates(
+          this.excludedOrdinals,
+          this.recentOrdinals,
+          this.nextBatchSize(count - items.length),
+        );
         if (result.candidates.length === 0) {
           this.exhausted = result.empty ?? "exhausted";
           break;
@@ -152,19 +207,37 @@ export class StationQueueProvider {
       // file in the same batch, and consuming the first retired the rest.
       if (this.excluded.has(candidate.trackOrdinal)) continue;
       this.consume(candidate);
+      this.candidatesConsumed += 1;
       const virtualPath = this.options.resolvePath(candidate.md5_48);
-      if (!virtualPath) continue; // removed tune — skip, no gap (§2.5)
-      if (this.minSeconds > 0 && this.options.resolveDuration) {
+      if (!virtualPath) {
+        this.unresolvedSkipped += 1;
+        continue; // removed tune — skip, no gap (§2.5)
+      }
+      let durationSeconds: number | null = null;
+      // Resolved whenever a resolver exists, not only when the rule is on: the length is what the
+      // queue displays and what the track's end is taken from, and asking for it twice would mean
+      // the tune admitted and the tune shown could disagree.
+      if (this.options.resolveDuration) {
         // A tune of a second or two is a sound effect, not music, and a station that serves them
         // between pieces reads as broken. Skipped exactly like a removed tune: the ordinal is already
         // consumed, so the next refill asks the engine for somewhere else rather than offering it
         // again. An unknown length is admitted — never drop a tune because the songlengths are thin.
         const seconds = await this.options.resolveDuration(virtualPath, candidate.songIndex);
-        if (seconds !== null && seconds < this.minSeconds) {
+        durationSeconds = seconds === null || seconds === undefined || !Number.isFinite(seconds) ? null : seconds;
+        if (this.minSeconds <= 0) {
+          // Filtering is off, so nothing is rejected and nothing is counted as an unknown-length
+          // admission — there is no rule for a missing length to slip past.
+        } else if (durationSeconds === null) {
+          // Admitted, and counted as such. A malformed length is treated exactly like a missing one
+          // rather than compared numerically, because `NaN < minSeconds` is false and would admit it
+          // silently through the branch below.
+          this.unknownDurationAdmitted += 1;
+        } else if (durationSeconds < this.minSeconds) {
           this.tooShortSkipped += 1;
           continue;
         }
       }
+      this.itemsEmitted += 1;
       items.push(
         this.options.buildItem({
           virtualPath,
@@ -172,6 +245,7 @@ export class StationQueueProvider {
           reason: candidate.reason,
           trackOrdinal: candidate.trackOrdinal,
           md5_48: candidate.md5_48,
+          durationSeconds,
         }),
       );
     }
@@ -193,9 +267,49 @@ export class StationQueueProvider {
     for (const sibling of candidate.fileTrackOrdinals) this.excluded.add(sibling);
   }
 
+  /**
+   * How large the next engine batch should be to yield `stillNeeded` items in one compute.
+   *
+   * Sized from the yield this station has observed so far, so the cost of a deep station is the
+   * cost of the candidates it actually needs rather than the number of times its buffer ran dry.
+   * Before any candidate has been consumed the yield is unknown and the minimum is used, which is
+   * the behaviour a shallow station had all along.
+   */
+  private nextBatchSize(stillNeeded: number): number {
+    const yieldRatio =
+      this.candidatesConsumed === 0 ? 1 : Math.max(this.itemsEmitted / this.candidatesConsumed, MIN_ASSUMED_YIELD);
+    const wanted = Math.ceil((Math.max(stillNeeded, 1) / yieldRatio) * REFILL_BATCH_OVERSHOOT);
+    return Math.min(Math.max(wanted, REFILL_BATCH_MIN), REFILL_BATCH_MAX);
+  }
+
   /** How many candidates were dropped for being shorter than {@link StationQueueProviderOptions.minSeconds}. */
   get shortTracksSkipped(): number {
     return this.tooShortSkipped;
+  }
+
+  /** How many candidates were dropped because their `md5_48` did not resolve to an installed path. */
+  get unresolvedTracksSkipped(): number {
+    return this.unresolvedSkipped;
+  }
+
+  /**
+   * How many queued items were admitted without a known length.
+   *
+   * Non-zero means the minimum-length rule is not fully in force: those tunes were let through
+   * because the songlengths could not answer, not because they were long enough.
+   */
+  get unknownDurationTracksAdmitted(): number {
+    return this.unknownDurationAdmitted;
+  }
+
+  /** Engine computes issued over this provider's life — the refill-cost multiplier. */
+  get engineComputeCalls(): number {
+    return this.computeCalls;
+  }
+
+  /** Fraction of consumed candidates that became queued items (1 when nothing consumed yet). */
+  get candidateYield(): number {
+    return this.candidatesConsumed === 0 ? 1 : this.itemsEmitted / this.candidatesConsumed;
   }
 
   /** Reset the exhausted flag (e.g. after a steer changes the candidate space). */

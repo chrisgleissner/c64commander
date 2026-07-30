@@ -14,6 +14,9 @@ import { cn } from "@/lib/utils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { buildLikedTunePlaylistItems, listLikedTunes, type LikedTuneEntry } from "@/lib/sidRadio/likedTunes";
 import { clearRanking, subscribeRankings } from "@/lib/sidRadio/rankingStore";
+import { SidChipBadge } from "@/components/playback/SidChipBadge";
+import { resolveTrackDisplayName } from "@/lib/playback/sidDisplayName";
+import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 
 export type LikedTunesListProps = {
   /** Play the (finite) Liked Tunes list starting at the tapped tune. */
@@ -30,6 +33,7 @@ export type LikedTunesListProps = {
  */
 export const LikedTunesList = ({ onPlay, isInstalled }: LikedTunesListProps) => {
   const [entries, setEntries] = useState<LikedTuneEntry[]>(() => listLikedTunes({ isInstalled }));
+  const friendlyNames = useFriendlySidNames();
 
   useEffect(() => {
     const refresh = () => setEntries(listLikedTunes({ isInstalled }));
@@ -51,6 +55,13 @@ export const LikedTunesList = ({ onPlay, isInstalled }: LikedTunesListProps) => 
     <ul className="flex flex-col gap-1" data-testid="liked-tunes">
       {entries.map((entry) => {
         const playIndex = entry.virtualPath ? playItems.findIndex((item) => item.path === entry.virtualPath) : -1;
+        // An unresolved entry's label is "Unknown tune (<md5>)", not a file name, so it is left
+        // alone: the beautifier reads a file-naming convention and this is a diagnostic string.
+        // Entries are still sorted on the raw label in `listLikedTunes`, so the order does not move
+        // when the preference changes.
+        const display = entry.virtualPath
+          ? resolveTrackDisplayName({ label: entry.label, category: "sid", friendlyNames })
+          : { title: entry.label, chipCount: null };
         return (
           <li
             key={entry.md5}
@@ -68,10 +79,11 @@ export const LikedTunesList = ({ onPlay, isInstalled }: LikedTunesListProps) => 
               data-testid="liked-tune-play"
               disabled={!entry.resolved || playIndex < 0}
               onClick={() => onPlay(playItems, playIndex)}
-              title={entry.resolved ? `Play from ${entry.label}` : "Not in the installed HVSC"}
+              title={entry.resolved ? `Play from ${display.title}` : "Not in the installed HVSC"}
             >
               <Play className="shrink-0" />
-              <span className="truncate">{entry.label}</span>
+              <span className="truncate">{display.title}</span>
+              {display.chipCount ? <SidChipBadge chipCount={display.chipCount} /> : null}
             </Button>
             {!entry.resolved ? (
               <span className="shrink-0 text-xs text-muted-foreground">not in current HVSC</span>
@@ -82,7 +94,7 @@ export const LikedTunesList = ({ onPlay, isInstalled }: LikedTunesListProps) => 
               size="icon"
               className="h-8 w-8 shrink-0"
               data-testid="liked-tune-unlike"
-              aria-label={`Un-like ${entry.label}`}
+              aria-label={`Un-like ${display.title}`}
               title="Un-like"
               onClick={() => void clearRanking(entry.md5)}
             >

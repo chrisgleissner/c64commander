@@ -187,7 +187,7 @@ Source of truth: `sidflow` repo docs `doc/similarity-export-tiny.md` (schema
 ### 2.1 What the current release contains
 
 From `sidcorr-hvsc-full-sidcorr-tiny-1.manifest.json` for the release the app is
-pinned to in `src/lib/sidRadio/sidcorrRelease.ts`, `sidflow-data` **0.8.0**:
+pinned to in `src/lib/sidRadio/sidcorrRelease.ts`, `sidflow-data` **0.8.2**:
 
 | Field                   | Value                                          |
 | ----------------------- | ---------------------------------------------- |
@@ -200,11 +200,38 @@ pinned to in `src/lib/sidRadio/sidcorrRelease.ts`, `sidflow-data` **0.8.0**:
 | `style_count`           | 9                                              |
 | `file_id_kind`          | `md5_48` (first 6 bytes of the SID file's MD5) |
 | `bundle_bytes`          | 1,834,993 (`content_encoding: identity`)       |
-| `bundle_sha256`         | `64bee446…7c9c6d`                              |
+| `bundle_sha256`         | `10db2838…c1c0bc`                              |
+| `graph_flags` (hdr @30) | `0x0006` — neither acyclic nor flow-successor  |
+
+**0.8.2 changed what a neighbour edge means, and nothing else.** Through 0.8.0 the
+exported edges formed a directed acyclic graph in which every target was a lower
+track ordinal. That guarantee encoded a playback policy — never play a tune twice —
+as a constraint on the artefact, and enforcing it discarded 50.76% of the source
+graph's edges and shipped 6.69% of slot capacity as sentinels. 0.8.2 replaces it
+with a Vamana (DiskANN) searchable index, and `graph_flags` bit 0 now reads 0.
+
+Measured on the shipped bytes, 0.8.0 → 0.8.2: mean out-degree 2.799 → **3.000** of 3
+(no sentinels), tracks with no incoming edge 24,669 (28.08%) → **2** (0.002%),
+tracks with no outgoing edge 2,786 → **0**, largest undirected component 99.08% →
+**99.995%**, edges pointing to a lower ordinal 100% → 48%. Slot order is still
+descending similarity, so the `NEIGHBORS_PER_TRACK - slot` weighting in
+`stationEngine` is unaffected.
+
+Not revisiting a track is now entirely the player's job, which is what
+`StationQueueProvider`'s exclusion set already did. `computeStation`'s walk is
+bounded by `maxHops` and a frontier cap, so it terminates on a cyclic graph without
+change; `tests/unit/sidRadio/sidcorrGraphFlags.test.ts` pins that.
+
+Every other section is **byte-identical** to 0.8.0 — STYLE_TABLE,
+FILE_IDENTITY_TABLE, FILE_TRACK_COUNT_TABLE, STYLE_MASK_TABLE and the packed
+ratings. `resolveTrack` derives identity only from the last two, so all 87,868 track
+ordinals resolve to the same `(fileOrdinal, songIndex, md5_48)` under both bundles
+and a station descriptor persisted under 0.8.0 stays valid across the re-pin.
 
 **Style populations are uniform in this release:** 0.8.0 rebuilt the masks so each
 style is the top 20% of the corpus by its own score — 17,574 tracks for all nine —
-and the export now refuses to publish a starved or indistinguishable one. 15.3% of
+and the export now refuses to publish a starved or indistinguishable one. 0.8.2
+ships that table byte-identical, so the populations below still hold. 15.3% of
 tracks consequently carry no style at all, which the previous forced-top-3 rule
 could not express.
 
@@ -212,8 +239,9 @@ The release this supersedes could not be used as it stood: `theme_hunter` had 0
 members, `composer_focus` 673 (0.8%), and five personas each covered roughly half
 the corpus, with `fast_paced` and `slow_ambient` sharing ~9,500 tracks. The
 launcher therefore reads the per-style counts before offering a tile (§5.4) instead
-of trusting every style to have a station behind it. On 0.8.0 that guard never
-fires; it is what keeps the next re-pin from putting a dead tile in front of a user.
+of trusting every style to have a station behind it. On 0.8.0 and 0.8.2 alike that
+guard never fires; it is what keeps the next re-pin from putting a dead tile in
+front of a user.
 
 ### 2.2 Binary layout (little-endian, byte-aligned)
 
@@ -271,9 +299,18 @@ The spec's own recipe, which we adopt:
 they just heard are seeds too, at a recency-decayed weight, so the retrieval centre moves
 with the listener. A fixed seed makes a station a sphere of one radius around one point,
 whose size is set by the branching factor rather than by how far the graph reaches —
-measured on the pinned 0.8.0 bundle it served a median of **1,676** distinct tracks before
-reporting itself exhausted, against **59,704** once the query drifts (of a 61,157-file
-ceiling). Every weight that trades "sounds like what you asked for" against "explores" is
+measured on the pinned 0.8.2 bundle it served a median of **2,265** distinct tracks before
+reporting itself exhausted, against **60,782** once the query drifts (of a 61,157-file
+ceiling; 12 stations, uncapped).
+
+The same measurement on 0.8.0 gives 1,379 fixed and 58,491 drifting, so the corpus change
+is worth +64% to a fixed seed and +3.9% to a drifting one. It matters most in the worst
+case: the weakest of 12 stations went from 56,537 to 60,145 tracks. Local coherence loosens
+slightly in exchange — consecutive tunes are one neighbour edge apart 3.6% → 2.0% of the
+time and share a style 42.8% → 40.8% — which is the expected cost of 0.8.2 spending its
+third slot on a diversifying long edge rather than a third nearest neighbour.
+
+Every weight that trades "sounds like what you asked for" against "explores" is
 stated in one place, `DEFAULT_STATION_BALANCE` in `stationEngine.ts`, and swept by
 `scripts/sidRadio/measure-station-depth.ts`.
 

@@ -73,7 +73,9 @@ describe("buildTinyFixture (v2)", () => {
     expect(h.styleCount).toBe(9);
     expect(h.neighborsPerTrack).toBe(3);
     expect(h.styleMaskWidth).toBe(2);
-    expect(h.graphFlags).toBe(0x0007);
+    // 0x0006 from sidflow-data 0.8.2 onward: the two legacy reserved bits, with bit 0 (acyclic)
+    // cleared because the export is now a Vamana index with cycles. 0.8.0 wrote 0x0007.
+    expect(h.graphFlags).toBe(0x0006);
   });
 
   it("lays out sections contiguously with the real v2 sizes", () => {
@@ -135,12 +137,23 @@ describe("buildTinyFixture (v2)", () => {
     expect(view.getUint8(rec(1, 0) + 3)).toBeGreaterThan(0); // similarity 0.9 → high byte
   });
 
-  it("rejects forward/self neighbor edges (DAG invariant)", () => {
+  // This test used to assert the opposite: that a forward edge was rejected, because through
+  // sidflow-data 0.8.0 every exported target was a lower track ordinal and the fixture enforced
+  // it. 0.8.2 replaced the DAG with a Vamana index in which 52% of edges point forward, so a
+  // builder that still rejected them could not produce a bundle shaped like the one the app
+  // parses. Out-of-range targets are still rejected — that is a real encoding error, not a
+  // retired convention.
+  it("accepts a forward neighbor edge and rejects an out-of-range one", () => {
     expect(() =>
       buildTinyFixture({
         files: [{ tracks: [{ neighbors: [1] }, {}] }], // track 0 points forward to 1
       }),
-    ).toThrow(/acyclic DAG/);
+    ).not.toThrow();
+    expect(() =>
+      buildTinyFixture({
+        files: [{ tracks: [{ neighbors: [2] }, {}] }], // only ordinals 0 and 1 exist
+      }),
+    ).toThrow(/ordinal in \[0, 2\)/);
   });
 });
 

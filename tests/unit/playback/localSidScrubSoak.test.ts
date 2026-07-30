@@ -374,6 +374,114 @@ describe("scrubbing under abuse", () => {
     expect(h.engine.getAwaitedSeekSeconds()).toBeCloseTo(90, 1);
   });
 
+  it("records the render head as it stood when the target was accepted", async () => {
+    // The denominator of everything the listener is shown. Read later instead, the figure would
+    // start at whatever fraction happened to be rendered rather than at nothing.
+    const h = await start();
+    h.engine.prerender("soak#0", new ArrayBuffer(8), 0, TUNE_SECONDS);
+    renderTo(h, 20);
+
+    await h.engine.seekTo(80);
+
+    const pending = h.engine.getPendingSeek();
+    expect(pending?.targetSeconds).toBeCloseTo(80, 1);
+    expect(pending?.renderedAtRequestSeconds).toBeCloseTo(20, 1);
+  });
+
+  it("remembers the last position that was genuinely audible, not the target", async () => {
+    // The scheduler is reset to the target when the seek is accepted, so every position source
+    // already reports the target. Without this the elapsed clock has nothing honest to show and
+    // ticks on from a position that is not sounding.
+    const h = await start();
+    h.engine.prerender("soak#0", new ArrayBuffer(8), 0, TUNE_SECONDS);
+    renderTo(h, 60);
+    await h.engine.seekTo(30);
+    expect(h.engine.getStats().positionSeconds).toBeCloseTo(30, 1);
+
+    renderTo(h, 61);
+    await h.engine.seekTo(100);
+
+    expect(h.engine.getPendingSeek()?.audibleAtRequestSeconds).toBeCloseTo(30, 1);
+    expect(h.engine.getPendingSeek()?.targetSeconds).toBeCloseTo(100, 1);
+  });
+
+  it("cancels a pending target when playback is stopped", async () => {
+    // Stop, Next, Previous, a station change, a route change and an engine change all stop playback
+    // first. A target that outlives the tune leaves the bar showing a wait for a track that has
+    // gone, and holds off the stall watchdog for the NEXT track as well.
+    const h = await start();
+    h.engine.prerender("soak#0", new ArrayBuffer(8), 0, TUNE_SECONDS);
+    renderTo(h, 10);
+    await h.engine.seekTo(90);
+    expect(h.engine.getPendingSeek()).not.toBeNull();
+
+    h.engine.stopPlayback();
+
+    expect(h.engine.getPendingSeek()).toBeNull();
+    expect(h.engine.getAwaitedSeekSeconds()).toBeNull();
+  });
+
+  it("ignores a render completion belonging to a target that is no longer outstanding", async () => {
+    // A completion that arrives after the drag has moved on must not move playback to a position
+    // nobody currently wants.
+    const h = await start();
+    h.engine.prerender("soak#0", new ArrayBuffer(8), 0, TUNE_SECONDS);
+    renderTo(h, 10);
+    await h.engine.seekTo(90);
+    const stale = h.engine.getPendingSeek();
+    expect(stale).not.toBeNull();
+
+    // A newer seek is accepted, then the old record is forced back in as a late arrival would be.
+    await h.engine.seekTo(30);
+    (h.engine as unknown as { pendingSeek: unknown }).pendingSeek = stale;
+    renderTo(h, 95);
+
+    expect(h.engine.getPendingSeek()).toBeNull();
+    // Nothing from the superseded target was adopted: the cache the engine plays from is untouched.
+    expect((h.engine.debugState() as unknown as { cached: unknown }).cached).toBeNull();
+  });
+
+  it("does not wait forever when the render finishes without reaching the target", async () => {
+    // Dragging into the closing seconds of a tune. No further pre-render chunk can ever arrive, so
+    // a target left outstanding latches the engine into a silence the stall watchdog is deliberately
+    // forbidden to judge, and the tune never reports its end either.
+    const h = await start();
+    h.engine.prerender("soak#0", new ArrayBuffer(8), 0, TUNE_SECONDS);
+    renderTo(h, 30);
+    await h.engine.seekTo(TUNE_SECONDS);
+    expect(h.engine.getPendingSeek()).not.toBeNull();
+
+    const id = (h.engine as unknown as { prerenderId: number }).prerenderId;
+    h.worker.emit({
+      type: "prerendered",
+      id,
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      seconds: TUNE_SECONDS,
+    } as never);
+
+    expect(h.engine.getPendingSeek()).toBeNull();
+    // At the end of the tune there is no audio to play, so this is the end of the track — said once.
+    expect(stateOf(h).endReceived).toBe(true);
+  });
+
+  it("drops a pending target when the pre-render thread is given up on", async () => {
+    // Nothing will ever report against that render again, so the target can only sit there showing
+    // a wait that cannot end — and while it sits there the stall watchdog is held off, so the
+    // ordinary recovery cannot run either.
+    const h = await start();
+    h.engine.prerender("soak#0", new ArrayBuffer(8), 0, TUNE_SECONDS);
+    renderTo(h, 10);
+    await h.engine.seekTo(90);
+    expect(h.engine.getPendingSeek()).not.toBeNull();
+
+    (h.engine as unknown as { onPrerenderWorkerFailure: (reason: string) => void }).onPrerenderWorkerFailure(
+      "thread died",
+    );
+
+    expect(h.engine.getPendingSeek()).toBeNull();
+  });
+
   it("keeps telling the governor how audio is doing after the Play page goes away", async () => {
     // The signal used to ride along inside getStats(), whose only regular caller is the Play page's
     // interval — and that interval is removed on tab navigation while this engine deliberately keeps

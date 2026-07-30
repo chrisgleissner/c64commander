@@ -150,7 +150,13 @@ describe("scrub feedback contract", () => {
     const { readFileSync } = await import("node:fs");
     const page = readFileSync("src/pages/PlayFilesPage.tsx", "utf8");
     expect(page).toContain("const isScrubbing = scrubTargetMs !== null");
-    expect(page).toContain("const displayElapsedMs = isScrubbing ? scrubTargetMs : elapsedMs");
+    // Amended: the expression now has a third source. A scrub still wins, which is what this test is
+    // about, but a seek waiting for the renderer freezes the clock at the last audible position
+    // instead of letting it run on through the silence. Insisting on the old two-way expression
+    // would have required the clock to advance normally while nothing was sounding, which is the
+    // defect the pending-seek state exists to remove.
+    expect(page).toContain("const displayElapsedMs = isScrubbing ? scrubTargetMs :");
+    expect(page).toContain("pendingSeek?.audibleMs ?? elapsedMs");
     // Both the bar and the timer must use it, or they disagree mid-gesture.
     expect(page).toMatch(/progressPercent = currentDurationMs \? Math\.min\(100, \(displayElapsedMs/);
     expect(page).toContain("elapsedLabel={formatTime(displayElapsedMs)}");
@@ -191,5 +197,19 @@ describe("auto-advance follows a seek", () => {
     expect(hook).toContain("const dueAtMs = Date.now() + Math.max(0, durationMs - positionMs)");
     // A rescheduled track must be allowed to fire again.
     expect(hook).toContain("guard.autoFired = false");
+  });
+
+  it("holds the deadline still while a seek waits for the renderer", async () => {
+    // The deadline is set from the TARGET the instant the target is accepted, before a note of that
+    // position has been heard. A wait of twenty seconds therefore spent twenty seconds of the tune's
+    // own time, and a target deep into a long tune advanced the playlist before playback resumed at
+    // all — the tune reported itself finished without ever reaching the position asked for.
+    const { readFileSync } = await import("node:fs");
+    const page = readFileSync("src/pages/PlayFilesPage.tsx", "utf8");
+    expect(page).toContain("const holdAutoAdvanceWhilePending = useCallback(");
+    expect(page).toContain("durationMs - pending.targetSeconds * 1000");
+    // Driven from the engine poll, so it is re-applied for as long as the wait lasts rather than
+    // once when the target is accepted.
+    expect(page).toContain("holdAutoAdvanceWhilePending(pending);");
   });
 });

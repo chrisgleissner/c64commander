@@ -19,6 +19,7 @@ const DISK_AUTOSTART_MODE_KEY = "c64u_disk_autostart_mode";
 const MIRROR_C64_AUDIO_KEY = "c64u_mirror_c64_audio";
 const LOCAL_ENGINE_AUTO_ROMS_KEY = "c64u_local_engine_auto_roms";
 const SID_RADIO_MIN_SECONDS_KEY = "c64u_sid_radio_min_seconds";
+const FRIENDLY_SID_NAMES_KEY = "c64u_friendly_sid_names";
 const VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY = "c64u_volume_slider_preview_interval_ms";
 const NOTIFICATION_VISIBILITY_KEY = "c64u_notification_visibility";
 const NOTIFICATION_DURATION_MS_KEY = "c64u_notification_duration_ms";
@@ -723,6 +724,27 @@ export const saveSidRadioMinSeconds = (seconds: number) => {
   broadcast(SID_RADIO_MIN_SECONDS_KEY, clamped);
 };
 
+/**
+ * Show SID tunes under a readable name rather than their file name.
+ *
+ * On by default. A SID's file name is a sanitised form of the tune's real title — separators stand
+ * in for spaces, and the chip count is appended as a marker — so rendering it verbatim shows the
+ * user an encoding rather than a name. Only SIDs are affected: a PRG, a CRT or a disk image is a
+ * file the user put somewhere and named, and the app has no convention to read into it.
+ *
+ * Turning this off restores the file name exactly as earlier releases drew it, badge included, for
+ * anyone who matches what is on screen against what is on disk.
+ */
+export const DEFAULT_FRIENDLY_SID_NAMES = true;
+
+export const loadFriendlySidNames = () => readBoolean(FRIENDLY_SID_NAMES_KEY, DEFAULT_FRIENDLY_SID_NAMES);
+
+export const saveFriendlySidNames = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(FRIENDLY_SID_NAMES_KEY, enabled ? "1" : "0");
+  broadcast(FRIENDLY_SID_NAMES_KEY, enabled);
+};
+
 export const DEFAULT_LOCAL_ENGINE_AUTO_ROMS = true;
 
 export const loadLocalEngineAutoRoms = () => readBoolean(LOCAL_ENGINE_AUTO_ROMS_KEY, DEFAULT_LOCAL_ENGINE_AUTO_ROMS);
@@ -850,6 +872,7 @@ export const APP_SETTINGS_KEYS = {
   SID_RANKING_ENABLED_KEY,
   PLAYBACK_ENGINE_KEY,
   LOCAL_ENGINE_ENABLED_KEY,
+  FRIENDLY_SID_NAMES_KEY,
 };
 
 /**

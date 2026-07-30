@@ -81,6 +81,78 @@ describe("SidRadioLauncherSheet", () => {
 });
 
 /**
+ * The mood a Song station is constrained to is chosen here, so the sheet has to offer the
+ * unconstrained station as an explicit option rather than as the absence of one — otherwise a
+ * listener who picks a mood has no way back to "similar to this tune" short of stopping the station
+ * and starting it again, which throws the seed away.
+ */
+describe("SidRadioLauncherSheet Song moods", () => {
+  const setupSong = (
+    overrides: Partial<{
+      songSeedLabel: string | null;
+      songStyleBit: number | null;
+      stylePopulations: SidRadioStylePopulations | null;
+    }> = {},
+  ) => {
+    const onStartSong = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <SidRadioLauncherSheet
+        open
+        onOpenChange={onOpenChange}
+        likeCount={0}
+        stylePopulations={overrides.stylePopulations ?? null}
+        onStartStyle={vi.fn()}
+        onStartTaste={vi.fn()}
+        onSurprise={vi.fn()}
+        songSeedLabel={"songSeedLabel" in overrides ? overrides.songSeedLabel : "Bouncy_Balls.sid"}
+        songStyleBit={overrides.songStyleBit ?? null}
+        onStartSong={onStartSong}
+      />,
+    );
+    return { onStartSong, onOpenChange };
+  };
+
+  it("offers All moods plus one option per style tile, named after the tune", () => {
+    setupSong();
+    expect(screen.getByTestId("sid-radio-song-section")).toHaveTextContent("Similar to Bouncy_Balls.sid");
+    expect(screen.getByTestId("sid-radio-song-mood-all")).toBeInTheDocument();
+    for (const tile of SID_RADIO_STYLE_TILES) {
+      expect(screen.getByTestId(`sid-radio-song-mood-${tile.bit}`)).toHaveTextContent(tile.label);
+    }
+  });
+
+  it("starts the Song station constrained to the chosen mood and closes the sheet", () => {
+    const { onStartSong, onOpenChange } = setupSong();
+    fireEvent.click(screen.getByTestId("sid-radio-song-mood-2"));
+    expect(onStartSong).toHaveBeenCalledWith(2);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("offers the unconstrained station as an explicit choice", () => {
+    const { onStartSong } = setupSong({ songStyleBit: 2 });
+    expect(screen.getByTestId("sid-radio-song-mood-2")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("sid-radio-song-mood-all")).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(screen.getByTestId("sid-radio-song-mood-all"));
+    expect(onStartSong).toHaveBeenCalledWith(null);
+  });
+
+  it("disables a mood the export left empty, exactly as the style tiles do", () => {
+    const { onStartSong } = setupSong({ stylePopulations: populationsWith({ theme_hunter: 0 }) });
+    const empty = screen.getByTestId("sid-radio-song-mood-8");
+    expect(empty).toBeDisabled();
+    fireEvent.click(empty);
+    expect(onStartSong).not.toHaveBeenCalled();
+  });
+
+  it("hides the section when there is no tune to seed a Song station from", () => {
+    setupSong({ songSeedLabel: null });
+    expect(screen.queryByTestId("sid-radio-song-section")).toBeNull();
+    expect(screen.queryByTestId("sid-radio-song-mood-all")).toBeNull();
+  });
+});
+
+/**
  * The release preceding the pinned 0.8.0 shipped `theme_hunter` with 0 members and
  * `composer_focus` with 673 of 87,868, so the launcher offered a station that could
  * never play anything and gave no way to tell it from one covering half the corpus.

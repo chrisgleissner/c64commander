@@ -34,6 +34,36 @@ const RAW_EMPTY_NEIGHBOR = 0xffffff;
 /** Hot (Uint32Array) unused-neighbour sentinel. */
 export const EMPTY_NEIGHBOR_HOT = 0xffffffff;
 
+/**
+ * `graph_flags` bit 0 — the exported edges form a directed acyclic graph.
+ *
+ * Set by 0.8.0 and earlier, and **cleared from 0.8.2 onward**: acyclicity encoded a playback
+ * policy ("never play the same tune twice") as a constraint on the artefact, and enforcing it
+ * cost 50.76% of the source graph's edges. Not revisiting a track is the player's job, and
+ * {@link StationQueueProvider} already keeps the set that does it.
+ *
+ * Exposed so the flag can be *reported*, never so a traversal can rely on it. `computeStation`'s
+ * walk is bounded by `maxHops` and a frontier cap, so it terminates on a cyclic graph as readily
+ * as on an acyclic one.
+ */
+export const GRAPH_FLAG_ACYCLIC = 1 << 0;
+
+/**
+ * `graph_flags` bit 3 — slot 0 of every populated row is the track's flow successor.
+ *
+ * Retired upstream. It declared a Hamiltonian path through the exported edges and was set only
+ * by a 0.8.2 build that was withdrawn within days; no published bundle sets it. The constant
+ * exists so that a bundle which *does* set it can be recognised rather than silently
+ * misinterpreted — slot 0 in every published bundle is the closest neighbour, not a successor.
+ */
+export const GRAPH_FLAG_FLOW_SUCCESSOR_FIRST = 1 << 3;
+
+/**
+ * `graph_flags` bits 1 and 2 — written since the format's first release and never assigned a
+ * meaning. Preserved by the generator rather than cleared, so they carry no information.
+ */
+export const GRAPH_FLAG_RESERVED_LEGACY = (1 << 1) | (1 << 2);
+
 export type SidcorrStyleKind = "audio" | "metadata" | "hybrid";
 
 export interface SidcorrStyle {
@@ -78,6 +108,14 @@ export class SidcorrParseError extends Error {
 
 export interface SidcorrTinyBundle {
   version: number;
+  /**
+   * Raw `graph_flags` u16 from header offset 30, reported rather than acted on.
+   *
+   * The format requires consumers to ignore bits they do not recognise, so this is deliberately
+   * the unmasked value: nothing here gates parsing or traversal, and an unknown bit changes
+   * nothing. See {@link GRAPH_FLAG_ACYCLIC} and {@link GRAPH_FLAG_FLOW_SUCCESSOR_FIRST}.
+   */
+  graphFlags: number;
   fileCount: number;
   trackCount: number;
   styles: SidcorrStyle[];
@@ -199,6 +237,10 @@ export const parseSidcorrTiny = (buffer: ArrayBuffer): SidcorrTinyBundle => {
   const fileCount = view.getUint32(16, true);
   const styleCount = view.getUint16(20, true);
   const neighborsPerTrack = view.getUint16(22, true);
+  // Header bytes 24..29 are unassigned; `graph_flags` is the u16 at 30. Read unmasked and never
+  // branched on — the format's rule is that unrecognised bits are ignored, and the bits that do
+  // have meanings (acyclic, flow-successor) are declarations the traversal must not depend on.
+  const graphFlags = view.getUint16(30, true);
   if (neighborsPerTrack !== NEIGHBORS_PER_TRACK) {
     throw new SidcorrParseError(
       "neighbors",
@@ -337,6 +379,7 @@ export const parseSidcorrTiny = (buffer: ArrayBuffer): SidcorrTinyBundle => {
 
   return {
     version,
+    graphFlags,
     fileCount,
     trackCount,
     styles,

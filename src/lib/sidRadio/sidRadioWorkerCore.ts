@@ -64,6 +64,8 @@ export const readyStatsFromBundle = (bundle: SidcorrTinyBundle, engineThreadIsMa
   trackCount: bundle.trackCount,
   edgeCount: bundle.stats.edgeCount,
   styleCount: bundle.styles.length,
+  graphFlags: bundle.graphFlags,
+  version: bundle.version,
   stylePopulations: stylePopulationsFromBundle(bundle),
   engineThreadIsMain,
 });

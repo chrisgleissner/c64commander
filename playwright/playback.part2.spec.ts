@@ -923,7 +923,13 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(page.getByTestId("playlist-list")).toContainText("demo.d64");
     await page.getByRole("button", { name: "View all" }).click();
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByText("demo.sid", { exact: true })).toBeVisible();
+    // Friendly SID names: a SID row and the now-playing transport draw the tune's readable name, so
+    // the on-screen text is neither the `.sid` file name nor its lower-case spelling — an
+    // all-lower-case name such as `track-1.sid` is set in title case, as `Track-1`. The assertion
+    // still names one specific tune. Elsewhere in this file the `toContainText`/`hasText` assertions
+    // are left on the raw file name on purpose: a playlist row keeps its full path as the subtitle,
+    // which is both still true and more stable than the rendered title.
+    await expect(dialog.getByText("Demo", { exact: true })).toBeVisible();
     await expect(dialog.getByText("demo.d64", { exact: true })).toBeVisible();
     await snap(page, testInfo, "playlist-view-all");
   });
@@ -983,7 +989,7 @@ test.describe("Playback file browser (part 2)", () => {
     await shuffleCheckbox.click();
 
     await page.getByTestId("playlist-play").click();
-    await expect(page.getByTestId("playback-current-track")).toContainText("shuffle-0.sid");
+    await expect(page.getByTestId("playback-current-track")).toContainText("Shuffle-0");
 
     const getTitles = async () => {
       const rows = page.getByTestId("playlist-item");

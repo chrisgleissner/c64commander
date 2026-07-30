@@ -105,8 +105,8 @@ export interface StationBalance {
  * The shipped balance.
  *
  * `recentWindow`, `recencyDecay`, `originWeight` and `maxHops` were each chosen by sweeping them over
- * the pinned 0.8.0 bundle with `scripts/sidRadio/measure-station-depth.ts --sweep`, which drives the
- * real {@link computeStation} through the real queue provider and reports both how deep a station
+ * the then-pinned 0.8.0 bundle with `scripts/sidRadio/measure-station-depth.ts --sweep`, which drives
+ * the real {@link computeStation} through the real queue provider and reports both how deep a station
  * gets before reporting itself exhausted and how far it steps between consecutive tunes. Depth
  * saturates for every drifting arm at ~59k of the corpus's 61,157 files, so the step distance is what
  * separates them:
@@ -122,6 +122,14 @@ export interface StationBalance {
  *    cheaper nor more coherent. At 3 (no widening) one station in 40 died after 390 tracks; 4, 6 and 8
  *    are indistinguishable in step distance and wall-clock, and depth still rises with the budget
  *    (48,864 → 56,671 → 58,971 → 59,036 → 59,704 for 2, 3, 4, 6, 8).
+ *
+ * Re-swept on the pinned 0.8.2 bundle (12 stations, cap 25,000) after the corpus became a Vamana
+ * index: every choice above still wins on step distance, and `originWeight` 0 still serves nothing
+ * at all. Two things changed and neither moves a parameter. Depth no longer separates the arms —
+ * every drifting arm now reaches the cap, including `maxHops` 2, where on 0.8.0 even 3 starved a
+ * station; that is 0.8.2's largest undirected component going from 99.08% to 99.995%. And the
+ * absolute step distances are lower across the board (`recentWindow` 3 reads 2.0%/15.0% against
+ * 3.1%/15.2%), because 0.8.2 spends its third slot on a diversifying long edge.
  */
 export const DEFAULT_STATION_BALANCE: StationBalance = {
   originWeight: 0.35,

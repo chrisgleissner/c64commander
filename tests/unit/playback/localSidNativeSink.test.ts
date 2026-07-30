@@ -423,3 +423,108 @@ describe("the native ring's own underruns reach the engine", () => {
     expect(sink.audioUnderruns!()).toBe(7);
   });
 });
+
+/**
+ * A pipeline that has stopped consuming.
+ *
+ * `ensureOpen` short-circuits on a flag held here in JavaScript, and nothing ever checked it against
+ * the pipeline it describes. Reproduced on a Pixel 4 after a burst of rapid track changes: the app's
+ * elapsed clock advanced, `__localSinkDebug()` reported seconds of audio buffered, `dumpsys audio`
+ * reported `mMusicActiveMs=0` and no AudioTrack in its players list, and the phone was silent until
+ * the app was relaunched.
+ */
+describe("a native pipeline that stops consuming", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("re-opens the track when the buffered depth stops falling while idle", async () => {
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend);
+    scheduleChunk(sink, 0.5);
+    await settle();
+    const opensBefore = backend.opens.length;
+    expect(opensBefore).toBeGreaterThan(0);
+
+    // The pipeline says it is holding audio, and goes on saying exactly that. A working one drains
+    // once nothing more is being written.
+    backend.bufferedMs = 5000;
+    await vi.advanceTimersByTimeAsync(9000);
+    await settle();
+
+    // The stalled track is dropped, which is what clears the stale "it is open" belief. It is not
+    // re-opened on the spot, because there is nothing to write yet — the next audio does that, and
+    // that is the property a listener actually experiences.
+    expect(backend.closes).toBeGreaterThan(0);
+
+    backend.bufferedMs = 0;
+    scheduleChunk(sink, 0.5, 1);
+    await settle();
+
+    expect(backend.opens.length).toBeGreaterThan(opensBefore);
+  });
+
+  it("leaves a draining pipeline alone", async () => {
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend);
+    scheduleChunk(sink, 0.5);
+    await settle();
+    const opensBefore = backend.opens.length;
+
+    // Falling depth is a pipeline doing its job, and must never be re-opened underneath the audio.
+    backend.bufferedMs = 5000;
+    for (let ms = 5000; ms > 0; ms -= 500) {
+      backend.bufferedMs = ms;
+      await vi.advanceTimersByTimeAsync(500);
+      await settle(5);
+    }
+
+    expect(backend.closes).toBe(0);
+    expect(backend.opens.length).toBe(opensBefore);
+  });
+
+  it("does not re-open a pipeline that is simply empty", async () => {
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend);
+    scheduleChunk(sink, 0.5);
+    await settle();
+    const opensBefore = backend.opens.length;
+
+    // Nothing buffered is a tune that has finished, not a pipeline that has stopped consuming.
+    backend.bufferedMs = 0;
+    await vi.advanceTimersByTimeAsync(9000);
+    await settle();
+
+    expect(backend.closes).toBe(0);
+    expect(backend.opens.length).toBe(opensBefore);
+  });
+});
+
+describe("what a stalled track leaves behind", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  // Dropping the track rebases the written total down onto the playhead, and chunk completions are
+  // announced against a clock clamped to that total. Anything still outstanding would therefore sit
+  // unfired for audio that no longer exists, and the engine renders more only when it is told a
+  // chunk has finished — so a silent pipeline would have become a stalled one.
+  it("announces the chunk completions that went with the dropped track", async () => {
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend);
+    // A long chunk, with the pipeline reporting nearly all of it still queued ahead of the speaker,
+    // so its completion is a long way from due when the stall is detected. A short chunk finishes on
+    // its own inside the watchdog's grace period and would pass whether or not anything was fixed.
+    const source = scheduleChunk(sink, 30);
+    const ended = vi.fn();
+    source.onended = ended;
+    backend.bufferedMs = 25000;
+    await settle();
+
+    expect(ended).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(9000);
+    await settle();
+
+    expect(backend.closes).toBeGreaterThan(0);
+    expect(ended).toHaveBeenCalled();
+  });
+});

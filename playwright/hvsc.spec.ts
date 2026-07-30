@@ -821,7 +821,13 @@ test.describe("HVSC Play page", () => {
     await expect(page.getByTestId("playlist-list")).toBeVisible({
       timeout: 20000,
     });
-    await expect(page.getByTestId("playlist-list").getByText("10_Orbyte.sid", { exact: true })).toBeVisible({
+    // Friendly SID names: a SID row and the now-playing transport draw the tune's readable name, so
+    // the on-screen text is neither the `.sid` file name nor its lower-case spelling — an
+    // all-lower-case name such as `track-1.sid` is set in title case, as `Track-1`. The assertion
+    // still names one specific tune. Elsewhere in this file the `toContainText`/`hasText` assertions
+    // are left on the raw file name on purpose: a playlist row keeps its full path as the subtitle,
+    // which is both still true and more stable than the rendered title.
+    await expect(page.getByTestId("playlist-list").getByText("10 Orbyte", { exact: true })).toBeVisible({
       timeout: 20000,
     });
 

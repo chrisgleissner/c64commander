@@ -93,7 +93,13 @@ test.describe("Playback auto advance", () => {
     await page.getByTestId("playlist-play").click();
 
     await expect.poll(() => server.sidplayRequests.length).toBe(1);
-    await expect(page.getByTestId("playback-current-track")).toContainText("track-1.sid");
+    // Friendly SID names: a SID row and the now-playing transport draw the tune's readable name, so
+    // the on-screen text is neither the `.sid` file name nor its lower-case spelling — an
+    // all-lower-case name such as `track-1.sid` is set in title case, as `Track-1`. The assertion
+    // still names one specific tune. Elsewhere in this file the `toContainText`/`hasText` assertions
+    // are left on the raw file name on purpose: a playlist row keeps its full path as the subtitle,
+    // which is both still true and more stable than the rendered title.
+    await expect(page.getByTestId("playback-current-track")).toContainText("Track-1");
 
     await expect
       .poll(async () => {
@@ -104,7 +110,7 @@ test.describe("Playback auto advance", () => {
       })
       .toBe(3);
 
-    await expect(page.getByTestId("playback-current-track")).toContainText("track-3.sid");
+    await expect(page.getByTestId("playback-current-track")).toContainText("Track-3");
     await expect(page.getByTestId("playlist-item").filter({ hasText: "track-3.sid" }).first()).toHaveAttribute(
       "data-playing",
       "true",
@@ -147,7 +153,7 @@ test.describe("Playback auto advance", () => {
       })
       .toBe(4);
 
-    await expect(page.getByTestId("playback-current-track")).toContainText("loop-1.sid");
+    await expect(page.getByTestId("playback-current-track")).toContainText("Loop-1");
     await expect(page.getByTestId("playlist-item").filter({ hasText: "loop-1.sid" }).first()).toHaveAttribute(
       "data-playing",
       "true",

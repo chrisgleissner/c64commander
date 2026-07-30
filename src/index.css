@@ -269,6 +269,71 @@
   }
 }
 
+/*
+ * The span of a tune still to be rendered while a seek waits for it.
+ *
+ * Given a texture rather than only a tint. The progress bar already carries a solid fill for what
+ * has played and a translucent one for what is rendered, so a third translucent fill would be
+ * telling the listener apart two states by shade alone — which fails on a phone held at arm's
+ * length, in daylight, and for anyone who cannot separate those shades at all. The stripes march
+ * towards the target while the renderer works, which is what makes the region read as work in
+ * progress rather than as a region that is simply there. Reduced motion stops the marching and
+ * keeps the stripes: the distinction survives, only the movement goes.
+ */
+@keyframes playback-pending-sweep {
+  from {
+    transform: translate3d(-60%, 0, 0);
+  }
+
+  to {
+    transform: translate3d(220%, 0, 0);
+  }
+}
+
+/*
+ * The stretch of the bar being rendered towards, while playback waits for it.
+ *
+ * A quiet wash with a single highlight travelling through it, rather than the barber-pole stripe
+ * this used to be. Two things were wrong with that. It animated `background-position`, which is not
+ * a compositor property, so every frame repainted the bar on the same thread that is running the
+ * SID renderer and the animation visibly stuttered — the reason it read as janky rather than as
+ * 90 Hz. And hard-edged stripes at half opacity are loud enough to look like a defect sitting on
+ * top of the control instead of part of it.
+ *
+ * The sweep is a pseudo-element moved with `translate3d`, which the compositor owns and runs at the
+ * display's own refresh rate without touching the main thread, however busy it is. The gradient has
+ * no hard stops, so there is no edge to catch the eye — it reads as light passing over the region.
+ */
+.playback-pending-region {
+  position: relative;
+  overflow: hidden;
+  background-color: hsl(var(--primary) / 0.16);
+}
+
+.playback-pending-region::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inline-size: 45%;
+  background-image: linear-gradient(
+    90deg,
+    hsl(var(--primary) / 0) 0%,
+    hsl(var(--primary) / 0.28) 50%,
+    hsl(var(--primary) / 0) 100%
+  );
+  /* Its own layer, so the sweep never forces the bar beneath it to repaint. */
+  will-change: transform;
+  animation: playback-pending-sweep 1600ms cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The wash stays — it is what marks the region — and only the travelling highlight stops. */
+  .playback-pending-region::after {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 .app-launch-shell {
   opacity: 1;
   will-change: opacity;
