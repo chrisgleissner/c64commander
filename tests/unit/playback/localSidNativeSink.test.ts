@@ -346,6 +346,28 @@ describe("on-device playback through the native track", () => {
     await expect(settle(200)).resolves.not.toThrow();
   });
 
+  it("tries again after a failed open instead of staying silent for good", async () => {
+    // A rejected attempt used to be cached, so one failure at the wrong moment — a track the platform
+    // was still tearing down, say — silenced the sink permanently.
+    const backend = createBackend();
+    let fail = true;
+    backend.openAudioTrack = async (options) => {
+      if (fail) throw new Error("busy");
+      backend.opens.push(options);
+      return { sampleRate: options.sampleRate, bufferMs: options.bufferMs ?? 0 };
+    };
+    const sink = createNativeLocalSidSink(RATE, backend);
+    scheduleChunk(sink, 1);
+    await settle(200);
+    expect(backend.writes).toHaveLength(0);
+
+    fail = false;
+    scheduleChunk(sink, 1, 1);
+    await settle(200);
+
+    expect(backend.writes.length).toBeGreaterThan(0);
+  });
+
   it("gives up quietly when the track cannot be opened", async () => {
     const backend = createBackend();
     backend.openAudioTrack = async () => {

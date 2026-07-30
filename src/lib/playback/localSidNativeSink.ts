@@ -410,6 +410,10 @@ class NativeLocalSidSink implements AudioScheduleSink {
         return true;
       })
       .catch((error) => {
+        // Cleared, so the next write tries again. Caching a rejected attempt meant one failure at the
+        // wrong moment — a track the platform was still tearing down, say — silenced the sink for the
+        // rest of its life, with every subsequent write returning the same remembered "no".
+        this.opening = null;
         addLog("warn", "Native audio: on-device AudioTrack open failed", {
           error: (error as Error)?.message ?? String(error),
         });

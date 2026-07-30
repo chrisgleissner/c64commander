@@ -1186,6 +1186,12 @@ export class LocalSidEngine {
   private checkLiveness(): void {
     if (!this.scheduler || this.endReceived || this.paused || this.stallRecoveryInFlight) return;
     if (this.openPending || this.seekPending) return;
+    if (this.awaitedSeekSeconds !== null) return;
+    // Waiting for the pre-render to reach a seek target is quiet for a reason too, and this timer is
+    // the wrong judge of it: no worker call is outstanding, the buffer is deliberately empty, and the
+    // wait lasts exactly as long as the rendering does — which for a position deep into a tune is far
+    // longer than the stall timeout. Killing the worker here would restart the very render being
+    // waited on, and the progress bar is already telling the listener what is happening.
     if (this.scheduler.bufferedSeconds() > STARVED_BUFFER_SECONDS) return;
     if (Date.now() - this.lastAudioAtMs < AUDIO_STALL_TIMEOUT_MS) return;
     void this.recoverFromStall();

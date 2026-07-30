@@ -351,4 +351,25 @@ describe("scrubbing under abuse", () => {
 
     expect((h.engine.debugState() as unknown as { currentKey: string | null }).currentKey).toBe("soak#0");
   });
+
+  it("does not let the stall watchdog kill a wait it asked for", async () => {
+    // Waiting for the pre-render leaves no worker call outstanding and an empty buffer, which is
+    // exactly the shape of a stall — but killing the worker would restart the render being waited on.
+    const h = await start();
+    h.engine.prerender("soak#0", new ArrayBuffer(8), 0, TUNE_SECONDS);
+    renderTo(h, 10);
+    await h.engine.seekTo(90);
+    expect(h.engine.getAwaitedSeekSeconds()).toBeCloseTo(90, 1);
+
+    // Watch for the recovery the watchdog would trigger: it throws the worker away and re-opens the
+    // tune, which would restart the very render being waited on.
+    const internals = h.engine as unknown as { checkLiveness: () => void; lastAudioAtMs: number };
+    const recover = vi.spyOn(h.engine as unknown as { recoverFromStall: () => Promise<void> }, "recoverFromStall");
+    // Well past the stall timeout, with nothing arriving.
+    internals.lastAudioAtMs = Date.now() - 60_000;
+    internals.checkLiveness();
+
+    expect(recover).not.toHaveBeenCalled();
+    expect(h.engine.getAwaitedSeekSeconds()).toBeCloseTo(90, 1);
+  });
 });
