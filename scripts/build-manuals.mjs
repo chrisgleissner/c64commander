@@ -1495,6 +1495,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "![The SID Radio station launcher: song, mood (nine style tiles) and taste seeds](../../img/app/play/sid-radio/02-stations.png)",
     "",
+    `**Stations skip the very short tunes.** HVSC holds jingles, one-shot sound effects and test tones alongside the music, and a station that serves those between pieces feels broken — so anything shorter than 15 seconds is passed over. Change the threshold under **Settings → SID Radio → Shortest tune to play**, or set it to 0 to play everything. Raising it does not make a station run dry: it looks further through the similarity index to make up the difference.`,
+    "",
     '**Lean back.** A station is an endless stream, so — like radio everywhere — it has no shuffle control of its own, and the transport Shuffle and Repeat are paused while a station plays. They return the moment you play a finite list such as Liked Tunes. Each start is fresh, so the same mood feels new every time. The now-playing chip names the active station, stops it in one tap, and expands a short "why this tune" line.',
     "",
     'A station follows similarity, and once in a while it reaches the end of what it can find — most often after you have skipped through a great many tunes in one sitting. When that happens the app says so, rather than leaving you on a last track that will not advance, and you can pick another mood.',
@@ -1511,11 +1513,14 @@ export const renderManualMarkdown = ({ variant, features }) => {
       variant,
     )} on the same Wi‑Fi. The C64 then streams its sound across the network and the app plays it in step with the on-screen progress.`,
     "",
-    `Where you hear a SID is up to you. When a SID is playing, the Play screen offers **Listen on**, with up to three choices:`,
+    `Where you hear a SID is up to you. When a SID is playing, the Play screen offers **Listen on**, with up to three choices, reading outwards from your own device:`,
     "",
-    `- **The device's own name** (or **C64U** if it has none) — the tune plays on ${targetDeviceShortName(
+    `- **Local** — your ${appDeviceName(
       variant,
-    )} and you listen there. The button is labelled after the machine you are connected to, so with two saved machines you can see which one you are choosing.`,
+    )} renders the SID itself with a built-in libsidplayfp engine. No C64 needed, and nothing is streamed.`,
+    `- **Remote** — the tune plays on ${targetDeviceShortName(
+      variant,
+    )} and you listen there. Which machine that is is shown in the header, so the button does not repeat it.`,
     `- **Both** — the tune plays on ${targetDeviceShortName(
       variant,
     )} and its sound is streamed to your ${appDeviceName(
@@ -1523,15 +1528,12 @@ export const renderManualMarkdown = ({ variant, features }) => {
     )} as well, so you hear it in both places. This choice only appears when the sound can actually reach you — if ${targetDeviceShortName(
       variant,
     )} has no network path for it, the option is simply not shown.`,
-    `- **Local** — your ${appDeviceName(
-      variant,
-    )} renders the SID itself with a built-in libsidplayfp engine. No C64 needed, and nothing is streamed.`,
     "",
     `**Listen on** appears only for SID tunes, since it is the only thing your ${appDeviceName(
       variant,
     )} can play on its own; programs and disks always run on ${targetDeviceShortName(variant)}.`,
     "",
-    "![The Listen on control: the connected machine, Both, or Local](../../img/app/play/sid-radio/03-listen-on.png)",
+    "![The Listen on control: Local, Remote, or Both](../../img/app/play/sid-radio/03-listen-on.png)",
     "",
     `**On-device playback needs the C64 ROMs.** SID music is driven by the C64's own KERNAL and BASIC routines, so without them a tune starts but never plays. Those ROM images are copyrighted and cannot be shipped with an app, so ${appName} reads them from ${targetDeviceShortName(
       variant,
