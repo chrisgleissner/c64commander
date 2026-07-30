@@ -22,6 +22,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { StreamGovernor } from "@/lib/streams/streamGovernor";
+import { chooseAudioBufferSignals } from "@/lib/streams/avMirrorSession";
 import {
   __resetLocalAudioHealth,
   clearLocalAudioHealth,
@@ -78,39 +79,73 @@ describe("the governor sheds video for a starving on-device tune", () => {
     ).effectiveFraction;
     expect(fraction).toBe(1);
   });
+});
 
-  describe("which buffer the governor is told about when both paths play", () => {
-    /**
-     * The two depths differ by three orders of magnitude, on purpose: on-device playback holds seconds
-     * so a busy JS thread cannot starve it, the native mirror sink holds tens of milliseconds so input
-     * stays in step. Whichever is closer to running dry is the one to protect — but the nominal depth
-     * has to describe THAT path, or the governor scales its thresholds for one buffer while reading
-     * another. It used to drop the mirror's nominal whenever a local tune was playing, which is exactly
-     * the case where the mirror's tiny buffer wins the minimum: a healthy native buffer read as
-     * starvation, and video demoted for nothing.
-     */
-    const pick = (localActive: boolean, mirrorLive: boolean, mirrorMs: number, localMs: number) => {
-      const mirrorIsTighter = !localActive || (mirrorLive && mirrorMs <= localMs);
-      return {
-        audioBufferMs: mirrorIsTighter ? mirrorMs : localMs,
-        audioNominalBufferMs: mirrorIsTighter ? 40 : undefined,
-      };
-    };
+describe("which buffer the governor is told about when both paths play", () => {
+  /**
+   * Calls the production decision, `chooseAudioBufferSignals`, rather than reimplementing it. The first
+   * version of these tests recomputed the arithmetic locally and therefore stayed green against the
+   * unfixed wiring — no test at all. The function is exported for exactly this reason.
+   *
+   * What it decides: whichever path is closer to running dry is the one to protect, and the nominal
+   * depth handed to the governor must describe THAT path. A reported nominal moves the "critical" bar
+   * from 25 ms to 0, because a small native buffer is expected rather than starvation — so dropping it
+   * while feeding the mirror's shallow depth is exactly how a healthy native buffer gets read as
+   * starving, and video shed for nothing.
+   *
+   * The depths differ by three orders of magnitude by design: on-device playback holds seconds so a
+   * busy JS thread cannot starve it, the native mirror sink tens of milliseconds so input stays in
+   * step. So the minimum is almost always the mirror's — precisely the case that used to lose it.
+   */
+  const MIRROR_NOMINAL = 40;
 
-    it("takes the mirror's buffer AND its nominal when the mirror is the tighter of the two", () => {
-      expect(pick(true, true, 35, 12_000)).toEqual({ audioBufferMs: 35, audioNominalBufferMs: 40 });
-    });
+  it("takes the mirror's buffer AND keeps its nominal when the mirror is the tighter of the two", () => {
+    expect(
+      chooseAudioBufferSignals({
+        localActive: true,
+        localBufferedMs: 12_000,
+        mirrorLive: true,
+        mirrorBufferedMs: 15,
+        mirrorNominalBufferMs: MIRROR_NOMINAL,
+      }),
+    ).toEqual({ audioBufferMs: 15, audioNominalBufferMs: MIRROR_NOMINAL });
+  });
 
-    it("takes the local buffer and drops the mirror's nominal when local is the tighter", () => {
-      expect(pick(true, true, 900, 120)).toEqual({ audioBufferMs: 120, audioNominalBufferMs: undefined });
-    });
+  it("takes the local buffer and drops the mirror's nominal when local is the tighter", () => {
+    // The nominal describes the native sink; it says nothing about a Web Audio buffer, so carrying it
+    // over would tell the governor a deep buffer is a shallow one that is fine.
+    expect(
+      chooseAudioBufferSignals({
+        localActive: true,
+        localBufferedMs: 120,
+        mirrorLive: true,
+        mirrorBufferedMs: 900,
+        mirrorNominalBufferMs: MIRROR_NOMINAL,
+      }),
+    ).toEqual({ audioBufferMs: 120, audioNominalBufferMs: undefined });
+  });
 
-    it("uses the mirror alone when no tune is playing here", () => {
-      expect(pick(false, true, 35, 0)).toEqual({ audioBufferMs: 35, audioNominalBufferMs: 40 });
-    });
+  it("uses the mirror alone when no tune is playing on this device", () => {
+    expect(
+      chooseAudioBufferSignals({
+        localActive: false,
+        localBufferedMs: 0,
+        mirrorLive: true,
+        mirrorBufferedMs: 15,
+        mirrorNominalBufferMs: MIRROR_NOMINAL,
+      }),
+    ).toEqual({ audioBufferMs: 15, audioNominalBufferMs: MIRROR_NOMINAL });
+  });
 
-    it("uses the local buffer alone when the mirror is not live", () => {
-      expect(pick(true, false, 0, 8_000)).toEqual({ audioBufferMs: 8_000, audioNominalBufferMs: undefined });
-    });
+  it("uses the local buffer alone when the mirror is not live", () => {
+    expect(
+      chooseAudioBufferSignals({
+        localActive: true,
+        localBufferedMs: 8_000,
+        mirrorLive: false,
+        mirrorBufferedMs: 0,
+        mirrorNominalBufferMs: MIRROR_NOMINAL,
+      }),
+    ).toEqual({ audioBufferMs: 8_000, audioNominalBufferMs: undefined });
   });
 });
