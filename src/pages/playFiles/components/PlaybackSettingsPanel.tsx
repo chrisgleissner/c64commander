@@ -135,19 +135,19 @@ export const PlaybackSettingsPanel = ({
                   onPointerDown={onSongPickerPointerDown}
                   onClick={onSongPickerClick}
                 >
-                  Subsong {clampedSongNr}/{subsongCount}
+                  Tune {clampedSongNr} of {subsongCount}
                 </Button>
               </div>
             </div>
             {songPickerOpen ? (
               <div
                 role="dialog"
-                aria-label="SID song number"
+                aria-label="Tune"
                 data-testid="song-selector-dialog"
                 className="w-full max-w-full rounded-lg border border-border bg-background p-3 shadow-sm space-y-2"
               >
-                <p className="text-sm font-semibold">SID song number</p>
-                <p className="text-xs text-muted-foreground">Select a subsong index to start playback.</p>
+                <p className="text-sm font-semibold">Tune</p>
+                <p className="text-xs text-muted-foreground">Choose which tune in this file to play.</p>
                 <div className="space-y-2" data-testid="song-selector-options">
                   {Array.from({ length: subsongCount }, (_, index) => {
                     const value = index + 1;
@@ -158,12 +158,12 @@ export const PlaybackSettingsPanel = ({
                         className="w-full justify-start"
                         onClick={() => onSelectSong(value)}
                       >
-                        Subsong {value}
+                        Tune {value}
                       </Button>
                     );
                   })}
                 </div>
-                <p className="text-xs text-muted-foreground">Available subsongs: 1–{subsongCount}</p>
+                <p className="text-xs text-muted-foreground">Tunes available: 1–{subsongCount}</p>
                 <Button variant="outline" size="sm" className="w-full" onClick={onCloseSongPicker}>
                   Close
                 </Button>

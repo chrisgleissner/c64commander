@@ -14,7 +14,7 @@ import type { StationCandidate, StationResult } from "@/lib/sidRadio/stationEngi
 const candidate = (trackOrdinal: number): StationCandidate => ({
   trackOrdinal,
   md5_48: `md${trackOrdinal.toString().padStart(10, "0")}`,
-  songIndex: 1,
+  songNr: 1,
   score: 100 - trackOrdinal,
   reason: "similar",
   fileTrackOrdinals: [trackOrdinal],
@@ -25,7 +25,7 @@ const subsongsOfOneFile = (md5_48: string, ordinals: number[]): StationCandidate
   ordinals.map((trackOrdinal, index) => ({
     trackOrdinal,
     md5_48,
-    songIndex: index + 1,
+    songNr: index + 1,
     score: 100 - trackOrdinal,
     reason: "similar" as const,
     fileTrackOrdinals: ordinals,

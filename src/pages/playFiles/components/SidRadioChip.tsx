@@ -7,7 +7,7 @@
  */
 
 import { useState } from "react";
-import { Radio, X } from "lucide-react";
+import { ListMusic, Radio } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -16,11 +16,15 @@ import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { SID_RADIO_STYLE_TILES, type ActiveStation } from "@/pages/playFiles/hooks/useSidRadio";
 
 export type SidRadioChipProps = {
-  station: ActiveStation;
+  /** The running station, or null when the queue is just the playlist. */
+  station: ActiveStation | null;
   /** One-line "why this tune" provenance for the current track (spec §5.3, Q8). */
   whyThisTune?: string | null;
   onStop: () => void;
 };
+
+/** Every state of this row is exactly this tall, so starting or stopping a station moves nothing. */
+const ROW_HEIGHT = "min-h-[2.75rem]";
 
 const stationName = (station: ActiveStation, friendlyNames: boolean): string => {
   // Only a song station's seed label is a file name; a style or taste station is seeded by a mood or
@@ -42,8 +46,24 @@ const stationName = (station: ActiveStation, friendlyNames: boolean): string => 
 };
 
 /**
- * The now-playing station chip (spec §5.3). Names the active station, doubles as
- * Stop (`sid-radio-stop`), and expands a one-line "why this tune" provenance.
+ * The line at the top of the Now Playing card that says where the queue is coming from.
+ *
+ * It used to be a bordered, tinted chip below the transport, the progress bar, the volume row and
+ * the playlist toggles — the very bottom of the card. That is the wrong end of the reading order:
+ * which station is playing is context for everything underneath it, not a footnote after the
+ * controls. It now leads the card, and the reading order is source → tune → controls → settings.
+ *
+ * It is present whether or not a station is running, and every state is the same height. That is
+ * what keeps the card still: if this row only existed during a station, starting one would push the
+ * title, the transport and the progress bar down the screen, and the transport is the one thing on
+ * this page people hit without looking. When nothing is steering the queue the row simply names the
+ * playlist, which is also the honest answer to "where is this coming from".
+ *
+ * The chip's box has gone with it. A tinted, bordered rectangle inside an already bordered card,
+ * above four bordered transport buttons, was one competing edge too many; a single rule underneath
+ * says "context above, content below" with far less ink. Stop is a labelled control rather than a
+ * 28 px bare ×, which was under the project's hit-target floor and read as "close this" — the same
+ * ambiguity the ranking ✕ has, and the same fix.
  */
 export const SidRadioChip = ({ station, whyThisTune, onStop }: SidRadioChipProps) => {
   const [expanded, setExpanded] = useState(false);
@@ -51,38 +71,54 @@ export const SidRadioChip = ({ station, whyThisTune, onStop }: SidRadioChipProps
 
   return (
     <div
-      className="flex w-full flex-col gap-1 rounded-lg border border-primary/40 bg-primary/5 px-2 py-1"
-      data-testid="sid-radio-chip"
+      className="flex w-full flex-col border-b border-border"
+      data-testid="now-playing-source"
+      data-station-active={station ? "true" : "false"}
     >
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
-          data-testid="sid-radio-chip-toggle"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((value) => !value)}
-        >
-          <Radio className={cn("h-4 w-4 shrink-0 text-primary")} />
-          <span className="truncate text-sm font-medium">{stationName(station, friendlyNames)}</span>
-        </button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 shrink-0"
-          data-testid="sid-radio-stop"
-          aria-label="Stop radio"
-          title="Stop radio"
-          onClick={onStop}
-        >
-          <X />
-        </Button>
-      </div>
-      {expanded && whyThisTune ? (
-        <p className="pl-6 text-xs text-muted-foreground" data-testid="sid-radio-why">
-          {whyThisTune}
-        </p>
-      ) : null}
+      {station ? (
+        <div className="flex w-full flex-col" data-testid="sid-radio-chip">
+          <div className={cn("flex items-center gap-2", ROW_HEIGHT)}>
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-2 self-stretch text-left"
+              data-testid="sid-radio-chip-toggle"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((value) => !value)}
+            >
+              <Radio className="h-4 w-4 shrink-0 text-primary" />
+              <span className="truncate text-sm font-medium text-foreground">
+                {stationName(station, friendlyNames)}
+              </span>
+            </button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="shrink-0 text-muted-foreground"
+              data-testid="sid-radio-stop"
+              aria-label="Stop radio"
+              title="Stop radio"
+              onClick={onStop}
+            >
+              Stop
+            </Button>
+          </div>
+          {expanded && whyThisTune ? (
+            <p className="pb-2 pl-6 text-xs text-muted-foreground" data-testid="sid-radio-why">
+              {whyThisTune}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <div className={cn("flex items-center gap-2", ROW_HEIGHT)} data-testid="now-playing-source-idle">
+          <ListMusic className="h-4 w-4 shrink-0 text-muted-foreground" />
+          {/* "Your playlist", not "Playlist": the panel below this card is already headed Playlist, and
+              two identical labels one above the other read as a mistake. This phrasing also sits
+              parallel to the station state, which names a thing ("Melodic Radio") rather than
+              labelling a section. */}
+          <span className="truncate text-sm text-muted-foreground">Your playlist</span>
+        </div>
+      )}
     </div>
   );
 };

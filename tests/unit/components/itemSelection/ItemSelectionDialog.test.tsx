@@ -145,6 +145,111 @@ const MediumHarness = () => {
   );
 };
 
+describe("ItemSelectionDialog folder options", () => {
+  // "Include subfolders" (formerly "Recurse") is not a playback setting: it decides what selecting a
+  // folder means. It used to sit on the playback card, where a running SID Radio station left it as
+  // the only live control in an otherwise dead row. Rendered here, it is in front of the person
+  // choosing folders and nowhere else.
+  const renderWithOptions = (props?: { allowFolderSelection?: boolean }) =>
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={sourceGroups}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+          allowFolderSelection={props?.allowFolderSelection ?? true}
+          folderOptions={<span data-testid="playback-recurse">Include subfolders</span>}
+        />
+      </DisplayProfileProvider>,
+    );
+
+  beforeEach(() => {
+    localStorage.clear();
+    setViewportWidth(360);
+    vi.useRealTimers();
+  });
+
+  it("does not show folder options until a source is open", () => {
+    renderWithOptions();
+
+    // The interstitial is a list of sources; there are no folders to say anything about yet.
+    expect(screen.queryByTestId("add-items-folder-options")).toBeNull();
+  });
+
+  it("shows folder options beside the confirm action once a source is open", async () => {
+    renderWithOptions();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add file / folder from C64U" }));
+
+    await waitFor(() => expect(screen.getByTestId("add-items-filter")).toBeVisible());
+    expect(screen.getByTestId("add-items-folder-options")).toBeVisible();
+    expect(screen.getByTestId("playback-recurse")).toBeVisible();
+  });
+
+  it("leaves them out on an archive search, which has no folders", async () => {
+    // A CommoServe search returns individual files. "Include subfolders" would be offering to change
+    // something the source cannot do, so the slot is withheld even though a source is open.
+    const withArchive: SourceGroup[] = [
+      ...sourceGroups,
+      {
+        label: "CommoServe",
+        sources: [
+          {
+            id: "archive-commoserve",
+            type: "commoserve",
+            name: "CommoServe",
+            rootPath: "/",
+            isAvailable: true,
+            listEntries: async () => [],
+            listFilesRecursive: async () => [],
+          },
+        ],
+      },
+    ];
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={withArchive}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+          folderOptions={<span data-testid="playback-recurse">Include subfolders</span>}
+          archiveConfigs={{
+            "archive-commoserve": {
+              id: "archive-commoserve",
+              name: "CommoServe",
+              baseUrl: "http://commoserve.files.commodore.net",
+              enabled: true,
+            },
+          }}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("import-option-commoserve"));
+    await waitFor(() => expect(screen.getByTestId("archive-selection-view-mock")).toBeVisible());
+
+    expect(screen.queryByTestId("add-items-folder-options")).toBeNull();
+    expect(screen.queryByTestId("playback-recurse")).toBeNull();
+  });
+
+  it("leaves them out where folders cannot be selected at all", async () => {
+    renderWithOptions({ allowFolderSelection: false });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add file / folder from C64U" }));
+
+    await waitFor(() => expect(screen.getByTestId("add-items-filter")).toBeVisible());
+    expect(screen.queryByTestId("add-items-folder-options")).toBeNull();
+  });
+});
+
 describe("ItemSelectionDialog display profiles", () => {
   beforeEach(() => {
     vi.useRealTimers();

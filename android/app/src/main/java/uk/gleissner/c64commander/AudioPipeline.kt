@@ -168,6 +168,21 @@ internal class AudioPipeline(
   @Volatile private var trackUnderruns: Int = 0
   @Volatile private var trackQueuedFrames: Long = 0
   @Volatile private var appliedRatio: Double = 1.0
+
+  /**
+   * Master attenuation, applied as samples leave the ring.
+   *
+   * On-device playback keeps up to twenty seconds of audio scheduled ahead, so attenuating where the
+   * samples are produced means a listener hears a volume change twenty seconds after making it. That
+   * is not a volume control. Applying it here — on the player thread, as each frame is written out —
+   * means the change is heard within the AudioTrack's own buffer instead, which is tens of
+   * milliseconds.
+   *
+   * Set from any thread, read only by the player thread, and ramped rather than stepped: a gain that
+   * jumps between one frame and the next is audible as a click.
+   */
+  @Volatile private var targetGain: Double = 1.0
+  private var appliedGain: Double = 1.0
   @Volatile private var running = true
   @Volatile private var started = false
 
@@ -263,6 +278,16 @@ internal class AudioPipeline(
     synchronized(producerLock) {
       readFrames = writeFrames
     }
+  }
+
+  /**
+   * Set the master attenuation, 0.0 (silent) to 1.0 (unchanged).
+   *
+   * Only ever attenuates: values above unity are clamped, so this cannot push a sample into clipping
+   * however it is driven. The device's own media volume is untouched.
+   */
+  fun setGain(gain: Double) {
+    targetGain = if (gain.isFinite()) gain.coerceIn(0.0, 1.0) else 1.0
   }
 
   fun offer(data: ByteArray, offset: Int, length: Int) {
@@ -792,8 +817,17 @@ internal class AudioPipeline(
   }
 
   private fun putFrame(dst: ByteArray, offset: Int, left: Double, right: Double) {
-    val l = left.toInt().coerceIn(-32768, 32767)
-    val r = right.toInt().coerceIn(-32768, 32767)
+    // Ramp towards the requested level rather than jumping to it. `GAIN_RAMP_FRAMES` is a whole
+    // number of frames at the output rate, so the slew is the same wall-clock duration whatever the
+    // device resamples to.
+    val target = targetGain
+    if (appliedGain != target) {
+      val step = 1.0 / GAIN_RAMP_FRAMES
+      appliedGain = if (appliedGain < target) minOf(target, appliedGain + step) else maxOf(target, appliedGain - step)
+    }
+    val gain = appliedGain
+    val l = (left * gain).toInt().coerceIn(-32768, 32767)
+    val r = (right * gain).toInt().coerceIn(-32768, 32767)
     dst[offset] = (l and 0xFF).toByte()
     dst[offset + 1] = ((l shr 8) and 0xFF).toByte()
     dst[offset + 2] = (r and 0xFF).toByte()
@@ -867,6 +901,15 @@ internal class AudioPipeline(
      * for the player thread being descheduled; four is still around 15–20 ms on a modern device and
      * survives an ordinary scheduling hiccup without the DAC drying out.
      */
+    /**
+     * How many output frames a full-scale gain change is spread over.
+     *
+     * ~20 ms at 48 kHz, matching the ramp the JavaScript sinks use, so a level change sounds the
+     * same whichever path is playing. Long enough that no step is audible as a click, short enough
+     * that the control still feels immediate.
+     */
+    private const val GAIN_RAMP_FRAMES = 960.0
+
     private const val TRACK_BURSTS = 4
 
     /** Never leave the ring so shallow that a single late packet empties it. */

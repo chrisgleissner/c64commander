@@ -359,6 +359,39 @@ test.describe("Item Selection Dialog UX", () => {
     await snap(page, testInfo, "confirm-button-visible");
   });
 
+  test("include-subfolders sits with the folders it applies to, not on the Play page", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    // The option decides what selecting a folder means. It used to sit on the Play page's playback
+    // card, where a running SID Radio station left it as the only live control in a row of controls
+    // the station had taken over. It now appears once a source is open, beside the folder listing.
+    await page.goto("/play");
+    await expect(page.getByTestId("playback-recurse")).toHaveCount(0);
+
+    await openAddItemsDialog(page);
+    const dialog = page.getByRole("dialog");
+    // Not in the source chooser: no folder has been reached yet.
+    await expect(dialog.getByTestId("add-items-folder-options")).toHaveCount(0);
+
+    await clickSourceSelectionButton(dialog, "C64 Ultimate");
+    await waitForFtpIdle(dialog);
+    await expect(dialog.getByText("Usb0", { exact: true })).toBeVisible();
+
+    const recurseCheckbox = dialog.getByTestId("playback-recurse");
+    await expect(dialog.getByTestId("add-items-folder-options")).toBeVisible();
+    await expect(recurseCheckbox).toBeVisible();
+    await snap(page, testInfo, "folder-options-visible");
+
+    const initiallyChecked = (await recurseCheckbox.getAttribute("aria-checked")) === "true";
+    await recurseCheckbox.click();
+    if (initiallyChecked) {
+      await expect(recurseCheckbox).not.toBeChecked();
+    } else {
+      await expect(recurseCheckbox).toBeChecked();
+    }
+    await snap(page, testInfo, "folder-options-toggled");
+  });
+
   test("folder row tap navigates and checkbox selection does not navigate", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {

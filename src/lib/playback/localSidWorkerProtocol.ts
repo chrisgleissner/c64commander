@@ -20,6 +20,17 @@
  * the Callback 8020 / SailfishOS Android runtime).
  */
 
+/**
+ * A SID revision in libsidplayfp's own spelling, which is what the engine's `SidConfig` takes.
+ *
+ * The app spells the same two chips `6581` / `8580` everywhere a person reads them; the
+ * translation happens once, in {@link toEngineSidModel}, so the worker never has to know about the
+ * app's settings vocabulary.
+ */
+export type EngineSidModel = "MOS6581" | "MOS8580";
+
+export const toEngineSidModel = (model: "6581" | "8580"): EngineSidModel => (model === "6581" ? "MOS6581" : "MOS8580");
+
 /** main → worker: instantiate the WASM module (idempotent). */
 export interface LocalSidLoadMessage {
   type: "load";
@@ -53,6 +64,18 @@ export interface LocalSidOpenMessage {
    * Settings takes effect on the very next track.
    */
   roms?: { kernal: ArrayBuffer; basic: ArrayBuffer };
+  /**
+   * The chip to assume for a tune whose header does not name one.
+   *
+   * A **fallback**, never an override: libsidplayfp reads the model out of the tune's own header,
+   * per chip, and only consults this where the header says `UNKNOWN` or `ANY`. The worker
+   * therefore sets `sidModel` and leaves `forceSidModel` alone — forcing it would silence every
+   * tune's own declaration, including the per-chip models of a 2SID or 3SID file.
+   *
+   * Passed per-open for the same reason the ROMs are: it keeps the worker stateless about the
+   * setting, so changing it in Settings applies from the very next tune.
+   */
+  sidModel?: EngineSidModel;
 }
 
 /** main → worker: render the next `seconds` of PCM for the open tune. */
@@ -159,6 +182,13 @@ export interface LocalSidPrerenderMessage {
   /** How much audio to produce; the tune's resolved songlength. */
   seconds: number;
   roms?: { kernal: ArrayBuffer; basic: ArrayBuffer };
+  /**
+   * The same fallback chip the playing engine is using — see {@link LocalSidOpenMessage.sidModel}.
+   *
+   * It has to be the same value, or the cached render and the live render of one tune would be two
+   * different performances, and the handover between them would be audible.
+   */
+  sidModel?: EngineSidModel;
 }
 
 /** worker → main: how far a pre-render has got (0..1). */

@@ -1,6 +1,6 @@
 # C64 Commander Manual
 
-Connect, control, play, mount, and diagnose a Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, or Ultimate-II+(L).
+Play SID music, run games and demos, mount disks, and control a Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, or Ultimate-II+(L) from one app.
 
 ![C64 Commander launch screen](../../img/app/launch/profiles/medium/04-app-ready.png)
 
@@ -12,7 +12,6 @@ Connect, control, play, mount, and diagnose a Commodore 64 Ultimate, Ultimate 64
 - [Your First Tour](#your-first-tour)
 - [Everyday Flows](#everyday-flows)
 - [In Depth](#in-depth)
-- [SID Radio](#sid-radio)
 - [Safe Device Use](#safe-device-use)
 - [Troubleshooting](#troubleshooting)
 - [Appendices](#appendices)
@@ -110,7 +109,7 @@ The picker stays inside that source, so **Up** never escapes into a different pl
 
 ![C64U file picker](../../img/app/play/import/profiles/medium/02-c64u-file-picker.png)
 
-Playback supports SID, MOD, PRG, CRT, and disk images. SID files can expose subsongs. When songlength metadata is available, the app shows duration and can advance more predictably.
+Playback supports SID, MOD, PRG, CRT, and disk images. A SID file can hold several separate pieces of music, which the app calls tunes. When songlength metadata is available, the app shows a duration and can advance more predictably.
 
 ![Playlist view all](../../img/app/play/profiles/medium/02-view-all.png)
 
@@ -122,11 +121,11 @@ Add broadly, then filter narrowly. Add a folder, an album, or a set of related f
 
 The filter changes the visible list, not the playlist itself. Clearing it brings the full queue back.
 
-Each playlist item keeps its origin. Local files remain local, C64U files point back to the device, archive results remember their source, and SID entries can retain songlength and subsong information.
+Each playlist item keeps its origin. Local files remain local, C64U files point back to the device, archive results remember their source, and SID entries can retain songlength and tune information.
 
-Use playback controls for the session: play or pause, previous or next, shuffle, repeat, and volume. Use item actions for one entry: remove it, inspect it, choose a subsong, or apply an item-specific playback setting where available.
+Use playback controls for the session: play or pause, previous or next, shuffle, repeat, and volume. Use item actions for one entry: remove it, inspect it, choose which tune of a SID to play, or apply an item-specific playback setting where available.
 
-For SID files, watch duration and subsong information. A SID may contain one tune or several. Songlength data makes advancing through the list less like guesswork.
+For SID files, watch the duration and the tune count. A SID may contain one tune or several, and the line under the title says which one is playing — Tune 3 of 15. Songlength data makes advancing through the list less like guesswork.
 
 For disk images, Play is convenient when you are launching or testing. Disks is better when drive setup, grouping, or collection work matters.
 
@@ -280,11 +279,11 @@ Preferred path: Add a folder first, then filter the playlist to choose what to p
 
 Preferred path: filter before removing. A filter changes only what you can see.
 
-### Work with SID Subsongs
+### Work with the Tunes Inside a SID
 
 1. Add one or more SID files to Play.
 2. Select the SID item.
-3. Choose the subsong or playback option if the file exposes one.
+3. Choose the tune or playback option if the file offers one.
 4. Use duration information when available to decide whether to repeat, skip, or continue.
 
 Preferred path: keep SID work in Play; use HVSC preparation only when the library itself needs attention.
@@ -370,6 +369,150 @@ Preferred path: Share before restart when you are trying to preserve evidence.
 
 The tour showed you where everything lives, and the flows above are quick recipes. A few features reward a closer look. This chapter takes its time with them.
 
+### SID Radio
+
+SID Radio turns the tunes you like — and the mood you are in — into an endless, self-refilling queue of similar SIDs, launched in one tap. It rides the normal Play engine, so everything you already know about playback still applies, and it works fully offline: the app ships a small similarity index and needs no network while you listen.
+
+![SID Radio and Liked Tunes controls with the heart / cross ranking on the Now Playing card](../../img/app/play/sid-radio/01-controls.png)
+
+**Rate as you listen.** While a SID plays, a subtle heart / cross pair sits on the Now Playing card. Tap the heart to add a tune to your **Liked Tunes**; tap the cross to skip it now and steer future picks away from its neighbourhood. Ratings are optional and ambient, stored on the device, and they follow a tune across HVSC updates because they key on the tune's content (its MD5), not its path.
+
+**Start a station.** Open **SID Radio** from the Play page to pick a mood: nine style tiles (Fast-Paced, Chill / Ambient, Melodic and more), a **From tunes you like** taste station that unlocks once you have liked a few tunes, or **Surprise me**. Each tile shows how many tunes that station draws from, and a mood the similarity index has nothing for is greyed out rather than starting a station with nothing to play. Turn on **Based on my likes** to bias any style toward what you enjoy — for example "Fast-Paced from your Likes". You can also start a station from any single tune with **Start Radio**.
+
+![The SID Radio station launcher: song, mood (nine style tiles) and taste seeds](../../img/app/play/sid-radio/02-stations.png)
+
+**Stations skip the very short tunes.** HVSC holds jingles, one-shot sound effects and test tones alongside the music, and a station that serves those between pieces feels broken — so anything shorter than 15 seconds is passed over. Change the threshold under **Settings → SID Radio → Shortest tune to play**, or set it to 0 to play everything. Raising it does not make a station run dry: it looks further through the similarity index to make up the difference.
+
+**Lean back.** A station is an endless stream, so — like radio everywhere — there is very little to adjust while one plays. The station decides what comes next, so Shuffle, Repeat and Reshuffle are taken off the Play page altogether rather than shown greyed out: they have no meaning here, and the space is better spent on the music. They come back, with the settings you had, the moment you stop the station and play a finite list such as Liked Tunes. Each start is fresh, so the same mood feels new every time.
+
+The line at the top of the Now Playing card always says where the queue is coming from — the name of the running station, or the playlist when nothing is steering it. It stops the station in one tap and expands a short "why this tune" line. The line is there in both states and is the same height either way, so starting or stopping a station never shifts the transport buttons under your thumb.
+
+**No repeats.** A station never plays the same tune twice, and it never plays two tunes from the same file back to back: once it serves one piece from a multi-tune SID, the rest of that file's pieces are set aside. What you hear is a walk through the similarity index that keeps moving outwards, not a shuffle that can circle back.
+
+A station follows similarity, and once in a while it reaches the end of what it can find — most often after you have skipped through a great many tunes in one sitting. When that happens the app says so, rather than leaving you on a last track that will not advance, and you can pick another mood.
+
+**Liked Tunes.** Everything you have liked is a plain, playable list — browse it, play it (with normal Shuffle and Repeat), or un-like a tune. Tunes no longer in your installed HVSC are shown greyed rather than dropped.
+
+#### Where the music plays
+
+By default, SID Radio plays each tune **on the C64** — exactly like the rest of the app — and you hear it back on your phone or tablet through the network **audio mirror**. For that to work the connected Ultimate-family device has to be reachable on your local network: connect it to your Wi‑Fi router with an **Ethernet** cable, and keep your phone or tablet on the same Wi‑Fi. The C64 then streams its sound across the network and the app plays it in step with the on-screen progress.
+
+Where you hear a SID is up to you. When a SID is playing, the Play screen offers **Listen on**, with up to three choices, reading outwards from your own device:
+
+- **Local** — your phone or tablet renders the SID itself with a built-in libsidplayfp engine. No C64 needed, and nothing is streamed.
+- **Remote** — the tune plays on the connected Ultimate-family device and you listen there. Which machine that is is shown in the header, so the button does not repeat it.
+- **Both** — the tune plays on the connected Ultimate-family device and its sound is streamed to your phone or tablet as well, so you hear it in both places. This choice only appears when the sound can actually reach you — if the connected Ultimate-family device has no network path for it, the option is simply not shown.
+
+**Listen on** appears only for SID tunes, since it is the only thing your phone or tablet can play on its own; programs and disks always run on the connected Ultimate-family device.
+
+![The Listen on control: Local, Remote, or Both](../../img/app/play/sid-radio/03-listen-on.png)
+
+**On-device playback needs the C64 ROMs.** SID music is driven by the C64's own KERNAL and BASIC routines, so without them a tune starts but never plays. Those ROM images are copyrighted and cannot be shipped with an app, so C64 Commander reads them from the connected Ultimate-family device: **Settings → SID Radio → C64 ROMs for on-device playback → Read from C64**. It takes a moment and only has to be done once.
+
+**Only connect C64 Commander to devices you own or have been given permission to use.** The ROM images stay on your phone or tablet, are never shared or uploaded, and are never included in diagnostics. You can remove them again at any time with **Remove** in the same place.
+
+Until the ROMs are in place — or if you remove them — SID tunes simply play on the connected Ultimate-family device instead, and the app tells you so once.
+
+**Wind through a tune.** While a SID is playing on your phone or tablet, press and hold **⏭** to fast-forward or **⏮** to rewind — the tune keeps moving for as long as you hold, roughly five seconds at a time. A short tap still skips to the next or previous tune, so the buttons do what they always did. This works with the on-device engine; on the connected Ultimate-family device the buttons only skip.
+
+**Jump straight to a moment.** The progress bar is not only a read-out. Tap anywhere along it to land there, or hold and sweep to travel through the tune — the bar and the time follow your finger, and the music picks up wherever you let go. Winding backwards asks more of the engine than winding forwards, so a long rewind can take a moment to settle. Like winding, this is for tunes playing on your phone or tablet.
+
+**If a tune ever falls quiet.** Very occasionally the on-device engine can stop making sound while everything on screen still says the tune is playing — the clock counts on, and there is simply nothing to hear. The app watches for that and starts the tune again from the moment it went quiet, without being asked. You may notice a short gap. You should not have to touch anything.
+
+**One sound at a time.** Your phone or tablet can make sound two ways — playing a tune itself, or playing the sound streamed from the connected Ultimate-family device — and it will never do both at once. Whichever you start last takes over, and the other stops. So turning **Listen** on while a tune is playing here hands the speaker to the connected Ultimate-family device, and starting a tune here takes it back. You never have to work out which of two sounds to chase.
+
+**Crossfading between tunes.** By default one tune stops before the next begins, so you never hear two at once — including when you move playback between the connected Ultimate-family device and your phone or tablet, or switch to a different Ultimate. If you would rather they overlap, **Settings → SID Radio → Crossfade** offers a short, medium or long fade: the outgoing tune fades down while the next fades in. That fade is the one moment two tunes are meant to sound together.
+
+Crossfading only works for tunes playing on your phone or tablet. Two tunes have to sound at the same moment for one to fade into the other, and the connected Ultimate-family device plays a single tune live on its one sound chip — so unless **Listen on** is set to **Local** the setting is greyed out and tunes change cleanly instead.
+
+**Which SID chip a tune is played on.** The C64 shipped with two revisions of the SID sound chip, the 6581 and the later 8580, and they do not sound the same. Most SID files record which one they were written for, and those always play on the chip they name. For the rest, **Settings → SID Radio → SID chip for tunes that do not name one** decides. Leave **Match my Commodore 64** on and the app reads the chip from the connected Ultimate-family device while you are connected and remembers it, so it keeps applying when the machine is off. Turn it off, or use a machine the app has not read yet, and the chip you pick below it is used instead. Either way the choice applies from the next tune, not the one already playing.
+
+**What the tune says about itself.** Under the title, one line carries what the SID file records: composer, year and publisher, the chip or chips it names, PAL or NTSC, which tune of the file is playing, and its length. A file that does not record something simply leaves it out rather than guessing. Many SID files hold several separate pieces of music; when one does, the line says **Tune 3 of 15**, and the transport plays exactly that piece.
+
+**Volume and Mute while your phone or tablet is playing.** They act on the tune itself, turning the sound down before it reaches the speaker, and they leave your device's own volume alone. So muting a tune here does not mute anything else, and your ringer and notifications are untouched.
+
+**Two SID sound engines.** Under **Settings → SID Radio → SID emulation** you can choose how faithfully the on-device engine models the C64's SID chip. **Accurate (reSIDfp)** is the default and models the real chip cycle by cycle — pick it if you want the last word in fidelity. **Light (SIDLite)** does roughly a third of the work and still sounds good; most listeners will not hear the difference, so it is a perfectly reasonable choice on an older or slower phone, or when you want to save battery on a long listen. Both play every tune, and you can switch whenever you like.
+
+![SID Radio settings: enable stations, the ranking, and the experimental on-device playback engine, with the similarity-corpus status](../../img/app/settings/sid-radio.png)
+
+Enable SID Radio, the heart / cross ranking, and the on-device engine under **Settings → SID Radio**, which also shows the similarity-corpus and installed-HVSC versions.
+
+### The SID Audio Mixer
+
+Your C64 makes its sound with a SID chip, and can host more than one. **Home > SID / Audio mixer** is a live mixing desk: a **master volume** for everything, and, for each SID it reports, that chip's own **volume** and **stereo position**. Slide one SID toward the left speaker and another toward the right for true stereo, or pull one down to let the other lead. Changes are heard at once, and the same controls appear in **Config > Audio Mixer** if you prefer the full tree.
+
+### Live View
+
+Your C64 can send its own sound and picture out across your network, and Live View brings them straight back into the app — so you can hear a tune or watch the screen without wiring up a speaker or a second television.
+
+It is one shared session. Start it in a single place and it keeps playing wherever you go; there is never a second copy fighting for the same stream. You will find it just below the Quick Actions on **Home**, with two switches:
+
+- **Listen** turns the sound on. It asks for almost no room — a lit button and a small live dot — so it is perfect for keeping half an ear on a game or a SID tune while you get on with something else. Wander to another page and a matching dot appears in the top bar to remind you it is still playing; a tap on it stops everything at once.
+- **Watch** turns the picture on. A small preview of the C64 screen appears just beneath the switches; tap the chevron beside it to grow that preview in place.
+
+![Live View on Home](../../img/app/home/content-explorer/01-live-view.png)
+
+#### The immersive screen
+
+Open **Remote Input** while **Watch** is on and the picture stretches to fill the width of the sheet, above the joystick and keyboard — a proper screen for playing a game or driving a program you are typing into.
+
+Move around it however suits you. On a touchscreen, **pinch** to zoom, **drag** to slide the picture about, and **double-tap** to jump straight in on a spot — a second double-tap fits the whole screen back on. A small map in the corner shows which part you are looking at; drag its rectangle to leap somewhere else in an instant. Switch on **Follow** and the view drifts along on its own to wherever the action is — a lovely way to keep the cursor in sight as you type.
+
+![The immersive screen in Remote Input](../../img/app/home/remote-input/06-av-mirror-immersive.png)
+
+#### Driving the C64, or adjusting the view
+
+When you steer your phone or tablet with a physical keypad, those same keys could either work the C64 or move the picture, so Live View makes the difference impossible to mistake. The mirror wears a coloured border that tells you at a glance which one you are doing: a **blue “Driving C64”** border means your keys go straight to the machine, as usual; an **amber “Adjusting view”** border means your keys zoom and pan the picture instead.
+
+Press the **menu key** — or the on-screen **Adjust** button — to switch between the two. You are never stranded looking at a frozen game: adjusting view slips quietly back to driving on its own after a short pause. While the border is amber, the keypad moves the view like this:
+
+| Key                                | What it does                 |
+| ---------------------------------- | ---------------------------- |
+| **2**, or D-pad up                 | Pan up                       |
+| **8**, or D-pad down               | Pan down                     |
+| **4**, or D-pad left               | Pan left                     |
+| **6**, or D-pad right              | Pan right                    |
+| **3** or **9**                     | Zoom in                      |
+| **1** or **7**                     | Zoom out                     |
+| **0**, **5**, or the centre/OK key | Fit the whole screen back on |
+| the **menu** key                   | Return to driving the C64    |
+
+The same four moves have on-screen buttons too — **＋** and **−** to zoom, **⤢** to fit, and **◎** to turn Follow on and off — so a touchscreen and a keypad reach every control. However large you make the game controls, the picture always stays fully in view above them — the controls never creep up and cover it.
+
+#### Smooth playback, and what it costs
+
+Live View keeps the **sound** running smoothly above everything else. If a packet of audio goes missing on the network it fills the tiny gap so cleanly you will not hear a click, and it never lets the picture run away and leave the sound trailing behind.
+
+The sound also plays through a **fast, low-latency path** so what you hear follows your keypresses closely — the app holds far less sound waiting to play than the ordinary in-app audio does, so the delay is much shorter. This is on by default; if you ever need to compare, or the sound misbehaves on your device, you can switch **Low-latency audio (native)** off in **Settings**.
+
+Your C64 sends colour _numbers_ rather than colours, so the app decides what shade to paint each one. **Settings → Screen colours** offers nine palettes, with all sixteen colours shown before you choose: **Default** matches the machine's own palette, and the rest are alternatives — warmer, cooler, monochrome, and so on. It changes only how Live View looks on your device; the C64 carries on exactly as before, and it costs the picture nothing.
+
+The **picture** is the demanding part, so you get a say in how much of it to draw. Open **Stats** — it appears under Live View while it is playing — and choose a **Video frame rate**:
+
+- **Auto** (recommended) plays every frame it can and quietly eases off only when your device is working too hard, then climbs back to full speed once there is room to spare.
+- **100%**, **50%**, and **25%** cap the picture at the full rate, half, or a quarter of what the C64 is sending. A lower setting is gentler on the battery and on older phones and leaves more headroom for the game you are driving. Even at a manual cap the app will still drop below it for a moment if that is what it takes to keep the sound perfect — the sound always comes first.
+
+**Stats** also shows, at a glance and over the last minutes, how the stream is really doing: the picture's frame rate, how full the audio buffer is, any packets lost on the network and how they were smoothed over, and the app's own load. Open or close it as you like — it is built to be light enough that watching it costs the stream nothing. If you ever need to send in a report, **Export diagnostics** saves all of it as a small file.
+
+#### Checking the sound and picture yourself
+
+Under Live View you will find three checks you can run whenever something seems off.
+
+- **A/V sync** and **Tap latency** answer _when_: how far apart the sound and picture are, and how long it takes a keypress to come back to you.
+- **Tone & colour ladder** answers _what_. It plays a short tune on your C64 — a scale from C3 up to C4 and back, half a second a note — and changes the screen colour on every single note, stepping through all sixteen C64 colours as it goes. Because the C64 changes the note and the colour at the very same instant, anything that arrives out of step arrived that way across your network.
+
+The ladder grades what comes back and shows you five numbers: how many notes were **in tune**, how far off the **pitch** was, whether notes ran **long or short**, whether the two deliberate **silent gaps** really were silent, and how far apart the **sound and picture** were. Wrong pitches, notes running long, or a gap that is not silent all point the same way — the sound is being corrupted on the way to you rather than merely delayed. The most common cause by far is a second machine on your network streaming into the same place, and this check makes that obvious in one run.
+
+Live View is ready to use out of the box; the picture and sound simply stay off until you press **Watch** or **Listen**, so nothing streams until you ask for it. The device streams to two network ports (11000 for the picture, 11001 for the sound); if your setup needs different ones, you can change them in **Settings**, under Play and disk behaviour. Live View borrows the same feeds as **Streams** (below), and while it is playing it takes charge of them — see there for how the two work together.
+
+On by default. You can change it in Settings > Experimental Features.
+
+### Streams
+
+Your C64 can send what it is doing out across the network. **Home > Streams** exposes three feeds — **VIC** (the live video picture), **Audio** (the SID output), and **Debug** (a low-level trace for developers). Point a feed at a destination address, press **Start**, and it streams there; **Stop** ends it. The card appears only when the connected device advertises streaming support.
+
+Live View (above) plays those same **VIC** and **Audio** feeds inside the app, so the two are careful never to fight over one stream. Turn Live View on and it takes charge of the feed it needs: that row shows a small **Live View** badge and turns read-only, so nothing you do here can pull the picture or sound out from under it. Your own target is remembered, and the moment you stop Live View the row hands control straight back to you.
+
 ### Remote Input
 
 Remote Input turns your phone or tablet into a second-screen controller for the C64. It is handy when you are sitting across the room from the machine, when no joystick is plugged in, or when you just want to type a command without reaching for the real keyboard.
@@ -411,85 +554,62 @@ To steer a game you have just launched:
 
 On by default. You can change it in Settings > Stable Features.
 
-### Live View
+### File Sources
 
-Your C64 can send its own sound and picture out across your network, and Live View brings them straight back into the app — so you can hear a tune or watch the screen without wiring up a speaker or a second television.
+Everything you play or mount comes from a **source**, and each source keeps to its own picker so a wrong turn never lands you somewhere unexpected.
 
-It is one shared session. Start it in a single place and it keeps playing wherever you go; there is never a second copy fighting for the same stream. You will find it just below the Quick Actions on **Home**, with two switches:
+- **Local** — files and folders on the phone or tablet running the app.
+- **C64U** — files on the connected Ultimate-family device, reached over FTP.
+- **HVSC** — the High Voltage SID Collection, the definitive archive of C64 music. Prepare it once from **Settings > HVSC**; afterwards the app checks for updates on its own, and browsing shows song durations and the tunes inside each file.
+- **CommoServe** — an online archive you search by name, pulling disks and programs straight into a playlist or disk collection. Set its address in **Settings > Online Archive**.
 
-- **Listen** turns the sound on. It asks for almost no room — a lit button and a small live dot — so it is perfect for keeping half an ear on a game or a SID tune while you get on with something else. Wander to another page and a matching dot appears in the top bar to remind you it is still playing; a tap on it stops everything at once.
-- **Watch** turns the picture on. A small preview of the C64 screen appears just beneath the switches; tap the chevron beside it to grow that preview in place.
+### Drives and Disk Images
 
-![Live View on Home](../../img/app/home/content-explorer/01-live-view.png)
+C64 Commander gives your C64 up to two disk drives, and the **Disks** page drives both. Each drive card is a small control panel of its own.
 
-#### The immersive screen
+Turn a drive on or off with its power control — a drive must be **on** before it can mount anything. Give it a **bus ID** (8, 9, 10, or 11) so software can find it; the first drive is usually 8. Set its **type** to match the image you are loading — a 1541 for D64 and G64 disks, a 1571 for D71, or a 1581 for D81 — and use **Reset** to restart just the drive's own processor, the gentlest way to recover a confused drive without disturbing the C64.
 
-Open **Remote Input** while **Watch** is on and the picture stretches to fill the width of the sheet, above the joystick and keyboard — a proper screen for playing a game or driving a program you are typing into.
+Mounting is the heart of the page. Choose a disk from your collection, choose the drive, and mount it; **Eject** empties the drive again. A disk that already lives on the connected Ultimate-family device mounts in place, while a **Local** or archive disk is copied across first — and anything a program writes back to it is saved to your original when you eject, so high scores and saved games survive.
 
-Move around it however suits you. On a touchscreen, **pinch** to zoom, **drag** to slide the picture about, and **double-tap** to jump straight in on a spot — a second double-tap fits the whole screen back on. A small map in the corner shows which part you are looking at; drag its rectangle to leap somewhere else in an instant. Switch on **Follow** and the view drifts along on its own to wherever the action is — a lovely way to keep the cursor in sight as you type.
+For a title that spans several disks, drop the related images into one **group**. Grouped disks add **rotate** controls to the drive card, so when a program asks for the next disk you can swap without hunting through the collection. A drive can also read loose files straight from a folder on the device through its **Soft IEC** path, which suits large collections that are not packed into disk images.
 
-![The immersive screen in Remote Input](../../img/app/home/remote-input/06-av-mirror-immersive.png)
+### Content Explorer
 
-#### Driving the C64, or adjusting the view
+Content Explorer is a set of additive tools for working with the programs _inside_ disk images and launching them safely. Each part is optional and independent — turn on only the ones you want in **Settings**, and the rest stay out of the way.
 
-When you steer your phone or tablet with a physical keypad, those same keys could either work the C64 or move the picture, so Live View makes the difference impossible to mistake. The mirror wears a coloured border that tells you at a glance which one you are doing: a **blue “Driving C64”** border means your keys go straight to the machine, as usual; an **amber “Adjusting view”** border means your keys zoom and pan the picture instead.
+#### Looking Inside a Disk
 
-Press the **menu key** — or the on-screen **Adjust** button — to switch between the two. You are never stranded looking at a frozen game: adjusting view slips quietly back to driving on its own after a short pause. While the border is amber, the keypad moves the view like this:
+Mounting a disk image gives you the whole disk. Disk Explorer instead looks _inside_ one so you can pick a single program to launch. On **Disks**, open a disk image's menu and choose **Open (Disk Explorer)…**; the app lists every file on the disk, each with its type, its size in blocks, and — for a program — its load address.
 
-| Key | What it does |
-| --- | --- |
-| **2**, or D-pad up | Pan up |
-| **8**, or D-pad down | Pan down |
-| **4**, or D-pad left | Pan left |
-| **6**, or D-pad right | Pan right |
-| **3** or **9** | Zoom in |
-| **1** or **7** | Zoom out |
-| **0**, **5**, or the centre/OK key | Fit the whole screen back on |
-| the **menu** key | Return to driving the C64 |
+Each launchable file offers three actions:
 
-The same four moves have on-screen buttons too — **＋** and **−** to zoom, **⤢** to fit, and **◎** to turn Follow on and off — so a touchscreen and a keypad reach every control. However large you make the game controls, the picture always stays fully in view above them — the controls never creep up and cover it.
+- **Run** loads the program into the C64's memory and starts it.
+- **Load** loads it into memory without starting it — handy for monitors and development.
+- **Mount & Load** mounts the whole disk, resets the machine, waits for BASIC, then types the LOAD and RUN for you — the right choice for titles that load in several stages.
 
-#### Smooth playback, and what it costs
+Only a proper **PRG** program can be launched directly. Other file types show a short note explaining why they cannot, and an unclosed "splat" file — one that was never finished being written — cannot be launched either.
 
-Live View keeps the **sound** running smoothly above everything else. If a packet of audio goes missing on the network it fills the tiny gap so cleanly you will not hear a click, and it never lets the picture run away and leave the sound trailing behind.
+On by default. You can change it in Settings > Stable Features.
 
-The sound also plays through a **fast, low-latency path** so what you hear follows your keypresses closely — the app holds far less sound waiting to play than the ordinary in-app audio does, so the delay is much shorter. This is on by default; if you ever need to compare, or the sound misbehaves on your device, you can switch **Low-latency audio (native)** off in **Settings**.
+#### Launch Safety
 
-Your C64 sends colour *numbers* rather than colours, so the app decides what shade to paint each one. **Settings → Screen colours** offers nine palettes, with all sixteen colours shown before you choose: **Default** matches the machine's own palette, and the rest are alternatives — warmer, cooler, monochrome, and so on. It changes only how Live View looks on your device; the C64 carries on exactly as before, and it costs the picture nothing.
+Some setups have a freezer cartridge (Action Replay / Retro Replay style) configured. On those, launching a program directly can occasionally reset into the cartridge's own menu instead — which looks exactly like the app misbehaving. Launch Safety prevents that: around every direct launch it briefly _parks_ the configured cartridge, then restores it afterwards. It never writes to the device's saved (flash) settings, so a power cycle always brings the cartridge back, and when no cartridge is configured it does nothing at all. This happens automatically; there is no per-launch control.
 
-The **picture** is the demanding part, so you get a say in how much of it to draw. Open **Stats** — it appears under Live View while it is playing — and choose a **Video frame rate**:
+One advanced option sits in **Settings**, under Play and disk behaviour: **Answer cartridge boot menu after reset**. It is off by default and helps only one narrow case — a cartridge that shows a boot menu when the machine resets, which could otherwise swallow the LOAD that Mount & Load types. Turn it on to choose the **menu key** (F1–F8, RETURN, or SPACE) and a **boot settle** time; the app then presses that key after a Mount & Load reset to clear the menu first. Leave it off unless you run such a cartridge.
 
-- **Auto** (recommended) plays every frame it can and quietly eases off only when your device is working too hard, then climbs back to full speed once there is room to spare.
-- **100%**, **50%**, and **25%** cap the picture at the full rate, half, or a quarter of what the C64 is sending. A lower setting is gentler on the battery and on older phones and leaves more headroom for the game you are driving. Even at a manual cap the app will still drop below it for a moment if that is what it takes to keep the sound perfect — the sound always comes first.
+On by default. You can change it in Settings > Stable Features.
 
-**Stats** also shows, at a glance and over the last minutes, how the stream is really doing: the picture's frame rate, how full the audio buffer is, any packets lost on the network and how they were smoothed over, and the app's own load. Open or close it as you like — it is built to be light enough that watching it costs the stream nothing. If you ever need to send in a report, **Export diagnostics** saves all of it as a small file.
+#### Searching Inside Disk Images
 
-#### Checking the sound and picture yourself
+By default, searching your media matches disk images by their file name. Turn on **Search inside disk images** — in **Settings**, under Play and disk behaviour — and search also reaches the programs _inside_ your `.d64`, `.d71`, and `.d81` images. A match found inside a disk is shown as **DISK → PROGRAM**, so you can see exactly which disk holds the program you want, then Run or Load it just like any other.
 
-Under Live View you will find three checks you can run whenever something seems off.
+Optional. Enable it in Settings > Experimental Features.
 
-- **A/V sync** and **Tap latency** answer *when*: how far apart the sound and picture are, and how long it takes a keypress to come back to you.
-- **Tone & colour ladder** answers *what*. It plays a short tune on your C64 — a scale from C3 up to C4 and back, half a second a note — and changes the screen colour on every single note, stepping through all sixteen C64 colours as it goes. Because the C64 changes the note and the colour at the very same instant, anything that arrives out of step arrived that way across your network.
+#### Creating a Blank Disk
 
-The ladder grades what comes back and shows you five numbers: how many notes were **in tune**, how far off the **pitch** was, whether notes ran **long or short**, whether the two deliberate **silent gaps** really were silent, and how far apart the **sound and picture** were. Wrong pitches, notes running long, or a gap that is not silent all point the same way — the sound is being corrupted on the way to you rather than merely delayed. The most common cause by far is a second machine on your network streaming into the same place, and this check makes that obvious in one run.
+Need a fresh disk to save to? On **Disks**, choose **New disk** to format a blank image on the device. Pick the **type** — D64 (1541), D71 (1571), D81 (1581), or DNP (CMD native) — give it a **file name**, and set a **disk label** of up to 16 characters (it defaults to the file name). A D64 lets you choose the number of **tracks** (35 to 41, usually 35); a DNP requires a track count (1 to 255); D71 and D81 need none. Finally pick a real **storage folder** on the device, such as USB0 — the top-level `/` is only a virtual list of drives and cannot hold files. The app creates the image and mounts it ready to write to.
 
-Live View is ready to use out of the box; the picture and sound simply stay off until you press **Watch** or **Listen**, so nothing streams until you ask for it. The device streams to two network ports (11000 for the picture, 11001 for the sound); if your setup needs different ones, you can change them in **Settings**, under Play and disk behaviour. Live View borrows the same feeds as **Streams** (below), and while it is playing it takes charge of them — see there for how the two work together.
-
-On by default. You can change it in Settings > Experimental Features.
-
-### Streams
-
-Your C64 can send what it is doing out across the network. **Home > Streams** exposes three feeds — **VIC** (the live video picture), **Audio** (the SID output), and **Debug** (a low-level trace for developers). Point a feed at a destination address, press **Start**, and it streams there; **Stop** ends it. The card appears only when the connected device advertises streaming support.
-
-Live View (above) plays those same **VIC** and **Audio** feeds inside the app, so the two are careful never to fight over one stream. Turn Live View on and it takes charge of the feed it needs: that row shows a small **Live View** badge and turns read-only, so nothing you do here can pull the picture or sound out from under it. Your own target is remembered, and the moment you stop Live View the row hands control straight back to you.
-
-### The SID Audio Mixer
-
-Your C64 makes its sound with a SID chip, and can host more than one. **Home > SID / Audio mixer** is a live mixing desk: a **master volume** for everything, and, for each SID it reports, that chip's own **volume** and **stereo position**. Slide one SID toward the left speaker and another toward the right for true stereo, or pull one down to let the other lead. Changes are heard at once, and the same controls appear in **Config > Audio Mixer** if you prefer the full tree.
-
-### The Virtual Printer
-
-A C64 once talked to a Commodore printer over the serial bus; yours emulates one so you never need the vintage hardware. **Home > Printer** picks the **emulation** (such as Commodore MPS), sets the printer's **bus ID**, and manages its output: **Flush** commits what has been printed so far, **Eject** finishes the page, and **Reset** clears the emulated printer.
+On by default. You can change it in Settings > Stable Features.
 
 ### RAM Snapshots
 
@@ -511,62 +631,9 @@ Snapshots are kept on your phone or tablet, not on the C64. Each one is named au
 
 On by default. You can change it in Settings > Stable Features.
 
-### Drives and Disk Images
+### The Virtual Printer
 
-C64 Commander gives your C64 up to two disk drives, and the **Disks** page drives both. Each drive card is a small control panel of its own.
-
-Turn a drive on or off with its power control — a drive must be **on** before it can mount anything. Give it a **bus ID** (8, 9, 10, or 11) so software can find it; the first drive is usually 8. Set its **type** to match the image you are loading — a 1541 for D64 and G64 disks, a 1571 for D71, or a 1581 for D81 — and use **Reset** to restart just the drive's own processor, the gentlest way to recover a confused drive without disturbing the C64.
-
-Mounting is the heart of the page. Choose a disk from your collection, choose the drive, and mount it; **Eject** empties the drive again. A disk that already lives on the connected Ultimate-family device mounts in place, while a **Local** or archive disk is copied across first — and anything a program writes back to it is saved to your original when you eject, so high scores and saved games survive.
-
-For a title that spans several disks, drop the related images into one **group**. Grouped disks add **rotate** controls to the drive card, so when a program asks for the next disk you can swap without hunting through the collection. A drive can also read loose files straight from a folder on the device through its **Soft IEC** path, which suits large collections that are not packed into disk images.
-
-### Content Explorer
-
-Content Explorer is a set of additive tools for working with the programs *inside* disk images and launching them safely. Each part is optional and independent — turn on only the ones you want in **Settings**, and the rest stay out of the way.
-
-#### Looking Inside a Disk
-
-Mounting a disk image gives you the whole disk. Disk Explorer instead looks *inside* one so you can pick a single program to launch. On **Disks**, open a disk image's menu and choose **Open (Disk Explorer)…**; the app lists every file on the disk, each with its type, its size in blocks, and — for a program — its load address.
-
-Each launchable file offers three actions:
-
-- **Run** loads the program into the C64's memory and starts it.
-- **Load** loads it into memory without starting it — handy for monitors and development.
-- **Mount & Load** mounts the whole disk, resets the machine, waits for BASIC, then types the LOAD and RUN for you — the right choice for titles that load in several stages.
-
-Only a proper **PRG** program can be launched directly. Other file types show a short note explaining why they cannot, and an unclosed "splat" file — one that was never finished being written — cannot be launched either.
-
-On by default. You can change it in Settings > Stable Features.
-
-#### Launch Safety
-
-Some setups have a freezer cartridge (Action Replay / Retro Replay style) configured. On those, launching a program directly can occasionally reset into the cartridge's own menu instead — which looks exactly like the app misbehaving. Launch Safety prevents that: around every direct launch it briefly *parks* the configured cartridge, then restores it afterwards. It never writes to the device's saved (flash) settings, so a power cycle always brings the cartridge back, and when no cartridge is configured it does nothing at all. This happens automatically; there is no per-launch control.
-
-One advanced option sits in **Settings**, under Play and disk behaviour: **Answer cartridge boot menu after reset**. It is off by default and helps only one narrow case — a cartridge that shows a boot menu when the machine resets, which could otherwise swallow the LOAD that Mount & Load types. Turn it on to choose the **menu key** (F1–F8, RETURN, or SPACE) and a **boot settle** time; the app then presses that key after a Mount & Load reset to clear the menu first. Leave it off unless you run such a cartridge.
-
-On by default. You can change it in Settings > Stable Features.
-
-#### Searching Inside Disk Images
-
-By default, searching your media matches disk images by their file name. Turn on **Search inside disk images** — in **Settings**, under Play and disk behaviour — and search also reaches the programs *inside* your `.d64`, `.d71`, and `.d81` images. A match found inside a disk is shown as **DISK → PROGRAM**, so you can see exactly which disk holds the program you want, then Run or Load it just like any other.
-
-Optional. Enable it in Settings > Experimental Features.
-
-#### Creating a Blank Disk
-
-Need a fresh disk to save to? On **Disks**, choose **New disk** to format a blank image on the device. Pick the **type** — D64 (1541), D71 (1571), D81 (1581), or DNP (CMD native) — give it a **file name**, and set a **disk label** of up to 16 characters (it defaults to the file name). A D64 lets you choose the number of **tracks** (35 to 41, usually 35); a DNP requires a track count (1 to 255); D71 and D81 need none. Finally pick a real **storage folder** on the device, such as USB0 — the top-level `/` is only a virtual list of drives and cannot hold files. The app creates the image and mounts it ready to write to.
-
-On by default. You can change it in Settings > Stable Features.
-
-### File Sources
-
-Everything you play or mount comes from a **source**, and each source keeps to its own picker so a wrong turn never lands you somewhere unexpected.
-
-- **Local** — files and folders on the phone or tablet running the app.
-- **C64U** — files on the connected Ultimate-family device, reached over FTP.
-- **HVSC** — the High Voltage SID Collection, the definitive archive of C64 music. Prepare it once from **Settings > HVSC**; afterwards the app checks for updates on its own, and browsing shows song durations and subsongs.
-- **CommoServe** — an online archive you search by name, pulling disks and programs straight into a playlist or disk collection. Set its address in **Settings > Online Archive**.
+A C64 once talked to a Commodore printer over the serial bus; yours emulates one so you never need the vintage hardware. **Home > Printer** picks the **emulation** (such as Commodore MPS), sets the printer's **bus ID**, and manages its output: **Flush** commits what has been printed so far, **Eject** finishes the page, and **Reset** clears the emulated printer.
 
 ### Configuration and Saving
 
@@ -575,6 +642,22 @@ Two ideas make the configuration tree easy to live with: where a change goes, an
 Every change — on Home, on Disks, or in Config — is sent to the running device at once and takes effect immediately. But the device holds two copies of its settings: the **live** ones it is using now, and a **flash** copy it reloads at power-on. A change is live instantly; it survives a reboot or power cycle only once it reaches flash.
 
 You manage that from **Home > Config actions**. **Save to flash** writes the current live settings to flash now — reach for it when **Auto save config** is Ask or No. The app can also keep named **configuration snapshots** on the phone or tablet, separate from the device's flash: save the current setup, then load it back later to restore a whole configuration at once.
+
+### Switching Between Devices
+
+If you have saved more than one device, the Device Switcher lets you hop between them without opening Settings.
+
+Open it in any of three ways, whenever more than one device is saved:
+
+- **Long-press the header badge** (a short tap opens Diagnostics instead).
+- Press **`#`** on a hardware keyboard or keypad.
+- Choose **Switch device** in the Quick Menu.
+
+The switcher checks each saved device for you and refreshes every ten seconds while it is open. Each row shows the device's name, a status pill (**Selected**, **Verifying**, **Offline**, or **Mismatch**), a live health badge, and a short summary such as how many health probes passed or when the device was last seen. The device you are using is highlighted. Tap the chevron to expand a row and see every health probe in detail, which is handy for telling a sleeping device from one that is genuinely unreachable.
+
+Tap a device to switch to it. Before anything else the app safely lets go of any input you were holding on the old device, stops tracking its playback and pause state, retargets to the new device's address and ports, and then checks that the new device answers. While that happens the target shows a **Verifying** pill; once it responds, it becomes the active device.
+
+Saved devices themselves are created and edited in **Settings > Connection**, under **Saved devices**. There you can add a device, edit its **Device name**, **Hostname / IP**, and **HTTP**, **FTP**, and **Telnet** ports, set an optional **Network Password**, or delete one you no longer use. A device is saved only once it answers, so the list never fills with machines that are not really there. With a single device saved there is nothing to switch to, so the switcher stays out of your way.
 
 ### Reading Diagnostics
 
@@ -585,6 +668,7 @@ The panel has three parts, from top to bottom:
 - The **health header** shows the current state (Healthy, Degraded, Unhealthy, or Offline), which device it refers to, and when it was last checked. Tap **Run health check** to test the connection now. The check probes REST, FTP, and Telnet, plus three C64-specific signals (CONFIG, RASTER, and JIFFY), and reports each result with its timing and the overall latency. Expand the header to see every probe in detail.
 
 The CONFIG probe does more than read: it nudges a live setting by a hair, reads it back to confirm the device really applied the change, then restores the original value. On a device with an LED strip — the case light or the keyboard LEDs — you will see the lights **pulse once** as it runs, a tiny visible heartbeat that tells you the connection is alive at a glance.
+
 - The **Filters** bar narrows what you see below. Filter by device, by activity type (Problems, Actions, Logs, Traces), by contributor (App, REST, FTP, Telnet), or by severity (Errors, Warnings, Info). One-tap **Errors only** and **Problems only** shortcuts are there too.
 - The **Activity** list gathers problems, actions, logs, and traces together. Tap any row to expand it for the full details.
 
@@ -605,80 +689,6 @@ To share a report about a recent error:
 The report is a small ZIP file holding the app's logs, traces, errors, and recent actions, along with a health snapshot and details about your app version, your device, and the active C64 (its name, host address, and firmware). It does not include your network password. It can, however, contain your device's hostname or IP address, so share it only with people you trust or with support.
 
 Use **Clear all** afterwards for a clean slate. It asks you to confirm, then shows **Diagnostics cleared** when done.
-
-### Switching Between Devices
-
-If you have saved more than one device, the Device Switcher lets you hop between them without opening Settings.
-
-Open it in any of three ways, whenever more than one device is saved:
-
-- **Long-press the header badge** (a short tap opens Diagnostics instead).
-- Press **`#`** on a hardware keyboard or keypad.
-- Choose **Switch device** in the Quick Menu.
-
-The switcher checks each saved device for you and refreshes every ten seconds while it is open. Each row shows the device's name, a status pill (**Selected**, **Verifying**, **Offline**, or **Mismatch**), a live health badge, and a short summary such as how many health probes passed or when the device was last seen. The device you are using is highlighted. Tap the chevron to expand a row and see every health probe in detail, which is handy for telling a sleeping device from one that is genuinely unreachable.
-
-Tap a device to switch to it. Before anything else the app safely lets go of any input you were holding on the old device, stops tracking its playback and pause state, retargets to the new device's address and ports, and then checks that the new device answers. While that happens the target shows a **Verifying** pill; once it responds, it becomes the active device.
-
-Saved devices themselves are created and edited in **Settings > Connection**, under **Saved devices**. There you can add a device, edit its **Device name**, **Hostname / IP**, and **HTTP**, **FTP**, and **Telnet** ports, set an optional **Network Password**, or delete one you no longer use. A device is saved only once it answers, so the list never fills with machines that are not really there. With a single device saved there is nothing to switch to, so the switcher stays out of your way.
-
-## SID Radio
-
-SID Radio turns the tunes you like — and the mood you are in — into an endless, self-refilling queue of similar SIDs, launched in one tap. It rides the normal Play engine, so everything you already know about playback still applies, and it works fully offline: the app ships a small similarity index and needs no network while you listen.
-
-![SID Radio and Liked Tunes controls with the heart / cross ranking on the Now Playing card](../../img/app/play/sid-radio/01-controls.png)
-
-**Rate as you listen.** While a SID plays, a subtle heart / cross pair sits on the Now Playing card. Tap the heart to add a tune to your **Liked Tunes**; tap the cross to skip it now and steer future picks away from its neighbourhood. Ratings are optional and ambient, stored on the device, and they follow a tune across HVSC updates because they key on the tune's content (its MD5), not its path.
-
-**Start a station.** Open **SID Radio** from the Play page to pick a mood: nine style tiles (Fast-Paced, Chill / Ambient, Melodic and more), a **From tunes you like** taste station that unlocks once you have liked a few tunes, or **Surprise me**. Each tile shows how many tunes that station draws from, and a mood the similarity index has nothing for is greyed out rather than starting a station with nothing to play. Turn on **Based on my likes** to bias any style toward what you enjoy — for example "Fast-Paced from your Likes". You can also start a station from any single tune with **Start Radio**.
-
-![The SID Radio station launcher: song, mood (nine style tiles) and taste seeds](../../img/app/play/sid-radio/02-stations.png)
-
-**Stations skip the very short tunes.** HVSC holds jingles, one-shot sound effects and test tones alongside the music, and a station that serves those between pieces feels broken — so anything shorter than 15 seconds is passed over. Change the threshold under **Settings → SID Radio → Shortest tune to play**, or set it to 0 to play everything. Raising it does not make a station run dry: it looks further through the similarity index to make up the difference.
-
-**Lean back.** A station is an endless stream, so — like radio everywhere — it has no shuffle control of its own, and the transport Shuffle and Repeat are paused while a station plays. They return the moment you play a finite list such as Liked Tunes. Each start is fresh, so the same mood feels new every time. The now-playing chip names the active station, stops it in one tap, and expands a short "why this tune" line.
-
-A station follows similarity, and once in a while it reaches the end of what it can find — most often after you have skipped through a great many tunes in one sitting. When that happens the app says so, rather than leaving you on a last track that will not advance, and you can pick another mood.
-
-**Liked Tunes.** Everything you have liked is a plain, playable list — browse it, play it (with normal Shuffle and Repeat), or un-like a tune. Tunes no longer in your installed HVSC are shown greyed rather than dropped.
-
-### Where the music plays
-
-By default, SID Radio plays each tune **on the C64** — exactly like the rest of the app — and you hear it back on your phone or tablet through the network **audio mirror**. For that to work the connected Ultimate-family device has to be reachable on your local network: connect it to your Wi‑Fi router with an **Ethernet** cable, and keep your phone or tablet on the same Wi‑Fi. The C64 then streams its sound across the network and the app plays it in step with the on-screen progress.
-
-Where you hear a SID is up to you. When a SID is playing, the Play screen offers **Listen on**, with up to three choices, reading outwards from your own device:
-
-- **Local** — your phone or tablet renders the SID itself with a built-in libsidplayfp engine. No C64 needed, and nothing is streamed.
-- **Remote** — the tune plays on the connected Ultimate-family device and you listen there. Which machine that is is shown in the header, so the button does not repeat it.
-- **Both** — the tune plays on the connected Ultimate-family device and its sound is streamed to your phone or tablet as well, so you hear it in both places. This choice only appears when the sound can actually reach you — if the connected Ultimate-family device has no network path for it, the option is simply not shown.
-
-**Listen on** appears only for SID tunes, since it is the only thing your phone or tablet can play on its own; programs and disks always run on the connected Ultimate-family device.
-
-![The Listen on control: Local, Remote, or Both](../../img/app/play/sid-radio/03-listen-on.png)
-
-**On-device playback needs the C64 ROMs.** SID music is driven by the C64's own KERNAL and BASIC routines, so without them a tune starts but never plays. Those ROM images are copyrighted and cannot be shipped with an app, so C64 Commander reads them from the connected Ultimate-family device: **Settings → SID Radio → C64 ROMs for on-device playback → Read from C64**. It takes a moment and only has to be done once.
-
-**Only connect C64 Commander to devices you own or have been given permission to use.** The ROM images stay on your phone or tablet, are never shared or uploaded, and are never included in diagnostics. You can remove them again at any time with **Remove** in the same place.
-
-Until the ROMs are in place — or if you remove them — SID tunes simply play on the connected Ultimate-family device instead, and the app tells you so once.
-
-**Wind through a tune.** While a SID is playing on your phone or tablet, press and hold **⏭** to fast-forward or **⏮** to rewind — the tune keeps moving for as long as you hold, roughly five seconds at a time. A short tap still skips to the next or previous tune, so the buttons do what they always did. This works with the on-device engine; on the connected Ultimate-family device the buttons only skip.
-
-**Jump straight to a moment.** The progress bar is not only a read-out. Tap anywhere along it to land there, or hold and sweep to travel through the tune — the bar and the time follow your finger, and the music picks up wherever you let go. Winding backwards asks more of the engine than winding forwards, so a long rewind can take a moment to settle. Like winding, this is for tunes playing on your phone or tablet.
-
-**If a tune ever falls quiet.** Very occasionally the on-device engine can stop making sound while everything on screen still says the tune is playing — the clock counts on, and there is simply nothing to hear. The app watches for that and starts the tune again from the moment it went quiet, without being asked. You may notice a short gap. You should not have to touch anything.
-
-**One sound at a time.** Your phone or tablet can make sound two ways — playing a tune itself, or playing the sound streamed from the connected Ultimate-family device — and it will never do both at once. Whichever you start last takes over, and the other stops. So turning **Listen** on while a tune is playing here hands the speaker to the connected Ultimate-family device, and starting a tune here takes it back. You never have to work out which of two sounds to chase.
-
-**Crossfading between tunes.** By default one tune stops before the next begins, so you never hear two at once — including when you move playback between the connected Ultimate-family device and your phone or tablet, or switch to a different Ultimate. If you would rather they overlap, **Settings → SID Radio → Crossfade** offers a short, medium or long fade: the outgoing tune fades down while the next fades in. That fade is the one moment two tunes are meant to sound together.
-
-Crossfading only works for tunes playing on your phone or tablet. Two tunes have to sound at the same moment for one to fade into the other, and the connected Ultimate-family device plays a single tune live on its one sound chip — so unless **Listen on** is set to **Local** the setting is greyed out and tunes change cleanly instead.
-
-**Two SID sound engines.** Under **Settings → SID Radio → SID emulation** you can choose how faithfully the on-device engine models the C64's SID chip. **Accurate (reSIDfp)** is the default and models the real chip cycle by cycle — pick it if you want the last word in fidelity. **Light (SIDLite)** does roughly a third of the work and still sounds good; most listeners will not hear the difference, so it is a perfectly reasonable choice on an older or slower phone, or when you want to save battery on a long listen. Both play every tune, and you can switch whenever you like.
-
-![SID Radio settings: enable stations, the ranking, and the experimental on-device playback engine, with the similarity-corpus status](../../img/app/settings/sid-radio.png)
-
-Enable SID Radio, the heart / cross ranking, and the on-device engine under **Settings → SID Radio**, which also shows the similarity-corpus and installed-HVSC versions.
 
 ## Safe Device Use
 
@@ -745,49 +755,49 @@ The rest of this guide is reference material for when you want the exact answer.
 
 Preferred locations are marked first.
 
-| Feature | Where to find it | Notes |
-| --- | --- | --- |
-| Connect to a device | **Startup discovery**, Settings > Connection | Use startup discovery first. Use Settings for later edits. |
-| Manual host/IP entry | **Startup prompt when no devices are found**, Settings > Connection | Startup prompt is fastest on first run; Settings is best for saved-device maintenance. |
-| Network password | **Startup prompt or auth popup**, Settings > Connection | The app asks only when needed. |
-| Switch saved device | **Header badge long-press / `#`**, Settings > Connection | Use Device Switcher for fast switching; Settings for editing. |
-| Reset / Reboot / Pause / Menu | **Home > Quick Actions** | Main daily control path. |
-| Power Cycle | **Home > Quick Actions** | Optional. Enable it in Settings > Experimental Features. |
-| Clear-RAM reboot | **Home > Quick Actions** | Optional. Enable it in Settings > Experimental Features. |
-| Save / Load RAM | **Home > Quick Actions** | On by default. You can change it in Settings > Stable Features. |
-| Remote Input | **Home > Quick Actions**, Play (while an item plays) | On by default. You can change it in Settings > Stable Features. Joystick needs firmware 1.2.0 or newer on a Commodore 64 Ultimate, or 3.15 or newer on an Ultimate 64; otherwise only Keys are available. |
-| CPU speed and turbo | **Home > Quick Config**, Config | Home is preferred for common changes. |
-| Video mode and scan lines | **Home > Quick Config**, Config | Home is preferred. |
-| Joystick, serial bus, cartridge, user port | **Home > Quick Config**, Config | Home is preferred. |
-| Drive power, bus, type, reset | **Disks**, Home > Drives | Disks is preferred for drive work; Home is good for quick checks. |
-| Mount/eject disks | **Disks**, Home > Drives | Disks gives the clearest disk collection view. |
-| Disk groups and rotation | **Disks** | Set a group in the disk collection, then rotate from drive controls. |
-| Printer controls | **Home > Printer**, Config | Home is preferred. |
-| SID mixer | **Home > SID / Audio mixer**, Config > Audio Mixer | Home is preferred for live mixing. |
-| Streams | **Home > Streams**, Config | Visible when the device exposes streaming support. |
-| Save/load device config | **Home > Config actions** | Use Save to flash when Auto save config is Ask or No, or when you want to force a flash save now. |
-| App-stored config snapshots | **Home > Config actions** | Local app snapshots, separate from device flash. |
-| Disk Explorer (launch a program inside a disk) | **Disks > disk menu > Open (Disk Explorer)** | On by default. You can change it in Settings > Stable Features. |
-| Create a blank disk | **Disks > New disk** | On by default. You can change it in Settings > Stable Features. |
-| Search inside disk images | **Settings > Play and disk behavior** | Optional. Enable it in Settings > Experimental Features. |
-| Launch Safety (cartridge parking) | Automatic; boot-menu answer in **Settings > Play and disk behavior** | On by default. You can change it in Settings > Stable Features. |
-| Live View — Audio Mirror | **Settings > Experimental Features** | On by default. You can change it in Settings > Experimental Features. |
-| Live View — Video Mirror | **Settings > Experimental Features** | On by default. You can change it in Settings > Experimental Features. |
-| Advanced config file actions | **Home > Config actions** | Optional. Enable it in Settings > Experimental Features. |
-| Advanced drive shortcuts | **Home > Drives** | Optional. Enable it in Settings > Experimental Features. |
-| Advanced printer shortcuts | **Home > Printer** | Optional. Enable it in Settings > Experimental Features. |
-| Full configuration tree | **Config** | Use search, open a category, edit rows. |
-| Add playlist items | **Play > Add items** | Sources: Local, C64U, HVSC, CommoServe. |
-| Playback controls | **Play** | Play, pause, previous/next, shuffle, repeat, duration, and volume. |
-| HVSC preparation | **Play**, Settings > HVSC | On by default. You can change it in Settings > Stable Features. |
-| CommoServe | **Play > Add items**, Disks > Add disks, Settings > Online Archive | On by default. You can change it in Settings > Stable Features. |
-| Demo Mode | **Settings > Connection** | Optional. Enable it in Settings > Stable Features. |
-| Background playback scheduling | **Play**, Android app permissions | Always enabled in this variant. |
-| Display profile and theme | **Settings > Appearance** | Medium screenshots in this manual match this guide's presentation. |
-| Device Safety | **Settings > Device Safety** | Leave it on Auto (recommended); Auto uses Conservative for a Commodore 64 Ultimate, and Balanced for an Ultimate 64-family device on firmware newer than 3.15. See Device Safety Modes. |
-| Diagnostics | **Header badge / `*`**, Settings > Diagnostics | Badge is preferred for fast access. |
-| Logs, traces, errors, health checks | **Diagnostics** | Use filters and Share for support. |
-| Built-in help | **Docs** | Good for quick reminders inside the app. |
+| Feature                                        | Where to find it                                                     | Notes                                                                                                                                                                                                     |
+| ---------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Connect to a device                            | **Startup discovery**, Settings > Connection                         | Use startup discovery first. Use Settings for later edits.                                                                                                                                                |
+| Manual host/IP entry                           | **Startup prompt when no devices are found**, Settings > Connection  | Startup prompt is fastest on first run; Settings is best for saved-device maintenance.                                                                                                                    |
+| Network password                               | **Startup prompt or auth popup**, Settings > Connection              | The app asks only when needed.                                                                                                                                                                            |
+| Switch saved device                            | **Header badge long-press / `#`**, Settings > Connection             | Use Device Switcher for fast switching; Settings for editing.                                                                                                                                             |
+| Reset / Reboot / Pause / Menu                  | **Home > Quick Actions**                                             | Main daily control path.                                                                                                                                                                                  |
+| Power Cycle                                    | **Home > Quick Actions**                                             | Optional. Enable it in Settings > Experimental Features.                                                                                                                                                  |
+| Clear-RAM reboot                               | **Home > Quick Actions**                                             | Optional. Enable it in Settings > Experimental Features.                                                                                                                                                  |
+| Save / Load RAM                                | **Home > Quick Actions**                                             | On by default. You can change it in Settings > Stable Features.                                                                                                                                           |
+| Remote Input                                   | **Home > Quick Actions**, Play (while an item plays)                 | On by default. You can change it in Settings > Stable Features. Joystick needs firmware 1.2.0 or newer on a Commodore 64 Ultimate, or 3.15 or newer on an Ultimate 64; otherwise only Keys are available. |
+| CPU speed and turbo                            | **Home > Quick Config**, Config                                      | Home is preferred for common changes.                                                                                                                                                                     |
+| Video mode and scan lines                      | **Home > Quick Config**, Config                                      | Home is preferred.                                                                                                                                                                                        |
+| Joystick, serial bus, cartridge, user port     | **Home > Quick Config**, Config                                      | Home is preferred.                                                                                                                                                                                        |
+| Drive power, bus, type, reset                  | **Disks**, Home > Drives                                             | Disks is preferred for drive work; Home is good for quick checks.                                                                                                                                         |
+| Mount/eject disks                              | **Disks**, Home > Drives                                             | Disks gives the clearest disk collection view.                                                                                                                                                            |
+| Disk groups and rotation                       | **Disks**                                                            | Set a group in the disk collection, then rotate from drive controls.                                                                                                                                      |
+| Printer controls                               | **Home > Printer**, Config                                           | Home is preferred.                                                                                                                                                                                        |
+| SID mixer                                      | **Home > SID / Audio mixer**, Config > Audio Mixer                   | Home is preferred for live mixing.                                                                                                                                                                        |
+| Streams                                        | **Home > Streams**, Config                                           | Visible when the device exposes streaming support.                                                                                                                                                        |
+| Save/load device config                        | **Home > Config actions**                                            | Use Save to flash when Auto save config is Ask or No, or when you want to force a flash save now.                                                                                                         |
+| App-stored config snapshots                    | **Home > Config actions**                                            | Local app snapshots, separate from device flash.                                                                                                                                                          |
+| Disk Explorer (launch a program inside a disk) | **Disks > disk menu > Open (Disk Explorer)**                         | On by default. You can change it in Settings > Stable Features.                                                                                                                                           |
+| Create a blank disk                            | **Disks > New disk**                                                 | On by default. You can change it in Settings > Stable Features.                                                                                                                                           |
+| Search inside disk images                      | **Settings > Play and disk behavior**                                | Optional. Enable it in Settings > Experimental Features.                                                                                                                                                  |
+| Launch Safety (cartridge parking)              | Automatic; boot-menu answer in **Settings > Play and disk behavior** | On by default. You can change it in Settings > Stable Features.                                                                                                                                           |
+| Live View — Audio Mirror                       | **Settings > Experimental Features**                                 | On by default. You can change it in Settings > Experimental Features.                                                                                                                                     |
+| Live View — Video Mirror                       | **Settings > Experimental Features**                                 | On by default. You can change it in Settings > Experimental Features.                                                                                                                                     |
+| Advanced config file actions                   | **Home > Config actions**                                            | Optional. Enable it in Settings > Experimental Features.                                                                                                                                                  |
+| Advanced drive shortcuts                       | **Home > Drives**                                                    | Optional. Enable it in Settings > Experimental Features.                                                                                                                                                  |
+| Advanced printer shortcuts                     | **Home > Printer**                                                   | Optional. Enable it in Settings > Experimental Features.                                                                                                                                                  |
+| Full configuration tree                        | **Config**                                                           | Use search, open a category, edit rows.                                                                                                                                                                   |
+| Add playlist items                             | **Play > Add items**                                                 | Sources: Local, C64U, HVSC, CommoServe.                                                                                                                                                                   |
+| Playback controls                              | **Play**                                                             | Play, pause, previous/next, shuffle, repeat, duration, and volume.                                                                                                                                        |
+| HVSC preparation                               | **Play**, Settings > HVSC                                            | On by default. You can change it in Settings > Stable Features.                                                                                                                                           |
+| CommoServe                                     | **Play > Add items**, Disks > Add disks, Settings > Online Archive   | On by default. You can change it in Settings > Stable Features.                                                                                                                                           |
+| Demo Mode                                      | **Settings > Connection**                                            | Optional. Enable it in Settings > Stable Features.                                                                                                                                                        |
+| Background playback scheduling                 | **Play**, Android app permissions                                    | Always enabled in this variant.                                                                                                                                                                           |
+| Display profile and theme                      | **Settings > Appearance**                                            | Medium screenshots in this manual match this guide's presentation.                                                                                                                                        |
+| Device Safety                                  | **Settings > Device Safety**                                         | Leave it on Auto (recommended); Auto uses Conservative for a Commodore 64 Ultimate, and Balanced for an Ultimate 64-family device on firmware newer than 3.15. See Device Safety Modes.                   |
+| Diagnostics                                    | **Header badge / `*`**, Settings > Diagnostics                       | Badge is preferred for fast access.                                                                                                                                                                       |
+| Logs, traces, errors, health checks            | **Diagnostics**                                                      | Use filters and Share for support.                                                                                                                                                                        |
+| Built-in help                                  | **Docs**                                                             | Good for quick reminders inside the app.                                                                                                                                                                  |
 
 ### Keyboard and Directional Input Reference
 
@@ -795,13 +805,13 @@ On by default. You can change it in Settings > Experimental Features. Directiona
 
 #### Directional Pad
 
-| Key | What it does |
-| --- | --- |
-| Up / Down | Move through the current page, card, list, or dialog. |
-| Left / Right | Adjust sliders, tabs, and segmented controls. Otherwise move to a nearby control. |
-| OK / Center / Enter | Enter a group, open a select, press a button, or toggle a switch. |
-| Back / Escape | Close the top dialog, leave a field, leave a group, or go back. |
-| Menu / Context Menu | Open the focused item menu; if none exists, open the Quick Menu. |
+| Key                 | What it does                                                                      |
+| ------------------- | --------------------------------------------------------------------------------- |
+| Up / Down           | Move through the current page, card, list, or dialog.                             |
+| Left / Right        | Adjust sliders, tabs, and segmented controls. Otherwise move to a nearby control. |
+| OK / Center / Enter | Enter a group, open a select, press a button, or toggle a switch.                 |
+| Back / Escape       | Close the top dialog, leave a field, leave a group, or go back.                   |
+| Menu / Context Menu | Open the focused item menu; if none exists, open the Quick Menu.                  |
 
 The rule is simple: **OK goes in, Back comes out**.
 
@@ -809,20 +819,20 @@ The rule is simple: **OK goes in, Back comes out**.
 
 Outside text fields, number keys jump to pages:
 
-| Key | Page |
-| --- | --- |
-| 1 | Home |
-| 2 | Play |
-| 3 | Disks |
-| 4 | Config |
-| 5 | Settings |
-| 6 | Docs |
+| Key | Page     |
+| --- | -------- |
+| 1   | Home     |
+| 2   | Play     |
+| 3   | Disks    |
+| 4   | Config   |
+| 5   | Settings |
+| 6   | Docs     |
 
 #### Star and Pound
 
-| Key | Outside text fields | Inside text fields |
-| --- | --- | --- |
-| `*` | Open Diagnostics | Type `*` when the field accepts it |
+| Key | Outside text fields  | Inside text fields                 |
+| --- | -------------------- | ---------------------------------- |
+| `*` | Open Diagnostics     | Type `*` when the field accepts it |
 | `#` | Open Device Switcher | Type `#` when the field accepts it |
 
 #### Quick Menu
@@ -831,90 +841,90 @@ Press Menu when no focused control has its own menu. The Quick Menu offers page 
 
 ### File and Source Reference
 
-| Source | Used in | Meaning |
-| --- | --- | --- |
-| Local | Play, Disks | Files and folders available to the Android device running the app. |
-| C64U | Play, Disks | Files on the connected Ultimate-family device through FTP. |
-| HVSC | Play | On by default. You can change it in Settings > Stable Features. SID library browsing after preparation. |
-| CommoServe | Play, Disks | On by default. You can change it in Settings > Stable Features. Online archive search. |
+| Source     | Used in     | Meaning                                                                                                 |
+| ---------- | ----------- | ------------------------------------------------------------------------------------------------------- |
+| Local      | Play, Disks | Files and folders available to the Android device running the app.                                      |
+| C64U       | Play, Disks | Files on the connected Ultimate-family device through FTP.                                              |
+| HVSC       | Play        | On by default. You can change it in Settings > Stable Features. SID library browsing after preparation. |
+| CommoServe | Play, Disks | On by default. You can change it in Settings > Stable Features. Online archive search.                  |
 
 Supported playback/import types include SID, MOD, PRG, CRT, D64, G64, D71, G71, and D81. Disk collection workflows focus on disk images: D64, G64, D71, G71, and D81.
 
-| Format | Kind | Notes |
-| --- | --- | --- |
-| SID | Music | One or more subsongs; durations shown when songlength data is available. |
-| MOD | Music | Amiga-style tracker module. |
-| PRG | Program | A single loadable program. |
-| CRT | Cartridge | Cartridge image; started as if you inserted a cartridge. |
-| D64, G64 | Disk | 1541 single-sided disk image. |
-| D71, G71 | Disk | 1571 double-sided disk image. |
-| D81 | Disk | 1581 3.5-inch disk image. |
+| Format   | Kind      | Notes                                                                 |
+| -------- | --------- | --------------------------------------------------------------------- |
+| SID      | Music     | One or more tunes; durations shown when songlength data is available. |
+| MOD      | Music     | Amiga-style tracker module.                                           |
+| PRG      | Program   | A single loadable program.                                            |
+| CRT      | Cartridge | Cartridge image; started as if you inserted a cartridge.              |
+| D64, G64 | Disk      | 1541 single-sided disk image.                                         |
+| D71, G71 | Disk      | 1571 double-sided disk image.                                         |
+| D81      | Disk      | 1581 3.5-inch disk image.                                             |
 
 ### Network Ports and Services
 
 These are the defaults the app expects. Change them per device in **Settings > Connection** if yours differ.
 
-| Service | Default port | Used for |
-| --- | --- | --- |
-| Web Remote Control (REST) | 80 | Control, status, and configuration — required. |
-| FTP File Service | 21 | Browsing and transferring files, playlists, and disks. |
-| Telnet Remote Menu | 23 | Advanced menu-backed actions, when those are enabled. |
+| Service                   | Default port | Used for                                               |
+| ------------------------- | ------------ | ------------------------------------------------------ |
+| Web Remote Control (REST) | 80           | Control, status, and configuration — required.         |
+| FTP File Service          | 21           | Browsing and transferring files, playlists, and disks. |
+| Telnet Remote Menu        | 23           | Advanced menu-backed actions, when those are enabled.  |
 
 ### Device Safety Modes
 
 Set the mode in **Settings > Device Safety**. Higher concurrency is faster but pushes the device harder; the presets also tune caching, cooldowns, and backoff.
 
-| Mode | Requests at once | Use it when |
-| --- | --- | --- |
-| Auto | Chosen for you | Always a safe default — picks Conservative or Balanced from the device and its firmware. Recommended. |
-| Relaxed | Up to 3 | The device and network are proven fast and stable, and you accept higher risk. |
-| Balanced | Up to 2 | A Commodore 64 Ultimate on firmware 1.2.0 or newer, or an Ultimate 64-family device on 3.15 or newer. |
-| Conservative | 1 (serialized) | A first setup, Wi-Fi, or firmware you do not yet trust. Maximum safety. |
-| Troubleshooting | 1 (serialized) | You are chasing a problem and want extra debug logging. |
+| Mode            | Requests at once | Use it when                                                                                           |
+| --------------- | ---------------- | ----------------------------------------------------------------------------------------------------- |
+| Auto            | Chosen for you   | Always a safe default — picks Conservative or Balanced from the device and its firmware. Recommended. |
+| Relaxed         | Up to 3          | The device and network are proven fast and stable, and you accept higher risk.                        |
+| Balanced        | Up to 2          | A Commodore 64 Ultimate on firmware 1.2.0 or newer, or an Ultimate 64-family device on 3.15 or newer. |
+| Conservative    | 1 (serialized)   | A first setup, Wi-Fi, or firmware you do not yet trust. Maximum safety.                               |
+| Troubleshooting | 1 (serialized)   | You are chasing a problem and want extra debug logging.                                               |
 
 ### Drive Types and Disk Formats
 
 Set a drive's type on the **Disks** page to match the image you are mounting.
 
-| Drive type | Disk images | Description |
-| --- | --- | --- |
-| 1541 | D64, G64 | The classic single-sided 5.25-inch drive. |
-| 1571 | D71, G71 | Double-sided 5.25-inch drive. |
-| 1581 | D81 | High-capacity 3.5-inch drive. |
+| Drive type | Disk images | Description                               |
+| ---------- | ----------- | ----------------------------------------- |
+| 1541       | D64, G64    | The classic single-sided 5.25-inch drive. |
+| 1571       | D71, G71    | Double-sided 5.25-inch drive.             |
+| 1581       | D81         | High-capacity 3.5-inch drive.             |
 
 ### Snapshot Types and Memory Ranges
 
 **Save RAM** offers these capture types. The app keeps up to 100 snapshots on your phone or tablet and drops the oldest once that fills.
 
-| Snapshot | Captures | Memory range |
-| --- | --- | --- |
-| CPU + RAM | Full memory plus the CPU registers; can resume where it left off (when the device supports it). | $0000–$FFFF + registers |
-| Program | Almost all of memory, skipping the stack. A good all-round choice. | $0000–$00FF, $0200–$FFFF |
-| Basic | The BASIC program and its variables. | $002B–$0038, $0801–$9FFF |
-| Screen | The current screen and its colours. | VIC bank, $D000–$D02E, $D800–$DBFF, $DD00–$DD01 |
-| Custom | Exactly the address ranges you type. | User-defined |
+| Snapshot  | Captures                                                                                        | Memory range                                    |
+| --------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| CPU + RAM | Full memory plus the CPU registers; can resume where it left off (when the device supports it). | $0000–$FFFF + registers                         |
+| Program   | Almost all of memory, skipping the stack. A good all-round choice.                              | $0000–$00FF, $0200–$FFFF                        |
+| Basic     | The BASIC program and its variables.                                                            | $002B–$0038, $0801–$9FFF                        |
+| Screen    | The current screen and its colours.                                                             | VIC bank, $D000–$D02E, $D800–$DBFF, $DD00–$DD01 |
+| Custom    | Exactly the address ranges you type.                                                            | User-defined                                    |
 
 ### Health Check Probes
 
 Run a health check from **Diagnostics** to test the connection. Each probe reports its own result and timing.
 
-| Probe | What it checks |
-| --- | --- |
-| REST | The Web Remote Control service answers. |
-| FTP | The FTP file service answers. |
-| Telnet | The Telnet menu service answers. |
+| Probe  | What it checks                                                                                                                                 |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| REST   | The Web Remote Control service answers.                                                                                                        |
+| FTP    | The FTP file service answers.                                                                                                                  |
+| Telnet | The Telnet menu service answers.                                                                                                               |
 | CONFIG | Writes a live setting, reads it back, and restores it — proving the device applies changes. A device with an LED strip pulses once as it runs. |
-| RASTER | The VIC-II raster line is available — the video chip is running. |
-| JIFFY | The KERNAL jiffy clock is ticking, which also reports the machine's uptime. |
+| RASTER | The VIC-II raster line is available — the video chip is running.                                                                               |
+| JIFFY  | The KERNAL jiffy clock is ticking, which also reports the machine's uptime.                                                                    |
 
 ### Status and Safety Reference
 
-| Signal | Meaning | Best next step |
-| --- | --- | --- |
-| Healthy badge | The selected device is responding. | Continue normally. |
-| Degraded badge | Some check or recent activity suggests trouble. | Open Diagnostics. |
-| Unhealthy badge | The selected device is not responding correctly. | Run a health check; verify network services. |
-| Offline state | No live connection is active. | Use discovery, manual host entry, or Settings > Connection. |
-| 401/403 password prompt | The device requires its network password. | Enter the target device network password. |
-| TCP refused while ping works | The target device TCP stack may be wedged. | Stop traffic and power-cycle the device. |
-| CPU-speed network drop | Firmware may briefly drop network while applying clock changes. | Wait for reconnect before changing more settings. |
+| Signal                       | Meaning                                                         | Best next step                                              |
+| ---------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------- |
+| Healthy badge                | The selected device is responding.                              | Continue normally.                                          |
+| Degraded badge               | Some check or recent activity suggests trouble.                 | Open Diagnostics.                                           |
+| Unhealthy badge              | The selected device is not responding correctly.                | Run a health check; verify network services.                |
+| Offline state                | No live connection is active.                                   | Use discovery, manual host entry, or Settings > Connection. |
+| 401/403 password prompt      | The device requires its network password.                       | Enter the target device network password.                   |
+| TCP refused while ping works | The target device TCP stack may be wedged.                      | Stop traffic and power-cycle the device.                    |
+| CPU-speed network drop       | Firmware may briefly drop network while applying clock changes. | Wait for reconnect before changing more settings.           |

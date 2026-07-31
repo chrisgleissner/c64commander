@@ -91,8 +91,8 @@ test.describe("Playlist controls and advanced features", () => {
 
     await expect(page.getByTestId("playlist-item")).toHaveCount(2);
 
-    // The Shuffle checkbox is in a div with checkboxes - scroll to the options area first
-    await page.getByTestId("playback-recurse").scrollIntoViewIfNeeded();
+    // The order controls sit at the bottom of the playback card - scroll to them first
+    await page.getByTestId("playback-shuffle").scrollIntoViewIfNeeded();
     await snap(page, testInfo, "scrolled-to-options");
 
     // Now find the shuffle checkbox - it's the second checkbox in the options area
@@ -121,7 +121,7 @@ test.describe("Playlist controls and advanced features", () => {
 
     await expect(page.getByTestId("playlist-item")).toHaveCount(2);
 
-    await page.getByTestId("playback-recurse").scrollIntoViewIfNeeded();
+    await page.getByTestId("playback-shuffle").scrollIntoViewIfNeeded();
     const shuffleCheckbox = page.getByTestId("playback-shuffle");
     await shuffleCheckbox.click();
     await snap(page, testInfo, "shuffle-enabled");
@@ -174,10 +174,9 @@ test.describe("Playlist controls and advanced features", () => {
     await snap(page, testInfo, "playlist-ready");
 
     // Scroll to options area
-    await page.getByTestId("playback-recurse").scrollIntoViewIfNeeded();
+    await page.getByTestId("playback-repeat").scrollIntoViewIfNeeded();
     await snap(page, testInfo, "scrolled-to-options");
 
-    // Repeat checkbox is the third one (0=Recurse, 1=Shuffle, 2=Repeat)
     const repeatCheckbox = page.getByTestId("playback-repeat");
 
     await repeatCheckbox.click();
@@ -185,28 +184,22 @@ test.describe("Playlist controls and advanced features", () => {
     await snap(page, testInfo, "repeat-enabled");
   });
 
-  test("recurse folders checkbox toggles state @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("include-subfolders is no longer a playback control @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    // It moved to the Add items sheet, beside the folders it governs. Its behaviour there is covered
+    // by `itemSelection.spec.ts`, which is the spec that can actually browse a source; this asserts
+    // only that it has left the Play page, which is what stopped a running SID Radio station leaving
+    // one live control stranded in a row of controls the station had taken over.
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
 
     await addLocalFolder(page, path.resolve("playwright/fixtures/local-play"));
-    await snap(page, testInfo, "playlist-ready");
+    await expect(page.getByTestId("playlist-item")).toHaveCount(2);
 
-    const recurseCheckbox = page.getByTestId("playback-recurse");
-    await recurseCheckbox.scrollIntoViewIfNeeded();
-    await expect(recurseCheckbox).toBeVisible();
-    const initiallyChecked = (await recurseCheckbox.getAttribute("aria-checked")) === "true";
-    await snap(page, testInfo, initiallyChecked ? "recurse-initial-on" : "recurse-initial-off");
-
-    await recurseCheckbox.click();
-    if (initiallyChecked) {
-      await expect(recurseCheckbox).not.toBeChecked();
-      await snap(page, testInfo, "recurse-toggled-off");
-      return;
-    }
-
-    await expect(recurseCheckbox).toBeChecked();
-    await snap(page, testInfo, "recurse-toggled-on");
+    await expect(page.getByTestId("playback-recurse")).toHaveCount(0);
+    await expect(page.getByTestId("playback-shuffle")).toBeVisible();
+    await snap(page, testInfo, "no-recurse-on-play-page");
   });
 
   test("duration control syncs slider and input @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -273,7 +266,7 @@ test.describe("Playlist controls and advanced features", () => {
 
     await expectRestTraceSequence(page, testInfo, /\/v1\/runners:sidplay/);
 
-    const songButton = page.getByRole("button", { name: /Subsong 1\/3/ });
+    const songButton = page.getByRole("button", { name: /Tune 1 of 3/ });
     await expect(songButton).toBeVisible();
     await snap(page, testInfo, "song-selector-visible");
 
@@ -286,7 +279,7 @@ test.describe("Playlist controls and advanced features", () => {
     await expect(dialog).toBeVisible({ timeout: 10000 });
     await snap(page, testInfo, "song-selector-open");
 
-    await dialog.getByRole("button", { name: /Subsong 2/ }).click();
+    await dialog.getByRole("button", { name: /Tune 2/ }).click();
 
     await expect(dialog).toBeHidden();
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(playCountBefore + 1);

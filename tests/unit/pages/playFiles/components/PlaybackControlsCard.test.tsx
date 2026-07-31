@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { PENDING_ANNOUNCEMENT_INTERVAL_MS, type PendingSeekPresentation } from "@/lib/playback/pendingSeekStatus";
 import { CTA_HIGHLIGHT_DURATION_MS, CTA_PERSISTENT_ACTIVE_ATTR } from "@/lib/ui/buttonInteraction";
@@ -23,8 +23,6 @@ import {
 const buildProps = (overrides: Partial<PlaybackControlsCardProps> = {}): PlaybackControlsCardProps => ({
   hasCurrentItem: false,
   currentItemLabel: null,
-  currentDurationLabel: null,
-  subsongLabel: null,
   canTransport: true,
   hasPrev: false,
   hasNext: true,
@@ -44,8 +42,6 @@ const buildProps = (overrides: Partial<PlaybackControlsCardProps> = {}): Playbac
   totalLabel: "0:00",
   remainingTotalLabel: "0:00",
   volumeControls: <div data-testid="volume-controls-placeholder" />,
-  recurseFolders: false,
-  onRecurseChange: vi.fn(),
   shuffleEnabled: false,
   onShuffleChange: vi.fn(),
   repeatEnabled: false,
@@ -93,37 +89,148 @@ describe("PlaybackControlsCard", () => {
     vi.useRealTimers();
   });
 
-  // HARD12-017
-  it("renders the openControllerAction slot when provided, and nothing when omitted", () => {
-    const { rerender } = render(<PlaybackControlsCard {...buildProps()} />);
-    expect(screen.queryByTestId("open-controller-slot")).not.toBeInTheDocument();
-
-    rerender(
-      <PlaybackControlsCard
-        {...buildProps({ openControllerAction: <button data-testid="open-controller-slot">Open Controller</button> })}
-      />,
-    );
-    expect(screen.getByTestId("open-controller-slot")).toBeInTheDocument();
-  });
-
-  it("badges the SID chip count beside the now-playing title", () => {
+  // The 2SID/3SID badge used to sit beside the title. It has gone from this card, and these
+  // assertions with it: the metadata line now names one SID model per chip, which states the chip
+  // count and says which chips they are, so a badge repeating the count would be the same fact twice
+  // on the one line that was specified to carry the title and the ranking actions and nothing else.
+  // The badge is untouched on the playlist rows and in Liked Tunes, where there is no metadata line.
+  it("carries the title and the ranking actions on the title row, and nothing else", () => {
     render(
       <PlaybackControlsCard
-        {...buildProps({ hasCurrentItem: true, currentItemLabel: "Bossa in Do", currentItemChipCount: 2 })}
+        {...buildProps({
+          hasCurrentItem: true,
+          currentItemLabel: "Bossa in Do",
+          currentItemMetadata: "Jeroen Tel - 1988 - 6581 / 8580 - PAL - 2:07",
+          rankingControls: <button data-testid="ranking-slot">rank</button>,
+        })}
       />,
     );
 
-    const track = screen.getByTestId("playback-current-track");
-    expect(track).toHaveTextContent("Bossa in Do");
-    expect(within(track).getByTestId("sid-chip-badge-2")).toHaveTextContent("2SID");
+    const titleRow = screen.getByTestId("playback-current-title").parentElement as HTMLElement;
+    expect(titleRow.childElementCount).toBe(2);
+    expect(within(titleRow).getByTestId("ranking-slot")).toBeInTheDocument();
+    expect(titleRow.textContent).toBe("Bossa in Dorank");
+    expect(screen.queryByTestId("sid-chip-badge-2")).toBeNull();
+    // The length and which-tune-of-how-many are on the line below now, not beside the title.
+    expect(screen.getByTestId("playback-current-credits")).toHaveTextContent("2:07");
   });
 
-  it("draws no chip badge when the chip count is unknown", () => {
-    render(<PlaybackControlsCard {...buildProps({ hasCurrentItem: true, currentItemLabel: "Bossa in Do" })} />);
+  it("holds the ranking actions in the same place however long the title is", () => {
+    // Muscle memory: the ♥ and the ✕ must not move between tunes. Two things do that — the row never
+    // wraps, and the action track never shrinks — so a title long enough to overflow is truncated
+    // inside its own box instead of pushing them anywhere.
+    const longTitle = "Sanxion Loader Tune Extended Remix With A Very Long Name Indeed";
+    render(
+      <PlaybackControlsCard
+        {...buildProps({
+          hasCurrentItem: true,
+          currentItemLabel: longTitle,
+          rankingControls: <button data-testid="ranking-slot">rank</button>,
+        })}
+      />,
+    );
 
-    expect(screen.queryByTestId("sid-chip-badge-1")).toBeNull();
-    expect(screen.queryByTestId("sid-chip-badge-2")).toBeNull();
-    expect(screen.queryByTestId("sid-chip-badge-3")).toBeNull();
+    const title = screen.getByTestId("playback-current-title");
+    const titleRow = title.parentElement as HTMLElement;
+    const actions = within(titleRow).getByTestId("ranking-slot").parentElement as HTMLElement;
+
+    expect(titleRow.className).toContain("flex-nowrap");
+    expect(titleRow.className).not.toContain("flex-wrap");
+    expect(actions.className).toContain("shrink-0");
+    // The title yields the space instead: it may shrink below its content width and is clipped there.
+    expect(title.className).toContain("min-w-0");
+    expect(title.className).toContain("flex-1");
+    expect(title.className).toContain("truncate");
+    // Truncating must not lose the name. `truncate` is text-overflow, so the whole string is still
+    // in the document — which is what a screen reader reads — and the tooltip carries it for a
+    // pointer.
+    expect(title).toHaveTextContent(longTitle);
+    expect(title).toHaveAttribute("title", longTitle);
+  });
+
+  /**
+   * Reading order: where the queue comes from, then the tune, then the controls. The station
+   * indicator used to be the *last* thing on the card, under the transport, the progress bar, the
+   * volume row and the playlist toggles, which is the wrong end — it is context for all of them.
+   */
+  it("draws the station indicator above the title, in both station states", () => {
+    for (const stationActive of [false, true]) {
+      const { unmount } = render(
+        <PlaybackControlsCard
+          {...buildProps({
+            hasCurrentItem: true,
+            currentItemLabel: "Commando",
+            stationActive,
+            stationIndicator: <div data-testid="station-indicator-slot" />,
+          })}
+        />,
+      );
+
+      const layout = screen.getByTestId("playback-controls-layout");
+      expect(layout.firstElementChild).toHaveAttribute("data-testid", "station-indicator-slot");
+      const indicator = screen.getByTestId("station-indicator-slot");
+      const track = screen.getByTestId("playback-current-track");
+      expect(indicator.compareDocumentPosition(track) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      unmount();
+    }
+  });
+
+  /**
+   * A station is a mode, not a passing unavailability: nothing the user can do re-enables Shuffle,
+   * Repeat or Reshuffle while one runs, because the station owns the play order by definition. So
+   * they are removed rather than greyed, and the row they sat in goes with them — a row left holding
+   * one control, or a row of greyed controls, would spend vertical space on nothing.
+   */
+  it("drops the whole order row while a station runs, leaving the transport and the ranking pair", () => {
+    const { container } = render(
+      <PlaybackControlsCard {...buildProps({ stationActive: true, reshuffleDisabled: false })} />,
+    );
+
+    expect(screen.queryByTestId("playback-shuffle")).toBeNull();
+    expect(screen.queryByTestId("playback-repeat")).toBeNull();
+    expect(screen.queryByTestId("playlist-reshuffle")).toBeNull();
+    // Recurse is no longer a playback control at all; it lives in the Add items sheet.
+    expect(screen.queryByTestId("playback-recurse")).toBeNull();
+    // What a listener still needs is untouched.
+    expect(screen.getByTestId("playback-transport-row")).toBeInTheDocument();
+    // And the space is actually given back, rather than an empty row being left behind. Counted
+    // against the same render with no station, so the assertion cannot pass by naming a class that
+    // is never present.
+    const rowsDuringStation = container.querySelectorAll(".flex.flex-wrap.items-center.gap-3").length;
+    cleanup();
+    const idle = render(<PlaybackControlsCard {...buildProps({ reshuffleDisabled: false })} />);
+    expect(idle.container.querySelectorAll(".flex.flex-wrap.items-center.gap-3").length).toBeGreaterThan(
+      rowsDuringStation,
+    );
+    expect(rowsDuringStation).toBe(0);
+  });
+
+  it("puts the order controls back, with the values the user had, once the station stops", () => {
+    // Nothing is mutated while they are hidden: the card only stops drawing them, so stopping a
+    // station returns the playlist exactly as it was left.
+    const props = buildProps({ shuffleEnabled: true, repeatEnabled: true, reshuffleDisabled: false });
+    const { rerender } = render(<PlaybackControlsCard {...props} stationActive />);
+
+    expect(screen.queryByTestId("playback-shuffle")).toBeNull();
+
+    rerender(<PlaybackControlsCard {...props} stationActive={false} />);
+
+    expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("data-state", "checked");
+    expect(screen.getByTestId("playback-repeat")).toHaveAttribute("data-state", "checked");
+    expect(screen.getByTestId("playlist-reshuffle")).toBeEnabled();
+  });
+
+  it("spreads the transport across the card so its ends sit on the card's own edges", () => {
+    // The buttons are a fixed 44 px, so in the previous `grid-cols-4` they sat at the left of cells
+    // wider than themselves and the row stopped short of the right edge — visibly ragged against
+    // the ranking pair above it and the progress bar below it, both of which are flush.
+    render(<PlaybackControlsCard {...buildProps()} />);
+
+    const row = screen.getByTestId("playback-transport-row");
+    expect(row.className).toContain("justify-between");
+    expect(row.className).not.toMatch(/\bgrid-cols-4\b/);
+    expect(row.firstElementChild).toHaveAttribute("data-testid", "playlist-prev");
+    expect(row.lastElementChild).toHaveAttribute("data-testid", "playlist-next");
   });
 
   it("keeps track metadata and transport controls stacked full-width", () => {
@@ -132,7 +239,6 @@ describe("PlaybackControlsCard", () => {
         {...buildProps({
           hasCurrentItem: true,
           currentItemLabel: "intro.sid",
-          currentDurationLabel: "02:31",
           canPause: true,
         })}
       />,
@@ -213,14 +319,13 @@ describe("PlaybackControlsCard", () => {
     expect(props.onReshuffle).not.toHaveBeenCalled();
   });
 
-  it("shows composer and year under the title, smaller than it", () => {
+  it("shows what the tune says about itself under the title, smaller than it", () => {
     render(
       <PlaybackControlsCard
         {...buildProps({
           hasCurrentItem: true,
           currentItemLabel: "Commando",
-          currentItemAuthor: "Rob Hubbard",
-          currentItemReleased: "1985 Elite",
+          currentItemMetadata: "Rob Hubbard - 1985 Elite - 6581 - PAL - Tune 2 of 3 - 3:12",
         })}
       />,
     );
@@ -228,9 +333,36 @@ describe("PlaybackControlsCard", () => {
     const credits = screen.getByTestId("playback-current-credits");
     expect(credits).toHaveTextContent("Rob Hubbard");
     expect(credits).toHaveTextContent("1985 Elite");
+    expect(credits).toHaveTextContent("Tune 2 of 3");
+    expect(credits.textContent).not.toContain("Subsong");
     // Readable: a step below the title rather than the smallest type on the page. The title is
     // text-base, so credits are text-sm — the same primary/secondary pairing used elsewhere.
     expect(credits.className).toContain("text-sm");
+  });
+
+  it("starts the title and the credits on the same left edge, with no glyph in front of either", () => {
+    // There used to be a small file-origin glyph before the title, which indented the title by its
+    // own width while the credits line below stayed at the card's edge, so the two did not line up.
+    // Where a tune came from is already shown against every playlist row, and the page says at the
+    // top which device is playing.
+    render(
+      <PlaybackControlsCard
+        {...buildProps({
+          hasCurrentItem: true,
+          currentItemLabel: "Commando",
+          currentItemMetadata: "Rob Hubbard",
+        })}
+      />,
+    );
+
+    const track = screen.getByTestId("playback-current-track");
+    expect(within(track).queryByTestId("file-origin-icon")).toBeNull();
+    // The title is the first thing on its row, and its row starts at the same edge as the credits:
+    // neither carries padding or a margin that would offset one from the other.
+    const titleRow = track.firstElementChild as HTMLElement;
+    expect(titleRow.firstElementChild).toHaveTextContent("Commando");
+    expect(titleRow.className).not.toMatch(/\b(pl-|ml-|indent-)/);
+    expect(screen.getByTestId("playback-current-credits").className).not.toMatch(/\b(pl-|ml-|indent-)/);
   });
 
   it("shows nothing extra for a tune that names neither", () => {

@@ -106,12 +106,45 @@ describe("PlayFilesPage feature-flag contracts", () => {
   });
 
   it("derives transport enablement from the same traversal helpers used by playback", () => {
+    // HARD12-005: what Previous/Next look like has to be decided by the functions that decide what
+    // they do, so the buttons cannot claim there is somewhere to go when the traversal disagrees.
+    expect(playFilesPageSource).toMatch(/const hasPrev = canAdvancePrevious\(\s*playlist,\s*currentIndex,/);
+    expect(playFilesPageSource).toMatch(/const hasNext = canAdvanceNext\(\s*playlist,\s*currentIndex,/);
+  });
+
+  it("computes transport enablement from the ordering a running station imposes, not the raw switches", () => {
+    // A station turns Shuffle and Repeat off for the traversal. If the enablement kept reading the
+    // raw switches, Previous could be shown as available at a position only the shuffled walk can
+    // reach, and Next as available at the end of the queue because Repeat says it wraps.
     expect(playFilesPageSource).toContain(
-      "const hasPrev = canAdvancePrevious(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed);",
+      "const traversalOrdering = resolveTraversalOrdering({ repeatEnabled, shuffleEnabled }, sidRadio.active);",
     );
-    expect(playFilesPageSource).toContain(
-      "const hasNext = canAdvanceNext(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed);",
-    );
+    for (const helper of ["canAdvancePrevious", "canAdvanceNext"]) {
+      const call = playFilesPageSource.slice(playFilesPageSource.indexOf(`${helper}(`));
+      expect(call.slice(0, 200)).toContain("traversalOrdering.repeatEnabled");
+      expect(call.slice(0, 200)).toContain("traversalOrdering.shuffleEnabled");
+    }
+  });
+
+  it("keeps Remote Input gated on an actually-playing session (HARD12-017)", () => {
+    // The button reaches a controller for the machine that is playing. Shown while nothing plays it
+    // opens a sheet with nothing to drive.
+    expect(playFilesPageSource).toContain("{remoteInputEnabled && isPlaying ? (");
+    expect(playFilesPageSource).toContain('data-testid="play-open-controller"');
+  });
+
+  it("places Remote Input after the two station actions", () => {
+    // All three open a sheet, so they share one wrapping row. Remote Input comes last because it
+    // leaves the music behind, while SID Radio and Liked Tunes are about what plays next and belong
+    // nearer the controls that play it.
+    const launcher = playFilesPageSource.indexOf('data-testid="sid-radio-launcher"');
+    const likedTunes = playFilesPageSource.indexOf('data-testid="sid-radio-liked-tunes-open"');
+    const remoteInput = playFilesPageSource.indexOf('data-testid="play-open-controller"');
+    expect(launcher).toBeGreaterThan(-1);
+    expect(likedTunes).toBeGreaterThan(launcher);
+    expect(remoteInput).toBeGreaterThan(likedTunes);
+    // And it is no longer handed to the playback card, which drew it above all three.
+    expect(playFilesPageSource).not.toContain("openControllerAction=");
   });
 
   it("does not overwrite playItem's resolved subsong playlist entry with the stripped switch item", () => {

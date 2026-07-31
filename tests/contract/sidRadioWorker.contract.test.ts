@@ -92,7 +92,7 @@ describe("sidRadio worker contract (§8.3)", () => {
       expect(candidate).toMatchObject({
         trackOrdinal: expect.any(Number),
         md5_48: expect.any(String),
-        songIndex: expect.any(Number),
+        songNr: expect.any(Number),
         reason: expect.any(String),
         // The queue provider retires a whole `.sid` file when it plays one subsong, so the file's
         // track ordinals have to cross the boundary with the candidate.

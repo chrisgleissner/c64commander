@@ -174,6 +174,21 @@ export class LocalSidPlaybackController {
     this.ensureEngine().setMuted(muted);
   }
 
+  /**
+   * The level and mute state on-device playback is using, without building an engine to ask.
+   *
+   * Read while the Play page mounts, which is long before anyone has chosen to play anything here,
+   * so it must not be the thing that pays for a worker and a WASM module. Before an engine exists
+   * the answer is the level a new one would start at.
+   */
+  volume(): number {
+    return this.engine?.getVolume() ?? 1;
+  }
+
+  muted(): boolean {
+    return this.engine?.getMuted() ?? false;
+  }
+
   /** True while this device is actually rendering a tune. */
   isActive(): boolean {
     return this.engine?.isActive() ?? false;

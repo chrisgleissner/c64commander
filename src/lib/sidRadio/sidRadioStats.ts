@@ -78,7 +78,13 @@ export interface SidRadioStats {
    * to 30.
    */
   emittedSequence: number[];
-  /** True while a station drives the queue → transport Shuffle/Repeat are disabled (§5.3). */
+  /**
+   * True while a station drives the queue (§5.3).
+   *
+   * The station owns the play order, so Shuffle and Repeat are removed from the card and — more to
+   * the point — taken out of the traversal itself by `resolveTraversalOrdering`. The two used to
+   * disagree: the card stopped drawing them while the traversal went on reading the stored values.
+   */
   transportShuffleDisabled: boolean;
   transportRepeatDisabled: boolean;
   // Local engine (§12.6) — populated only by Track B.

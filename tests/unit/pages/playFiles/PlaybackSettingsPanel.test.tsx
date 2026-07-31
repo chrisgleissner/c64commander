@@ -59,13 +59,18 @@ describe("PlaybackSettingsPanel", () => {
     expect(onChooseSonglengthsFile).toHaveBeenCalledTimes(1);
   });
 
-  it("uses Subsong terminology for multi-subsong selector", () => {
+  // Amended deliberately: the pieces inside a SID file are called tunes on screen now, everywhere,
+  // because "subsong" is format jargon and a listener is choosing between tunes. The now-playing line
+  // above this panel says "Tune 2 of 5"; a picker underneath it saying "Subsong 2/5" for the same
+  // thing would be two names for one idea on one page. The behaviour under test is unchanged.
+  it("uses Tune terminology for a file that holds more than one", () => {
     render(
       <PlaybackSettingsPanel {...baseProps} songSelectorVisible songPickerOpen clampedSongNr={2} subsongCount={5} />,
     );
 
-    expect(screen.getByRole("button", { name: "Subsong 2/5" })).toBeInTheDocument();
-    expect(screen.getByText("Available subsongs: 1–5")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tune 2 of 5" })).toBeInTheDocument();
+    expect(screen.getByText("Tunes available: 1–5")).toBeInTheDocument();
+    expect(screen.queryByText(/Subsong/)).toBeNull();
   });
 
   it("calls onDurationInputChange when input value changes", () => {
@@ -76,7 +81,7 @@ describe("PlaybackSettingsPanel", () => {
     expect(onDurationInputChange).toHaveBeenCalledWith("03:00");
   });
 
-  it("calls onSelectSong when subsong button is clicked in picker", () => {
+  it("calls onSelectSong when a tune button is clicked in the picker", () => {
     const onSelectSong = vi.fn();
     render(
       <PlaybackSettingsPanel
@@ -89,7 +94,7 @@ describe("PlaybackSettingsPanel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Subsong 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tune 2" }));
     expect(onSelectSong).toHaveBeenCalledWith(2);
   });
 

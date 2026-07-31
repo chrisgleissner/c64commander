@@ -18,7 +18,14 @@ vi.mock("@/hooks/useC64Connection", () => ({
 }));
 
 import { SidRadioSettingsSection } from "@/pages/settings/SidRadioSettingsSection";
-import { loadLocalEngineEnabled, loadSidRadioEnabled } from "@/lib/config/appSettings";
+import {
+  loadLocalEngineEnabled,
+  loadLocalSidModel,
+  loadLocalSidModelFromDevice,
+  loadSidRadioEnabled,
+  saveLearnedDeviceSidModel,
+  saveLocalSidModelFromDevice,
+} from "@/lib/config/appSettings";
 import { clearAllRankings, getRanking, setRanking } from "@/lib/sidRadio/rankingStore";
 
 beforeEach(async () => {
@@ -139,5 +146,62 @@ describe("SidRadioSettingsSection crossfade availability", () => {
     expect(screen.queryByTestId("settings-sid-radio-status")).toBeNull();
     // Undoing your own rankings is not a developer concern.
     expect(screen.getByTestId("settings-clear-rankings")).toBeVisible();
+  });
+});
+
+/**
+ * Which chip a tune that names none is played on. The two controls are a switch that takes the
+ * answer from the connected Ultimate and a manual choice for when there is no answer to take.
+ */
+describe("SidRadioSettingsSection SID chip", () => {
+  it("offers both controls without developer mode, because on-device playback is GA", () => {
+    render(<SidRadioSettingsSection />);
+    expect(screen.getByTestId("settings-sid-chip")).toBeVisible();
+    expect(screen.getByTestId("settings-sid-chip-from-device")).toBeVisible();
+    expect(screen.getByTestId("settings-sid-chip-6581")).toBeVisible();
+    expect(screen.getByTestId("settings-sid-chip-8580")).toBeVisible();
+  });
+
+  it("says plainly that a tune naming its own chip is unaffected", () => {
+    // Without this the control reads as "play everything on 6581", and a listener who set it that
+    // way would reasonably think the app was ignoring them.
+    render(<SidRadioSettingsSection />);
+    const block = screen.getByTestId("settings-sid-chip");
+    expect(block).toHaveTextContent(/always play on the chip they name/i);
+  });
+
+  it("takes the chip from the connected machine by default and says which one is in use", async () => {
+    saveLearnedDeviceSidModel("6581");
+    render(<SidRadioSettingsSection />);
+    expect(screen.getByTestId("settings-sid-chip-from-device")).toBeChecked();
+    expect(screen.getByTestId("settings-sid-chip-effective")).toHaveTextContent(/currently play on the 6581/i);
+    expect(screen.getByTestId("settings-sid-chip")).toHaveTextContent(/Last read: 6581/);
+  });
+
+  it("falls back to the manual choice once the machine is no longer consulted", async () => {
+    saveLearnedDeviceSidModel("6581");
+    render(<SidRadioSettingsSection />);
+    fireEvent.click(screen.getByTestId("settings-sid-chip-from-device"));
+    await waitFor(() => expect(loadLocalSidModelFromDevice()).toBe(false));
+    expect(screen.getByTestId("settings-sid-chip-effective")).toHaveTextContent(/currently play on the 8580/i);
+  });
+
+  it("persists the manual choice and reflects it once inference is off", async () => {
+    saveLocalSidModelFromDevice(false);
+    render(<SidRadioSettingsSection />);
+    fireEvent.click(screen.getByTestId("settings-sid-chip-6581"));
+    await waitFor(() => expect(loadLocalSidModel()).toBe("6581"));
+    expect(screen.getByTestId("settings-sid-chip-effective")).toHaveTextContent(/currently play on the 6581/i);
+  });
+
+  it("says nothing has been read yet when no machine has answered", () => {
+    render(<SidRadioSettingsSection />);
+    expect(screen.getByTestId("settings-sid-chip")).toHaveTextContent(/Nothing has been read yet/i);
+  });
+
+  it("hides the whole block when on-device playback is switched off", async () => {
+    render(<SidRadioSettingsSection developerMode />);
+    fireEvent.click(screen.getByTestId("settings-local-engine-enabled"));
+    await waitFor(() => expect(screen.queryByTestId("settings-sid-chip")).toBeNull());
   });
 });

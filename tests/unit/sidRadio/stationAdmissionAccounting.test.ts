@@ -28,8 +28,8 @@ import { StationQueueProvider } from "@/lib/sidRadio/stationQueueProvider";
 import type { StationCandidate, StationResult } from "@/lib/sidRadio/stationEngine";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
-const buildItem = ({ virtualPath, songIndex }: { virtualPath: string; songIndex: number }) =>
-  ({ id: `${virtualPath}#${songIndex}`, path: virtualPath }) as unknown as PlaylistItem;
+const buildItem = ({ virtualPath, songNr }: { virtualPath: string; songNr: number }) =>
+  ({ id: `${virtualPath}#${songNr}`, path: virtualPath }) as unknown as PlaylistItem;
 
 /** An engine that hands out consecutive ordinals forever, honouring the exclude set. */
 const endlessEngine =
@@ -43,7 +43,7 @@ const endlessEngine =
         candidates.push({
           trackOrdinal: ordinal,
           md5_48: String(ordinal).padStart(12, "0"),
-          songIndex: 1,
+          songNr: 1,
           score: 1,
           reason: "similar",
           fileTrackOrdinals: [ordinal],
@@ -227,9 +227,9 @@ describe("the resolved duration reaches the queued item", () => {
     const provider = new StationQueueProvider({
       computeCandidates: endlessEngine(),
       resolvePath: (md5) => `/hvsc/${md5}.sid`,
-      buildItem: ({ virtualPath, songIndex, durationSeconds }) => {
+      buildItem: ({ virtualPath, songNr, durationSeconds }) => {
         seen.push(durationSeconds);
-        return { id: `${virtualPath}#${songIndex}` } as unknown as PlaylistItem;
+        return { id: `${virtualPath}#${songNr}` } as unknown as PlaylistItem;
       },
       minSeconds: 15,
       resolveDuration: () => 96,
@@ -246,9 +246,9 @@ describe("the resolved duration reaches the queued item", () => {
     const provider = new StationQueueProvider({
       computeCandidates: endlessEngine(),
       resolvePath: (md5) => `/hvsc/${md5}.sid`,
-      buildItem: ({ virtualPath, songIndex, durationSeconds }) => {
+      buildItem: ({ virtualPath, songNr, durationSeconds }) => {
         seen.push(durationSeconds);
-        return { id: `${virtualPath}#${songIndex}` } as unknown as PlaylistItem;
+        return { id: `${virtualPath}#${songNr}` } as unknown as PlaylistItem;
       },
       minSeconds: 15,
       resolveDuration: () => null,
@@ -268,9 +268,9 @@ describe("the resolved duration reaches the queued item", () => {
     const provider = new StationQueueProvider({
       computeCandidates: endlessEngine(),
       resolvePath: (md5) => `/hvsc/${md5}.sid`,
-      buildItem: ({ virtualPath, songIndex, durationSeconds }) => {
+      buildItem: ({ virtualPath, songNr, durationSeconds }) => {
         seen.push(durationSeconds);
-        return { id: `${virtualPath}#${songIndex}` } as unknown as PlaylistItem;
+        return { id: `${virtualPath}#${songNr}` } as unknown as PlaylistItem;
       },
       minSeconds: 0,
       resolveDuration: () => 8,
@@ -284,5 +284,71 @@ describe("the resolved duration reaches the queued item", () => {
     expect(seen).toEqual([8, 8]);
     // And a missing length is not counted as slipping past a rule that is not in force.
     expect(provider.unknownDurationTracksAdmitted).toBe(0);
+  });
+});
+
+describe("waiting for the path index before consuming anything", () => {
+  // A station resumed on app start refills immediately, while the `md5_48 -> path` index is still
+  // being built as a side effect of loading the HVSC songlengths. Measured on a Pixel 4 with all
+  // 61,157 songs ingested: 2,454 candidates dropped as unresolved and none emitted. The refill
+  // failing is not the worst of it — a candidate is consumed before it is resolved, so those 2,454
+  // tracks joined the exclude set and could never be offered again.
+  it("does not consume a single candidate before the index can answer", async () => {
+    let indexReady = false;
+    let resolved = 0;
+    const provider = new StationQueueProvider({
+      computeCandidates: endlessEngine(),
+      resolvePath: (md5) => {
+        resolved += 1;
+        return indexReady ? `/hvsc/${md5}.sid` : null;
+      },
+      buildItem,
+      lookahead: 4,
+      ensureResolvable: async () => {
+        indexReady = true;
+      },
+    });
+
+    const { items } = await provider.refill();
+
+    expect(items).toHaveLength(4);
+    expect(provider.unresolvedTracksSkipped).toBe(0);
+    expect(provider.excludedOrdinals).toHaveLength(4);
+    expect(resolved).toBe(4);
+  });
+
+  it("waits once, not before every refill", async () => {
+    let waits = 0;
+    const provider = new StationQueueProvider({
+      computeCandidates: endlessEngine(),
+      resolvePath: (md5) => `/hvsc/${md5}.sid`,
+      buildItem,
+      lookahead: 2,
+      ensureResolvable: async () => {
+        waits += 1;
+      },
+    });
+
+    await provider.refill();
+    await provider.refill();
+    await provider.refill();
+
+    expect(waits).toBe(1);
+  });
+
+  // An index that never loads must not stop the station trying: the empty refill that follows is
+  // how that is reported, and refusing to proceed would turn a degraded station into a dead one.
+  it("still refills when the wait rejects", async () => {
+    const provider = new StationQueueProvider({
+      computeCandidates: endlessEngine(),
+      resolvePath: (md5) => `/hvsc/${md5}.sid`,
+      buildItem,
+      lookahead: 3,
+      ensureResolvable: async () => {
+        throw new Error("index unavailable");
+      },
+    });
+
+    expect((await provider.refill()).items).toHaveLength(3);
   });
 });

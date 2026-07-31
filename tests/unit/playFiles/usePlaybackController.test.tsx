@@ -170,6 +170,7 @@ const renderPlaybackController = (
     buildHvscLocalPlayFile?: ReturnType<typeof vi.fn>;
     deviceProduct?: string | null;
     localSidPlaybackController?: unknown;
+    stationActiveRef?: { current: boolean };
   },
 ) =>
   renderHook(() =>
@@ -243,6 +244,7 @@ const renderPlaybackController = (
       setAutoAdvanceDueAtMs: options?.setAutoAdvanceDueAtMs ?? vi.fn(),
       ensureUnmuted: options?.ensureUnmuted ?? vi.fn().mockResolvedValue(undefined),
       localSidPlaybackController: options?.localSidPlaybackController as any,
+      stationActiveRef: options?.stationActiveRef,
     }),
   );
 
@@ -2518,6 +2520,106 @@ describe("usePlaybackController", () => {
     expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
   });
 
+  describe("a running station owns the play order", () => {
+    // Shuffle and Repeat are hidden from the screen while a station runs, but hiding a control says
+    // nothing about the traversal — the stored values were still being read. A listener who had left
+    // Shuffle on before starting a station therefore heard the station's queue out of order, which
+    // also broke the refill lookahead (it counts the tracks after the cursor) and served tunes the
+    // station had already played.
+    const threeTracks = () => [
+      createPlaylistItem({ id: "item-1", label: "one.prg", path: "/PROGRAMS/one.prg" }),
+      createPlaylistItem({ id: "item-2", label: "two.prg", path: "/PROGRAMS/two.prg" }),
+      createPlaylistItem({ id: "item-3", label: "three.prg", path: "/PROGRAMS/three.prg" }),
+    ];
+
+    it("advances in queue order even when the listener left shuffle on", async () => {
+      const playlist = threeTracks();
+      const seed = 4242;
+      const shuffled = seededShuffleIds(
+        playlist.map((item) => item.id),
+        seed,
+      );
+      const startIndex = playlist.findIndex((item) => item.id === shuffled[0]);
+      // The test is only meaningful where the two orders disagree.
+      expect(startIndex + 1).not.toBe(playlist.findIndex((item) => item.id === shuffled[1]));
+      const setCurrentIndex = vi.fn();
+      const { result } = renderPlaybackController(playlist, {
+        currentIndex: startIndex,
+        isPlaying: true,
+        shuffleEnabled: true,
+        shuffleSeed: seed,
+        setCurrentIndex,
+        stationActiveRef: { current: true },
+      });
+
+      await result.current.handleNext("user");
+
+      expect(setCurrentIndex).toHaveBeenCalledWith(startIndex + 1);
+    });
+
+    it("steps back in queue order even when the listener left shuffle on", async () => {
+      const playlist = threeTracks();
+      const setCurrentIndex = vi.fn();
+      const { result } = renderPlaybackController(playlist, {
+        currentIndex: 2,
+        isPlaying: true,
+        shuffleEnabled: true,
+        shuffleSeed: 4242,
+        setCurrentIndex,
+        stationActiveRef: { current: true },
+      });
+
+      await result.current.handlePrevious();
+
+      expect(setCurrentIndex).toHaveBeenCalledWith(1);
+    });
+
+    it("does not send the cursor back into tracks the station already played when repeat is on", async () => {
+      // With Repeat on, the end of the queue wraps to index 0 — tunes the station has already
+      // served. A station instead ends the run and waits for the refill.
+      const playlist = threeTracks();
+      const setCurrentIndex = vi.fn();
+      const { result } = renderPlaybackController(playlist, {
+        currentIndex: 2,
+        isPlaying: true,
+        repeatEnabled: true,
+        setCurrentIndex,
+        stationActiveRef: { current: true },
+      });
+
+      await result.current.handleNext("user");
+
+      expect(setCurrentIndex).not.toHaveBeenCalledWith(0);
+    });
+
+    it("hands the order back the moment the station stops", async () => {
+      const playlist = threeTracks();
+      const seed = 4242;
+      const shuffled = seededShuffleIds(
+        playlist.map((item) => item.id),
+        seed,
+      );
+      const startIndex = playlist.findIndex((item) => item.id === shuffled[0]);
+      const expectedNextIndex = playlist.findIndex((item) => item.id === shuffled[1]);
+      const setCurrentIndex = vi.fn();
+      // The same ref the page mirrors `sidRadio.active` into, flipped as a Stop would flip it.
+      const stationActiveRef = { current: true };
+      const { result } = renderPlaybackController(playlist, {
+        currentIndex: startIndex,
+        isPlaying: true,
+        shuffleEnabled: true,
+        shuffleSeed: seed,
+        setCurrentIndex,
+        stationActiveRef,
+      });
+
+      stationActiveRef.current = false;
+      await result.current.handleNext("user");
+
+      expect(setCurrentIndex).toHaveBeenCalledWith(expectedNextIndex);
+    });
+  });
+
   it("does not reorder the curated playlist when shuffle-walking to the next track", async () => {
     const playlist = [
       createPlaylistItem({ id: "item-1", label: "one.prg", path: "/PROGRAMS/one.prg" }),
@@ -2541,9 +2643,12 @@ describe("usePlaybackController", () => {
     const psid = () => new Uint8Array([0x50, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer; // "PSID"
     const rsid = () => new Uint8Array([0x52, 0x53, 0x49, 0x44, 0, 2, 0, 0x7c]).buffer; // "RSID"
 
-    const sidItem = (bytes: () => ArrayBuffer): PlaylistItem =>
+    // `songNr` is one-based, as it is everywhere it is stored, shown or looked up. Tune 1 is the
+    // default because that is what a file with a single tune, and a file whose header names no
+    // other, actually plays.
+    const sidItem = (bytes: () => ArrayBuffer, songNr = 1, id = "sid-1"): PlaylistItem =>
       createPlaylistItem({
-        id: "sid-1",
+        id,
         category: "sid",
         label: "tune.sid",
         path: "/HVSC/tune.sid",
@@ -2551,7 +2656,7 @@ describe("usePlaybackController", () => {
         request: {
           source: "local",
           path: "/HVSC/tune.sid",
-          songNr: 0,
+          songNr,
           file: { name: "tune.sid", lastModified: 0, arrayBuffer: vi.fn(async () => bytes()) },
         } as any,
       });
@@ -2563,6 +2668,8 @@ describe("usePlaybackController", () => {
       resume: vi.fn(async () => undefined),
       getStats: vi.fn(() => null),
       dispose: vi.fn(),
+      warmLeadIn: vi.fn(),
+      prerender: vi.fn(),
     });
 
     const enableLocal = () => {
@@ -2586,8 +2693,55 @@ describe("usePlaybackController", () => {
       await result.current.playItem(playlist[0], { playlistIndex: 0 });
 
       expect(controller.play).toHaveBeenCalledTimes(1);
-      expect(controller.play.mock.calls[0][1]).toBe(0); // song index
+      expect(controller.play.mock.calls[0][1]).toBe(0); // tune 1, zero-based
       expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+    });
+
+    // The listener-facing tune number and the engine's tune index count from different places, and
+    // for a while the controller handed one straight to the other. Every multi-tune SID then played
+    // the tune after the one selected, the first tune of a file could not be reached at all, and the
+    // songlength driving auto-advance belonged to a different tune than the one being heard. It was
+    // invisible on single-tune files and on the last tune of a file, where the engine clamps.
+    it("hands the engine a zero-based tune index, not the one-based tune number", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const playlist = [sidItem(psid, 3)];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+      expect(controller.play).toHaveBeenCalledTimes(1);
+      expect(controller.play.mock.calls[0][1]).toBe(2);
+    });
+
+    it("keys the pre-render by the tune the engine was asked to render", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const playlist = [sidItem(psid, 3)];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+
+      // A key built from the one-based number would name a tune the engine never rendered, so a
+      // seek would be served PCM from the neighbouring tune.
+      expect((controller.play.mock.calls[0][3] as { prerenderKey: string }).prerenderKey).toMatch(/^sid-1#2@/);
+    });
+
+    it("warms the next track at the same zero-based index it will later be played at", async () => {
+      // The lead-in is handed over to live rendering part-way through the track. If the warm and the
+      // play disagree about which tune they mean, the handover is a cut to different music.
+      enableLocal();
+      const controller = fakeController();
+      const playlist = [sidItem(psid, 1, "sid-1"), sidItem(psid, 3, "sid-2")];
+      const { result } = renderPlaybackController(playlist, { localSidPlaybackController: controller });
+
+      await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      await waitFor(() => expect(controller.warmLeadIn).toHaveBeenCalled());
+
+      const warmed = controller.warmLeadIn.mock.calls.find((call) => String(call[0]).startsWith("sid-2#"));
+      expect(warmed).toBeDefined();
+      expect(warmed![0]).toMatch(/^sid-2#2@/);
+      expect(warmed![2]).toBe(2);
     });
 
     it("reads a tune off the Ultimate so the on-device engine can have it", async () => {

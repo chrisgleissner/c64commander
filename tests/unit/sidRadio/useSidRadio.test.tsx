@@ -51,7 +51,7 @@ const makeClient = (stylePopulations: SidRadioStylePopulations = populationsWith
         candidates: pool.slice(0, request.count).map((trackOrdinal) => ({
           trackOrdinal,
           md5_48: `m${trackOrdinal}`,
-          songIndex: 1,
+          songNr: 1,
           score: 10 - trackOrdinal,
           reason: "similar" as const,
           fileTrackOrdinals: [trackOrdinal],
@@ -317,6 +317,40 @@ describe("useSidRadio", () => {
     expect(params.startPlaylist).not.toHaveBeenCalled();
   });
 
+  // A resumed station never passes through `start`, and its bundle loads lazily inside the worker on
+  // the first compute. So nothing recorded which corpus had been parsed, and a relaunched device
+  // reported `corpusGraphFlags: null` for a station that was visibly running — observed on the
+  // Pixel 4 as `fmt null flags 0x0000` in a HIL run against a live station.
+  it("names the corpus it resumed onto (D15)", async () => {
+    saveSidRadioSession({
+      seedKind: "song",
+      seedLabel: "Race.sid",
+      seed: { kind: "song", md5_48: "m1" },
+      styleFilter: null,
+      shuffleSeed: 42,
+      rankingSnapshotId: "snap",
+      excludeOrdinals: [1],
+    });
+    const client = makeClient();
+    client.load = vi.fn().mockResolvedValue({
+      fileCount: 4,
+      trackCount: 4,
+      stylePopulations: populationsWith({}),
+      engineThreadIsMain: false,
+      version: 2,
+      graphFlags: 0x0006,
+    });
+
+    renderHook(() => useSidRadio(baseParams(client)));
+
+    const { getSidRadioStats } = await import("@/lib/sidRadio/sidRadioStats");
+    await waitFor(() => {
+      const stats = getSidRadioStats();
+      expect(stats.corpusBinaryFormatVersion).toBe(2);
+      expect(stats.corpusGraphFlags).toBe(0x0006);
+    });
+  });
+
   it("refuses a station for a style with no members even when the tap beats the counts", async () => {
     // The sheet opens before the populations are read, so the disabled tile
     // cannot be the enforcement point — a tap that lands first must still be
@@ -374,7 +408,7 @@ describe("useSidRadio launcher preload overlapping a station start", () => {
               candidates: Array.from({ length: request.count }, (_, index) => ({
                 trackOrdinal: index + 1,
                 md5_48: `m${index + 1}`,
-                songIndex: 1,
+                songNr: 1,
                 score: 1,
                 reason: "similar" as const,
                 fileTrackOrdinals: [index + 1],
@@ -579,7 +613,7 @@ describe("useSidRadio emittedSequence identity", () => {
         .map((trackOrdinal) => ({
           trackOrdinal,
           md5_48: `m${trackOrdinal}`,
-          songIndex: 1,
+          songNr: 1,
           score: 1,
           reason: "similar" as const,
           fileTrackOrdinals: [trackOrdinal],

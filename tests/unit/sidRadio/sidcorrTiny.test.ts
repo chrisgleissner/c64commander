@@ -110,11 +110,11 @@ describe("parseSidcorrTiny — cold→hot transform", () => {
     expect([...bundle.reverseSourcesOf(3)]).toEqual([]);
   });
 
-  it("resolves a track ordinal to (fileOrdinal, songIndex, md5_48)", () => {
-    expect(bundle.resolveTrack(0)).toMatchObject({ fileOrdinal: 0, songIndex: 1, md5_48: "aaaaaaaaaaaa" });
+  it("resolves a track ordinal to (fileOrdinal, songNr, md5_48)", () => {
+    expect(bundle.resolveTrack(0)).toMatchObject({ fileOrdinal: 0, songNr: 1, md5_48: "aaaaaaaaaaaa" });
     // ordinals 2 & 3 are the two subsongs of file "cccccccccccc"
-    expect(bundle.resolveTrack(2)).toMatchObject({ fileOrdinal: 2, songIndex: 1, md5_48: "cccccccccccc" });
-    expect(bundle.resolveTrack(3)).toMatchObject({ fileOrdinal: 2, songIndex: 2, md5_48: "cccccccccccc" });
+    expect(bundle.resolveTrack(2)).toMatchObject({ fileOrdinal: 2, songNr: 1, md5_48: "cccccccccccc" });
+    expect(bundle.resolveTrack(3)).toMatchObject({ fileOrdinal: 2, songNr: 2, md5_48: "cccccccccccc" });
   });
 
   it("resolves a seed md5_48 to its file's track ordinals", () => {

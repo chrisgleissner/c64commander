@@ -35,6 +35,9 @@ const SID_RADIO_ENABLED_KEY = "c64u_sid_radio_enabled";
 const SID_RANKING_ENABLED_KEY = "c64u_sid_ranking_enabled";
 const PLAYBACK_ENGINE_KEY = "c64u_playback_engine";
 const SID_EMULATION_ENGINE_KEY = "c64u_sid_emulation_engine";
+const LOCAL_SID_MODEL_KEY = "c64u_local_sid_model";
+const LOCAL_SID_MODEL_FROM_DEVICE_KEY = "c64u_local_sid_model_from_device";
+const LEARNED_DEVICE_SID_MODEL_KEY = "c64u_learned_device_sid_model";
 const PLAYBACK_CROSSFADE_MS_KEY = "c64u_playback_crossfade_ms";
 const LOCAL_ENGINE_ENABLED_KEY = "c64u_local_engine_enabled";
 const BOOT_MENU_ANSWER_ENABLED_KEY = "c64u_boot_menu_answer_enabled";
@@ -779,6 +782,89 @@ export const saveSidEmulationEngine = (engine: SidEmulationEngine) => {
 };
 
 /**
+ * A SID revision, as the two chips are universally named. The engine models exactly these two.
+ */
+export type LocalSidModel = "6581" | "8580";
+
+export const LOCAL_SID_MODELS: readonly LocalSidModel[] = ["6581", "8580"];
+
+const normalizeLocalSidModel = (value: unknown): LocalSidModel | null =>
+  value === "6581" || value === "8580" ? value : null;
+
+/**
+ * Which chip the on-device engine assumes for a tune that does not name one.
+ *
+ * This is *only* a fallback. A SID file may declare in its header which revision it was written
+ * for, and libsidplayfp plays it on that chip whichever way this is set — per chip, so a 2SID or
+ * 3SID file gets each of its chips right. The setting is consulted where the header says
+ * `UNKNOWN` or `ANY`, which is a large part of HVSC.
+ *
+ * 8580 by default, which is what libsidplayfp itself assumes, so an installation that has never
+ * reached a C64 and has never touched this sounds exactly as earlier releases did.
+ */
+export const DEFAULT_LOCAL_SID_MODEL: LocalSidModel = "8580";
+
+export const loadLocalSidModel = (): LocalSidModel => {
+  if (typeof localStorage === "undefined") return DEFAULT_LOCAL_SID_MODEL;
+  return normalizeLocalSidModel(localStorage.getItem(LOCAL_SID_MODEL_KEY)) ?? DEFAULT_LOCAL_SID_MODEL;
+};
+
+export const saveLocalSidModel = (model: LocalSidModel) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(LOCAL_SID_MODEL_KEY, model);
+  broadcast(LOCAL_SID_MODEL_KEY, model);
+};
+
+/**
+ * Take the fallback chip from the Ultimate the app is connected to, when it has one.
+ *
+ * On by default: the listener's own machine is the best available answer to "which SID should a
+ * tune that does not say be played on", and it costs the user nothing to arrive at.
+ */
+export const DEFAULT_LOCAL_SID_MODEL_FROM_DEVICE = true;
+
+export const loadLocalSidModelFromDevice = () =>
+  readBoolean(LOCAL_SID_MODEL_FROM_DEVICE_KEY, DEFAULT_LOCAL_SID_MODEL_FROM_DEVICE);
+
+export const saveLocalSidModelFromDevice = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(LOCAL_SID_MODEL_FROM_DEVICE_KEY, enabled ? "1" : "0");
+  broadcast(LOCAL_SID_MODEL_FROM_DEVICE_KEY, enabled);
+};
+
+/**
+ * The last chip actually read from a connected Ultimate.
+ *
+ * Persisted rather than held in memory because the point of learning it is that it keeps applying
+ * when the machine is off, on the train, or on a different network. Nothing re-probes to render a
+ * tune, so a device that cannot be reached costs playback no time at all.
+ */
+export const loadLearnedDeviceSidModel = (): LocalSidModel | null => {
+  if (typeof localStorage === "undefined") return null;
+  return normalizeLocalSidModel(localStorage.getItem(LEARNED_DEVICE_SID_MODEL_KEY));
+};
+
+export const saveLearnedDeviceSidModel = (model: LocalSidModel | null) => {
+  if (typeof localStorage === "undefined") return;
+  if (model === null) localStorage.removeItem(LEARNED_DEVICE_SID_MODEL_KEY);
+  else localStorage.setItem(LEARNED_DEVICE_SID_MODEL_KEY, model);
+  broadcast(LEARNED_DEVICE_SID_MODEL_KEY, model);
+};
+
+/**
+ * The chip the on-device engine should fall back to right now.
+ *
+ * A pure read of what is already stored — it never talks to the device, so a machine that is off
+ * or unreachable neither blocks nor delays a tune. The learned value only participates while the
+ * "take it from my C64" setting is on and something has actually been learned; otherwise the
+ * user's explicit choice stands.
+ */
+export const resolveLocalSidModel = (): LocalSidModel => {
+  if (!loadLocalSidModelFromDevice()) return loadLocalSidModel();
+  return loadLearnedDeviceSidModel() ?? loadLocalSidModel();
+};
+
+/**
  * Crossfade length for on-device playback, in milliseconds. `0` (the default)
  * means a hard cut: the outgoing tune is silenced before the next one starts.
  *
@@ -873,6 +959,9 @@ export const APP_SETTINGS_KEYS = {
   PLAYBACK_ENGINE_KEY,
   LOCAL_ENGINE_ENABLED_KEY,
   FRIENDLY_SID_NAMES_KEY,
+  LOCAL_SID_MODEL_KEY,
+  LOCAL_SID_MODEL_FROM_DEVICE_KEY,
+  LEARNED_DEVICE_SID_MODEL_KEY,
 };
 
 /**

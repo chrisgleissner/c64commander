@@ -103,6 +103,19 @@ describe("exploratory playback audio analysis guard", () => {
     expect(hasVisibleButtonLabel(xml, "Mute", "volume-mute")).toBe(true);
   });
 
+  it("reads the mute toggle's state from its content description now that it carries no text", () => {
+    // The Play page's mute control is a speaker icon with no label on it, so uiautomator reports an
+    // empty `text` and the state arrives as the content description instead.
+    const xml = `
+      <hierarchy>
+        <node text="" content-desc="Unmute" resource-id="volume-mute" class="android.widget.Button" clickable="true" enabled="true" bounds="[203,2004][341,2150]" />
+      </hierarchy>
+    `;
+
+    expect(hasVisibleButtonLabel(xml, "Unmute", "volume-mute")).toBe(true);
+    expect(hasVisibleButtonLabel(xml, "Mute", "volume-mute")).toBe(false);
+  });
+
   it("reveals off-screen HVSC controls with a bounded swipe before tapping", async () => {
     tapByTextMock.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     tapByTextContainingMock.mockResolvedValue(false);

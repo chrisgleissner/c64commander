@@ -57,6 +57,8 @@ import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAd
 import { createHvscSourceLocation } from "@/lib/sourceNavigation/hvscSourceAdapter";
 import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
 import { createStationDurationResolver } from "@/pages/playFiles/stationDurationResolver";
+import { Checkbox } from "@/components/ui/checkbox";
+import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { createArchiveSourceLocation } from "@/lib/sourceNavigation/archiveSourceAdapter";
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
@@ -65,8 +67,9 @@ import type { SelectedItem, SourceLocation } from "@/lib/sourceNavigation/types"
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { buildSelectedDeviceBoundOrigin } from "@/lib/savedDevices/deviceBoundOrigin";
 
-import { buildEnabledSidMuteUpdates, sidVolumeStepGain } from "@/lib/config/sidVolumeControl";
-import { parseSidHeaderMetadata } from "@/lib/sid/sidUtils";
+import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
+import { parseSidHeaderMetadata, type SidClock, type SidModel } from "@/lib/sid/sidUtils";
+import { buildNowPlayingMetadata } from "@/lib/playback/nowPlayingMetadata";
 import { resolveTrackDisplayName, type SidChipCount } from "@/lib/playback/sidDisplayName";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
@@ -81,9 +84,10 @@ import { BackgroundExecution, onBackgroundAutoSkipDue } from "@/lib/native/backg
 
 import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
-import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { VolumeControls } from "@/pages/playFiles/components/VolumeControls";
+import { resolvePlaybackVolumeBinding } from "@/pages/playFiles/playbackVolumeBinding";
+import { localVolumeGainForIndex, localVolumeIndexForGain } from "@/lib/playback/localPlaybackVolume";
 import { PlaybackControlsCard } from "@/pages/playFiles/components/PlaybackControlsCard";
 import { PlaybackEngineToggle } from "@/pages/playFiles/components/PlaybackEngineToggle";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
@@ -213,6 +217,9 @@ export default function PlayFilesPage() {
   const deviceInfoId = status.deviceInfo?.unique_id ?? null;
   const { sources: localSources, addSourceFromPicker } = useLocalSources();
   const [browserOpen, setBrowserOpen] = useState(false);
+  // Written from `sidRadio.active` below. A ref, because `useSidRadio` is created after the playback
+  // controller and consumes the handlers it returns, so the flag cannot travel as a plain prop.
+  const stationActiveRef = useRef(false);
   const {
     playlist,
     setPlaylist,
@@ -495,6 +502,7 @@ export default function PlayFilesPage() {
     setTrackInstanceId,
     repeatEnabled,
     shuffleEnabled,
+    stationActiveRef,
     shuffleSeed,
     localEntriesBySourceId,
     localSourceTreeUris,
@@ -1375,10 +1383,10 @@ export default function PlayFilesPage() {
   const stationDurationResolver = useMemo(
     () =>
       createStationDurationResolver({
-        resolveHvscSeconds: async (virtualPath, songIndex) =>
-          (await resolveHvscSonglengthDuration({ virtualPath, songNr: songIndex })).durationSeconds,
-        resolveFileSeconds: async (virtualPath, songIndex) => {
-          const ms = await resolveSonglengthDurationMsForPath(virtualPath, null, songIndex);
+        resolveHvscSeconds: async (virtualPath, songNr) =>
+          (await resolveHvscSonglengthDuration({ virtualPath, songNr: songNr })).durationSeconds,
+        resolveFileSeconds: async (virtualPath, songNr) => {
+          const ms = await resolveSonglengthDurationMsForPath(virtualPath, null, songNr);
           return ms === null || ms === undefined ? null : ms / 1000;
         },
       }),
@@ -1398,7 +1406,15 @@ export default function PlayFilesPage() {
     // tones alongside the music, and a station that serves them between pieces reads as broken.
     // Which store answers, and why the order matters, is in `stationDurationResolver.ts`.
     resolveDurationSeconds: stationDurationResolver,
+    // The station's `resolvePath` reads an index built as a side effect of loading the HVSC
+    // songlengths, so the first refill has to wait for it or it burns every candidate it is given.
+    ensureResolvable: ensureHvscSonglengthsReadyOnColdStart,
   });
+  // Mirrored into the ref the playback controller reads, so a skip resolved at any point after this
+  // render sees the current state of the station rather than the one captured when its handlers were
+  // created.
+  stationActiveRef.current = sidRadio.active;
+
   const sidRadioWhyThisTune = sidRadio.station
     ? sidRadio.station.seedKind === "song"
       ? `Similar to ${sidRadio.station.seedLabel}`
@@ -1508,14 +1524,19 @@ export default function PlayFilesPage() {
     author: string | null;
     released: string | null;
     chipCount: SidChipCount | null;
+    /** One entry per chip the file addresses; a 2SID or 3SID may mix models. */
+    sidModels: SidModel[];
+    clock: SidClock | null;
   }>({
     author: null,
     released: null,
     chipCount: null,
+    sidModels: [],
+    clock: null,
   });
   useEffect(() => {
     let cancelled = false;
-    setCurrentItemCredits({ author: null, released: null, chipCount: null });
+    setCurrentItemCredits({ author: null, released: null, chipCount: null, sidModels: [], clock: null });
     const file = currentItem?.request.file;
     if (!file || currentItem?.category !== "sid") return;
     void (async () => {
@@ -1526,6 +1547,12 @@ export default function PlayFilesPage() {
           author: header.author || null,
           released: header.released || null,
           chipCount: header.sidChipCount === 2 || header.sidChipCount === 3 ? header.sidChipCount : 1,
+          // `sid2Model`/`sid3Model` are null unless the file actually addresses that chip, so this is
+          // one entry per real chip rather than a fixed three.
+          sidModels: [header.sid1Model, header.sid2Model, header.sid3Model].filter((model): model is SidModel =>
+            Boolean(model),
+          ),
+          clock: header.clock,
         });
       } catch (error) {
         // Not a readable SID header — nothing to show, which is the same as a tune that names nobody.
@@ -1643,27 +1670,61 @@ export default function PlayFilesPage() {
   const progressPercent = currentDurationMs ? Math.min(100, (displayElapsedMs / currentDurationMs) * 100) : 0;
   const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - displayElapsedMs) : undefined;
   const remainingLabel = currentDurationMs !== undefined ? `-${formatTime(remainingMs)}` : "—";
-  // On-device playback has its own output gain (the same master node the
-  // crossfade uses), so the Play page's volume control can drive whichever
-  // route is sounding instead of only ever reaching the C64.
-  const [localMuted, setLocalMuted] = useState(false);
-  const setLocalVolumeFromIndex = useCallback(
-    (index: number) => {
-      // The step's decibels, not its position in the list — see sidVolumeStepGain. The scale is
-      // uneven, so the index fraction never matched the figure the listener was reading.
-      getSharedLocalSidPlaybackController().setVolume(sidVolumeStepGain(volumeSteps[index]));
-    },
-    [volumeSteps],
+  // On-device playback attenuates its own PCM before it reaches the speaker, so the Play page's
+  // volume control drives whichever route is sounding. Android's media volume is never touched:
+  // that dial belongs to the person holding the phone, not to this app.
+  //
+  // Seeded from the engine rather than from a constant. The engine is process-wide and outlives this
+  // page, so a listener who set -12 dB, navigated away and came back would otherwise find the slider
+  // claiming 0 dB over a tune still playing at -12.
+  const [localMuted, setLocalMuted] = useState(() => getSharedLocalSidPlaybackController().muted());
+  const [localVolumeIndex, setLocalVolumeIndex] = useState(() =>
+    localVolumeIndexForGain(getSharedLocalSidPlaybackController().volume()),
   );
+  const setLocalVolumeFromIndex = useCallback((index: number) => {
+    setLocalVolumeIndex(index);
+    // The step's decibels, not its position in the list. The ladder is uneven, so an index fraction
+    // would bear no relation to the figure the listener is reading — see localPlaybackVolume.
+    getSharedLocalSidPlaybackController().setVolume(localVolumeGainForIndex(index));
+  }, []);
   const toggleLocalMute = useCallback(() => {
     setLocalMuted((muted) => {
+      // Only the mute flag moves; the step index stays where the listener left it, so unmuting comes
+      // back to the same level rather than to a default.
       getSharedLocalSidPlaybackController().setMuted(!muted);
       return !muted;
     });
   }, []);
 
   const canControlVolume = enabledSidVolumeItems.length > 0 && volumeSteps.length > 0;
-  const volumeLabel = volumeSteps[volumeIndex]?.label ?? "—";
+  const volumeBinding = resolvePlaybackVolumeBinding({
+    route: playbackEngine.engine === "local" ? "local" : "c64",
+    local: {
+      index: localVolumeIndex,
+      muted: localMuted,
+      onIndexChange: setLocalVolumeFromIndex,
+      onToggleMute: toggleLocalMute,
+    },
+    device: {
+      index: volumeIndex,
+      muted: volumeMuted,
+      steps: volumeSteps,
+      canControl: canControlVolume,
+      onDraftChange: handleVolumeDraftChange,
+      onPreview: handleVolumePreview,
+      onCommit: handleVolumeCommit,
+      onToggleMute: () =>
+        void handleToggleMute().catch((error) => {
+          addErrorLog("Mute toggle failed", { error: (error as Error).message });
+          reportUserError({
+            operation: "PLAYBACK_MUTE_TOGGLE",
+            title: "Mute toggle failed",
+            description: (error as Error).message,
+            error,
+          });
+        }),
+    },
+  });
   const knownSubsongCount =
     currentSubsongCount ?? (typeof currentItem?.subsongCount === "number" ? currentItem.subsongCount : null);
   const subsongCount = knownSubsongCount ?? 1;
@@ -1671,6 +1732,19 @@ export default function PlayFilesPage() {
   const clampedSongNr = Math.min(Math.max(1, currentSongNr), subsongCount);
   const isSongPlaying = Boolean(currentItem && isSongCategory(currentItem.category) && (isPlaying || isPaused));
   const songSelectorVisible = Boolean(isSongPlaying && knownSubsongCount && knownSubsongCount > 1);
+  // Everything the tune's own header says about itself, on one line under the title. The order and
+  // the omission rules live in buildNowPlayingMetadata; this only supplies the fields.
+  const currentItemMetadata = currentItem
+    ? buildNowPlayingMetadata({
+        author: currentItemCredits.author,
+        released: currentItemCredits.released,
+        sidModels: currentItemCredits.sidModels,
+        clock: currentItemCredits.clock,
+        tuneNumber: clampedSongNr,
+        tuneCount: knownSubsongCount,
+        lengthLabel: currentDurationLabel,
+      })
+    : null;
 
   const handleSongSelection = useCallback(
     async (nextSongNr: number) => {
@@ -1691,7 +1765,7 @@ export default function PlayFilesPage() {
         // unreported failures (e.g. a launch failure from executePlayPlan).
         reportUserError({
           operation: "PLAYBACK_SUBSONG_SELECT",
-          title: "Subsong switch failed",
+          title: "Tune switch failed",
           description: (error as Error).message,
           error,
           context: {
@@ -1730,8 +1804,23 @@ export default function PlayFilesPage() {
   const canPause = playbackRunning;
   // HARD12-005: Next/Prev enablement must reflect the shuffle-aware traversal
   // (what tapping them will do), not the linear playlist position.
-  const hasPrev = canAdvancePrevious(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed);
-  const hasNext = canAdvanceNext(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed);
+  // A running station owns the order, so the enablement has to be computed from the same ordering the
+  // traversal will actually use — see `resolveTraversalOrdering`.
+  const traversalOrdering = resolveTraversalOrdering({ repeatEnabled, shuffleEnabled }, sidRadio.active);
+  const hasPrev = canAdvancePrevious(
+    playlist,
+    currentIndex,
+    traversalOrdering.repeatEnabled,
+    traversalOrdering.shuffleEnabled,
+    shuffleSeed,
+  );
+  const hasNext = canAdvanceNext(
+    playlist,
+    currentIndex,
+    traversalOrdering.repeatEnabled,
+    traversalOrdering.shuffleEnabled,
+    shuffleSeed,
+  );
 
   const togglePlaylistTypeFilter = (category: PlayFileCategory) => {
     setPlaylistTypeFilters((prev) =>
@@ -2068,24 +2157,17 @@ export default function PlayFilesPage() {
               {playbackEngine.localEngineEnabled && currentItem?.category === "sid" ? <PlaybackEngineToggle /> : null}
               <PlaybackControlsCard
                 hasCurrentItem={Boolean(currentItem)}
-                currentItemIcon={
-                  currentItem ? (
-                    <FileOriginIcon
-                      origin={
-                        currentItem.request.source === "ultimate"
-                          ? "ultimate"
-                          : currentItem.request.source === "hvsc"
-                            ? "hvsc"
-                            : currentItem.request.source === "commoserve"
-                              ? "commoserve"
-                              : "local"
-                      }
-                      className="h-3.5 w-3.5 shrink-0 opacity-70"
-                    />
+                currentItemLabel={currentDisplay?.title ?? null}
+                currentItemMetadata={currentItemMetadata}
+                // Which station (or, when none is running, which playlist) is producing this tune
+                // leads the card: it is context for the title, the transport and everything else
+                // below it. Rendered in both states, and the same height in both, so that starting
+                // or stopping a station never shifts the controls underneath.
+                stationIndicator={
+                  sidRadioFlags.sidRadioEnabled ? (
+                    <SidRadioChip station={sidRadio.station} whyThisTune={sidRadioWhyThisTune} onStop={sidRadio.stop} />
                   ) : undefined
                 }
-                currentItemLabel={currentDisplay?.title ?? null}
-                currentItemChipCount={currentDisplay?.chipCount ?? null}
                 stationActive={sidRadio.active}
                 rankingControls={
                   sidRadioFlags.rankingActive ? (
@@ -2108,10 +2190,6 @@ export default function PlayFilesPage() {
                       }
                     />
                   ) : undefined
-                }
-                currentDurationLabel={currentDurationLabel}
-                subsongLabel={
-                  knownSubsongCount && knownSubsongCount > 1 ? `Subsong ${clampedSongNr}/${subsongCount}` : null
                 }
                 canTransport={canTransport}
                 hasPrev={hasPrev}
@@ -2150,63 +2228,21 @@ export default function PlayFilesPage() {
                 progressPercent={progressPercent}
                 renderedPercent={renderedPercent}
                 pendingSeek={pendingSeek}
-                currentItemAuthor={currentItemCredits.author}
-                currentItemReleased={currentItemCredits.released}
                 elapsedLabel={formatTime(displayElapsedMs)}
                 remainingLabel={remainingLabel}
                 totalLabel={formatTime(playlistTotals.total)}
                 remainingTotalLabel={formatTime(playlistTotals.remaining)}
                 volumeControls={
+                  // Bound to whichever route is sounding — see resolvePlaybackVolumeBinding. The two
+                  // routes must not be blended: while the C64 route's handlers also ran on this
+                  // device, its synchronisation loop pulled the slider back to the Ultimate's level
+                  // a moment after every drag.
                   <VolumeControls
-                    volumeMuted={playbackEngine.engine === "local" ? localMuted : volumeMuted}
-                    canControlVolume={playbackEngine.engine === "local" ? true : canControlVolume}
-                    onToggleMute={() => {
-                      if (playbackEngine.engine === "local") {
-                        toggleLocalMute();
-                        return;
-                      }
-                      void handleToggleMute().catch((error) => {
-                        addErrorLog("Mute toggle failed", {
-                          error: (error as Error).message,
-                        });
-                        reportUserError({
-                          operation: "PLAYBACK_MUTE_TOGGLE",
-                          title: "Mute toggle failed",
-                          description: (error as Error).message,
-                          error,
-                        });
-                      });
-                    }}
-                    volumeStepsCount={volumeSteps.length}
-                    volumeIndex={volumeIndex}
-                    onVolumeDraftChange={handleVolumeDraftChange}
-                    onVolumePreview={(value) => {
-                      // Follow the route that is actually sounding. The slider
-                      // reached only the C64's Audio Mixer, so while the tune
-                      // rendered here it moved and nothing happened — which is
-                      // not what anyone expects of a volume control on the page
-                      // they are listening from.
-                      if (playbackEngine.engine === "local") {
-                        setLocalVolumeFromIndex(value);
-                        return;
-                      }
-                      handleVolumePreview(value);
-                    }}
-                    onVolumeCommit={(value) => {
-                      if (playbackEngine.engine === "local") {
-                        setLocalVolumeFromIndex(value);
-                        return;
-                      }
-                      void handleVolumeCommit(value);
-                    }}
+                    {...volumeBinding}
                     previewIntervalMs={volumeSliderPreviewIntervalMs}
-                    volumeLabel={volumeLabel}
-                    volumeValueFormatter={(value) => volumeSteps[Math.round(value)]?.label ?? "—"}
                     useNativeRangeInput={isAndroid}
                   />
                 }
-                recurseFolders={recurseFolders}
-                onRecurseChange={(value) => setRecurseFolders(Boolean(value))}
                 shuffleEnabled={shuffleEnabled}
                 onShuffleChange={(value) => setShuffleEnabled(Boolean(value))}
                 repeatEnabled={repeatEnabled}
@@ -2215,27 +2251,25 @@ export default function PlayFilesPage() {
                 reshuffleActive={reshuffleActive}
                 reshuffleDisabled={!shuffleEnabled || playlist.length < 2}
                 shuffleSeed={shuffleSeed}
-                openControllerAction={
-                  remoteInputEnabled && isPlaying ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="self-start"
-                      data-testid="play-open-controller"
-                      onClick={() => setRemoteInputSheetOpen(true)}
-                    >
-                      <Gamepad2 className="mr-1.5 h-4 w-4" /> Remote Input
-                    </Button>
-                  ) : undefined
-                }
               />
-              {sidRadioFlags.sidRadioEnabled ? (
+              {/*
+               * One row for everything on this page that opens a sheet: start or change a station,
+               * open the Likes list, reach the controller. They are grouped because they are the
+               * same kind of action, and Remote Input comes last because it leaves the music
+               * behind — the two station actions are about what plays, and belong nearer the
+               * controls that play it. Sharing one wrapping row also costs no extra height over
+               * the two-row arrangement it replaces.
+               */}
+              {sidRadioFlags.sidRadioEnabled || (remoteInputEnabled && isPlaying) ? (
                 <div className="flex w-full flex-col gap-2">
-                  {sidRadio.active && sidRadio.station ? (
-                    <SidRadioChip station={sidRadio.station} whyThisTune={sidRadioWhyThisTune} onStop={sidRadio.stop} />
-                  ) : null}
+                  {/* The station's identity and its Stop now lead the card above; what is left here
+                      are the actions that start or change a station, which belong after the
+                      controls they will replace rather than before them. */}
                   <div className="flex flex-wrap gap-2">
-                    {!sidRadio.active && currentTuneMd5 && currentItem?.category === "sid" ? (
+                    {sidRadioFlags.sidRadioEnabled &&
+                    !sidRadio.active &&
+                    currentTuneMd5 &&
+                    currentItem?.category === "sid" ? (
                       <Button
                         variant="outline"
                         size="sm"
@@ -2252,27 +2286,41 @@ export default function PlayFilesPage() {
                      * Song station is constrained to is changed from this sheet, and stopping the
                      * station to reach that control would throw away the seed it is meant to keep.
                      */}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      data-testid="sid-radio-launcher"
-                      onClick={() => {
-                        void sidRadio.ensureStylePopulations();
-                        setSidRadioLauncherOpen(true);
-                      }}
-                    >
-                      <RadioIcon className="mr-1.5 h-4 w-4" /> SID Radio
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      data-testid="sid-radio-liked-tunes-open"
-                      onClick={() => setLikedTunesSheetOpen(true)}
-                    >
-                      <Heart className="mr-1.5 h-4 w-4" /> Liked Tunes
-                    </Button>
+                    {sidRadioFlags.sidRadioEnabled ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid="sid-radio-launcher"
+                          onClick={() => {
+                            void sidRadio.ensureStylePopulations();
+                            setSidRadioLauncherOpen(true);
+                          }}
+                        >
+                          <RadioIcon className="mr-1.5 h-4 w-4" /> SID Radio
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid="sid-radio-liked-tunes-open"
+                          onClick={() => setLikedTunesSheetOpen(true)}
+                        >
+                          <Heart className="mr-1.5 h-4 w-4" /> Liked Tunes
+                        </Button>
+                      </>
+                    ) : null}
+                    {remoteInputEnabled && isPlaying ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-testid="play-open-controller"
+                        onClick={() => setRemoteInputSheetOpen(true)}
+                      >
+                        <Gamepad2 className="mr-1.5 h-4 w-4" /> Remote Input
+                      </Button>
+                    ) : null}
                   </div>
-                  {sidRadio.notice ? (
+                  {sidRadioFlags.sidRadioEnabled && sidRadio.notice ? (
                     <p className="text-xs text-muted-foreground" data-testid="sid-radio-notice">
                       {sidRadio.notice === "no-radio-for-tune"
                         ? "No radio for this tune yet — try a style or your likes."
@@ -2448,6 +2496,21 @@ export default function PlayFilesPage() {
             autoConfirmCloseBefore={isAndroid}
             onAutoConfirmStart={handleAutoConfirmStart}
             autoConfirmLocalSource
+            // "Recurse" used to live on the playback card, where it was the only control left once a
+            // station took over the play order. It is not a playback setting at all: it decides what
+            // a folder selection means. Here it sits next to the folders it governs, and it can say
+            // so in words rather than in one.
+            folderOptions={
+              <label className="flex items-center gap-2 text-xs">
+                <Checkbox
+                  checked={recurseFolders}
+                  onCheckedChange={(value) => setRecurseFolders(Boolean(value))}
+                  aria-label="Include subfolders"
+                  data-testid="playback-recurse"
+                />
+                Include subfolders
+              </label>
+            }
           />
 
           <HvscPreparationSheet

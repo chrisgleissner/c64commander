@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   AppDialog,
@@ -69,6 +69,14 @@ export type ItemSelectionDialogProps = {
   onAutoConfirmStart?: (source: SourceLocation) => void;
   onCancelScan?: () => void;
   archiveConfigs?: Record<string, ArchiveClientConfigInput>;
+  /**
+   * Options that only apply to how the chosen folders are read, shown beside the confirm action.
+   *
+   * They belong here rather than on the page behind this sheet: the choice is made while picking
+   * folders and has no effect at any other time, so it is put in front of the person making it and
+   * nowhere else. Rendered only once a source is open and only when folders can be selected at all.
+   */
+  folderOptions?: ReactNode;
 };
 
 export const ItemSelectionDialog = ({
@@ -92,6 +100,7 @@ export const ItemSelectionDialog = ({
   onAutoConfirmStart,
   onCancelScan,
   archiveConfigs,
+  folderOptions,
 }: ItemSelectionDialogProps) => {
   const { profile } = useDisplayProfile();
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
@@ -671,6 +680,13 @@ export const ItemSelectionDialog = ({
               <p className="text-xs leading-snug text-muted-foreground" data-testid="archive-legal-notice">
                 {LEGAL_NOTICE}
               </p>
+            ) : null}
+            {/* Not on an archive search: its results are individual files, so there are no folders for
+                this to say anything about. */}
+            {folderOptions && allowFolderSelection && source && !isArchiveSource ? (
+              <div className="flex flex-wrap items-center gap-3" data-testid="add-items-folder-options">
+                {folderOptions}
+              </div>
             ) : null}
             <div className={cn("flex gap-2", footerActionsClassName)}>
               <Button
