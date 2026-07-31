@@ -47,6 +47,14 @@ export type HvscSearchSheetProps = {
   canSeedStation?: (hit: HvscSearchHit) => boolean;
   /** True while a station is running, which is what makes the play action an interruption. */
   stationActive: boolean;
+  /**
+   * What to search for on opening, when the sheet was opened from something that already knows.
+   *
+   * Tapping the composer on the now-playing card opens this with their name in the box, which is
+   * the whole of "more by this person": the search already worked, it just had to be reachable
+   * from where the name was printed.
+   */
+  initialQuery?: string;
 };
 
 /**
@@ -141,8 +149,9 @@ export const HvscSearchSheet = ({
   onStartStation,
   canSeedStation,
   stationActive,
+  initialQuery,
 }: HvscSearchSheetProps) => {
-  const search = useHvscArchiveSearch({ enabled: open });
+  const search = useHvscArchiveSearch({ enabled: open, ...(initialQuery ? { initialQuery } : {}) });
   // Read once per opening: it changes only when a track starts, which cannot happen while this is
   // the thing being looked at.
   const [recent, setRecent] = useState<HvscSearchHit[]>([]);

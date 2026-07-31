@@ -65,7 +65,19 @@ const folderOf = (virtualPath: string): string => {
   return index <= 0 ? "/" : virtualPath.slice(0, index);
 };
 
-export const useHvscArchiveSearch = (options: { enabled?: boolean } = {}): HvscArchiveSearchState => {
+export const useHvscArchiveSearch = (
+  options: {
+    enabled?: boolean;
+    /**
+     * A query to start from, applied whenever it changes to a non-empty value.
+     *
+     * Used when the search is opened from somewhere that already knows what is being looked for —
+     * tapping a composer's name on the now-playing card. Typing then replaces it as normal; this
+     * seeds the box, it does not lock it.
+     */
+    initialQuery?: string;
+  } = {},
+): HvscArchiveSearchState => {
   const enabled = options.enabled ?? true;
   const [query, setQueryState] = useState("");
   const [hits, setHits] = useState<HvscSearchHit[]>([]);
@@ -158,6 +170,15 @@ export const useHvscArchiveSearch = (options: { enabled?: boolean } = {}): HvscA
     setQueryState("");
     reset();
   }, [reset]);
+
+  const initialQuery = options.initialQuery ?? "";
+  useEffect(() => {
+    if (!enabled || !initialQuery.trim()) return;
+    // Runs immediately rather than through the debounce: nobody is typing, and the results are the
+    // reason the sheet was opened.
+    setQueryState(initialQuery);
+    void run(initialQuery);
+  }, [enabled, initialQuery, run]);
 
   useEffect(
     () => () => {

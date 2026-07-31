@@ -27,7 +27,11 @@ import {
   type PendingSeekPresentation,
   type PoliteAnnouncement,
 } from "@/lib/playback/pendingSeekStatus";
-import { buildStilTuneLine } from "@/lib/playback/nowPlayingMetadata";
+import {
+  buildStilTuneLine,
+  NOW_PLAYING_METADATA_SEPARATOR,
+  type NowPlayingMetadataSegment,
+} from "@/lib/playback/nowPlayingMetadata";
 import { TuneNotes } from "./TuneNotes";
 
 export type PlaybackControlsCardProps = {
@@ -36,10 +40,13 @@ export type PlaybackControlsCardProps = {
   /**
    * The single line under the title: composer, year, SID models, video standard, which tune, length.
    *
-   * Built by `buildNowPlayingMetadata` so the order and the omission rules live in one tested place
-   * rather than in this component's JSX. `null` when the header carried nothing worth a line.
+   * Built by `buildNowPlayingMetadataParts` so the order and the omission rules live in one tested
+   * place rather than in this component's JSX. Supplied as labelled parts rather than as a finished
+   * string because the composer is a control and the rest is text; joining first and splitting again
+   * here would mean guessing at where the name ended, and composer names contain the separator's
+   * neighbours often enough for that to be wrong.
    */
-  currentItemMetadata?: string | null;
+  currentItemMetadataParts?: NowPlayingMetadataSegment[];
   /**
    * What STIL says about this tune, where it says anything.
    *
@@ -54,6 +61,11 @@ export type PlaybackControlsCardProps = {
     originalArtist: string | null;
     note: string | null;
   };
+  /**
+   * Go and find more by this composer. Omitted where there is nothing to search — the card is also
+   * rendered for playback from a device, where the archive is not involved.
+   */
+  onComposerSelected?: (composer: string) => void;
   canTransport: boolean;
   hasPrev: boolean;
   hasNext: boolean;
@@ -289,8 +301,9 @@ const useHoldToSeek = (
 export const PlaybackControlsCard = ({
   hasCurrentItem,
   currentItemLabel,
-  currentItemMetadata = null,
+  currentItemMetadataParts = [],
   stil,
+  onComposerSelected,
   canTransport,
   hasPrev,
   hasNext,
@@ -405,9 +418,33 @@ export const PlaybackControlsCard = ({
             {/* Composer, year, chips, video standard, which tune, and how long — in that order, with
                 anything the header does not carry left out along with its separator. See
                 `buildNowPlayingMetadata`. */}
-            {currentItemMetadata ? (
+            {currentItemMetadataParts.length ? (
               <p className="mt-0.5 text-sm leading-snug text-muted-foreground" data-testid="playback-current-credits">
-                {currentItemMetadata}
+                {currentItemMetadataParts.map((part, index) => (
+                  <span key={`${part.kind}-${index}`}>
+                    {index > 0 ? NOW_PLAYING_METADATA_SEPARATOR : null}
+                    {/* The composer is the one thing on this line that is a person rather than a
+                        fact about the file, and "more by this person" is the commonest thing to
+                        want next. It has been printed here inertly all along; now it opens the
+                        search that was already there, pre-filled with the name.
+
+                        Underlined rather than coloured, so the line still reads as one line and
+                        does not gain a second accent colour competing with the transport. */}
+                    {part.kind === "author" && onComposerSelected ? (
+                      <button
+                        type="button"
+                        className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                        onClick={() => onComposerSelected(part.text)}
+                        data-testid="playback-current-composer"
+                        title={`Find more by ${part.text}`}
+                      >
+                        {part.text}
+                      </button>
+                    ) : (
+                      part.text
+                    )}
+                  </span>
+                ))}
               </p>
             ) : null}
             {/* What this tune is, from STIL — above the header line because it is the more specific

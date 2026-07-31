@@ -9,6 +9,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { PENDING_ANNOUNCEMENT_INTERVAL_MS, type PendingSeekPresentation } from "@/lib/playback/pendingSeekStatus";
+import type { NowPlayingMetadataSegment } from "@/lib/playback/nowPlayingMetadata";
 import { CTA_HIGHLIGHT_DURATION_MS, CTA_PERSISTENT_ACTIVE_ATTR } from "@/lib/ui/buttonInteraction";
 import {
   PlaybackControlsCard,
@@ -19,6 +20,15 @@ import {
   useFocusNavigationContext,
   type FocusNavigationContextValue,
 } from "@/hooks/useFocusNavigation";
+
+/**
+ * The metadata line, as the card now takes it: labelled parts rather than a finished string, so the
+ * composer can be a control and the rest text. The first is always the composer.
+ */
+const metadataParts = (author: string, ...details: string[]): NowPlayingMetadataSegment[] => [
+  { text: author, kind: "author" },
+  ...details.map((text): NowPlayingMetadataSegment => ({ text, kind: "detail" })),
+];
 
 const buildProps = (overrides: Partial<PlaybackControlsCardProps> = {}): PlaybackControlsCardProps => ({
   hasCurrentItem: false,
@@ -100,7 +110,7 @@ describe("PlaybackControlsCard", () => {
         {...buildProps({
           hasCurrentItem: true,
           currentItemLabel: "Bossa in Do",
-          currentItemMetadata: "Jeroen Tel - 1988 - 6581 / 8580 - PAL - 2:07",
+          currentItemMetadataParts: metadataParts("Jeroen Tel", "1988", "6581 / 8580", "PAL", "2:07"),
           rankingControls: <button data-testid="ranking-slot">rank</button>,
         })}
       />,
@@ -325,7 +335,7 @@ describe("PlaybackControlsCard", () => {
         {...buildProps({
           hasCurrentItem: true,
           currentItemLabel: "Commando",
-          currentItemMetadata: "Rob Hubbard - 1985 Elite - 6581 - PAL - Tune 2 of 3 - 3:12",
+          currentItemMetadataParts: metadataParts("Rob Hubbard", "1985 Elite", "6581", "PAL", "Tune 2 of 3", "3:12"),
         })}
       />,
     );
@@ -350,7 +360,7 @@ describe("PlaybackControlsCard", () => {
         {...buildProps({
           hasCurrentItem: true,
           currentItemLabel: "Commando",
-          currentItemMetadata: "Rob Hubbard",
+          currentItemMetadataParts: metadataParts("Rob Hubbard"),
         })}
       />,
     );
@@ -553,5 +563,73 @@ describe("PlaybackControlsCard pending seek", () => {
     rerender(<PlaybackControlsCard {...buildProps({ hasCurrentItem: true, onSeekToFraction: () => {} })} />);
 
     expect(screen.getByTestId("playback-pending-announcement")).toHaveTextContent("");
+  });
+});
+
+describe("PlaybackControlsCard STIL and composer", () => {
+  it("makes the composer a way to find more by them, and leaves the rest as text", () => {
+    const onComposerSelected = vi.fn();
+    render(
+      <PlaybackControlsCard
+        {...buildProps({
+          hasCurrentItem: true,
+          currentItemLabel: "Commando",
+          currentItemMetadataParts: metadataParts("Rob Hubbard", "1985 Elite", "6581", "PAL", "3:12"),
+          onComposerSelected,
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("playback-current-composer"));
+    expect(onComposerSelected).toHaveBeenCalledWith("Rob Hubbard");
+    // The line still reads as one line: everything else is text, not a second control.
+    const credits = screen.getByTestId("playback-current-credits");
+    expect(within(credits).getAllByRole("button")).toHaveLength(1);
+    expect(credits).toHaveTextContent("Rob Hubbard · 1985 Elite · 6581 · PAL · 3:12");
+  });
+
+  it("leaves the composer inert where there is nowhere to go", () => {
+    render(
+      <PlaybackControlsCard
+        {...buildProps({
+          hasCurrentItem: true,
+          currentItemLabel: "Commando",
+          currentItemMetadataParts: metadataParts("Rob Hubbard", "1985 Elite"),
+        })}
+      />,
+    );
+    expect(screen.queryByTestId("playback-current-composer")).toBeNull();
+    expect(screen.getByTestId("playback-current-credits")).toHaveTextContent("Rob Hubbard · 1985 Elite");
+  });
+
+  it("says what the tune is and who wrote the music, which the header cannot", () => {
+    render(
+      <PlaybackControlsCard
+        {...buildProps({
+          hasCurrentItem: true,
+          currentItemLabel: "Commando",
+          currentItemMetadataParts: metadataParts("Rob Hubbard", "1985 Elite"),
+          stil: { title: "BGM1", originalArtist: "Tamayo Kawamoto", note: null },
+        })}
+      />,
+    );
+    // The header credits Rob Hubbard, who arranged it; STIL credits the person who wrote it.
+    expect(screen.getByTestId("playback-current-stil")).toHaveTextContent("BGM1 · music by Tamayo Kawamoto");
+    expect(screen.getByTestId("playback-current-credits")).toHaveTextContent("Rob Hubbard");
+  });
+
+  it("adds nothing for the majority of the archive, which STIL does not describe", () => {
+    render(
+      <PlaybackControlsCard
+        {...buildProps({
+          hasCurrentItem: true,
+          currentItemLabel: "Commando",
+          currentItemMetadataParts: metadataParts("Rob Hubbard"),
+          stil: { title: null, originalArtist: null, note: null },
+        })}
+      />,
+    );
+    expect(screen.queryByTestId("playback-current-stil")).toBeNull();
+    expect(screen.queryByTestId("tune-notes")).toBeNull();
   });
 });

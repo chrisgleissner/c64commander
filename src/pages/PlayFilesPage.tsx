@@ -70,7 +70,7 @@ import { buildSelectedDeviceBoundOrigin } from "@/lib/savedDevices/deviceBoundOr
 
 import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
 import { parseSidHeaderMetadata, type SidClock, type SidModel } from "@/lib/sid/sidUtils";
-import { buildNowPlayingMetadata } from "@/lib/playback/nowPlayingMetadata";
+import { buildNowPlayingMetadataParts } from "@/lib/playback/nowPlayingMetadata";
 import { useStilInfo } from "@/pages/playFiles/hooks/useStilInfo";
 import { resolveTrackDisplayName, type SidChipCount } from "@/lib/playback/sidDisplayName";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
@@ -334,6 +334,13 @@ export default function PlayFilesPage() {
   const [likedTunesSheetOpen, setLikedTunesSheetOpen] = useState(false);
   const [sidRadioLauncherOpen, setSidRadioLauncherOpen] = useState(false);
   const [hvscSearchOpen, setHvscSearchOpen] = useState(false);
+  /**
+   * What the search sheet should open with, when it was opened from a composer's name.
+   *
+   * Cleared when the sheet closes so that opening it again from the toolbar starts empty, which is
+   * what that entry point means.
+   */
+  const [hvscSearchSeed, setHvscSearchSeed] = useState<string | null>(null);
   const likedTuneCount = useLikedTuneCount();
 
   const {
@@ -1887,6 +1894,12 @@ export default function PlayFilesPage() {
     if (items.length === playlist.length) return;
     void startPlaylist(items, index, { replaceQueue: true });
   }, [currentIndex, knownSubsongCount, playlist, startPlaylist]);
+  // "More by this person" — the composer's name has been printed on the card all along without
+  // doing anything, and the archive-wide search that answers it already exists.
+  const openSearchForComposer = useCallback((composer: string) => {
+    setHvscSearchSeed(composer);
+    setHvscSearchOpen(true);
+  }, []);
   // What the archive's editors say about this tune, as opposed to what its header declares. Only
   // HVSC has STIL, so anything played from a device, a local file or an archive resolves to nothing
   // without a lookup.
@@ -1895,9 +1908,9 @@ export default function PlayFilesPage() {
     songNr: clampedSongNr ?? undefined,
   });
   // Everything the tune's own header says about itself, on one line under the title. The order and
-  // the omission rules live in buildNowPlayingMetadata; this only supplies the fields.
-  const currentItemMetadata = currentItem
-    ? buildNowPlayingMetadata({
+  // the omission rules live in buildNowPlayingMetadataParts; this only supplies the fields.
+  const currentItemMetadataParts = currentItem
+    ? buildNowPlayingMetadataParts({
         author: currentItemCredits.author,
         released: currentItemCredits.released,
         sidModels: currentItemCredits.sidModels,
@@ -1906,7 +1919,7 @@ export default function PlayFilesPage() {
         tuneCount: knownSubsongCount,
         lengthLabel: currentDurationLabel,
       })
-    : null;
+    : [];
 
   const handleSongSelection = useCallback(
     async (nextSongNr: number) => {
@@ -2320,8 +2333,9 @@ export default function PlayFilesPage() {
               <PlaybackControlsCard
                 hasCurrentItem={Boolean(currentItem)}
                 currentItemLabel={currentDisplay?.title ?? null}
-                currentItemMetadata={currentItemMetadata}
+                currentItemMetadataParts={currentItemMetadataParts}
                 stil={stilInfo}
+                onComposerSelected={openSearchForComposer}
                 // Which station (or, when none is running, which playlist) is producing this tune
                 // leads the card: it is context for the title, the transport and everything else
                 // below it. Rendered in both states, and the same height in both, so that starting
@@ -2792,11 +2806,15 @@ export default function PlayFilesPage() {
           />
           <HvscSearchSheet
             open={hvscSearchOpen}
-            onOpenChange={setHvscSearchOpen}
+            onOpenChange={(open) => {
+              setHvscSearchOpen(open);
+              if (!open) setHvscSearchSeed(null);
+            }}
             onPlay={playFoundTune}
             onStartStation={startStationFromFoundTune}
             canSeedStation={canSeedStationFrom}
             stationActive={sidRadio.active}
+            {...(hvscSearchSeed ? { initialQuery: hvscSearchSeed } : {})}
           />
 
           <AlertDialog

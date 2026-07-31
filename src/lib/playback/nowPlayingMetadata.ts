@@ -84,19 +84,36 @@ const clean = (value: string | null | undefined): string | null => {
 };
 
 /**
+ * Which field a segment came from.
+ *
+ * Only the author is named, because it is the only one the card treats differently: it is a person,
+ * and a person is somewhere to go. Everything else is a fact about the file and is rendered as
+ * text.
+ */
+export type NowPlayingMetadataSegment = {
+  text: string;
+  kind: "author" | "detail";
+};
+
+/**
  * The fields in order, ready to be joined.
  *
  * Returned as segments rather than one string so a caller can render them apart if it ever wants to,
  * and so the tests can name what is missing rather than diff a sentence.
  */
-export const buildNowPlayingMetadataSegments = (input: NowPlayingMetadataInput): string[] => {
-  const segments: string[] = [];
+export const buildNowPlayingMetadataSegments = (input: NowPlayingMetadataInput): string[] =>
+  buildNowPlayingMetadataParts(input).map((part) => part.text);
+
+/** The same segments, each labelled with where it came from. */
+export const buildNowPlayingMetadataParts = (input: NowPlayingMetadataInput): NowPlayingMetadataSegment[] => {
+  const segments: NowPlayingMetadataSegment[] = [];
+  const push = (text: string, kind: NowPlayingMetadataSegment["kind"] = "detail") => segments.push({ text, kind });
 
   const author = clean(input.author);
-  if (author) segments.push(author);
+  if (author) push(author, "author");
 
   const released = clean(input.released);
-  if (released) segments.push(released);
+  if (released) push(released);
 
   // An unnamed chip is dropped rather than shown as a gap or guessed at. In practice this costs
   // nothing on multi-chip tunes: addressing a second chip needs a version 3 header, and every header
@@ -104,20 +121,20 @@ export const buildNowPlayingMetadataSegments = (input: NowPlayingMetadataInput):
   const models = input.sidModels
     .map((model) => (model ? SID_MODEL_LABELS[model] : null))
     .filter((label): label is string => Boolean(label));
-  if (models.length) segments.push(models.join(SID_MODEL_SEPARATOR));
+  if (models.length) push(models.join(SID_MODEL_SEPARATOR));
 
   const clock = input.clock ? CLOCK_LABELS[input.clock] : null;
-  if (clock) segments.push(clock);
+  if (clock) push(clock);
 
   // "Tune", never "subsong": the pieces inside a SID file are what a listener is choosing between,
   // and calling them subsongs only ever meant something to the people who wrote the format.
   // Suppressed on a single-tune file, where "Tune 1 of 1" says nothing.
   if (input.tuneNumber && input.tuneCount && input.tuneCount > 1) {
-    segments.push(`Tune ${input.tuneNumber} of ${input.tuneCount}`);
+    push(`Tune ${input.tuneNumber} of ${input.tuneCount}`);
   }
 
   const length = clean(input.lengthLabel);
-  if (length) segments.push(length);
+  if (length) push(length);
 
   return segments;
 };
