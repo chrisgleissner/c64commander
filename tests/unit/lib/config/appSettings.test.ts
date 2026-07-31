@@ -56,6 +56,29 @@ describe("appSettings", () => {
     });
   });
 
+  describe("friendlySidNames", () => {
+    it("defaults to on, so a fresh install shows readable tune names", () => {
+      expect(appSettings.DEFAULT_FRIENDLY_SID_NAMES).toBe(true);
+      expect(appSettings.loadFriendlySidNames()).toBe(true);
+    });
+
+    it("persists the user turning it off and back on", () => {
+      appSettings.saveFriendlySidNames(false);
+      expect(appSettings.loadFriendlySidNames()).toBe(false);
+      expect(localStorage.getItem(APP_SETTINGS_KEYS.FRIENDLY_SID_NAMES_KEY)).toBe("0");
+
+      appSettings.saveFriendlySidNames(true);
+      expect(appSettings.loadFriendlySidNames()).toBe(true);
+      expect(localStorage.getItem(APP_SETTINGS_KEYS.FRIENDLY_SID_NAMES_KEY)).toBe("1");
+    });
+
+    it("broadcasts the change, so the Play screen redraws without remounting", () => {
+      const spy = vi.spyOn(window, "dispatchEvent");
+      appSettings.saveFriendlySidNames(false);
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({ type: "c64u-app-settings-updated" }));
+    });
+  });
+
   describe("configWriteIntervalMs", () => {
     it("defaults correctly", () => {
       expect(appSettings.loadConfigWriteIntervalMs()).toBe(appSettings.DEFAULT_CONFIG_WRITE_INTERVAL_MS);

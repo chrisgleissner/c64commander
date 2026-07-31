@@ -48,6 +48,35 @@ import { startupBufferMs } from "./renderThroughput";
 import type { AudioScheduleBuffer, AudioScheduleSink, AudioScheduleSource } from "./localSidChunkScheduler";
 import type { LocalSidAudioSink } from "./localSidEngine";
 
+/**
+ * What the native pipeline reports back from a write or a stats read.
+ *
+ * `underruns` is `AudioTrack.underrunCount` — AudioFlinger's own count of the output running dry,
+ * i.e. the speaker had nothing to play. It has always been on the wire; nothing read it, so the
+ * pinned `audioUnderruns` budget was reporting the chunk scheduler's JS-side accounting instead.
+ * Those are different events: the scheduler counts a chunk handed over after the previous one
+ * finished, which on this sink is decoupled from whether the native ring drained.
+ */
+export interface NativeAudioStats {
+  bufferedMs?: number;
+  underruns?: number;
+}
+
+/** How often the native depth is re-read once nothing is being written. */
+const IDLE_DEPTH_POLL_MS = 500;
+/**
+ * How long since the last write before the depth is allowed to be judged at all.
+ *
+ * Short, and deliberately separate from {@link STALL_GRACE_MS}: it only has to be long enough to be
+ * sure nothing is currently going into the pipeline. Reusing the stall window here would stack the
+ * two and leave a listener in silence for eight seconds before anything recovered.
+ */
+const WRITE_QUIET_MS = 1000;
+/** How long an idle, non-draining native buffer is tolerated before the track is re-opened. */
+const STALL_GRACE_MS = 4000;
+/** Depth reduction that counts as real progress rather than reporting jitter. */
+const DEPTH_PROGRESS_EPSILON_MS = 20;
+
 /** Int16 full scale — the scheduler hands out floats in [-1, 1). */
 const INT16_SCALE = 32768;
 
@@ -142,12 +171,12 @@ export interface NativeLocalAudioBackend {
     trackBursts?: number;
     primeMs?: number;
   }): Promise<{ sampleRate: number; bufferMs: number }>;
-  writeAudioTrack(options: { data: string }): Promise<{ bufferedMs?: number } | undefined>;
+  writeAudioTrack(options: { data: string }): Promise<NativeAudioStats | undefined>;
   closeAudioTrack(options?: Record<string, never>): Promise<void>;
   /** Drop queued-but-unplayed audio, so a pause or seek is immediate despite the deep ring. */
   flushAudioTrack?(options?: Record<string, never>): Promise<void>;
   /** Current pipeline state. Plain field reads, so cheap enough to poll while waiting. */
-  readAudioStats?(options?: Record<string, never>): Promise<{ bufferedMs?: number } | undefined>;
+  readAudioStats?(options?: Record<string, never>): Promise<NativeAudioStats | undefined>;
 }
 
 const toBase64 = (bytes: Uint8Array): string => {
@@ -183,6 +212,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
   private playheadAtMs = performance.now();
   /** Queue depth the pipeline last reported, in seconds. */
   private queuedSec = 0;
+  private nativeUnderruns = 0;
   private suspended = false;
   private closed = false;
   private opening: Promise<boolean> | null = null;
@@ -193,6 +223,13 @@ class NativeLocalSidSink implements AudioScheduleSink {
   /** Slices waiting to go out, in play order. */
   private queue: Int16Array[] = [];
   private pumping = false;
+  /** When the native depth first stopped falling while idle, or null when it is draining. */
+  private depthStalledSinceMs: number | null = null;
+  /** Ticks since the depth was last polled while idle. */
+  private idleTicks = 0;
+  private lastDepthMs = Number.POSITIVE_INFINITY;
+  /** When audio was last handed to the pipeline; a stall is only judged once writing has stopped. */
+  private lastWriteAtMs = 0;
   /** Chunk ends still to be announced, as playhead seconds. */
   private endings: { at: number; fire: () => void }[] = [];
   private ticker: ReturnType<typeof setInterval> | null = null;
@@ -308,8 +345,23 @@ class NativeLocalSidSink implements AudioScheduleSink {
     this.ticker = setInterval(() => {
       if (this.closed) return;
       this.announceEndings();
-      if (this.queue.length) void this.pump();
-      else if (!this.endings.length && this.ticker !== null) {
+      if (this.queue.length) {
+        void this.pump();
+        return;
+      }
+      // Nothing left to write. The depth still has to be read from time to time, because a pipeline
+      // that has stopped consuming only shows itself by holding a depth that never falls — and the
+      // pump, which is the only other caller that reads it, has already exited. Without this the
+      // stall watchdog could never observe the state it exists to catch.
+      if (this.opened && !this.suspended) {
+        this.idleTicks += 1;
+        if (this.idleTicks * TICK_MS >= IDLE_DEPTH_POLL_MS) {
+          this.idleTicks = 0;
+          void this.readQueuedSec();
+        }
+        return;
+      }
+      if (!this.endings.length && this.ticker !== null) {
         clearInterval(this.ticker);
         this.ticker = null;
       }
@@ -348,8 +400,8 @@ class NativeLocalSidSink implements AudioScheduleSink {
   private async readQueuedSec(): Promise<number> {
     try {
       const stats = await this.backend.readAudioStats?.({});
+      this.noteStats(stats);
       if (stats && typeof stats.bufferedMs === "number") {
-        this.noteDepth(stats.bufferedMs);
         return Math.max(0, stats.bufferedMs / 1000);
       }
     } catch (error) {
@@ -362,21 +414,120 @@ class NativeLocalSidSink implements AudioScheduleSink {
     return 0;
   }
 
+  /**
+   * The pipeline's cumulative underrun count, as AudioFlinger reports it.
+   *
+   * Cumulative since `openAudioTrack`, so it only ever rises within a tune; kept as a max so a
+   * reordered or stale read cannot walk it backwards.
+   */
+  underruns(): number {
+    return this.nativeUnderruns;
+  }
+
+  /** Take whatever the pipeline reported, from a write or a stats read. */
+  private noteStats(stats: NativeAudioStats | undefined): void {
+    if (!stats) return;
+    if (typeof stats.bufferedMs === "number") this.noteDepth(stats.bufferedMs);
+    if (typeof stats.underruns === "number") {
+      this.nativeUnderruns = Math.max(this.nativeUnderruns, stats.underruns);
+    }
+  }
+
   /** Record a depth reading against the playhead, whatever call produced it. */
   private noteDepth(bufferedMs: number): void {
     this.queuedSec = Math.max(0, bufferedMs / 1000);
     this.playheadSec = this.writtenFrames / this.sampleRate - this.queuedSec;
     this.playheadAtMs = performance.now();
+    this.watchDepth(bufferedMs);
+  }
+
+  /**
+   * Notice a pipeline that has stopped consuming, and re-open it.
+   *
+   * `ensureOpen` short-circuits on `this.opened`, which is a belief held on the JavaScript side and
+   * never checked against the pipeline it describes. When the native track stops — observed on the
+   * Pixel 4 after a burst of rapid track changes — that belief stays true, the sink keeps handing
+   * over audio nothing will play, and the elapsed clock keeps advancing because it is driven by the
+   * written total rather than by anything audible. The result is a station that looks like it is
+   * playing and is silent, and only relaunching the app cleared it.
+   *
+   * The signal is deliberately narrow. Once the queue has drained, a working pipeline must report a
+   * falling depth, because nothing more is being written into it. A depth that does not fall over
+   * {@link STALL_GRACE_MS} while there is audio buffered, playback is not suspended and nothing is
+   * being written means the pipeline is not consuming. Anything looser risks firing while the pump
+   * is legitimately holding the buffer at its high-water mark, and a watchdog that judges a healthy
+   * pipeline is worse than none: this engine has been broken twice by one that judged seeks.
+   */
+  private watchDepth(bufferedMs: number): void {
+    // "Nothing is going in" rather than "the pump is not running". The pump also sits still while
+    // the buffer is above its high-water mark, polling for it to drain — which is exactly the state
+    // a stalled pipeline holds it in, and the state the device was found in with twelve seconds
+    // parked and nothing playing. Keying off the pump's own flag missed that case entirely.
+    const quiet = performance.now() - this.lastWriteAtMs >= WRITE_QUIET_MS;
+    if (this.closed || this.suspended || !this.opened || !quiet || bufferedMs <= 0) {
+      this.depthStalledSinceMs = null;
+      this.lastDepthMs = bufferedMs;
+      return;
+    }
+    const draining = bufferedMs < this.lastDepthMs - DEPTH_PROGRESS_EPSILON_MS;
+    this.lastDepthMs = bufferedMs;
+    if (draining) {
+      this.depthStalledSinceMs = null;
+      return;
+    }
+    this.depthStalledSinceMs ??= performance.now();
+    if (performance.now() - this.depthStalledSinceMs < STALL_GRACE_MS) return;
+    this.depthStalledSinceMs = null;
+    addLog("warn", "Native audio: pipeline stopped consuming; re-opening", {
+      service: "local-sid",
+      bufferedMs: Math.round(bufferedMs),
+      writtenSec: Math.round(this.writtenFrames / this.sampleRate),
+    });
+    void this.reopenAfterStall();
+  }
+
+  /**
+   * Drop the stalled track and let the next write open a fresh one.
+   *
+   * `writtenFrames` is rebased onto what was actually audible, because the playhead is derived from
+   * it: leaving it at the total written into a track that never played would put the playhead
+   * seconds ahead of the sound and the scheduler would read that as the audio having run out.
+   */
+  private async reopenAfterStall(): Promise<void> {
+    if (this.closed || !this.opened) return;
+    this.opened = false;
+    this.opening = null;
+    this.writtenFrames = Math.max(0, Math.round(this.playheadSec * this.sampleRate));
+    this.queuedSec = 0;
+    // Everything still queued went with the track, so the chunks it belonged to will never finish
+    // playing and their completions would never be announced. The engine renders more only when it
+    // is told a chunk is done, so leaving these outstanding trades a silent pipeline for a stalled
+    // one — which is the failure this codebase has already been broken by twice. Rebasing
+    // `writtenFrames` down to the playhead is what would have stranded them: `announceEndings`
+    // fires on a clock clamped to what has been written.
+    const orphaned = this.endings;
+    this.endings = [];
+    for (const entry of orphaned) entry.fire();
+    try {
+      await this.backend.closeAudioTrack?.({});
+    } catch (error) {
+      addLog("debug", "Native audio: closing a stalled track failed; opening a new one anyway", {
+        error: (error as Error)?.message ?? String(error),
+      });
+    }
+    if (!this.closed) void this.pump();
   }
 
   private async send(slice: Int16Array): Promise<void> {
     const bytes = new Uint8Array(slice.buffer, slice.byteOffset, slice.byteLength);
     try {
       const stats = await this.backend.writeAudioTrack({ data: toBase64(bytes) });
+      this.lastWriteAtMs = performance.now();
       this.writtenFrames += slice.length / 2;
       // The playhead is what has been written less what is still queued, which ties the clock to the
       // DAC rather than to wall time.
       this.noteDepth(stats?.bufferedMs ?? 0);
+      this.noteStats(stats);
     } catch (error) {
       addLog("warn", "Native audio: on-device write failed", {
         error: (error as Error)?.message ?? String(error),
@@ -515,6 +666,7 @@ export const createNativeLocalSidSink = (
   (globalThis as Record<string, unknown>).__localSinkDebug = () => sink.debug();
   return {
     sink,
+    audioUnderruns: () => sink.underruns(),
     resume: () => sink.resume(),
     suspend: () => sink.suspend(),
     fadeOut: (ms: number) => sink.fadeTo(0, ms),

@@ -29,7 +29,30 @@ export type SidRadioLauncherSheetProps = {
   onStartStyle: (styleBit: number, label: string, fromLikes: boolean) => void;
   onStartTaste: () => void;
   onSurprise: () => void;
+  /**
+   * Display label of the tune a Song station is (or would be) seeded by.
+   *
+   * Absent — nothing playable to seed from, and no active Song station — hides the Song section
+   * entirely, because a mood on its own is what the style tiles below already offer.
+   */
+  songSeedLabel?: string | null;
+  /** The mood the active Song station is constrained to; `null` is all moods. */
+  songStyleBit?: number | null;
+  /** Start the Song station, or re-aim the active one, at this mood; `null` is all moods. */
+  onStartSong?: (styleBit: number | null) => void;
 };
+
+/**
+ * The mood choices offered over a Song seed: every style tile, plus the unconstrained station.
+ *
+ * "All moods" is an explicit option rather than an absent one so the choice reads as a setting with
+ * a current value, and so a listener can get back to the unconstrained station without stopping and
+ * restarting the one they are listening to.
+ */
+const songMoodOptions: ReadonlyArray<{ bit: number | null; key: string | null; label: string }> = [
+  { bit: null, key: null, label: "All moods" },
+  ...SID_RADIO_STYLE_TILES.map((tile) => ({ bit: tile.bit, key: tile.key, label: tile.label })),
+];
 
 /**
  * The SID Radio launcher (spec §5.2). Composes seed × optional style: a grid of
@@ -48,6 +71,9 @@ export const SidRadioLauncherSheet = ({
   onStartStyle,
   onStartTaste,
   onSurprise,
+  songSeedLabel = null,
+  songStyleBit = null,
+  onStartSong,
 }: SidRadioLauncherSheetProps) => {
   const [fromLikes, setFromLikes] = useState(false);
   const tasteUnlocked = likeCount >= SID_RADIO_TASTE_UNLOCK_LIKES;
@@ -62,6 +88,38 @@ export const SidRadioLauncherSheet = ({
         </SheetHeader>
 
         <div className="flex flex-col gap-4 pt-3">
+          {songSeedLabel && onStartSong ? (
+            <div className="flex flex-col gap-2" data-testid="sid-radio-song-section">
+              <Label className="font-medium">Similar to {songSeedLabel}</Label>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {songMoodOptions.map((option) => {
+                  // A mood with no members admits nothing, so the intersection with any seed is
+                  // empty before the walk starts — the same reason the style tiles disable it.
+                  const populated = option.key === null || isStylePopulated(stylePopulations, option.key);
+                  const selected = songStyleBit === option.bit;
+                  return (
+                    <Button
+                      key={option.key ?? "all"}
+                      type="button"
+                      size="sm"
+                      variant={selected ? "default" : "outline"}
+                      className="h-auto whitespace-normal py-1.5 text-xs"
+                      data-testid={`sid-radio-song-mood-${option.bit ?? "all"}`}
+                      aria-pressed={selected}
+                      disabled={!populated}
+                      onClick={() => {
+                        close();
+                        onStartSong(option.bit);
+                      }}
+                    >
+                      {option.label}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
               data-testid="sid-radio-likes-toggle"

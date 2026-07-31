@@ -13,7 +13,12 @@
  * Diagnostics surface. Node-safe (no-ops without a DOM).
  */
 
+import { SIDCORR_BUNDLE_SHA256, SIDCORR_RELEASE_TAG, SIDCORR_SCHEMA_VERSION } from "@/lib/sidRadio/sidcorrRelease";
+
 export const SID_RADIO_STATS_TESTID = "sid-radio-stats";
+
+/** How many emitted ordinals {@link SidRadioStats.emittedSequence} keeps. */
+export const EMITTED_SEQUENCE_CAP = 512;
 
 export interface SidRadioStats {
   bundleLoadMs: number;
@@ -23,7 +28,41 @@ export interface SidRadioStats {
   refillMainThreadMaxMs: number;
   skipToLaunchMs: number | null;
   queueLookahead: number;
+  /**
+   * Which corpus this run actually used.
+   *
+   * `corpusReleaseTag` and `corpusBundleSha256` come from the pin, `corpusGraphFlags` and
+   * `corpusBinaryFormatVersion` from the bytes the device parsed. A run's evidence has to name the
+   * corpus it ran against, and a device has to be checkable against the pin without a rebuild —
+   * both of which were guesswork while the only record of the corpus was a constant in the source.
+   */
+  corpusReleaseTag: string;
+  corpusBundleSha256: string;
+  corpusSchemaVersion: string;
+  corpusBinaryFormatVersion: number | null;
+  corpusGraphFlags: number | null;
   candidatesEmitted: number;
+  /**
+   * Candidate accounting for the current station, split by why a candidate did not become an item.
+   *
+   * Without this the minimum-length rule cannot be told apart from the songlengths being unable to
+   * answer: both leave the queue looking normal, and only one of them can put a three-second tune
+   * in front of a listener. `unknownDurationAdmitted` is the one that matters — it counts tunes
+   * admitted because their length could not be resolved, not because it was long enough.
+   */
+  candidatesTooShort: number;
+  candidatesUnresolvedPath: number;
+  unknownDurationAdmitted: number;
+  /**
+   * Engine computes issued per refill.
+   *
+   * A refill costs `count / yield` computes, not one. This is the multiplier that made a deep
+   * station expensive (3.9 s against a 150 ms budget on the Pixel 4), so it is reported next to
+   * `lastRefillMs` rather than inferred from it.
+   */
+  refillComputeCalls: number;
+  /** Fraction of consumed candidates that became queued items, as a percentage. */
+  candidateYieldPercent: number;
   tracksAutoAdvanced: number;
   skips: number;
   engineThreadIsMain: boolean;
@@ -32,7 +71,12 @@ export interface SidRadioStats {
   seedKind: "song" | "style" | "taste" | null;
   styleBit: number | null;
   shuffleSeed: number | null;
-  /** Emitted track-ordinal sequence — the `--shuffle-replay` determinism proof (§9.3). */
+  /**
+   * The first {@link EMITTED_SEQUENCE_CAP} emitted track ordinals — the `--shuffle-replay`
+   * determinism proof (§9.3). A prefix is all that proof needs: the gate starts one station twice
+   * with the same pinned `shuffleSeed` and compares `seq[:tracks]`, with `--soak-tracks` defaulting
+   * to 30.
+   */
   emittedSequence: number[];
   /** True while a station drives the queue → transport Shuffle/Repeat are disabled (§5.3). */
   transportShuffleDisabled: boolean;
@@ -51,7 +95,17 @@ const initialStats = (): SidRadioStats => ({
   refillMainThreadMaxMs: 0,
   skipToLaunchMs: null,
   queueLookahead: 0,
+  corpusReleaseTag: SIDCORR_RELEASE_TAG,
+  corpusBundleSha256: SIDCORR_BUNDLE_SHA256,
+  corpusSchemaVersion: SIDCORR_SCHEMA_VERSION,
+  corpusBinaryFormatVersion: null,
+  corpusGraphFlags: null,
   candidatesEmitted: 0,
+  candidatesTooShort: 0,
+  candidatesUnresolvedPath: 0,
+  unknownDurationAdmitted: 0,
+  refillComputeCalls: 0,
+  candidateYieldPercent: 100,
   tracksAutoAdvanced: 0,
   skips: 0,
   engineThreadIsMain: false,
@@ -108,6 +162,14 @@ export const recordRefill = (input: {
   emitted: number;
   lookahead: number;
   firstCandidate?: boolean;
+  /** Provider-side admission accounting, cumulative for the station (absent → left unchanged). */
+  admission?: {
+    tooShort: number;
+    unresolvedPath: number;
+    unknownDurationAdmitted: number;
+    computeCalls: number;
+    yieldPercent: number;
+  };
 }): void => {
   stats = {
     ...stats,
@@ -120,6 +182,12 @@ export const recordRefill = (input: {
     lastRefillMs: input.firstCandidate ? stats.lastRefillMs : input.lastRefillMs,
     refillMainThreadMaxMs: Math.max(stats.refillMainThreadMaxMs, input.mainThreadMs),
     candidatesEmitted: stats.candidatesEmitted + input.emitted,
+    // Cumulative on the provider already, so assigned rather than added — adding would square them.
+    candidatesTooShort: input.admission?.tooShort ?? stats.candidatesTooShort,
+    candidatesUnresolvedPath: input.admission?.unresolvedPath ?? stats.candidatesUnresolvedPath,
+    unknownDurationAdmitted: input.admission?.unknownDurationAdmitted ?? stats.unknownDurationAdmitted,
+    refillComputeCalls: input.admission?.computeCalls ?? stats.refillComputeCalls,
+    candidateYieldPercent: input.admission?.yieldPercent ?? stats.candidateYieldPercent,
     queueLookahead: input.lookahead,
     firstCandidateMs:
       input.firstCandidate && stats.firstCandidateMs === null ? input.lastRefillMs : stats.firstCandidateMs,
@@ -152,6 +220,12 @@ export const recordEmitted = (trackOrdinal: number): void => {
   // with an audio underrun against a pinned budget of 0 where earlier runs had
   // none. The refill that emitted these items calls recordRefill immediately
   // afterwards, which flushes the sequence along with the rest.
+  //
+  // The copy is what bounds the sequence: appending immutably costs one copy of
+  // the whole array per emitted track, which was ~1M element copies over the
+  // ~1.4k tracks a station used to reach and would be 1.8 billion over the ~60k
+  // it reaches now — sustained allocation churn on the thread rendering audio.
+  if (stats.emittedSequence.length >= EMITTED_SEQUENCE_CAP) return;
   stats = { ...stats, emittedSequence: [...stats.emittedSequence, trackOrdinal] };
 };
 
@@ -168,8 +242,17 @@ export const recordSkip = (skipToLaunchMs: number): void => {
   writeToDom();
 };
 
+/**
+ * Clear the per-station counters, keeping what describes the corpus.
+ *
+ * The bundle's format version and graph flags are properties of the bytes this build loaded, not of
+ * the station being started, and the load happens once while a station starts every time the
+ * listener picks one. Resetting them here wiped the identity that had just been read and left the
+ * device reporting a corpus it could not name.
+ */
 export const resetSidRadioStats = (): void => {
-  stats = initialStats();
+  const { corpusBinaryFormatVersion, corpusGraphFlags } = stats;
+  stats = { ...initialStats(), corpusBinaryFormatVersion, corpusGraphFlags };
   writeToDom();
 };
 

@@ -64,6 +64,8 @@ export const readyStatsFromBundle = (bundle: SidcorrTinyBundle, engineThreadIsMa
   trackCount: bundle.trackCount,
   edgeCount: bundle.stats.edgeCount,
   styleCount: bundle.styles.length,
+  graphFlags: bundle.graphFlags,
+  version: bundle.version,
   stylePopulations: stylePopulationsFromBundle(bundle),
   engineThreadIsMain,
 });
@@ -86,6 +88,7 @@ export const computeStationResponse = (
     notForMe: request.notForMe,
     shuffleSeed: request.shuffleSeed,
     exclude: request.exclude,
+    recent: request.recent,
     limit: request.count,
   });
   if (result.candidates.length === 0) {

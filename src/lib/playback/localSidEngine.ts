@@ -26,6 +26,7 @@ import { addLog, addErrorLog } from "@/lib/logging";
 import { claimPhoneAudio, phoneAudioOwner, releasePhoneAudio } from "@/lib/audio/phoneAudioOwnership";
 import { clearLocalAudioHealth, reportLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
 import { notifyPlaybackActivityChanged } from "./playbackActivitySignal";
+import type { PendingSeekState } from "./pendingSeekStatus";
 import { RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
 
 /**
@@ -58,6 +59,17 @@ export type LocalSidWorkerFactory = () => LocalSidWorkerLike;
 /** An audio sink instance plus its teardown. */
 export interface LocalSidAudioSink {
   sink: AudioScheduleSink;
+  /**
+   * Cumulative underruns the OUTPUT itself reported, where the sink can see them.
+   *
+   * The chunk scheduler counts a chunk handed over after the previous one finished, which is the
+   * right measure for the Web Audio sink because there the schedule *is* the output. The native sink
+   * writes into a ring the speaker drains on its own thread, so the ring can run dry while every
+   * chunk was handed over on time — the scheduler sees nothing and the listener hears a gap. That is
+   * the shape of defect this repo has already been caught by once (AGENTS.md, "Diagnostics that
+   * cannot report the fault"), so the pinned `audioUnderruns` budget takes the worse of the two.
+   */
+  audioUnderruns?: () => number;
   /** Resume a suspended context (browsers start suspended until a gesture). */
   resume?: () => Promise<void> | void;
   /** Suspend the audio clock, freezing the schedule where it stands. */
@@ -484,13 +496,29 @@ export class LocalSidEngine {
   private warmKey: string | null = null;
   private warmAccumulated: Int16Array = EMPTY_PCM;
   /**
-   * A seek waiting for the pre-render to reach it, in seconds.
+   * A seek waiting for the pre-render to reach it.
    *
    * Set when a seek lands past what is rendered while a pre-render of this tune is already running.
    * Playback resumes from the buffer the moment coverage passes it — which is what the progress bar's
    * translucent fill is showing in the meantime.
+   *
+   * A record rather than a bare number because three things about the request outlive the moment it
+   * was made. The render head as it stood when the target was accepted is the denominator of the
+   * preparation progress the UI shows, and reading it later would give a figure that starts at
+   * whatever fraction happened to be rendered. The last genuinely audible position is where the
+   * elapsed clock has to freeze, because the scheduler has already been reset to the target. And the
+   * two identities let a render completion that arrives late be matched against what is actually
+   * outstanding rather than applied to whatever is playing now.
    */
-  private awaitedSeekSeconds: number | null = null;
+  private pendingSeek: PendingSeekState | null = null;
+  /**
+   * Identity of the track instance currently open.
+   *
+   * Bumped by every open, so a pre-render completion that arrives after the listener has pressed
+   * Next can be told apart from one for the tune now playing. Without it, a completion is matched
+   * only by pre-render id, and ids are per-engine rather than per-tune.
+   */
+  private trackInstanceId = 0;
   /** The cache key of the tune being opened, re-applied after the teardown that clears it. */
   private pendingCacheKey: string | null = null;
   /** Lead-ins waiting for the renderer to be free, so they never displace the current tune's. */
@@ -624,6 +652,10 @@ export class LocalSidEngine {
 
   /** Give up on the current pre-render, leaving playback untouched. */
   private abandonPrerender(): void {
+    // A seek waiting on this render is now waiting on a thread that will never report again. Drop
+    // it rather than leave it outstanding: while it is set the UI shows a wait that cannot end and
+    // the stall watchdog is held off, so clearing it is what lets the ordinary recovery run.
+    this.pendingSeek = null;
     this.prerenderFraction = null;
     this.prerenderKey = null;
     this.prerenderWorker?.terminate();
@@ -716,6 +748,10 @@ export class LocalSidEngine {
      */
     cacheKey?: string,
   ): Promise<LocalSidPlayResult> {
+    // A new track instance, so anything still in flight for the previous one can be told apart from
+    // this one's work. A stall recovery re-opens the same tune and counts as a new instance too:
+    // what the old instance was waiting for did not survive the worker being thrown away.
+    this.trackInstanceId += 1;
     // Remembered, not just assigned. Opening a tune tears the previous one down, and that teardown
     // clears `currentKey` — so setting it here and nothing else left it null for the whole tune. With it
     // null the pre-render cache cannot be found by any of the three things that need it: the progress
@@ -848,9 +884,15 @@ export class LocalSidEngine {
         this.prerenderAccumulated = grown;
         // A seek is waiting on this: hand playback the buffer the moment coverage reaches the target,
         // rather than leaving it silent while a second render of the same audio catches up.
-        if (this.awaitedSeekSeconds !== null && message.seconds > this.awaitedSeekSeconds) {
-          const awaited = this.awaitedSeekSeconds;
-          this.awaitedSeekSeconds = null;
+        //
+        // Only for a target that is still the outstanding one. A pending seek from a previous track
+        // instance, or one a newer seek has already superseded, must be discarded rather than
+        // applied — applying it would jump the tune now playing to a position somebody asked for in
+        // a different one.
+        if (this.pendingSeek && this.isStalePendingSeek(this.pendingSeek)) this.pendingSeek = null;
+        if (this.pendingSeek !== null && message.seconds > this.pendingSeek.targetSeconds) {
+          const awaited = this.pendingSeek.targetSeconds;
+          this.pendingSeek = null;
           this.cached = {
             partial: true,
             pcm: grown,
@@ -893,6 +935,11 @@ export class LocalSidEngine {
             durationSeconds: message.seconds,
           });
         }
+        // A wait the last chunk did not satisfy has nothing left to wait FOR — the render is over,
+        // so no further "prerender-chunk" can ever arrive. Left outstanding, the target latches the
+        // engine into a silence the stall watchdog is deliberately forbidden to judge, and the tune
+        // never reports its end either. Dragging into the closing seconds of a tune reaches this.
+        this.resolvePendingSeekAgainstCompletedRender(pcm, message.sampleRate, message.channels, message.seconds);
         addLog("debug", "Local SID tune pre-rendered", {
           service: "local-sid",
           key: this.prerenderKey,
@@ -1059,8 +1106,13 @@ export class LocalSidEngine {
 
     this.seekEpoch += 1;
     const epoch = this.seekEpoch;
+    // Read the playhead BEFORE the scheduler is reset, because that reset moves it to the target.
+    // If this seek ends up waiting, this is the last position the listener genuinely heard, and it
+    // is where the elapsed clock has to stay: a clock advancing from the target while the engine
+    // renders towards it is a silent wait dressed up as normal playback.
+    const audibleAtRequest = this.scheduler.positionSeconds();
     // A newer seek replaces whatever an older one was waiting for.
-    this.awaitedSeekSeconds = null;
+    this.pendingSeek = null;
     this.inFlightRenders = 0;
     this.endReceived = false;
     this.endedFired = false;
@@ -1104,7 +1156,13 @@ export class LocalSidEngine {
     this.cached = null;
     this.cachedCursor = 0;
     if (this.prerenderFraction !== null && this.prerenderKey === this.currentKey) {
-      this.awaitedSeekSeconds = target;
+      this.pendingSeek = {
+        targetSeconds: target,
+        renderedAtRequestSeconds: rendered?.durationSeconds ?? 0,
+        audibleAtRequestSeconds: audibleAtRequest,
+        generation: epoch,
+        trackInstanceId: this.trackInstanceId,
+      };
       // Held at the target, not drifting on from where it was. Letting playback carry on meant the
       // listener heard the old position while the bar showed the new one, which is worse than a pause:
       // there is no way to tell whether the drag did anything. Silence with a visibly advancing
@@ -1160,6 +1218,62 @@ export class LocalSidEngine {
     this.pump();
   }
 
+  /**
+   * Is this pending seek still the one the listener is waiting for?
+   *
+   * Two ways it can stop being: the track was replaced (Next, Stop, a station change, a route or
+   * engine change — all of which open or tear down a tune, and all of which bump the instance), or
+   * a newer seek was accepted (the drag moved again, or the target came inside coverage). Either
+   * way the completion that is arriving now belongs to nobody, and applying it would move playback
+   * to a position nobody currently wants.
+   */
+  private isStalePendingSeek(pending: PendingSeekState): boolean {
+    return pending.trackInstanceId !== this.trackInstanceId || pending.generation !== this.seekEpoch;
+  }
+
+  /**
+   * Settle a seek that was still waiting when the pre-render finished.
+   *
+   * In practice the target is past the end of the tune whenever this runs — a drag into the closing
+   * seconds. Every chunk of a pre-render is delivered as it is produced, so a target inside the
+   * finished render was already served by the chunk that reached it. The covering branch is kept as
+   * a safety net for a renderer that ever coalesces its tail into the completion message, and it
+   * decides from the buffer's own length rather than the reported duration: if the two ever
+   * disagree, only the samples that exist can actually be played.
+   *
+   * The other case is the end of the track, reported once so the playlist moves on instead of
+   * sitting silent on a tune that has nothing left to render.
+   */
+  private resolvePendingSeekAgainstCompletedRender(
+    pcm: Int16Array,
+    sampleRate: number,
+    channels: number,
+    seconds: number,
+  ): void {
+    const pending = this.pendingSeek;
+    if (!pending) return;
+    this.pendingSeek = null;
+    if (this.isStalePendingSeek(pending)) return;
+    const coveredSeconds = pcm.length / Math.max(1, channels) / Math.max(1, sampleRate);
+    if (pcm.length > 0 && pending.targetSeconds < coveredSeconds) {
+      this.cached = { partial: false, pcm, sampleRate, channels, durationSeconds: seconds };
+      this.cachedCursor = Math.min(pcm.length, Math.floor(pending.targetSeconds * sampleRate) * channels);
+      addLog("debug", "Local SID awaited seek served by the completed pre-render", {
+        service: "local-sid",
+        seconds: pending.targetSeconds,
+      });
+      this.pump();
+      return;
+    }
+    addLog("debug", "Local SID awaited seek landed at or past the end of the tune", {
+      service: "local-sid",
+      seconds: pending.targetSeconds,
+      renderedSeconds: seconds,
+    });
+    this.endReceived = true;
+    this.maybeFireEnded();
+  }
+
   /** Begin supervising liveness. Idempotent; a running watchdog is left alone. */
   private startWatchdog(): void {
     this.lastAudioAtMs = Date.now();
@@ -1189,7 +1303,7 @@ export class LocalSidEngine {
     reportLocalAudioHealth({
       active: this.scheduler !== null && !this.paused,
       bufferedMs: (source?.bufferedSeconds ?? 0) * 1000,
-      underruns: source?.underruns ?? 0,
+      underruns: Math.max(source?.underruns ?? 0, this.audio?.audioUnderruns?.() ?? 0),
     });
   }
 
@@ -1221,7 +1335,7 @@ export class LocalSidEngine {
   private checkLiveness(): void {
     if (!this.scheduler || this.endReceived || this.paused || this.stallRecoveryInFlight) return;
     if (this.openPending || this.seekPending) return;
-    if (this.awaitedSeekSeconds !== null) return;
+    if (this.pendingSeek !== null) return;
     // Waiting for the pre-render to reach a seek target is quiet for a reason too, and this timer is
     // the wrong judge of it: no worker call is outstanding, the buffer is deliberately empty, and the
     // wait lasts exactly as long as the rendering does — which for a position deep into a tune is far
@@ -1425,7 +1539,7 @@ export class LocalSidEngine {
       renderMsPerSec: this.totalRenderedSeconds > 0 ? this.totalRenderMs / this.totalRenderedSeconds : 0,
       renderMsPerSecP99: this.renderRateP99(),
       peakRenderMsPerSec: this.peakRenderMsPerSec,
-      audioUnderruns: stats?.underruns ?? 0,
+      audioUnderruns: Math.max(stats?.underruns ?? 0, this.audio?.audioUnderruns?.() ?? 0),
       bufferedSeconds: stats?.bufferedSeconds ?? 0,
       positionSeconds: this.scheduler?.positionSeconds() ?? 0,
       chunksScheduled: stats?.chunksScheduled ?? 0,
@@ -1668,6 +1782,8 @@ export class LocalSidEngine {
       cached: this.cached ? { partial: Boolean(this.cached.partial), seconds: this.cached.durationSeconds } : null,
       cachedCursor: this.cachedCursor,
       currentKey: this.currentKey,
+      pendingSeek: this.pendingSeek,
+      trackInstanceId: this.trackInstanceId,
       prerenderFraction: this.prerenderFraction,
       pendingWarms: this.pendingWarms.size,
       cachedTunes: this.renderCache.size,
@@ -1682,7 +1798,19 @@ export class LocalSidEngine {
    * gets there. Surfaced because a listener must never be left guessing whether a drag did anything.
    */
   getAwaitedSeekSeconds(): number | null {
-    return this.awaitedSeekSeconds;
+    return this.pendingSeek?.targetSeconds ?? null;
+  }
+
+  /**
+   * The whole pending-seek record, or null when nothing is pending.
+   *
+   * The UI needs more than the target to say anything determinate: the render head as it stood when
+   * the target was accepted is the denominator of the preparation progress, and the last audible
+   * position is where the elapsed clock must sit while the engine holds. Returned as a copy so a
+   * caller holding on to it cannot see the engine's own record change underneath them.
+   */
+  getPendingSeek(): PendingSeekState | null {
+    return this.pendingSeek ? { ...this.pendingSeek } : null;
   }
 
   /**
@@ -1814,6 +1942,11 @@ export class LocalSidEngine {
     this.cached = null;
     this.cachedCursor = 0;
     this.currentKey = null;
+    // Stop, Next, Previous, a station change, a route change and an engine change all come through
+    // here, and every one of them is the listener saying they no longer want the position they were
+    // waiting for. Leaving it set outlived the tune: the progress bar kept showing a target for a
+    // track that had gone, and the stall watchdog stayed disabled for the next one.
+    this.pendingSeek = null;
     // Render throughput is deliberately NOT reset here: it measures what this
     // device sustains across the whole engine session, so a multi-track soak
     // (§12.6) reports one p99 over every tune rather than only the last one.

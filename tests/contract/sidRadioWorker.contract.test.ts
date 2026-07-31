@@ -83,6 +83,7 @@ describe("sidRadio worker contract (§8.3)", () => {
       likes: [],
       notForMe: [],
       exclude: [],
+      recent: [],
       count: 10,
     });
     expect(result.empty).toBeUndefined();
@@ -93,8 +94,32 @@ describe("sidRadio worker contract (§8.3)", () => {
         md5_48: expect.any(String),
         songIndex: expect.any(Number),
         reason: expect.any(String),
+        // The queue provider retires a whole `.sid` file when it plays one subsong, so the file's
+        // track ordinals have to cross the boundary with the candidate.
+        fileTrackOrdinals: expect.any(Array),
       });
     }
+  });
+
+  it("carries the drifting query's recent window across the boundary", async () => {
+    // `recent` is only useful if it survives structured cloning in order, so assert it by result:
+    // the same seed with a different history has to reach a different part of the graph.
+    const client = clientFor(fixtureBytes());
+    await client.load();
+    const request = {
+      seed: { kind: "song" as const, md5_48: "aaaaaaaaaaaa" },
+      shuffleSeed: 7,
+      likes: [],
+      notForMe: [],
+      exclude: [3],
+      recent: [] as number[],
+      count: 10,
+    };
+    const withoutHistory = await client.compute(request);
+    const withHistory = await client.compute({ ...request, recent: [3] });
+    expect(withoutHistory.candidates.map((candidate) => candidate.score)).not.toEqual(
+      withHistory.candidates.map((candidate) => candidate.score),
+    );
   });
 
   it("compute → empty for an unknown seed", async () => {
@@ -106,6 +131,7 @@ describe("sidRadio worker contract (§8.3)", () => {
       likes: [],
       notForMe: [],
       exclude: [],
+      recent: [],
       count: 10,
     });
     expect(result.candidates).toEqual([]);
@@ -133,6 +159,7 @@ describe("sidRadio worker contract (§8.3)", () => {
           likes: [],
           notForMe: [],
           exclude: [],
+          recent: [],
           count: 5,
         },
       });
@@ -151,6 +178,7 @@ describe("sidRadio worker contract (§8.3)", () => {
       likes: [],
       notForMe: [],
       exclude: [],
+      recent: [],
       count: 5,
     });
     expect(result.candidates.length).toBeGreaterThan(0);

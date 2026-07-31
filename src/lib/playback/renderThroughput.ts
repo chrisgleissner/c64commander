@@ -73,6 +73,17 @@ const MAX_PLAUSIBLE_RATIO = 200;
 const ASSUMED_RATIO = 2;
 
 let cached: number | null = null;
+/**
+ * Whether `cached` came from a measurement rather than from {@link ASSUMED_RATIO}.
+ *
+ * `renderRatio()` deliberately never returns null — the startup buffer has to be sized before
+ * anything has been measured, and the assumption is the right answer there. But a figure shown to
+ * the listener is different: "about 4 s" derived from a guess is a number the app has no business
+ * stating. So the estimator keeps one flag saying whether it has evidence, and the only consumer
+ * that needs evidence asks for it through {@link measuredRenderRatio}. One estimator, one flag —
+ * a second rate tracker for the UI would drift away from the one that sizes the buffer.
+ */
+let measured = false;
 
 const readStored = (): number | null => {
   try {
@@ -91,8 +102,25 @@ const readStored = (): number | null => {
 
 /** Seconds of audio this device renders per second of wall time, as measured so far. */
 export const renderRatio = (): number => {
-  cached ??= readStored() ?? ASSUMED_RATIO;
+  if (cached === null) {
+    const stored = readStored();
+    // A remembered ratio is still a measurement — it was measured in an earlier session — so it
+    // counts as evidence. The assumption does not.
+    if (stored !== null) measured = true;
+    cached = stored ?? ASSUMED_RATIO;
+  }
   return cached;
+};
+
+/**
+ * The same ratio, but only once there is evidence for it; null before that.
+ *
+ * Used where the figure is shown to the listener rather than used to size a buffer. Callers must
+ * drop whatever they derived from it when this turns null again, which it does after a reset.
+ */
+export const measuredRenderRatio = (): number | null => {
+  const ratio = renderRatio();
+  return measured ? ratio : null;
 };
 
 /**
@@ -108,6 +136,7 @@ export const recordRenderMeasurement = (audioSeconds: number, wallMs: number): v
   if (ratio < MIN_PLAUSIBLE_RATIO || ratio > MAX_PLAUSIBLE_RATIO) return;
   const next = cached === null ? ratio : cached * (1 - SMOOTHING) + ratio * SMOOTHING;
   cached = next;
+  measured = true;
   try {
     globalThis.localStorage?.setItem(STORAGE_KEY, String(next));
   } catch (error) {
@@ -158,6 +187,7 @@ export const accurateEngineViable = (): boolean => cached === null || cached >= 
 /** Test seam: forget what has been learned. */
 export const __resetRenderThroughput = (): void => {
   cached = null;
+  measured = false;
   try {
     globalThis.localStorage?.removeItem(STORAGE_KEY);
   } catch (error) {

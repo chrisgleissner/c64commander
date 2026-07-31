@@ -15,6 +15,7 @@ import {
   getNotForMeMd5s,
   getRankingSnapshot,
   getLikedMd5s,
+  loadRankings,
   setRanking,
   type RankingSignal,
 } from "@/lib/sidRadio/rankingStore";
@@ -22,7 +23,7 @@ import { SidRadioWorkerClient } from "@/lib/sidRadio/sidRadioWorkerClient";
 import type { SidRadioStylePopulations } from "@/lib/sidRadio/sidRadioWorkerProtocol";
 import { loadSidRadioMinSeconds } from "@/lib/config/appSettings";
 import { StationQueueProvider } from "@/lib/sidRadio/stationQueueProvider";
-import type { StationSeed } from "@/lib/sidRadio/stationEngine";
+import { DEFAULT_STATION_BALANCE, type StationSeed } from "@/lib/sidRadio/stationEngine";
 import {
   recordAutoAdvance,
   recordEmitted,
@@ -34,6 +35,7 @@ import {
 import {
   clearSidRadioSession,
   loadSidRadioSession,
+  resumeRecentOrdinals,
   saveSidRadioSession,
   type SidRadioSessionDescriptor,
 } from "@/lib/sidRadio/sidRadioSession";
@@ -77,7 +79,22 @@ export interface UseSidRadioParams {
 export interface UseSidRadioResult {
   active: boolean;
   station: ActiveStation | null;
-  startSongRadio: (md5_48: string, seedLabel: string) => Promise<void>;
+  /**
+   * Song station, optionally constrained to a single mood (a style-mask bit).
+   *
+   * The mood is an admission test applied inside the similarity walk, not a filter over what the
+   * walk produced: a tune is served only if it is reachable from this seed **and** carries the bit,
+   * and the walk widens rather than reporting itself exhausted when nearby tunes fail the test.
+   * Omitting the argument (or passing `null`) admits every mood.
+   */
+  startSongRadio: (md5_48: string, seedLabel: string, styleBit?: number | null) => Promise<void>;
+  /**
+   * Re-aim the active Song station at a different mood, keeping the tune it was seeded by.
+   *
+   * The seed comes from the station rather than from the caller, because a station restored after
+   * an app restart is one nothing on the page ever held the seed md5 for.
+   */
+  setSongStationStyleFilter: (styleBit: number | null) => Promise<void>;
   /** Style station; `fromLikes` composes a style filter over a Likes seed (D10). */
   startStyleRadio: (styleBit: number, label: string, fromLikes?: boolean) => Promise<void>;
   startTasteRadio: () => Promise<void>;
@@ -94,15 +111,56 @@ export interface UseSidRadioResult {
   dismissNotice: () => void;
 }
 
-const buildStationItem = (input: { virtualPath: string; songIndex: number; trackOrdinal: number }): PlaylistItem => ({
+const buildStationItem = (input: {
+  virtualPath: string;
+  songIndex: number;
+  trackOrdinal: number;
+  durationSeconds: number | null;
+}): PlaylistItem => ({
   id: `radio:${input.virtualPath}#${input.songIndex}`,
   request: { source: "hvsc", path: input.virtualPath, songNr: input.songIndex },
   category: getPlayCategory(input.virtualPath) ?? "sid",
   label: basename(input.virtualPath),
   path: input.virtualPath,
+  // The provider has already resolved this to decide whether the tune is long enough, so carrying
+  // it costs nothing and skipping it costs a great deal: an item with no duration falls back to the
+  // three-minute default, which is what the whole station queue displayed, and the default also
+  // sets the progress bar and the end of the track. `durationSource` is left unset so a later
+  // songlengths load does not treat this as a default it should overwrite.
+  ...(input.durationSeconds === null ? {} : { durationMs: Math.round(input.durationSeconds * 1000) }),
 });
 
 const LOOKAHEAD = 10;
+
+/**
+ * Record which corpus the worker actually parsed.
+ *
+ * Called wherever the bundle loads, not only where a station starts: a station resumed from a
+ * persisted descriptor loads the bundle down a different path, and a run whose evidence cannot name
+ * its corpus is a run that cannot be checked against the pin without a rebuild. Taken from the
+ * parsed header rather than the release constants, so a device running a different asset from the
+ * one the pin names says so.
+ */
+const recordCorpusIdentity = (readyStats: { version: number; graphFlags: number }) =>
+  updateSidRadioStats({
+    corpusBinaryFormatVersion: readyStats.version,
+    corpusGraphFlags: readyStats.graphFlags,
+  });
+
+/**
+ * Provider-side admission accounting, shaped for {@link recordRefill}.
+ *
+ * Read off the provider rather than tracked separately, so the counters the diagnostics show and
+ * the counters the queue actually acted on cannot drift apart.
+ */
+const admissionOf = (provider: StationQueueProvider) => ({
+  tooShort: provider.shortTracksSkipped,
+  unresolvedPath: provider.unresolvedTracksSkipped,
+  unknownDurationAdmitted: provider.unknownDurationTracksAdmitted,
+  computeCalls: provider.engineComputeCalls,
+  yieldPercent: Math.round(provider.candidateYield * 1000) / 10,
+});
+
 const REFILL_THRESHOLD = 4;
 
 /** The 9 style tiles (spec §5.4) — mask bit → export key + friendly label + blurb. */
@@ -190,6 +248,17 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     shuffleSeed: 0,
   });
   const refillingRef = useRef(false);
+  /**
+   * Which station the asynchronous work in flight belongs to.
+   *
+   * A station start and a lookahead refill both span an await, and both end by putting tracks in
+   * front of the listener. Starting a second station — including re-aiming this one at another mood
+   * — must therefore supersede whatever the first one left running, or the queue is served items
+   * chosen under the previous constraint. The counter is bumped by every start and every stop, read
+   * once when the asynchronous work begins, and re-checked before that work is allowed to append,
+   * record or persist anything.
+   */
+  const stationGenerationRef = useRef(0);
 
   const ensureClient = useCallback((): SidRadioWorkerClient => {
     if (!clientRef.current) {
@@ -213,6 +282,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       .load()
       .then((stats) => {
         rememberStylePopulations(stats.stylePopulations);
+        recordCorpusIdentity(stats);
         return stats.stylePopulations;
       })
       .catch((error: unknown) => {
@@ -224,31 +294,53 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
   }, [enabled, ensureClient, rememberStylePopulations]);
 
   const buildProvider = useCallback(
-    (seed: StationSeed, styleFilter: number | null, shuffleSeed: number, initialExclude: number[] = []) => {
+    (
+      seed: StationSeed,
+      styleFilter: number | null,
+      shuffleSeed: number,
+      initialExclude: number[] = [],
+      initialRecent: number[] = [],
+    ) => {
       const client = ensureClient();
       seedRef.current = { seed, styleFilter, shuffleSeed };
+      // Which station this provider speaks for. `start` bumps the counter before it builds, so a
+      // provider is pinned to the station that created it and can tell when it has been superseded.
+      const generation = stationGenerationRef.current;
       return new StationQueueProvider({
         lookahead: LOOKAHEAD,
         initialExclude,
+        initialRecent,
         minSeconds: loadSidRadioMinSeconds(),
         resolveDuration: params.resolveDurationSeconds,
-        computeCandidates: (exclude, count) =>
-          client.compute({
+        computeCandidates: async (exclude, recent, count) => {
+          // The ♥/✕ signal is durable but the in-memory cache is not, and nothing else on the
+          // resume path reads it back: without this a relaunched app steered every station from an
+          // empty likes/not-for-me list until the user happened to rate something. Idempotent, so
+          // every later refill pays nothing.
+          await loadRankings();
+          return client.compute({
             seed,
             styleFilter,
             shuffleSeed,
             likes: getLikedMd5s(),
             notForMe: getNotForMeMd5s(),
             exclude,
+            recent,
             count,
-          }),
+          });
+        },
         resolvePath,
-        buildItem: ({ virtualPath, songIndex, trackOrdinal }) => {
+        buildItem: ({ virtualPath, songIndex, trackOrdinal, durationSeconds }) => {
           // The determinism proof behind G11: emission order is a pure function
           // of the seed, so it is recorded here, where the station decides, and
           // not where playback happens to arrive.
-          recordEmitted(trackOrdinal);
-          return buildStationItem({ virtualPath, songIndex, trackOrdinal });
+          //
+          // It also has to describe ONE station. A superseded refill can still resolve after its
+          // replacement has started, and its tunes were chosen under the previous constraint, so
+          // recording them would make the sequence a mixture of two stations and the replay
+          // comparison meaningless.
+          if (stationGenerationRef.current === generation) recordEmitted(trackOrdinal);
+          return buildStationItem({ virtualPath, songIndex, trackOrdinal, durationSeconds });
         },
       });
     },
@@ -264,7 +356,25 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       shuffleSeed: descriptor.shuffleSeed,
       rankingSnapshotId: descriptor.rankingSnapshotId,
       excludeOrdinals: providerRef.current?.excludedOrdinals ?? [],
+      recentOrdinals: providerRef.current?.recentOrdinals ?? [],
     });
+  }, []);
+
+  /**
+   * Take the station down: no chip, no provider, no saved session, nothing left in flight.
+   *
+   * The user-facing Stop, and also what a start that came back empty calls, because both leave the
+   * app in the same place — there is no station. A start that produced nothing has already retired
+   * the previous station's provider, so leaving its chip up would advertise one that can never
+   * refill again.
+   */
+  const stop = useCallback(() => {
+    stationGenerationRef.current += 1;
+    refillingRef.current = false;
+    setStation(null);
+    providerRef.current = null;
+    clearSidRadioSession();
+    updateSidRadioStats({ stationActive: false, transportShuffleDisabled: false, transportRepeatDisabled: false });
   }, []);
 
   const start = useCallback(
@@ -273,6 +383,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       const client = ensureClient();
       const readyStats = await client.load();
       rememberStylePopulations(readyStats.stylePopulations);
+      recordCorpusIdentity(readyStats);
       // The launcher opens before the populations are read, so a fast tap reaches
       // a tile the disabled state had no counts to refuse yet. They are known
       // here, ahead of any compute, and a style with no members admits nothing
@@ -282,12 +393,24 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         setNotice("no-radio");
         return;
       }
+      // Past this point the previous station is being replaced, so it is retired here rather than
+      // when the new one succeeds: the refusal above must be able to decline without disturbing a
+      // station that is playing, but everything below commits. Clearing `providerRef` also keeps the
+      // lookahead effect out of the way while the first batch is computed — it would otherwise see
+      // the outgoing station paired with the incoming provider.
+      const generation = (stationGenerationRef.current += 1);
+      refillingRef.current = false;
+      providerRef.current = null;
       const shuffleSeed = randomSeed();
       const provider = buildProvider(seed, styleFilter, shuffleSeed);
-      providerRef.current = provider;
       resetSidRadioStats();
       const started = performance.now();
       const { items } = await provider.refill(LOOKAHEAD);
+      // Another station was started (or this one stopped) while the first batch was being computed.
+      // Its tracks were chosen under a constraint that is no longer the one in force, so they are
+      // dropped whole — not queued, not counted, not persisted.
+      if (stationGenerationRef.current !== generation) return;
+      providerRef.current = provider;
       // `lastRefillMs` is end-to-end latency (it spans the await, so it includes
       // worker compute). `mainThreadMs` must NOT: its budget is one 60 fps frame
       // because it is meant to capture only the synchronous work this callback
@@ -301,6 +424,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         emitted: items.length,
         lookahead: LOOKAHEAD,
         firstCandidate: true,
+        admission: admissionOf(provider),
       });
       const snapshot = getRankingSnapshot();
       updateSidRadioStats({
@@ -312,7 +436,11 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         transportRepeatDisabled: items.length > 0,
       });
       if (items.length === 0) {
-        providerRef.current = null;
+        // Nothing was produced, and the station this one replaced is already gone. Say so and leave
+        // no station behind: an empty result is never relaxed into a broader one, and the tracks
+        // still queued from the previous constraint are not allowed to stand in for a station that
+        // could not be built.
+        stop();
         // Candidates resolve to a path through the md5→path index, which HVSC fills. An empty index
         // means nothing is installed, so NO station can produce a track whatever its seed — and the
         // usual wording then sends the user somewhere that cannot help: there is nothing installed
@@ -334,12 +462,23 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       persistSession(activeStation, seed);
       await startPlaylist(items);
     },
-    [enabled, ensureClient, rememberStylePopulations, randomSeed, buildProvider, startPlaylist, persistSession],
+    [enabled, ensureClient, rememberStylePopulations, randomSeed, buildProvider, startPlaylist, persistSession, stop],
   );
 
   const startSongRadio = useCallback(
-    (md5_48: string, seedLabel: string) => start({ kind: "song", md5_48 }, null, "song", seedLabel),
+    (md5_48: string, seedLabel: string, styleBit: number | null = null) =>
+      start({ kind: "song", md5_48 }, styleBit, "song", seedLabel),
     [start],
+  );
+  const setSongStationStyleFilter = useCallback(
+    async (styleBit: number | null) => {
+      // `seedRef` is the authority on what seeded the station, and it is kept correct across a
+      // resume, so re-aiming cannot drift onto whatever happens to be playing now.
+      const { seed } = seedRef.current;
+      if (!station || station.seedKind !== "song" || seed.kind !== "song") return;
+      await start(seed, styleBit, "song", station.seedLabel);
+    },
+    [station, start],
   );
   const startStyleRadio = useCallback(
     (styleBit: number, label: string, fromLikes = false) =>
@@ -358,13 +497,6 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     await start({ kind: "style", styleBit: tile.bit }, tile.bit, "style", tile.label);
   }, [start, randomSeed, ensureStylePopulations]);
 
-  const stop = useCallback(() => {
-    setStation(null);
-    providerRef.current = null;
-    clearSidRadioSession();
-    updateSidRadioStats({ stationActive: false, transportShuffleDisabled: false, transportRepeatDisabled: false });
-  }, []);
-
   // Resume the chip after an app restart (D15): rebuild the provider with the
   // saved exclude set so the next refill continues the identical sequence.
   const restoredRef = useRef(false);
@@ -373,7 +505,13 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     restoredRef.current = true;
     const saved: SidRadioSessionDescriptor | null = loadSidRadioSession();
     if (!saved) return;
-    providerRef.current = buildProvider(saved.seed, saved.styleFilter, saved.shuffleSeed, saved.excludeOrdinals);
+    providerRef.current = buildProvider(
+      saved.seed,
+      saved.styleFilter,
+      saved.shuffleSeed,
+      saved.excludeOrdinals,
+      resumeRecentOrdinals(saved, DEFAULT_STATION_BALANCE.recentWindow),
+    );
     setStation({
       seedKind: saved.seedKind,
       seedLabel: saved.seedLabel,
@@ -411,10 +549,16 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     if (remaining > REFILL_THRESHOLD || refillingRef.current) return;
     refillingRef.current = true;
     const provider = providerRef.current;
+    const generation = stationGenerationRef.current;
     const started = performance.now();
     void provider
       .refill(LOOKAHEAD - remaining)
       .then(({ items, reason }) => {
+        // The station this refill belongs to has been replaced or stopped. Its items were chosen
+        // under the previous constraint, so they are discarded rather than appended to the queue the
+        // new station is now filling — and neither the "station ended" notice nor the counters may
+        // speak for a station that is no longer there.
+        if (stationGenerationRef.current !== generation) return;
         // See the note in the station-start refill: the awaited span is refill
         // *latency*, not main-thread occupancy. Only the synchronous work below
         // — appending items and saving the session — actually blocks the UI
@@ -430,6 +574,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
             shuffleSeed: station.shuffleSeed,
             rankingSnapshotId: station.rankingSnapshotId,
             excludeOrdinals: provider.excludedOrdinals,
+            recentOrdinals: provider.recentOrdinals,
           });
         } else if (reason) {
           updateSidRadioStats({ stationActive: true });
@@ -447,10 +592,13 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
           mainThreadMs: performance.now() - settledAt,
           emitted: items.length,
           lookahead: LOOKAHEAD,
+          admission: admissionOf(provider),
         });
       })
       .finally(() => {
-        refillingRef.current = false;
+        // Only the generation that set the flag may clear it. A superseded refill settling later
+        // would otherwise release the *new* station's lock and let a second refill run beside it.
+        if (stationGenerationRef.current === generation) refillingRef.current = false;
       });
   }, [station, currentIndex, playlistLength, appendItems]);
 
@@ -475,6 +623,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     active: station !== null,
     station,
     startSongRadio,
+    setSongStationStyleFilter,
     startStyleRadio,
     startTasteRadio,
     startSurpriseRadio,

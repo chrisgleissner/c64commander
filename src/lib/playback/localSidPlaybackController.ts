@@ -14,6 +14,7 @@ import {
 } from "./localSidEngine";
 import { addLog } from "@/lib/logging";
 import { notifyPlaybackActivityChanged } from "./playbackActivitySignal";
+import type { PendingSeekState } from "./pendingSeekStatus";
 
 /**
  * Thin lifecycle wrapper the playback controller (LE2) holds in a ref to route
@@ -137,6 +138,16 @@ export class LocalSidPlaybackController {
   /** Position playback is waiting for the renderer to reach, or null. Drives the "catching up" state. */
   awaitedSeekSeconds(): number | null {
     return this.engine?.getAwaitedSeekSeconds() ?? null;
+  }
+
+  /**
+   * The full pending-seek record, or null. See {@link LocalSidEngine.getPendingSeek}.
+   *
+   * The progress bar needs all of it: the target for the marker, the render head at the moment the
+   * target was accepted for determinate progress, and the last audible position for the clock.
+   */
+  pendingSeek(): PendingSeekState | null {
+    return this.engine?.getPendingSeek() ?? null;
   }
 
   /** Seconds of the current tune already rendered; drives the progress bar's pre-render fill. */

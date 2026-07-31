@@ -903,7 +903,13 @@ test.describe("Playback file browser", () => {
     await page.getByRole("button", { name: "View all" }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
     const scrollArea = page.locator('[data-virtuoso-scroller="true"]');
-    await expect(scrollArea.getByText("A-Track-001.sid", { exact: true })).toBeVisible();
+    // Friendly SID names: a SID row and the now-playing transport draw the tune's readable name, so
+    // the on-screen text is neither the `.sid` file name nor its lower-case spelling — an
+    // all-lower-case name such as `track-1.sid` is set in title case, as `Track-1`. The assertion
+    // still names one specific tune. Elsewhere in this file the `toContainText`/`hasText` assertions
+    // are left on the raw file name on purpose: a playlist row keeps its full path as the subtitle,
+    // which is both still true and more stable than the rendered title.
+    await expect(scrollArea.getByText("A-Track-001", { exact: true })).toBeVisible();
     await expect(scrollArea).toBeVisible();
     await expect
       .poll(async () => {
@@ -969,7 +975,7 @@ test.describe("Playback file browser", () => {
     await page.getByRole("button", { name: "View all" }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
     const scrollArea = page.locator('[data-virtuoso-scroller="true"]');
-    await expect(scrollArea.getByText("A-Track-001.sid", { exact: true })).toBeVisible();
+    await expect(scrollArea.getByText("A-Track-001", { exact: true })).toBeVisible();
     await expect(scrollArea).toBeVisible();
     await expect
       .poll(async () => {
@@ -1000,7 +1006,7 @@ test.describe("Playback file browser", () => {
     });
 
     await expect(page.getByTestId("alphabet-badge")).toBeVisible();
-    await expect(scrollArea.getByText("Z-Track-001.sid", { exact: true })).toBeVisible();
+    await expect(scrollArea.getByText("Z-Track-001", { exact: true })).toBeVisible();
     await snap(page, testInfo, "alphabet-jump");
 
     await expect
@@ -1252,7 +1258,7 @@ test.describe("Playback file browser", () => {
     await snap(page, testInfo, "playback-started");
 
     const currentTrack = page.getByTestId("playback-current-track");
-    await expect(currentTrack).toContainText(/demo\d?\.sid/i);
+    await expect(currentTrack).toContainText(/^Demo\d?\b/);
     await expect(currentTrack).toContainText(/\(\d+:\d{2}\)/);
 
     await pauseButton.click();
@@ -1347,7 +1353,7 @@ test.describe("Playback file browser", () => {
 
     await nextButton.click();
     await nextButton.click();
-    await expect(currentTrack).toContainText("track-3.sid");
+    await expect(currentTrack).toContainText("Track-3");
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(1);
     await snap(page, testInfo, "skipped-to-last");
   });
@@ -1379,10 +1385,10 @@ test.describe("Playback file browser", () => {
     await page.goto("/play");
     await page.getByTestId("playlist-play").click();
     await expect.poll(() => server.sidplayRequests.length).toBe(1);
-    await expect(page.getByTestId("playback-current-track")).toContainText("track-1.sid");
+    await expect(page.getByTestId("playback-current-track")).toContainText("Track-1");
 
     await expect.poll(() => server.sidplayRequests.length).toBe(2);
-    await expect(page.getByTestId("playback-current-track")).toContainText("track-2.sid");
+    await expect(page.getByTestId("playback-current-track")).toContainText("Track-2");
     await expect(page.getByTestId("playlist-item").filter({ hasText: "track-2.sid" }).first()).toHaveAttribute(
       "data-playing",
       "true",
@@ -1414,7 +1420,7 @@ test.describe("Playback file browser", () => {
     await page.goto("/play");
     await page.getByTestId("playlist-play").click();
     await expect.poll(() => server.sidplayRequests.length).toBe(1);
-    await expect(page.getByTestId("playback-current-track")).toContainText("track-1.sid");
+    await expect(page.getByTestId("playback-current-track")).toContainText("Track-1");
 
     await page.getByTestId("tab-settings").click();
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
@@ -1424,7 +1430,7 @@ test.describe("Playback file browser", () => {
     // Wait for session restore to complete: track-1 must still be current before auto-advance fires.
     // The component remounts on navigation; restore is async (IndexedDB). Without this gate the
     // poll can start before isPlaying/guard are set, so resume signals never trigger advance.
-    await expect(page.getByTestId("playback-current-track")).toContainText("track-1.sid");
+    await expect(page.getByTestId("playback-current-track")).toContainText("Track-1");
     await expect
       .poll(async () => {
         if (server.sidplayRequests.length === 1) {
@@ -1433,7 +1439,7 @@ test.describe("Playback file browser", () => {
         return server.sidplayRequests.length;
       })
       .toBe(2);
-    await expect(page.getByTestId("playback-current-track")).toContainText("track-2.sid");
+    await expect(page.getByTestId("playback-current-track")).toContainText("Track-2");
     await snap(page, testInfo, "auto-advance-after-navigation");
   });
 
@@ -1467,7 +1473,7 @@ test.describe("Playback file browser", () => {
 
     await page.getByTestId("playlist-next").click();
     await expect.poll(() => server.sidplayRequests.length).toBe(2);
-    await expect(page.getByTestId("playback-current-track")).toContainText("track-2.sid");
+    await expect(page.getByTestId("playback-current-track")).toContainText("Track-2");
 
     await page.waitForTimeout(1800);
     expect(server.sidplayRequests.length).toBe(2);
@@ -1503,7 +1509,7 @@ test.describe("Playback file browser", () => {
     await page.goto("/play");
     await page.getByTestId("playlist-play").click();
     await expect.poll(() => server.sidplayRequests.length).toBe(1);
-    await expect(page.getByTestId("playback-current-track")).toContainText("track-1.sid");
+    await expect(page.getByTestId("playback-current-track")).toContainText("Track-1");
 
     await page.waitForTimeout(900);
     await expect
@@ -1514,7 +1520,7 @@ test.describe("Playback file browser", () => {
         return server.sidplayRequests.length;
       })
       .toBe(2);
-    await expect(page.getByTestId("playback-current-track")).toContainText("track-2.sid");
+    await expect(page.getByTestId("playback-current-track")).toContainText("Track-2");
     await snap(page, testInfo, "non-interval-catchup");
   });
 
@@ -1636,7 +1642,7 @@ test.describe("Playback file browser", () => {
       }
     }
     if (playbackStarted) {
-      await expect(page.getByTestId("playback-current-track")).toContainText("demo.sid");
+      await expect(page.getByTestId("playback-current-track")).toContainText("Demo");
     } else {
       await expect(page.getByTestId("playlist-list")).toContainText("demo.sid");
     }

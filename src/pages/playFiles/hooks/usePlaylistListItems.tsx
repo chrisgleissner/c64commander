@@ -9,6 +9,9 @@
 import { useMemo } from "react";
 import { Folder } from "lucide-react";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
+import { SidChipBadge } from "@/components/playback/SidChipBadge";
+import { resolveTrackDisplayName } from "@/lib/playback/sidDisplayName";
+import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { describeConfigOrigin, resolvePlaybackConfigUiState } from "@/lib/config/playbackConfig";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
@@ -57,6 +60,7 @@ export const usePlaylistListItems = ({
   currentPlayingItemId,
 }: PlaylistListItemsOptions) => {
   const playlistIndexById = useMemo(() => new Map(playlist.map((entry, index) => [entry.id, index])), [playlist]);
+  const friendlyNames = useFriendlySidNames();
 
   return useMemo(() => {
     const renderScope = beginHvscPerfScope("browse:render", {
@@ -84,6 +88,11 @@ export const usePlaylistListItems = ({
         lastFolder = folderPath;
       }
       const playlistIndex = playlistIndexById.get(item.id) ?? -1;
+      // Presentation only. `item.label`, `item.id` and `item.path` are untouched, so selection,
+      // removal, the playlist filter and everything persisted still work off the raw values; the row
+      // only draws something else. A playlist row has no file bytes, so the chip count here comes
+      // from the file-name marker rather than from a parsed SID header.
+      const display = resolveTrackDisplayName({ label: item.label, category: item.category, friendlyNames });
       const durationLabel = formatTime(playlistItemDuration(item, Math.max(0, playlistIndex)));
       const detailsDate = item.modifiedAt ?? item.addedAt ?? null;
       const configUiState = resolvePlaybackConfigUiState({
@@ -193,7 +202,7 @@ export const usePlaylistListItems = ({
       ];
       items.push({
         id: item.id,
-        title: item.label,
+        title: display.title,
         titleClassName: "whitespace-normal break-words block",
         subtitle: item.path,
         subtitleClassName: "truncate block",
@@ -211,6 +220,7 @@ export const usePlaylistListItems = ({
               }
               className="h-3.5 w-3.5 shrink-0 opacity-60"
             />
+            {display.chipCount ? <SidChipBadge chipCount={display.chipCount} /> : null}
             <span>{formatPlayCategory(item.category)}</span>
             <span>•</span>
             <span>{durationLabel}</span>
@@ -236,7 +246,7 @@ export const usePlaylistListItems = ({
         onAction: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
         secondaryActionLabel: configStatusLabel,
         onSecondaryAction: configStatusLabel ? () => onOpenConfig(item) : undefined,
-        secondaryActionAriaLabel: configStatusLabel ? `Open config details for ${item.label}` : undefined,
+        secondaryActionAriaLabel: configStatusLabel ? `Open config details for ${display.title}` : undefined,
         onTitleClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
         onRowClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
         disableActions: isPlaylistLoading,
@@ -266,6 +276,7 @@ export const usePlaylistListItems = ({
     return items;
   }, [
     filteredPlaylist,
+    friendlyNames,
     formatBytes,
     formatDate,
     formatPlayCategory,

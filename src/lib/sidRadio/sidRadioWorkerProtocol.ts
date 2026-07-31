@@ -31,6 +31,8 @@ export interface StationRequest {
   likes: string[];
   notForMe: string[];
   exclude: number[];
+  /** Most recently played track ordinals, most recent first — the drifting query (order is load-bearing). */
+  recent: number[];
   count: number;
 }
 
@@ -48,11 +50,12 @@ export type SidRadioMainToWorker = SidRadioLoadMessage | SidRadioComputeMessage;
  * Export style key (`fast_paced`, `theme_hunter`, …) → how many tracks carry it.
  *
  * A style with no members is a station that can never play anything: the release
- * preceding the pinned 0.8.0 shipped `theme_hunter` at 0 tracks and
- * `composer_focus` at 673 of 87,868, and the launcher offered both as ordinary
- * tiles. The launcher therefore needs the populations before the user picks, not
- * the `empty` reason afterwards. 0.8.0 itself ships all nine at 17,574, so these
- * counts now size the tiles and the guard behind them waits on the next re-pin.
+ * preceding 0.8.0 shipped `theme_hunter` at 0 tracks and `composer_focus` at 673
+ * of 87,868, and the launcher offered both as ordinary tiles. The launcher
+ * therefore needs the populations before the user picks, not the `empty` reason
+ * afterwards. 0.8.0 and the pinned 0.8.2 both ship all nine at 17,574 — 0.8.2
+ * leaves the style masks byte-identical — so these counts now size the tiles and
+ * the guard behind them waits on the next re-pin.
  */
 export type SidRadioStylePopulations = Readonly<Record<string, number>>;
 
@@ -65,6 +68,16 @@ export interface SidRadioReadyStats {
   trackCount: number;
   edgeCount: number;
   styleCount: number;
+  /**
+   * `graph_flags` from the bundle header, so a run's evidence names the corpus it ran against and a
+   * device can be checked against the pin without a rebuild.
+   *
+   * Read from the shipped bytes rather than from the release constants: those describe what should
+   * have been fetched, and this describes what the device actually parsed. The two differing is
+   * exactly the case worth being able to see.
+   */
+  graphFlags: number;
+  version: number;
   stylePopulations: SidRadioStylePopulations;
   /** MUST be false — the engine runs off the main thread (§9.4 / G3). */
   engineThreadIsMain: boolean;

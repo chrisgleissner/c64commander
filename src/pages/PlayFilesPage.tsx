@@ -55,6 +55,8 @@ import { PlaybackClock } from "@/lib/playback/playbackClock";
 import { calculatePlaylistTotals } from "@/lib/playback/playlistTotals";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { createHvscSourceLocation } from "@/lib/sourceNavigation/hvscSourceAdapter";
+import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
+import { createStationDurationResolver } from "@/pages/playFiles/stationDurationResolver";
 import { createArchiveSourceLocation } from "@/lib/sourceNavigation/archiveSourceAdapter";
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
@@ -65,6 +67,8 @@ import { buildSelectedDeviceBoundOrigin } from "@/lib/savedDevices/deviceBoundOr
 
 import { buildEnabledSidMuteUpdates, sidVolumeStepGain } from "@/lib/config/sidVolumeControl";
 import { parseSidHeaderMetadata } from "@/lib/sid/sidUtils";
+import { resolveTrackDisplayName, type SidChipCount } from "@/lib/playback/sidDisplayName";
+import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import { redactTreeUri } from "@/lib/native/safUtils";
@@ -90,7 +94,7 @@ import { LikedTunesSheet } from "@/pages/playFiles/components/LikedTunesSheet";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
-import { getLikedMd5s } from "@/lib/sidRadio/rankingStore";
+import { useLikedTuneCount } from "@/lib/sidRadio/useLikedTuneCount";
 import { recordSkip } from "@/lib/sidRadio/sidRadioStats";
 import { Radio as RadioIcon } from "lucide-react";
 import { PlaybackSettingsPanel } from "@/pages/playFiles/components/PlaybackSettingsPanel";
@@ -169,6 +173,7 @@ import {
   shuffleArray,
 } from "@/pages/playFiles/playFilesUtils";
 import { getSharedLocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
+import { describePendingSeek, type PendingSeekState } from "@/lib/playback/pendingSeekStatus";
 import { useActivePlayback } from "@/hooks/useActivePlayback";
 
 const ACTIVE_ADD_ITEMS_PROGRESS_STATES = new Set<AddItemsProgressState["status"]>([
@@ -307,6 +312,7 @@ export default function PlayFilesPage() {
   const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
   const [likedTunesSheetOpen, setLikedTunesSheetOpen] = useState(false);
   const [sidRadioLauncherOpen, setSidRadioLauncherOpen] = useState(false);
+  const likedTuneCount = useLikedTuneCount();
 
   const {
     volumeSliderPreviewIntervalMs,
@@ -1355,10 +1361,34 @@ export default function PlayFilesPage() {
   const sidRadioFlags = useSidRadioFlags();
   const playbackEngine = usePlaybackEngine();
   const currentTuneMd5 = useCurrentTuneMd5(currentItem ?? null, sidRadioFlags.sidRadioEnabled);
+  // Load the HVSC songlength store before a station needs it, not during the refill that first asks.
+  // `resolveHvscSonglengthDuration` awaits the load, which is right — treating "not loaded yet" as
+  // "no such length" is what let short tunes into the queue — but paying for it inside a refill put
+  // 6.9 s on the device's first `lastRefillMs` against a 150 ms budget. Warming it here moves that
+  // cost off the refill path entirely; it is idempotent and memoised, so this costs nothing after
+  // the first call.
+  useEffect(() => {
+    if (!sidRadioFlags.sidRadioEnabled) return;
+    void ensureHvscSonglengthsReadyOnColdStart();
+  }, [sidRadioFlags.sidRadioEnabled]);
+
+  const stationDurationResolver = useMemo(
+    () =>
+      createStationDurationResolver({
+        resolveHvscSeconds: async (virtualPath, songIndex) =>
+          (await resolveHvscSonglengthDuration({ virtualPath, songNr: songIndex })).durationSeconds,
+        resolveFileSeconds: async (virtualPath, songIndex) => {
+          const ms = await resolveSonglengthDurationMsForPath(virtualPath, null, songIndex);
+          return ms === null || ms === undefined ? null : ms / 1000;
+        },
+      }),
+    [resolveSonglengthDurationMsForPath],
+  );
   const sidRadio = useSidRadio({
     enabled: sidRadioFlags.sidRadioEnabled,
     startPlaylist: (items) => {
-      void startPlaylist(items, 0);
+      // Replace, never merge: the station owns the queue for as long as it runs.
+      void startPlaylist(items, 0, { replaceQueue: true });
     },
     appendItems: (items) => setPlaylist((prev) => [...prev, ...items]),
     advanceToNext: handleNext,
@@ -1366,10 +1396,8 @@ export default function PlayFilesPage() {
     playlistLength: playlist.length,
     // Lets the station leave out sound effects. HVSC carries jingles, one-shot effects and test
     // tones alongside the music, and a station that serves them between pieces reads as broken.
-    resolveDurationSeconds: async (virtualPath, songIndex) => {
-      const ms = await resolveSonglengthDurationMsForPath(virtualPath, null, songIndex);
-      return ms === null || ms === undefined ? null : ms / 1000;
-    },
+    // Which store answers, and why the order matters, is in `stationDurationResolver.ts`.
+    resolveDurationSeconds: stationDurationResolver,
   });
   const sidRadioWhyThisTune = sidRadio.station
     ? sidRadio.station.seedKind === "song"
@@ -1378,6 +1406,28 @@ export default function PlayFilesPage() {
         ? `Matches ${sidRadio.station.seedLabel}`
         : "From tunes you like"
     : null;
+  /**
+   * The tune the launcher's mood choices apply to.
+   *
+   * An active Song station wins over whatever is playing right now: re-aiming that station keeps the
+   * tune it was seeded by, so naming the current track here would describe the wrong seed.
+   */
+  const sidRadioSongSeedLabel =
+    sidRadio.station?.seedKind === "song"
+      ? sidRadio.station.seedLabel
+      : !sidRadio.active && currentTuneMd5 && currentItem?.category === "sid"
+        ? (currentItem.label ?? "this tune")
+        : null;
+  const startSidRadioSongMood = (styleBit: number | null) => {
+    // Re-aim rather than restart while a Song station is running, so the seed survives the change of
+    // mood; the hook holds the seed, which is also what makes this work for a resumed station.
+    if (sidRadio.station?.seedKind === "song") {
+      void sidRadio.setSongStationStyleFilter(styleBit);
+      return;
+    }
+    if (!currentTuneMd5) return;
+    void sidRadio.startSongRadio(currentTuneMd5.slice(0, 12), currentItem?.label ?? "this tune", styleBit);
+  };
   const { setPlaybackContext, resolved: lightingResolved, openStudio, openContextLens } = useLightingStudio();
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
   const sourceKind = useMemo<TraceSourceKind | null>(() => {
@@ -1447,24 +1497,36 @@ export default function PlayFilesPage() {
   // to the target in the background — and showing its position would make the
   // control feel dead for as long as a rewind takes to re-render.
   const isScrubbing = scrubTargetMs !== null;
-  const displayElapsedMs = isScrubbing ? scrubTargetMs : elapsedMs;
-  // Composer and year, read from the tune's own SID header. Every SID carries them, so this works for
-  // every source rather than only the ones with a metadata database behind them; a tune that leaves
-  // the fields blank simply shows nothing.
-  const [currentItemCredits, setCurrentItemCredits] = useState<{ author: string | null; released: string | null }>({
+  // Composer, year and SID chip count, read from the tune's own SID header. Every SID carries them,
+  // so this works for every source rather than only the ones with a metadata database behind them; a
+  // tune that leaves the fields blank simply shows nothing.
+  //
+  // The chip count is the authoritative one: `sidChipCount` comes from the second and third chip
+  // address bytes, which is what the player itself obeys. It is only available where the file's
+  // bytes are in hand, so a tune the app has not opened yet falls back to the file-name marker.
+  const [currentItemCredits, setCurrentItemCredits] = useState<{
+    author: string | null;
+    released: string | null;
+    chipCount: SidChipCount | null;
+  }>({
     author: null,
     released: null,
+    chipCount: null,
   });
   useEffect(() => {
     let cancelled = false;
-    setCurrentItemCredits({ author: null, released: null });
+    setCurrentItemCredits({ author: null, released: null, chipCount: null });
     const file = currentItem?.request.file;
     if (!file || currentItem?.category !== "sid") return;
     void (async () => {
       try {
         const header = parseSidHeaderMetadata(new Uint8Array(await file.arrayBuffer()));
         if (cancelled) return;
-        setCurrentItemCredits({ author: header.author || null, released: header.released || null });
+        setCurrentItemCredits({
+          author: header.author || null,
+          released: header.released || null,
+          chipCount: header.sidChipCount === 2 || header.sidChipCount === 3 ? header.sidChipCount : 1,
+        });
       } catch (error) {
         // Not a readable SID header — nothing to show, which is the same as a tune that names nobody.
         addLog("debug", "Could not read tune credits from the SID header", {
@@ -1478,17 +1540,59 @@ export default function PlayFilesPage() {
     };
   }, [currentItem?.id, currentItem?.request.file, currentItem?.category]);
 
+  // How the tune is named on screen. `currentItem.label` stays the raw file name — the session
+  // persistence, the playlist and every lookup still use it — and only what the transport draws
+  // changes.
+  const friendlySidNames = useFriendlySidNames();
+  const currentDisplay = currentItem
+    ? resolveTrackDisplayName({
+        label: currentItem.label,
+        category: currentItem.category,
+        friendlyNames: friendlySidNames,
+        chipCount: currentItemCredits.chipCount,
+      })
+    : null;
+
   // How much of the tune the on-device engine has rendered, as a percentage of its length. Only the
   // local engine has this: libsidplayfp cannot rewind, so a seek beyond what is rendered has to be
   // rendered up to. Polled rather than pushed — it changes a few times a second at most.
   const [renderedSeconds, setRenderedSeconds] = useState<number | null>(null);
-  /** Where a seek is waiting to land, while the renderer works towards it. */
-  const [awaitedSeconds, setAwaitedSeconds] = useState<number | null>(null);
+  /**
+   * The seek being waited for, if any: target, the render head when it was accepted, and the last
+   * position that was genuinely audible. Held as the engine's own record rather than flattened to a
+   * percentage, because each field answers a different question on screen.
+   */
+  const [pendingSeekState, setPendingSeekState] = useState<PendingSeekState | null>(null);
   const localEngineActive = playbackEngine.engine === "local";
+  // Read inside the poll below, which outlives any one render of this page.
+  const currentDurationMsRef = useRef(currentDurationMs);
+  currentDurationMsRef.current = currentDurationMs;
+  /**
+   * Keep the auto-advance deadline from running down during a wait.
+   *
+   * The deadline is "now plus what is left of the tune", and a seek sets it from the target the
+   * instant the target is accepted — before a note of that position has been heard. A wait of
+   * twenty seconds therefore spent twenty seconds of the tune's own time, and a target deep into a
+   * long tune advanced the playlist before playback resumed at all. Re-setting it from the target on
+   * every poll holds it still for as long as the wait lasts, and leaves it exactly right the moment
+   * the wait ends.
+   */
+  const holdAutoAdvanceWhilePending = useCallback(
+    (pending: PendingSeekState | null) => {
+      const durationMs = currentDurationMsRef.current;
+      const guard = autoAdvanceGuardRef.current;
+      if (!pending || !guard || !durationMs) return;
+      const dueAtMs = Date.now() + Math.max(0, durationMs - pending.targetSeconds * 1000);
+      guard.dueAtMs = dueAtMs;
+      guard.autoFired = false;
+      setAutoAdvanceDueAtMs(dueAtMs);
+    },
+    [autoAdvanceGuardRef, setAutoAdvanceDueAtMs],
+  );
   useEffect(() => {
     if (!localEngineActive) {
       setRenderedSeconds(null);
-      setAwaitedSeconds(null);
+      setPendingSeekState(null);
       return;
     }
     // Debug seam for HIL: the engine's own state, which the sink counters cannot show.
@@ -1497,20 +1601,44 @@ export default function PlayFilesPage() {
     const read = () => {
       const controller = getSharedLocalSidPlaybackController();
       setRenderedSeconds(controller.renderedSeconds());
-      setAwaitedSeconds(controller.awaitedSeekSeconds());
+      const pending = controller.pendingSeek();
+      // Compared field by field rather than by identity: the engine hands out a copy each poll, so
+      // storing it unconditionally would re-render the whole page twice a second for nothing.
+      setPendingSeekState((previous) =>
+        previous === pending ||
+        (previous !== null &&
+          pending !== null &&
+          previous.targetSeconds === pending.targetSeconds &&
+          previous.generation === pending.generation &&
+          previous.trackInstanceId === pending.trackInstanceId)
+          ? previous
+          : pending,
+      );
+      holdAutoAdvanceWhilePending(pending);
     };
     read();
     const timer = window.setInterval(read, 500);
     return () => window.clearInterval(timer);
-  }, [localEngineActive, currentItem?.id]);
-  const awaitedPercent =
-    localEngineActive && awaitedSeconds !== null && currentDurationMs
-      ? Math.min(100, (awaitedSeconds * 1000 * 100) / currentDurationMs)
+  }, [localEngineActive, currentItem?.id, holdAutoAdvanceWhilePending]);
+  const pendingSeek =
+    localEngineActive && pendingSeekState
+      ? (describePendingSeek({
+          state: pendingSeekState,
+          renderedSeconds: renderedSeconds ?? pendingSeekState.renderedAtRequestSeconds,
+          durationMs: currentDurationMs ?? 0,
+        }) ?? undefined)
       : undefined;
   const renderedPercent =
     localEngineActive && renderedSeconds !== null && currentDurationMs
       ? Math.min(100, (renderedSeconds * 1000 * 100) / currentDurationMs)
       : undefined;
+
+  // While a seek waits for the renderer, the engine is silent and the elapsed clock must sit at the
+  // last position that was genuinely heard. It cannot read its own clock for this: the scheduler was
+  // reset to the target when the seek was accepted, so every position source already reports the
+  // target. A clock advancing normally through a silence is exactly what a listener reads as
+  // playback having died, which is why the target is shown separately on the bar instead.
+  const displayElapsedMs = isScrubbing ? scrubTargetMs : (pendingSeek?.audibleMs ?? elapsedMs);
 
   const progressPercent = currentDurationMs ? Math.min(100, (displayElapsedMs / currentDurationMs) * 100) : 0;
   const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - displayElapsedMs) : undefined;
@@ -1956,7 +2084,8 @@ export default function PlayFilesPage() {
                     />
                   ) : undefined
                 }
-                currentItemLabel={currentItem?.label ?? null}
+                currentItemLabel={currentDisplay?.title ?? null}
+                currentItemChipCount={currentDisplay?.chipCount ?? null}
                 stationActive={sidRadio.active}
                 rankingControls={
                   sidRadioFlags.rankingActive ? (
@@ -2020,7 +2149,7 @@ export default function PlayFilesPage() {
                 isScrubbing={isScrubbing}
                 progressPercent={progressPercent}
                 renderedPercent={renderedPercent}
-                awaitedPercent={awaitedPercent}
+                pendingSeek={pendingSeek}
                 currentItemAuthor={currentItemCredits.author}
                 currentItemReleased={currentItemCredits.released}
                 elapsedLabel={formatTime(displayElapsedMs)}
@@ -2118,19 +2247,22 @@ export default function PlayFilesPage() {
                         <RadioIcon className="mr-1.5 h-4 w-4" /> Start Radio
                       </Button>
                     ) : null}
-                    {!sidRadio.active ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        data-testid="sid-radio-launcher"
-                        onClick={() => {
-                          void sidRadio.ensureStylePopulations();
-                          setSidRadioLauncherOpen(true);
-                        }}
-                      >
-                        <RadioIcon className="mr-1.5 h-4 w-4" /> SID Radio
-                      </Button>
-                    ) : null}
+                    {/*
+                     * Offered while a station is playing too, which it was not before: the mood a
+                     * Song station is constrained to is changed from this sheet, and stopping the
+                     * station to reach that control would throw away the seed it is meant to keep.
+                     */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      data-testid="sid-radio-launcher"
+                      onClick={() => {
+                        void sidRadio.ensureStylePopulations();
+                        setSidRadioLauncherOpen(true);
+                      }}
+                    >
+                      <RadioIcon className="mr-1.5 h-4 w-4" /> SID Radio
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -2388,11 +2520,14 @@ export default function PlayFilesPage() {
           <SidRadioLauncherSheet
             open={sidRadioLauncherOpen}
             onOpenChange={setSidRadioLauncherOpen}
-            likeCount={getLikedMd5s().length}
+            likeCount={likedTuneCount}
             stylePopulations={sidRadio.stylePopulations}
             onStartStyle={(bit, label, fromLikes) => void sidRadio.startStyleRadio(bit, label, fromLikes)}
             onStartTaste={() => void sidRadio.startTasteRadio()}
             onSurprise={() => void sidRadio.startSurpriseRadio()}
+            songSeedLabel={sidRadioSongSeedLabel}
+            songStyleBit={sidRadio.station?.seedKind === "song" ? sidRadio.station.styleBit : null}
+            onStartSong={startSidRadioSongMood}
           />
 
           <AlertDialog

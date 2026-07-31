@@ -37,6 +37,7 @@ import {
   saveHideNavigationBar,
   saveVolumeSliderPreviewIntervalMs,
   saveNotificationDurationMs,
+  saveFriendlySidNames,
   APP_SETTINGS_KEYS,
 } from "@/lib/config/appSettings";
 import { applyScreenOrientationMode } from "@/lib/native/screenOrientation";
@@ -476,6 +477,8 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadVolumeSliderPreviewIntervalMs: vi.fn(() => 200),
   loadSearchInsideDisks: vi.fn(() => false),
   saveSearchInsideDisks: vi.fn(),
+  loadFriendlySidNames: vi.fn(() => true),
+  saveFriendlySidNames: vi.fn(),
   loadBootMenuAnswerEnabled: vi.fn(() => false),
   saveBootMenuAnswerEnabled: vi.fn(),
   loadBootMenuKey: vi.fn(() => "F7"),
@@ -1076,6 +1079,19 @@ describe("SettingsPage", () => {
     const backupRow = screen.getByTestId("settings-device-row-saved-device-2");
     expect(backupRow).toHaveTextContent("Unknown · c64u");
     expect(backupRow).not.toHaveTextContent("U64E · c64u");
+  });
+
+  it("offers Friendly SID names in Play and Disk, reflecting the stored preference and writing it back", () => {
+    renderSettingsPage();
+
+    const toggle = screen.getByTestId("settings-friendly-sid-names");
+    // The mocked loader returns the shipped default of true.
+    expect(toggle).toHaveAttribute("data-state", "checked");
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute("data-state", "unchecked");
+    expect(vi.mocked(saveFriendlySidNames)).toHaveBeenCalledWith(false);
   });
 
   it("persists HTTP, FTP, and Telnet ports when saving connection settings", async () => {

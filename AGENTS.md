@@ -162,6 +162,43 @@ Before declaring any task complete, deploy the most recent built APK from `andro
 - Launch the newly deployed build on that Pixel 4 and validate the user-visible behavior there for the touched feature area before closing the task.
 - Record the deployment and on-device validation result in the completion summary; do not claim the work is finished until this deploy-and-validate step has succeeded or a concrete hardware/adb blocker is documented.
 
+#### Never raise the Pixel 4's media volume above 10 of 25
+
+**Hard limit. 10 is the maximum the device may ever be set to, for any reason.**
+
+Someone sits next to that phone and listens to it directly. This rule exists because an agent raised
+the volume from 14 to 23 to improve the signal-to-noise ratio of a microphone measurement, and had to
+be stopped: "This is much too loud. I cannot deal with such volume." It is a comfort and
+hearing-safety constraint, so it outranks any measurement that would be easier with more level.
+
+If you change it at all, restore it to 10 or below immediately and say so in your report.
+
+Measuring at this volume is entirely possible, but **only if the analysis is band-limited**. Get this
+wrong and you will wrongly conclude the microphone is unusable — an earlier agent did exactly that.
+
+The room's noise is almost all below 300 Hz (desk and fan rumble), which is a band a phone speaker
+barely reproduces. Measured with the microphone 4 mm from a Pixel 4 grille, in silence:
+
+```
+    0- 120 Hz   -40.8 dBFS     <- the rumble that dominates a broadband reading
+  120- 300 Hz   -46.7 dBFS
+  300- 700 Hz   -83.9 dBFS
+    3-   6 kHz  -77.1 dBFS
+```
+
+So a broadband RMS reads a -41 dBFS floor while the floor **in the 300-6000 Hz band the speaker
+actually uses** is -73 dBFS. Judging signal-to-noise broadband understates it by more than 30 dB.
+
+Band-limited to 300-6000 Hz, at phone volume 10 with the microphone 4 mm from the grille, a real
+measurement over 98 s of SID playback gave **27 dB median SNR and 33 dB on loud passages** — ample.
+The same recording judged broadband looked like 6 dB and appeared hopeless. `local_vs_mirror_mic.py`
+already band-limits for this reason; follow it.
+
+Detecting a dropout still needs more than a level threshold, because SID music has real rests that
+reach the floor. Require a fast collapse *and* a fast recovery *and* loud music either side: an
+underrun is a step within about a buffer period, where a musical decay is exponential over tens to
+hundreds of milliseconds. A plain threshold at 16 dB broadband SNR produced 400 false candidates.
+
 ### Phase 5c - Version identity must match Git
 
 The app version shown by built APK/IPA artifacts and in-app diagnostics must be

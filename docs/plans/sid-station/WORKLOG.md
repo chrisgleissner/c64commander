@@ -945,3 +945,191 @@ Only tab→Home approaches half a second and is worth a look.
 **Also:** a 4-hour unattended run left the phone at 10% battery _while on USB
 power_ — continuous local-engine playback outruns the charge rate. Worth a
 battery note before this is called finished.
+
+## 2026-07-30 — the corpus re-pin: 0.8.2, and a premise that was two releases wide
+
+Adopted `sidflow-data` 0.8.2. The pin moves from `64bee446…` to `10db2838…` in
+`src/lib/sidRadio/sidcorrRelease.ts` and `scripts/fetch-sidcorr.mjs`.
+
+**The bug-bash prompt described a release that no longer exists.** It expected sha256
+`62097331…`, a flow successor declared in neighbour slot 0, a Hamiltonian walk over all
+87,868 tracks, and an acyclic graph. The published bundle has none of them. Measured
+against that description it fails eight assertions: slot 0 from track 0 runs
+`0 → 86297 → 22008 → 22176 → 22008`, a 2-cycle after three steps, and the graph carries
+16,700 cycles through slot 0 alone.
+
+That was the wrong contract, not a broken corpus. A 0.8.2 with the flow successor was
+published and withdrawn within days, and the tag was reused. sidflow's own source says
+so — `similarity-export-tiny.ts` marks `graph_flags` bit 3 "Retired… and 0.8.2 has been
+withdrawn", and `CHANGES.md` opens with the withdrawal. `62097331…` is that build.
+
+**What 0.8.2 is instead:** a Vamana (DiskANN) searchable index. Acyclicity was withdrawn
+on purpose — enforcing it discarded 50.76% of the source graph's edges and shipped 6.69%
+of slot capacity as sentinels, to encode "never play a tune twice" in the artefact rather
+than in the player. Mean out-degree 2.799 → 3.000, tracks with no incoming edge 24,669
+(28.08%) → 2 (0.002%), dead ends 2,786 → 0, largest undirected component 99.08% →
+99.995%. `graph_flags` `0x0007` → `0x0006`.
+
+**Only the neighbour table changed.** STYLE_TABLE, FILE_IDENTITY_TABLE,
+FILE_TRACK_COUNT_TABLE, STYLE_MASK_TABLE and the packed ratings are byte-identical. Two
+consequences worth stating exactly, both proven over all 87,868 ordinals rather than
+sampled: style masks are unchanged, so nothing about the mood tiles moves; and every
+ordinal resolves to the same `(fileOrdinal, songIndex, md5_48)`, so a station descriptor
+persisted under 0.8.0 stays valid with no migration.
+
+**The risk the re-pin actually carried, and why nothing broke.** 0.8.0 was acyclic by
+construction; 0.8.2 has 109,150 cycles across all three slots. `computeStation`'s walk is
+a BFS bounded by `maxHops` with a frontier cap, so a cycle costs it a bounded number of
+hops and only accumulates score, which is what a similarity walk should do. Slot order is
+still descending similarity, so the `NEIGHBORS_PER_TRACK - slot` weighting is untouched —
+the upstream changelog names that weighting as the convention it preserved. No engine
+change. `tests/unit/sidRadio/sidcorrGraphFlags.test.ts` pins it so it cannot regress.
+
+**Depth (12 stations, uncapped).** Fixed seed 1,379 → 2,265 (+64%). Drifting query
+58,491 → 60,782 (+3.9%), and the worst of the 12 stations 56,537 → 60,145 (+6.4%) — the
+gain is concentrated where it matters. Zero duplicates and zero same-file adjacency on
+both. Local coherence loosens slightly (consecutive tunes one hop apart 3.6% → 2.0%,
+sharing a style 42.8% → 40.8%), which is the documented cost of 0.8.2 spending its third
+slot on a diversifying long edge. The balance sweep re-run on 0.8.2 still picks the
+shipped `recentWindow` 3 and `recencyDecay` 0.4 on step distance, with every drifting arm
+saturating on depth exactly as it did on 0.8.0.
+
+**The flow successor was not adopted, because no published bundle has one.** Slot 0 is
+the closest neighbour. Using it as a continuation backbone would loop a listener between
+two and four tunes. The drifting query stays the continuation mechanism, which is also
+what the 0.8.2 release notes say ships alongside the corpus.
+
+**Parser change:** `graph_flags` (u16 at header offset 30) is now read and exposed as
+`bundle.graphFlags`, unmasked. It gates nothing. "Unknown bits are ignored" was previously
+true only because the field was never read, which is not the same as being correct.
+
+**Two existing tests were amended**, both asserting 0.8.0 corpus properties rather than
+user-visible behaviour: the fixture header's `graph_flags` `0x0007` → `0x0006`, and
+"rejects forward/self neighbor edges (DAG invariant)" → "accepts a forward neighbor edge
+and rejects an out-of-range one". The fixture builder *enforced* the retired lower-ordinal
+rule, so until it was relaxed no test could build a bundle shaped like the one the app
+parses. Out-of-range targets are still rejected.
+
+Each fix was watched failing without it: zeroing the parser's `graph_flags` reddens 3 of
+4 flag tests; restoring the lower-ordinal rule reddens 5 of 9; swapping the 0.8.0 bytes in
+under `SIDCORR_REAL=1` reddens 4 of 5 new real-bundle assertions. One flag test initially
+passed against a zeroed value and was strengthened.
+
+Gates: `npm run lint`, `npm run typecheck`, `npm test` (830 files, 9,859 tests) all green.
+Build-side digest enforcement re-verified against the new pin: a stale cached bundle is
+detected and re-downloaded, and a mismatched pin exits 1 without writing.
+
+Evidence and scripts: `ci-artifacts/sid-radio-bug-bash/corpus/`.
+
+## 2026-07-30 (later) — the minimum-length rule was asking the wrong songlength store
+
+Two defects, found on the Pixel 4 against a live station at 84,282 exclusions. Full evidence in
+`ci-artifacts/sid-radio-bug-bash/MIN-LENGTH-AND-REFILL.md`.
+
+**The minimum-length rule rejected nothing.** Reported by the user: stations still play tunes
+shorter than the configured 15 s. Reading the live queue over CDP, 46 of 47 items showed `3:00` —
+the default for an unknown length — and the one that had resolved was a one-second subsong of
+`Commando.sid`, queued anyway.
+
+Neither the setting nor the data was at fault. `loadSidRadioMinSeconds()` returns 15 when the key is
+unset, and the device had HVSC 85 fully ingested: 61,157 of 61,157 songs, zero songlength syntax
+errors.
+
+There are two songlength stores and the station was asking the wrong one. `PlayFilesPage` wired the
+station to `resolveSonglengthDurationMsForPath`, which searches for a `Songlengths.md5` or `.txt`
+next to the media and returns null when it finds none (`useSonglengths.ts:283`). No such file sits
+next to an HVSC virtual path — HVSC songlengths live in the ingested store behind
+`resolveHvscSonglengthDuration`. Every lookup returned null, and the provider admits an unknown
+length by an explicit policy: never drop a tune because the songlengths are thin. That policy is
+right, and with every lookup returning null it admitted everything.
+
+It went unnoticed because nothing counted the difference between "checked, long enough" and "could
+not find out". `shortTracksSkipped` would have read 0, and it was not published in the stats blob at
+all.
+
+Fixed by `src/pages/playFiles/stationDurationResolver.ts`: ask the ingested HVSC store first, fall
+back to the file-based resolver. `resolveHvscSonglengthDuration` awaits its own readiness, so a
+refill that runs before the store has loaded waits for the answer instead of reading "not loaded
+yet" as "no such length". Extracted from `PlayFilesPage` rather than fixed in place, because inline
+in a 2,000-line component it had no test and could not get one. Also fixed: a `NaN` duration reached
+`seconds < minSeconds`, which is false, so a malformed length was admitted as though checked.
+
+**A refill issued about 25 engine computes, not one.** `lastRefillMs` read 3,834 ms against a 150 ms
+budget, while `refillMainThreadMaxMs` stayed at 11.1 ms inside its 16 ms bound. The main thread was
+never the problem. `refill` asked for a fixed 24 candidates, discarded most of them, and asked
+again; a refill costs `count / yield` computes, and one `computeStation` at that depth is ~14 ms.
+
+Reproduced host-side with `scripts/sidRadio/measure-refill-cost.ts`, which drives the production
+provider over the production engine and models the device's discard rate. At 98% discard: 22.7,
+21.7 and 24.0 computes per refill at depths 1,000 / 30,000 / 60,000, costing 34.5, 113.8 and
+210.3 ms.
+
+Fixed by sizing the batch from the yield the station has observed rather than fixing it at 24. Same
+harness and seeds: 1.7, 1.7 and 3.0 computes, costing 7.2, 10.6 and 25.3 ms — 8.0x fewer computes
+and 8.3x faster at depth 60,000, with identical items emitted. At a healthy yield the batch stays at
+the 24 it always was (1.2 computes per refill before and after at 60% discard), so a shallow station
+is untouched.
+
+Station behaviour is unchanged, which matters more than the speed: `measure-station-depth.ts` over
+12 stations uncapped reports median 60,782, p10 60,572, p90 60,934, min 60,145, same-file adjacency
+0.000%, duplicates 0 — identical before and after. The provider consumes an ordered candidate stream
+in order, so the batch size changes when a compute happens, never which tunes come out.
+
+This confirms §8b.2a's reading and names the mechanism: the multiplier, not the per-compute cost.
+The bitset proposed in §8b.3 targets transfer and stringify cost, which the device measurements show
+was never the binding constraint.
+
+**New observability**, read off the provider so the diagnostics and the queue cannot drift apart:
+`candidatesTooShort`, `candidatesUnresolvedPath`, `unknownDurationAdmitted`, `refillComputeCalls`,
+`candidateYieldPercent`, plus corpus identity (`corpusReleaseTag`, `corpusBundleSha256`,
+`corpusSchemaVersion`, `corpusBinaryFormatVersion`, `corpusGraphFlags`). The last two are read from
+the bytes the worker parsed rather than from the pin, so a device can be checked against the pin
+without a rebuild.
+
+Each fix watched failing without it: reverting the resolver to the file-based store only reddens 2
+of 5 resolver tests; fixing the batch at 24 reddens the low-yield compute-count test; letting `NaN`
+fall through to the comparison reddens the malformed-length test.
+
+## 2026-07-30 (device) — verified on the Pixel 4, and a third defect on the way there
+
+Final APK `0.9.4-72680`, Pixel 4 `9B081FFAZ001WX`, C64U `192.168.1.148` firmware 1.2.0, local route.
+
+**The minimum-length rule now rejects.** `candidatesTooShort` reads 8-13 per station where it read
+0, and `unknownDurationAdmitted` reads **0** — every admitted tune was admitted because its length
+resolved and passed, not because nothing could answer. Forty-four real Next taps produced no tune
+under 15 s.
+
+**Durations reach the queue.** A third defect surfaced during verification: the provider resolved
+each tune's length to decide whether to admit it and then threw it away, so every station item fell
+back to the three-minute default. That default sets the progress bar and the end of the track as
+well as the label, so a thirty-second tune both read and behaved as three minutes. Fourteen
+consecutive tracks after the fix: 2:26, 1:01, 3:08, 1:37, 1:27, 4:37, 3:44, 2:47, 0:30, 2:18, 2:49,
+0:21, 1:05, 2:03 — fourteen distinct tunes, fourteen real durations.
+
+**A fourth, smaller one.** `resetSidRadioStats()` ran after the corpus identity had been recorded
+and wiped it, so a running station reported a corpus it could not name. The reset now keeps the two
+fields read from the bundle; the corpus is a property of the loaded bytes, not of the station being
+started. The device now reports tag 0.8.2, sha `10db2838…`, format 2, `graph_flags 0x0006` — read
+from the bytes it parsed, matching the pin.
+
+**History is exactly reversible.** Ten real Next taps then ten real Previous taps, driven through
+`taptid.sh` with an `elementFromPoint` hit-test: ten of ten matched, zero mismatches.
+
+**The mood-constrained song station works on hardware.** The launcher renders `All moods` plus all
+nine tiles; selecting Melodic gave chip `Radio: Budokan.sid · Melodic` and `styleBit=2` in the stats
+blob.
+
+**Two traps worth recording, both of which cost time.**
+
+The 3,834 ms `lastRefillMs` that opened the dropout investigation was measured against a *depth-probe
+descriptor* an earlier harness had left in `localStorage`: 84,282 exclusions of 87,868 tracks,
+leaving roughly 3,000 admissible. That station was near-exhausted by construction and is not what any
+listener has. Check what station is actually loaded before trusting a refill number.
+
+Reading durations out of `[data-testid=playlist-item]` reports the same tune repeatedly with a
+uniform `3:00`. The list is virtualised and those nodes are recycled, so they do not describe the
+queue. `playback-current-track` is authoritative and disagreed with the scrape in both content and
+duration. This nearly became an hour spent on a tune-level dedupe defect that `emittedSequence` —
+ten distinct ordinals — showed did not exist.
+
+Gates: `npm run lint` 0 errors, `npm run typecheck` clean, `npm test` 835 files / 9,968 tests.

@@ -18,8 +18,12 @@
  *   STYLE_MASK_TABLE | [RATING_TABLE (v2)] | NEIGHBOR_TABLE
  *
  * Track ordinals follow file order then subsong order (sidcorr-1 ordering).
- * Neighbor targets MUST reference a strictly smaller ordinal (acyclic DAG);
- * unused slots are the 0xFFFFFF sentinel.
+ * Neighbor targets may reference any ordinal in range; unused slots are the 0xFFFFFF sentinel.
+ *
+ * Targets used to be required to be strictly smaller than the source ordinal, because through
+ * `sidflow-data` 0.8.0 the exported graph was a DAG built that way. 0.8.2 replaced it with a
+ * Vamana index in which 52% of edges point forward and cycles are normal, so a fixture held to
+ * the old rule can no longer represent the bundle the app actually parses.
  */
 
 /** The 9 canonical styles the real export ships, in mask-bit order. */
@@ -48,7 +52,7 @@ export interface TinyFixtureStyle {
 }
 
 export interface TinyFixtureNeighbor {
-  /** Target track ordinal — MUST be strictly smaller than this track's ordinal. */
+  /** Target track ordinal — any ordinal in `[0, trackCount)`, including a forward or cyclic one. */
   target: number;
   /** Cosine similarity in [-1, 1]; quantized to a byte in v2 (ignored in v1). */
   similarity?: number;
@@ -59,7 +63,7 @@ export interface TinyFixtureTrack {
   styleMask?: number;
   /** Compact ratings (each 0..15; p null/absent → stored as 0 → decodes to null). */
   ratings?: { e: number; m: number; c: number; p?: number | null };
-  /** Up to 3 backward neighbor edges (bare ordinals or {target, similarity}). */
+  /** Up to 3 neighbor edges (bare ordinals or {target, similarity}), in any direction. */
   neighbors?: Array<number | TinyFixtureNeighbor>;
 }
 
@@ -74,6 +78,13 @@ export interface TinyFixtureSpec {
   version?: 1 | 2;
   /** Style table (default the 9 canonical styles). */
   styles?: TinyFixtureStyle[];
+  /**
+   * `graph_flags` u16 at header offset 30. Default `0x0006`, what the generator writes from
+   * 0.8.2 onward: the two legacy reserved bits, with acyclic (bit 0) and flow-successor (bit 3)
+   * both clear. Override to build a bundle that declares a property the parser must report
+   * without acting on.
+   */
+  graphFlags?: number;
   files: TinyFixtureFile[];
 }
 
@@ -222,9 +233,9 @@ export const buildTinyFixture = (spec: TinyFixtureSpec): ArrayBuffer => {
       const edge = edges[slot];
       const recordOffset = (ordinal * NEIGHBORS_PER_TRACK + slot) * neighborRecordBytes;
       const target = edge ? edge.target : SIDTINY_EMPTY_NEIGHBOR;
-      if (edge && (target >= ordinal || target < 0)) {
+      if (edge && (target >= trackCount || target < 0)) {
         throw new Error(
-          `buildTinyFixture: neighbor target ${target} of track ${ordinal} must be a smaller, non-negative ordinal (acyclic DAG)`,
+          `buildTinyFixture: neighbor target ${target} of track ${ordinal} must be an ordinal in [0, ${trackCount})`,
         );
       }
       neighborTable[recordOffset] = target & 0xff;
@@ -257,7 +268,7 @@ export const buildTinyFixture = (spec: TinyFixtureSpec): ArrayBuffer => {
   headerView.setUint8(26, 1); // neighbor_ref_kind = absolute_track_ordinal
   headerView.setUint8(27, 2); // style_mask_width_bytes
   headerView.setUint16(28, STYLE_TABLE_VERSION, true);
-  headerView.setUint16(30, 0x0007, true); // graph_flags (matches the generator)
+  headerView.setUint16(30, spec.graphFlags ?? 0x0006, true); // graph_flags (matches the generator)
   headerView.setUint32(32, styleTableOffset, true);
   headerView.setUint32(36, fileIdentityOffset, true);
   headerView.setUint32(40, fileTrackCountOffset, true);

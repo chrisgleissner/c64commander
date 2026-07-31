@@ -11,8 +11,18 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { EMPTY_NEIGHBOR_HOT, SidcorrParseError, parseSidcorrTiny } from "@/lib/sidRadio/sidcorrTiny";
-import { SIDCORR_BUNDLE_PUBLIC_PATH, SIDCORR_EXPECTED } from "@/lib/sidRadio/sidcorrRelease";
+import {
+  EMPTY_NEIGHBOR_HOT,
+  GRAPH_FLAG_ACYCLIC,
+  GRAPH_FLAG_FLOW_SUCCESSOR_FIRST,
+  SidcorrParseError,
+  parseSidcorrTiny,
+} from "@/lib/sidRadio/sidcorrTiny";
+import {
+  SIDCORR_BUNDLE_PUBLIC_PATH,
+  SIDCORR_EXPECTED,
+  SIDCORR_EXPECTED_GRAPH_FLAGS,
+} from "@/lib/sidRadio/sidcorrRelease";
 import { SID_RADIO_STYLE_TILES } from "@/pages/playFiles/hooks/useSidRadio";
 import {
   DEFAULT_TINY_STYLES,
@@ -154,9 +164,99 @@ describe.skipIf(!process.env.SIDCORR_REAL)("parseSidcorrTiny — real bundle gol
       "deep_discovery",
       "theme_hunter",
     ]);
-    // Neighbour edges are a backward DAG; reverse CSR must account for every edge.
+    // Reverse CSR must account for every forward edge.
     expect(bundle.reverseSource.length).toBe(bundle.stats.edgeCount);
     expect(bundle.stats.edgeCount).toBeGreaterThan(0);
     expect(bundle.trackOrdinalsForMd548(bundle.resolveTrack(1000).md5_48).length).toBeGreaterThan(0);
+  });
+
+  // The 0.8.2 neighbour graph is a Vamana (DiskANN) index, not the DAG 0.8.0 shipped. These are
+  // the properties the station depends on, checked against the shipped bytes rather than against
+  // the manifest's description of them. They mirror sidflow's own `verify-published-exports.ts`.
+  it("carries the 0.8.2 graph flags: neither acyclic nor a flow successor", () => {
+    const data = readFileSync(realBundlePath);
+    const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+    const bundle = parseSidcorrTiny(buffer);
+    expect(bundle.graphFlags).toBe(SIDCORR_EXPECTED_GRAPH_FLAGS);
+    expect(bundle.graphFlags & GRAPH_FLAG_ACYCLIC).toBe(0);
+    expect(bundle.graphFlags & GRAPH_FLAG_FLOW_SUCCESSOR_FIRST).toBe(0);
+  });
+
+  it("fills every neighbour slot, with no dead end and no self edge", () => {
+    const data = readFileSync(realBundlePath);
+    const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+    const bundle = parseSidcorrTiny(buffer);
+    const slots = bundle.trackCount * SIDCORR_EXPECTED.neighborsPerTrack;
+    // 0.8.0 shipped 17,640 sentinels (6.69% of slot capacity); 0.8.2 ships none.
+    expect(bundle.stats.edgeCount).toBe(slots);
+    let selfEdges = 0;
+    let deadEnds = 0;
+    for (let track = 0; track < bundle.trackCount; track += 1) {
+      let outDegree = 0;
+      for (let slot = 0; slot < SIDCORR_EXPECTED.neighborsPerTrack; slot += 1) {
+        const target = bundle.neighborTargets[track * SIDCORR_EXPECTED.neighborsPerTrack + slot];
+        if (target === EMPTY_NEIGHBOR_HOT) continue;
+        outDegree += 1;
+        if (target === track) selfEdges += 1;
+      }
+      if (outDegree === 0) deadEnds += 1;
+    }
+    expect(selfEdges).toBe(0);
+    expect(deadEnds).toBe(0);
+  });
+
+  // The retired rule, asserted absent. 0.8.0 pointed 100% of edges at a lower ordinal; if a
+  // bundle ever went back to that shape it would be a silent 74% loss of station depth on the
+  // fixed-seed path, so the forward edges are worth pinning rather than assuming.
+  it("no longer restricts neighbour targets to lower ordinals", () => {
+    const data = readFileSync(realBundlePath);
+    const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+    const bundle = parseSidcorrTiny(buffer);
+    let forward = 0;
+    for (let track = 0; track < bundle.trackCount; track += 1) {
+      for (let slot = 0; slot < SIDCORR_EXPECTED.neighborsPerTrack; slot += 1) {
+        const target = bundle.neighborTargets[track * SIDCORR_EXPECTED.neighborsPerTrack + slot];
+        if (target !== EMPTY_NEIGHBOR_HOT && target > track) forward += 1;
+      }
+    }
+    // Measured on 0.8.2: 137,130 of 263,604 edges (52.0%) point forward.
+    expect(forward / bundle.stats.edgeCount).toBeGreaterThan(0.4);
+  });
+
+  it("keeps every track reachable and the corpus in one navigable region", () => {
+    const data = readFileSync(realBundlePath);
+    const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+    const bundle = parseSidcorrTiny(buffer);
+    const inDegree = new Int32Array(bundle.trackCount);
+    for (const target of bundle.neighborTargets) {
+      if (target !== EMPTY_NEIGHBOR_HOT) inDegree[target] += 1;
+    }
+    let unreachable = 0;
+    let inDegreeMax = 0;
+    for (const degree of inDegree) {
+      if (degree === 0) unreachable += 1;
+      if (degree > inDegreeMax) inDegreeMax = degree;
+    }
+    // 0.8.0 left 24,669 tracks (28.08%) with no incoming edge; 0.8.2 leaves 2 (0.002%).
+    expect(unreachable).toBeLessThanOrEqual(Math.floor(bundle.trackCount / 1000));
+    // No track may become everyone's neighbour — a hub is the same handful of tunes in every
+    // station. The bound is 64x the mean, which is the bound sidflow's own release check applies.
+    const meanOutDegree = bundle.stats.edgeCount / bundle.trackCount;
+    expect(inDegreeMax).toBeLessThanOrEqual(meanOutDegree * 64);
+  });
+
+  // Every style tile must have a population, or its launcher tile is a station that cannot start.
+  it("ships all nine style masks with a non-empty population", () => {
+    const data = readFileSync(realBundlePath);
+    const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+    const bundle = parseSidcorrTiny(buffer);
+    const populations = new Array(SIDCORR_EXPECTED.styleCount).fill(0);
+    for (let track = 0; track < bundle.trackCount; track += 1) {
+      for (let bit = 0; bit < SIDCORR_EXPECTED.styleCount; bit += 1) {
+        if (bundle.styleMask[track] & (1 << bit)) populations[bit] += 1;
+      }
+    }
+    // 0.8.2 leaves the style masks byte-identical to 0.8.0: all nine at 17,574 (20% each).
+    expect(populations).toEqual(new Array(SIDCORR_EXPECTED.styleCount).fill(17574));
   });
 });

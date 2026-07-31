@@ -116,6 +116,8 @@ import {
   saveVolumeSliderPreviewIntervalMs,
   loadSearchInsideDisks,
   saveSearchInsideDisks,
+  loadFriendlySidNames,
+  saveFriendlySidNames,
   loadBootMenuAnswerEnabled,
   saveBootMenuAnswerEnabled,
   loadBootMenuKey,
@@ -358,6 +360,7 @@ export default function SettingsPage() {
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
   const [demoModeEnabled, setDemoModeEnabled] = useState(loadDemoModeEnabled());
   const [diskAutostartMode, setDiskAutostartMode] = useState<DiskAutostartMode>(loadDiskAutostartMode());
+  const [friendlySidNames, setFriendlySidNames] = useState(loadFriendlySidNames);
   // Content Explorer: In-Image Search (C) + Launch Safety boot-menu answer (B).
   const [searchInsideDisks, setSearchInsideDisks] = useState(loadSearchInsideDisks);
   const [bootMenuAnswerEnabled, setBootMenuAnswerEnabled] = useState(loadBootMenuAnswerEnabled);
@@ -1914,6 +1917,29 @@ export default function SettingsPage() {
                   <p className="text-xs text-muted-foreground">
                     Controls how many playlist or disk items are shown before opening View all. Default is 50.
                   </p>
+                </div>
+
+                <div className="flex items-start justify-between gap-3 min-w-0">
+                  <div className="min-w-0">
+                    <Label htmlFor="settings-friendly-sid-names" className="font-medium">
+                      Friendly SID names
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Show SID tunes as “Bossa in Do” rather than “Bossa_in_Do_2SID.sid”, with a badge for the number of
+                      SID chips the tune plays through. Programs, cartridges and disk images always keep their file
+                      name.
+                    </p>
+                  </div>
+                  <Checkbox
+                    id="settings-friendly-sid-names"
+                    data-testid="settings-friendly-sid-names"
+                    checked={friendlySidNames}
+                    onCheckedChange={(checked) => {
+                      const next = checked === true;
+                      setFriendlySidNames(next);
+                      saveFriendlySidNames(next);
+                    }}
+                  />
                 </div>
 
                 <div className="space-y-2">
