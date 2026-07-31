@@ -389,6 +389,57 @@ describe("hvscService", () => {
       expect(getRuntimeFolderListing).toHaveBeenCalledWith("/");
       expect(result).toEqual({ path: "/", folders: [], songs: [] });
     });
+
+    /**
+     * "Nothing matched" is a complete answer; "the index does not know this folder" is not.
+     *
+     * Treating both as a cold index made every keystroke that matched nothing enumerate the whole
+     * folder over the native bridge — on a filter that is typed one letter at a time, in the exact
+     * place where finding a tune is already hard.
+     */
+    it("does not enumerate the folder natively when a query simply matched nothing", async () => {
+      vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+      // The folder is known and populated; the query is what is empty.
+      mediaIndexMocks.queryFolderPage.mockImplementation(({ query }: { query?: string }) =>
+        query
+          ? { path: "/", folders: [], songs: [], totalFolders: 0, totalSongs: 0, offset: 0, limit: 200, query }
+          : {
+              path: "/",
+              folders: ["/DEMOS"],
+              songs: [],
+              totalFolders: 1,
+              totalSongs: 0,
+              offset: 0,
+              limit: 200,
+              query: "",
+            },
+      );
+
+      const page = await getHvscFolderListingPaged({ path: "/", query: "zzzznomatch" });
+
+      expect(getRuntimeFolderListing).not.toHaveBeenCalled();
+      expect(page.totalSongs).toBe(0);
+      expect(page.totalFolders).toBe(0);
+    });
+
+    it("still falls back to the runtime when the index does not know the folder at all", async () => {
+      vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+      // Empty with and without the query: this folder is genuinely not in the index.
+      mediaIndexMocks.queryFolderPage.mockReturnValue({
+        path: "/",
+        folders: [],
+        songs: [],
+        totalFolders: 0,
+        totalSongs: 0,
+        offset: 0,
+        limit: 200,
+        query: "",
+      });
+
+      await getHvscFolderListingPaged({ path: "/", query: "commando" });
+
+      expect(getRuntimeFolderListing).toHaveBeenCalledWith("/");
+    });
   });
 
   describe("paged listing", () => {

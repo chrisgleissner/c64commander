@@ -920,6 +920,43 @@ const setHvscScreenshotMode = async (page: Page, mode: "download-pending" | "rea
   );
 };
 
+/**
+ * Seed the HVSC browse index so a search has something to find.
+ *
+ * The whole-archive search reads the persisted compact index — the same file a real install comes
+ * back from — so seeding that is what makes the screenshot show the feature rather than its empty
+ * state. The entries carry hydrated titles and authors because that is what the search is for: HVSC
+ * files tunes by composer, and finding one by name is the thing browsing cannot do.
+ */
+const seedHvscBrowseIndex = async (page: Page) => {
+  const tunes = [
+    ["/MUSICIANS/H/Hubbard_Rob/Commando.sid", "Commando", "Rob Hubbard", "1985 Elite"],
+    ["/MUSICIANS/H/Hubbard_Rob/Monty_on_the_Run.sid", "Monty on the Run", "Rob Hubbard", "1985 Gremlin"],
+    ["/MUSICIANS/D/Daglish_Ben/Commando_Remix.sid", "Commando (remix)", "Ben Daglish", "1986 Elite"],
+    ["/MUSICIANS/G/Galway_Martin/Wizball.sid", "Wizball", "Martin Galway", "1987 Ocean"],
+    ["/DEMOS/A-F/Commando_Tribute.sid", "Commando Tribute", "Jeroen Tel", "1990 Maniacs of Noise"],
+  ];
+  await page.addInitScript((rows: string[][]) => {
+    localStorage.setItem(
+      "c64u_media_index:v1",
+      JSON.stringify({
+        version: 2,
+        updatedAt: new Date().toISOString(),
+        entries: rows.map(([path, title, author, released]) => ({
+          path,
+          name: path.split("/").pop(),
+          type: "sid",
+          durationSeconds: 221,
+          title,
+          author,
+          released,
+          hydrated: true,
+        })),
+      }),
+    );
+  }, tunes);
+};
+
 const waitForOverlaysToClear = async (page: Page) => {
   const notificationRegion = page.locator('[aria-label="Notifications (F8)"]');
   const openToasts = notificationRegion.locator('[data-state="open"], [role="status"]');
@@ -2460,6 +2497,28 @@ test.describe("App screenshots", () => {
     { tag: "@screenshots" },
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       test.slow();
+      await seedHvscBrowseIndex(page);
+      await page.addInitScript(() => {
+        localStorage.setItem(
+          "c64u_recently_played:v1",
+          JSON.stringify([
+            {
+              virtualPath: "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
+              title: "Commando",
+              author: "Rob Hubbard",
+              folder: "/MUSICIANS/H/Hubbard_Rob",
+              playedAt: 2,
+            },
+            {
+              virtualPath: "/MUSICIANS/G/Galway_Martin/Wizball.sid",
+              title: "Wizball",
+              author: "Martin Galway",
+              folder: "/MUSICIANS/G/Galway_Martin",
+              playedAt: 1,
+            },
+          ]),
+        );
+      });
       // GA defaults these on; set them explicitly + enable dev mode for the Settings capture.
       await page.addInitScript((seed: typeof FEATURED_SID) => {
         localStorage.setItem("c64u_sid_radio_enabled", "1");
@@ -2542,6 +2601,24 @@ test.describe("App screenshots", () => {
       await captureScreenshot(page, testInfo, "play/sid-radio/02-stations.png", { locator: sheet });
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("sid-radio-launcher-sheet")).toHaveCount(0);
+
+      // Reaching for one particular tune while a station is running. A station is endless and
+      // chooses for you, which is the point of it right up until you want to hear one specific
+      // thing — so this searches the whole archive by title or composer without stopping it.
+      const findATune = getActiveMain(page).getByTestId("hvsc-search-open");
+      await expect(findATune).toBeVisible();
+      await findATune.click();
+      const searchSheet = page.getByTestId("hvsc-search-sheet");
+      await expect(searchSheet).toBeVisible();
+      // Empty state first: a station is endless and one-way, so the sheet opens on what was just
+      // heard rather than on a line of advice.
+      await captureScreenshot(page, testInfo, "play/sid-radio/05-recently-played.png", { locator: searchSheet });
+      await searchSheet.getByTestId("hvsc-search-input").fill("commando");
+      // Either results or the "nothing found" line settles the sheet; both are stable to capture.
+      await expect(searchSheet.getByTestId("hvsc-search-results")).toBeVisible();
+      await captureScreenshot(page, testInfo, "play/sid-radio/04-find-a-tune.png", { locator: searchSheet });
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("hvsc-search-sheet")).toHaveCount(0);
 
       // "Listen on: C64 / Both / This device" — only rendered while a SID is the
       // current item, which the tune seeded at the top of this test satisfies.
@@ -2748,6 +2825,17 @@ test.describe("App screenshots", () => {
       await expect(readyDialog.getByTestId("source-file-picker")).toBeVisible();
       await expect(readyDialog.getByTestId("add-items-selection-heading")).toContainText("From HVSC");
       await captureScreenshot(page, testInfo, "play/import/08-hvsc-browser.png", { skipFuzzyHeadRestore: true });
+
+      // How far the search reaches. HVSC files sixty thousand tunes by composer, so a filter that
+      // only ever sees the folder on screen can find nothing you did not already know the location
+      // of; the scope control is what makes the same text search the whole archive.
+      const scope = readyDialog.getByTestId("add-items-search-scope");
+      await expect(scope).toBeVisible();
+      await readyDialog.getByTestId("add-items-scope-source").click();
+      await expect(readyDialog.getByTestId("add-items-scope-source")).toHaveAttribute("aria-pressed", "true");
+      await captureScreenshot(page, testInfo, "play/import/09-hvsc-search-scope.png", {
+        skipFuzzyHeadRestore: true,
+      });
     },
   );
 

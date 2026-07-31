@@ -29,6 +29,7 @@ export {
   ensureHvscMetadataHydration,
   getHvscSong,
   getHvscSongsRecursive,
+  getHvscSubsongDurationsSeconds,
   streamHvscSongsRecursive,
   getHvscStatus,
   ingestCachedHvsc,
@@ -37,6 +38,7 @@ export {
   isHvscIngestionBridgeAvailable,
   resetHvscLibraryData,
   resolveHvscSonglength,
+  searchHvscSongs,
 } from "./hvscService";
 export { recoverStaleIngestionState } from "./hvscIngestionRuntime";
 export { createHvscMediaIndex, HvscMediaIndexAdapter } from "./hvscMediaIndex";

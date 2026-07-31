@@ -400,6 +400,25 @@ describe("on-device playback through the native track", () => {
     expect(backend.writes.length).toBeGreaterThan(whilePaused);
   });
 
+  it("drops the completions owed for audio a pause threw away", async () => {
+    // A pause discards the ring, so those completions describe audio nobody heard. The engine counts
+    // them against what it scheduled to decide the tune is over, so leaving them queued would let
+    // the count run ahead and end the track early after a few pause/resume cycles. Asserted on the
+    // sink's own counters rather than on a callback, because whether one fires depends on how far
+    // the fake pipeline's clock has run.
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend);
+    // Scheduled far enough ahead that its completion is still owed when the pause arrives.
+    scheduleChunk(sink, 4, 100);
+    await settle(200);
+    const debug = (globalThis as Record<string, unknown>).__localSinkDebug as () => Record<string, number>;
+    expect(debug().endings).toBeGreaterThan(0);
+
+    sink!.suspend?.();
+
+    expect(debug().endings).toBe(0);
+  });
+
   it("holds the clock still while paused", async () => {
     const backend = createBackend();
     const sink = createNativeLocalSidSink(RATE, backend);

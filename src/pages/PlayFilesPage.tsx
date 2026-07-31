@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Gamepad2, Heart } from "lucide-react";
+import { Gamepad2, Heart, ListMusic, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RemoteInputSheet } from "@/components/remoteInput/RemoteInputSheet";
 import { PlaybackConfigSheet } from "@/pages/playFiles/components/PlaybackConfigSheet";
@@ -56,6 +56,7 @@ import { calculatePlaylistTotals } from "@/lib/playback/playlistTotals";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { createHvscSourceLocation } from "@/lib/sourceNavigation/hvscSourceAdapter";
 import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
+import { getHvscSubsongDurationsSeconds } from "@/lib/hvsc";
 import { createStationDurationResolver } from "@/pages/playFiles/stationDurationResolver";
 import { Checkbox } from "@/components/ui/checkbox";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
@@ -98,6 +99,17 @@ import { LikedTunesSheet } from "@/pages/playFiles/components/LikedTunesSheet";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
+import { HvscSearchSheet } from "@/pages/playFiles/components/HvscSearchSheet";
+import type { HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
+import { buildFoundTuneItem, insertAfterCurrent } from "@/pages/playFiles/insertTuneNext";
+import { expandSubsongs, hasAllTunesQueued, MIN_TUNES_TO_EXPAND } from "@/pages/playFiles/expandSubsongs";
+import { md548ForVirtualPath } from "@/lib/sidRadio/md5PathIndex";
+import {
+  loadRecentlyPlayed,
+  saveRecentlyPlayed,
+  toRecentlyPlayedEntry,
+  withRecentlyPlayed,
+} from "@/lib/sidRadio/recentlyPlayed";
 import { useLikedTuneCount } from "@/lib/sidRadio/useLikedTuneCount";
 import { recordSkip } from "@/lib/sidRadio/sidRadioStats";
 import { Radio as RadioIcon } from "lucide-react";
@@ -178,6 +190,7 @@ import {
 } from "@/pages/playFiles/playFilesUtils";
 import { getSharedLocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { describePendingSeek, type PendingSeekState } from "@/lib/playback/pendingSeekStatus";
+import { resolvePlayheadAnchor } from "@/lib/playback/playheadAnchor";
 import { useActivePlayback } from "@/hooks/useActivePlayback";
 
 const ACTIVE_ADD_ITEMS_PROGRESS_STATES = new Set<AddItemsProgressState["status"]>([
@@ -319,6 +332,7 @@ export default function PlayFilesPage() {
   const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
   const [likedTunesSheetOpen, setLikedTunesSheetOpen] = useState(false);
   const [sidRadioLauncherOpen, setSidRadioLauncherOpen] = useState(false);
+  const [hvscSearchOpen, setHvscSearchOpen] = useState(false);
   const likedTuneCount = useLikedTuneCount();
 
   const {
@@ -358,6 +372,12 @@ export default function PlayFilesPage() {
   const localConfigInputRef = useRef<HTMLInputElement | null>(null);
   const songlengthsInputRef = useRef<HTMLInputElement | null>(null);
   const trackStartedAtRef = useRef<number | null>(null);
+  // The playing track's length. Declared here rather than beside the value it mirrors because the
+  // timeline tick and the pending-seek poll both read it, and both outlive any one render.
+  const currentDurationMsRef = useRef<number | undefined>(undefined);
+  // What the previous tick anchored the clock to, so this one can tell a playhead that is moving
+  // from one that has stopped. See `stalled` in `playheadAnchor`.
+  const anchoredElapsedRef = useRef<number | null>(null);
   const playedClockRef = useRef(new PlaybackClock());
   const addItemsStartedAtRef = useRef<number | null>(null);
   const addItemsAbortControllerRef = useRef<AbortController | null>(null);
@@ -1263,8 +1283,39 @@ export default function PlayFilesPage() {
       const allowAutoAdvance = options?.allowAutoAdvance ?? true;
       if (!isPlaying || isPaused || currentIndex < 0) return;
       const now = Date.now();
-      if (trackStartedAtRef.current) {
-        setElapsedMs(now - trackStartedAtRef.current);
+      // On-device playback knows exactly where it is, so it — and not wall time — is the clock. See
+      // `playheadAnchor`: every wait the renderer takes is a permanent offset otherwise, and the
+      // auto-advance deadline computed from a clock that ran ahead cuts the tune off before its end.
+      const controller = getSharedLocalSidPlaybackController();
+      const localActive = controller.isActive();
+      const anchor = resolvePlayheadAnchor({
+        enginePositionMs: localActive ? controller.positionSeconds() * 1000 : null,
+        trackStartedAtMs: trackStartedAtRef.current,
+        nowMs: now,
+        // Any seek, not only the one the progress bar reports. A seek that fell through to the
+        // worker is silent and unannounced but every bit as deliberate, and letting the deadline run
+        // down through it would skip the track the listener is waiting to hear.
+        previousElapsedMs: anchoredElapsedRef.current,
+        awaitingSeek: localActive && controller.isSeeking(),
+      });
+      if (anchor) {
+        trackStartedAtRef.current = anchor.trackStartedAtMs;
+        anchoredElapsedRef.current = anchor.elapsedMs;
+        setElapsedMs(anchor.elapsedMs);
+        // Only when it actually moved, and never while the playhead is stuck. The first is because
+        // this deadline is mirrored to the native background watchdog and rewriting it every second
+        // would be constant bridge traffic for nothing. The second is the important one: the
+        // deadline is what rescues a tune that has stopped producing audio, and re-deriving it from
+        // a frozen playhead would push it into the future for ever — see `stalled`.
+        if (anchor.drifted && !anchor.stalled && currentDurationMsRef.current) {
+          const guard = autoAdvanceGuardRef.current;
+          if (guard && !guard.userCancelled) {
+            const dueAtMs = now + Math.max(0, currentDurationMsRef.current - anchor.elapsedMs);
+            guard.dueAtMs = dueAtMs;
+            guard.autoFired = false;
+            setAutoAdvanceDueAtMs(dueAtMs);
+          }
+        }
       }
       setPlayedMs(playedClockRef.current.current(now));
       const guard = autoAdvanceGuardRef.current;
@@ -1428,10 +1479,52 @@ export default function PlayFilesPage() {
    * An active Song station wins over whatever is playing right now: re-aiming that station keeps the
    * tune it was seeded by, so naming the current track here would describe the wrong seed.
    */
+  /**
+   * The corpus identity of whatever is playing, for "more like this".
+   *
+   * Two ways to get it, because the tracks that most often prompt the question are the ones the
+   * first way cannot answer. Hashing the tune's bytes works for anything the app is holding a file
+   * for, but a track a station served — or one found by name — is a path and a subsong, with no
+   * blob attached until playback resolves one. The archive index turns that path straight into the
+   * identity the corpus uses, which is both cheaper and available sooner.
+   */
+  /**
+   * Remember what has been heard, so there is a way back to it.
+   *
+   * A station is endless and one-way, and the tune that made somebody think "what was that" has
+   * usually gone by the time they reach for anything. Recorded on the track itself rather than on
+   * the playlist so a station's tunes are covered — they never appear in a playlist anyone built —
+   * and keyed on the track instance so a repeat of the same tune moves it up rather than adding a
+   * second row.
+   */
+  useEffect(() => {
+    if (!currentItem || !isSongCategory(currentItem.category)) return;
+    const virtualPath = currentItem.request.source === "hvsc" ? currentItem.path : null;
+    if (!virtualPath) return;
+    saveRecentlyPlayed(
+      withRecentlyPlayed(
+        loadRecentlyPlayed(),
+        toRecentlyPlayedEntry({
+          virtualPath,
+          title: currentDisplay?.title ?? currentItem.label,
+          author: currentItemCredits.author,
+          songNr: currentItem.request.songNr,
+          subsongCount: currentItem.subsongCount,
+          durationMs: currentItem.durationMs,
+        }),
+      ),
+    );
+    // Keyed on the track instance: the same tune coming round again is a new hearing and belongs at
+    // the top, but a re-render of the same one is not.
+  }, [trackInstanceId]);
+
+  const currentSeedMd548 =
+    (currentTuneMd5 ? currentTuneMd5.slice(0, 12) : null) ??
+    (currentItem?.path ? md548ForVirtualPath(currentItem.path) : null);
   const sidRadioSongSeedLabel =
     sidRadio.station?.seedKind === "song"
       ? sidRadio.station.seedLabel
-      : !sidRadio.active && currentTuneMd5 && currentItem?.category === "sid"
+      : !sidRadio.active && currentSeedMd548 && currentItem?.category === "sid"
         ? (currentItem.label ?? "this tune")
         : null;
   const startSidRadioSongMood = (styleBit: number | null) => {
@@ -1441,9 +1534,42 @@ export default function PlayFilesPage() {
       void sidRadio.setSongStationStyleFilter(styleBit);
       return;
     }
-    if (!currentTuneMd5) return;
-    void sidRadio.startSongRadio(currentTuneMd5.slice(0, 12), currentItem?.label ?? "this tune", styleBit);
+    if (!currentSeedMd548) return;
+    void sidRadio.startSongRadio(currentSeedMd548, currentItem?.label ?? "this tune", styleBit);
   };
+  /**
+   * Play one tune that was reached for by name, without losing the station.
+   *
+   * Inserted directly after what is playing rather than appended: a station keeps ten tunes queued
+   * ahead of the cursor, so the tail is roughly half an hour away. Nothing about the station is
+   * touched — it keeps its seed, its exclusion set and its place — so when this tune ends the queue
+   * simply carries on into what the station had already lined up. That is the whole of "and then go
+   * back to the station".
+   */
+  const playFoundTune = useCallback(
+    (hit: HvscSearchHit) => {
+      const item = buildFoundTuneItem(hit);
+      const { items, index } = insertAfterCurrent(playlist, currentIndex, item);
+      void startPlaylist(items, index, { replaceQueue: true });
+    },
+    [currentIndex, playlist, startPlaylist],
+  );
+  /**
+   * Whether a station can be seeded from a tune found by name.
+   *
+   * The similarity corpus knows tunes by their content hash, and the archive index is what turns a
+   * path back into one. A tune the corpus has never heard of can still be played — it just cannot be
+   * the seed of anything, so the action is left off that row rather than offered and then failing.
+   */
+  const canSeedStationFrom = useCallback((hit: HvscSearchHit) => md548ForVirtualPath(hit.virtualPath) !== null, []);
+  const startStationFromFoundTune = useCallback(
+    (hit: HvscSearchHit) => {
+      const md548 = md548ForVirtualPath(hit.virtualPath);
+      if (!md548) return;
+      void sidRadio.startSongRadio(md548, hit.title);
+    },
+    [sidRadio],
+  );
   const { setPlaybackContext, resolved: lightingResolved, openStudio, openContextLens } = useLightingStudio();
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
   const sourceKind = useMemo<TraceSourceKind | null>(() => {
@@ -1591,32 +1717,19 @@ export default function PlayFilesPage() {
    */
   const [pendingSeekState, setPendingSeekState] = useState<PendingSeekState | null>(null);
   const localEngineActive = playbackEngine.engine === "local";
-  // Read inside the poll below, which outlives any one render of this page.
-  const currentDurationMsRef = useRef(currentDurationMs);
   currentDurationMsRef.current = currentDurationMs;
-  /**
-   * Keep the auto-advance deadline from running down during a wait.
-   *
-   * The deadline is "now plus what is left of the tune", and a seek sets it from the target the
-   * instant the target is accepted — before a note of that position has been heard. A wait of
-   * twenty seconds therefore spent twenty seconds of the tune's own time, and a target deep into a
-   * long tune advanced the playlist before playback resumed at all. Re-setting it from the target on
-   * every poll holds it still for as long as the wait lasts, and leaves it exactly right the moment
-   * the wait ends.
+  /*
+   * The auto-advance deadline used to be held still here, from the pending seek's target, on every
+   * poll of this 500 ms loop. It no longer is, because the timeline tick already does it and does it
+   * from the one place that knows: the engine's playhead, which sits exactly at the target for as
+   * long as the wait lasts. Two mechanisms writing the same deadline is one too many, and this was
+   * the expensive one — the deadline is mirrored to the native background watchdog, so a twenty
+   * second wait spent forty bridge calls saying the same thing. See `playheadAnchor`.
    */
-  const holdAutoAdvanceWhilePending = useCallback(
-    (pending: PendingSeekState | null) => {
-      const durationMs = currentDurationMsRef.current;
-      const guard = autoAdvanceGuardRef.current;
-      if (!pending || !guard || !durationMs) return;
-      const dueAtMs = Date.now() + Math.max(0, durationMs - pending.targetSeconds * 1000);
-      guard.dueAtMs = dueAtMs;
-      guard.autoFired = false;
-      setAutoAdvanceDueAtMs(dueAtMs);
-    },
-    [autoAdvanceGuardRef, setAutoAdvanceDueAtMs],
-  );
   useEffect(() => {
+    // A new track starts its playhead at zero, which is not the previous track's playhead having
+    // stopped. Forgetting the last reading here is what keeps that from reading as a stall.
+    anchoredElapsedRef.current = null;
     if (!localEngineActive) {
       setRenderedSeconds(null);
       setPendingSeekState(null);
@@ -1641,12 +1754,11 @@ export default function PlayFilesPage() {
           ? previous
           : pending,
       );
-      holdAutoAdvanceWhilePending(pending);
     };
     read();
     const timer = window.setInterval(read, 500);
     return () => window.clearInterval(timer);
-  }, [localEngineActive, currentItem?.id, holdAutoAdvanceWhilePending]);
+  }, [localEngineActive, currentItem?.id]);
   const pendingSeek =
     localEngineActive && pendingSeekState
       ? (describePendingSeek({
@@ -1732,6 +1844,40 @@ export default function PlayFilesPage() {
   const clampedSongNr = Math.min(Math.max(1, currentSongNr), subsongCount);
   const isSongPlaying = Boolean(currentItem && isSongCategory(currentItem.category) && (isPlaying || isPaused));
   const songSelectorVisible = Boolean(isSongPlaying && knownSubsongCount && knownSubsongCount > 1);
+  /**
+   * Put every tune in this file into the queue.
+   *
+   * A SID is a small album, and until now the app said so — "Tune 1 of 19" — while offering nothing
+   * on the card that acted on it. Once they are ordinary playlist items, next, previous, shuffle,
+   * repeat and the playlist panel all work on them unchanged, so this adds an action rather than a
+   * surface. The tunes replace the item they came from, because that item is one of them.
+   */
+  const canPlayAllTunes = Boolean(
+    currentItem &&
+    isSongCategory(currentItem.category) &&
+    knownSubsongCount &&
+    knownSubsongCount >= MIN_TUNES_TO_EXPAND &&
+    currentIndex >= 0 &&
+    // Withdrawn once taken: expanding again would queue a second copy of all nineteen, and a
+    // control that has already done its job is better removed than made to explain itself.
+    !hasAllTunesQueued(playlist, currentItem.path, knownSubsongCount),
+  );
+  const playAllTunes = useCallback(async () => {
+    const item = playlist[currentIndex];
+    if (!item || !knownSubsongCount) return;
+    // Each tune's own length, resolved before they go in. They differ wildly inside one file — a
+    // nineteen-tune SID routinely holds a five-minute piece and a one-second jingle — and an item
+    // with no length falls back to the three-minute default, so without this most of them would be
+    // followed by minutes of silence.
+    //
+    // Read from the browse index, which carries the whole array. The songlength store answers per
+    // file rather than per tune, so it can say how long the SID is but not how long tune twelve is.
+    const seconds = item.request.source === "hvsc" ? await getHvscSubsongDurationsSeconds(item.path) : [];
+    const durationsMs = seconds.map((value) => (typeof value === "number" && value > 0 ? value * 1000 : null));
+    const { items, index } = expandSubsongs(playlist, currentIndex, knownSubsongCount, durationsMs);
+    if (items.length === playlist.length) return;
+    void startPlaylist(items, index, { replaceQueue: true });
+  }, [currentIndex, knownSubsongCount, playlist, startPlaylist]);
   // Everything the tune's own header says about itself, on one line under the title. The order and
   // the omission rules live in buildNowPlayingMetadata; this only supplies the fields.
   const currentItemMetadata = currentItem
@@ -2266,19 +2412,42 @@ export default function PlayFilesPage() {
                       are the actions that start or change a station, which belong after the
                       controls they will replace rather than before them. */}
                   <div className="flex flex-wrap gap-2">
-                    {sidRadioFlags.sidRadioEnabled &&
-                    !sidRadio.active &&
-                    currentTuneMd5 &&
-                    currentItem?.category === "sid" ? (
+                    {/*
+                     * First in the row, because it acts on the tune you are listening to rather than
+                     * on what plays next. Shown only when the file actually holds more than one, so
+                     * it never appears offering to do nothing.
+                     */}
+                    {canPlayAllTunes ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-testid="play-all-tunes"
+                        title={`Add all ${subsongCount} tunes in this file to the playlist`}
+                        onClick={() => void playAllTunes()}
+                      >
+                        <ListMusic className="mr-1.5 h-4 w-4" /> Play all {subsongCount} tunes
+                      </Button>
+                    ) : null}
+                    {/*
+                     * Offered whenever a SID is playing, including while a station is already
+                     * running — which is exactly when people want it. Hearing something you like is
+                     * what makes you want more of it, and a station is what produces that; requiring
+                     * the listener to stop the station first, and so throw away the one tune that
+                     * prompted them, made the obvious move the awkward one. Re-seeding is a single
+                     * tap and needs no confirmation: the thing it replaces is a station, and starting
+                     * another is the whole point of the control.
+                     */}
+                    {sidRadioFlags.sidRadioEnabled && currentSeedMd548 && currentItem?.category === "sid" ? (
                       <Button
                         variant="outline"
                         size="sm"
                         data-testid="sid-radio-start"
+                        title={`Start a station from ${currentDisplay?.title ?? "this tune"}`}
                         onClick={() =>
-                          void sidRadio.startSongRadio(currentTuneMd5.slice(0, 12), currentItem?.label ?? "this tune")
+                          void sidRadio.startSongRadio(currentSeedMd548, currentItem?.label ?? "this tune")
                         }
                       >
-                        <RadioIcon className="mr-1.5 h-4 w-4" /> Start Radio
+                        <RadioIcon className="mr-1.5 h-4 w-4" /> More like this
                       </Button>
                     ) : null}
                     {/*
@@ -2298,6 +2467,18 @@ export default function PlayFilesPage() {
                           }}
                         >
                           <RadioIcon className="mr-1.5 h-4 w-4" /> SID Radio
+                        </Button>
+                        {/* A station chooses for you, which is the point of it right up until you
+                            want one specific tune. Without this the only way to hear it was to stop
+                            the station, drill through the composer folders in the picker to a tune
+                            you could already name, and lose the station. */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid="hvsc-search-open"
+                          onClick={() => setHvscSearchOpen(true)}
+                        >
+                          <Search className="mr-1.5 h-4 w-4" /> Find a tune
                         </Button>
                         <Button
                           variant="outline"
@@ -2591,6 +2772,14 @@ export default function PlayFilesPage() {
             songSeedLabel={sidRadioSongSeedLabel}
             songStyleBit={sidRadio.station?.seedKind === "song" ? sidRadio.station.styleBit : null}
             onStartSong={startSidRadioSongMood}
+          />
+          <HvscSearchSheet
+            open={hvscSearchOpen}
+            onOpenChange={setHvscSearchOpen}
+            onPlay={playFoundTune}
+            onStartStation={startStationFromFoundTune}
+            canSeedStation={canSeedStationFrom}
+            stationActive={sidRadio.active}
           />
 
           <AlertDialog

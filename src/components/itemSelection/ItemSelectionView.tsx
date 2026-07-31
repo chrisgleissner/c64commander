@@ -151,6 +151,14 @@ export const ItemSelectionView = ({
                         {entry.subtitle}
                       </p>
                     ) : null}
+                    {entry.detail ? (
+                      <p
+                        className="text-[11px] text-muted-foreground/70 break-all whitespace-normal"
+                        data-testid="source-entry-detail"
+                      >
+                        {entry.detail}
+                      </p>
+                    ) : null}
                   </div>
                 </button>
               ) : (
@@ -161,6 +169,14 @@ export const ItemSelectionView = ({
                     {entry.subtitle ? (
                       <p className="text-[11px] text-muted-foreground break-words whitespace-normal">
                         {entry.subtitle}
+                      </p>
+                    ) : null}
+                    {entry.detail ? (
+                      <p
+                        className="text-[11px] text-muted-foreground/70 break-all whitespace-normal"
+                        data-testid="source-entry-detail"
+                      >
+                        {entry.detail}
                       </p>
                     ) : null}
                   </div>

@@ -23,7 +23,7 @@ import {
   nativeLocalAudioAvailable,
   type NativeLocalAudioBackend,
 } from "./localSidNativeSink";
-import { accurateEngineViable, recordRenderMeasurement, renderRatio } from "./renderThroughput";
+import { accurateEngineViable, recordRenderMeasurement, renderRatio, startupBufferSeconds } from "./renderThroughput";
 import { addLog, addErrorLog } from "@/lib/logging";
 import { claimPhoneAudio, phoneAudioOwner, releasePhoneAudio } from "@/lib/audio/phoneAudioOwnership";
 import { clearLocalAudioHealth, reportLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
@@ -540,6 +540,21 @@ export class LocalSidEngine {
    */
   private cached: RenderedTune | null = null;
   private cachedCursor = 0;
+  /**
+   * Playback is being fed from the pre-render's buffer while that pre-render is still growing it.
+   *
+   * Set when an awaited seek is finally served, and it is what stops that moment turning straight
+   * back into another silence. The buffer that satisfies the seek ends barely past the target — it
+   * is the chunk that just crossed it — so there is almost nothing after the resume point. Handing
+   * back to the live renderer there means asking a renderer that cannot rewind to reach a position
+   * three minutes in, which is the whole tune re-rendered with the audio gated shut: measured on a
+   * Pixel 4 as a second of music after a seventy-second wait, followed by a minute of nothing.
+   *
+   * The renderer that is about to produce exactly the needed audio is the pre-render, which is still
+   * running and ahead. So playback follows it: every chunk it emits extends the buffer being played
+   * from, and the hand-off waits until it has finished (or died).
+   */
+  private followingPrerender = false;
   /** Key of the tune currently open, so a finished pre-render can be matched to it. */
   private currentKey: string | null = null;
   private volume = 1;
@@ -657,7 +672,26 @@ export class LocalSidEngine {
     // A seek waiting on this render is now waiting on a thread that will never report again. Drop
     // it rather than leave it outstanding: while it is set the UI shows a wait that cannot end and
     // the stall watchdog is held off, so clearing it is what lets the ordinary recovery run.
+    const awaited = this.pendingSeek;
     this.pendingSeek = null;
+    // Playback reading from that render is in the same position: no further chunk will extend the
+    // buffer it is playing from, so it has to go back to the live renderer or fall silent when the
+    // buffer runs out. The hand-off is expensive — the live renderer cannot rewind — but it is the
+    // only source of the rest of the tune once this thread has gone.
+    //
+    // Where to send it depends on which of the two states this interrupted. Following the render
+    // means resuming from the end of what was cached. A seek still waiting means the listener has
+    // been promised a position that nothing is now working towards, and the live renderer is the
+    // only thing that can still reach it — a thread dying on its first chunk leaves no cache at all,
+    // which is the case that otherwise fell through here with playback silently stuck until the
+    // watchdog noticed.
+    const wasFollowing = this.followingPrerender;
+    this.followingPrerender = false;
+    if (wasFollowing || awaited) {
+      const seam = this.cached?.durationSeconds ?? 0;
+      const target = seam > 0 ? seam : (awaited?.targetSeconds ?? 0);
+      if (target > 0) this.beginPartialHandoff(target);
+    }
     this.prerenderFraction = null;
     this.prerenderKey = null;
     this.prerenderWorker?.terminate();
@@ -902,7 +936,16 @@ export class LocalSidEngine {
         // applied — applying it would jump the tune now playing to a position somebody asked for in
         // a different one.
         if (this.pendingSeek && this.isStalePendingSeek(this.pendingSeek)) this.pendingSeek = null;
-        if (this.pendingSeek !== null && message.seconds > this.pendingSeek.targetSeconds) {
+        // Wait for a cushion past the target, not merely for the target.
+        //
+        // The chunk that crosses the target leaves nothing after it, so resuming exactly there
+        // starts playback with no headroom at all: the speaker consumes one second per second and
+        // the renderer is only just ahead. The same question — how much has to be in hand before
+        // starting so it cannot run dry — is what the measured start-up buffer already answers, so
+        // it answers this one too. It costs a fraction of a second more waiting on a wait that is
+        // measured in tens of them.
+        const cushion = startupBufferSeconds();
+        if (this.pendingSeek !== null && message.seconds > this.pendingSeek.targetSeconds + cushion) {
           const awaited = this.pendingSeek.targetSeconds;
           this.pendingSeek = null;
           this.cached = {
@@ -913,7 +956,26 @@ export class LocalSidEngine {
             durationSeconds: message.seconds,
           };
           this.cachedCursor = Math.min(grown.length, Math.floor(awaited * message.sampleRate) * message.channels);
-          this.beginPartialHandoff(message.seconds);
+          // Deliberately NOT a hand-off to the live renderer: see `followingPrerender`. The thread
+          // that is already producing this audio keeps producing it.
+          this.followingPrerender = true;
+          addLog("debug", "Local SID awaited seek served by the running pre-render", {
+            service: "local-sid",
+            seconds: awaited,
+            renderedSeconds: message.seconds,
+            cushionSeconds: Math.round(cushion * 100) / 100,
+          });
+          this.pump();
+        } else if (this.followingPrerender && this.cached) {
+          // Playback is reading from this buffer as it grows. Republish the extended one, keeping
+          // the cursor where it is — the slices already scheduled are a prefix of it.
+          this.cached = {
+            partial: true,
+            pcm: grown,
+            sampleRate: message.sampleRate,
+            channels: message.channels,
+            durationSeconds: message.seconds,
+          };
           this.pump();
         }
         this.renderCache.set(this.prerenderKey, {
@@ -952,6 +1014,33 @@ export class LocalSidEngine {
         // engine into a silence the stall watchdog is deliberately forbidden to judge, and the tune
         // never reports its end either. Dragging into the closing seconds of a tune reaches this.
         this.resolvePendingSeekAgainstCompletedRender(pcm, message.sampleRate, message.channels, message.seconds);
+        // Playback was following this render as it grew. It has stopped growing, so whatever is in
+        // hand is now all there will be — which means the flag comes off here unconditionally. A
+        // render that finished with nothing to show for it is the case that matters: leaving the
+        // flag set would leave `pump` waiting for a chunk that can no longer arrive, and the only
+        // thing that would notice is the stall watchdog, seconds later and by killing the worker.
+        if (this.followingPrerender) {
+          this.followingPrerender = false;
+          if (pcm.length > 0) {
+            // Adopt the finished buffer and let its `partial` flag decide what running off the end
+            // means: a full render's end is the tune's end, a lead-in's end is where the live
+            // renderer has to take over.
+            this.cached = {
+              partial,
+              pcm,
+              sampleRate: message.sampleRate,
+              channels: message.channels,
+              durationSeconds: message.seconds,
+            };
+            if (partial) this.beginPartialHandoff(message.seconds);
+          } else {
+            // Nothing was produced, so the live renderer is the only remaining source of the rest of
+            // the tune — expensive, because it cannot rewind, and better than falling silent.
+            const seam = this.cached?.durationSeconds ?? 0;
+            if (seam > 0) this.beginPartialHandoff(seam);
+          }
+          this.pump();
+        }
         addLog("debug", "Local SID tune pre-rendered", {
           service: "local-sid",
           key: this.prerenderKey,
@@ -969,6 +1058,15 @@ export class LocalSidEngine {
         // before the "seeked" reply was rendered for the position we just left.
         // Scheduling it would play the wrong part of the tune.
         if (this.seekPending) return;
+        // The same is true for a seek waiting on the pre-render, and for a less obvious reason: that
+        // path never repositions the live renderer at all, precisely so it does not pay for a second
+        // re-render. So the live worker is still sitting at the position the listener just left, and
+        // every chunk it produces is that old audio. Scheduling it plays the part of the tune the
+        // listener seeked AWAY from while the bar, the clock and the status all describe the target —
+        // the exact "heard the old position while the bar showed the new one" failure the wait exists
+        // to avoid. Flushing the queued audio was not enough on its own, because the renderer kept
+        // refilling it.
+        if (this.pendingSeek) return;
         this.inFlightRenders = Math.max(0, this.inFlightRenders - 1);
         this.recordRender(message.renderMs, message.samples);
         // Learn how fast this device renders, so the next tune knows how much to buffer before it
@@ -988,6 +1086,10 @@ export class LocalSidEngine {
         // Same reasoning as "chunk": an end raised before the seek completed
         // describes the old position and must not finish the tune.
         if (this.seekPending) return;
+        // And an end that arrives while a seek waits on the pre-render describes the live renderer
+        // running off the tune from the OLD position. The tune the listener is waiting for has not
+        // finished; ending it here would skip to the next track mid-wait.
+        if (this.pendingSeek) return;
         this.inFlightRenders = Math.max(0, this.inFlightRenders - 1);
         this.endReceived = true;
         this.maybeFireEnded();
@@ -1125,6 +1227,11 @@ export class LocalSidEngine {
     const audibleAtRequest = this.scheduler.positionSeconds();
     // A newer seek replaces whatever an older one was waiting for.
     this.pendingSeek = null;
+    // And it decides afresh where playback reads from. Following the pre-render is a state the
+    // previous seek entered; this one either re-enters it, finds the cache can answer outright, or
+    // goes to the worker. Carrying it over would leave a later `prerender-chunk` extending a buffer
+    // nothing is playing from any more.
+    this.followingPrerender = false;
     this.inFlightRenders = 0;
     this.endReceived = false;
     this.endedFired = false;
@@ -1427,6 +1534,12 @@ export class LocalSidEngine {
       let handedOff = false;
       while (this.scheduler.bufferedSeconds() < this.targetBufferSeconds) {
         if (this.cachedCursor >= pcm.length) {
+          if (this.followingPrerender) {
+            // Momentarily caught up with a render that is still producing. The next chunk extends
+            // this buffer and pumps again, so there is nothing to do but wait for it — and nothing
+            // to hand off to, because the live renderer is at the position this seek left behind.
+            return;
+          }
           if (this.cached.partial) {
             // Only the opening was cached. The rest is rendered live from the seam, which the worker
             // was sent to when playback began. Treating this as the end would cut the song off.
@@ -1450,6 +1563,11 @@ export class LocalSidEngine {
       if (!handedOff) return;
     }
     if (!this.worker) return;
+    // Nothing live is wanted while a seek waits on the pre-render. The chunks would be discarded on
+    // arrival (they are the old position), so asking for them only spends the CPU that the
+    // pre-render — the thread the listener is actually waiting for — needs to finish. Measured on a
+    // Pixel 4, the two renderers competing is a material part of how long that wait lasts.
+    if (this.pendingSeek) return;
     while (
       this.inFlightRenders < MAX_IN_FLIGHT_RENDERS &&
       this.scheduler.bufferedSeconds() + this.inFlightRenders * this.chunkSeconds < this.targetBufferSeconds
@@ -1468,7 +1586,11 @@ export class LocalSidEngine {
 
   private maybeFireEnded(): void {
     if (this.endedFired || !this.endReceived || !this.scheduler) return;
-    const scheduled = this.scheduler.getStats().chunksScheduled;
+    // Since the last seek, not since the tune began. `chunksEnded` is zeroed by a seek and the
+    // sources a seek silences never report, so comparing against the session total meant a tune that
+    // had been seeked into could never satisfy this — it played to the end of its audio and then sat
+    // there, silent and still "playing", until the songlength ran out.
+    const scheduled = this.scheduler.chunksScheduledSinceReset();
     // `scheduled === 0` is not "not finished yet", it is "there was never any
     // audio": seeking to or past the end of a fully-rendered tune exhausts the
     // cache on the first pump, before anything is queued. Waiting for chunks
@@ -1810,6 +1932,7 @@ export class LocalSidEngine {
       endReceived: this.endReceived,
       cached: this.cached ? { partial: Boolean(this.cached.partial), seconds: this.cached.durationSeconds } : null,
       cachedCursor: this.cachedCursor,
+      followingPrerender: this.followingPrerender,
       currentKey: this.currentKey,
       pendingSeek: this.pendingSeek,
       trackInstanceId: this.trackInstanceId,
@@ -1817,6 +1940,13 @@ export class LocalSidEngine {
       pendingWarms: this.pendingWarms.size,
       cachedTunes: this.renderCache.size,
       scheduledAhead: this.scheduler?.bufferedSeconds() ?? null,
+      // What the tune's end is waiting for. `maybeFireEnded` only fires once every scheduled source
+      // has reported back, so a tune that has run out of audio but never advances is telling you
+      // these two disagree — which is invisible from any other counter.
+      chunksScheduled: this.scheduler?.getStats().chunksScheduled ?? null,
+      chunksEnded: this.chunksEnded,
+      endedFired: this.endedFired,
+      cachedRemaining: this.cached ? this.cached.pcm.length - this.cachedCursor : null,
     };
   }
 
@@ -1840,6 +1970,23 @@ export class LocalSidEngine {
    */
   getPendingSeek(): PendingSeekState | null {
     return this.pendingSeek ? { ...this.pendingSeek } : null;
+  }
+
+  /**
+   * Is a seek of any kind still being worked on?
+   *
+   * Two different waits look identical from outside — the playhead stops and nothing sounds — and
+   * both are legitimate. One is waiting for the pre-render to reach the target ({@link pendingSeek},
+   * which the progress bar reports). The other is the worker re-rendering the tune to get there,
+   * which is silent and unreported but just as deliberate, and takes fifteen to twenty seconds on a
+   * Pixel 4.
+   *
+   * Anything that treats a motionless playhead as a fault has to ask this first. The auto-advance
+   * deadline is the one that matters: left to run down through a slow seek it would skip the track
+   * the listener is waiting to hear.
+   */
+  isSeeking(): boolean {
+    return this.seekPending !== null || this.pendingSeek !== null;
   }
 
   /**
@@ -1971,6 +2118,7 @@ export class LocalSidEngine {
     this.chunksEnded = 0;
     this.cached = null;
     this.cachedCursor = 0;
+    this.followingPrerender = false;
     this.currentKey = null;
     // Stop, Next, Previous, a station change, a route change and an engine change all come through
     // here, and every one of them is the listener saying they no longer want the position they were

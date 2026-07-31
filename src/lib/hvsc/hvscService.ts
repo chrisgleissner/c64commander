@@ -22,6 +22,7 @@ import type { SongLengthResolveQuery, SongLengthResolution } from "@/lib/songlen
 import { addErrorLog, addLog } from "@/lib/logging";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import {
+  getHvscSongFromBrowseIndex,
   loadHvscBrowseIndexSnapshot,
   saveHvscBrowseIndexSnapshot,
   verifyHvscBrowseIndexIntegrity,
@@ -404,6 +405,18 @@ export const getHvscFolderListingPaged = async (options: {
     if (page.totalFolders > 0 || page.totalSongs > 0 || !isHvscBridgeAvailable()) {
       return finalizePage(page, "index");
     }
+    // An empty page means one of two very different things, and the fallback below is only right for
+    // one of them. "The index does not know this folder" deserves a native listing. "The query
+    // matched nothing here" is a complete, correct answer — and falling back for it made every
+    // keystroke that matched nothing enumerate the whole folder over the bridge, on a filter that is
+    // typed a letter at a time. Asking the index for the same folder unfiltered separates the two,
+    // and costs an in-memory lookup rather than a native call.
+    if (query.trim()) {
+      const unfiltered = hvscIndex.queryFolderPage({ path, query: "", offset: 0, limit: 1 });
+      if (unfiltered.totalFolders > 0 || unfiltered.totalSongs > 0) {
+        return finalizePage(page, "index-no-match");
+      }
+    }
     const mock = getMockBridge();
     if (mock?.getHvscFolderListing) {
       const runtimeListing = await mock.getHvscFolderListing({ path });
@@ -453,6 +466,29 @@ export const getHvscFolderListing = async (path: string): Promise<HvscFolderList
 };
 
 /**
+ * Search every tune in the archive by title, author or path.
+ *
+ * Answers from the in-memory browse index, so it costs a linear pass over the song table and no
+ * I/O at all — fast enough to run while the listener is still typing. Returns null when the index
+ * is not loaded, which the caller must show as "not ready" rather than "nothing found".
+ *
+ * Deliberately bypasses `ensureHvscIndexReady()` for the same reason `getHvscSongsRecursive` does:
+ * its integrity check stat-probes virtual paths that do not exist as files, and a failed probe
+ * destructively clears the snapshot.
+ */
+export const searchHvscSongs = async (options: {
+  query: string;
+  path?: string;
+  offset?: number;
+  limit?: number;
+}): Promise<ReturnType<typeof hvscIndex.searchSongs>> => {
+  await ensureHvscSonglengthsReadyOnColdStart();
+  const snapshot = await hvscIndex.loadBrowseSnapshot();
+  if (!snapshot) return null;
+  return hvscIndex.searchSongs(options);
+};
+
+/**
  * Fast synchronous bulk listing of all songs under a folder.
  * Reads directly from the in-memory browse index — no async I/O,
  * no per-page smoke snapshots. Returns null if the index is not loaded.
@@ -466,6 +502,23 @@ export const getHvscFolderListing = async (path: string): Promise<HvscFolderList
  * the recursive query path has no such rebuild —- so we load the snapshot
  * directly and, if still missing, rebuild from native without the stat check.
  */
+/**
+ * Every tune's length inside one SID file, in seconds, indexed by `songNr - 1`.
+ *
+ * A SID is a small album and its tunes are wildly different lengths — a nineteen-tune file routinely
+ * holds a five-minute piece and a one-second jingle. The songlength store answers per file, so it
+ * cannot say how long tune twelve is; the browse index carries the whole array, which is what this
+ * reads. Empty when the archive does not know, which the caller must treat as "leave it unresolved"
+ * rather than as zero.
+ */
+export const getHvscSubsongDurationsSeconds = async (virtualPath: string): Promise<number[]> => {
+  await ensureHvscSonglengthsReadyOnColdStart();
+  const snapshot = await hvscIndex.loadBrowseSnapshot();
+  if (!snapshot) return [];
+  const song = getHvscSongFromBrowseIndex(snapshot, virtualPath);
+  return song?.durationsSeconds ? [...song.durationsSeconds] : [];
+};
+
 export const getHvscSongsRecursive = async (
   path: string,
 ): Promise<ReturnType<typeof hvscIndex.querySongsRecursive>> => {

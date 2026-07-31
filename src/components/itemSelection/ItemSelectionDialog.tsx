@@ -242,17 +242,30 @@ export const ItemSelectionDialog = ({
     selectedSourceId,
   ]);
 
+  /**
+   * Whether the text box belongs to the navigator or to this component.
+   *
+   * A source that pages its own listings applies the query itself; so does one that can search
+   * beyond the current folder, because the scope control has to be able to widen the same text. Only
+   * a plain `listEntries` source with no search of its own keeps a local filter here.
+   */
+  const usesNavigatorQuery = Boolean(browser.isQueryBacked || browser.canSearchSource);
+  const searchText = usesNavigatorQuery ? (browser.query ?? "") : filterText;
+
   const visibleEntries = useMemo(() => {
     const filesFiltered = filterEntry
       ? browser.entries.filter((entry) => entry.type === "dir" || filterEntry(entry))
       : browser.entries;
-    if (browser.isQueryBacked) return filesFiltered;
-    if (!filterText) return filesFiltered;
-    const lower = filterText.toLowerCase();
+    // Already matched: a query-backed listing was paged with the query applied, and search results
+    // were matched by the source. Filtering again here would drop results that matched on something
+    // not in their name — a composer, for one.
+    if (browser.isQueryBacked || browser.isSearching) return filesFiltered;
+    if (!searchText) return filesFiltered;
+    const lower = searchText.toLowerCase();
     return filesFiltered.filter(
       (entry) => entry.name.toLowerCase().includes(lower) || entry.path.toLowerCase().includes(lower),
     );
-  }, [browser.entries, browser.isQueryBacked, filterEntry, filterText]);
+  }, [browser.entries, browser.isQueryBacked, browser.isSearching, filterEntry, searchText]);
 
   const toggleSelection = (entry: SourceEntry) => {
     setSelection((prev) => {
@@ -576,19 +589,73 @@ export const ItemSelectionDialog = ({
             </div>
 
             {!isArchiveSource ? (
-              <Input
-                placeholder="Filter files…"
-                value={browser.isQueryBacked ? (browser.query ?? "") : filterText}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  if (browser.isQueryBacked) {
-                    browser.setQuery?.(nextValue);
-                    return;
+              <div className="space-y-2">
+                <Input
+                  placeholder={
+                    browser.searchScope === "source"
+                      ? `Search all of ${selectedSourceLabel ?? "this source"}…`
+                      : "Filter files…"
                   }
-                  setFilterText(nextValue);
-                }}
-                data-testid="add-items-filter"
-              />
+                  value={searchText}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    if (usesNavigatorQuery) {
+                      browser.setQuery?.(nextValue);
+                      return;
+                    }
+                    setFilterText(nextValue);
+                  }}
+                  data-testid="add-items-filter"
+                  aria-label={browser.searchScope === "source" ? "Search the whole source" : "Filter this folder"}
+                />
+                {/* Where the text applies. A filter that only ever sees the folder on screen cannot
+                    find a tune in an archive filed by composer, so the reach is made explicit and
+                    switchable rather than assumed. Only shown for a source that can actually search
+                    beyond the current folder. */}
+                {browser.canSearchSource ? (
+                  <div className="flex flex-wrap items-center gap-2" data-testid="add-items-search-scope">
+                    <Button
+                      type="button"
+                      variant={browser.searchScope === "folder" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => browser.setSearchScope("folder")}
+                      data-testid="add-items-scope-folder"
+                      aria-pressed={browser.searchScope === "folder"}
+                    >
+                      This folder
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={browser.searchScope === "source" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => browser.setSearchScope("source")}
+                      data-testid="add-items-scope-source"
+                      aria-pressed={browser.searchScope === "source"}
+                    >
+                      Everywhere
+                    </Button>
+                    {/* A source that has to be walked cannot search while you type, so it gets an
+                        explicit action. An indexed one answers on its own and needs no button. */}
+                    {browser.searchScope === "source" && !browser.searchIsInstant ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => browser.runSourceSearch?.()}
+                        disabled={browser.isLoading || !(browser.query ?? "").trim()}
+                        data-testid="add-items-deep-scan"
+                      >
+                        {browser.isLoading ? "Scanning…" : "Scan"}
+                      </Button>
+                    ) : null}
+                    {browser.isSearching ? (
+                      <span className="text-xs text-muted-foreground" data-testid="add-items-search-summary">
+                        {browser.totalCount ?? 0} found
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
           </div>
 
@@ -645,8 +712,14 @@ export const ItemSelectionDialog = ({
                   onNavigateUp={browser.navigateUp}
                   onNavigateRoot={browser.navigateRoot}
                   onRefresh={browser.refresh}
-                  showFolderSelect={allowFolderSelection}
-                  emptyLabel="No matching items in this folder."
+                  showFolderSelect={allowFolderSelection && !browser.isSearching}
+                  emptyLabel={
+                    browser.isSearching
+                      ? "Nothing found. Try a shorter search, or part of the composer's name."
+                      : browser.searchScope === "source" && !browser.searchIsInstant
+                        ? "Type what you are looking for, then Scan."
+                        : "No matching items in this folder."
+                  }
                 />
               )}
               {!isArchiveSource && browser.hasMore ? (

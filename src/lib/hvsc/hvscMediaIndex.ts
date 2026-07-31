@@ -14,11 +14,13 @@ import {
   buildHvscBrowseIndexFromEntries,
   listFolderFromBrowseIndex,
   listSongsRecursiveFromBrowseIndex,
+  searchSongsFromBrowseIndex,
   streamSongsRecursiveFromBrowseIndex,
   loadHvscBrowseIndexSnapshot,
   saveHvscBrowseIndexSnapshot,
   type HvscBrowseIndexSnapshot,
   type HvscBrowseIndexedSong,
+  type HvscSongSearchPage,
 } from "./hvscBrowseIndexStore";
 
 const normalizePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
@@ -197,6 +199,21 @@ export class HvscMediaIndexAdapter implements MediaIndex {
       this.browseSnapshot = buildHvscBrowseIndexFromEntries(entries);
     }
     return page;
+  }
+
+  /**
+   * Search the whole archive by title, author or path.
+   *
+   * Returns null when the browse snapshot is not loaded, which is a different answer from an empty
+   * page: the caller must be able to say "the index is not ready" rather than "no such tune".
+   */
+  searchSongs(options: { query: string; path?: string; offset?: number; limit?: number }): HvscSongSearchPage | null {
+    if (!this.browseSnapshot) return null;
+    return searchSongsFromBrowseIndex(this.browseSnapshot, options.query, {
+      path: options.path,
+      offset: options.offset,
+      limit: options.limit,
+    });
   }
 
   /**

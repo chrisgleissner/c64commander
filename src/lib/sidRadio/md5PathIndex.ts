@@ -79,7 +79,35 @@ export interface ResolveVirtualPathOptions {
 // --- module singleton store (rebuilt on the songlengths finalize hook) ---
 
 let currentIndex = new Map<string, string[]>();
+/**
+ * The same index read the other way: `virtualPath → md5_48`.
+ *
+ * Needed as soon as a tune can be chosen by name rather than served by the similarity walk. Starting
+ * a station from a search result means turning a path back into the identity the corpus uses, and
+ * the only alternative — reading the file and hashing it — costs a file read and a digest for
+ * something the parse already knew. A path has exactly one hash, so the inversion is unambiguous
+ * even though several paths can share one (HVSC keeps duplicates).
+ */
+let pathIndex = new Map<string, string>();
 let lastContentHash: string | null = null;
+
+/**
+ * Invert the forward index.
+ *
+ * A path that turns up under more than one `md5_48` — a tune revised, with both digests listed —
+ * keeps the last one assigned, which is the one listed last in `Songlengths.md5`. That is the
+ * revision, so the right answer falls out, but it is a property of the file's ordering rather than
+ * of this function, and is pinned by a test rather than left implicit.
+ *
+ * Paths are matched exactly as HVSC stores them, which is case-sensitive and upper-case.
+ */
+const buildPathIndex = (byMd5: Map<string, string[]>): Map<string, string> => {
+  const index = new Map<string, string>();
+  for (const [md548, paths] of byMd5) {
+    for (const path of paths) index.set(path, md548);
+  }
+  return index;
+};
 
 // FNV-1a — cheap change detection so an unchanged reload is a no-op.
 const hashContent = (text: string): string => {
@@ -116,6 +144,7 @@ export const rebuildMd548PathIndex = (
     return { rebuilt: false, size: currentIndex.size };
   }
   currentIndex = next;
+  pathIndex = buildPathIndex(next);
   lastContentHash = hash;
   return { rebuilt: true, size: currentIndex.size };
 };
@@ -144,10 +173,20 @@ export const resolveVirtualPath = (md5_48: string, options?: ResolveVirtualPathO
 /** All known paths for a `md5_48` (sorted; empty if unknown). */
 export const virtualPathsForMd548 = (md5_48: string): string[] => currentIndex.get(md5_48.toLowerCase()) ?? [];
 
+/**
+ * The corpus identity of an HVSC path, or null when the archive does not list it.
+ *
+ * Null is the answer for a tune the similarity corpus has never heard of, which is the difference
+ * between "a station can be seeded here" and "this tune can only be played".
+ */
+export const md548ForVirtualPath = (virtualPath: string): string | null =>
+  pathIndex.get(normalizePath(virtualPath)) ?? null;
+
 export const getMd548PathIndexStats = () => ({ size: currentIndex.size });
 
 /** Test-only reset of the singleton. */
 export const resetMd548PathIndex = (): void => {
   currentIndex = new Map<string, string[]>();
+  pathIndex = new Map<string, string>();
   lastContentHash = null;
 };

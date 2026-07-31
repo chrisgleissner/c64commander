@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { getHvscFolderListing, getHvscFolderListingPaged, getHvscSongsRecursive } from "@/lib/hvsc";
+import { getHvscFolderListing, getHvscFolderListingPaged, getHvscSongsRecursive, searchHvscSongs } from "@/lib/hvsc";
 import { getHvscDisplayAuthor, getHvscDisplayTitle } from "@/lib/hvsc/hvscBrowseIndexStore";
 import { normalizeSourcePath } from "./paths";
 import { SOURCE_LABELS } from "./sourceTerms";
@@ -83,6 +83,44 @@ export const createHvscSourceLocation = (rootPath: string): SourceLocation => {
     };
   };
 
+  /**
+   * Search the whole archive rather than the folder on screen.
+   *
+   * HVSC files tunes by composer, so browsing to a title you can name means already knowing who
+   * wrote it. The browse index answers this in a linear pass with no I/O, which is why it can run
+   * while the listener is typing.
+   *
+   * Each result says which folder it came from, because a flat list drawn from sixty thousand files
+   * is otherwise ambiguous — two composers can both have a "Theme".
+   */
+  const searchEntries = async (options: {
+    query: string;
+    path?: string;
+    offset?: number;
+    limit?: number;
+  }): Promise<SourceEntryPage> => {
+    const page = await searchHvscSongs({
+      query: options.query,
+      path: options.path,
+      offset: options.offset,
+      limit: options.limit,
+    });
+    // A missing index is not an empty archive. Reporting zero results would tell the listener their
+    // tune is not there; reporting nothing loaded leaves the browse path to say what is happening.
+    if (!page) return { entries: [], totalCount: 0, nextOffset: null };
+    const entries = page.songs.map((song) => {
+      const entry = songToEntry(song);
+      const folder = normalizeHvscPath(song.virtualPath).split("/").slice(0, -1).join("/") || "/";
+      return { ...entry, detail: folder };
+    });
+    const loaded = page.offset + entries.length;
+    return {
+      entries,
+      totalCount: page.totalSongs,
+      nextOffset: loaded < page.totalSongs ? loaded : null,
+    };
+  };
+
   const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal }): Promise<SourceEntry[]> => {
     if (options?.signal?.aborted) {
       throw new DOMException("Aborted", "AbortError");
@@ -137,6 +175,8 @@ export const createHvscSourceLocation = (rootPath: string): SourceLocation => {
     isAvailable: true,
     listEntries,
     listEntriesPage,
+    searchEntries,
+    searchIsInstant: true,
     listFilesRecursive,
   };
 };

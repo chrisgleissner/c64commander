@@ -204,12 +204,79 @@ describe("auto-advance follows a seek", () => {
     // position has been heard. A wait of twenty seconds therefore spent twenty seconds of the tune's
     // own time, and a target deep into a long tune advanced the playlist before playback resumed at
     // all — the tune reported itself finished without ever reaching the position asked for.
+    //
+    // What holds it still is the anchor: for as long as the wait lasts the engine's playhead sits at
+    // the target, so the elapsed time the deadline is computed from does not move either.
+    const { resolvePlayheadAnchor } = await import("@/lib/playback/playheadAnchor");
+    const durationMs = 240_000;
+    const targetMs = 180_000;
+    const acceptedAtMs = 1_000_000;
+    // The seek is accepted: the clocks are rebased to the target.
+    const trackStartedAtMs = acceptedAtMs - targetMs;
+
+    // Twenty seconds of rendering pass. The playhead has not moved — nothing was heard.
+    const nowMs = acceptedAtMs + 20_000;
+    const anchor = resolvePlayheadAnchor({ enginePositionMs: targetMs, trackStartedAtMs, nowMs });
+
+    expect(anchor?.elapsedMs).toBe(targetMs);
+    // So the tune still has all of its remaining minute left, rather than forty seconds.
+    expect(durationMs - (anchor?.elapsedMs ?? 0)).toBe(60_000);
+    // And the wall clock had genuinely run away by the whole wait, which is what the anchor caught.
+    expect(anchor?.driftMs).toBe(20_000);
+    expect(anchor?.drifted).toBe(true);
+  });
+
+  it("re-derives the deadline from the anchored elapsed time, not from wall time", async () => {
+    // Contract on the wiring: the timeline tick is the one place that owns this. A second mechanism
+    // writing the same deadline drifted from it AND spent a Capacitor bridge call twice a second.
     const { readFileSync } = await import("node:fs");
     const page = readFileSync("src/pages/PlayFilesPage.tsx", "utf8");
-    expect(page).toContain("const holdAutoAdvanceWhilePending = useCallback(");
-    expect(page).toContain("durationMs - pending.targetSeconds * 1000");
-    // Driven from the engine poll, so it is re-applied for as long as the wait lasts rather than
-    // once when the target is accepted.
-    expect(page).toContain("holdAutoAdvanceWhilePending(pending);");
+    expect(page).toContain("resolvePlayheadAnchor({");
+    expect(page).toContain("const dueAtMs = now + Math.max(0, currentDurationMsRef.current - anchor.elapsedMs);");
+    // Only when it moved: this deadline is mirrored to the native background watchdog.
+    expect(page).toContain("if (anchor.drifted && !anchor.stalled && currentDurationMsRef.current)");
+    expect(page).not.toContain("holdAutoAdvanceWhilePending");
+  });
+});
+
+/**
+ * When a tune is allowed to report that it has finished.
+ *
+ * The engine fires "ended" once every source it scheduled has reported back. It counts those reports
+ * itself and zeroes the count on a seek — so the count it is compared against has to be zeroed by
+ * the same seek. Measured on a Pixel 4 before this: a tune seeked into played to the end of its
+ * audio with 114 chunks scheduled against 28 reported, never fired "ended", and the playlist sat on
+ * a silent track.
+ */
+describe("chunk accounting across a seek", () => {
+  it("counts scheduled chunks from the last seek, not from the start of the tune", () => {
+    const sink = new FakeSink();
+    const scheduler = new LocalSidChunkScheduler(sink as never, { startPaddingSec: 0 });
+    scheduler.schedule(chunk(), 2);
+    scheduler.schedule(chunk(), 2);
+    expect(scheduler.chunksScheduledSinceReset()).toBe(2);
+
+    scheduler.resetTo(60);
+
+    expect(scheduler.chunksScheduledSinceReset()).toBe(0);
+    scheduler.schedule(chunk(), 2);
+    expect(scheduler.chunksScheduledSinceReset()).toBe(1);
+    // The session total is untouched, because the stats bridge reads that one.
+    expect(scheduler.getStats().chunksScheduled).toBe(3);
+  });
+
+  it("silences the pre-seek sources without their ends ever being reported", () => {
+    // Which is why the count has to restart rather than be subtracted from: those sources have their
+    // completion handler removed, so they can never balance the books.
+    const sink = new FakeSink();
+    const scheduler = new LocalSidChunkScheduler(sink as never, { startPaddingSec: 0 });
+    let ended = 0;
+    scheduler.schedule(chunk(), 2);
+    sink.sources.forEach((source) => (source.onended = () => (ended += 1)));
+
+    scheduler.resetTo(60);
+    sink.sources.forEach((source) => source.onended?.());
+
+    expect(ended).toBe(0);
   });
 });
