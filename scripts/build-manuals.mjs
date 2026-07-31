@@ -1185,7 +1185,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `It needs no internet connection. The app already knows which tunes resemble one another, so once the music is on your ${appDeviceName(variant)} there is nothing further to download.`,
     "",
-    "![The Now Playing card during a station, with the heart and cross beside the title](../../img/app/play/sid-radio/01-controls.png)",
+    '![The Now Playing card: Rob Hubbard\'s "Monty on the Run" playing, with the heart and cross beside the title](../../img/app/play/sid-radio/01-controls.png)',
     "",
     "#### Starting a station",
     "",

@@ -973,24 +973,28 @@ const FEATURED_SID = {
   playlistKey: SHARED_PLAYLIST_STORAGE_KEY,
   sessionKey: PLAYBACK_SESSION_KEY,
   deviceId: "TEST-123",
-  path: "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
-  name: "Commando.sid",
-  title: "Commando",
-  durationMs: 215000,
-  elapsedMs: 7000,
+  // Rob Hubbard's "Monty on the Run", 1985 — one of the tunes that made the SID
+  // famous, and a cheerful one. Every value here is taken from the real HVSC
+  // entry: 19 tunes, PAL, a 6581 chip, and 5:50 for the first tune. The bytes the
+  // mock serves are synthetic, but the header they carry states exactly what the
+  // real file states, so the credits under the title are genuine rather than
+  // invented. Without a header to read, the card showed a nameless tune.
+  path: "/MUSICIANS/H/Hubbard_Rob/Monty_on_the_Run.sid",
+  name: "Monty_on_the_Run.sid",
+  title: "Monty on the Run",
+  durationMs: 350000,
+  songCount: 19,
   /**
-   * The wall-clock instant the capture runs at.
+   * Seven seconds in, just past a whole second.
    *
-   * The transport's elapsed time is derived from `Date.now()`, so with a live
-   * clock this screenshot read 0:07 on one run and 0:08 on the next. The noise
-   * budget that suppresses re-writes is 8 pixels, and a changed digit plus the
-   * moved progress bar is far more than that, so the file churned on every
-   * regeneration. Pinning `Date.now()` for the page makes the elapsed exactly
-   * `elapsedMs` and keeps it there. The same instant is used for the session's
-   * `updatedAt`, so the restore sees an age of zero and is not downgraded to
-   * paused as a stale session would be.
+   * The elapsed time, the remaining time and the progress bar are all derived
+   * from `Date.now()`, so with a live clock this file was rewritten on every
+   * regeneration — well past the 8-pixel noise budget that suppresses re-writes.
+   * The page clock is pinned for the capture, and that happens after the app has
+   * connected because the connection and health logic compares timestamps and
+   * never settles against a frozen clock.
    */
-  nowIso: "2026-01-01T12:00:00.000Z",
+  elapsedMs: 7050,
 } as const;
 
 const captureScreenshot = async (
@@ -2476,7 +2480,18 @@ test.describe("App screenshots", () => {
         // prose describes — no title, no elapsed time, no progress.
         const playlistKey = seed.playlistKey;
         const payload = {
-          items: [{ source: "hvsc", path: seed.path, name: seed.name, durationMs: seed.durationMs }],
+          items: [
+            {
+              source: "hvsc",
+              path: seed.path,
+              name: seed.name,
+              durationMs: seed.durationMs,
+              // The header declares 19 tunes; carrying the count here is what makes
+              // the card say "Tune 1 of 19" rather than leaving that field out.
+              subsongCount: seed.songCount,
+              songNr: 1,
+            },
+          ],
           currentIndex: 0,
         };
         localStorage.setItem(playlistKey, JSON.stringify(payload));
@@ -2565,6 +2580,15 @@ test.describe("App screenshots", () => {
       // Wait for the seeded tune to be the current track, so the shutter cannot
       // catch the transport before the session restore has landed.
       await expect(getActiveMain(page).getByTestId("playback-current-title")).toContainText(FEATURED_SID.title);
+
+      // The credits under the title — composer, year, publisher, chip, television
+      // standard — are parsed from the tune's own header, so wait for them rather
+      // than photographing a card that is still only showing a length.
+      await expect(getActiveMain(page).getByTestId("playback-current-credits")).toContainText("Rob Hubbard");
+
+      // Stop the clock now that the tune is up, so the elapsed time, the remaining
+      // time and the progress bar cannot move between here and the shutter. See
+      // FEATURED_SID for why this happens after connecting rather than before.
       await page.clock.setFixedTime(Date.now());
       await page.evaluate(() => window.scrollTo(0, 0));
       await captureScreenshot(page, testInfo, "play/sid-radio/01-controls.png");

@@ -18,6 +18,12 @@
       "fileName": "Multi_Track.sid",
       "dataBase64": "PSU=",
       "durations": [60, 120, 180]
+    },
+    {
+      "virtualPath": "/MUSICIANS/H/Hubbard_Rob/Monty_on_the_Run.sid",
+      "fileName": "Monty_on_the_Run.sid",
+      "dataBase64": "UFNJRAACAHwAAAAAAAAAEwABAAAAAE1vbnR5IG9uIHRoZSBSdW4AAAAAAAAAAAAAAAAAAAAAUm9iIEh1YmJhcmQAAAAAAAAAAAAAAAAAAAAAAAAAAAAxOTg1IEdyZW1saW4gR3JhcGhpY3MAAAAAAAAAAAAAAAAUAAAAAAAAAAA=",
+      "durationSeconds": 350
     }
   ]
 }

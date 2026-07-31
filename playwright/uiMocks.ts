@@ -91,6 +91,22 @@ const fixtureBase64 = primarySong
   ? ensureValidSidBase64(primarySong.dataBase64, primarySong.durations?.length ?? 1)
   : "";
 
+/**
+ * The rest of the fixture, served alongside the primary song.
+ *
+ * `getHvscSong` used to know about one song only, so a test that wanted a tune
+ * with real credits — a composer, a year, a publisher — had no way to ask for
+ * one. These are additional; the primary song is untouched, so every existing
+ * test sees exactly what it saw before.
+ */
+const additionalSongs = baselineFixture.songs.slice(1).map((entry, index) => ({
+  id: index + 2,
+  virtualPath: entry.virtualPath,
+  fileName: entry.fileName,
+  durationSeconds: entry.durationSeconds ?? 0,
+  dataBase64: ensureValidSidBase64(entry.dataBase64, entry.durations?.length ?? 1),
+}));
+
 const buildSnapshotData = () => {
   const data: Record<string, any> = {};
   Object.entries(configState).forEach(([category, items]) => {
@@ -193,6 +209,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
     ({
       baseUrl: baseUrlArg,
       songData,
+      extraSongs,
       snapshot,
       seedFeatureFlagsByDefault: seedFeatureFlags,
       clearStorageBeforeSeeding: clearStorage,
@@ -200,6 +217,13 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
     }: {
       baseUrl: string;
       songData: string;
+      extraSongs: Array<{
+        id: number;
+        virtualPath: string;
+        fileName: string;
+        durationSeconds: number;
+        dataBase64: string;
+      }>;
       snapshot: unknown;
       seedFeatureFlagsByDefault: boolean;
       clearStorageBeforeSeeding: boolean;
@@ -512,13 +536,16 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
           return { path: normalized, folders: [], songs: [] };
         },
         getHvscSong: async ({ id, virtualPath }: { id?: number; virtualPath?: string }) => {
-          if (id !== song.id && virtualPath !== song.virtualPath) throw new Error("Song not found");
+          const match = [song, ...extraSongs].find(
+            (candidate) => candidate.id === id || candidate.virtualPath === virtualPath,
+          );
+          if (!match) throw new Error("Song not found");
           return {
-            id: song.id,
-            virtualPath: song.virtualPath,
-            fileName: song.fileName,
-            durationSeconds: song.durationSeconds,
-            dataBase64: song.dataBase64,
+            id: match.id,
+            virtualPath: match.virtualPath,
+            fileName: match.fileName,
+            durationSeconds: match.durationSeconds,
+            dataBase64: match.dataBase64,
           };
         },
         getHvscDurationByMd5: async () => ({
@@ -532,6 +559,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
     {
       baseUrl: baseUrl,
       songData: fixtureBase64,
+      extraSongs: additionalSongs,
       snapshot: initialSnapshot,
       seedFeatureFlagsByDefault,
       clearStorageBeforeSeeding,
