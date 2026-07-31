@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Gamepad2, Heart, Search } from "lucide-react";
+import { Gamepad2, Heart, ListMusic, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RemoteInputSheet } from "@/components/remoteInput/RemoteInputSheet";
 import { PlaybackConfigSheet } from "@/pages/playFiles/components/PlaybackConfigSheet";
@@ -56,6 +56,7 @@ import { calculatePlaylistTotals } from "@/lib/playback/playlistTotals";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { createHvscSourceLocation } from "@/lib/sourceNavigation/hvscSourceAdapter";
 import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
+import { getHvscSubsongDurationsSeconds } from "@/lib/hvsc";
 import { createStationDurationResolver } from "@/pages/playFiles/stationDurationResolver";
 import { Checkbox } from "@/components/ui/checkbox";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
@@ -101,7 +102,14 @@ import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLaun
 import { HvscSearchSheet } from "@/pages/playFiles/components/HvscSearchSheet";
 import type { HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
 import { buildFoundTuneItem, insertAfterCurrent } from "@/pages/playFiles/insertTuneNext";
+import { expandSubsongs, hasAllTunesQueued, MIN_TUNES_TO_EXPAND } from "@/pages/playFiles/expandSubsongs";
 import { md548ForVirtualPath } from "@/lib/sidRadio/md5PathIndex";
+import {
+  loadRecentlyPlayed,
+  saveRecentlyPlayed,
+  toRecentlyPlayedEntry,
+  withRecentlyPlayed,
+} from "@/lib/sidRadio/recentlyPlayed";
 import { useLikedTuneCount } from "@/lib/sidRadio/useLikedTuneCount";
 import { recordSkip } from "@/lib/sidRadio/sidRadioStats";
 import { Radio as RadioIcon } from "lucide-react";
@@ -1480,6 +1488,36 @@ export default function PlayFilesPage() {
    * blob attached until playback resolves one. The archive index turns that path straight into the
    * identity the corpus uses, which is both cheaper and available sooner.
    */
+  /**
+   * Remember what has been heard, so there is a way back to it.
+   *
+   * A station is endless and one-way, and the tune that made somebody think "what was that" has
+   * usually gone by the time they reach for anything. Recorded on the track itself rather than on
+   * the playlist so a station's tunes are covered — they never appear in a playlist anyone built —
+   * and keyed on the track instance so a repeat of the same tune moves it up rather than adding a
+   * second row.
+   */
+  useEffect(() => {
+    if (!currentItem || !isSongCategory(currentItem.category)) return;
+    const virtualPath = currentItem.request.source === "hvsc" ? currentItem.path : null;
+    if (!virtualPath) return;
+    saveRecentlyPlayed(
+      withRecentlyPlayed(
+        loadRecentlyPlayed(),
+        toRecentlyPlayedEntry({
+          virtualPath,
+          title: currentDisplay?.title ?? currentItem.label,
+          author: currentItemCredits.author,
+          songNr: currentItem.request.songNr,
+          subsongCount: currentItem.subsongCount,
+          durationMs: currentItem.durationMs,
+        }),
+      ),
+    );
+    // Keyed on the track instance: the same tune coming round again is a new hearing and belongs at
+    // the top, but a re-render of the same one is not.
+  }, [trackInstanceId]);
+
   const currentSeedMd548 =
     (currentTuneMd5 ? currentTuneMd5.slice(0, 12) : null) ??
     (currentItem?.path ? md548ForVirtualPath(currentItem.path) : null);
@@ -1806,6 +1844,40 @@ export default function PlayFilesPage() {
   const clampedSongNr = Math.min(Math.max(1, currentSongNr), subsongCount);
   const isSongPlaying = Boolean(currentItem && isSongCategory(currentItem.category) && (isPlaying || isPaused));
   const songSelectorVisible = Boolean(isSongPlaying && knownSubsongCount && knownSubsongCount > 1);
+  /**
+   * Put every tune in this file into the queue.
+   *
+   * A SID is a small album, and until now the app said so — "Tune 1 of 19" — while offering nothing
+   * on the card that acted on it. Once they are ordinary playlist items, next, previous, shuffle,
+   * repeat and the playlist panel all work on them unchanged, so this adds an action rather than a
+   * surface. The tunes replace the item they came from, because that item is one of them.
+   */
+  const canPlayAllTunes = Boolean(
+    currentItem &&
+    isSongCategory(currentItem.category) &&
+    knownSubsongCount &&
+    knownSubsongCount >= MIN_TUNES_TO_EXPAND &&
+    currentIndex >= 0 &&
+    // Withdrawn once taken: expanding again would queue a second copy of all nineteen, and a
+    // control that has already done its job is better removed than made to explain itself.
+    !hasAllTunesQueued(playlist, currentItem.path, knownSubsongCount),
+  );
+  const playAllTunes = useCallback(async () => {
+    const item = playlist[currentIndex];
+    if (!item || !knownSubsongCount) return;
+    // Each tune's own length, resolved before they go in. They differ wildly inside one file — a
+    // nineteen-tune SID routinely holds a five-minute piece and a one-second jingle — and an item
+    // with no length falls back to the three-minute default, so without this most of them would be
+    // followed by minutes of silence.
+    //
+    // Read from the browse index, which carries the whole array. The songlength store answers per
+    // file rather than per tune, so it can say how long the SID is but not how long tune twelve is.
+    const seconds = item.request.source === "hvsc" ? await getHvscSubsongDurationsSeconds(item.path) : [];
+    const durationsMs = seconds.map((value) => (typeof value === "number" && value > 0 ? value * 1000 : null));
+    const { items, index } = expandSubsongs(playlist, currentIndex, knownSubsongCount, durationsMs);
+    if (items.length === playlist.length) return;
+    void startPlaylist(items, index, { replaceQueue: true });
+  }, [currentIndex, knownSubsongCount, playlist, startPlaylist]);
   // Everything the tune's own header says about itself, on one line under the title. The order and
   // the omission rules live in buildNowPlayingMetadata; this only supplies the fields.
   const currentItemMetadata = currentItem
@@ -2340,6 +2412,22 @@ export default function PlayFilesPage() {
                       are the actions that start or change a station, which belong after the
                       controls they will replace rather than before them. */}
                   <div className="flex flex-wrap gap-2">
+                    {/*
+                     * First in the row, because it acts on the tune you are listening to rather than
+                     * on what plays next. Shown only when the file actually holds more than one, so
+                     * it never appears offering to do nothing.
+                     */}
+                    {canPlayAllTunes ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-testid="play-all-tunes"
+                        title={`Add all ${subsongCount} tunes in this file to the playlist`}
+                        onClick={() => void playAllTunes()}
+                      >
+                        <ListMusic className="mr-1.5 h-4 w-4" /> Play all {subsongCount} tunes
+                      </Button>
+                    ) : null}
                     {/*
                      * Offered whenever a SID is playing, including while a station is already
                      * running — which is exactly when people want it. Hearing something you like is

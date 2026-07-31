@@ -2498,6 +2498,27 @@ test.describe("App screenshots", () => {
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       test.slow();
       await seedHvscBrowseIndex(page);
+      await page.addInitScript(() => {
+        localStorage.setItem(
+          "c64u_recently_played:v1",
+          JSON.stringify([
+            {
+              virtualPath: "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
+              title: "Commando",
+              author: "Rob Hubbard",
+              folder: "/MUSICIANS/H/Hubbard_Rob",
+              playedAt: 2,
+            },
+            {
+              virtualPath: "/MUSICIANS/G/Galway_Martin/Wizball.sid",
+              title: "Wizball",
+              author: "Martin Galway",
+              folder: "/MUSICIANS/G/Galway_Martin",
+              playedAt: 1,
+            },
+          ]),
+        );
+      });
       // GA defaults these on; set them explicitly + enable dev mode for the Settings capture.
       await page.addInitScript((seed: typeof FEATURED_SID) => {
         localStorage.setItem("c64u_sid_radio_enabled", "1");
@@ -2589,6 +2610,9 @@ test.describe("App screenshots", () => {
       await findATune.click();
       const searchSheet = page.getByTestId("hvsc-search-sheet");
       await expect(searchSheet).toBeVisible();
+      // Empty state first: a station is endless and one-way, so the sheet opens on what was just
+      // heard rather than on a line of advice.
+      await captureScreenshot(page, testInfo, "play/sid-radio/05-recently-played.png", { locator: searchSheet });
       await searchSheet.getByTestId("hvsc-search-input").fill("commando");
       // Either results or the "nothing found" line settles the sheet; both are stable to capture.
       await expect(searchSheet.getByTestId("hvsc-search-results")).toBeVisible();

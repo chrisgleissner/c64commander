@@ -6,12 +6,26 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useCallback, useEffect, useState } from "react";
 import { Play, Radio, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useHvscArchiveSearch, type HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
+import { loadRecentlyPlayed } from "@/lib/sidRadio/recentlyPlayed";
+
+/** What was recently heard, in the same shape a search result takes. */
+const recentlyPlayedTunes = (): HvscSearchHit[] =>
+  loadRecentlyPlayed().map((entry) => ({
+    virtualPath: entry.virtualPath,
+    title: entry.title,
+    author: entry.author,
+    folder: entry.folder,
+    ...(entry.songNr === undefined ? {} : { songNr: entry.songNr }),
+    ...(entry.subsongCount === undefined ? {} : { subsongCount: entry.subsongCount }),
+    ...(entry.durationMs === undefined ? {} : { durationMs: entry.durationMs }),
+  }));
 
 export type HvscSearchSheetProps = {
   open: boolean;
@@ -47,6 +61,79 @@ export type HvscSearchSheetProps = {
  * place, the tune plays, and the station carries on. Seeding a new station from what was found is
  * the other thing people want here, and it is one tap away on the same row.
  */
+/**
+ * One tune, as a row.
+ *
+ * Shared by the search results and by what was recently played, so the two can never disagree about
+ * what a result looks like or what you can do with one. Both answer the same question — "this tune,
+ * please" — and the actions are the same two: play it, or start a station from it.
+ */
+const TuneList = ({
+  tunes,
+  onPlay,
+  onStartStation,
+  canSeedStation,
+  stationActive,
+  testId,
+}: {
+  tunes: readonly HvscSearchHit[];
+  onPlay: (hit: HvscSearchHit) => void;
+  onStartStation?: (hit: HvscSearchHit) => void;
+  canSeedStation?: (hit: HvscSearchHit) => boolean;
+  stationActive: boolean;
+  testId: string;
+}) => (
+  /* Enough of a gap to read as separate results, and no more. Each row is three lines of its own —
+     title, composer, folder — so without a clear gap the lines of one run into the next. The
+     keyboard leaves this list very little room, which is why the space goes between the rows rather
+     than inside them. */
+  <ul className="flex flex-col gap-2">
+    {tunes.map((hit) => {
+      const seedable = Boolean(onStartStation) && (canSeedStation?.(hit) ?? true);
+      return (
+        <li
+          key={hit.virtualPath}
+          className="flex items-center gap-2 rounded-md border border-border/60 px-2 py-1.5"
+          data-testid={testId}
+        >
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="min-w-0 flex-1 justify-start gap-2 py-1 text-left"
+            data-testid="hvsc-search-play"
+            title={stationActive ? `Play ${hit.title} now, then carry on` : `Play ${hit.title}`}
+            onClick={() => onPlay(hit)}
+          >
+            <Play className="shrink-0" aria-hidden="true" />
+            {/* Tight leading, because the keyboard leaves this list very little room and three
+                loosely-spaced lines per row meant barely two rows were readable. */}
+            <span className="min-w-0 leading-tight">
+              <span className="block truncate text-sm font-medium">{hit.title}</span>
+              {hit.author ? <span className="block truncate text-xs text-muted-foreground">{hit.author}</span> : null}
+              <span className="block truncate text-[11px] text-muted-foreground/70">{hit.folder}</span>
+            </span>
+          </Button>
+          {seedable ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              data-testid="hvsc-search-start-station"
+              aria-label={`Start a station from ${hit.title}`}
+              title="Start a station from this tune"
+              onClick={() => onStartStation?.(hit)}
+            >
+              <Radio />
+            </Button>
+          ) : null}
+        </li>
+      );
+    })}
+  </ul>
+);
+
 export const HvscSearchSheet = ({
   open,
   onOpenChange,
@@ -66,6 +153,29 @@ export const HvscSearchSheet = ({
    * results. So it is spent on the empty state and reclaimed for the list afterwards.
    */
   const showIntro = !search.query.trim();
+  // Read once per opening: it changes only when a track starts, which cannot happen while this is
+  // the thing being looked at.
+  const [recent, setRecent] = useState<HvscSearchHit[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    setRecent(recentlyPlayedTunes());
+  }, [open]);
+  // Act first, close second: the action is the point, and a handler that needed this sheet still
+  // mounted would otherwise break silently.
+  const play = useCallback(
+    (hit: HvscSearchHit) => {
+      onPlay(hit);
+      onOpenChange(false);
+    },
+    [onOpenChange, onPlay],
+  );
+  const seed = useCallback(
+    (hit: HvscSearchHit) => {
+      onStartStation?.(hit);
+      onOpenChange(false);
+    },
+    [onOpenChange, onStartStation],
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -103,9 +213,28 @@ export const HvscSearchSheet = ({
               The HVSC index is not ready yet. Install or open the library once, then search again.
             </p>
           ) : !search.query.trim() ? (
-            <p className="text-sm text-muted-foreground">
-              Type part of a title or a composer's name — "commando", "hubbard", or both.
-            </p>
+            /* A station is endless and one-way: a tune goes by, you think "what was that", and it is
+               gone. This is the way back, and it costs no new screen — the sheet is already open,
+               already called Find a tune, and the rows are the same rows. */
+            recent.length > 0 ? (
+              <>
+                <p className="pb-2 text-xs text-muted-foreground" data-testid="recently-played-heading">
+                  Recently played
+                </p>
+                <TuneList
+                  tunes={recent}
+                  onPlay={play}
+                  onStartStation={onStartStation ? seed : undefined}
+                  canSeedStation={canSeedStation}
+                  stationActive={stationActive}
+                  testId="recently-played-row"
+                />
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Type part of a title or a composer's name — "commando", "hubbard", or both.
+              </p>
+            )
           ) : search.hits.length === 0 ? (
             <p className="text-sm text-muted-foreground" data-testid="hvsc-search-empty">
               {search.isSearching || !search.hasSearched ? "Searching…" : "Nothing found. Try a shorter search."}
@@ -126,61 +255,14 @@ export const HvscSearchSheet = ({
                   the lines of one result run into the next. The keyboard leaves this list very
                   little room, which is why the space goes between the rows rather than inside
                   them. */}
-              <ul className="flex flex-col gap-2">
-                {search.hits.map((hit) => {
-                  const seedable = Boolean(onStartStation) && (canSeedStation?.(hit) ?? true);
-                  return (
-                    <li
-                      key={hit.virtualPath}
-                      className="flex items-center gap-2 rounded-md border border-border/60 px-2 py-1.5"
-                      data-testid="hvsc-search-row"
-                    >
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="min-w-0 flex-1 justify-start gap-2 py-1 text-left"
-                        data-testid="hvsc-search-play"
-                        title={stationActive ? `Play ${hit.title} now, then carry on` : `Play ${hit.title}`}
-                        onClick={() => {
-                          // Act first, close second: the action is the point, and a handler that
-                          // needed this sheet still mounted would otherwise break silently.
-                          onPlay(hit);
-                          onOpenChange(false);
-                        }}
-                      >
-                        <Play className="shrink-0" aria-hidden="true" />
-                        {/* Tight leading, because the keyboard leaves this list very little room and
-                            three loosely-spaced lines per row meant barely two rows were readable. */}
-                        <span className="min-w-0 leading-tight">
-                          <span className="block truncate text-sm font-medium">{hit.title}</span>
-                          {hit.author ? (
-                            <span className="block truncate text-xs text-muted-foreground">{hit.author}</span>
-                          ) : null}
-                          <span className="block truncate text-[11px] text-muted-foreground/70">{hit.folder}</span>
-                        </span>
-                      </Button>
-                      {seedable ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 shrink-0"
-                          data-testid="hvsc-search-start-station"
-                          aria-label={`Start a station from ${hit.title}`}
-                          title="Start a station from this tune"
-                          onClick={() => {
-                            onStartStation?.(hit);
-                            onOpenChange(false);
-                          }}
-                        >
-                          <Radio />
-                        </Button>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
+              <TuneList
+                tunes={search.hits}
+                onPlay={play}
+                onStartStation={onStartStation ? seed : undefined}
+                canSeedStation={canSeedStation}
+                stationActive={stationActive}
+                testId="hvsc-search-row"
+              />
             </>
           )}
         </div>

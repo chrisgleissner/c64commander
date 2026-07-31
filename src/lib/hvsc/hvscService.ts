@@ -22,6 +22,7 @@ import type { SongLengthResolveQuery, SongLengthResolution } from "@/lib/songlen
 import { addErrorLog, addLog } from "@/lib/logging";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import {
+  getHvscSongFromBrowseIndex,
   loadHvscBrowseIndexSnapshot,
   saveHvscBrowseIndexSnapshot,
   verifyHvscBrowseIndexIntegrity,
@@ -501,6 +502,23 @@ export const searchHvscSongs = async (options: {
  * the recursive query path has no such rebuild —- so we load the snapshot
  * directly and, if still missing, rebuild from native without the stat check.
  */
+/**
+ * Every tune's length inside one SID file, in seconds, indexed by `songNr - 1`.
+ *
+ * A SID is a small album and its tunes are wildly different lengths — a nineteen-tune file routinely
+ * holds a five-minute piece and a one-second jingle. The songlength store answers per file, so it
+ * cannot say how long tune twelve is; the browse index carries the whole array, which is what this
+ * reads. Empty when the archive does not know, which the caller must treat as "leave it unresolved"
+ * rather than as zero.
+ */
+export const getHvscSubsongDurationsSeconds = async (virtualPath: string): Promise<number[]> => {
+  await ensureHvscSonglengthsReadyOnColdStart();
+  const snapshot = await hvscIndex.loadBrowseSnapshot();
+  if (!snapshot) return [];
+  const song = getHvscSongFromBrowseIndex(snapshot, virtualPath);
+  return song?.durationsSeconds ? [...song.durationsSeconds] : [];
+};
+
 export const getHvscSongsRecursive = async (
   path: string,
 ): Promise<ReturnType<typeof hvscIndex.querySongsRecursive>> => {

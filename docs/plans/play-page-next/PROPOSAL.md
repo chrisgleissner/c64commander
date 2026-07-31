@@ -81,10 +81,24 @@ reading its files. It is a known quantity architecturally — the same discovery
 lookup path the songlengths already take — and it lands entirely inside an existing UI surface.
 This is the highest ceiling of the ten.
 
+**Blocked on a prerequisite, checked on the device (2026-07-31):** the installed archive's
+`DOCUMENTS/` folder contains `Songlengths.md5` and nothing else. `STIL.txt` is not extracted by the
+ingestion at all, so there is nothing on disk to parse. Doing this properly therefore starts in the
+archive ingestion — extracting and storing the file — before any of the parse, index and display
+work begins. That is a materially larger change than it looks from the outside, and it is why this
+was not built alongside the other two: half of it, against an archive that does not carry the file,
+would be worse than its absence.
+
 **Recently played (3).** The smallest of the three and the one that removes a genuine, repeated
 frustration created by the station itself. It is pure reuse: the row, the play action and the
 seed-a-station action all exist as of this session. Shipping the station without it leaves a
 one-way door.
+
+## Status
+
+Built and verified on the Pixel 4 on 2026-07-31: **(1) "Play all N tunes in this file"** and
+**(3) recently played**. (2) STIL is blocked on the ingestion prerequisite above. The rest of the ten
+are untouched.
 
 ## The rule these are judged against
 

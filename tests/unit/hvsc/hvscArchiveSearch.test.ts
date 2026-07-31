@@ -275,6 +275,34 @@ describe("hydrated metadata survives a restart", () => {
     expect(reloaded.songs["/MUSICIANS/H/Hubbard_Rob/Commando.sid"]?.metadataStatus).not.toBe("hydrated");
   });
 
+  it("brings back how many tunes a file holds", () => {
+    // The count lives in the SID header, not in the index, so losing it left every multi-tune file
+    // looking like a single track after a restart: no "Tune 3 of 19" on the card, no subsong
+    // selector, and nothing to offer to play them all.
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: "/MUSICIANS/H/Hubbard_Rob/Monty_on_the_Run.sid", name: "Monty_on_the_Run.sid", type: "sid" },
+    ]);
+    updateHvscBrowseSong(snapshot, "/MUSICIANS/H/Hubbard_Rob/Monty_on_the_Run.sid", {
+      durationsSeconds: [350, 61, 44, 32, 120],
+    });
+
+    const reloaded = reload(snapshot)!;
+    const song = reloaded.songs["/MUSICIANS/H/Hubbard_Rob/Monty_on_the_Run.sid"];
+
+    expect(song?.subsongCount).toBe(5);
+    expect(song?.durationsSeconds).toEqual([350, 61, 44, 32, 120]);
+    expect(song?.trackSubsongs?.map((tune) => tune.songNr)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("writes nothing extra for a single-tune file, which is most of them", () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: "/A/one.sid", name: "one.sid", type: "sid", durationSeconds: 61 },
+    ]);
+    const entry = __buildPersistedMediaIndexSnapshotForTest(snapshot).entries[0]!;
+
+    expect(entry).not.toHaveProperty("durations");
+  });
+
   it("writes nothing extra for a library that has not been hydrated", () => {
     const plain = buildHvscBrowseIndexFromEntries([{ path: "/A/x.sid", name: "x.sid", type: "sid" }]);
     const entry = __buildPersistedMediaIndexSnapshotForTest(plain).entries[0]!;

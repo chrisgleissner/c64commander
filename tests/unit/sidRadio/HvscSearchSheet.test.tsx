@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HvscSearchSheet } from "@/pages/playFiles/components/HvscSearchSheet";
 import { searchHvscSongs } from "@/lib/hvsc";
+import { saveRecentlyPlayed, toRecentlyPlayedEntry } from "@/lib/sidRadio/recentlyPlayed";
 
 vi.mock("@/lib/hvsc", () => ({ searchHvscSongs: vi.fn() }));
 vi.mock("@/lib/logging", () => ({ addErrorLog: vi.fn(), addLog: vi.fn() }));
@@ -43,6 +44,7 @@ const type = (value: string) => fireEvent.change(screen.getByTestId("hvsc-search
 describe("HvscSearchSheet", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
 
   it("searches the whole archive, not a folder", async () => {
@@ -156,5 +158,77 @@ describe("HvscSearchSheet", () => {
     renderSheet({ stationActive: true });
 
     expect(screen.getByTestId("hvsc-search-sheet").textContent).toContain("carries on");
+  });
+});
+
+/**
+ * The way back from an endless station.
+ *
+ * A tune goes by, you think "what was that", and it is gone. This costs no new screen: the sheet is
+ * already open, already called Find a tune, and the rows are the same rows the search uses.
+ */
+describe("recently played", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  const seedRecents = () =>
+    saveRecentlyPlayed([
+      toRecentlyPlayedEntry({
+        virtualPath: "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
+        title: "Commando",
+        author: "Rob Hubbard",
+      }),
+    ]);
+
+  it("shows what was just heard when nothing has been typed", () => {
+    seedRecents();
+    renderSheet();
+
+    expect(screen.getByTestId("recently-played-heading")).toBeTruthy();
+    const row = screen.getByTestId("recently-played-row");
+    expect(row.textContent).toContain("Commando");
+    expect(row.textContent).toContain("Rob Hubbard");
+  });
+
+  it("plays one straight from the list", () => {
+    seedRecents();
+    const onPlay = vi.fn();
+    renderSheet({ onPlay });
+
+    fireEvent.click(screen.getByTestId("hvsc-search-play"));
+
+    expect(onPlay).toHaveBeenCalledWith(
+      expect.objectContaining({ virtualPath: "/MUSICIANS/H/Hubbard_Rob/Commando.sid" }),
+    );
+  });
+
+  it("seeds a station from one, exactly as a search result does", () => {
+    seedRecents();
+    const onStartStation = vi.fn();
+    renderSheet({ onStartStation });
+
+    fireEvent.click(screen.getByTestId("hvsc-search-start-station"));
+
+    expect(onStartStation).toHaveBeenCalledWith(expect.objectContaining({ title: "Commando" }));
+  });
+
+  it("falls back to the hint when nothing has been played yet", () => {
+    renderSheet();
+
+    expect(screen.queryByTestId("recently-played-row")).toBeNull();
+    expect(screen.getByTestId("hvsc-search-results").textContent).toContain("Type part of a title");
+  });
+
+  it("gives way to the results as soon as something is typed", async () => {
+    seedRecents();
+    answerWith([hit("/MUSICIANS/G/Galway_Martin/Wizball.sid", "Wizball")]);
+    renderSheet();
+
+    type("wizball");
+
+    await waitFor(() => expect(screen.getByTestId("hvsc-search-row")).toBeTruthy());
+    expect(screen.queryByTestId("recently-played-row")).toBeNull();
   });
 });

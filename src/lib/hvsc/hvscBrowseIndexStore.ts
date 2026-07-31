@@ -63,6 +63,16 @@ type PersistedMediaIndexEntry = {
   /** Canonical author from the SID header, once hydrated. */
   author?: string | null;
   released?: string | null;
+  /**
+   * One length per tune in the file, when it holds more than one.
+   *
+   * A SID is a small album, and this is the only record of how many tunes are in it: the count lives
+   * in the file's header, not in the index. Without it a restart leaves every multi-tune SID looking
+   * like a single track — no "Tune 3 of 19" on the card, no subsong selector, and nothing to offer
+   * to play them all. Written only for files that actually hold more than one, so single-tune
+   * entries, which are most of them, cost nothing.
+   */
+  durations?: number[];
   /** True once this song has been read, so hydration does not queue it again. */
   hydrated?: boolean;
 };
@@ -434,9 +444,16 @@ const parseMediaIndexSnapshot = (raw: string | null) => {
     // file written before this existed and grows as hydration progresses — so the common case costs
     // one property read per song and no work.
     for (const entry of sidEntries) {
-      if (!entry.hydrated && !entry.title && !entry.author && !entry.released) continue;
+      if (!entry.hydrated && !entry.title && !entry.author && !entry.released && !entry.durations) continue;
       const song = snapshot.songs[normalizePath(entry.path)];
       if (!song) continue;
+      if (entry.durations && entry.durations.length > 1) {
+        // Restores the tune count with it, which is what the card, the subsong selector and "play
+        // all tunes" all read.
+        song.durationsSeconds = [...entry.durations];
+        song.subsongCount = entry.durations.length;
+        song.trackSubsongs = entry.durations.map((_, index) => ({ songNr: index + 1, isDefault: index === 0 }));
+      }
       song.canonicalTitle = normalizeDisplayValue(entry.title);
       song.canonicalAuthor = normalizeDisplayValue(entry.author);
       song.released = normalizeDisplayValue(entry.released);
@@ -469,6 +486,7 @@ const buildPersistedMediaIndexSnapshot = (snapshot: HvscBrowseIndexSnapshot): Pe
     };
     // Written only when there is something to write, so an archive that has not been hydrated
     // persists exactly the same bytes it did before.
+    if (song.durationsSeconds && song.durationsSeconds.length > 1) entry.durations = [...song.durationsSeconds];
     if (song.canonicalTitle) entry.title = song.canonicalTitle;
     if (song.canonicalAuthor) entry.author = song.canonicalAuthor;
     if (song.released) entry.released = song.released;
