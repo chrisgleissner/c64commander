@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { CTA_HIGHLIGHT_MAX_EXPECTED_MS, CTA_HIGHLIGHT_MIN_EXPECTED_MS } from "../src/lib/ui/buttonInteraction";
+import { CTA_HIGHLIGHT_MIN_EXPECTED_MS } from "../src/lib/ui/buttonInteraction";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import { saveCoverageFromPage } from "./withCoverage";
@@ -106,9 +106,27 @@ test.describe("CTA highlight proof", () => {
 
     const duration = await measureFlashDuration(target, () => target.click({ timeout: 60000 }));
 
+    // Two claims, and deliberately no wall-clock ceiling.
+    //
+    // The lower bound is safe to assert from the outside: a starved machine can
+    // only make the flash last *longer*, so a measurement below the floor means
+    // the flash was genuinely too brief to see.
+    //
+    // An upper bound cannot be asserted this way. `measureFlashDuration` returns
+    // the time from when the app set the attribute to when a `requestAnimationFrame`
+    // poll observed it cleared, so it accumulates both the app's own timer and the
+    // browser's scheduling delay. On a loaded CI runner this read 1834 ms for a
+    // 150 ms flash while `locator.click` was itself timing out at 60 s — the number
+    // was measuring the runner, not the app, and it turned a dependency-bump PR red
+    // for a day (PR #330).
+    //
+    // Nothing is lost by dropping it. That the flash ends after exactly
+    // CTA_HIGHLIGHT_DURATION_MS is proven deterministically with fake timers in
+    // `tests/unit/lib/ui/buttonInteraction.test.ts` ("removes tap-flash attribute
+    // after the highlight duration"), and that it does not stick is asserted on the
+    // next line and again in the "rapid repeated taps" test below.
     expect(duration).not.toBeNull();
     expect(duration ?? 0).toBeGreaterThanOrEqual(CTA_HIGHLIGHT_MIN_EXPECTED_MS);
-    expect(duration ?? 0).toBeLessThanOrEqual(CTA_HIGHLIGHT_MAX_EXPECTED_MS);
     await expect(target).not.toHaveAttribute(FLASH_ATTR, "true");
   });
 

@@ -36,7 +36,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

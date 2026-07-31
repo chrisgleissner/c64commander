@@ -14,8 +14,16 @@ type InteractiveElement = HTMLElement & {
 export const CTA_HIGHLIGHT_ATTR = "data-c64-tap-flash";
 export const CTA_HIGHLIGHT_SET_AT_ATTR = "data-c64-tap-flash-set-at";
 export const CTA_HIGHLIGHT_DURATION_MS = 150;
+/**
+ * The floor an end-to-end test may assert the flash lasted.
+ *
+ * There is deliberately no matching ceiling. A browser can only make the flash
+ * outlast its timer, never undercut it, so a floor is a property of the app while
+ * a ceiling is a property of whatever machine the test happens to run on. That the
+ * flash ends after `CTA_HIGHLIGHT_DURATION_MS` is asserted with fake timers in the
+ * unit tests instead.
+ */
 export const CTA_HIGHLIGHT_MIN_EXPECTED_MS = 120;
-export const CTA_HIGHLIGHT_MAX_EXPECTED_MS = 1000;
 export const CTA_HIGHLIGHT_MAX_AGE_MS = 2000;
 export const CTA_PERSISTENT_ACTIVE_ATTR = "data-c64-persistent-active";
 export const INTERACTIVE_SELECTOR = [
