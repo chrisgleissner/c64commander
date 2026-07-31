@@ -58,7 +58,10 @@ describe("SidRadioChip", () => {
 
     const idleRow = screen.getByTestId("now-playing-source-idle");
     expect(screen.getByTestId("now-playing-source")).toHaveAttribute("data-station-active", "false");
-    expect(idleRow).toHaveTextContent("Playlist");
+    // Deliberately not the bare word "Playlist": the playlist panel below carries that as its
+    // heading, and two identical labels one above the other both read as a mistake and made
+    // `getByText("Playlist", { exact: true })` ambiguous for anything asserting on the panel.
+    expect(idleRow).toHaveTextContent("Your playlist");
     expect(screen.queryByTestId("sid-radio-chip")).toBeNull();
     expect(screen.queryByTestId("sid-radio-stop")).toBeNull();
     const idleHeight = idleRow.className.match(/min-h-\[[^\]]+\]/)?.[0];

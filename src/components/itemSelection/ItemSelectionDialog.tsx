@@ -681,7 +681,9 @@ export const ItemSelectionDialog = ({
                 {LEGAL_NOTICE}
               </p>
             ) : null}
-            {folderOptions && allowFolderSelection && source ? (
+            {/* Not on an archive search: its results are individual files, so there are no folders for
+                this to say anything about. */}
+            {folderOptions && allowFolderSelection && source && !isArchiveSource ? (
               <div className="flex flex-wrap items-center gap-3" data-testid="add-items-folder-options">
                 {folderOptions}
               </div>

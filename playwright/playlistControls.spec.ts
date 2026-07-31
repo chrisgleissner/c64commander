@@ -184,40 +184,22 @@ test.describe("Playlist controls and advanced features", () => {
     await snap(page, testInfo, "repeat-enabled");
   });
 
-  test("include-subfolders checkbox lives in the Add items sheet and toggles there @layout", async ({
+  test("include-subfolders is no longer a playback control @layout", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
-    // The option decides what selecting a folder means, so it is shown while folders are being
-    // chosen rather than on the playback card, where it used to be the one live control left once a
-    // SID Radio station took over the play order.
+    // It moved to the Add items sheet, beside the folders it governs. Its behaviour there is covered
+    // by `itemSelection.spec.ts`, which is the spec that can actually browse a source; this asserts
+    // only that it has left the Play page, which is what stopped a running SID Radio station leaving
+    // one live control stranded in a row of controls the station had taken over.
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
 
-    // Not on the page itself.
+    await addLocalFolder(page, path.resolve("playwright/fixtures/local-play"));
+    await expect(page.getByTestId("playlist-item")).toHaveCount(2);
+
     await expect(page.getByTestId("playback-recurse")).toHaveCount(0);
-
-    await page.getByRole("button", { name: /Add items|Add more items/i }).click();
-    const dialog = page.getByRole("dialog");
-    // Nor in the source chooser, where no folder has been reached yet.
-    await expect(dialog.getByTestId("add-items-folder-options")).toHaveCount(0);
-
-    await clickSourceSelectionButton(dialog, "This device");
-    await snap(page, testInfo, "add-items-source-open");
-
-    const recurseCheckbox = dialog.getByTestId("playback-recurse");
-    await expect(recurseCheckbox).toBeVisible();
-    const initiallyChecked = (await recurseCheckbox.getAttribute("aria-checked")) === "true";
-    await snap(page, testInfo, initiallyChecked ? "recurse-initial-on" : "recurse-initial-off");
-
-    await recurseCheckbox.click();
-    if (initiallyChecked) {
-      await expect(recurseCheckbox).not.toBeChecked();
-      await snap(page, testInfo, "recurse-toggled-off");
-      return;
-    }
-
-    await expect(recurseCheckbox).toBeChecked();
-    await snap(page, testInfo, "recurse-toggled-on");
+    await expect(page.getByTestId("playback-shuffle")).toBeVisible();
+    await snap(page, testInfo, "no-recurse-on-play-page");
   });
 
   test("duration control syncs slider and input @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {

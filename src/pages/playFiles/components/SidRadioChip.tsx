@@ -112,7 +112,11 @@ export const SidRadioChip = ({ station, whyThisTune, onStop }: SidRadioChipProps
       ) : (
         <div className={cn("flex items-center gap-2", ROW_HEIGHT)} data-testid="now-playing-source-idle">
           <ListMusic className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className="truncate text-sm text-muted-foreground">Playlist</span>
+          {/* "Your playlist", not "Playlist": the panel below this card is already headed Playlist, and
+              two identical labels one above the other read as a mistake. This phrasing also sits
+              parallel to the station state, which names a thing ("Melodic Radio") rather than
+              labelling a section. */}
+          <span className="truncate text-sm text-muted-foreground">Your playlist</span>
         </div>
       )}
     </div>
