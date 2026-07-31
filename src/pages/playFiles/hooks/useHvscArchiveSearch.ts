@@ -124,6 +124,10 @@ export const useHvscArchiveSearch = (options: { enabled?: boolean } = {}): HvscA
       setHits([]);
       setTotalCount(0);
       setHasSearched(true);
+      // A search that threw says nothing about whether the index is loaded, and an earlier search
+      // may have set that flag. Leaving it would tell the listener their library is not ready when
+      // the truth is that one query failed.
+      setIndexUnavailable(false);
     } finally {
       if (runRef.current === run) setIsSearching(false);
     }

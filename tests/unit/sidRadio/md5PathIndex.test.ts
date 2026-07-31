@@ -151,6 +151,24 @@ describe("md548ForVirtualPath", () => {
     expect(md548ForVirtualPath("/DEMOS/B/Beta.sid")).toBe(DUP_MD5_B.slice(0, 12));
   });
 
+  it("keeps the digest listed last when one path carries two", () => {
+    // A revised tune lists both digests. HVSC puts the revision last, so last-wins gives the right
+    // answer — but that is a property of the file's ordering, not of the lookup, so it is pinned.
+    resetMd548PathIndex();
+    rebuildMd548PathIndex(
+      ["; /MUSICIANS/R/Revised.sid", `${OTHER_MD5}=1:00`, "; /MUSICIANS/R/Revised.sid", `${COMMANDO_MD5}=1:05`].join(
+        "\n",
+      ),
+    );
+
+    expect(md548ForVirtualPath("/MUSICIANS/R/Revised.sid")).toBe(COMMANDO_MD5.slice(0, 12));
+  });
+
+  it("matches a path exactly as HVSC stores it", () => {
+    // Upper-case, case-sensitive. A caller lower-casing a path would silently get nothing.
+    expect(md548ForVirtualPath("/musicians/h/hubbard_rob/commando.sid")).toBeNull();
+  });
+
   it("is emptied by a reset, so a stale library cannot answer for a new one", () => {
     resetMd548PathIndex();
     expect(md548ForVirtualPath("/MUSICIANS/H/Hubbard_Rob/Commando.sid")).toBeNull();

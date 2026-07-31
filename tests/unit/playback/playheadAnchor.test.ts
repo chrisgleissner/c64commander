@@ -156,6 +156,20 @@ describe("a stalled playhead", () => {
     expect(result?.stalled).toBe(false);
   });
 
+  it("is not reported while the start-up buffer is still filling", () => {
+    // Every track begins with a playhead sitting at zero while the buffer fills. The second tick has
+    // a previous reading of zero and a playhead of zero, which is not a stall — and reporting one
+    // withheld the single deadline update that tick was entitled to.
+    const result = resolvePlayheadAnchor({
+      enginePositionMs: 0,
+      trackStartedAtMs: 1_000,
+      nowMs: 3_000,
+      previousElapsedMs: 0,
+    });
+
+    expect(result?.stalled).toBe(false);
+  });
+
   it("is not reported on the first tick of a track, which has nothing to compare against", () => {
     const result = resolvePlayheadAnchor({ enginePositionMs: 0, trackStartedAtMs: null, nowMs: 1_000 });
     expect(result?.stalled).toBe(false);

@@ -6,9 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { __resetFoundTuneSequence, buildFoundTuneItem, insertAfterCurrent } from "@/pages/playFiles/insertTuneNext";
+import { buildFoundTuneItem, insertAfterCurrent } from "@/pages/playFiles/insertTuneNext";
 
 /**
  * Playing one named tune without losing the station.
@@ -54,8 +54,6 @@ describe("insertAfterCurrent", () => {
 });
 
 describe("buildFoundTuneItem", () => {
-  beforeEach(() => __resetFoundTuneSequence());
-
   it("routes the tune through HVSC at the subsong the archive names", () => {
     const item = buildFoundTuneItem({
       virtualPath: "/MUSICIANS/H/Hubbard_Rob/Commando.sid",

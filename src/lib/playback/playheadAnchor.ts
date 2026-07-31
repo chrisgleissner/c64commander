@@ -124,7 +124,12 @@ export const resolvePlayheadAnchor = (input: PlayheadAnchorInput): PlayheadAncho
   const previous = input.previousElapsedMs;
   // Strictly "has not moved". A playhead that is playing advances by about a second per tick, so
   // there is no need for a tolerance here and no risk of a slow tick reading as a stall.
-  const frozen = typeof previous === "number" && playheadMs <= previous;
+  //
+  // A playhead still sitting at zero is excluded: that is the start-up buffer being filled before
+  // the first sample sounds, which every track begins with and which is not a fault. Without this
+  // the second tick of every track — previous 0, playhead 0 — reported a stall and withheld the one
+  // deadline update it was entitled to.
+  const frozen = typeof previous === "number" && previous > 0 && playheadMs <= previous;
   return {
     elapsedMs: playheadMs,
     trackStartedAtMs: nowMs - playheadMs,

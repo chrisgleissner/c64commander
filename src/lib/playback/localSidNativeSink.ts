@@ -726,6 +726,13 @@ class NativeLocalSidSink implements AudioScheduleSink {
     this.suspended = true;
     // The ring holds a couple of seconds, which would otherwise keep sounding after a pause.
     this.queue = [];
+    // And the completions owed for it. The audio those entries describe has just been thrown away,
+    // so their `at` times are now in a future the playhead will still reach — each would announce a
+    // chunk that never played. The engine counts those announcements against what it scheduled to
+    // decide the tune is over, so a few pause/resume cycles would let the count run ahead and end
+    // the track early. Discarded, not orphaned: unlike `reopenAfterStall` there is nothing to
+    // rescue, because the scheduler is not being asked to refill from here.
+    this.endings = [];
     // Rebase the write counter onto what was actually heard, exactly as the other two paths that
     // discard audio do (`flush` and `reopenAfterStall`). The playhead is derived as
     // "written minus still queued", so throwing audio away while leaving it counted as written puts

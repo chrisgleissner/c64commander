@@ -91,6 +91,16 @@ let currentIndex = new Map<string, string[]>();
 let pathIndex = new Map<string, string>();
 let lastContentHash: string | null = null;
 
+/**
+ * Invert the forward index.
+ *
+ * A path that turns up under more than one `md5_48` — a tune revised, with both digests listed —
+ * keeps the last one assigned, which is the one listed last in `Songlengths.md5`. That is the
+ * revision, so the right answer falls out, but it is a property of the file's ordering rather than
+ * of this function, and is pinned by a test rather than left implicit.
+ *
+ * Paths are matched exactly as HVSC stores them, which is case-sensitive and upper-case.
+ */
 const buildPathIndex = (byMd5: Map<string, string[]>): Map<string, string> => {
   const index = new Map<string, string>();
   for (const [md548, paths] of byMd5) {

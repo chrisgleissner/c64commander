@@ -672,15 +672,25 @@ export class LocalSidEngine {
     // A seek waiting on this render is now waiting on a thread that will never report again. Drop
     // it rather than leave it outstanding: while it is set the UI shows a wait that cannot end and
     // the stall watchdog is held off, so clearing it is what lets the ordinary recovery run.
+    const awaited = this.pendingSeek;
     this.pendingSeek = null;
     // Playback reading from that render is in the same position: no further chunk will extend the
     // buffer it is playing from, so it has to go back to the live renderer or fall silent when the
     // buffer runs out. The hand-off is expensive — the live renderer cannot rewind — but it is the
     // only source of the rest of the tune once this thread has gone.
-    if (this.followingPrerender) {
-      this.followingPrerender = false;
+    //
+    // Where to send it depends on which of the two states this interrupted. Following the render
+    // means resuming from the end of what was cached. A seek still waiting means the listener has
+    // been promised a position that nothing is now working towards, and the live renderer is the
+    // only thing that can still reach it — a thread dying on its first chunk leaves no cache at all,
+    // which is the case that otherwise fell through here with playback silently stuck until the
+    // watchdog noticed.
+    const wasFollowing = this.followingPrerender;
+    this.followingPrerender = false;
+    if (wasFollowing || awaited) {
       const seam = this.cached?.durationSeconds ?? 0;
-      if (seam > 0) this.beginPartialHandoff(seam);
+      const target = seam > 0 ? seam : (awaited?.targetSeconds ?? 0);
+      if (target > 0) this.beginPartialHandoff(target);
     }
     this.prerenderFraction = null;
     this.prerenderKey = null;

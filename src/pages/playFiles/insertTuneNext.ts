@@ -41,14 +41,15 @@ export const insertAfterCurrent = <T>(playlist: readonly T[], currentIndex: numb
   return { items, index };
 };
 
-let sequence = 0;
-
 /**
  * A playlist item for a tune chosen by name from HVSC.
  *
- * The id carries a sequence number rather than only the path, because the same tune can be asked for
- * more than once in a session — and two items sharing an id are two rows React cannot tell apart and
- * two entries the session store would collapse into one.
+ * The id has to be unique rather than merely descriptive: the same tune can be asked for more than
+ * once in a session, and two items sharing an id are two rows React cannot tell apart and two
+ * entries the session store would collapse into one. It is drawn from a random suffix rather than a
+ * module counter — a counter shared by every importer is state that has to be reset between tests
+ * and says nothing about the playlist it is numbering, and the only property actually needed here is
+ * that two calls differ.
  */
 export const buildFoundTuneItem = (hit: {
   virtualPath: string;
@@ -57,10 +58,10 @@ export const buildFoundTuneItem = (hit: {
   subsongCount?: number;
   durationMs?: number;
 }): PlaylistItem => {
-  sequence += 1;
   const songNr = hit.songNr ?? 1;
+  const unique = Math.random().toString(36).slice(2, 10);
   return {
-    id: `found:${hit.virtualPath}#${songNr}:${sequence}`,
+    id: `found:${hit.virtualPath}#${songNr}:${unique}`,
     request: { source: "hvsc", path: hit.virtualPath, songNr },
     category: "sid",
     label: hit.virtualPath.split("/").filter(Boolean).pop() ?? hit.title,
@@ -71,9 +72,4 @@ export const buildFoundTuneItem = (hit: {
     // unset so a later songlengths load does not treat this as a default it may overwrite.
     ...(hit.durationMs === undefined ? {} : { durationMs: hit.durationMs }),
   };
-};
-
-/** Test seam: make the id sequence deterministic. */
-export const __resetFoundTuneSequence = (): void => {
-  sequence = 0;
 };

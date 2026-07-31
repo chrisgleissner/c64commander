@@ -365,6 +365,23 @@ describe("a seek waiting for the pre-render to reach it", () => {
     expect(worker.ofType("seek").length).toBeGreaterThan(seeksBefore);
   });
 
+  it("sends the live renderer after the target when the pre-render dies before its first chunk", async () => {
+    // The listener has been promised a position that nothing is now working towards, and with no
+    // chunk delivered there is no cache to resume from either. Left alone this was silence until the
+    // stall watchdog noticed, seconds later and by discarding the worker.
+    const engine = makeEngine();
+    await openWithPrerenderRunning(engine);
+    await engine.seekTo(120);
+    expect(engine.getPendingSeek()).not.toBeNull();
+    const seeksBefore = worker.ofType("seek").length;
+
+    (engine as unknown as { onPrerenderWorkerFailure(reason: string): void }).onPrerenderWorkerFailure("thread gone");
+
+    expect(engine.getPendingSeek()).toBeNull();
+    expect(worker.ofType("seek").length).toBeGreaterThan(seeksBefore);
+    expect(worker.ofType("seek").at(-1)).toMatchObject({ positionSeconds: 120 });
+  });
+
   it("hands back to the live renderer if the pre-render thread dies mid-follow", async () => {
     // No further chunk can extend the buffer being played from, so the only remaining source of the
     // rest of the tune is the live renderer — expensive, and better than falling silent.

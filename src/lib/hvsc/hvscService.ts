@@ -465,20 +465,6 @@ export const getHvscFolderListing = async (path: string): Promise<HvscFolderList
 };
 
 /**
- * Fast synchronous bulk listing of all songs under a folder.
- * Reads directly from the in-memory browse index — no async I/O,
- * no per-page smoke snapshots. Returns null if the index is not loaded.
- *
- * Bypasses `ensureHvscIndexReady()` intentionally: the integrity check
- * there stat-probes virtual paths that may not exist on disk (songs live
- * in native SQLite, not as individual files). When the probe fails it
- * destructively clears the browse snapshot, causing `querySongsRecursive`
- * to return null and the adapter to fall back to a minutes-long paged BFS.
- * The browse page recovers via `queryFolderPage`'s inline rebuild, but
- * the recursive query path has no such rebuild —- so we load the snapshot
- * directly and, if still missing, rebuild from native without the stat check.
- */
-/**
  * Search every tune in the archive by title, author or path.
  *
  * Answers from the in-memory browse index, so it costs a linear pass over the song table and no
@@ -501,6 +487,20 @@ export const searchHvscSongs = async (options: {
   return hvscIndex.searchSongs(options);
 };
 
+/**
+ * Fast synchronous bulk listing of all songs under a folder.
+ * Reads directly from the in-memory browse index — no async I/O,
+ * no per-page smoke snapshots. Returns null if the index is not loaded.
+ *
+ * Bypasses `ensureHvscIndexReady()` intentionally: the integrity check
+ * there stat-probes virtual paths that may not exist on disk (songs live
+ * in native SQLite, not as individual files). When the probe fails it
+ * destructively clears the browse snapshot, causing `querySongsRecursive`
+ * to return null and the adapter to fall back to a minutes-long paged BFS.
+ * The browse page recovers via `queryFolderPage`'s inline rebuild, but
+ * the recursive query path has no such rebuild —- so we load the snapshot
+ * directly and, if still missing, rebuild from native without the stat check.
+ */
 export const getHvscSongsRecursive = async (
   path: string,
 ): Promise<ReturnType<typeof hvscIndex.querySongsRecursive>> => {

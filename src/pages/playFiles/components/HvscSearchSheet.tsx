@@ -143,8 +143,10 @@ export const HvscSearchSheet = ({
                         data-testid="hvsc-search-play"
                         title={stationActive ? `Play ${hit.title} now, then carry on` : `Play ${hit.title}`}
                         onClick={() => {
-                          onOpenChange(false);
+                          // Act first, close second: the action is the point, and a handler that
+                          // needed this sheet still mounted would otherwise break silently.
                           onPlay(hit);
+                          onOpenChange(false);
                         }}
                       >
                         <Play className="shrink-0" aria-hidden="true" />
@@ -168,8 +170,8 @@ export const HvscSearchSheet = ({
                           aria-label={`Start a station from ${hit.title}`}
                           title="Start a station from this tune"
                           onClick={() => {
-                            onOpenChange(false);
                             onStartStation?.(hit);
+                            onOpenChange(false);
                           }}
                         >
                           <Radio />

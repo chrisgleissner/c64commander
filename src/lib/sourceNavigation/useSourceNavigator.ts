@@ -98,6 +98,8 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
   const queryRef = useRef("");
   const searchScopeRef = useRef<SourceSearchScope>("folder");
   const searchDebounceRef = useRef<number | null>(null);
+  /** The walk currently in flight, so a superseded one can be stopped rather than merely ignored. */
+  const searchAbortRef = useRef<AbortController | null>(null);
   const isQueryBacked = Boolean(source?.listEntriesPage);
   const canSearchSource = Boolean(source?.searchEntries);
   const searchIsInstant = Boolean(source?.searchIsInstant);
@@ -198,6 +200,16 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
    * Shares `loadingTokenRef` with the folder loader on purpose: a search and a navigation are two
    * answers to "what should the list show", and whichever was asked for last must win. Separate
    * tokens would let a slow walk overwrite a folder the person had already navigated to.
+   *
+   * Superseding also *aborts*, rather than only ignoring the answer. Discarding a result is enough
+   * for an index lookup, which has already finished by the time it is discarded — but a walked
+   * source is minutes of listing over FTP or the Capacitor bridge, and abandoning one without
+   * stopping it leaves it running against a source the next one is about to hammer.
+   *
+   * The scope is deliberately the whole source. `searchEntries` accepts a subtree, and the control
+   * this is driven from offers exactly two choices — this folder, which is the ordinary listing, and
+   * everywhere, which is this. A third "everywhere below here" would be a scope most people would
+   * have to think about, for a question the folder listing already answers.
    */
   const runSearchNow = useCallback(
     async (nextQuery: string, options?: { offset?: number; append?: boolean }) => {
@@ -209,13 +221,21 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
         void loadEntries(path, { query: "" });
         return;
       }
+      searchAbortRef.current?.abort();
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
       const token = loadingTokenRef.current + 1;
       loadingTokenRef.current = token;
       setIsLoading(true);
       setError(null);
       setIsSearching(true);
       try {
-        const page = await search({ query: trimmed, offset: options?.offset ?? 0, limit: PAGE_SIZE });
+        const page = await search({
+          query: trimmed,
+          offset: options?.offset ?? 0,
+          limit: PAGE_SIZE,
+          signal: controller.signal,
+        });
         if (loadingTokenRef.current !== token) return; // superseded — discard
         setEntries((currentEntries) =>
           options?.append ? mergeEntriesByPath(currentEntries, page.entries) : page.entries,
@@ -257,6 +277,8 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
   useEffect(
     () => () => {
       if (searchDebounceRef.current !== null) window.clearTimeout(searchDebounceRef.current);
+      // An unmounted sheet must not leave a walk running against the source.
+      searchAbortRef.current?.abort();
     },
     [],
   );
@@ -280,6 +302,7 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
         window.clearTimeout(searchDebounceRef.current);
         searchDebounceRef.current = null;
       }
+      searchAbortRef.current?.abort();
       const leavingSearch = searchScopeRef.current === "source";
       if (leavingSearch) {
         queryRef.current = "";
@@ -311,6 +334,8 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
   }, [goToFolder, path, source]);
 
   const cancelPendingSearch = useCallback(() => {
+    // Both halves of "in flight": a keystroke that has not fired yet, and a walk that has.
+    searchAbortRef.current?.abort();
     if (searchDebounceRef.current === null) return;
     window.clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = null;
