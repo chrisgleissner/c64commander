@@ -1004,20 +1004,31 @@ export class LocalSidEngine {
         // engine into a silence the stall watchdog is deliberately forbidden to judge, and the tune
         // never reports its end either. Dragging into the closing seconds of a tune reaches this.
         this.resolvePendingSeekAgainstCompletedRender(pcm, message.sampleRate, message.channels, message.seconds);
-        // Playback was following this render as it grew. It has stopped growing, so what is in hand
-        // is now the whole of it: adopt the final buffer, and let its `partial` flag decide what
-        // running off the end means. A full render's end is the tune's end; a lead-in's end is where
-        // the live renderer has to take over.
-        if (this.followingPrerender && pcm.length > 0) {
+        // Playback was following this render as it grew. It has stopped growing, so whatever is in
+        // hand is now all there will be — which means the flag comes off here unconditionally. A
+        // render that finished with nothing to show for it is the case that matters: leaving the
+        // flag set would leave `pump` waiting for a chunk that can no longer arrive, and the only
+        // thing that would notice is the stall watchdog, seconds later and by killing the worker.
+        if (this.followingPrerender) {
           this.followingPrerender = false;
-          this.cached = {
-            partial,
-            pcm,
-            sampleRate: message.sampleRate,
-            channels: message.channels,
-            durationSeconds: message.seconds,
-          };
-          if (partial) this.beginPartialHandoff(message.seconds);
+          if (pcm.length > 0) {
+            // Adopt the finished buffer and let its `partial` flag decide what running off the end
+            // means: a full render's end is the tune's end, a lead-in's end is where the live
+            // renderer has to take over.
+            this.cached = {
+              partial,
+              pcm,
+              sampleRate: message.sampleRate,
+              channels: message.channels,
+              durationSeconds: message.seconds,
+            };
+            if (partial) this.beginPartialHandoff(message.seconds);
+          } else {
+            // Nothing was produced, so the live renderer is the only remaining source of the rest of
+            // the tune — expensive, because it cannot rewind, and better than falling silent.
+            const seam = this.cached?.durationSeconds ?? 0;
+            if (seam > 0) this.beginPartialHandoff(seam);
+          }
           this.pump();
         }
         addLog("debug", "Local SID tune pre-rendered", {

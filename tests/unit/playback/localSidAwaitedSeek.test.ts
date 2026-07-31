@@ -332,6 +332,39 @@ describe("a seek waiting for the pre-render to reach it", () => {
     expect(worker.ofType("seek")).toHaveLength(0);
   });
 
+  it("stops following a render that finished with nothing to show for it", async () => {
+    // Otherwise the flag stays set and the pump waits for a chunk that can no longer arrive. The
+    // only thing that would notice is the stall watchdog, seconds later and by killing the worker.
+    const engine = makeEngine();
+    await openWithPrerenderRunning(engine);
+    await engine.seekTo(2);
+    prerenderWorker.emit({
+      type: "prerender-chunk",
+      id: prerenderId(engine),
+      pcm: pcmOf(8, 4321),
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      seconds: 8,
+    } as never);
+    expect(engine.debugState()).toMatchObject({ followingPrerender: true });
+    const seeksBefore = worker.ofType("seek").length;
+
+    // The accumulated buffer was taken away before the completion arrived — a second pre-render
+    // starting for another tune does exactly this.
+    (engine as unknown as { prerenderAccumulated: Int16Array }).prerenderAccumulated = new Int16Array(0);
+    prerenderWorker.emit({
+      type: "prerendered",
+      id: prerenderId(engine),
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      seconds: 8,
+    } as never);
+
+    expect(engine.debugState()).toMatchObject({ followingPrerender: false });
+    // And it went back to the live renderer rather than waiting on a thread that has finished.
+    expect(worker.ofType("seek").length).toBeGreaterThan(seeksBefore);
+  });
+
   it("hands back to the live renderer if the pre-render thread dies mid-follow", async () => {
     // No further chunk can extend the buffer being played from, so the only remaining source of the
     // rest of the tune is the live renderer — expensive, and better than falling silent.
