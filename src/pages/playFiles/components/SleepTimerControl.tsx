@@ -29,6 +29,15 @@ export type SleepTimerControlProps = {
    * page produced a timer with 3:33 left on it.
    */
   nowMs: number;
+  /**
+   * Whether anything is playing.
+   *
+   * "This tune" has nothing to wait for when nothing is playing, and the timer clears itself in
+   * that state rather than lying in wait for the next thing started. Offering it anyway meant a
+   * button that could be tapped, went nowhere, and gave no reason — observed on the device. It is
+   * disabled instead, which says the same thing without needing to be tried.
+   */
+  isPlaying: boolean;
 };
 
 /**
@@ -39,17 +48,26 @@ export type SleepTimerControlProps = {
  * what it is going to do. "Off" is one of the choices for the same reason — cancelling has to be as
  * plain as setting it.
  */
-export const SleepTimerControl = ({ mode, onChange, nowMs }: SleepTimerControlProps) => {
+export const SleepTimerControl = ({ mode, onChange, nowMs, isPlaying }: SleepTimerControlProps) => {
   const armed = mode.kind !== "off";
   // `next` is a function, not a value: a timed choice has to be dated from the tap, and a value
   // computed during render is dated from the render.
-  const options: Array<{ key: string; label: string; next: () => SleepTimerMode; active: boolean }> = [
+  const options: Array<{
+    key: string;
+    label: string;
+    next: () => SleepTimerMode;
+    active: boolean;
+    disabled?: boolean;
+    title?: string;
+  }> = [
     { key: "off", label: "Off", next: () => SLEEP_TIMER_OFF, active: mode.kind === "off" },
     {
       key: "after-tune",
       label: "This tune",
       next: () => ({ kind: "after-tune" }),
       active: mode.kind === "after-tune",
+      disabled: !isPlaying,
+      ...(isPlaying ? {} : { title: "Nothing is playing" }),
     },
     ...SLEEP_TIMER_MINUTES.map((minutes) => ({
       key: `m${minutes}`,
@@ -81,6 +99,8 @@ export const SleepTimerControl = ({ mode, onChange, nowMs }: SleepTimerControlPr
             variant={option.active ? "default" : "outline"}
             className="h-8 px-2.5 text-xs"
             aria-pressed={option.active}
+            disabled={option.disabled ?? false}
+            {...(option.title ? { title: option.title } : {})}
             data-testid={`sleep-timer-${option.key}`}
             onClick={() => onChange(option.next())}
           >

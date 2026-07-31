@@ -2575,7 +2575,12 @@ export default function PlayFilesPage() {
               {/* Above the panel's own settings rather than inside it: this is a decision about the
                   listening session, not about how a file is played, and it is the one control here
                   that has to be findable in the dark. */}
-              <SleepTimerControl mode={sleepTimer.mode} onChange={sleepTimer.setMode} nowMs={sleepTimer.nowMs} />
+              <SleepTimerControl
+                mode={sleepTimer.mode}
+                onChange={sleepTimer.setMode}
+                nowMs={sleepTimer.nowMs}
+                isPlaying={isPlaying}
+              />
               <PlaybackSettingsPanel
                 durationSliderMax={DURATION_SLIDER_STEPS}
                 durationSliderValue={durationSecondsToSlider(durationSeconds)}
