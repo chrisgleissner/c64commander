@@ -389,7 +389,7 @@ It needs no internet connection. The app already knows which tunes resemble one 
 
 You will be offered three kinds of station:
 
-- **A mood.** Nine of them, such as Fast-Paced, Chill / Ambient and Melodic. Each tile tells you how many tunes it has to draw on. A mood with nothing to offer is greyed out, so you cannot start a station that has no music in it.
+- **A mood.** Nine of them, such as Fast-Paced, Chill / Ambient and Melodic. Every one of them draws on tens of thousands of tunes, so pick whichever suits you and do not worry about running short.
 - **Tunes you like.** This appears once you have marked a few favourites, and builds a station out of them.
 - **Surprise me.** Anything at all.
 
@@ -469,7 +469,7 @@ These work for tunes playing on your phone or tablet. On your C64 the buttons on
 
 **Which sound chip.** The Commodore 64 was made with two versions of the SID chip, the earlier **6581** and the later **8580**, and music written for one sounds a little different on the other. Most SID files record which chip the composer used, and those always play as intended. For the files that do not say, **Settings → SID Radio → SID chip for tunes that do not name one** decides. Leave **Match my Commodore 64** switched on and the app reads the chip from your own machine and remembers it, so your tunes keep that character even when the machine is switched off. Switch it off, and the app uses whichever chip you choose there instead. Either way, the choice applies from the next tune onwards.
 
-**How closely to copy the chip.** Under **Settings → SID Radio → SID emulation** you can choose between two ways of recreating the SID. **Accurate** follows the real chip in the finest detail. **Light** does about a third of the work and still sounds good; most listeners will not hear the difference, which makes it a sensible choice on an older phone or tablet or when you want a long listen to go easy on the battery. Both play every tune, and you can change your mind at any time.
+**How closely to copy the chip.** Under **Settings → SID Radio → SID emulation** you can choose between two ways of recreating the SID. **Accurate** follows the real chip in the finest detail. **Light** asks about a third as much of your phone or tablet and still sounds good — most listeners will not hear the difference. Choosing it leaves more headroom for everything else, so the app stays quick to answer while the music plays, and it makes a long listen kinder to the battery. Both play every tune, and you can change your mind at any time.
 
 #### What the tune tells you about itself
 

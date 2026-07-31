@@ -162,10 +162,15 @@ describe("SidRadioLauncherSheet Song moods", () => {
 describe("SidRadioLauncherSheet station populations", () => {
   const populations = populationsWith({ fast_paced: 41648, composer_focus: 673, theme_hunter: 0 });
 
-  it("shows each station's size once the populations are known", () => {
+  it("does not print a track count on a station that has music", () => {
+    // Every mood draws on tens of thousands of tunes and the figures sat within a
+    // few per cent of each other, so the number said nothing about which mood to
+    // pick and cost a third line on every tile. A release that lost most of a mood
+    // is caught by the build instead — see `stylePopulationGate.test.ts`.
     setup(0, populations);
-    expect(screen.getByTestId("sid-radio-style-0-size")).toHaveTextContent("41,648 tracks");
-    expect(screen.getByTestId("sid-radio-style-5-size")).toHaveTextContent("673 tracks");
+    expect(screen.queryByTestId("sid-radio-style-0-size")).toBeNull();
+    expect(screen.queryByTestId("sid-radio-style-5-size")).toBeNull();
+    expect(screen.getByTestId("sid-radio-style-0")).not.toHaveTextContent(/tracks/);
   });
 
   it("disables a style the export left empty instead of offering a dead station", () => {
