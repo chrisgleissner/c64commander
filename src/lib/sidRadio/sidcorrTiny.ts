@@ -79,8 +79,14 @@ export interface SidcorrStyle {
 
 export interface SidcorrResolvedTrack {
   fileOrdinal: number;
-  /** 1-based subsong index within the file. */
-  songIndex: number;
+  /**
+   * Which tune of the file this ordinal is, counting from 1.
+   *
+   * One-based, like every other tune number the app holds, and deliberately not called an index:
+   * the engine's own `songIndex` counts from 0, and conflating the two played the wrong tune. See
+   * `sidTuneIndex` for the single place that converts.
+   */
+  songNr: number;
   /** 12-hex-char md5_48 file identity. */
   md5_48: string;
 }
@@ -144,7 +150,7 @@ export interface SidcorrTinyBundle {
 
   stats: SidcorrTinyStats;
 
-  /** Resolve a track ordinal to its (fileOrdinal, songIndex, md5_48). */
+  /** Resolve a track ordinal to its (fileOrdinal, songNr, md5_48). */
   resolveTrack(ordinal: number): SidcorrResolvedTrack;
   /** All track ordinals belonging to a file identity (empty if unknown). */
   trackOrdinalsForMd548(md5_48: string): number[];
@@ -409,7 +415,7 @@ export const parseSidcorrTiny = (buffer: ArrayBuffer): SidcorrTinyBundle => {
       const fileOrdinal = lo - 1;
       return {
         fileOrdinal,
-        songIndex: ordinal - fileTrackStart[fileOrdinal] + 1,
+        songNr: ordinal - fileTrackStart[fileOrdinal] + 1,
         md5_48: md548ByFileOrdinal[fileOrdinal],
       };
     },

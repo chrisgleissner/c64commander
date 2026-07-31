@@ -647,19 +647,37 @@ class NativeLocalSidSink implements AudioScheduleSink {
     // scheduled ahead, so a level applied there reaches the speaker twenty seconds late, which is
     // not a volume control. Where the native path takes it, that becomes the one that matters and
     // the conversion below is left at unity so the two do not multiply.
-    if (this.backend.setAudioTrackGain) {
-      void this.backend.setAudioTrackGain({ gain: to }).catch((error) => {
-        addLog("debug", "Native audio: pipeline gain rejected; falling back to scaling at conversion", {
-          error: (error as Error)?.message ?? String(error),
+    if (this.backend.setAudioTrackGain && this.nativeGainAvailable) {
+      void this.backend
+        .setAudioTrackGain({ gain: to })
+        .then(() => {
+          // Only now is the pipeline holding the level, so only now may the conversion stand down.
+          // Standing it down before the call resolved was a way to lose the level entirely: a
+          // rejection arriving later left the conversion at unity with nothing attenuating, and the
+          // listener heard full volume until they happened to move the slider again.
+          this.masterRamp = null;
+          this.masterGain = 1;
+        })
+        .catch((error) => {
+          addLog("warn", "Native audio: pipeline gain rejected; attenuating at the conversion instead", {
+            service: "local-sid",
+            gain: to,
+            error: (error as Error)?.message ?? String(error),
+          });
+          this.nativeGainAvailable = false;
+          this.rampConversionGain(to, rampMs);
         });
-        this.nativeGainAvailable = false;
-      });
-      if (this.nativeGainAvailable) {
-        this.masterRamp = null;
-        this.masterGain = 1;
-        return;
-      }
+      return;
     }
+    this.rampConversionGain(to, rampMs);
+  }
+
+  /**
+   * Attenuate where the samples are converted, which is where the level lands when the pipeline
+   * cannot take it. Correct, but heard only once the twenty seconds already scheduled have played
+   * out — which is why it is the fallback rather than the way this normally works.
+   */
+  private rampConversionGain(to: number, rampMs: number): void {
     if (rampMs <= 0 || !this.converted) {
       this.masterRamp = null;
       this.masterGain = to;

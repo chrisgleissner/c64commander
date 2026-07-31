@@ -23,7 +23,7 @@ const build = (overrides: Partial<NowPlayingMetadataInput> = {}) =>
 
 describe("the line under the now-playing title", () => {
   it("puts the fields in the order the page specifies, with the length last", () => {
-    expect(build({ tuneNumber: 2, tuneCount: 5 })).toBe("Rob Hubbard - 1985 Elite - 6581 - PAL - Tune 2 of 5 - 3:12");
+    expect(build({ tuneNumber: 2, tuneCount: 5 })).toBe("Rob Hubbard · 1985 Elite · 6581 · PAL · Tune 2 of 5 · 3:12");
   });
 
   it("names one SID model per chip, so a 2SID says which two it uses", () => {
@@ -54,12 +54,27 @@ describe("the line under the now-playing title", () => {
   });
 
   it("drops a missing field together with its separator, so the line never shows a hole", () => {
-    expect(build({ released: null, clock: "unknown", sidModels: [] })).toBe("Rob Hubbard - 3:12");
-    expect(build({ author: "   ", released: null })).toBe("6581 - PAL - 3:12");
+    expect(build({ released: null, clock: "unknown", sidModels: [] })).toBe("Rob Hubbard · 3:12");
+    expect(build({ author: "   ", released: null })).toBe("6581 · PAL · 3:12");
   });
 
   it("leaves out a chip whose model the header does not name rather than guessing at it", () => {
-    expect(build({ sidModels: ["unknown"] })).toBe("Rob Hubbard - 1985 Elite - PAL - 3:12");
+    expect(build({ sidModels: ["unknown"] })).toBe("Rob Hubbard · 1985 Elite · PAL · 3:12");
+  });
+
+  // The separator is a middle dot rather than a hyphen because the fields themselves contain
+  // hyphens — publisher names, the PAL/NTSC clock, hyphenated tune titles. With a hyphen separator
+  // the eye cannot tell which hyphens divide fields and which belong to a value.
+  it("stays readable when a field contains a hyphen of its own", () => {
+    const line = build({
+      author: "Jeroen Tel",
+      released: "1988 Maniacs of Noise - Team",
+      clock: "pal_ntsc",
+    });
+
+    expect(line).toBe("Jeroen Tel · 1988 Maniacs of Noise - Team · 6581 · PAL/NTSC · 3:12");
+    // Every separator in the line is the dot; the hyphen that remains belongs to the publisher.
+    expect(line.split(" · ")).toHaveLength(5);
     expect(build({ sidModels: ["mos6581", "unknown"] })).toContain("6581");
     expect(build({ sidModels: ["mos6581", "unknown"] })).not.toContain("6581 /");
   });

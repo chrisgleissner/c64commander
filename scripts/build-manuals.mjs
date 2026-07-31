@@ -237,7 +237,6 @@ const markdownToc = [
   "Your First Tour",
   "Everyday Flows",
   "In Depth",
-  "SID Radio",
   "Safe Device Use",
   "Troubleshooting",
   {
@@ -364,6 +363,20 @@ const targetDeviceDescription = (variant) =>
   isC64uRemoteVariant(variant)
     ? "a Commodore 64 Ultimate"
     : "a Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, or Ultimate-II+(L)";
+
+/**
+ * The line under the manual's title, and the line the PDF's cover repeats.
+ *
+ * It leads with what someone opens the app to do — listen to SID music, run games and demos, get at
+ * the disks — because that is what a reader is deciding about on page 1. Diagnostics are in here and
+ * are covered in their own chapter, but naming them on the cover made the app sound like a
+ * fault-finding tool rather than something to enjoy a C64 with.
+ *
+ * Defined once, because the markdown title block and the PDF cover both set it and had drifted apart
+ * before.
+ */
+const manualSubtitle = (variant) =>
+  `Play SID music, run games and demos, mount disks, and control ${targetDeviceDescription(variant)} from one app.`;
 
 const targetDeviceShortName = (variant) =>
   isC64uRemoteVariant(variant) ? "the Commodore 64 Ultimate" : "the connected Ultimate-family device";
@@ -773,7 +786,7 @@ const renderKeyboardReference = ({ features, variant }) => {
 export const renderManualMarkdown = ({ variant, features }) => {
   const appName = variant.displayName;
   const title = `${appName} Manual`;
-  const subtitle = `Connect, control, play, mount, and diagnose ${targetDeviceDescription(variant)}.`;
+  const subtitle = manualSubtitle(variant);
   const profile = variant.id === "c64u-remote" ? "compact" : "medium";
   const sourceLabels = ["Local", "C64U"];
   if (includeFeature(features, "hvsc_enabled")) sourceLabels.push("HVSC");
@@ -894,7 +907,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("C64U file picker", profile, "play/import/profiles/{profile}/02-c64u-file-picker.png"),
     "",
-    "Playback supports SID, MOD, PRG, CRT, and disk images. SID files can expose subsongs. When songlength metadata is available, the app shows duration and can advance more predictably.",
+    "Playback supports SID, MOD, PRG, CRT, and disk images. A SID file can hold several separate pieces of music, which the app calls tunes. When songlength metadata is available, the app shows a duration and can advance more predictably.",
     "",
     image("Playlist view all", profile, "play/profiles/{profile}/02-view-all.png"),
     "",
@@ -906,11 +919,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The filter changes the visible list, not the playlist itself. Clearing it brings the full queue back.",
     "",
-    "Each playlist item keeps its origin. Local files remain local, C64U files point back to the device, archive results remember their source, and SID entries can retain songlength and subsong information.",
+    "Each playlist item keeps its origin. Local files remain local, C64U files point back to the device, archive results remember their source, and SID entries can retain songlength and tune information.",
     "",
-    "Use playback controls for the session: play or pause, previous or next, shuffle, repeat, and volume. Use item actions for one entry: remove it, inspect it, choose a subsong, or apply an item-specific playback setting where available.",
+    "Use playback controls for the session: play or pause, previous or next, shuffle, repeat, and volume. Use item actions for one entry: remove it, inspect it, choose which tune of a SID to play, or apply an item-specific playback setting where available.",
     "",
-    "For SID files, watch duration and subsong information. A SID may contain one tune or several. Songlength data makes advancing through the list less like guesswork.",
+    "For SID files, watch the duration and the tune count. A SID may contain one tune or several, and the line under the title says which one is playing — Tune 3 of 15. Songlength data makes advancing through the list less like guesswork.",
     "",
     "For disk images, Play is convenient when you are launching or testing. Disks is better when drive setup, grouping, or collection work matters.",
     "",
@@ -1070,11 +1083,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Preferred path: filter before removing. A filter changes only what you can see.",
     "",
-    "### Work with SID Subsongs",
+    "### Work with the Tunes Inside a SID",
     "",
     "1. Add one or more SID files to Play.",
     "2. Select the SID item.",
-    "3. Choose the subsong or playback option if the file exposes one.",
+    "3. Choose the tune or playback option if the file offers one.",
     "4. Use duration information when available to decide whether to repeat, skip, or continue.",
     "",
     "Preferred path: keep SID work in Play; use HVSC preparation only when the library itself needs attention.",
@@ -1162,53 +1175,124 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The tour showed you where everything lives, and the flows above are quick recipes. A few features reward a closer look. This chapter takes its time with them.",
     "",
-    ...(includeFeature(features, "remote_input_enabled")
-      ? [
-          "### Remote Input",
-          "",
-          `Remote Input turns your ${appDeviceName(
-            variant,
-          )} into a second-screen controller for the C64. It is handy when you are sitting across the room from the machine, when no joystick is plugged in, or when you just want to type a command without reaching for the real keyboard.`,
-          "",
-          "Open it in either of two places:",
-          "",
-          "- From **Home**, tap the **Remote Input** tile in Quick Actions.",
-          "- From **Play**, tap the **Remote Input** button that appears while an item is playing.",
-          "",
-          "Each place opens its own copy of the controller, so a key you are holding in one never leaks into the other.",
-          "",
-          image("Remote Input joystick mode", profile, "home/remote-input/01-joystick.png"),
-          "",
-          "At the top of the sheet you choose between two modes, **Joystick** and **Keys**.",
-          "",
-          "**Joystick** puts a stick and a large **FIRE** button on the screen. You can:",
-          "",
-          "- choose how the stick behaves with **Analog**, **D-Pad**, or **Swipe**;",
-          "- send the signal to **Port 1** or **Port 2** with the port toggle (most games read Port 2);",
-          "- resize the controls from M up to XXL with the **Size** stepper (L by default);",
-          "- turn on **Autofire** and set its rate from 1 to 10 presses per second (the default is 5, and you can also set it in Settings).",
-          "",
-          "A companion quick-keys bar beside the joystick keeps the keys you reach for mid-game one tap away — RUN/STOP, SPACE, RETURN, the function keys f1 to f8, the cursor keys, and the CTRL, C=, and SHIFT modifiers — so you can nudge a menu or answer a prompt without leaving the joystick. For distraction-free play, tap **Game mode**: the app hides every other control and anchors the stick and FIRE button to the edges of the screen for no-look thumbs. Leave it with **Exit game mode** or your device's Back button. Both release everything you were holding.",
-          "",
-          "**Keys** shows a full Commodore 64 keyboard, including the SHIFT, CTRL, and C= modifiers, SHIFT LOCK, the function keys f1 to f8, and RESTORE. Tap a modifier once to arm it for the next key, or hold it down to chord.",
-          "",
-          image("Remote Input keyboard mode", profile, remoteInputKeyboardImage(profile)),
-          "",
-          remoteInputJoystickFirmware(variant),
-          "",
-          "Remote Input is careful never to leave a key or direction stuck on the real C64. Everything you are holding is released automatically when you close the sheet, switch mode or port, switch to another device, or send the app to the background. If a message does not reach the device, the header shows **Reconnecting…** until the next one gets through. And at any moment you can tap **Release All** to let go of every key and button at once.",
-          "",
-          "To steer a game you have just launched:",
-          "",
-          "1. On **Play**, start the game, then tap **Remote Input**.",
-          "2. Choose **Joystick** and set the port (most games use **Port 2**).",
-          "3. Pick a movement style, then play with the stick and **FIRE**.",
-          "4. Tap **Release All**, or close the sheet, when you finish.",
-          "",
-          featureAvailability(features.remote_input_enabled),
-          "",
-        ]
-      : []),
+    "### SID Radio",
+    "",
+    "SID Radio turns the tunes you like — and the mood you are in — into an endless, self-refilling queue of similar SIDs, launched in one tap. It rides the normal Play engine, so everything you already know about playback still applies, and it works fully offline: the app ships a small similarity index and needs no network while you listen.",
+    "",
+    "![SID Radio and Liked Tunes controls with the heart / cross ranking on the Now Playing card](../../img/app/play/sid-radio/01-controls.png)",
+    "",
+    "**Rate as you listen.** While a SID plays, a subtle heart / cross pair sits on the Now Playing card. Tap the heart to add a tune to your **Liked Tunes**; tap the cross to skip it now and steer future picks away from its neighbourhood. Ratings are optional and ambient, stored on the device, and they follow a tune across HVSC updates because they key on the tune's content (its MD5), not its path.",
+    "",
+    '**Start a station.** Open **SID Radio** from the Play page to pick a mood: nine style tiles (Fast-Paced, Chill / Ambient, Melodic and more), a **From tunes you like** taste station that unlocks once you have liked a few tunes, or **Surprise me**. Each tile shows how many tunes that station draws from, and a mood the similarity index has nothing for is greyed out rather than starting a station with nothing to play. Turn on **Based on my likes** to bias any style toward what you enjoy — for example "Fast-Paced from your Likes". You can also start a station from any single tune with **Start Radio**.',
+    "",
+    "![The SID Radio station launcher: song, mood (nine style tiles) and taste seeds](../../img/app/play/sid-radio/02-stations.png)",
+    "",
+    `**Stations skip the very short tunes.** HVSC holds jingles, one-shot sound effects and test tones alongside the music, and a station that serves those between pieces feels broken — so anything shorter than 15 seconds is passed over. Change the threshold under **Settings → SID Radio → Shortest tune to play**, or set it to 0 to play everything. Raising it does not make a station run dry: it looks further through the similarity index to make up the difference.`,
+    "",
+    "**Lean back.** A station is an endless stream, so — like radio everywhere — there is very little to adjust while one plays. The station decides what comes next, so Shuffle, Repeat and Reshuffle are taken off the Play page altogether rather than shown greyed out: they have no meaning here, and the space is better spent on the music. They come back, with the settings you had, the moment you stop the station and play a finite list such as Liked Tunes. Each start is fresh, so the same mood feels new every time.",
+    "",
+    'The line at the top of the Now Playing card always says where the queue is coming from — the name of the running station, or the playlist when nothing is steering it. It stops the station in one tap and expands a short "why this tune" line. The line is there in both states and is the same height either way, so starting or stopping a station never shifts the transport buttons under your thumb.',
+    "",
+    "**No repeats.** A station never plays the same tune twice, and it never plays two tunes from the same file back to back: once it serves one piece from a multi-tune SID, the rest of that file's pieces are set aside. What you hear is a walk through the similarity index that keeps moving outwards, not a shuffle that can circle back.",
+    "",
+    "A station follows similarity, and once in a while it reaches the end of what it can find — most often after you have skipped through a great many tunes in one sitting. When that happens the app says so, rather than leaving you on a last track that will not advance, and you can pick another mood.",
+    "",
+    "**Liked Tunes.** Everything you have liked is a plain, playable list — browse it, play it (with normal Shuffle and Repeat), or un-like a tune. Tunes no longer in your installed HVSC are shown greyed rather than dropped.",
+    "",
+    "#### Where the music plays",
+    "",
+    `By default, SID Radio plays each tune **on the C64** — exactly like the rest of the app — and you hear it back on your ${appDeviceName(
+      variant,
+    )} through the network **audio mirror**. For that to work ${targetDeviceShortName(
+      variant,
+    )} has to be reachable on your local network: connect it to your Wi‑Fi router with an **Ethernet** cable, and keep your ${appDeviceName(
+      variant,
+    )} on the same Wi‑Fi. The C64 then streams its sound across the network and the app plays it in step with the on-screen progress.`,
+    "",
+    `Where you hear a SID is up to you. When a SID is playing, the Play screen offers **Listen on**, with up to three choices, reading outwards from your own device:`,
+    "",
+    `- **Local** — your ${appDeviceName(
+      variant,
+    )} renders the SID itself with a built-in libsidplayfp engine. No C64 needed, and nothing is streamed.`,
+    `- **Remote** — the tune plays on ${targetDeviceShortName(
+      variant,
+    )} and you listen there. Which machine that is is shown in the header, so the button does not repeat it.`,
+    `- **Both** — the tune plays on ${targetDeviceShortName(variant)} and its sound is streamed to your ${appDeviceName(
+      variant,
+    )} as well, so you hear it in both places. This choice only appears when the sound can actually reach you — if ${targetDeviceShortName(
+      variant,
+    )} has no network path for it, the option is simply not shown.`,
+    "",
+    `**Listen on** appears only for SID tunes, since it is the only thing your ${appDeviceName(
+      variant,
+    )} can play on its own; programs and disks always run on ${targetDeviceShortName(variant)}.`,
+    "",
+    "![The Listen on control: Local, Remote, or Both](../../img/app/play/sid-radio/03-listen-on.png)",
+    "",
+    `**On-device playback needs the C64 ROMs.** SID music is driven by the C64's own KERNAL and BASIC routines, so without them a tune starts but never plays. Those ROM images are copyrighted and cannot be shipped with an app, so ${appName} reads them from ${targetDeviceShortName(
+      variant,
+    )}: **Settings → SID Radio → C64 ROMs for on-device playback → Read from C64**. It takes a moment and only has to be done once.`,
+    "",
+    `**Only connect ${appName} to devices you own or have been given permission to use.** The ROM images stay on your ${appDeviceName(
+      variant,
+    )}, are never shared or uploaded, and are never included in diagnostics. You can remove them again at any time with **Remove** in the same place.`,
+    "",
+    `Until the ROMs are in place — or if you remove them — SID tunes simply play on ${targetDeviceShortName(
+      variant,
+    )} instead, and the app tells you so once.`,
+    "",
+    `**Wind through a tune.** While a SID is playing on your ${appDeviceName(
+      variant,
+    )}, press and hold **⏭** to fast-forward or **⏮** to rewind — the tune keeps moving for as long as you hold, roughly five seconds at a time. A short tap still skips to the next or previous tune, so the buttons do what they always did. This works with the on-device engine; on ${targetDeviceShortName(
+      variant,
+    )} the buttons only skip.`,
+    "",
+    `**Jump straight to a moment.** The progress bar is not only a read-out. Tap anywhere along it to land there, or hold and sweep to travel through the tune — the bar and the time follow your finger, and the music picks up wherever you let go. Winding backwards asks more of the engine than winding forwards, so a long rewind can take a moment to settle. Like winding, this is for tunes playing on your ${appDeviceName(
+      variant,
+    )}.`,
+    "",
+    `**If a tune ever falls quiet.** Very occasionally the on-device engine can stop making sound while everything on screen still says the tune is playing — the clock counts on, and there is simply nothing to hear. The app watches for that and starts the tune again from the moment it went quiet, without being asked. You may notice a short gap. You should not have to touch anything.`,
+    "",
+    `**One sound at a time.** Your ${appDeviceName(
+      variant,
+    )} can make sound two ways — playing a tune itself, or playing the sound streamed from ${targetDeviceShortName(
+      variant,
+    )} — and it will never do both at once. Whichever you start last takes over, and the other stops. So turning **Listen** on while a tune is playing here hands the speaker to ${targetDeviceShortName(
+      variant,
+    )}, and starting a tune here takes it back. You never have to work out which of two sounds to chase.`,
+    "",
+    `**Crossfading between tunes.** By default one tune stops before the next begins, so you never hear two at once — including when you move playback between ${targetDeviceShortName(
+      variant,
+    )} and your ${appDeviceName(
+      variant,
+    )}, or switch to a different Ultimate. If you would rather they overlap, **Settings → SID Radio → Crossfade** offers a short, medium or long fade: the outgoing tune fades down while the next fades in. That fade is the one moment two tunes are meant to sound together.
+
+Crossfading only works for tunes playing on your ${appDeviceName(
+      variant,
+    )}. Two tunes have to sound at the same moment for one to fade into the other, and ${targetDeviceShortName(
+      variant,
+    )} plays a single tune live on its one sound chip — so unless **Listen on** is set to **Local** the setting is greyed out and tunes change cleanly instead.`,
+    "",
+    `**Which SID chip a tune is played on.** The C64 shipped with two revisions of the SID sound chip, the 6581 and the later 8580, and they do not sound the same. Most SID files record which one they were written for, and those always play on the chip they name. For the rest, **Settings → SID Radio → SID chip for tunes that do not name one** decides. Leave **Match my Commodore 64** on and the app reads the chip from ${targetDeviceShortName(
+      variant,
+    )} while you are connected and remembers it, so it keeps applying when the machine is off. Turn it off, or use a machine the app has not read yet, and the chip you pick below it is used instead. Either way the choice applies from the next tune, not the one already playing.`,
+    "",
+    `**What the tune says about itself.** Under the title, one line carries what the SID file records: composer, year and publisher, the chip or chips it names, PAL or NTSC, which tune of the file is playing, and its length. A file that does not record something simply leaves it out rather than guessing. Many SID files hold several separate pieces of music; when one does, the line says **Tune 3 of 15**, and the transport plays exactly that piece.`,
+    "",
+    `**Volume and Mute while your ${appDeviceName(
+      variant,
+    )} is playing.** They act on the tune itself, turning the sound down before it reaches the speaker, and they leave your device's own volume alone. So muting a tune here does not mute anything else, and your ringer and notifications are untouched.`,
+    "",
+    `**Two SID sound engines.** Under **Settings → SID Radio → SID emulation** you can choose how faithfully the on-device engine models the C64's SID chip. **Accurate (reSIDfp)** is the default and models the real chip cycle by cycle — pick it if you want the last word in fidelity. **Light (SIDLite)** does roughly a third of the work and still sounds good; most listeners will not hear the difference, so it is a perfectly reasonable choice on an older or slower phone, or when you want to save battery on a long listen. Both play every tune, and you can switch whenever you like.`,
+    "",
+    "![SID Radio settings: enable stations, the ranking, and the experimental on-device playback engine, with the similarity-corpus status](../../img/app/settings/sid-radio.png)",
+    "",
+    "Enable SID Radio, the heart / cross ranking, and the on-device engine under **Settings → SID Radio**, which also shows the similarity-corpus and installed-HVSC versions.",
+    "",
+    "### The SID Audio Mixer",
+    "",
+    "Your C64 makes its sound with a SID chip, and can host more than one. **Home > SID / Audio mixer** is a live mixing desk: a **master volume** for everything, and, for each SID it reports, that chip's own **volume** and **stereo position**. Slide one SID toward the left speaker and another toward the right for true stereo, or pull one down to let the other lead. Changes are heard at once, and the same controls appear in **Config > Audio Mixer** if you prefer the full tree.",
+    "",
     ...(includeFeature(features, "audio_mirror_enabled") || includeFeature(features, "video_mirror_enabled")
       ? [
           "### Live View",
@@ -1299,42 +1383,70 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Live View (above) plays those same **VIC** and **Audio** feeds inside the app, so the two are careful never to fight over one stream. Turn Live View on and it takes charge of the feed it needs: that row shows a small **Live View** badge and turns read-only, so nothing you do here can pull the picture or sound out from under it. Your own target is remembered, and the moment you stop Live View the row hands control straight back to you.",
     "",
-    "### The SID Audio Mixer",
-    "",
-    "Your C64 makes its sound with a SID chip, and can host more than one. **Home > SID / Audio mixer** is a live mixing desk: a **master volume** for everything, and, for each SID it reports, that chip's own **volume** and **stereo position**. Slide one SID toward the left speaker and another toward the right for true stereo, or pull one down to let the other lead. Changes are heard at once, and the same controls appear in **Config > Audio Mixer** if you prefer the full tree.",
-    "",
-    "### The Virtual Printer",
-    "",
-    "A C64 once talked to a Commodore printer over the serial bus; yours emulates one so you never need the vintage hardware. **Home > Printer** picks the **emulation** (such as Commodore MPS), sets the printer's **bus ID**, and manages its output: **Flush** commits what has been printed so far, **Eject** finishes the page, and **Reset** clears the emulated printer.",
-    "",
-    ...(includeFeature(features, "ram_snapshots_enabled")
+    ...(includeFeature(features, "remote_input_enabled")
       ? [
-          "### RAM Snapshots",
+          "### Remote Input",
           "",
-          `A RAM snapshot is a copy of what is in your C64's memory right now, saved onto your ${appDeviceName(
+          `Remote Input turns your ${appDeviceName(
             variant,
-          )} so you can put it back later. It is the nearest thing the app has to a save-and-restore button for programs that have none of their own.`,
+          )} into a second-screen controller for the C64. It is handy when you are sitting across the room from the machine, when no joystick is plugged in, or when you just want to type a command without reaching for the real keyboard.`,
           "",
-          "Both actions live in **Home > Quick Actions**: **Save RAM** to capture, and **Load RAM** to restore. The device must be connected and not busy. The app pauses the machine for the transfer and resumes it afterwards, so a running program is not disturbed.",
+          "Open it in either of two places:",
           "",
-          "When you tap **Save RAM**, the app asks which region of memory to capture:",
+          "- From **Home**, tap the **Remote Input** tile in Quick Actions.",
+          "- From **Play**, tap the **Remote Input** button that appears while an item is playing.",
           "",
-          "- **CPU + RAM Snapshot** (when the device supports it) freezes the running program and stores the full 64K of memory together with the processor's registers, so it can later resume exactly where it left off. It is best for BASIC and simple programs; fast-action games may not resume cleanly.",
-          "- **Program Snapshot** stores almost all of memory (everything but the stack). A good all-round choice.",
-          "- **Basic Snapshot** stores just the BASIC program and its variables.",
-          "- **Screen Snapshot** stores the current screen and its colours.",
-          "- **Custom Snapshot** lets you type the exact address ranges you want.",
+          "Each place opens its own copy of the controller, so a key you are holding in one never leaks into the other.",
           "",
-          `Snapshots are kept on your ${appDeviceName(
-            variant,
-          )}, not on the C64. Each one is named automatically from its type and the date and time, and if something is playing its title becomes the label. You can add or change a **Comment** on any snapshot later. The app keeps up to 100 snapshots and quietly drops the oldest once that fills.`,
+          image("Remote Input joystick mode", profile, "home/remote-input/01-joystick.png"),
           "",
-          "**Load RAM** opens your snapshot library. Filter it by name or by type, then tap a snapshot to restore it. The app asks you to confirm first, because restoring overwrites the matching memory on the C64. It writes back only the bytes the snapshot holds, and it deliberately leaves the CIA timers alone so the cursor keeps its normal blink. A CPU snapshot resumes the program; if that is not possible the app restores the memory alone and tells you so. From the same library you can edit a snapshot's comment or remove ones you no longer need with the trash icon.",
+          "At the top of the sheet you choose between two modes, **Joystick** and **Keys**.",
           "",
-          featureAvailability(features.ram_snapshots_enabled),
+          "**Joystick** puts a stick and a large **FIRE** button on the screen. You can:",
+          "",
+          "- choose how the stick behaves with **Analog**, **D-Pad**, or **Swipe**;",
+          "- send the signal to **Port 1** or **Port 2** with the port toggle (most games read Port 2);",
+          "- resize the controls from M up to XXL with the **Size** stepper (L by default);",
+          "- turn on **Autofire** and set its rate from 1 to 10 presses per second (the default is 5, and you can also set it in Settings).",
+          "",
+          "A companion quick-keys bar beside the joystick keeps the keys you reach for mid-game one tap away — RUN/STOP, SPACE, RETURN, the function keys f1 to f8, the cursor keys, and the CTRL, C=, and SHIFT modifiers — so you can nudge a menu or answer a prompt without leaving the joystick. For distraction-free play, tap **Game mode**: the app hides every other control and anchors the stick and FIRE button to the edges of the screen for no-look thumbs. Leave it with **Exit game mode** or your device's Back button. Both release everything you were holding.",
+          "",
+          "**Keys** shows a full Commodore 64 keyboard, including the SHIFT, CTRL, and C= modifiers, SHIFT LOCK, the function keys f1 to f8, and RESTORE. Tap a modifier once to arm it for the next key, or hold it down to chord.",
+          "",
+          image("Remote Input keyboard mode", profile, remoteInputKeyboardImage(profile)),
+          "",
+          remoteInputJoystickFirmware(variant),
+          "",
+          "Remote Input is careful never to leave a key or direction stuck on the real C64. Everything you are holding is released automatically when you close the sheet, switch mode or port, switch to another device, or send the app to the background. If a message does not reach the device, the header shows **Reconnecting…** until the next one gets through. And at any moment you can tap **Release All** to let go of every key and button at once.",
+          "",
+          "To steer a game you have just launched:",
+          "",
+          "1. On **Play**, start the game, then tap **Remote Input**.",
+          "2. Choose **Joystick** and set the port (most games use **Port 2**).",
+          "3. Pick a movement style, then play with the stick and **FIRE**.",
+          "4. Tap **Release All**, or close the sheet, when you finish.",
+          "",
+          featureAvailability(features.remote_input_enabled),
           "",
         ]
       : []),
+    "### File Sources",
+    "",
+    "Everything you play or mount comes from a **source**, and each source keeps to its own picker so a wrong turn never lands you somewhere unexpected.",
+    "",
+    `- **Local** — files and folders on the ${appDeviceName(variant)} running the app.`,
+    `- **C64U** — files on ${targetDeviceShortName(variant)}, reached over FTP.`,
+    ...(includeFeature(features, "hvsc_enabled")
+      ? [
+          "- **HVSC** — the High Voltage SID Collection, the definitive archive of C64 music. Prepare it once from **Settings > HVSC**; afterwards the app checks for updates on its own, and browsing shows song durations and the tunes inside each file.",
+        ]
+      : []),
+    ...(includeFeature(features, "commoserve_enabled")
+      ? [
+          "- **CommoServe** — an online archive you search by name, pulling disks and programs straight into a playlist or disk collection. Set its address in **Settings > Online Archive**.",
+        ]
+      : []),
+    "",
     "### Drives and Disk Images",
     "",
     `${appName} gives your C64 up to two disk drives, and the **Disks** page drives both. Each drive card is a small control panel of its own.`,
@@ -1408,22 +1520,37 @@ export const renderManualMarkdown = ({ variant, features }) => {
             : []),
         ]
       : []),
-    "### File Sources",
-    "",
-    "Everything you play or mount comes from a **source**, and each source keeps to its own picker so a wrong turn never lands you somewhere unexpected.",
-    "",
-    `- **Local** — files and folders on the ${appDeviceName(variant)} running the app.`,
-    `- **C64U** — files on ${targetDeviceShortName(variant)}, reached over FTP.`,
-    ...(includeFeature(features, "hvsc_enabled")
+    ...(includeFeature(features, "ram_snapshots_enabled")
       ? [
-          "- **HVSC** — the High Voltage SID Collection, the definitive archive of C64 music. Prepare it once from **Settings > HVSC**; afterwards the app checks for updates on its own, and browsing shows song durations and subsongs.",
+          "### RAM Snapshots",
+          "",
+          `A RAM snapshot is a copy of what is in your C64's memory right now, saved onto your ${appDeviceName(
+            variant,
+          )} so you can put it back later. It is the nearest thing the app has to a save-and-restore button for programs that have none of their own.`,
+          "",
+          "Both actions live in **Home > Quick Actions**: **Save RAM** to capture, and **Load RAM** to restore. The device must be connected and not busy. The app pauses the machine for the transfer and resumes it afterwards, so a running program is not disturbed.",
+          "",
+          "When you tap **Save RAM**, the app asks which region of memory to capture:",
+          "",
+          "- **CPU + RAM Snapshot** (when the device supports it) freezes the running program and stores the full 64K of memory together with the processor's registers, so it can later resume exactly where it left off. It is best for BASIC and simple programs; fast-action games may not resume cleanly.",
+          "- **Program Snapshot** stores almost all of memory (everything but the stack). A good all-round choice.",
+          "- **Basic Snapshot** stores just the BASIC program and its variables.",
+          "- **Screen Snapshot** stores the current screen and its colours.",
+          "- **Custom Snapshot** lets you type the exact address ranges you want.",
+          "",
+          `Snapshots are kept on your ${appDeviceName(
+            variant,
+          )}, not on the C64. Each one is named automatically from its type and the date and time, and if something is playing its title becomes the label. You can add or change a **Comment** on any snapshot later. The app keeps up to 100 snapshots and quietly drops the oldest once that fills.`,
+          "",
+          "**Load RAM** opens your snapshot library. Filter it by name or by type, then tap a snapshot to restore it. The app asks you to confirm first, because restoring overwrites the matching memory on the C64. It writes back only the bytes the snapshot holds, and it deliberately leaves the CIA timers alone so the cursor keeps its normal blink. A CPU snapshot resumes the program; if that is not possible the app restores the memory alone and tells you so. From the same library you can edit a snapshot's comment or remove ones you no longer need with the trash icon.",
+          "",
+          featureAvailability(features.ram_snapshots_enabled),
+          "",
         ]
       : []),
-    ...(includeFeature(features, "commoserve_enabled")
-      ? [
-          "- **CommoServe** — an online archive you search by name, pulling disks and programs straight into a playlist or disk collection. Set its address in **Settings > Online Archive**.",
-        ]
-      : []),
+    "### The Virtual Printer",
+    "",
+    "A C64 once talked to a Commodore printer over the serial bus; yours emulates one so you never need the vintage hardware. **Home > Printer** picks the **emulation** (such as Commodore MPS), sets the printer's **bus ID**, and manages its output: **Flush** commits what has been printed so far, **Eject** finishes the page, and **Reset** clears the emulated printer.",
     "",
     "### Configuration and Saving",
     "",
@@ -1434,6 +1561,24 @@ export const renderManualMarkdown = ({ variant, features }) => {
     `You manage that from **Home > Config actions**. **Save to flash** writes the current live settings to flash now — reach for it when **Auto save config** is Ask or No. The app can also keep named **configuration snapshots** on the ${appDeviceName(
       variant,
     )}, separate from the device's flash: save the current setup, then load it back later to restore a whole configuration at once.`,
+    "",
+    "### Switching Between Devices",
+    "",
+    `If you have saved more than one ${
+      isC64uRemoteVariant(variant) ? "Commodore 64 Ultimate" : "device"
+    }, the Device Switcher lets you hop between them without opening Settings.`,
+    "",
+    "Open it in any of three ways, whenever more than one device is saved:",
+    "",
+    "- **Long-press the header badge** (a short tap opens Diagnostics instead).",
+    "- Press **`#`** on a hardware keyboard or keypad.",
+    "- Choose **Switch device** in the Quick Menu.",
+    "",
+    "The switcher checks each saved device for you and refreshes every ten seconds while it is open. Each row shows the device's name, a status pill (**Selected**, **Verifying**, **Offline**, or **Mismatch**), a live health badge, and a short summary such as how many health probes passed or when the device was last seen. The device you are using is highlighted. Tap the chevron to expand a row and see every health probe in detail, which is handy for telling a sleeping device from one that is genuinely unreachable.",
+    "",
+    "Tap a device to switch to it. Before anything else the app safely lets go of any input you were holding on the old device, stops tracking its playback and pause state, retargets to the new device's address and ports, and then checks that the new device answers. While that happens the target shows a **Verifying** pill; once it responds, it becomes the active device.",
+    "",
+    "Saved devices themselves are created and edited in **Settings > Connection**, under **Saved devices**. There you can add a device, edit its **Device name**, **Hostname / IP**, and **HTTP**, **FTP**, and **Telnet** ports, set an optional **Network Password**, or delete one you no longer use. A device is saved only once it answers, so the list never fills with machines that are not really there. With a single device saved there is nothing to switch to, so the switcher stays out of your way.",
     "",
     "### Reading Diagnostics",
     "",
@@ -1464,126 +1609,6 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "The report is a small ZIP file holding the app's logs, traces, errors, and recent actions, along with a health snapshot and details about your app version, your device, and the active C64 (its name, host address, and firmware). It does not include your network password. It can, however, contain your device's hostname or IP address, so share it only with people you trust or with support.",
     "",
     "Use **Clear all** afterwards for a clean slate. It asks you to confirm, then shows **Diagnostics cleared** when done.",
-    "",
-    "### Switching Between Devices",
-    "",
-    `If you have saved more than one ${
-      isC64uRemoteVariant(variant) ? "Commodore 64 Ultimate" : "device"
-    }, the Device Switcher lets you hop between them without opening Settings.`,
-    "",
-    "Open it in any of three ways, whenever more than one device is saved:",
-    "",
-    "- **Long-press the header badge** (a short tap opens Diagnostics instead).",
-    "- Press **`#`** on a hardware keyboard or keypad.",
-    "- Choose **Switch device** in the Quick Menu.",
-    "",
-    "The switcher checks each saved device for you and refreshes every ten seconds while it is open. Each row shows the device's name, a status pill (**Selected**, **Verifying**, **Offline**, or **Mismatch**), a live health badge, and a short summary such as how many health probes passed or when the device was last seen. The device you are using is highlighted. Tap the chevron to expand a row and see every health probe in detail, which is handy for telling a sleeping device from one that is genuinely unreachable.",
-    "",
-    "Tap a device to switch to it. Before anything else the app safely lets go of any input you were holding on the old device, stops tracking its playback and pause state, retargets to the new device's address and ports, and then checks that the new device answers. While that happens the target shows a **Verifying** pill; once it responds, it becomes the active device.",
-    "",
-    "Saved devices themselves are created and edited in **Settings > Connection**, under **Saved devices**. There you can add a device, edit its **Device name**, **Hostname / IP**, and **HTTP**, **FTP**, and **Telnet** ports, set an optional **Network Password**, or delete one you no longer use. A device is saved only once it answers, so the list never fills with machines that are not really there. With a single device saved there is nothing to switch to, so the switcher stays out of your way.",
-    "",
-    "## SID Radio",
-    "",
-    "SID Radio turns the tunes you like — and the mood you are in — into an endless, self-refilling queue of similar SIDs, launched in one tap. It rides the normal Play engine, so everything you already know about playback still applies, and it works fully offline: the app ships a small similarity index and needs no network while you listen.",
-    "",
-    "![SID Radio and Liked Tunes controls with the heart / cross ranking on the Now Playing card](../../img/app/play/sid-radio/01-controls.png)",
-    "",
-    "**Rate as you listen.** While a SID plays, a subtle heart / cross pair sits on the Now Playing card. Tap the heart to add a tune to your **Liked Tunes**; tap the cross to skip it now and steer future picks away from its neighbourhood. Ratings are optional and ambient, stored on the device, and they follow a tune across HVSC updates because they key on the tune's content (its MD5), not its path.",
-    "",
-    '**Start a station.** Open **SID Radio** from the Play page to pick a mood: nine style tiles (Fast-Paced, Chill / Ambient, Melodic and more), a **From tunes you like** taste station that unlocks once you have liked a few tunes, or **Surprise me**. Each tile shows how many tunes that station draws from, and a mood the similarity index has nothing for is greyed out rather than starting a station with nothing to play. Turn on **Based on my likes** to bias any style toward what you enjoy — for example "Fast-Paced from your Likes". You can also start a station from any single tune with **Start Radio**.',
-    "",
-    "![The SID Radio station launcher: song, mood (nine style tiles) and taste seeds](../../img/app/play/sid-radio/02-stations.png)",
-    "",
-    `**Stations skip the very short tunes.** HVSC holds jingles, one-shot sound effects and test tones alongside the music, and a station that serves those between pieces feels broken — so anything shorter than 15 seconds is passed over. Change the threshold under **Settings → SID Radio → Shortest tune to play**, or set it to 0 to play everything. Raising it does not make a station run dry: it looks further through the similarity index to make up the difference.`,
-    "",
-    '**Lean back.** A station is an endless stream, so — like radio everywhere — it has no shuffle control of its own, and the transport Shuffle and Repeat are paused while a station plays. They return the moment you play a finite list such as Liked Tunes. Each start is fresh, so the same mood feels new every time. The now-playing chip names the active station, stops it in one tap, and expands a short "why this tune" line.',
-    "",
-    'A station follows similarity, and once in a while it reaches the end of what it can find — most often after you have skipped through a great many tunes in one sitting. When that happens the app says so, rather than leaving you on a last track that will not advance, and you can pick another mood.',
-    "",
-    "**Liked Tunes.** Everything you have liked is a plain, playable list — browse it, play it (with normal Shuffle and Repeat), or un-like a tune. Tunes no longer in your installed HVSC are shown greyed rather than dropped.",
-    "",
-    "### Where the music plays",
-    "",
-    `By default, SID Radio plays each tune **on the C64** — exactly like the rest of the app — and you hear it back on your ${appDeviceName(
-      variant,
-    )} through the network **audio mirror**. For that to work ${targetDeviceShortName(
-      variant,
-    )} has to be reachable on your local network: connect it to your Wi‑Fi router with an **Ethernet** cable, and keep your ${appDeviceName(
-      variant,
-    )} on the same Wi‑Fi. The C64 then streams its sound across the network and the app plays it in step with the on-screen progress.`,
-    "",
-    `Where you hear a SID is up to you. When a SID is playing, the Play screen offers **Listen on**, with up to three choices, reading outwards from your own device:`,
-    "",
-    `- **Local** — your ${appDeviceName(
-      variant,
-    )} renders the SID itself with a built-in libsidplayfp engine. No C64 needed, and nothing is streamed.`,
-    `- **Remote** — the tune plays on ${targetDeviceShortName(
-      variant,
-    )} and you listen there. Which machine that is is shown in the header, so the button does not repeat it.`,
-    `- **Both** — the tune plays on ${targetDeviceShortName(
-      variant,
-    )} and its sound is streamed to your ${appDeviceName(
-      variant,
-    )} as well, so you hear it in both places. This choice only appears when the sound can actually reach you — if ${targetDeviceShortName(
-      variant,
-    )} has no network path for it, the option is simply not shown.`,
-    "",
-    `**Listen on** appears only for SID tunes, since it is the only thing your ${appDeviceName(
-      variant,
-    )} can play on its own; programs and disks always run on ${targetDeviceShortName(variant)}.`,
-    "",
-    "![The Listen on control: Local, Remote, or Both](../../img/app/play/sid-radio/03-listen-on.png)",
-    "",
-    `**On-device playback needs the C64 ROMs.** SID music is driven by the C64's own KERNAL and BASIC routines, so without them a tune starts but never plays. Those ROM images are copyrighted and cannot be shipped with an app, so ${appName} reads them from ${targetDeviceShortName(
-      variant,
-    )}: **Settings → SID Radio → C64 ROMs for on-device playback → Read from C64**. It takes a moment and only has to be done once.`,
-    "",
-    `**Only connect ${appName} to devices you own or have been given permission to use.** The ROM images stay on your ${appDeviceName(
-      variant,
-    )}, are never shared or uploaded, and are never included in diagnostics. You can remove them again at any time with **Remove** in the same place.`,
-    "",
-    `Until the ROMs are in place — or if you remove them — SID tunes simply play on ${targetDeviceShortName(
-      variant,
-    )} instead, and the app tells you so once.`,
-    "",
-    `**Wind through a tune.** While a SID is playing on your ${appDeviceName(
-      variant,
-    )}, press and hold **⏭** to fast-forward or **⏮** to rewind — the tune keeps moving for as long as you hold, roughly five seconds at a time. A short tap still skips to the next or previous tune, so the buttons do what they always did. This works with the on-device engine; on ${targetDeviceShortName(
-      variant,
-    )} the buttons only skip.`,
-    "",
-    `**Jump straight to a moment.** The progress bar is not only a read-out. Tap anywhere along it to land there, or hold and sweep to travel through the tune — the bar and the time follow your finger, and the music picks up wherever you let go. Winding backwards asks more of the engine than winding forwards, so a long rewind can take a moment to settle. Like winding, this is for tunes playing on your ${appDeviceName(
-      variant,
-    )}.`,
-    "",
-    `**If a tune ever falls quiet.** Very occasionally the on-device engine can stop making sound while everything on screen still says the tune is playing — the clock counts on, and there is simply nothing to hear. The app watches for that and starts the tune again from the moment it went quiet, without being asked. You may notice a short gap. You should not have to touch anything.`,
-    "",
-    `**One sound at a time.** Your ${appDeviceName(
-      variant,
-    )} can make sound two ways — playing a tune itself, or playing the sound streamed from ${targetDeviceShortName(
-      variant,
-    )} — and it will never do both at once. Whichever you start last takes over, and the other stops. So turning **Listen** on while a tune is playing here hands the speaker to ${targetDeviceShortName(
-      variant,
-    )}, and starting a tune here takes it back. You never have to work out which of two sounds to chase.`,
-    "",
-    `**Crossfading between tunes.** By default one tune stops before the next begins, so you never hear two at once — including when you move playback between ${targetDeviceShortName(
-      variant,
-    )} and your ${appDeviceName(
-      variant,
-    )}, or switch to a different Ultimate. If you would rather they overlap, **Settings → SID Radio → Crossfade** offers a short, medium or long fade: the outgoing tune fades down while the next fades in. That fade is the one moment two tunes are meant to sound together.
-
-Crossfading only works for tunes playing on your ${appDeviceName(
-      variant,
-    )}. Two tunes have to sound at the same moment for one to fade into the other, and ${targetDeviceShortName(
-      variant,
-    )} plays a single tune live on its one sound chip — so unless **Listen on** is set to **Local** the setting is greyed out and tunes change cleanly instead.`,
-    "",
-    `**Two SID sound engines.** Under **Settings → SID Radio → SID emulation** you can choose how faithfully the on-device engine models the C64's SID chip. **Accurate (reSIDfp)** is the default and models the real chip cycle by cycle — pick it if you want the last word in fidelity. **Light (SIDLite)** does roughly a third of the work and still sounds good; most listeners will not hear the difference, so it is a perfectly reasonable choice on an older or slower phone, or when you want to save battery on a long listen. Both play every tune, and you can switch whenever you like.`,
-    "",
-    "![SID Radio settings: enable stations, the ranking, and the experimental on-device playback engine, with the similarity-corpus status](../../img/app/settings/sid-radio.png)",
-    "",
-    "Enable SID Radio, the heart / cross ranking, and the on-device engine under **Settings → SID Radio**, which also shows the similarity-corpus and installed-HVSC versions.",
     "",
     "## Safe Device Use",
     "",
@@ -1664,7 +1689,7 @@ Crossfading only works for tunes playing on your ${appDeviceName(
     table(
       ["Format", "Kind", "Notes"],
       [
-        ["SID", "Music", "One or more subsongs; durations shown when songlength data is available."],
+        ["SID", "Music", "One or more tunes; durations shown when songlength data is available."],
         ["MOD", "Music", "Amiga-style tracker module."],
         ["PRG", "Program", "A single loadable program."],
         ["CRT", "Cartridge", "Cartridge image; started as if you inserted a cartridge."],
@@ -1926,7 +1951,7 @@ export const buildManualContexts = async () => {
       markdownFile: path.join(manualDir, `${basename}.md`),
       pdfFile: path.join(manualDir, `${basename}.pdf`),
       title: `${variant.displayName} Manual`,
-      subtitle: `Connect, control, play, mount, and diagnose ${targetDeviceDescription(variant)}.`,
+      subtitle: manualSubtitle(variant),
     });
   }
   return contexts.sort((a, b) => a.variant.id.localeCompare(b.variant.id));

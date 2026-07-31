@@ -7,6 +7,22 @@
  */
 
 import { addLog } from "@/lib/logging";
+import { resolveLocalSidModel } from "@/lib/config/appSettings";
+
+/**
+ * The cache key for one rendered tune.
+ *
+ * Item and tune, because two tunes of one file are different music. The `tuneIndex` is the
+ * zero-based index handed to the engine, not the one-based number shown to the listener, so the key
+ * names the tune that was actually rendered rather than the one that was asked for — see
+ * `sidTuneIndex`. The fallback SID chip is in the key too, because it changes what the render sounds
+ * like: without it, switching chip would keep serving PCM produced by the previous one, and a
+ * lead-in cached under the old chip would hand over to live rendering under the new one part-way
+ * through a track. Entries keyed to a chip the listener has moved away from are simply never read
+ * again and fall out of the LRU window.
+ */
+export const buildRenderedTuneKey = (itemId: string, tuneIndex: number): string =>
+  `${itemId}#${tuneIndex}@${resolveLocalSidModel()}`;
 
 /**
  * A rolling cache of fully-rendered tunes, so seeking is instant.

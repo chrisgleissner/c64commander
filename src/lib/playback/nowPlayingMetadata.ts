@@ -61,8 +61,15 @@ const CLOCK_LABELS: Record<SidClock, string | null> = {
   unknown: null,
 };
 
-/** How the field are separated on screen. */
-export const NOW_PLAYING_METADATA_SEPARATOR = " - ";
+/**
+ * How the fields are separated on screen.
+ *
+ * A middle dot rather than a hyphen. Several of these fields legitimately contain a hyphen —
+ * publishers ("Virgin/Acclaim", "Maniacs of Noise - Team"), hyphenated tune names, and the
+ * `PAL/NTSC` clock — so a hyphen separator reads as part of the value it is meant to divide. The dot
+ * cannot occur inside a field, so the line stays scannable however odd the metadata is.
+ */
+export const NOW_PLAYING_METADATA_SEPARATOR = " · ";
 /**
  * Chips are separated by a slash with spaces around it, not a bare one.
  *

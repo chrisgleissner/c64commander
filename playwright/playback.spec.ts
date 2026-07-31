@@ -1257,9 +1257,11 @@ test.describe("Playback file browser", () => {
     await expect(pauseButton).toBeEnabled();
     await snap(page, testInfo, "playback-started");
 
-    const currentTrack = page.getByTestId("playback-current-track");
-    await expect(currentTrack).toContainText(/^Demo\d?\b/);
-    await expect(currentTrack).toContainText(/\(\d+:\d{2}\)/);
+    // The title line now holds only the title and the ranking actions; the length moved to the
+    // metadata line beneath it and is no longer parenthesised. Asserted on the two elements
+    // separately rather than on their concatenated text, so this still fails if either goes missing.
+    await expect(page.getByTestId("playback-current-title")).toContainText(/^Demo\d?\b/);
+    await expect(page.getByTestId("playback-current-credits")).toContainText(/\d+:\d{2}/);
 
     await pauseButton.click();
     await expect(pauseButton).toHaveAttribute("aria-label", "Resume");

@@ -91,8 +91,8 @@ test.describe("Playlist controls and advanced features", () => {
 
     await expect(page.getByTestId("playlist-item")).toHaveCount(2);
 
-    // The Shuffle checkbox is in a div with checkboxes - scroll to the options area first
-    await page.getByTestId("playback-recurse").scrollIntoViewIfNeeded();
+    // The order controls sit at the bottom of the playback card - scroll to them first
+    await page.getByTestId("playback-shuffle").scrollIntoViewIfNeeded();
     await snap(page, testInfo, "scrolled-to-options");
 
     // Now find the shuffle checkbox - it's the second checkbox in the options area
@@ -121,7 +121,7 @@ test.describe("Playlist controls and advanced features", () => {
 
     await expect(page.getByTestId("playlist-item")).toHaveCount(2);
 
-    await page.getByTestId("playback-recurse").scrollIntoViewIfNeeded();
+    await page.getByTestId("playback-shuffle").scrollIntoViewIfNeeded();
     const shuffleCheckbox = page.getByTestId("playback-shuffle");
     await shuffleCheckbox.click();
     await snap(page, testInfo, "shuffle-enabled");
@@ -174,10 +174,9 @@ test.describe("Playlist controls and advanced features", () => {
     await snap(page, testInfo, "playlist-ready");
 
     // Scroll to options area
-    await page.getByTestId("playback-recurse").scrollIntoViewIfNeeded();
+    await page.getByTestId("playback-repeat").scrollIntoViewIfNeeded();
     await snap(page, testInfo, "scrolled-to-options");
 
-    // Repeat checkbox is the third one (0=Recurse, 1=Shuffle, 2=Repeat)
     const repeatCheckbox = page.getByTestId("playback-repeat");
 
     await repeatCheckbox.click();
@@ -185,15 +184,27 @@ test.describe("Playlist controls and advanced features", () => {
     await snap(page, testInfo, "repeat-enabled");
   });
 
-  test("recurse folders checkbox toggles state @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("include-subfolders checkbox lives in the Add items sheet and toggles there @layout", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    // The option decides what selecting a folder means, so it is shown while folders are being
+    // chosen rather than on the playback card, where it used to be the one live control left once a
+    // SID Radio station took over the play order.
     await page.goto("/play");
     await snap(page, testInfo, "play-open");
 
-    await addLocalFolder(page, path.resolve("playwright/fixtures/local-play"));
-    await snap(page, testInfo, "playlist-ready");
+    // Not on the page itself.
+    await expect(page.getByTestId("playback-recurse")).toHaveCount(0);
 
-    const recurseCheckbox = page.getByTestId("playback-recurse");
-    await recurseCheckbox.scrollIntoViewIfNeeded();
+    await page.getByRole("button", { name: /Add items|Add more items/i }).click();
+    const dialog = page.getByRole("dialog");
+    // Nor in the source chooser, where no folder has been reached yet.
+    await expect(dialog.getByTestId("add-items-folder-options")).toHaveCount(0);
+
+    await clickSourceSelectionButton(dialog, "This device");
+    await snap(page, testInfo, "add-items-source-open");
+
+    const recurseCheckbox = dialog.getByTestId("playback-recurse");
     await expect(recurseCheckbox).toBeVisible();
     const initiallyChecked = (await recurseCheckbox.getAttribute("aria-checked")) === "true";
     await snap(page, testInfo, initiallyChecked ? "recurse-initial-on" : "recurse-initial-off");

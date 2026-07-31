@@ -8,11 +8,13 @@
 
 import { LocalSidChunkScheduler, type AudioScheduleSink, type AudioScheduleSource } from "./localSidChunkScheduler";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage } from "./localSidWorkerProtocol";
+import { toEngineSidModel } from "./localSidWorkerProtocol";
 import { hasCompleteRomSet, loadStoredRoms } from "@/lib/roms/romStore";
 import { Capacitor } from "@capacitor/core";
 import {
   effectiveSidEmulationEngine,
   loadPlaybackCrossfadeMs,
+  resolveLocalSidModel,
   type SidEmulationEngine,
 } from "@/lib/config/appSettings";
 import { StreamUdp } from "@/lib/native/streamUdp";
@@ -852,7 +854,17 @@ export class LocalSidEngine {
       this.openPending = { resolve: settle(resolve), reject: settle(reject) };
       // Transfer the SID bytes to the worker (single owner).
       worker.postMessage(
-        { type: "open", id, sidBytes, songIndex, sampleRate: this.requestedSampleRate, roms: romPayload },
+        {
+          type: "open",
+          id,
+          sidBytes,
+          songIndex,
+          sampleRate: this.requestedSampleRate,
+          roms: romPayload,
+          // Read per-play, like the ROMs above and for the same reason: changing the chip in
+          // Settings then applies from the very next tune rather than after a restart.
+          sidModel: toEngineSidModel(resolveLocalSidModel()),
+        },
         transfer,
       );
     });
@@ -1678,6 +1690,7 @@ export class LocalSidEngine {
         seconds,
         sampleRate: this.requestedSampleRate,
         roms: { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer },
+        sidModel: toEngineSidModel(resolveLocalSidModel()),
       } as LocalSidMainToWorker,
       [sidBytes],
     );
@@ -1878,6 +1891,7 @@ export class LocalSidEngine {
         sampleRate: this.requestedSampleRate,
         seconds,
         roms: { kernal, basic },
+        sidModel: toEngineSidModel(resolveLocalSidModel()),
       },
       [sidBytes, kernal, basic],
     );

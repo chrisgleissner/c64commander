@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { PENDING_ANNOUNCEMENT_INTERVAL_MS, type PendingSeekPresentation } from "@/lib/playback/pendingSeekStatus";
 import { CTA_HIGHLIGHT_DURATION_MS, CTA_PERSISTENT_ACTIVE_ATTR } from "@/lib/ui/buttonInteraction";
@@ -42,8 +42,6 @@ const buildProps = (overrides: Partial<PlaybackControlsCardProps> = {}): Playbac
   totalLabel: "0:00",
   remainingTotalLabel: "0:00",
   volumeControls: <div data-testid="volume-controls-placeholder" />,
-  recurseFolders: false,
-  onRecurseChange: vi.fn(),
   shuffleEnabled: false,
   onShuffleChange: vi.fn(),
   repeatEnabled: false,
@@ -89,19 +87,6 @@ describe("PlaybackControlsCard", () => {
 
     expect(screen.getByTestId("playlist-play")).not.toHaveAttribute(CTA_PERSISTENT_ACTIVE_ATTR);
     vi.useRealTimers();
-  });
-
-  // HARD12-017
-  it("renders the openControllerAction slot when provided, and nothing when omitted", () => {
-    const { rerender } = render(<PlaybackControlsCard {...buildProps()} />);
-    expect(screen.queryByTestId("open-controller-slot")).not.toBeInTheDocument();
-
-    rerender(
-      <PlaybackControlsCard
-        {...buildProps({ openControllerAction: <button data-testid="open-controller-slot">Open Controller</button> })}
-      />,
-    );
-    expect(screen.getByTestId("open-controller-slot")).toBeInTheDocument();
   });
 
   // The 2SID/3SID badge used to sit beside the title. It has gone from this card, and these
@@ -161,6 +146,91 @@ describe("PlaybackControlsCard", () => {
     // pointer.
     expect(title).toHaveTextContent(longTitle);
     expect(title).toHaveAttribute("title", longTitle);
+  });
+
+  /**
+   * Reading order: where the queue comes from, then the tune, then the controls. The station
+   * indicator used to be the *last* thing on the card, under the transport, the progress bar, the
+   * volume row and the playlist toggles, which is the wrong end — it is context for all of them.
+   */
+  it("draws the station indicator above the title, in both station states", () => {
+    for (const stationActive of [false, true]) {
+      const { unmount } = render(
+        <PlaybackControlsCard
+          {...buildProps({
+            hasCurrentItem: true,
+            currentItemLabel: "Commando",
+            stationActive,
+            stationIndicator: <div data-testid="station-indicator-slot" />,
+          })}
+        />,
+      );
+
+      const layout = screen.getByTestId("playback-controls-layout");
+      expect(layout.firstElementChild).toHaveAttribute("data-testid", "station-indicator-slot");
+      const indicator = screen.getByTestId("station-indicator-slot");
+      const track = screen.getByTestId("playback-current-track");
+      expect(indicator.compareDocumentPosition(track) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      unmount();
+    }
+  });
+
+  /**
+   * A station is a mode, not a passing unavailability: nothing the user can do re-enables Shuffle,
+   * Repeat or Reshuffle while one runs, because the station owns the play order by definition. So
+   * they are removed rather than greyed, and the row they sat in goes with them — a row left holding
+   * one control, or a row of greyed controls, would spend vertical space on nothing.
+   */
+  it("drops the whole order row while a station runs, leaving the transport and the ranking pair", () => {
+    const { container } = render(
+      <PlaybackControlsCard {...buildProps({ stationActive: true, reshuffleDisabled: false })} />,
+    );
+
+    expect(screen.queryByTestId("playback-shuffle")).toBeNull();
+    expect(screen.queryByTestId("playback-repeat")).toBeNull();
+    expect(screen.queryByTestId("playlist-reshuffle")).toBeNull();
+    // Recurse is no longer a playback control at all; it lives in the Add items sheet.
+    expect(screen.queryByTestId("playback-recurse")).toBeNull();
+    // What a listener still needs is untouched.
+    expect(screen.getByTestId("playback-transport-row")).toBeInTheDocument();
+    // And the space is actually given back, rather than an empty row being left behind. Counted
+    // against the same render with no station, so the assertion cannot pass by naming a class that
+    // is never present.
+    const rowsDuringStation = container.querySelectorAll(".flex.flex-wrap.items-center.gap-3").length;
+    cleanup();
+    const idle = render(<PlaybackControlsCard {...buildProps({ reshuffleDisabled: false })} />);
+    expect(idle.container.querySelectorAll(".flex.flex-wrap.items-center.gap-3").length).toBeGreaterThan(
+      rowsDuringStation,
+    );
+    expect(rowsDuringStation).toBe(0);
+  });
+
+  it("puts the order controls back, with the values the user had, once the station stops", () => {
+    // Nothing is mutated while they are hidden: the card only stops drawing them, so stopping a
+    // station returns the playlist exactly as it was left.
+    const props = buildProps({ shuffleEnabled: true, repeatEnabled: true, reshuffleDisabled: false });
+    const { rerender } = render(<PlaybackControlsCard {...props} stationActive />);
+
+    expect(screen.queryByTestId("playback-shuffle")).toBeNull();
+
+    rerender(<PlaybackControlsCard {...props} stationActive={false} />);
+
+    expect(screen.getByTestId("playback-shuffle")).toHaveAttribute("data-state", "checked");
+    expect(screen.getByTestId("playback-repeat")).toHaveAttribute("data-state", "checked");
+    expect(screen.getByTestId("playlist-reshuffle")).toBeEnabled();
+  });
+
+  it("spreads the transport across the card so its ends sit on the card's own edges", () => {
+    // The buttons are a fixed 44 px, so in the previous `grid-cols-4` they sat at the left of cells
+    // wider than themselves and the row stopped short of the right edge — visibly ragged against
+    // the ranking pair above it and the progress bar below it, both of which are flush.
+    render(<PlaybackControlsCard {...buildProps()} />);
+
+    const row = screen.getByTestId("playback-transport-row");
+    expect(row.className).toContain("justify-between");
+    expect(row.className).not.toMatch(/\bgrid-cols-4\b/);
+    expect(row.firstElementChild).toHaveAttribute("data-testid", "playlist-prev");
+    expect(row.lastElementChild).toHaveAttribute("data-testid", "playlist-next");
   });
 
   it("keeps track metadata and transport controls stacked full-width", () => {

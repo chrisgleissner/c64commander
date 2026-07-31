@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { addLog } from "@/lib/logging";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { getPlayCategory } from "@/lib/playback/fileTypes";
 import { getMd548PathIndexStats, resolveVirtualPath } from "@/lib/sidRadio/md5PathIndex";
@@ -72,7 +73,7 @@ export interface UseSidRadioParams {
    * serves them between pieces reads as broken. Optional: without it the station plays everything,
    * which is what the tests and the web build do.
    */
-  resolveDurationSeconds?: (virtualPath: string, songIndex: number) => number | null | Promise<number | null>;
+  resolveDurationSeconds?: (virtualPath: string, songNr: number) => number | null | Promise<number | null>;
   /**
    * Awaited before the first candidate is resolved, so `resolvePath` is asked a question its index
    * can answer. See `StationQueueProviderOptions.ensureResolvable`.
@@ -118,12 +119,12 @@ export interface UseSidRadioResult {
 
 const buildStationItem = (input: {
   virtualPath: string;
-  songIndex: number;
+  songNr: number;
   trackOrdinal: number;
   durationSeconds: number | null;
 }): PlaylistItem => ({
-  id: `radio:${input.virtualPath}#${input.songIndex}`,
-  request: { source: "hvsc", path: input.virtualPath, songNr: input.songIndex },
+  id: `radio:${input.virtualPath}#${input.songNr}`,
+  request: { source: "hvsc", path: input.virtualPath, songNr: input.songNr },
   category: getPlayCategory(input.virtualPath) ?? "sid",
   label: basename(input.virtualPath),
   path: input.virtualPath,
@@ -336,7 +337,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
           });
         },
         resolvePath,
-        buildItem: ({ virtualPath, songIndex, trackOrdinal, durationSeconds }) => {
+        buildItem: ({ virtualPath, songNr, trackOrdinal, durationSeconds }) => {
           // The determinism proof behind G11: emission order is a pure function
           // of the seed, so it is recorded here, where the station decides, and
           // not where playback happens to arrive.
@@ -346,7 +347,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
           // recording them would make the sequence a mixture of two stations and the replay
           // comparison meaningless.
           if (stationGenerationRef.current === generation) recordEmitted(trackOrdinal);
-          return buildStationItem({ virtualPath, songIndex, trackOrdinal, durationSeconds });
+          return buildStationItem({ virtualPath, songNr, trackOrdinal, durationSeconds });
         },
       });
     },
@@ -540,9 +541,14 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
     void ensureClient()
       .load()
       .then(recordCorpusIdentity)
-      .catch(() => {
-        // A bundle that will not load is reported by the refill that needs it; this is only the
-        // identity, and a station that cannot describe its corpus is still better than a crash.
+      .catch((error: unknown) => {
+        // The refill that needs the bundle reports its own failure, so this must not surface to the
+        // listener — but a worker that fails to load on every resume produces a silent, empty
+        // station, and without this line there is nothing in the field logs to say why.
+        addLog("warn", "SID Radio: could not read the corpus identity of a resumed station", {
+          service: "sid-radio",
+          error: error instanceof Error ? error.message : String(error),
+        });
       });
   }, [enabled, station, buildProvider, ensureClient]);
 

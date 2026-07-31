@@ -46,4 +46,51 @@ describe("SidRadioChip", () => {
     fireEvent.click(screen.getByTestId("sid-radio-chip-toggle"));
     expect(screen.getByTestId("sid-radio-why")).toHaveTextContent("similar to Commando");
   });
+
+  /**
+   * This row leads the Now Playing card, so it exists in both states and is the same height in
+   * both. If it only appeared during a station, starting one would push the title, the transport
+   * and the progress bar down the screen — and the transport is what people on this page hit
+   * without looking.
+   */
+  it("names the playlist when no station is running, at the same height as a station", () => {
+    const { rerender } = render(<SidRadioChip station={null} onStop={vi.fn()} />);
+
+    const idleRow = screen.getByTestId("now-playing-source-idle");
+    expect(screen.getByTestId("now-playing-source")).toHaveAttribute("data-station-active", "false");
+    expect(idleRow).toHaveTextContent("Playlist");
+    expect(screen.queryByTestId("sid-radio-chip")).toBeNull();
+    expect(screen.queryByTestId("sid-radio-stop")).toBeNull();
+    const idleHeight = idleRow.className.match(/min-h-\[[^\]]+\]/)?.[0];
+    expect(idleHeight).toBeDefined();
+
+    rerender(<SidRadioChip station={songStation} onStop={vi.fn()} />);
+
+    expect(screen.getByTestId("now-playing-source")).toHaveAttribute("data-station-active", "true");
+    const activeRow = screen.getByTestId("sid-radio-chip").firstElementChild as HTMLElement;
+    expect(activeRow.className).toContain(idleHeight as string);
+  });
+
+  it("sets the row apart with one rule rather than a box of its own", () => {
+    // Calm: a tinted, rounded, bordered rectangle inside an already bordered card, above four
+    // bordered transport buttons, was one competing edge too many. A single rule underneath says
+    // "context above, content below" with far less ink.
+    render(<SidRadioChip station={songStation} onStop={vi.fn()} />);
+
+    const root = screen.getByTestId("now-playing-source");
+    expect(root).toHaveClass("border-b");
+    expect(root.className).not.toMatch(/\brounded-lg\b/);
+    expect(root.className).not.toMatch(/bg-primary/);
+  });
+
+  it("gives Stop a word and a full-size target instead of a bare ×", () => {
+    // It was a 28 px ghost ×, which is under the project's 40 px hit-target floor and reads as
+    // "close this" rather than "end the station".
+    render(<SidRadioChip station={songStation} onStop={vi.fn()} />);
+
+    const stop = screen.getByTestId("sid-radio-stop");
+    expect(stop).toHaveTextContent("Stop");
+    expect(stop).toHaveClass("h-11");
+    expect(stop.className).not.toMatch(/\bh-7\b|\bw-7\b/);
+  });
 });

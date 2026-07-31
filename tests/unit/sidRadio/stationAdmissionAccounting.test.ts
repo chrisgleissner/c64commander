@@ -28,8 +28,8 @@ import { StationQueueProvider } from "@/lib/sidRadio/stationQueueProvider";
 import type { StationCandidate, StationResult } from "@/lib/sidRadio/stationEngine";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
-const buildItem = ({ virtualPath, songIndex }: { virtualPath: string; songIndex: number }) =>
-  ({ id: `${virtualPath}#${songIndex}`, path: virtualPath }) as unknown as PlaylistItem;
+const buildItem = ({ virtualPath, songNr }: { virtualPath: string; songNr: number }) =>
+  ({ id: `${virtualPath}#${songNr}`, path: virtualPath }) as unknown as PlaylistItem;
 
 /** An engine that hands out consecutive ordinals forever, honouring the exclude set. */
 const endlessEngine =
@@ -43,7 +43,7 @@ const endlessEngine =
         candidates.push({
           trackOrdinal: ordinal,
           md5_48: String(ordinal).padStart(12, "0"),
-          songIndex: 1,
+          songNr: 1,
           score: 1,
           reason: "similar",
           fileTrackOrdinals: [ordinal],
@@ -227,9 +227,9 @@ describe("the resolved duration reaches the queued item", () => {
     const provider = new StationQueueProvider({
       computeCandidates: endlessEngine(),
       resolvePath: (md5) => `/hvsc/${md5}.sid`,
-      buildItem: ({ virtualPath, songIndex, durationSeconds }) => {
+      buildItem: ({ virtualPath, songNr, durationSeconds }) => {
         seen.push(durationSeconds);
-        return { id: `${virtualPath}#${songIndex}` } as unknown as PlaylistItem;
+        return { id: `${virtualPath}#${songNr}` } as unknown as PlaylistItem;
       },
       minSeconds: 15,
       resolveDuration: () => 96,
@@ -246,9 +246,9 @@ describe("the resolved duration reaches the queued item", () => {
     const provider = new StationQueueProvider({
       computeCandidates: endlessEngine(),
       resolvePath: (md5) => `/hvsc/${md5}.sid`,
-      buildItem: ({ virtualPath, songIndex, durationSeconds }) => {
+      buildItem: ({ virtualPath, songNr, durationSeconds }) => {
         seen.push(durationSeconds);
-        return { id: `${virtualPath}#${songIndex}` } as unknown as PlaylistItem;
+        return { id: `${virtualPath}#${songNr}` } as unknown as PlaylistItem;
       },
       minSeconds: 15,
       resolveDuration: () => null,
@@ -268,9 +268,9 @@ describe("the resolved duration reaches the queued item", () => {
     const provider = new StationQueueProvider({
       computeCandidates: endlessEngine(),
       resolvePath: (md5) => `/hvsc/${md5}.sid`,
-      buildItem: ({ virtualPath, songIndex, durationSeconds }) => {
+      buildItem: ({ virtualPath, songNr, durationSeconds }) => {
         seen.push(durationSeconds);
-        return { id: `${virtualPath}#${songIndex}` } as unknown as PlaylistItem;
+        return { id: `${virtualPath}#${songNr}` } as unknown as PlaylistItem;
       },
       minSeconds: 0,
       resolveDuration: () => 8,

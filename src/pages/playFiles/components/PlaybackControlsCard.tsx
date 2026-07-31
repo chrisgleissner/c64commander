@@ -94,8 +94,6 @@ export type PlaybackControlsCardProps = {
   totalLabel: string;
   remainingTotalLabel: string;
   volumeControls: ReactNode;
-  recurseFolders: boolean;
-  onRecurseChange: (value: boolean) => void;
   shuffleEnabled: boolean;
   onShuffleChange: (value: boolean) => void;
   repeatEnabled: boolean;
@@ -104,11 +102,18 @@ export type PlaybackControlsCardProps = {
   reshuffleActive: boolean;
   reshuffleDisabled: boolean;
   shuffleSeed: number | null;
-  /** HARD12-017: one-tap entry to the remote input sheet, shown while playing. */
-  openControllerAction?: ReactNode;
   /** SID Radio ambient ♥/✕ ranking affordance (spec §5.1); null when disabled. */
   rankingControls?: ReactNode;
-  /** True while a SID Radio station drives the queue — disables Shuffle/Repeat (§5.3, principle 9). */
+  /**
+   * The line that says where the queue comes from, drawn above everything else on the card.
+   *
+   * It leads because it is context for the rest: which station (or which playlist) is producing
+   * this tune has to be readable before the tune's own details and long before the controls. The
+   * slot is expected to occupy the same height in every state, so that starting or stopping a
+   * station never moves the title or the transport underneath it.
+   */
+  stationIndicator?: ReactNode;
+  /** True while a SID Radio station drives the queue — hides Shuffle/Repeat/Reshuffle (§5.3, principle 9). */
   stationActive?: boolean;
 };
 
@@ -296,8 +301,6 @@ export const PlaybackControlsCard = ({
   totalLabel,
   remainingTotalLabel,
   volumeControls,
-  recurseFolders,
-  onRecurseChange,
   shuffleEnabled,
   onShuffleChange,
   repeatEnabled,
@@ -306,8 +309,8 @@ export const PlaybackControlsCard = ({
   reshuffleActive,
   reshuffleDisabled,
   shuffleSeed,
-  openControllerAction,
   rankingControls,
+  stationIndicator,
   stationActive = false,
 }: PlaybackControlsCardProps) => {
   const pendingAnnouncement = usePoliteAnnouncement(pendingSeek?.liveText ?? null);
@@ -343,11 +346,12 @@ export const PlaybackControlsCard = ({
     id: "play-transport-reshuffle",
     order: PLAY_TRANSPORT_FOCUS_ORDER.reshuffle,
     group: "play-transport",
-    disabled: reshuffleDisabled,
+    disabled: reshuffleDisabled || stationActive,
   });
 
   return (
     <div className="flex flex-col items-stretch gap-3" data-testid="playback-controls-layout">
+      {stationIndicator}
       <div className="w-full text-xs text-muted-foreground" data-testid="playback-current-track">
         {hasCurrentItem ? (
           <>
@@ -391,7 +395,13 @@ export const PlaybackControlsCard = ({
         )}
       </div>
       <div className="flex w-full flex-col gap-3" data-testid="playback-controls-stack">
-        <div className="grid grid-cols-4 gap-2">
+        {/* Spread across the card rather than packed into four grid columns. The buttons are a fixed
+            44 px, so in a `grid-cols-4` they sat at the left of cells that were wider than they
+            were, and the row stopped 33 px short of the right edge — visibly ragged against the
+            ranking pair directly above it, which is flush, and against the progress bar and the
+            metadata line, which are flush too. Distributing them puts the first and last on the
+            card's own edges, so every row of this card now starts and ends on the same two lines. */}
+        <div className="flex items-center justify-between gap-2" data-testid="playback-transport-row">
           <Button
             ref={previousFocusRef}
             variant="outline"
@@ -636,67 +646,70 @@ export const PlaybackControlsCard = ({
           </div>
         </div>
         {volumeControls}
-        {openControllerAction}
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-xs">
-            <Checkbox
-              checked={recurseFolders}
-              onCheckedChange={(value) => onRecurseChange(Boolean(value))}
-              aria-label="Recurse"
-              data-testid="playback-recurse"
-            />
-            Recurse
-          </label>
-          <label
-            className={cn("flex items-center gap-2 text-xs", stationActive && "opacity-50")}
-            title={stationActive ? "Radio picks the order" : undefined}
-          >
-            <Checkbox
-              checked={shuffleEnabled && !stationActive}
-              disabled={stationActive}
-              onCheckedChange={(value) => onShuffleChange(Boolean(value))}
-              aria-label="Shuffle"
-              data-testid="playback-shuffle"
-            />
-            <span className="flex items-center gap-1">
-              <Shuffle className="h-3.5 w-3.5" /> Shuffle
-            </span>
-          </label>
-          <label
-            className={cn("flex items-center gap-2 text-xs", stationActive && "opacity-50")}
-            title={stationActive ? "Radio picks the order" : undefined}
-          >
-            <Checkbox
-              checked={repeatEnabled && !stationActive}
-              disabled={stationActive}
-              onCheckedChange={(value) => onRepeatChange(Boolean(value))}
-              aria-label="Repeat"
-              data-testid="playback-repeat"
-            />
-            <span className="flex items-center gap-1">
-              <Repeat className="h-3.5 w-3.5" /> Repeat
-            </span>
-          </label>
-          <Button
-            ref={reshuffleFocusRef}
-            variant="outline"
-            size="sm"
-            onClick={onReshuffle}
-            disabled={reshuffleDisabled || stationActive}
-            id="playlist-reshuffle"
-            data-testid="playlist-reshuffle"
-            data-active={reshuffleActive ? "true" : "false"}
-            // Non-destructive shuffle (HARD9-007) never reorders the visible
-            // playlist, so the live seed of the next/prev order layer is
-            // surfaced here as a diagnostic: a changed value proves Reshuffle
-            // re-seeded the traversal without disturbing the curated list.
-            data-shuffle-seed={shuffleSeed ?? ""}
-            className={reshuffleActive ? "bg-accent text-accent-foreground" : undefined}
-          >
-            <Shuffle className="h-4 w-4 mr-1" />
-            Reshuffle
-          </Button>
-        </div>
+        {/* The whole order row goes while a station drives the queue — removed, not greyed.
+
+            A station is a mode, not a passing unavailability. The rule is to disable what will come
+            back on its own and to remove what has no meaning in the current mode, and nothing the
+            listener can do brings Shuffle, Repeat or Reshuffle back while a station runs: the
+            station owns the order by definition, so they return only by stopping it. Greying is
+            usually defended as teaching that a control exists, but that argument is paid for here by
+            the source line at the top of the card, which names the station and carries Stop — and it
+            was never actually being made, because the only explanation these controls carried was a
+            `title` tooltip and there is no hover on the phone this ships to.
+
+            The row holds nothing else. Recurse used to sit here and would have been left alone in an
+            otherwise empty row; it is now in the Add items sheet, next to the folders it applies to.
+            A radio station is something you listen to, so what is left on this card during one is
+            the transport and the ranking pair, and the vertical space is given back rather than
+            spent on controls that do nothing.
+
+            Nothing above this moves: the row is the last thing in the card, so dropping it only
+            shortens the card from the bottom. */}
+        {stationActive ? null : (
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-xs">
+              <Checkbox
+                checked={shuffleEnabled}
+                onCheckedChange={(value) => onShuffleChange(Boolean(value))}
+                aria-label="Shuffle"
+                data-testid="playback-shuffle"
+              />
+              <span className="flex items-center gap-1">
+                <Shuffle className="h-3.5 w-3.5" /> Shuffle
+              </span>
+            </label>
+            <label className="flex items-center gap-2 text-xs">
+              <Checkbox
+                checked={repeatEnabled}
+                onCheckedChange={(value) => onRepeatChange(Boolean(value))}
+                aria-label="Repeat"
+                data-testid="playback-repeat"
+              />
+              <span className="flex items-center gap-1">
+                <Repeat className="h-3.5 w-3.5" /> Repeat
+              </span>
+            </label>
+            <Button
+              ref={reshuffleFocusRef}
+              variant="outline"
+              size="sm"
+              onClick={onReshuffle}
+              disabled={reshuffleDisabled}
+              id="playlist-reshuffle"
+              data-testid="playlist-reshuffle"
+              data-active={reshuffleActive ? "true" : "false"}
+              // Non-destructive shuffle (HARD9-007) never reorders the visible
+              // playlist, so the live seed of the next/prev order layer is
+              // surfaced here as a diagnostic: a changed value proves Reshuffle
+              // re-seeded the traversal without disturbing the curated list.
+              data-shuffle-seed={shuffleSeed ?? ""}
+              className={reshuffleActive ? "bg-accent text-accent-foreground" : undefined}
+            >
+              <Shuffle className="h-4 w-4 mr-1" />
+              Reshuffle
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

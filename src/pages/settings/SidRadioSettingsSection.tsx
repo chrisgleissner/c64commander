@@ -21,6 +21,12 @@ import {
   saveSidEmulationEngine,
   loadPlaybackCrossfadeMs,
   savePlaybackCrossfadeMs,
+  loadLocalSidModel,
+  saveLocalSidModel,
+  loadLocalSidModelFromDevice,
+  saveLocalSidModelFromDevice,
+  LOCAL_SID_MODELS,
+  type LocalSidModel,
   type SidEmulationEngine,
   DEFAULT_SID_RADIO_MIN_SECONDS,
   loadSidRadioMinSeconds,
@@ -29,6 +35,7 @@ import {
 import { clearAllRankings } from "@/lib/sidRadio/rankingStore";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
+import { useLearnedDeviceSidModel, useLocalSidModel } from "@/lib/playback/useLocalSidModel";
 import {
   SIDCORR_BUNDLE_SHA256,
   SIDCORR_EXPECTED,
@@ -81,6 +88,12 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
   const { localEngineEnabled, engine: playbackEngine } = usePlaybackEngine();
   const { deviceHost } = useC64Connection();
   const [sidEngine, setSidEngine] = useState<SidEmulationEngine>(() => loadSidEmulationEngine());
+  const [sidModelFromDevice, setSidModelFromDevice] = useState(loadLocalSidModelFromDevice);
+  const [sidModelFallback, setSidModelFallback] = useState<LocalSidModel>(loadLocalSidModel);
+  // Read through the store rather than from the two pieces of local state: the chip in use may
+  // also have been learned from the machine while this screen was open.
+  const effectiveSidModel = useLocalSidModel();
+  const learnedSidModel = useLearnedDeviceSidModel();
   const [minSeconds, setMinSeconds] = useState<number>(loadSidRadioMinSeconds);
   const [crossfadeMs, setCrossfadeMs] = useState<number>(() => loadPlaybackCrossfadeMs());
   // Crossfading needs two tunes sounding at once. The C64 has one SID and
@@ -199,6 +212,61 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
                 </Button>
               ))}
             </div>
+          </div>
+        ) : null}
+        {localEngineEnabled ? (
+          <div className="space-y-3 rounded-lg border border-border/70 p-3 min-w-0" data-testid="settings-sid-chip">
+            <Label className="text-sm font-medium">SID chip for tunes that do not name one</Label>
+            <p className="text-xs text-muted-foreground">
+              The Commodore 64 shipped with two sound chips. The older <strong>6581</strong> has a thick, uneven filter;
+              the later <strong>8580</strong> is cleaner and quieter. Most SID files record which one they were written
+              for, and those always play on the chip they name — this changes nothing for them. It is for the many older
+              files that say nothing, which otherwise have to be played on a guess.
+            </p>
+            <ToggleRow
+              id="sid-chip-from-device"
+              testId="settings-sid-chip-from-device"
+              label="Match my Commodore 64"
+              description={
+                learnedSidModel
+                  ? `Read from your machine while you are connected, so it keeps applying when the machine is off. Last read: ${learnedSidModel}.`
+                  : "Read from your machine while you are connected, so it keeps applying when the machine is off. Nothing has been read yet — the choice below is in use."
+              }
+              checked={sidModelFromDevice}
+              onChange={(next) => {
+                setSidModelFromDevice(next);
+                saveLocalSidModelFromDevice(next);
+              }}
+            />
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Otherwise use</Label>
+              <p className="text-xs text-muted-foreground">
+                Used when the setting above is off, or when no Commodore 64 has been read yet.
+              </p>
+              <div className="flex gap-2">
+                {LOCAL_SID_MODELS.map((model) => (
+                  <Button
+                    key={model}
+                    type="button"
+                    size="sm"
+                    variant={sidModelFallback === model ? "default" : "outline"}
+                    data-testid={`settings-sid-chip-${model}`}
+                    aria-pressed={sidModelFallback === model}
+                    onClick={() => {
+                      setSidModelFallback(model);
+                      saveLocalSidModel(model);
+                    }}
+                  >
+                    {model}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground" data-testid="settings-sid-chip-effective">
+              Tunes that do not name a chip currently play on the <strong>{effectiveSidModel}</strong>. Takes effect on
+              the next track — the tune playing now is not restarted, because reaching your place in it again means
+              re-rendering it from the beginning.
+            </p>
           </div>
         ) : null}
         {localEngineEnabled ? (

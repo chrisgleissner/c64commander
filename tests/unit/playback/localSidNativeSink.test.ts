@@ -68,6 +68,10 @@ const createBackend = (): FakeBackend => {
 };
 
 const RATE = 48000;
+
+/** The conversion-side level, which is the only attenuator once the pipeline has refused. */
+const sinkMasterGainOf = (sink: NonNullable<ReturnType<typeof createNativeLocalSidSink>>): number =>
+  (sink.sink as unknown as { masterGain: number }).masterGain;
 /** Int16 full scale, as the sink scales to it. */
 const INT16_MAX = 32768;
 
@@ -693,5 +697,53 @@ describe("where the listener's level is applied", () => {
 
     // Still writing — the fallback attenuates the samples rather than stopping the pump.
     expect(backend.writes.length).toBeGreaterThan(loud);
+  });
+});
+
+describe("when the pipeline refuses the level", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  // The level used to stand the conversion down to unity as soon as the bridge call was *issued*.
+  // A rejection arriving afterwards then left nothing attenuating at all, and the listener heard
+  // full volume until they happened to move the slider again. The conversion only stands down once
+  // the pipeline has confirmed it holds the level.
+  it("attenuates at the conversion instead, rather than losing the level", async () => {
+    const backend = createBackend() as FakeBackend & { setAudioTrackGain?: (o: { gain: number }) => Promise<void> };
+    backend.setAudioTrackGain = async () => {
+      throw new Error("no such method");
+    };
+    const sink = createNativeLocalSidSink(RATE, backend);
+    scheduleChunk(sink, 0.5);
+    await settle();
+
+    sink!.setGain(0);
+    await settle();
+
+    // Silence has to reach the samples themselves, since the pipeline declined to apply it.
+    backend.writes.length = 0;
+    scheduleChunk(sink, 0.5, 1);
+    await settle();
+    const written = backend.writes.at(-1);
+    expect(written).toBeDefined();
+    expect(sinkMasterGainOf(sink!)).toBe(0);
+  });
+
+  it("stops asking a pipeline that has already refused", async () => {
+    let calls = 0;
+    const backend = createBackend() as FakeBackend & { setAudioTrackGain?: (o: { gain: number }) => Promise<void> };
+    backend.setAudioTrackGain = async () => {
+      calls += 1;
+      throw new Error("no such method");
+    };
+    const sink = createNativeLocalSidSink(RATE, backend);
+    await settle();
+
+    sink!.setGain(0.5);
+    await settle();
+    sink!.setGain(0.25);
+    await settle();
+
+    expect(calls).toBe(1);
   });
 });

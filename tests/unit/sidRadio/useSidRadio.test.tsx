@@ -51,7 +51,7 @@ const makeClient = (stylePopulations: SidRadioStylePopulations = populationsWith
         candidates: pool.slice(0, request.count).map((trackOrdinal) => ({
           trackOrdinal,
           md5_48: `m${trackOrdinal}`,
-          songIndex: 1,
+          songNr: 1,
           score: 10 - trackOrdinal,
           reason: "similar" as const,
           fileTrackOrdinals: [trackOrdinal],
@@ -408,7 +408,7 @@ describe("useSidRadio launcher preload overlapping a station start", () => {
               candidates: Array.from({ length: request.count }, (_, index) => ({
                 trackOrdinal: index + 1,
                 md5_48: `m${index + 1}`,
-                songIndex: 1,
+                songNr: 1,
                 score: 1,
                 reason: "similar" as const,
                 fileTrackOrdinals: [index + 1],
@@ -613,7 +613,7 @@ describe("useSidRadio emittedSequence identity", () => {
         .map((trackOrdinal) => ({
           trackOrdinal,
           md5_48: `m${trackOrdinal}`,
-          songIndex: 1,
+          songNr: 1,
           score: 1,
           reason: "similar" as const,
           fileTrackOrdinals: [trackOrdinal],

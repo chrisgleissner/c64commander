@@ -39,10 +39,10 @@ export type ResolvePathFn = (md5_48: string) => string | null;
  * Keyed by the resolved virtual path rather than the md5, because that is what the songlengths index
  * is keyed by and what the provider has in hand at the moment it decides.
  */
-export type ResolveDurationFn = (virtualPath: string, songIndex: number) => number | null | Promise<number | null>;
+export type ResolveDurationFn = (virtualPath: string, songNr: number) => number | null | Promise<number | null>;
 export type BuildStationItemFn = (input: {
   virtualPath: string;
-  songIndex: number;
+  songNr: number;
   reason: StationReason;
   trackOrdinal: number;
   md5_48: string;
@@ -254,7 +254,7 @@ export class StationQueueProvider {
         // between pieces reads as broken. Skipped exactly like a removed tune: the ordinal is already
         // consumed, so the next refill asks the engine for somewhere else rather than offering it
         // again. An unknown length is admitted — never drop a tune because the songlengths are thin.
-        const seconds = await this.options.resolveDuration(virtualPath, candidate.songIndex);
+        const seconds = await this.options.resolveDuration(virtualPath, candidate.songNr);
         durationSeconds = seconds === null || seconds === undefined || !Number.isFinite(seconds) ? null : seconds;
         if (this.minSeconds <= 0) {
           // Filtering is off, so nothing is rejected and nothing is counted as an unknown-length
@@ -273,7 +273,7 @@ export class StationQueueProvider {
       items.push(
         this.options.buildItem({
           virtualPath,
-          songIndex: candidate.songIndex,
+          songNr: candidate.songNr,
           reason: candidate.reason,
           trackOrdinal: candidate.trackOrdinal,
           md5_48: candidate.md5_48,

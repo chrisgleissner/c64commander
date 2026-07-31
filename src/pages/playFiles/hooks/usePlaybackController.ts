@@ -68,6 +68,9 @@ import { hasCompleteRomSet } from "@/lib/roms/romStore";
 import { ensureSystemRoms } from "@/lib/roms/ensureSystemRoms";
 import { promptForSystemRoms } from "@/lib/roms/promptForSystemRoms";
 import { detectRomRequired } from "@/lib/playback/localSidWorkerCore";
+import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
+import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
+import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import {
   ENGINE_FALLBACK_MESSAGES,
@@ -205,6 +208,13 @@ interface UsePlaybackControllerProps {
 
   repeatEnabled: boolean;
   shuffleEnabled: boolean;
+  /**
+   * Whether a SID Radio station is choosing the tracks, read at the moment a skip is resolved.
+   *
+   * A ref rather than a value because the station hook is created after this one and depends on the
+   * handlers it returns, so the flag cannot be passed in as a prop without reordering the two.
+   */
+  stationActiveRef?: { readonly current: boolean };
   shuffleSeed: number | null;
 
   // Dependencies
@@ -309,6 +319,7 @@ export function usePlaybackController({
   setCurrentSubsongCount,
   repeatEnabled,
   shuffleEnabled,
+  stationActiveRef,
   shuffleSeed,
   localEntriesBySourceId,
   localSourceTreeUris,
@@ -831,10 +842,11 @@ export function usePlaybackController({
       if (!file) continue;
       try {
         const bytes = await file.arrayBuffer();
+        const tuneIndex = toEngineTuneIndex(resolved.songNr);
         getLocalSidPlayback().warmLeadIn(
-          `${neighbour.id}#${resolved.songNr ?? 0}`,
+          buildRenderedTuneKey(neighbour.id, tuneIndex),
           bytes,
-          resolved.songNr ?? 0,
+          tuneIndex,
           LEAD_IN_SECONDS,
         );
       } catch (error) {
@@ -1205,7 +1217,10 @@ export function usePlaybackController({
           // path, so playlist/SID-Radio behaviour is engine-agnostic.
           await getLocalSidPlayback().play(
             effectiveRequest.file!,
-            effectiveRequest.songNr ?? 0,
+            // `songNr` is one-based everywhere it is stored, shown or looked up; the engine's
+            // `songIndex` is zero-based. Handing one straight to the other played the tune after
+            // the one asked for — see `sidTuneIndex`.
+            toEngineTuneIndex(effectiveRequest.songNr),
             {
               onError: (playbackError) =>
                 addErrorLog("Local SID playback failed", {
@@ -1224,10 +1239,9 @@ export function usePlaybackController({
               },
             },
             // Render the whole tune in the background so scrubbing inside it is
-            // instant. Keyed by item + subsong so two subsongs of one file are
-            // cached separately — they are different music.
+            // instant. See buildRenderedTuneKey for what the key has to separate.
             {
-              prerenderKey: `${item.id}#${effectiveRequest.songNr ?? 0}`,
+              prerenderKey: buildRenderedTuneKey(item.id, toEngineTuneIndex(effectiveRequest.songNr)),
               durationSeconds: resolvedDuration ? resolvedDuration / 1000 : undefined,
             },
           );
@@ -1915,6 +1929,15 @@ export function usePlaybackController({
     ],
   );
 
+  /**
+   * The ordering the traversal should use right now — the listener's switches, unless a station is
+   * running and owns the order itself. See `resolveTraversalOrdering`.
+   */
+  const traversalOrdering = useCallback(
+    () => resolveTraversalOrdering({ repeatEnabled, shuffleEnabled }, stationActiveRef?.current === true),
+    [repeatEnabled, shuffleEnabled, stationActiveRef],
+  );
+
   const flushPendingUserSkip = useCallback(async () => {
     const pending = pendingUserSkipRef.current;
     if (!pending) return;
@@ -1935,12 +1958,13 @@ export function usePlaybackController({
         let resolvedTargetIndex = pending.targetIndex;
         let resolvedStopAtEnd = pending.stopAtEnd;
         if (anotherTransitionAdvanced) {
+          const ordering = traversalOrdering();
           if (pending.operation === "PLAYBACK_NEXT") {
             resolvedTargetIndex = resolveNextPlaylistIndex(
               activePlaylist,
               activeIndex,
-              repeatEnabled,
-              shuffleEnabled,
+              ordering.repeatEnabled,
+              ordering.shuffleEnabled,
               shuffleSeed,
             );
             resolvedStopAtEnd = resolvedTargetIndex === null;
@@ -1948,8 +1972,8 @@ export function usePlaybackController({
             resolvedTargetIndex = resolvePreviousPlaylistIndex(
               activePlaylist,
               activeIndex,
-              repeatEnabled,
-              shuffleEnabled,
+              ordering.repeatEnabled,
+              ordering.shuffleEnabled,
               shuffleSeed,
             );
             resolvedStopAtEnd = false;
@@ -1995,8 +2019,7 @@ export function usePlaybackController({
     playItem,
     playedClockRef,
     reportPlaybackStartFailure,
-    repeatEnabled,
-    shuffleEnabled,
+    traversalOrdering,
     shuffleSeed,
     setAutoAdvanceDueAtMs,
     setIsPaused,
@@ -2068,11 +2091,12 @@ export function usePlaybackController({
         if (!activePlaylist.length) return;
         cancelAutoAdvance();
         const activeIndex = currentIndexRef.current;
+        const ordering = traversalOrdering();
         const nextIndex = resolveNextPlaylistIndex(
           activePlaylist,
           activeIndex,
-          repeatEnabled,
-          shuffleEnabled,
+          ordering.repeatEnabled,
+          ordering.shuffleEnabled,
           shuffleSeed,
         );
         const now = Date.now();
@@ -2102,11 +2126,12 @@ export function usePlaybackController({
         guard.autoFired = true;
 
         const activeIndex = currentIndexRef.current;
+        const ordering = traversalOrdering();
         const nextIndex = resolveNextPlaylistIndex(
           activePlaylist,
           activeIndex,
-          repeatEnabled,
-          shuffleEnabled,
+          ordering.repeatEnabled,
+          ordering.shuffleEnabled,
           shuffleSeed,
         );
         const now = Date.now();
@@ -2154,8 +2179,7 @@ export function usePlaybackController({
       cancelAutoAdvance,
       finishPlaylistPlayback,
       playItem,
-      repeatEnabled,
-      shuffleEnabled,
+      traversalOrdering,
       shuffleSeed,
       playedClockRef,
       scheduleUserSkip,
@@ -2173,11 +2197,12 @@ export function usePlaybackController({
     const activePlaylist = playlistRef.current;
     if (!activePlaylist.length) return;
     const activeIndex = currentIndexRef.current;
+    const ordering = traversalOrdering();
     const prevIndex = resolvePreviousPlaylistIndex(
       activePlaylist,
       activeIndex,
-      repeatEnabled,
-      shuffleEnabled,
+      ordering.repeatEnabled,
+      ordering.shuffleEnabled,
       shuffleSeed,
     );
     cancelAutoAdvance();
@@ -2188,8 +2213,7 @@ export function usePlaybackController({
     await scheduleUserSkip(prevIndex, false, activeIndex, "PLAYBACK_PREVIOUS", "Playback previous failed");
   }, [
     cancelAutoAdvance,
-    repeatEnabled,
-    shuffleEnabled,
+    traversalOrdering,
     shuffleSeed,
     playedClockRef,
     setPlayedMs,

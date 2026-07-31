@@ -57,6 +57,8 @@ import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAd
 import { createHvscSourceLocation } from "@/lib/sourceNavigation/hvscSourceAdapter";
 import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
 import { createStationDurationResolver } from "@/pages/playFiles/stationDurationResolver";
+import { Checkbox } from "@/components/ui/checkbox";
+import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { createArchiveSourceLocation } from "@/lib/sourceNavigation/archiveSourceAdapter";
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
@@ -215,6 +217,9 @@ export default function PlayFilesPage() {
   const deviceInfoId = status.deviceInfo?.unique_id ?? null;
   const { sources: localSources, addSourceFromPicker } = useLocalSources();
   const [browserOpen, setBrowserOpen] = useState(false);
+  // Written from `sidRadio.active` below. A ref, because `useSidRadio` is created after the playback
+  // controller and consumes the handlers it returns, so the flag cannot travel as a plain prop.
+  const stationActiveRef = useRef(false);
   const {
     playlist,
     setPlaylist,
@@ -497,6 +502,7 @@ export default function PlayFilesPage() {
     setTrackInstanceId,
     repeatEnabled,
     shuffleEnabled,
+    stationActiveRef,
     shuffleSeed,
     localEntriesBySourceId,
     localSourceTreeUris,
@@ -1377,10 +1383,10 @@ export default function PlayFilesPage() {
   const stationDurationResolver = useMemo(
     () =>
       createStationDurationResolver({
-        resolveHvscSeconds: async (virtualPath, songIndex) =>
-          (await resolveHvscSonglengthDuration({ virtualPath, songNr: songIndex })).durationSeconds,
-        resolveFileSeconds: async (virtualPath, songIndex) => {
-          const ms = await resolveSonglengthDurationMsForPath(virtualPath, null, songIndex);
+        resolveHvscSeconds: async (virtualPath, songNr) =>
+          (await resolveHvscSonglengthDuration({ virtualPath, songNr: songNr })).durationSeconds,
+        resolveFileSeconds: async (virtualPath, songNr) => {
+          const ms = await resolveSonglengthDurationMsForPath(virtualPath, null, songNr);
           return ms === null || ms === undefined ? null : ms / 1000;
         },
       }),
@@ -1404,6 +1410,11 @@ export default function PlayFilesPage() {
     // songlengths, so the first refill has to wait for it or it burns every candidate it is given.
     ensureResolvable: ensureHvscSonglengthsReadyOnColdStart,
   });
+  // Mirrored into the ref the playback controller reads, so a skip resolved at any point after this
+  // render sees the current state of the station rather than the one captured when its handlers were
+  // created.
+  stationActiveRef.current = sidRadio.active;
+
   const sidRadioWhyThisTune = sidRadio.station
     ? sidRadio.station.seedKind === "song"
       ? `Similar to ${sidRadio.station.seedLabel}`
@@ -1793,8 +1804,23 @@ export default function PlayFilesPage() {
   const canPause = playbackRunning;
   // HARD12-005: Next/Prev enablement must reflect the shuffle-aware traversal
   // (what tapping them will do), not the linear playlist position.
-  const hasPrev = canAdvancePrevious(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed);
-  const hasNext = canAdvanceNext(playlist, currentIndex, repeatEnabled, shuffleEnabled, shuffleSeed);
+  // A running station owns the order, so the enablement has to be computed from the same ordering the
+  // traversal will actually use — see `resolveTraversalOrdering`.
+  const traversalOrdering = resolveTraversalOrdering({ repeatEnabled, shuffleEnabled }, sidRadio.active);
+  const hasPrev = canAdvancePrevious(
+    playlist,
+    currentIndex,
+    traversalOrdering.repeatEnabled,
+    traversalOrdering.shuffleEnabled,
+    shuffleSeed,
+  );
+  const hasNext = canAdvanceNext(
+    playlist,
+    currentIndex,
+    traversalOrdering.repeatEnabled,
+    traversalOrdering.shuffleEnabled,
+    shuffleSeed,
+  );
 
   const togglePlaylistTypeFilter = (category: PlayFileCategory) => {
     setPlaylistTypeFilters((prev) =>
@@ -2133,6 +2159,15 @@ export default function PlayFilesPage() {
                 hasCurrentItem={Boolean(currentItem)}
                 currentItemLabel={currentDisplay?.title ?? null}
                 currentItemMetadata={currentItemMetadata}
+                // Which station (or, when none is running, which playlist) is producing this tune
+                // leads the card: it is context for the title, the transport and everything else
+                // below it. Rendered in both states, and the same height in both, so that starting
+                // or stopping a station never shifts the controls underneath.
+                stationIndicator={
+                  sidRadioFlags.sidRadioEnabled ? (
+                    <SidRadioChip station={sidRadio.station} whyThisTune={sidRadioWhyThisTune} onStop={sidRadio.stop} />
+                  ) : undefined
+                }
                 stationActive={sidRadio.active}
                 rankingControls={
                   sidRadioFlags.rankingActive ? (
@@ -2208,8 +2243,6 @@ export default function PlayFilesPage() {
                     useNativeRangeInput={isAndroid}
                   />
                 }
-                recurseFolders={recurseFolders}
-                onRecurseChange={(value) => setRecurseFolders(Boolean(value))}
                 shuffleEnabled={shuffleEnabled}
                 onShuffleChange={(value) => setShuffleEnabled(Boolean(value))}
                 repeatEnabled={repeatEnabled}
@@ -2218,27 +2251,25 @@ export default function PlayFilesPage() {
                 reshuffleActive={reshuffleActive}
                 reshuffleDisabled={!shuffleEnabled || playlist.length < 2}
                 shuffleSeed={shuffleSeed}
-                openControllerAction={
-                  remoteInputEnabled && isPlaying ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="self-start"
-                      data-testid="play-open-controller"
-                      onClick={() => setRemoteInputSheetOpen(true)}
-                    >
-                      <Gamepad2 className="mr-1.5 h-4 w-4" /> Remote Input
-                    </Button>
-                  ) : undefined
-                }
               />
-              {sidRadioFlags.sidRadioEnabled ? (
+              {/*
+               * One row for everything on this page that opens a sheet: start or change a station,
+               * open the Likes list, reach the controller. They are grouped because they are the
+               * same kind of action, and Remote Input comes last because it leaves the music
+               * behind — the two station actions are about what plays, and belong nearer the
+               * controls that play it. Sharing one wrapping row also costs no extra height over
+               * the two-row arrangement it replaces.
+               */}
+              {sidRadioFlags.sidRadioEnabled || (remoteInputEnabled && isPlaying) ? (
                 <div className="flex w-full flex-col gap-2">
-                  {sidRadio.active && sidRadio.station ? (
-                    <SidRadioChip station={sidRadio.station} whyThisTune={sidRadioWhyThisTune} onStop={sidRadio.stop} />
-                  ) : null}
+                  {/* The station's identity and its Stop now lead the card above; what is left here
+                      are the actions that start or change a station, which belong after the
+                      controls they will replace rather than before them. */}
                   <div className="flex flex-wrap gap-2">
-                    {!sidRadio.active && currentTuneMd5 && currentItem?.category === "sid" ? (
+                    {sidRadioFlags.sidRadioEnabled &&
+                    !sidRadio.active &&
+                    currentTuneMd5 &&
+                    currentItem?.category === "sid" ? (
                       <Button
                         variant="outline"
                         size="sm"
@@ -2255,27 +2286,41 @@ export default function PlayFilesPage() {
                      * Song station is constrained to is changed from this sheet, and stopping the
                      * station to reach that control would throw away the seed it is meant to keep.
                      */}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      data-testid="sid-radio-launcher"
-                      onClick={() => {
-                        void sidRadio.ensureStylePopulations();
-                        setSidRadioLauncherOpen(true);
-                      }}
-                    >
-                      <RadioIcon className="mr-1.5 h-4 w-4" /> SID Radio
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      data-testid="sid-radio-liked-tunes-open"
-                      onClick={() => setLikedTunesSheetOpen(true)}
-                    >
-                      <Heart className="mr-1.5 h-4 w-4" /> Liked Tunes
-                    </Button>
+                    {sidRadioFlags.sidRadioEnabled ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid="sid-radio-launcher"
+                          onClick={() => {
+                            void sidRadio.ensureStylePopulations();
+                            setSidRadioLauncherOpen(true);
+                          }}
+                        >
+                          <RadioIcon className="mr-1.5 h-4 w-4" /> SID Radio
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid="sid-radio-liked-tunes-open"
+                          onClick={() => setLikedTunesSheetOpen(true)}
+                        >
+                          <Heart className="mr-1.5 h-4 w-4" /> Liked Tunes
+                        </Button>
+                      </>
+                    ) : null}
+                    {remoteInputEnabled && isPlaying ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-testid="play-open-controller"
+                        onClick={() => setRemoteInputSheetOpen(true)}
+                      >
+                        <Gamepad2 className="mr-1.5 h-4 w-4" /> Remote Input
+                      </Button>
+                    ) : null}
                   </div>
-                  {sidRadio.notice ? (
+                  {sidRadioFlags.sidRadioEnabled && sidRadio.notice ? (
                     <p className="text-xs text-muted-foreground" data-testid="sid-radio-notice">
                       {sidRadio.notice === "no-radio-for-tune"
                         ? "No radio for this tune yet — try a style or your likes."
@@ -2451,6 +2496,21 @@ export default function PlayFilesPage() {
             autoConfirmCloseBefore={isAndroid}
             onAutoConfirmStart={handleAutoConfirmStart}
             autoConfirmLocalSource
+            // "Recurse" used to live on the playback card, where it was the only control left once a
+            // station took over the play order. It is not a playback setting at all: it decides what
+            // a folder selection means. Here it sits next to the folders it governs, and it can say
+            // so in words rather than in one.
+            folderOptions={
+              <label className="flex items-center gap-2 text-xs">
+                <Checkbox
+                  checked={recurseFolders}
+                  onCheckedChange={(value) => setRecurseFolders(Boolean(value))}
+                  aria-label="Include subfolders"
+                  data-testid="playback-recurse"
+                />
+                Include subfolders
+              </label>
+            }
           />
 
           <HvscPreparationSheet

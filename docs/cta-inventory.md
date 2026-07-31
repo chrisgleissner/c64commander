@@ -104,8 +104,8 @@ persistent status badge that appear on every page).
 | Page     | Route       |                   CTAs | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | -------- | ----------- | ---------------------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Home     | `/`         |               113 (+3) | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. `+1` Remote Input tile behind `remote_input_enabled` (stable, enabled and user-visible by default in C64 Commander; disabled and hidden in C64U Remote per `variants/feature-flags/c64u-remote.yaml`). `+2` Content Explorer **Live View** card (`live-view-card`) beneath the quick actions — one Audio toggle (`av-audio-toggle`, `audio_mirror_enabled`) and one Video toggle (`av-video-toggle`, `video_mirror_enabled`) sharing the single app-wide A/V mirror session; both user-visible and non-developer, off by default until the phone stream receiver ships. Mounted only when the device advertises streaming (code-verified — see note below). |
-| Settings | `/settings` |                77 (+8) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. `+6` Content Explorer **Play and Disk** controls: Search inside disk images (`in_image_search_enabled`), Answer cartridge boot menu (`launch_safety_enabled`, default on) plus its Menu key select and Boot settle input, and Video/Audio stream port inputs (shown when `audio_mirror_enabled` or `video_mirror_enabled`) (code-verified — see note below).                                                                                                                                                                                                                                                             |
-| Play     | `/play`     | 32 (+1, +20 SID Radio) | Transport, volume, playback flags, playlist, type filters, HVSC. `+1` Open Controller button, shown only while playing, behind `remote_input_enabled`. `+20` the seekable progress bar, the **Listen on** group and the **SID Radio** controls, behind `c64u_sid_radio_enabled` / `c64u_local_engine_enabled`.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Settings | `/settings` |                80 (+8) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. Includes the 3 SID chip controls in the SID Radio group (one switch plus a two-button chip choice, §4.5), which are shown whenever on-device playback is on. `+6` Content Explorer **Play and Disk** controls: Search inside disk images (`in_image_search_enabled`), Answer cartridge boot menu (`launch_safety_enabled`, default on) plus its Menu key select and Boot settle input, and Video/Audio stream port inputs (shown when `audio_mirror_enabled` or `video_mirror_enabled`) (code-verified — see note below).                                                                                                |
+| Play     | `/play`     | 31 (+1, +20 SID Radio) | Transport, volume, playback flags, playlist, type filters, HVSC. Include subfolders moved off this page into the Add items sheet (32 → 31). `+1` Remote Input button, shown only while playing, behind `remote_input_enabled`, last in the sheet-actions row. `+20` the seekable progress bar, the **Listen on** group and the **SID Radio** controls, behind `c64u_sid_radio_enabled` / `c64u_local_engine_enabled`.                                                                                                                                                                                                                                                                                                                                             |
 | Config   | `/config`   |                     30 | Search + 22 config-category accordions (each expands to config-item rows).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Disks    | `/disks`    |                28 (+1) | Drive A/B/Soft-IEC controls, disk library. `+1` Content Explorer **New disk** button (`new_disk_enabled`); the per-disk **Open (Disk Explorer)…** overflow action (`disk_explorer_enabled`) and the New-disk / Disk-contents dialogs it opens are documented in §4.3/§5 (code-verified — see note below).                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Docs     | `/docs`     |                     18 | 8 doc-section toggles + 3 external links.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -243,18 +243,40 @@ not-connected / empty / single-device).
 ### 4.2 Play (`/play`)
 
 - Transport: Previous / Play / Pause / Next — button — `playlist-prev|play|pause|next` — R✅ I✅ `[disabled: no playlist loaded, playlist loading, or no previous/next item in the current repeat/shuffle traversal]`
-- Mute — button — `volume-mute` — R✅ I✅ `[disabled]`
-- Volume — slider — R✅ I✅ `[disabled]`
-- Recurse / Shuffle / Repeat — checkbox — `playback-recurse|shuffle|repeat` — R✅ I✅
-- Reshuffle — button — `playlist-reshuffle` — R✅ I✅ `[disabled]`
+- Now playing: where the queue comes from — `now-playing-source` — the first row of the card, present
+  in both states and the same height in both (`data-station-active`); a running station renders
+  `sid-radio-chip` inside it, otherwise `now-playing-source-idle` names the playlist
+- Now playing: title — `playback-current-title` (title only; the ranking actions sit opposite it and
+  do not move when a long title truncates)
+- Now playing: author · year · SID model · clock · Tune x of y · length — `playback-current-credits`
+- Mute — button — `volume-mute` — R✅ I✅ `[disabled]` (icon-only; the accessible name carries the
+  state, and on the on-device route it attenuates the samples rather than the device's volume)
+- Volume — slider — R✅ I✅ `[disabled]` — shares one row with Mute and the dB readout (`volume-row`);
+  the former `volume-caption` label is gone, the readout is fixed-width so the row cannot reflow
+- Shuffle / Repeat — checkbox — `playback-shuffle|playback-repeat` — R✅ I✅ — **not rendered** while
+  a SID Radio station drives the queue. A station owns the play order, so these are
+  mode-inapplicable rather than temporarily unavailable. They return with their stored values when
+  the station stops — nothing is mutated while they are hidden.
+- Reshuffle — button — `playlist-reshuffle` — R✅ I✅ `[disabled]` — likewise **not rendered** during
+  a station. The row that holds all three is dropped with them, so a station leaves no empty or
+  greyed row behind.
 - Duration — slider — R✅ I✅
 - Duration override — text — `duration-input` (`mm:ss`) — R✅ I✅ ; Change — button — R✅ I✅
+- Tune selector — button — `song-selector-trigger` — R✅ I✅ — labelled `Tune x of y`, shown only for a
+  file that holds more than one tune. Opens an inline dialog (`song-selector-dialog`, accessible name
+  **Tune**) listing every tune (`song-selector-options`). The pieces inside a SID file are called
+  **tunes** throughout, on screen and in the manual; "subsong" is the file format's word and is not
+  used in the interface.
 - Add items to playlist — button — `add-items-to-playlist` — R✅ I✅ (opens picker)
+- Include subfolders — checkbox — `playback-recurse` — R✅ I✅ — in the **Add items** sheet
+  (`add-items-folder-options`), not on the Play page: it decides what selecting a folder means, so it
+  is shown while folders are being chosen and at no other time. Rendered only once a source is open
+  and only where folder selection is allowed.
 - Filter files — text — `list-filter-input` — R✅ I✅
 - Type filters: SID / MOD / PRG / CRT / Disk — checkbox — `playlist-type-*` — R✅ I✅
 - Select all — button — `playlist-list-toggle-select-all` — R✅ I✅
 - HVSC: Download / Ingest / Reindex / Reset — button — R✅ I✅ _(flag `hvsc_enabled`)_
-- Open Controller — button — `play-open-controller` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — opens the **Remote Input sheet** (§5)
+- Remote Input — button — `play-open-controller` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — opens the **Remote Input sheet** (§5). Sits in the sheet-actions row **after** SID Radio and Liked Tunes: all three open a sheet, and the two station actions are about what plays next while this one leaves the music behind.
 - Progress bar (seek) — button — `playback-progress-seek` — R✅ I✅ — tap or drag to jump within the tune; **also operable without a pointer**: `ArrowLeft`/`ArrowRight` step ±2%. Rendered only for audio this device renders (see _Listen on_ below); on the C64 route the bar is a plain indicator (`playback-progress`) and not focusable, because the machine plays the SID on its own chip and cannot be scrubbed.
 - Previous / Next **held** — scrub — same `playlist-prev|next` buttons — R✅ I✅ — a hold scrubs the current tune instead of changing track (local playback only); a tap still skips.
 
@@ -272,10 +294,14 @@ not-connected / empty / single-device).
   - Based on my likes — checkbox — `sid-radio-likes-toggle` — R✅ I✅
   - My taste — button — `sid-radio-taste` — R✅ I✅ `[disabled: not enough rankings yet — see hint `sid-radio-taste-hint`]`
   - Surprise me — button — `sid-radio-surprise` — R✅ I✅
-- Stop the station — button — `sid-radio-stop` — R✅ I✅ _(replaces the launcher while a station runs)_
+- Stop the station — button — `sid-radio-stop` — R✅ I✅ — labelled "Stop", on the source row at the
+  top of the Now Playing card, beside the station it ends
 - Station chip — button — `sid-radio-chip-toggle` — R✅ I✅ _(expands `sid-radio-chip`; `sid-radio-why` explains the pick)_
 - Liked tunes — button — `sid-radio-liked-tunes-open` — R✅ I✅
-- Rank the current tune: ♥ / ✕ — button — `now-playing-like` / `now-playing-notforme` — R✅ I✅ _(group `now-playing-ranking`; flag `c64u_sid_ranking_enabled`)_
+- Rank the current tune: ✕ / ♥ — button — `now-playing-notforme` / `now-playing-like` — R✅ I✅
+  _(group `now-playing-ranking`; flag `c64u_sid_ranking_enabled`)_ — right-aligned on the title row
+  in that order, so the outermost control is the harmless one; both are 44 px outline buttons, the
+  same size and chrome as the transport
 
 ### 4.3 Disks (`/disks`)
 
@@ -378,7 +404,12 @@ when SID Radio is on]` ;
   On-device playback engine — checkbox — `settings-local-engine-enabled` — R✅ I✅
   `[developer-mode only]` ;
   SID emulation — button group — `settings-sid-engine-residfp|sidlite`
-  (`settings-sid-engine`) — R✅ I✅ _(on-device engine only)_ ; Crossfade — button
+  (`settings-sid-engine`) — R✅ I✅ _(on-device engine only)_ ; SID chip
+  (`settings-sid-chip`): Match my Commodore 64 — checkbox —
+  `settings-sid-chip-from-device` — R✅ I✅ _(default on; reads the chip from the
+  connected Ultimate and remembers it)_ ; fallback chip — button group —
+  `settings-sid-chip-6581|8580` — R✅ I✅ _(used when the switch above is off or no
+  machine has been read)_ ; Crossfade — button
   group — `settings-crossfade-0|600|1500|3000` (`settings-crossfade`) — R✅ I✅
   `[disabled: Listen on is not Local — two tunes cannot sound at once on the C64's
 single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
