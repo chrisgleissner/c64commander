@@ -38,6 +38,7 @@ import { getScreenshotFraming, type ScreenshotFramingSurface } from "./screensho
 import { registerScreenshotSections, sanitizeSegment } from "./screenshotCatalog";
 import { planHomeScreenshotSlices, selectCanonicalHomeScreenshotSlices } from "./homeScreenshotLayout";
 import { shouldSkipFuzzyScreenshotPrune } from "../scripts/screenshotPrunePolicy.js";
+import { PLAYBACK_SESSION_KEY, SHARED_PLAYLIST_STORAGE_KEY } from "../src/pages/playFiles/playFilesUtils";
 import {
   decideMetadataScreenshotAction,
   decideTrackedScreenshotAction,
@@ -953,6 +954,44 @@ const captureFramedScreenshot = async (
   const { locator: _locator, ...rest } = options ?? {};
   await captureScreenshot(page, testInfo, relativePath, Object.keys(rest).length > 0 ? rest : undefined);
 };
+
+/**
+ * The tune the SID Radio captures are taken with.
+ *
+ * A real, well-known piece rather than a stub file: these images illustrate the
+ * manual's SID Radio chapter, and a transport with nothing loaded showed none of
+ * the state that prose describes. Rob Hubbard's "Commando" is about as
+ * recognisable as HVSC gets, and the fixed elapsed time keeps the capture
+ * showing a tune a few seconds in rather than one that has just started.
+ */
+const FEATURED_SID = {
+  // Imported rather than written out: the session restore compares the stored
+  // `playlistKey` against the page's own, and a stale literal here would be
+  // silently discarded (which is exactly what a `c64u_playlist:v1:<device>`
+  // guess did — the playlist still loaded through the legacy path, so the only
+  // symptom was a transport stuck at 0:00).
+  playlistKey: SHARED_PLAYLIST_STORAGE_KEY,
+  sessionKey: PLAYBACK_SESSION_KEY,
+  deviceId: "TEST-123",
+  path: "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
+  name: "Commando.sid",
+  title: "Commando",
+  durationMs: 215000,
+  elapsedMs: 7000,
+  /**
+   * The wall-clock instant the capture runs at.
+   *
+   * The transport's elapsed time is derived from `Date.now()`, so with a live
+   * clock this screenshot read 0:07 on one run and 0:08 on the next. The noise
+   * budget that suppresses re-writes is 8 pixels, and a changed digit plus the
+   * moved progress bar is far more than that, so the file churned on every
+   * regeneration. Pinning `Date.now()` for the page makes the elapsed exactly
+   * `elapsedMs` and keeps it there. The same instant is used for the session's
+   * `updatedAt`, so the restore sees an age of zero and is not downgraded to
+   * paused as a stale session would be.
+   */
+  nowIso: "2026-01-01T12:00:00.000Z",
+} as const;
 
 const captureScreenshot = async (
   page: Page,
@@ -2418,27 +2457,66 @@ test.describe("App screenshots", () => {
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       test.slow();
       // GA defaults these on; set them explicitly + enable dev mode for the Settings capture.
-      await page.addInitScript(() => {
+      await page.addInitScript((seed: typeof FEATURED_SID) => {
         localStorage.setItem("c64u_sid_radio_enabled", "1");
         localStorage.setItem("c64u_sid_ranking_enabled", "1");
         localStorage.setItem("c64u_local_engine_enabled", "1");
         localStorage.setItem("c64u_dev_mode_enabled", "1");
-      });
+        // Play the tune on this device, so the card shows the on-device route
+        // rather than the C64 one.
+        localStorage.setItem("c64u_playback_engine", "local");
+
+        // A real tune, mid-play, rather than an empty transport.
+        //
+        // The card is the app's main screen and the manual leans on this
+        // capture, so it should look like something someone is actually
+        // listening to: Rob Hubbard's "Commando", which is about as
+        // recognisable as HVSC gets, a few seconds in and running on this
+        // device. An idle transport showed none of the state the surrounding
+        // prose describes — no title, no elapsed time, no progress.
+        const playlistKey = seed.playlistKey;
+        const payload = {
+          items: [{ source: "hvsc", path: seed.path, name: seed.name, durationMs: seed.durationMs }],
+          currentIndex: 0,
+        };
+        localStorage.setItem(playlistKey, JSON.stringify(payload));
+        localStorage.setItem("c64u_playlist:v1:default", JSON.stringify(payload));
+        localStorage.setItem("c64u_last_device_id", seed.deviceId);
+
+        // Restored as an active session. `currentItemId` is left null on purpose:
+        // the restore falls back to `currentIndex` when it cannot match an id,
+        // which keeps this seed independent of how playlist item ids are built.
+        // `updatedAt` has to be now — a session older than the staleness window is
+        // deliberately downgraded to paused (HARD9-064).
+        sessionStorage.setItem(
+          seed.sessionKey,
+          JSON.stringify({
+            playlistKey,
+            currentItemId: null,
+            currentItemLabel: seed.name,
+            currentIndex: 0,
+            isPlaying: true,
+            isPaused: false,
+            elapsedMs: seed.elapsedMs,
+            playedMs: seed.elapsedMs,
+            durationMs: seed.durationMs,
+            autoAdvanceDueAtMs: null,
+            shuffleEnabled: false,
+            repeatEnabled: false,
+            randomSeed: 1,
+            updatedAt: seed.nowIso,
+          }),
+        );
+      }, FEATURED_SID);
       await installListPreviewLimit(page, 3);
       await page.goto("/play");
       await waitForConnected(page);
       await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
 
-      // The SID Radio controls (Browse stations, Liked Tunes) and the ♥/✕ ranking
-      // render on the playback card. The "Listen on" control is SID-only, so it
-      // gets its own capture below with a SID as the current item.
-      const launcher = getActiveMain(page).getByTestId("sid-radio-launcher");
-      await expect(launcher).toBeVisible();
-      await page.evaluate(() => window.scrollTo(0, 0));
-      await captureScreenshot(page, testInfo, "play/sid-radio/01-controls.png");
-
       // Open the stations launcher (song / style / taste seeds).
-      await launcher.click();
+      const stationsLauncher = getActiveMain(page).getByTestId("sid-radio-launcher");
+      await expect(stationsLauncher).toBeVisible();
+      await stationsLauncher.click();
       const sheet = page.getByTestId("sid-radio-launcher-sheet");
       await expect(sheet).toBeVisible();
       // Each tile's size arrives from the worker once it has parsed the bundle;
@@ -2449,36 +2527,47 @@ test.describe("App screenshots", () => {
       await expect(page.getByTestId("sid-radio-launcher-sheet")).toHaveCount(0);
 
       // "Listen on: C64 / Both / This device" — only rendered while a SID is the
-      // current item, so the playlist is seeded with one. Without this the
-      // control had no screenshot at all, even though the manual describes it.
-      await page.addInitScript(() => {
-        const payload = {
-          items: [
-            {
-              source: "hvsc",
-              path: "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
-              name: "Commando.sid",
-              durationMs: 215000,
-            },
-          ],
-          currentIndex: 0,
-        };
-        localStorage.setItem("c64u_playlist:v1:TEST-123", JSON.stringify(payload));
-        localStorage.setItem("c64u_playlist:v1:default", JSON.stringify(payload));
-        localStorage.setItem("c64u_last_device_id", "TEST-123");
-      });
+      // current item, which the tune seeded at the top of this test satisfies.
       await page.goto("/play");
       await waitForConnected(page);
       const listenOn = getActiveMain(page).getByTestId("playback-engine-toggle");
       await expect(listenOn).toBeVisible();
       await captureScreenshot(page, testInfo, "play/sid-radio/03-listen-on.png", { locator: listenOn });
 
-      // The dev-mode Settings group (master + ranking + on-device engine + corpus status).
+      // The Settings group (master + ranking + on-device engine + SID chip + corpus status).
+      //
+      // Captured as a viewport shot, not as a locator shot. The section is taller
+      // than the viewport (2324 CSS px against a 611 px main area) and it lives
+      // inside a `main` that scrolls on its own. `locator.screenshot()` stitches an
+      // over-tall element by scrolling the *page*, so with the scrolling happening
+      // in an inner container most of the stitched image came back as page
+      // background: the committed file was 993x6391 with roughly 4200 px of flat
+      // blue above and below about 2000 px of actual content. Every other settings
+      // capture is a viewport shot for this reason, and this one now matches.
       await page.goto("/settings");
       const section = page.getByTestId("settings-sid-radio");
       await expect(section).toBeVisible();
       await section.scrollIntoViewIfNeeded();
-      await captureScreenshot(page, testInfo, "settings/sid-radio.png", { locator: section });
+      await captureScreenshot(page, testInfo, "settings/sid-radio.png");
+
+      // The playback card, taken last and with the clock stopped.
+      //
+      // Everything above needs a live clock: the connection and health logic
+      // compares timestamps, so pinning `Date.now()` earlier leaves the app stuck
+      // and the captures fail. Pinning it here costs nothing because nothing
+      // follows, and it is what makes this shot reproducible — the elapsed time,
+      // the remaining time and the progress bar are all derived from the clock, so
+      // with it running the file was rewritten on every regeneration.
+      await page.goto("/play");
+      await waitForConnected(page);
+      const launcher = getActiveMain(page).getByTestId("sid-radio-launcher");
+      await expect(launcher).toBeVisible();
+      // Wait for the seeded tune to be the current track, so the shutter cannot
+      // catch the transport before the session restore has landed.
+      await expect(getActiveMain(page).getByTestId("playback-current-title")).toContainText(FEATURED_SID.title);
+      await page.clock.setFixedTime(Date.now());
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await captureScreenshot(page, testInfo, "play/sid-radio/01-controls.png");
     },
   );
 

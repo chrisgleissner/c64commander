@@ -369,71 +369,117 @@ The tour showed you where everything lives, and the flows above are quick recipe
 
 ### SID Radio
 
-SID Radio turns the tunes you like — and the mood you are in — into an endless, self-refilling queue of similar SIDs, launched in one tap. It rides the normal Play engine, so everything you already know about playback still applies, and it works fully offline: the app ships a small similarity index and needs no network while you listen.
+A **SID** — short for **Sound Interface Device** — is the sound chip inside every Commodore 64. It gives the machine three voices, and composers have been coaxing remarkable music out of those three voices since 1982.
 
-![SID Radio and Liked Tunes controls with the heart / cross ranking on the Now Playing card](../../img/app/play/sid-radio/01-controls.png)
+The same name is given to the small files that hold C64 music, because each one is really a tiny program that plays the chip. Thousands were written for games and demos, and people are still writing them today. Most have been gathered into a free archive called the **High Voltage SID Collection**, or **HVSC** for short.
 
-**Rate as you listen.** While a SID plays, a subtle heart / cross pair sits on the Now Playing card. Tap the heart to add a tune to your **Liked Tunes**; tap the cross to skip it now and steer future picks away from its neighbourhood. Ratings are optional and ambient, stored on the device, and they follow a tune across HVSC updates because they key on the tune's content (its MD5), not its path.
+SID Radio plays that archive like a radio station. You choose a mood, or a tune you already like, and the app keeps finding more music of the same kind for as long as you care to listen. You never have to build a playlist.
 
-**Start a station.** Open **SID Radio** from the Play page to pick a mood: nine style tiles (Fast-Paced, Chill / Ambient, Melodic and more), a **From tunes you like** taste station that unlocks once you have liked a few tunes, or **Surprise me**. Each tile shows how many tunes that station draws from, and a mood the similarity index has nothing for is greyed out rather than starting a station with nothing to play. Turn on **Based on my likes** to bias any style toward what you enjoy — for example "Fast-Paced from your Likes". You can also start a station from any single tune with **Start Radio**.
+It needs no internet connection. The app already knows which tunes resemble one another, so once the music is on your phone there is nothing further to download.
 
-![The SID Radio station launcher: song, mood (nine style tiles) and taste seeds](../../img/app/play/sid-radio/02-stations.png)
+![The Now Playing card during a station, with the heart and cross beside the title](../../img/app/play/sid-radio/01-controls.png)
 
-**Stations skip the very short tunes.** HVSC holds jingles, one-shot sound effects and test tones alongside the music, and a station that serves those between pieces feels broken — so anything shorter than 15 seconds is passed over. Change the threshold under **Settings → SID Radio → Shortest tune to play**, or set it to 0 to play everything. Raising it does not make a station run dry: it looks further through the similarity index to make up the difference.
+#### Starting a station
 
-**Lean back.** A station is an endless stream, so — like radio everywhere — there is very little to adjust while one plays. The station decides what comes next, so Shuffle, Repeat and Reshuffle are taken off the Play page altogether rather than shown greyed out: they have no meaning here, and the space is better spent on the music. They come back, with the settings you had, the moment you stop the station and play a finite list such as Liked Tunes. Each start is fresh, so the same mood feels new every time.
+1. Go to the **Play** page.
+2. Tap **SID Radio**.
+3. Pick what you are in the mood for.
 
-The line at the top of the Now Playing card always says where the queue is coming from — the name of the running station, or the playlist when nothing is steering it. It stops the station in one tap and expands a short "why this tune" line. The line is there in both states and is the same height either way, so starting or stopping a station never shifts the transport buttons under your thumb.
+You will be offered three kinds of station:
 
-**No repeats.** A station never plays the same tune twice, and it never plays two tunes from the same file back to back: once it serves one piece from a multi-tune SID, the rest of that file's pieces are set aside. What you hear is a walk through the similarity index that keeps moving outwards, not a shuffle that can circle back.
+- **A mood.** Nine of them, such as Fast-Paced, Chill / Ambient and Melodic. Each tile tells you how many tunes it has to draw on. A mood with nothing to offer is greyed out, so you cannot start a station that has no music in it.
+- **Tunes you like.** This appears once you have marked a few favourites, and builds a station out of them.
+- **Surprise me.** Anything at all.
 
-A station follows similarity, and once in a while it reaches the end of what it can find — most often after you have skipped through a great many tunes in one sitting. When that happens the app says so, rather than leaving you on a last track that will not advance, and you can pick another mood.
+You can also start a station from whatever is already playing. Tap **Start Radio**, and the app goes looking for more music in the same vein.
 
-**Liked Tunes.** Everything you have liked is a plain, playable list — browse it, play it (with normal Shuffle and Repeat), or un-like a tune. Tunes no longer in your installed HVSC are shown greyed rather than dropped.
+Switch on **Based on my likes** to tilt any mood towards your own taste — "Fast-Paced from your Likes", for example.
+
+![Choosing a station: a tune, a mood, or your own taste](../../img/app/play/sid-radio/02-stations.png)
+
+#### Telling it what you like
+
+While a tune plays, a heart and a cross sit beside its title.
+
+- Tap the **heart** to keep the tune. It joins your **Liked Tunes** list.
+- Tap the **cross** to move on. The station plays something else at once, and remembers to steer clear of anything similar.
+
+You never have to use either. The station works perfectly well if you simply listen.
+
+Your choices stay on your phone and nowhere else. They are attached to the music itself rather than to a file name, so they survive an update to your copy of HVSC even if the tune has since moved to a different folder.
+
+**Liked Tunes** is an ordinary playable list. Open it to play your favourites, shuffle them, or take a tune off the list again. If a tune is no longer in the copy of HVSC you have installed, it is shown greyed out rather than quietly dropped.
+
+#### What a station will and will not do
+
+**It never repeats itself.** A station will not play the same tune twice, nor two pieces from the same file one after the other. It always moves on to something you have not heard yet.
+
+**It skips the very short pieces.** HVSC holds jingles, sound effects and test tones alongside the music, and a station that slipped those between songs would feel broken. Anything shorter than fifteen seconds is passed over. Change that under **Settings → SID Radio → Shortest tune to play**, or set it to zero to hear everything. Raising it will not leave a station short of music; it simply searches further afield.
+
+**It can run out, eventually.** A station follows a trail of similar music, and once in a great while that trail comes to an end — usually only after you have skipped through a great many tunes in one sitting. The app says so plainly instead of leaving you on a tune that never advances, and you can choose another mood.
+
+#### While a station is playing
+
+There is very little to fiddle with, which is rather the point of radio. The station chooses what comes next, so Shuffle, Repeat and Reshuffle disappear from the Play page while one is running. They come back, set as you left them, as soon as you stop the station and play an ordinary list.
+
+The line across the top of the Now Playing card always tells you where the music is coming from: the name of the station, or simply your playlist when no station is running. Tap it to stop the station, or to see a short note about why this particular tune was chosen. The line is the same size whether or not a station is playing, so the buttons below it never shift under your thumb.
+
+Every station starts fresh, so the same mood gives you a different evening each time.
 
 #### Where the music plays
 
-By default, SID Radio plays each tune **on the C64** — exactly like the rest of the app — and you hear it back on your phone through the network **audio mirror**. For that to work the Commodore 64 Ultimate has to be reachable on your local network: connect it to your Wi‑Fi router with an **Ethernet** cable, and keep your phone on the same Wi‑Fi. The C64 then streams its sound across the network and the app plays it in step with the on-screen progress.
+You have a choice about which machine actually makes the sound. When a SID tune is playing, the Play page offers **Listen on**:
 
-Where you hear a SID is up to you. When a SID is playing, the Play screen offers **Listen on**, with up to three choices, reading outwards from your own device:
+- **Local** — your phone plays the tune itself. Your C64 need not even be switched on.
+- **Remote** — your C64 plays the tune, and you listen to it in the room, exactly as it would have sounded in 1985.
+- **Both** — your C64 plays the tune and sends the sound across your network as well, so you hear it in both places at once.
 
-- **Local** — your phone renders the SID itself with a built-in libsidplayfp engine. No C64 needed, and nothing is streamed.
-- **Remote** — the tune plays on the Commodore 64 Ultimate and you listen there. Which machine that is is shown in the header, so the button does not repeat it.
-- **Both** — the tune plays on the Commodore 64 Ultimate and its sound is streamed to your phone as well, so you hear it in both places. This choice only appears when the sound can actually reach you — if the Commodore 64 Ultimate has no network path for it, the option is simply not shown.
+**Both** only appears when the sound can actually reach you. For that, your C64 needs a wired **Ethernet** connection to your router, and your phone needs to be on the same network. If there is no path for the sound, the app simply does not offer the option.
 
-**Listen on** appears only for SID tunes, since it is the only thing your phone can play on its own; programs and disks always run on the Commodore 64 Ultimate.
+**Listen on** appears for SID tunes only. Programs and disks always run on your C64, since that is the only machine that can run them.
 
-![The Listen on control: Local, Remote, or Both](../../img/app/play/sid-radio/03-listen-on.png)
+![Listen on: Local, Remote, or Both](../../img/app/play/sid-radio/03-listen-on.png)
 
-**On-device playback needs the C64 ROMs.** SID music is driven by the C64's own KERNAL and BASIC routines, so without them a tune starts but never plays. Those ROM images are copyrighted and cannot be shipped with an app, so C64U Remote reads them from the Commodore 64 Ultimate: **Settings → SID Radio → C64 ROMs for on-device playback → Read from C64**. It takes a moment and only has to be done once.
+#### Playing tunes on your phone
 
-**Only connect C64U Remote to devices you own or have been given permission to use.** The ROM images stay on your phone, are never shared or uploaded, and are never included in diagnostics. You can remove them again at any time with **Remove** in the same place.
+To play music on its own, without help from your C64, the app needs a copy of two small programs that live inside every C64: the **KERNAL** and the **BASIC** ROMs. A "ROM" is simply a program built into the machine at the factory. SID music leans on both constantly, so without them a tune starts and then sits in silence.
 
-Until the ROMs are in place — or if you remove them — SID tunes simply play on the Commodore 64 Ultimate instead, and the app tells you so once.
+These programs are still under copyright and cannot be included with an app, so C64U Remote borrows them from your own machine. Go to **Settings → SID Radio → C64 ROMs for on-device playback** and tap **Read from C64**. It takes a moment, and you only ever have to do it once.
 
-**Wind through a tune.** While a SID is playing on your phone, press and hold **⏭** to fast-forward or **⏮** to rewind — the tune keeps moving for as long as you hold, roughly five seconds at a time. A short tap still skips to the next or previous tune, so the buttons do what they always did. This works with the on-device engine; on the Commodore 64 Ultimate the buttons only skip.
+The copies stay on your phone. They are never uploaded, never shared, and never included in a diagnostics report. **Remove** deletes them again whenever you wish. Please only read them from a machine that is yours, or that you have permission to use.
 
-**Jump straight to a moment.** The progress bar is not only a read-out. Tap anywhere along it to land there, or hold and sweep to travel through the tune — the bar and the time follow your finger, and the music picks up wherever you let go. Winding backwards asks more of the engine than winding forwards, so a long rewind can take a moment to settle. Like winding, this is for tunes playing on your phone.
+Until the ROMs are in place, SID tunes simply play on your C64 instead, and the app says so once.
 
-**If a tune ever falls quiet.** Very occasionally the on-device engine can stop making sound while everything on screen still says the tune is playing — the clock counts on, and there is simply nothing to hear. The app watches for that and starts the tune again from the moment it went quiet, without being asked. You may notice a short gap. You should not have to touch anything.
+#### Moving around inside a tune
 
-**One sound at a time.** Your phone can make sound two ways — playing a tune itself, or playing the sound streamed from the Commodore 64 Ultimate — and it will never do both at once. Whichever you start last takes over, and the other stops. So turning **Listen** on while a tune is playing here hands the speaker to the Commodore 64 Ultimate, and starting a tune here takes it back. You never have to work out which of two sounds to chase.
+These work for tunes playing on your phone. On your C64 the buttons only skip from one tune to the next.
 
-**Crossfading between tunes.** By default one tune stops before the next begins, so you never hear two at once — including when you move playback between the Commodore 64 Ultimate and your phone, or switch to a different Ultimate. If you would rather they overlap, **Settings → SID Radio → Crossfade** offers a short, medium or long fade: the outgoing tune fades down while the next fades in. That fade is the one moment two tunes are meant to sound together.
+- **Press and hold ⏭ or ⏮** to wind forwards or backwards, about five seconds at a time, for as long as you hold. A short tap still skips to the next or previous tune.
+- **Tap the progress bar** anywhere to jump to that point, or hold and slide along it to travel through the tune. The music picks up wherever you let go. Winding backwards asks more of the app than winding forwards, so a long rewind may take a moment to settle.
 
-Crossfading only works for tunes playing on your phone. Two tunes have to sound at the same moment for one to fade into the other, and the Commodore 64 Ultimate plays a single tune live on its one sound chip — so unless **Listen on** is set to **Local** the setting is greyed out and tunes change cleanly instead.
+#### The sound itself
 
-**Which SID chip a tune is played on.** The C64 shipped with two revisions of the SID sound chip, the 6581 and the later 8580, and they do not sound the same. Most SID files record which one they were written for, and those always play on the chip they name. For the rest, **Settings → SID Radio → SID chip for tunes that do not name one** decides. Leave **Match my Commodore 64** on and the app reads the chip from the Commodore 64 Ultimate while you are connected and remembers it, so it keeps applying when the machine is off. Turn it off, or use a machine the app has not read yet, and the chip you pick below it is used instead. Either way the choice applies from the next tune, not the one already playing.
+**Volume and Mute.** While your phone is playing a tune, these turn down the music alone. They do not touch your device's own volume, so muting a tune here leaves your ringer and your notifications exactly as they were.
 
-**What the tune says about itself.** Under the title, one line carries what the SID file records: composer, year and publisher, the chip or chips it names, PAL or NTSC, which tune of the file is playing, and its length. A file that does not record something simply leaves it out rather than guessing. Many SID files hold several separate pieces of music; when one does, the line says **Tune 3 of 15**, and the transport plays exactly that piece.
+**One sound at a time.** Your phone can either play a tune itself or play the sound sent from your C64, and it will never do both at once. Whichever you start last takes over and the other stops, so you never have to work out which of two sounds you are chasing.
 
-**Volume and Mute while your phone is playing.** They act on the tune itself, turning the sound down before it reaches the speaker, and they leave your device's own volume alone. So muting a tune here does not mute anything else, and your ringer and notifications are untouched.
+**Crossfading.** Normally one tune ends before the next begins. If you would rather they overlapped, **Settings → SID Radio → Crossfade** offers a short, medium or long fade. Fading one tune into another means playing both for a moment, and only your phone can do that — your C64 plays a single tune at a time — so the setting applies when **Listen on** is set to **Local**.
 
-**Two SID sound engines.** Under **Settings → SID Radio → SID emulation** you can choose how faithfully the on-device engine models the C64's SID chip. **Accurate (reSIDfp)** is the default and models the real chip cycle by cycle — pick it if you want the last word in fidelity. **Light (SIDLite)** does roughly a third of the work and still sounds good; most listeners will not hear the difference, so it is a perfectly reasonable choice on an older or slower phone, or when you want to save battery on a long listen. Both play every tune, and you can switch whenever you like.
+**Which sound chip.** The Commodore 64 was made with two versions of the SID chip, the earlier **6581** and the later **8580**, and music written for one sounds a little different on the other. Most SID files record which chip the composer used, and those always play as intended. For the files that do not say, **Settings → SID Radio → SID chip for tunes that do not name one** decides. Leave **Match my Commodore 64** switched on and the app reads the chip from your own machine and remembers it, so your tunes keep that character even when the machine is switched off. Switch it off, and the app uses whichever chip you choose there instead. Either way, the choice applies from the next tune onwards.
 
-![SID Radio settings: enable stations, the ranking, and the experimental on-device playback engine, with the similarity-corpus status](../../img/app/settings/sid-radio.png)
+**How closely to copy the chip.** Under **Settings → SID Radio → SID emulation** you can choose between two ways of recreating the SID. **Accurate** follows the real chip in the finest detail. **Light** does about a third of the work and still sounds good; most listeners will not hear the difference, which makes it a sensible choice on an older phone or when you want a long listen to go easy on the battery. Both play every tune, and you can change your mind at any time.
 
-Enable SID Radio, the heart / cross ranking, and the on-device engine under **Settings → SID Radio**, which also shows the similarity-corpus and installed-HVSC versions.
+#### What the tune tells you about itself
+
+Under the title you will find a single line describing the music: who wrote it, the year and who published it, which sound chip it asks for, whether it was written for **PAL** or **NTSC** (the two television standards the C64 was sold for, which ran at slightly different speeds), which tune of the file is playing, and how long it lasts. Anything the file does not record is simply left out rather than guessed at.
+
+Many SID files hold several separate pieces of music. When one does, the line says something like **Tune 3 of 15**, and that is exactly the piece you are hearing.
+
+Some modern tunes ask for more than one SID chip at once — two, or even three — giving six or nine voices instead of the usual three. When a tune does that, the line names every chip it calls for.
+
+![The SID Radio settings](../../img/app/settings/sid-radio.png)
+
+SID Radio, the heart and cross, and playing tunes on your phone are all switched on and off under **Settings → SID Radio**, which also shows which version of the music map and of HVSC you have installed.
 
 ### The SID Audio Mixer
 
