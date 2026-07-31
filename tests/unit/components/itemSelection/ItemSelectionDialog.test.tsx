@@ -190,6 +190,56 @@ describe("ItemSelectionDialog folder options", () => {
     expect(screen.getByTestId("playback-recurse")).toBeVisible();
   });
 
+  it("leaves them out on an archive search, which has no folders", async () => {
+    // A CommoServe search returns individual files. "Include subfolders" would be offering to change
+    // something the source cannot do, so the slot is withheld even though a source is open.
+    const withArchive: SourceGroup[] = [
+      ...sourceGroups,
+      {
+        label: "CommoServe",
+        sources: [
+          {
+            id: "archive-commoserve",
+            type: "commoserve",
+            name: "CommoServe",
+            rootPath: "/",
+            isAvailable: true,
+            listEntries: async () => [],
+            listFilesRecursive: async () => [],
+          },
+        ],
+      },
+    ];
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={withArchive}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+          folderOptions={<span data-testid="playback-recurse">Include subfolders</span>}
+          archiveConfigs={{
+            "archive-commoserve": {
+              id: "archive-commoserve",
+              name: "CommoServe",
+              baseUrl: "http://commoserve.files.commodore.net",
+              enabled: true,
+            },
+          }}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("import-option-commoserve"));
+    await waitFor(() => expect(screen.getByTestId("archive-selection-view-mock")).toBeVisible());
+
+    expect(screen.queryByTestId("add-items-folder-options")).toBeNull();
+    expect(screen.queryByTestId("playback-recurse")).toBeNull();
+  });
+
   it("leaves them out where folders cannot be selected at all", async () => {
     renderWithOptions({ allowFolderSelection: false });
 
