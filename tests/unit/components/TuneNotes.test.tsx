@@ -57,16 +57,34 @@ describe("TuneNotes", () => {
   it("expands and collapses again", () => {
     const restore = stageOverflow({ scrollHeight: 200, clientHeight: 48 });
     render(<TuneNotes note={"long ".repeat(200)} />);
-    const toggle = screen.getByTestId("tune-notes-toggle");
+    const region = screen.getByTestId("tune-notes");
 
-    fireEvent.click(toggle);
+    fireEvent.click(region);
     expect(screen.getByTestId("tune-notes-text")).toHaveAttribute("data-expanded", "true");
     expect(screen.getByTestId("tune-notes-text").className).not.toContain("line-clamp-3");
-    expect(toggle).toHaveTextContent("Show less");
-    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("tune-notes-toggle")).toHaveTextContent("Show less");
+    expect(region).toHaveAttribute("aria-expanded", "true");
 
-    fireEvent.click(toggle);
+    fireEvent.click(region);
     expect(screen.getByTestId("tune-notes-text")).toHaveAttribute("data-expanded", "false");
+    restore();
+  });
+
+  it("takes a tap anywhere in the note, not only on the label", () => {
+    // Three lines of text with a small link under them is a large thing to read and a small thing
+    // to hit, and the text is where the eye already is.
+    const restore = stageOverflow({ scrollHeight: 200, clientHeight: 48 });
+    render(<TuneNotes note={"long ".repeat(200)} />);
+    fireEvent.click(screen.getByTestId("tune-notes-text"));
+    expect(screen.getByTestId("tune-notes-text")).toHaveAttribute("data-expanded", "true");
+    restore();
+  });
+
+  it("offers no target at all when the note already fits", () => {
+    const restore = stageOverflow({ scrollHeight: 40, clientHeight: 40 });
+    render(<TuneNotes note="Remix of another tune." />);
+    expect(screen.getByTestId("tune-notes").tagName).not.toBe("BUTTON");
+    expect(screen.queryByTestId("tune-notes-toggle")).toBeNull();
     restore();
   });
 
@@ -79,6 +97,27 @@ describe("TuneNotes", () => {
 
     rerender(<TuneNotes note={"second ".repeat(100)} />);
     expect(screen.getByTestId("tune-notes-text")).toHaveAttribute("data-expanded", "false");
+    restore();
+  });
+});
+
+describe("TuneNotes expanded height", () => {
+  it("scrolls inside itself rather than pushing the transport off the card", () => {
+    // The longest note in the collection is 2,390 characters. Unbounded, expanding it put the
+    // progress bar, the transport and even "Show less" below the fold.
+    const restore = stageOverflow({ scrollHeight: 900, clientHeight: 48 });
+    render(<TuneNotes note={"long ".repeat(500)} />);
+    fireEvent.click(screen.getByTestId("tune-notes"));
+    const text = screen.getByTestId("tune-notes-text");
+    expect(text.className).toContain("max-h-52");
+    expect(text.className).toContain("overflow-y-auto");
+    restore();
+  });
+
+  it("takes no height cap while collapsed, where the clamp already bounds it", () => {
+    const restore = stageOverflow({ scrollHeight: 200, clientHeight: 48 });
+    render(<TuneNotes note={"long ".repeat(200)} />);
+    expect(screen.getByTestId("tune-notes-text").className).not.toContain("max-h-52");
     restore();
   });
 });

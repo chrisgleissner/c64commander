@@ -128,9 +128,20 @@ export const readStilManifest = async (): Promise<StilManifest | null> => {
     if (!text) return null;
     try {
       const parsed = JSON.parse(text) as StilManifest;
-      if (parsed.version !== STIL_STORE_VERSION || parsed.shards !== STIL_SHARD_COUNT) return null;
+      if (parsed.version !== STIL_STORE_VERSION || parsed.shards !== STIL_SHARD_COUNT) {
+        // Written by an older build. Reported rather than swallowed: the next lookup will find
+        // nothing, and "STIL is absent" and "STIL is stale" want different answers from whoever is
+        // reading the log.
+        addLog("info", "STIL store is from an older version; it will be rebuilt", {
+          version: parsed.version,
+          expectedVersion: STIL_STORE_VERSION,
+          shards: parsed.shards,
+        });
+        return null;
+      }
       return parsed;
-    } catch {
+    } catch (error) {
+      addErrorLog("STIL manifest is not readable", { error: (error as Error).message });
       return null;
     }
   })();
