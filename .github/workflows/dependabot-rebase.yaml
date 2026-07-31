@@ -17,6 +17,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  contents: read
   pull-requests: write
 
 jobs:
@@ -29,25 +30,52 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          BASE_REF: ${{ github.event.repository.default_branch || 'main' }}
         run: |
           set -euo pipefail
 
-          # `BEHIND` is only reported when GitHub has finished computing
-          # mergeability, and `UNKNOWN` means it is still working. Ask for the
-          # field and treat anything we cannot confirm as up to date, so we never
-          # spam a PR that does not need rebasing.
+          # Whether a PR is behind is decided by comparing commits, not by
+          # reading `mergeStateStatus`.
+          #
+          # `mergeStateStatus` reports a single winning state, and `UNSTABLE` (a
+          # failing or pending check) outranks `BEHIND`. A PR that is both behind
+          # and red therefore reports only `UNSTABLE`, so the previous
+          # `select(.mergeStateStatus == "BEHIND")` filter skipped exactly the
+          # PRs that most needed rebasing. That is self-reinforcing: one flaky
+          # run turns a PR red, the red state hides that it is behind, it is
+          # never rebased again, and it drifts further from main while every
+          # later run judges it against a stale base. PR #330 sat in that state
+          # with 37 dependency updates in it.
+          #
+          # `compare` answers the question directly and is unaffected by check
+          # status. A PR whose head cannot be compared (deleted fork branch, for
+          # example) is left alone rather than guessed at.
           prs=$(gh pr list \
             --state open \
             --app dependabot \
-            --json number,mergeStateStatus,title \
-            --jq '.[] | select(.mergeStateStatus == "BEHIND") | .number')
+            --json number \
+            --jq '.[].number')
 
           if [[ -z "${prs}" ]]; then
-            echo "No Dependabot PRs are behind ${GITHUB_REF_NAME:-main}."
+            echo "No open Dependabot PRs."
             exit 0
           fi
 
           for pr in ${prs}; do
-            echo "PR #${pr} is behind the base branch; requesting a rebase."
+            head_sha=$(gh pr view "${pr}" --json headRefOid --jq '.headRefOid')
+            behind_by=$(gh api "repos/${GH_REPO}/compare/${BASE_REF}...${head_sha}" \
+              --jq '.behind_by' 2>/dev/null || echo "")
+
+            if [[ -z "${behind_by}" ]]; then
+              echo "PR #${pr}: could not compare against ${BASE_REF}; leaving it alone."
+              continue
+            fi
+
+            if [[ "${behind_by}" -eq 0 ]]; then
+              echo "PR #${pr} is up to date with ${BASE_REF}."
+              continue
+            fi
+
+            echo "PR #${pr} is ${behind_by} commit(s) behind ${BASE_REF}; requesting a rebase."
             gh pr comment "${pr}" --body '@dependabot rebase'
           done
