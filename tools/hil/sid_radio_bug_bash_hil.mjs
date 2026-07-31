@@ -132,7 +132,10 @@ const CURRENT = `(() => {
   const el = document.querySelector('[data-testid=playback-current-track]');
   if (!el) return null;
   const raw = (el.textContent || '').replace(/\\s+/g, ' ').trim();
-  const m = raw.match(/([^\\s♫]+\\.sid)\\s*\\((\\d+):(\\d\\d)\\)/);
+  // The title is whatever precedes the duration. It used to be a file name and is now a friendly
+  // display name ("Go Hard" rather than "Go_Hard.sid"), so matching on ".sid" reported every track
+  // as missing and the run aborted on its first step.
+  const m = raw.match(/^♫?\\s*(.+?)\\s*\\((\\d+):(\\d\\d)\\)/);
   const sub = raw.match(/Subsong (\\d+)\\/(\\d+)/);
   return {
     raw: raw.slice(0, 90),
@@ -151,6 +154,8 @@ const failures = [];
 /** Observed tap-to-change latencies, so the run reports how the device actually behaved. */
 const latencies = [];
 const CHANGE_TIMEOUT_MS = 8000;
+/** How often the paused condition had to be re-asserted, so the run can be judged on it. */
+let repauses = 0;
 const fail = (scenario, detail) => {
   failures.push({ scenario, detail });
   console.log(`  FAIL [${scenario}] ${detail}`);
@@ -169,13 +174,38 @@ async function main() {
     // produced repeated identities and reverse mismatches in a run where nothing was wrong.
     // Paused, Next and Previous are the only things that move the cursor, which is what is under
     // test. Playback actually starting is proven separately, on the forward pass before the pause.
+    // Pausing only means anything while something is playing. Tapping Pause from a stopped
+    // transport leaves it stopped, and a stopped transport does not traverse: the run advanced two
+    // tracks and then reported the station stuck, against a queue with eight more in it. So start
+    // playback first if it is not already running, and only then pause.
+    const state = await evaluate(
+      `(() => { const p = document.querySelector('[data-testid=playlist-play]');
+                const q = document.querySelector('[data-testid=playlist-pause]');
+                return { play: p && p.getAttribute('aria-label'), pause: q && q.getAttribute('aria-label'),
+                         pauseDisabled: !!(q && q.disabled) }; })()`,
+    );
+    if (state.play === "Play") {
+      const p = await evaluate(GEOM("playlist-play"));
+      if (p.ok) {
+        adb("shell", "input", "tap", String(Math.round(p.cx * DPR)), String(Math.round(p.cy * DPR)));
+        await sleep(6000);
+      }
+    }
     const g = await evaluate(GEOM("playlist-pause"));
-    if (g.ok) {
-      adb("shell", "input", "tap", String(Math.round(g.cx * 2.75)), String(Math.round(g.cy * 2.75)));
-      await sleep(600);
-      console.log("paused playback for the traversal");
+    const nowPaused = await evaluate(
+      `(() => { const q = document.querySelector('[data-testid=playlist-pause]');
+                return q && q.getAttribute('aria-label'); })()`,
+    );
+    if (g.ok && nowPaused === "Pause") {
+      adb("shell", "input", "tap", String(Math.round(g.cx * DPR)), String(Math.round(g.cy * DPR)));
+      await sleep(800);
+      const after = await evaluate(
+        `(() => { const q = document.querySelector('[data-testid=playlist-pause]');
+                  return q && q.getAttribute('aria-label'); })()`,
+      );
+      console.log(after === "Resume" ? "paused playback for the traversal" : `pause did not take (${after})`);
     } else {
-      console.log(`could not pause (${g.why ?? "blocked by " + g.blocker}) — traversal will race auto-advance`);
+      console.log(`not pausing (pause=${nowPaused}) — traversal will race auto-advance`);
     }
   }
   console.log(
@@ -189,21 +219,46 @@ async function main() {
   // largest cost in a three-hundred-tap run, and re-testing periodically still catches an overlay
   // that appears part-way through — which is the case that matters, since the toast viewport
   // covering the transport after an error was a real defect here.
-  const HIT_TEST_EVERY = 20;
+  // Every tap, not every twentieth. Caching was a false economy: pausing re-flows the transport
+  // row, so a cached `playlist-next` position went stale and the taps landed on nothing — the run
+  // reported the station stuck after three tracks against a queue with seven more in it, and manual
+  // taps at freshly-read coordinates worked. A CDP round-trip is ~30 ms against a ~100 ms
+  // tap-to-change; being right is worth it, and this is the third defect this session that was the
+  // instrument rather than the app.
+  const HIT_TEST_EVERY = 1;
   const coords = new Map();
   const tapCount = new Map();
-  const tap = async (testid, scenario) => {
-    const n = (tapCount.get(testid) ?? 0) + 1;
-    tapCount.set(testid, n);
-    if (!coords.has(testid) || n % HIT_TEST_EVERY === 0) {
+  /**
+   * An element's position, once it has stopped moving.
+   *
+   * The transport re-flows as each track's metadata arrives — the credits line wraps to a second
+   * line and back — so `playlist-next` was measured at y=905 and tapped at y=831 a moment later.
+   * Reading once and tapping lands on whatever has slid into that spot, which reported the station
+   * stuck after two tracks against a queue that manual taps walked happily. Two consecutive
+   * identical rectangles mean the layout has settled and the coordinate is real.
+   */
+  const stableGeometry = async (testid, scenario) => {
+    let previous = null;
+    for (let attempt = 0; attempt < 12; attempt += 1) {
       const g = await evaluate(GEOM(testid));
       if (!g.ok) {
-        fail(scenario, `${testid} not tappable: ${g.why ?? "blocked by " + g.blocker}`);
-        return false;
+        if (g.why === "no such testid") {
+          fail(scenario, `${testid} not tappable: ${g.why}`);
+          return null;
+        }
+      } else if (previous && previous.cx === g.cx && previous.cy === g.cy) {
+        return g;
       }
-      coords.set(testid, g);
+      previous = g.ok ? g : null;
+      await sleep(120);
     }
-    const g = coords.get(testid);
+    fail(scenario, `${testid} never settled to a stable position`);
+    return null;
+  };
+
+  const tap = async (testid, scenario) => {
+    const g = await stableGeometry(testid, scenario);
+    if (!g) return false;
     adb("shell", "input", "tap", String(Math.round(g.cx * DPR)), String(Math.round(g.cy * DPR)));
     await sleep(SETTLE_MS);
     return true;
@@ -211,20 +266,12 @@ async function main() {
 
   /** The same tap, without the blind settle — the caller waits for an observable change instead. */
   const tapNoSettle = async (testid, scenario) => {
-    const n = (tapCount.get(testid) ?? 0) + 1;
-    tapCount.set(testid, n);
-    if (!coords.has(testid) || n % HIT_TEST_EVERY === 0) {
-      const g = await evaluate(GEOM(testid));
-      if (!g.ok) {
-        fail(scenario, `${testid} not tappable: ${g.why ?? "blocked by " + g.blocker}`);
-        return false;
-      }
-      coords.set(testid, g);
-    }
-    const g = coords.get(testid);
+    const g = await stableGeometry(testid, scenario);
+    if (!g) return false;
     adb("shell", "input", "tap", String(Math.round(g.cx * DPR)), String(Math.round(g.cy * DPR)));
     return true;
   };
+
 
   const read = async (scenario, step) => {
     const cur = await evaluate(CURRENT);
@@ -250,7 +297,30 @@ async function main() {
    * A change that never arrives is a real failure — a stalled transport — and is recorded as one
    * rather than retried.
    */
+  /**
+   * Hold the traversal's experimental condition: playback paused.
+   *
+   * Pausing once is not enough, because Next resumes playback — so a run that pauses at the start
+   * spends the rest of its life racing auto-advance. Measured over a 100-tap run: 258 auto-advances,
+   * a sequence that jumped backwards, and 55 repeated identities against a station that was
+   * behaving correctly. Re-asserting the condition before each tap is not repairing the product; it
+   * is keeping the experiment valid, and the count of how often it was needed is reported.
+   */
+  const ensurePaused = async () => {
+    const label = await evaluate(
+      `(() => { const q = document.querySelector('[data-testid=playlist-pause]');
+                return q && !q.disabled ? q.getAttribute('aria-label') : null; })()`,
+    );
+    if (label !== "Pause") return;
+    const g = await stableGeometry("playlist-pause", "pause");
+    if (!g) return;
+    adb("shell", "input", "tap", String(Math.round(g.cx * DPR)), String(Math.round(g.cy * DPR)));
+    repauses += 1;
+    await sleep(300);
+  };
+
   const tapAwaitingChange = async (testid, fromIdentity, scenario, step) => {
+    await ensurePaused();
     const startedAt = Date.now();
     if (!(await tapNoSettle(testid, scenario))) return null;
     for (;;) {
@@ -267,6 +337,16 @@ async function main() {
     }
   };
 
+  // Declared before the forward pass so the summary can still be written when a scenario aborts
+  // early — reaching the report and finding it cannot read its own results is the least useful
+  // possible outcome of a failed run.
+  let dupes = [];
+  let short = [];
+  let siblings = [];
+  let noDuration = [];
+  let backMismatch = 0;
+  let replayMismatch = 0;
+
   // ---- forward traversal ----
   console.log(`\n=== forward: ${TRACKS} real Next taps ===`);
   const forward = [];
@@ -282,22 +362,21 @@ async function main() {
   console.log(`  collected ${forward.length} identities`);
 
   const ids = forward.map(identity);
-  const dupes = ids.filter((v, i) => ids.indexOf(v) !== i);
+  dupes = ids.filter((v, i) => ids.indexOf(v) !== i);
   if (dupes.length) fail("forward", `repeated identities: ${[...new Set(dupes)].slice(0, 5).join(", ")}`);
 
-  const short = forward.filter((c) => c.seconds !== null && c.seconds < MIN_SECONDS);
+  short = forward.filter((c) => c.seconds !== null && c.seconds < MIN_SECONDS);
   if (short.length)
     fail("forward", `tunes under ${MIN_SECONDS}s: ${short.map((c) => `${c.file}=${c.seconds}s`).join(", ")}`);
 
-  const siblings = forward.filter((c, i) => i > 0 && forward[i - 1].file === c.file);
+  siblings = forward.filter((c, i) => i > 0 && forward[i - 1].file === c.file);
   if (siblings.length) fail("forward", `adjacent subsongs of one file: ${siblings.map((c) => c.file).join(", ")}`);
 
-  const noDuration = forward.filter((c) => c.seconds === null);
+  noDuration = forward.filter((c) => c.seconds === null);
   if (noDuration.length) fail("forward", `${noDuration.length} tracks with no duration shown`);
 
   // ---- backward traversal ----
   console.log(`\n=== backward: ${forward.length - 1} real Previous taps ===`);
-  let backMismatch = 0;
   let lastSeen = identity(forward[forward.length - 1]);
   for (let i = forward.length - 2; i >= 0; i -= 1) {
     const cur = await tapAwaitingChange("playlist-prev", lastSeen, "backward", i);
@@ -312,7 +391,6 @@ async function main() {
 
   // ---- forward replay ----
   console.log(`\n=== forward replay: ${forward.length - 1} real Next taps ===`);
-  let replayMismatch = 0;
   lastSeen = identity(forward[0]);
   for (let i = 1; i < forward.length; i += 1) {
     const cur = await tapAwaitingChange("playlist-next", lastSeen, "replay", i);
@@ -458,6 +536,7 @@ async function main() {
         replayMismatches: replayMismatch,
       },
       tapToChangeMs: latencies,
+      repauses,
       chaosNotes: notes,
       consoleErrors,
       statsAfter: after ?? null,
@@ -483,6 +562,7 @@ async function main() {
     }
     console.log(`  console errors/exceptions: ${consoleErrors.length}`);
     for (const e of consoleErrors.slice(0, 5)) console.log(`    ${e.kind}: ${e.text.slice(0, 140)}`);
+    console.log(`  re-pauses needed: ${repauses}`);
     console.log(`  failures: ${failures.length}`);
     console.log(`  written: ${OUT}`);
     process.exit(failures.length === 0 && backMismatch === 0 && replayMismatch === 0 ? 0 : 1);

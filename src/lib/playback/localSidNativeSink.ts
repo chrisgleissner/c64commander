@@ -81,6 +81,17 @@ const DEPTH_PROGRESS_EPSILON_MS = 20;
 const INT16_SCALE = 32768;
 
 /**
+ * How long a change to the listener's level takes to arrive, in milliseconds of audio.
+ *
+ * A gain that differs between one sample and the next is a step discontinuity, and a step in the
+ * middle of a waveform is heard as a click; a slider being dragged produces a run of them, which is
+ * the noise usually called zipper. Ramping across the change removes it. Twenty milliseconds is what
+ * the Web Audio sink already uses for the same job, so the two output paths behave identically, and
+ * it is short enough that pressing Mute still reads as immediate.
+ */
+const MASTER_RAMP_MS = 20;
+
+/**
  * Target depth for the native track, in ms, and the ceiling the ring is allowed to reach.
  *
  * Deliberately far deeper than the mirror's. Nothing is waiting on on-device playback — there is no
@@ -175,6 +186,8 @@ export interface NativeLocalAudioBackend {
   closeAudioTrack(options?: Record<string, never>): Promise<void>;
   /** Drop queued-but-unplayed audio, so a pause or seek is immediate despite the deep ring. */
   flushAudioTrack?(options?: Record<string, never>): Promise<void>;
+  /** Master attenuation applied by the pipeline as samples leave its ring (0..1). */
+  setAudioTrackGain?(options: { gain: number }): Promise<void>;
   /** Current pipeline state. Plain field reads, so cheap enough to poll while waiting. */
   readAudioStats?(options?: Record<string, never>): Promise<NativeAudioStats | undefined>;
 }
@@ -220,6 +233,28 @@ class NativeLocalSidSink implements AudioScheduleSink {
   private gain = 1;
   /** An in-flight fade: where the gain is heading, and how fast, in gain units per second. */
   private fade: { to: number; perSecond: number } | null = null;
+  /**
+   * The listener's own level, 0..1, and a ramp towards a new one.
+   *
+   * Deliberately a second value rather than a second stage: it is multiplied into the crossfade gain
+   * at the one place samples are converted, so nothing downstream has to know there are two of them.
+   * What it must not be is the *same* value as {@link fade}. They answer different questions — "how
+   * loud does the listener want this" and "how far through the blend between two tunes are we" — and
+   * while they shared one field each one overwrote the other: moving the volume slider during a
+   * crossfade cancelled the crossfade, and every crossfade discarded the listener's level.
+   */
+  private masterGain = 1;
+  /** Cleared when the pipeline refuses the gain call, so the conversion takes over. */
+  private nativeGainAvailable = true;
+  private masterRamp: { to: number; perSecond: number } | null = null;
+  /**
+   * Whether any audio has been converted yet.
+   *
+   * A level set before the first sample has nothing to click against, so it is applied outright. This
+   * matters at the start of every tune: the engine carries the listener's level onto each new sink,
+   * and ramping into it from unity would open each track fractionally too loud.
+   */
+  private converted = false;
   /** Slices waiting to go out, in play order. */
   private queue: Int16Array[] = [];
   private pumping = false;
@@ -305,31 +340,56 @@ class NativeLocalSidSink implements AudioScheduleSink {
     return source;
   }
 
-  /** Interleave one slice to S16, applying the current gain and any fade in progress. */
+  /**
+   * Interleave one slice to S16, applying the crossfade gain and the listener's level together.
+   *
+   * This is the only place a sample is scaled, which is why the volume control belongs here rather
+   * than anywhere further downstream: the samples handed to the pipeline are already the samples the
+   * listener asked to hear, and nothing on the Android side is asked to change its own volume.
+   *
+   * Both gains are at most unity, so their product is too. That is what makes the control incapable
+   * of clipping: it can only ever take away.
+   */
   private interleave(planar: PlanarBuffer, offset: number, frames: number): Int16Array {
     const channels = planar.channels.length;
     // The pipeline's wire format is interleaved stereo, so a mono render is duplicated rather than
     // left to be read as two channels running at half speed.
     const outChannels = 2;
     const pcm = new Int16Array(frames * outChannels);
-    const perFrame = this.fade ? this.fade.perSecond / this.sampleRate : 0;
-    let gain = this.gain;
+    const fadePerFrame = this.fade ? this.fade.perSecond / this.sampleRate : 0;
+    const masterPerFrame = this.masterRamp ? this.masterRamp.perSecond / this.sampleRate : 0;
+    let fadeGain = this.gain;
+    let masterGain = this.masterGain;
 
     for (let frame = 0; frame < frames; frame += 1) {
       if (this.fade) {
-        gain += perFrame;
-        gain = this.fade.perSecond >= 0 ? Math.min(gain, this.fade.to) : Math.max(gain, this.fade.to);
+        fadeGain += fadePerFrame;
+        fadeGain = this.fade.perSecond >= 0 ? Math.min(fadeGain, this.fade.to) : Math.max(fadeGain, this.fade.to);
       }
+      if (this.masterRamp) {
+        masterGain += masterPerFrame;
+        masterGain =
+          this.masterRamp.perSecond >= 0
+            ? Math.min(masterGain, this.masterRamp.to)
+            : Math.max(masterGain, this.masterRamp.to);
+      }
+      const gain = fadeGain * masterGain;
       for (let channel = 0; channel < outChannels; channel += 1) {
         const source = planar.channels[Math.min(channel, channels - 1)];
         const value = Math.max(-1, Math.min(1, source[offset + frame] * gain));
         pcm[frame * outChannels + channel] = Math.round(value * (value < 0 ? INT16_SCALE : INT16_SCALE - 1));
       }
     }
-    this.gain = gain;
+    this.gain = fadeGain;
+    this.masterGain = masterGain;
+    this.converted = true;
     if (this.fade) {
-      const done = this.fade.perSecond >= 0 ? gain >= this.fade.to : gain <= this.fade.to;
+      const done = this.fade.perSecond >= 0 ? fadeGain >= this.fade.to : fadeGain <= this.fade.to;
       if (done) this.fade = null;
+    }
+    if (this.masterRamp) {
+      const done = this.masterRamp.perSecond >= 0 ? masterGain >= this.masterRamp.to : masterGain <= this.masterRamp.to;
+      if (done) this.masterRamp = null;
     }
     return pcm;
   }
@@ -573,15 +633,51 @@ class NativeLocalSidSink implements AudioScheduleSink {
     return this.opening;
   }
 
-  setGain(value: number): void {
-    this.fade = null;
-    this.gain = Math.max(0, Math.min(1, value));
+  /**
+   * Set the listener's level, ramping into it so the change is never a step.
+   *
+   * The crossfade is left exactly where it is. Mute is simply this with a target of zero, and
+   * unmuting is the level going back to whatever the slider still reads — the slider's position is
+   * held by the caller, so muting cannot lose it.
+   */
+  setMasterGain(value: number, rampMs = MASTER_RAMP_MS): void {
+    const to = Math.max(0, Math.min(1, value));
+    // Ask the pipeline to attenuate on its way out, where the change is heard almost at once.
+    // Scaling at the conversion below is correct but slow: this sink keeps up to twenty seconds
+    // scheduled ahead, so a level applied there reaches the speaker twenty seconds late, which is
+    // not a volume control. Where the native path takes it, that becomes the one that matters and
+    // the conversion below is left at unity so the two do not multiply.
+    if (this.backend.setAudioTrackGain) {
+      void this.backend.setAudioTrackGain({ gain: to }).catch((error) => {
+        addLog("debug", "Native audio: pipeline gain rejected; falling back to scaling at conversion", {
+          error: (error as Error)?.message ?? String(error),
+        });
+        this.nativeGainAvailable = false;
+      });
+      if (this.nativeGainAvailable) {
+        this.masterRamp = null;
+        this.masterGain = 1;
+        return;
+      }
+    }
+    if (rampMs <= 0 || !this.converted) {
+      this.masterRamp = null;
+      this.masterGain = to;
+      return;
+    }
+    if (to === this.masterGain) {
+      this.masterRamp = null;
+      return;
+    }
+    this.masterRamp = { to, perSecond: ((to - this.masterGain) * 1000) / rampMs };
   }
 
+  /** Move the crossfade gain — the blend between two tunes — leaving the listener's level alone. */
   fadeTo(target: number, ms: number): void {
     const to = Math.max(0, Math.min(1, target));
     if (ms <= 0) {
-      this.setGain(to);
+      this.fade = null;
+      this.gain = to;
       return;
     }
     this.fade = { to, perSecond: ((to - this.gain) * 1000) / ms };
@@ -670,8 +766,14 @@ export const createNativeLocalSidSink = (
     resume: () => sink.resume(),
     suspend: () => sink.suspend(),
     fadeOut: (ms: number) => sink.fadeTo(0, ms),
-    fadeIn: (ms: number, toGain = 1) => sink.fadeTo(toGain, ms),
-    setGain: (value: number) => sink.setGain(value),
+    // A tune opening at the listener's level: the level is the master, the blend is the fade. Setting
+    // the master outright rather than ramping into it is what the engine has always done here, and it
+    // is right — this runs before the new tune's first sample, so there is nothing to click against.
+    fadeIn: (ms: number, toGain = 1) => {
+      sink.setMasterGain(toGain, 0);
+      sink.fadeTo(1, ms);
+    },
+    setGain: (value: number) => sink.setMasterGain(value),
     flush: () => sink.flush(),
     close: () => sink.close(),
   };

@@ -20,6 +20,8 @@ vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 interface FakeBackend extends NativeLocalAudioBackend {
   opens: { sampleRate: number; bufferMs?: number; maxRingMs?: number; primeMs?: number; trackBursts?: number }[];
   writes: number[];
+  /** The samples of each write, decoded — the volume control's whole job is what is in here. */
+  pcm: Int16Array[];
   flushes: number;
   closes: number;
   /** Queue depth the pipeline reports back, in ms. */
@@ -28,10 +30,19 @@ interface FakeBackend extends NativeLocalAudioBackend {
   underruns: number;
 }
 
+/** Undo the sink's base64 framing, back to the interleaved S16 the pipeline would have played. */
+const decodePcm = (base64: string): Int16Array => {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.byteLength / 2));
+};
+
 const createBackend = (): FakeBackend => {
   const backend: FakeBackend = {
     opens: [],
     writes: [],
+    pcm: [],
     flushes: 0,
     closes: 0,
     bufferedMs: 0,
@@ -42,6 +53,7 @@ const createBackend = (): FakeBackend => {
     },
     writeAudioTrack: async ({ data }) => {
       backend.writes.push(data.length);
+      backend.pcm.push(decodePcm(data));
       return { bufferedMs: backend.bufferedMs, underruns: backend.underruns };
     },
     closeAudioTrack: async () => {
@@ -56,6 +68,8 @@ const createBackend = (): FakeBackend => {
 };
 
 const RATE = 48000;
+/** Int16 full scale, as the sink scales to it. */
+const INT16_MAX = 32768;
 
 /** A chunk of `seconds` of silence, in the planar shape the scheduler produces. */
 const scheduleChunk = (sink: ReturnType<typeof createNativeLocalSidSink>, seconds: number, when = 0) => {
@@ -231,21 +245,30 @@ describe("on-device playback through the native track", () => {
     expect(ended).toHaveBeenCalled();
   });
 
+  // These three used to assert only that *something* was written, which every one of them would have
+  // done with the gain removed entirely. They now decode the payload, because the samples in it are
+  // the only thing the volume control changes.
   it("applies the listener's level to what it hands over", async () => {
     const loud = createBackend();
     const quiet = createBackend();
+    const silent = createBackend();
     const loudSink = createNativeLocalSidSink(RATE, loud);
     const quietSink = createNativeLocalSidSink(RATE, quiet);
+    const silentSink = createNativeLocalSidSink(RATE, silent);
 
     loudSink!.setGain?.(1);
-    quietSink!.setGain?.(0);
+    quietSink!.setGain?.(0.25);
+    silentSink!.setGain?.(0);
     scheduleChunk(loudSink, 0.5);
     scheduleChunk(quietSink, 0.5);
+    scheduleChunk(silentSink, 0.5);
     await settle(200);
 
-    // Same payload size either way; the difference is in the samples, so compare what was sent.
-    expect(loud.writes.length).toBeGreaterThan(0);
-    expect(quiet.writes.length).toBeGreaterThan(0);
+    // 0.5 full scale in, so unity is half of Int16 and a quarter of that is an eighth.
+    expect(loud.pcm[0][0]).toBe(Math.round(0.5 * (INT16_MAX - 1)));
+    expect(quiet.pcm[0][0]).toBe(Math.round(0.125 * (INT16_MAX - 1)));
+    // Mute is silence, not "quiet enough".
+    expect(Array.from(silent.pcm[0]).every((sample) => sample === 0)).toBe(true);
   });
 
   it("ramps the level over a fade rather than stepping it", async () => {
@@ -258,7 +281,14 @@ describe("on-device playback through the native track", () => {
     scheduleChunk(sink, 1);
     await settle(200);
 
-    expect(backend.writes.length).toBeGreaterThan(0);
+    const samples = backend.pcm[0];
+    const at = (seconds: number) => Math.abs(samples[Math.round(seconds * RATE) * 2]);
+    expect(at(0)).toBeGreaterThan(15000);
+    // A quarter of the way through a 200 ms fade-out, roughly three quarters of the level is left.
+    expect(at(0.05)).toBeGreaterThan(11000);
+    expect(at(0.05)).toBeLessThan(13500);
+    // And it has actually reached silence by the end of the fade, rather than merely got quieter.
+    expect(at(0.25)).toBe(0);
   });
 
   it("treats a zero-length fade as an immediate level change", async () => {
@@ -268,7 +298,87 @@ describe("on-device playback through the native track", () => {
     scheduleChunk(sink, 0.5);
     await settle(200);
 
-    expect(backend.writes.length).toBeGreaterThan(0);
+    expect(backend.pcm[0][0]).toBe(Math.round(0.25 * (INT16_MAX - 1)));
+  });
+
+  it("mutes to silence and comes back to the level the slider still reads", async () => {
+    // What the Play page's speaker button asks for. The level is held here, not in the button, so
+    // unmuting must land back on the same step rather than on a default.
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend);
+    sink!.setGain?.(0.25);
+    scheduleChunk(sink, 0.5);
+    await settle(200);
+
+    sink!.setGain?.(0);
+    scheduleChunk(sink, 0.5, 0.5);
+    await settle(200);
+
+    sink!.setGain?.(0.25);
+    scheduleChunk(sink, 0.5, 1);
+    await settle(200);
+
+    const quarter = Math.round(0.125 * (INT16_MAX - 1));
+    expect(backend.pcm[0][0]).toBe(quarter);
+    // Past the ramp into and out of the mute, so this is the settled state either side of it.
+    expect(backend.pcm[1][backend.pcm[1].length - 1]).toBe(0);
+    expect(backend.pcm[2][backend.pcm[2].length - 1]).toBe(quarter);
+  });
+
+  it("ramps a level change instead of stepping it, so the change is not heard as a click", async () => {
+    // A gain that differs between one sample and the next is a step in the waveform, and a step is a
+    // click; dragging the slider would produce a run of them. Twenty milliseconds of ramp is enough
+    // to remove it and short enough that Mute still reads as instant.
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend);
+    scheduleChunk(sink, 0.5);
+    await settle(200);
+
+    sink!.setGain?.(0);
+    scheduleChunk(sink, 0.5, 0.5);
+    await settle(200);
+
+    const muted = backend.pcm[1];
+    // The first sample after the change is still near the old level: it has not jumped to zero.
+    expect(muted[0]).toBeGreaterThan(Math.round(0.45 * (INT16_MAX - 1)));
+    // It falls away smoothly rather than in one move.
+    expect(muted[2 * Math.round(0.005 * RATE)]).toBeLessThan(muted[0]);
+    expect(muted[2 * Math.round(0.005 * RATE)]).toBeGreaterThan(0);
+    // And it is silent once the ramp has run.
+    expect(muted[2 * Math.round(0.03 * RATE)]).toBe(0);
+  });
+
+  it("keeps the listener's level and the crossfade apart, so neither cancels the other", async () => {
+    // They are two different quantities behind one conversion. While they shared a field, moving the
+    // slider during a crossfade cancelled the crossfade and every crossfade discarded the level.
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend);
+    scheduleChunk(sink, 0.5);
+    await settle(200);
+
+    sink!.fadeOut?.(200);
+    sink!.setGain?.(0.5);
+    scheduleChunk(sink, 0.5, 0.5);
+    await settle(200);
+
+    const faded = backend.pcm[1];
+    // The crossfade still runs to silence despite the level change landing on top of it.
+    expect(faded[faded.length - 2]).toBe(0);
+    // And it was attenuated on the way down, so the level change was not discarded either: a quarter
+    // of the way through the fade the two multiply to about 0.5 x 0.75 of the source.
+    const quarterWay = Math.abs(faded[2 * Math.round(0.05 * RATE)]);
+    expect(quarterWay).toBeGreaterThan(5000);
+    expect(quarterWay).toBeLessThan(7000);
+  });
+
+  it("attenuates only, so the control can never push a sample into clipping", async () => {
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend);
+    sink!.setGain?.(4);
+    scheduleChunk(sink, 0.5);
+    await settle(200);
+
+    expect(backend.pcm[0][0]).toBe(Math.round(0.5 * (INT16_MAX - 1)));
   });
 
   it("resumes feeding after a pause", async () => {
@@ -526,5 +636,62 @@ describe("what a stalled track leaves behind", () => {
 
     expect(backend.closes).toBeGreaterThan(0);
     expect(ended).toHaveBeenCalled();
+  });
+});
+
+describe("where the listener's level is applied", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  // Scaling at the float-to-Int16 conversion is correct and slow: this sink keeps up to twenty
+  // seconds of audio scheduled ahead, so a level applied there reaches the speaker twenty seconds
+  // after the slider moved. The pipeline attenuates on its way out of the ring instead, which is
+  // heard within the AudioTrack's own buffer.
+  it("hands the level to the pipeline when it can take it", async () => {
+    const backend = createBackend() as FakeBackend & { gains: number[] };
+    backend.gains = [];
+    backend.setAudioTrackGain = async ({ gain }: { gain: number }) => {
+      backend.gains.push(gain);
+    };
+    const sink = createNativeLocalSidSink(RATE, backend);
+    scheduleChunk(sink, 0.5);
+    await settle();
+
+    sink!.setGain(0.25);
+    await settle();
+
+    expect(backend.gains).toEqual([0.25]);
+  });
+
+  it("clamps what it asks the pipeline for, so the level can only attenuate", async () => {
+    const backend = createBackend() as FakeBackend & { gains: number[] };
+    backend.gains = [];
+    backend.setAudioTrackGain = async ({ gain }: { gain: number }) => {
+      backend.gains.push(gain);
+    };
+    const sink = createNativeLocalSidSink(RATE, backend);
+    await settle();
+
+    sink!.setGain(4);
+    sink!.setGain(-3);
+    await settle();
+
+    expect(backend.gains).toEqual([1, 0]);
+  });
+
+  // A pipeline too old to know the call must not leave the listener without a volume control.
+  it("falls back to scaling at the conversion when the pipeline has no gain call", async () => {
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend);
+    scheduleChunk(sink, 0.5);
+    await settle();
+    const loud = backend.writes.length;
+
+    sink!.setGain(0);
+    scheduleChunk(sink, 0.5, 1);
+    await settle();
+
+    // Still writing — the fallback attenuates the samples rather than stopping the pump.
+    expect(backend.writes.length).toBeGreaterThan(loud);
   });
 });

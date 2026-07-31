@@ -21,8 +21,6 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { addLog } from "@/lib/logging";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
-import { SidChipBadge } from "@/components/playback/SidChipBadge";
-import type { SidChipCount } from "@/lib/playback/sidDisplayName";
 import {
   nextPoliteAnnouncement,
   PENDING_ANNOUNCEMENT_INTERVAL_MS,
@@ -32,12 +30,14 @@ import {
 
 export type PlaybackControlsCardProps = {
   hasCurrentItem: boolean;
-  currentItemIcon?: ReactNode;
   currentItemLabel: string | null;
-  /** 1, 2 or 3 when the tune's SID chip count is known; `null` suppresses the badge. */
-  currentItemChipCount?: SidChipCount | null;
-  currentDurationLabel: string | null;
-  subsongLabel: string | null;
+  /**
+   * The single line under the title: composer, year, SID models, video standard, which tune, length.
+   *
+   * Built by `buildNowPlayingMetadata` so the order and the omission rules live in one tested place
+   * rather than in this component's JSX. `null` when the header carried nothing worth a line.
+   */
+  currentItemMetadata?: string | null;
   canTransport: boolean;
   hasPrev: boolean;
   hasNext: boolean;
@@ -80,10 +80,6 @@ export type PlaybackControlsCardProps = {
    * with no end in sight is indistinguishable from a fault.
    */
   pendingSeek?: PendingSeekPresentation;
-  /** The tune's composer, from its SID header, when known. */
-  currentItemAuthor?: string | null;
-  /** The tune's release line, from its SID header, when known — often "1987 Hewson" or just a year. */
-  currentItemReleased?: string | null;
   /**
    * How much of the tune is already rendered, 0-100, or undefined when that is not a thing here.
    *
@@ -271,11 +267,8 @@ const useHoldToSeek = (
 
 export const PlaybackControlsCard = ({
   hasCurrentItem,
-  currentItemIcon,
   currentItemLabel,
-  currentItemChipCount = null,
-  currentDurationLabel,
-  subsongLabel,
+  currentItemMetadata = null,
   canTransport,
   hasPrev,
   hasNext,
@@ -297,8 +290,6 @@ export const PlaybackControlsCard = ({
   onSeekToFraction,
   progressPercent,
   renderedPercent,
-  currentItemAuthor,
-  currentItemReleased,
   pendingSeek,
   elapsedLabel,
   remainingLabel,
@@ -360,21 +351,38 @@ export const PlaybackControlsCard = ({
       <div className="w-full text-xs text-muted-foreground" data-testid="playback-current-track">
         {hasCurrentItem ? (
           <>
-            <div className="flex flex-wrap items-center gap-1">
-              {currentItemIcon ? <span className="shrink-0">{currentItemIcon}</span> : null}
-              <span className="text-base font-semibold text-foreground">{currentItemLabel}</span>
-              {currentItemChipCount ? <SidChipBadge chipCount={currentItemChipCount} /> : null}
-              {currentDurationLabel ? (
-                <span className="text-sm text-muted-foreground">({currentDurationLabel})</span>
-              ) : null}
-              {subsongLabel ? <span className="text-sm text-muted-foreground">{subsongLabel}</span> : null}
-              {rankingControls ? <span className="ml-auto shrink-0">{rankingControls}</span> : null}
+            {/* The title on the left, the ranking actions on the right, and nothing else on the row.
+                Everything the tune says about itself has moved to the line below, because anything
+                sharing this row moves the actions: the length alone is three characters on one tune
+                and five on the next.
+
+                `flex-nowrap` and a non-shrinking action track are what actually pin them. The title
+                takes whatever is left and is truncated to one line rather than wrapped, so the card
+                is exactly as tall for a forty-character HVSC name as for a short one and nothing
+                below it — the actions, the metadata, the transport — moves between tunes. Nothing is
+                lost by that: truncation here is `text-overflow`, so the whole name is still in the
+                document and is what a screen reader reads and what a pointer sees as the tooltip.
+
+                The title also starts at the left edge of the card, level with the metadata line under
+                it. There used to be a small file-origin glyph in front of it, which indented it by
+                its own width and left the two lines misaligned; where a tune came from is already
+                shown against every row of the playlist. */}
+            <div className="flex flex-nowrap items-center gap-2">
+              <span
+                className="min-w-0 flex-1 truncate text-base font-semibold text-foreground"
+                data-testid="playback-current-title"
+                title={currentItemLabel ?? undefined}
+              >
+                {currentItemLabel}
+              </span>
+              {rankingControls ? <span className="shrink-0">{rankingControls}</span> : null}
             </div>
-            {/* Composer and year on their own line under the title, smaller. Both come from the SID
-                header, so a tune that names neither shows nothing rather than a placeholder. */}
-            {currentItemAuthor || currentItemReleased ? (
+            {/* Composer, year, chips, video standard, which tune, and how long — in that order, with
+                anything the header does not carry left out along with its separator. See
+                `buildNowPlayingMetadata`. */}
+            {currentItemMetadata ? (
               <p className="mt-0.5 text-sm leading-snug text-muted-foreground" data-testid="playback-current-credits">
-                {[currentItemAuthor, currentItemReleased].filter(Boolean).join(" · ")}
+                {currentItemMetadata}
               </p>
             ) : null}
           </>

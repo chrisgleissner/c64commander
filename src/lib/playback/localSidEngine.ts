@@ -1589,6 +1589,22 @@ export class LocalSidEngine {
     this.audio?.setGain?.(muted ? 0 : this.volume);
   }
 
+  /**
+   * The level and mute state on-device playback is currently using.
+   *
+   * The engine outlives any one mount of the Play page — it is a process-wide singleton — so it, and
+   * not the page, is where the listener's choice actually persists. The page reads these on mount so
+   * the slider and the speaker button come up showing what is really being played, rather than a
+   * default that disagrees with the sound.
+   */
+  getVolume(): number {
+    return this.volume;
+  }
+
+  getMuted(): boolean {
+    return this.muted;
+  }
+
   /** A fully-rendered tune, when this one has been cached. */
   getRenderedTune(key: string): RenderedTune | null {
     return this.renderCache.get(key);

@@ -376,7 +376,7 @@ test.describe("Playback file browser (part 2)", () => {
     await expect(page.getByTestId("playlist-item")).toHaveCount(1);
 
     await muteButton.click();
-    await expect(muteButton).toContainText("Unmute");
+    await expect(muteButton).toHaveAttribute("aria-label", "Unmute");
     await expect(muteButton).toHaveAttribute(PERSISTENT_ATTR, "true");
     await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"].value).toBe("-42 dB");
     await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 1"].value).toBe("OFF");
@@ -388,7 +388,7 @@ test.describe("Playback file browser (part 2)", () => {
 
     await playButton.click();
     await expect(playButton).toHaveAttribute("aria-label", "Stop");
-    await expect(muteButton).toContainText("Unmute");
+    await expect(muteButton).toHaveAttribute("aria-label", "Unmute");
     await expect(muteButton).toHaveAttribute(PERSISTENT_ATTR, "true");
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
     await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 1"].value).toBe("OFF");
@@ -428,7 +428,7 @@ test.describe("Playback file browser (part 2)", () => {
 
     await playButton.click();
     await expect(pauseButton).toBeEnabled();
-    await expect(muteButton).toContainText("Mute");
+    await expect(muteButton).toHaveAttribute("aria-label", "Mute");
     await expect(muteButton).not.toHaveAttribute(PERSISTENT_ATTR, "true");
     await snap(page, testInfo, "play-started");
 
@@ -447,7 +447,7 @@ test.describe("Playback file browser (part 2)", () => {
 
     await pauseButton.click();
     await snap(page, testInfo, "paused");
-    await expect(muteButton).toContainText("Unmute");
+    await expect(muteButton).toHaveAttribute("aria-label", "Unmute");
     await expect(muteButton).toHaveAttribute(PERSISTENT_ATTR, "true");
 
     await expect
@@ -465,7 +465,7 @@ test.describe("Playback file browser (part 2)", () => {
 
     await pauseButton.click();
     await snap(page, testInfo, "resumed");
-    await expect(muteButton).toContainText("Mute");
+    await expect(muteButton).toHaveAttribute("aria-label", "Mute");
     await expect(muteButton).not.toHaveAttribute(PERSISTENT_ATTR, "true");
 
     await expect
@@ -548,7 +548,7 @@ test.describe("Playback file browser (part 2)", () => {
       delayConfigReads = true;
       await pauseButton.tap();
       await expect(pauseButton).toHaveAttribute("aria-label", "Resume", { timeout: 1000 });
-      await expect(muteButton).toContainText("Unmute");
+      await expect(muteButton).toHaveAttribute("aria-label", "Unmute");
       await expect.poll(() => server.requests.some((req) => req.url.includes("/v1/machine:pause"))).toBe(true);
       await snap(page, testInfo, "pause-not-blocked-by-config-read-delay");
     } finally {
@@ -584,24 +584,24 @@ test.describe("Playback file browser (part 2)", () => {
     await snap(page, testInfo, "touch-play-started");
 
     await muteButton.tap();
-    await expect(muteButton).toContainText("Unmute");
+    await expect(muteButton).toHaveAttribute("aria-label", "Unmute");
     await expect.poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"].value, { timeout: 4000 }).toBe("-42 dB");
     await snap(page, testInfo, "touch-mute-applied");
 
     await muteButton.tap();
-    await expect(muteButton).toContainText("Mute");
+    await expect(muteButton).toHaveAttribute("aria-label", "Mute");
     await expect
       .poll(() => server.getState()["Audio Mixer"]["Vol UltiSid 2"].value, { timeout: 4000 })
       .not.toBe("-42 dB");
     await snap(page, testInfo, "touch-unmute-applied");
 
     await pauseButton.tap();
-    await expect(muteButton).toContainText("Unmute");
+    await expect(muteButton).toHaveAttribute("aria-label", "Unmute");
     await expect.poll(() => server.requests.some((req) => req.url.includes("/v1/machine:pause"))).toBe(true);
     await snap(page, testInfo, "touch-pause-applied");
 
     await pauseButton.tap();
-    await expect(muteButton).toContainText("Mute");
+    await expect(muteButton).toHaveAttribute("aria-label", "Mute");
     await expect.poll(() => server.requests.some((req) => req.url.includes("/v1/machine:resume"))).toBe(true);
     await snap(page, testInfo, "touch-resume-applied");
 

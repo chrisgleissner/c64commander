@@ -65,8 +65,9 @@ import type { SelectedItem, SourceLocation } from "@/lib/sourceNavigation/types"
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { buildSelectedDeviceBoundOrigin } from "@/lib/savedDevices/deviceBoundOrigin";
 
-import { buildEnabledSidMuteUpdates, sidVolumeStepGain } from "@/lib/config/sidVolumeControl";
-import { parseSidHeaderMetadata } from "@/lib/sid/sidUtils";
+import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
+import { parseSidHeaderMetadata, type SidClock, type SidModel } from "@/lib/sid/sidUtils";
+import { buildNowPlayingMetadata } from "@/lib/playback/nowPlayingMetadata";
 import { resolveTrackDisplayName, type SidChipCount } from "@/lib/playback/sidDisplayName";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
@@ -81,9 +82,10 @@ import { BackgroundExecution, onBackgroundAutoSkipDue } from "@/lib/native/backg
 
 import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
-import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { VolumeControls } from "@/pages/playFiles/components/VolumeControls";
+import { resolvePlaybackVolumeBinding } from "@/pages/playFiles/playbackVolumeBinding";
+import { localVolumeGainForIndex, localVolumeIndexForGain } from "@/lib/playback/localPlaybackVolume";
 import { PlaybackControlsCard } from "@/pages/playFiles/components/PlaybackControlsCard";
 import { PlaybackEngineToggle } from "@/pages/playFiles/components/PlaybackEngineToggle";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
@@ -1398,6 +1400,9 @@ export default function PlayFilesPage() {
     // tones alongside the music, and a station that serves them between pieces reads as broken.
     // Which store answers, and why the order matters, is in `stationDurationResolver.ts`.
     resolveDurationSeconds: stationDurationResolver,
+    // The station's `resolvePath` reads an index built as a side effect of loading the HVSC
+    // songlengths, so the first refill has to wait for it or it burns every candidate it is given.
+    ensureResolvable: ensureHvscSonglengthsReadyOnColdStart,
   });
   const sidRadioWhyThisTune = sidRadio.station
     ? sidRadio.station.seedKind === "song"
@@ -1508,14 +1513,19 @@ export default function PlayFilesPage() {
     author: string | null;
     released: string | null;
     chipCount: SidChipCount | null;
+    /** One entry per chip the file addresses; a 2SID or 3SID may mix models. */
+    sidModels: SidModel[];
+    clock: SidClock | null;
   }>({
     author: null,
     released: null,
     chipCount: null,
+    sidModels: [],
+    clock: null,
   });
   useEffect(() => {
     let cancelled = false;
-    setCurrentItemCredits({ author: null, released: null, chipCount: null });
+    setCurrentItemCredits({ author: null, released: null, chipCount: null, sidModels: [], clock: null });
     const file = currentItem?.request.file;
     if (!file || currentItem?.category !== "sid") return;
     void (async () => {
@@ -1526,6 +1536,12 @@ export default function PlayFilesPage() {
           author: header.author || null,
           released: header.released || null,
           chipCount: header.sidChipCount === 2 || header.sidChipCount === 3 ? header.sidChipCount : 1,
+          // `sid2Model`/`sid3Model` are null unless the file actually addresses that chip, so this is
+          // one entry per real chip rather than a fixed three.
+          sidModels: [header.sid1Model, header.sid2Model, header.sid3Model].filter((model): model is SidModel =>
+            Boolean(model),
+          ),
+          clock: header.clock,
         });
       } catch (error) {
         // Not a readable SID header — nothing to show, which is the same as a tune that names nobody.
@@ -1643,27 +1659,61 @@ export default function PlayFilesPage() {
   const progressPercent = currentDurationMs ? Math.min(100, (displayElapsedMs / currentDurationMs) * 100) : 0;
   const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - displayElapsedMs) : undefined;
   const remainingLabel = currentDurationMs !== undefined ? `-${formatTime(remainingMs)}` : "—";
-  // On-device playback has its own output gain (the same master node the
-  // crossfade uses), so the Play page's volume control can drive whichever
-  // route is sounding instead of only ever reaching the C64.
-  const [localMuted, setLocalMuted] = useState(false);
-  const setLocalVolumeFromIndex = useCallback(
-    (index: number) => {
-      // The step's decibels, not its position in the list — see sidVolumeStepGain. The scale is
-      // uneven, so the index fraction never matched the figure the listener was reading.
-      getSharedLocalSidPlaybackController().setVolume(sidVolumeStepGain(volumeSteps[index]));
-    },
-    [volumeSteps],
+  // On-device playback attenuates its own PCM before it reaches the speaker, so the Play page's
+  // volume control drives whichever route is sounding. Android's media volume is never touched:
+  // that dial belongs to the person holding the phone, not to this app.
+  //
+  // Seeded from the engine rather than from a constant. The engine is process-wide and outlives this
+  // page, so a listener who set -12 dB, navigated away and came back would otherwise find the slider
+  // claiming 0 dB over a tune still playing at -12.
+  const [localMuted, setLocalMuted] = useState(() => getSharedLocalSidPlaybackController().muted());
+  const [localVolumeIndex, setLocalVolumeIndex] = useState(() =>
+    localVolumeIndexForGain(getSharedLocalSidPlaybackController().volume()),
   );
+  const setLocalVolumeFromIndex = useCallback((index: number) => {
+    setLocalVolumeIndex(index);
+    // The step's decibels, not its position in the list. The ladder is uneven, so an index fraction
+    // would bear no relation to the figure the listener is reading — see localPlaybackVolume.
+    getSharedLocalSidPlaybackController().setVolume(localVolumeGainForIndex(index));
+  }, []);
   const toggleLocalMute = useCallback(() => {
     setLocalMuted((muted) => {
+      // Only the mute flag moves; the step index stays where the listener left it, so unmuting comes
+      // back to the same level rather than to a default.
       getSharedLocalSidPlaybackController().setMuted(!muted);
       return !muted;
     });
   }, []);
 
   const canControlVolume = enabledSidVolumeItems.length > 0 && volumeSteps.length > 0;
-  const volumeLabel = volumeSteps[volumeIndex]?.label ?? "—";
+  const volumeBinding = resolvePlaybackVolumeBinding({
+    route: playbackEngine.engine === "local" ? "local" : "c64",
+    local: {
+      index: localVolumeIndex,
+      muted: localMuted,
+      onIndexChange: setLocalVolumeFromIndex,
+      onToggleMute: toggleLocalMute,
+    },
+    device: {
+      index: volumeIndex,
+      muted: volumeMuted,
+      steps: volumeSteps,
+      canControl: canControlVolume,
+      onDraftChange: handleVolumeDraftChange,
+      onPreview: handleVolumePreview,
+      onCommit: handleVolumeCommit,
+      onToggleMute: () =>
+        void handleToggleMute().catch((error) => {
+          addErrorLog("Mute toggle failed", { error: (error as Error).message });
+          reportUserError({
+            operation: "PLAYBACK_MUTE_TOGGLE",
+            title: "Mute toggle failed",
+            description: (error as Error).message,
+            error,
+          });
+        }),
+    },
+  });
   const knownSubsongCount =
     currentSubsongCount ?? (typeof currentItem?.subsongCount === "number" ? currentItem.subsongCount : null);
   const subsongCount = knownSubsongCount ?? 1;
@@ -1671,6 +1721,19 @@ export default function PlayFilesPage() {
   const clampedSongNr = Math.min(Math.max(1, currentSongNr), subsongCount);
   const isSongPlaying = Boolean(currentItem && isSongCategory(currentItem.category) && (isPlaying || isPaused));
   const songSelectorVisible = Boolean(isSongPlaying && knownSubsongCount && knownSubsongCount > 1);
+  // Everything the tune's own header says about itself, on one line under the title. The order and
+  // the omission rules live in buildNowPlayingMetadata; this only supplies the fields.
+  const currentItemMetadata = currentItem
+    ? buildNowPlayingMetadata({
+        author: currentItemCredits.author,
+        released: currentItemCredits.released,
+        sidModels: currentItemCredits.sidModels,
+        clock: currentItemCredits.clock,
+        tuneNumber: clampedSongNr,
+        tuneCount: knownSubsongCount,
+        lengthLabel: currentDurationLabel,
+      })
+    : null;
 
   const handleSongSelection = useCallback(
     async (nextSongNr: number) => {
@@ -1691,7 +1754,7 @@ export default function PlayFilesPage() {
         // unreported failures (e.g. a launch failure from executePlayPlan).
         reportUserError({
           operation: "PLAYBACK_SUBSONG_SELECT",
-          title: "Subsong switch failed",
+          title: "Tune switch failed",
           description: (error as Error).message,
           error,
           context: {
@@ -2068,24 +2131,8 @@ export default function PlayFilesPage() {
               {playbackEngine.localEngineEnabled && currentItem?.category === "sid" ? <PlaybackEngineToggle /> : null}
               <PlaybackControlsCard
                 hasCurrentItem={Boolean(currentItem)}
-                currentItemIcon={
-                  currentItem ? (
-                    <FileOriginIcon
-                      origin={
-                        currentItem.request.source === "ultimate"
-                          ? "ultimate"
-                          : currentItem.request.source === "hvsc"
-                            ? "hvsc"
-                            : currentItem.request.source === "commoserve"
-                              ? "commoserve"
-                              : "local"
-                      }
-                      className="h-3.5 w-3.5 shrink-0 opacity-70"
-                    />
-                  ) : undefined
-                }
                 currentItemLabel={currentDisplay?.title ?? null}
-                currentItemChipCount={currentDisplay?.chipCount ?? null}
+                currentItemMetadata={currentItemMetadata}
                 stationActive={sidRadio.active}
                 rankingControls={
                   sidRadioFlags.rankingActive ? (
@@ -2108,10 +2155,6 @@ export default function PlayFilesPage() {
                       }
                     />
                   ) : undefined
-                }
-                currentDurationLabel={currentDurationLabel}
-                subsongLabel={
-                  knownSubsongCount && knownSubsongCount > 1 ? `Subsong ${clampedSongNr}/${subsongCount}` : null
                 }
                 canTransport={canTransport}
                 hasPrev={hasPrev}
@@ -2150,58 +2193,18 @@ export default function PlayFilesPage() {
                 progressPercent={progressPercent}
                 renderedPercent={renderedPercent}
                 pendingSeek={pendingSeek}
-                currentItemAuthor={currentItemCredits.author}
-                currentItemReleased={currentItemCredits.released}
                 elapsedLabel={formatTime(displayElapsedMs)}
                 remainingLabel={remainingLabel}
                 totalLabel={formatTime(playlistTotals.total)}
                 remainingTotalLabel={formatTime(playlistTotals.remaining)}
                 volumeControls={
+                  // Bound to whichever route is sounding — see resolvePlaybackVolumeBinding. The two
+                  // routes must not be blended: while the C64 route's handlers also ran on this
+                  // device, its synchronisation loop pulled the slider back to the Ultimate's level
+                  // a moment after every drag.
                   <VolumeControls
-                    volumeMuted={playbackEngine.engine === "local" ? localMuted : volumeMuted}
-                    canControlVolume={playbackEngine.engine === "local" ? true : canControlVolume}
-                    onToggleMute={() => {
-                      if (playbackEngine.engine === "local") {
-                        toggleLocalMute();
-                        return;
-                      }
-                      void handleToggleMute().catch((error) => {
-                        addErrorLog("Mute toggle failed", {
-                          error: (error as Error).message,
-                        });
-                        reportUserError({
-                          operation: "PLAYBACK_MUTE_TOGGLE",
-                          title: "Mute toggle failed",
-                          description: (error as Error).message,
-                          error,
-                        });
-                      });
-                    }}
-                    volumeStepsCount={volumeSteps.length}
-                    volumeIndex={volumeIndex}
-                    onVolumeDraftChange={handleVolumeDraftChange}
-                    onVolumePreview={(value) => {
-                      // Follow the route that is actually sounding. The slider
-                      // reached only the C64's Audio Mixer, so while the tune
-                      // rendered here it moved and nothing happened — which is
-                      // not what anyone expects of a volume control on the page
-                      // they are listening from.
-                      if (playbackEngine.engine === "local") {
-                        setLocalVolumeFromIndex(value);
-                        return;
-                      }
-                      handleVolumePreview(value);
-                    }}
-                    onVolumeCommit={(value) => {
-                      if (playbackEngine.engine === "local") {
-                        setLocalVolumeFromIndex(value);
-                        return;
-                      }
-                      void handleVolumeCommit(value);
-                    }}
+                    {...volumeBinding}
                     previewIntervalMs={volumeSliderPreviewIntervalMs}
-                    volumeLabel={volumeLabel}
-                    volumeValueFormatter={(value) => volumeSteps[Math.round(value)]?.label ?? "—"}
                     useNativeRangeInput={isAndroid}
                   />
                 }

@@ -73,6 +73,11 @@ export interface UseSidRadioParams {
    * which is what the tests and the web build do.
    */
   resolveDurationSeconds?: (virtualPath: string, songIndex: number) => number | null | Promise<number | null>;
+  /**
+   * Awaited before the first candidate is resolved, so `resolvePath` is asked a question its index
+   * can answer. See `StationQueueProviderOptions.ensureResolvable`.
+   */
+  ensureResolvable?: () => Promise<unknown>;
   randomSeed?: () => number;
 }
 
@@ -312,6 +317,7 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         initialRecent,
         minSeconds: loadSidRadioMinSeconds(),
         resolveDuration: params.resolveDurationSeconds,
+        ensureResolvable: params.ensureResolvable,
         computeCandidates: async (exclude, recent, count) => {
           // The ♥/✕ signal is durable but the in-memory cache is not, and nothing else on the
           // resume path reads it back: without this a relaunched app steered every station from an
@@ -527,7 +533,18 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
       transportShuffleDisabled: true,
       transportRepeatDisabled: true,
     });
-  }, [enabled, station, buildProvider]);
+    // A resumed station never passes through `start`, and the bundle it runs on loads lazily inside
+    // the worker on the first compute — so nothing reported which corpus was parsed, and a device
+    // that had been relaunched described its station without naming the data behind it. `load()` is
+    // memoised, so asking here costs a resolved promise.
+    void ensureClient()
+      .load()
+      .then(recordCorpusIdentity)
+      .catch(() => {
+        // A bundle that will not load is reported by the refill that needs it; this is only the
+        // identity, and a station that cannot describe its corpus is still better than a crash.
+      });
+  }, [enabled, station, buildProvider, ensureClient]);
 
   const steer = useCallback(
     (md5: string, signal: RankingSignal) => {

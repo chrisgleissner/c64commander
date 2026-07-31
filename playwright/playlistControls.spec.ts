@@ -273,7 +273,7 @@ test.describe("Playlist controls and advanced features", () => {
 
     await expectRestTraceSequence(page, testInfo, /\/v1\/runners:sidplay/);
 
-    const songButton = page.getByRole("button", { name: /Subsong 1\/3/ });
+    const songButton = page.getByRole("button", { name: /Tune 1 of 3/ });
     await expect(songButton).toBeVisible();
     await snap(page, testInfo, "song-selector-visible");
 
@@ -286,7 +286,7 @@ test.describe("Playlist controls and advanced features", () => {
     await expect(dialog).toBeVisible({ timeout: 10000 });
     await snap(page, testInfo, "song-selector-open");
 
-    await dialog.getByRole("button", { name: /Subsong 2/ }).click();
+    await dialog.getByRole("button", { name: /Tune 2/ }).click();
 
     await expect(dialog).toBeHidden();
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(playCountBefore + 1);

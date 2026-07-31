@@ -1729,21 +1729,21 @@ test.describe("Playback file browser", () => {
     await expect(muteButton).toBeEnabled();
 
     await muteButton.click();
-    await expect(muteButton).toContainText("Unmute");
+    await expect(muteButton).toHaveAttribute("aria-label", "Unmute");
     await snap(page, testInfo, "muted");
 
     await muteButton.click();
-    await expect(muteButton).toContainText("Mute");
+    await expect(muteButton).toHaveAttribute("aria-label", "Mute");
     await snap(page, testInfo, "unmuted");
 
     await muteButton.click();
-    await expect(muteButton).toContainText("Unmute");
+    await expect(muteButton).toHaveAttribute("aria-label", "Unmute");
     await slider.click({ position: { x: 10, y: 5 } });
-    await expect(muteButton).toContainText("Unmute");
+    await expect(muteButton).toHaveAttribute("aria-label", "Unmute");
     await snap(page, testInfo, "slider-muted");
 
     await muteButton.click();
-    await expect(muteButton).toContainText("Mute");
+    await expect(muteButton).toHaveAttribute("aria-label", "Mute");
     await snap(page, testInfo, "slider-unmuted");
   });
 
