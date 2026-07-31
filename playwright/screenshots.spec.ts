@@ -2534,9 +2534,11 @@ test.describe("App screenshots", () => {
       await stationsLauncher.click();
       const sheet = page.getByTestId("sid-radio-launcher-sheet");
       await expect(sheet).toBeVisible();
-      // Each tile's size arrives from the worker once it has parsed the bundle;
-      // capturing before then would photograph a half-populated grid.
-      await expect(sheet.getByTestId("sid-radio-style-0-size")).toBeVisible();
+      // A tile is disabled until the worker has parsed the bundle and reported that
+      // the mood has music, so waiting for one to be enabled is waiting for the
+      // grid to be populated. This used to wait for a per-tile track count, which
+      // the tiles no longer print.
+      await expect(sheet.getByTestId("sid-radio-style-0")).toBeEnabled();
       await captureScreenshot(page, testInfo, "play/sid-radio/02-stations.png", { locator: sheet });
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("sid-radio-launcher-sheet")).toHaveCount(0);

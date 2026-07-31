@@ -59,9 +59,8 @@ const songMoodOptions: ReadonlyArray<{ bit: number | null; key: string | null; l
  * the 9 style tiles, a "based on my likes" composition toggle (Q4/D10), a Taste
  * entry that unlocks at the like threshold (D1), and Surprise.
  *
- * Each tile carries the size of the station behind it, and a style the export
- * left empty is offered as a disabled tile rather than a station that starts and
- * immediately reports it has nothing to play (§5.4).
+ * A style the export left empty is offered as a disabled tile rather than a
+ * station that starts and immediately reports it has nothing to play (§5.4).
  */
 export const SidRadioLauncherSheet = ({
   open,
@@ -148,11 +147,20 @@ export const SidRadioLauncherSheet = ({
                 >
                   <span className="text-sm font-medium">{tile.label}</span>
                   <span className="text-xs text-muted-foreground">{tile.blurb}</span>
-                  {population === undefined ? null : (
+                  {/* No track count.
+                      Every mood draws on tens of thousands of tunes and the numbers
+                      sat within a few per cent of each other, so the figure told a
+                      listener nothing about which mood to pick — it only added a
+                      third line to every tile. A release where a mood held too
+                      little to be worth offering is caught at build time instead;
+                      see `assertStylePopulations` in `scripts/fetch-sidcorr.mjs`.
+                      The empty state is still spelled out, because a greyed tile
+                      with no explanation is worse than one with a reason. */}
+                  {population !== undefined && !populated ? (
                     <span className="text-xs text-muted-foreground" data-testid={`sid-radio-style-${tile.bit}-size`}>
-                      {populated ? `${population.toLocaleString()} tracks` : "None in this release"}
+                      None in this release
                     </span>
-                  )}
+                  ) : null}
                 </Button>
               );
             })}

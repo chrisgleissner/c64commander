@@ -43,6 +43,10 @@ describe("fetch-sidcorr sha256 pin (§8.4)", () => {
   it("refuses to write a drifted download and reports a fatal status", async () => {
     let wrote = false;
     const result = await fetchSidcorr({
+      // The stub asset here is not a real bundle; the population gate is exercised
+      // in `stylePopulationGate.test.ts`, so it is stubbed out to keep this suite on
+      // the sha and caching behaviour it is about.
+      readPopulationsImpl: () => ({ fast_paced: 20000, slow_ambient: 20000 }),
       readFileImpl: async () => {
         throw enoent; // asset absent → exercise the download+verify path
       },
@@ -66,6 +70,10 @@ describe("fetch-sidcorr sha256 pin (§8.4)", () => {
     const pinned = Buffer.from("pinned bundle bytes");
     let wrote: Buffer | null = null;
     const result = await fetchSidcorr({
+      // The stub asset here is not a real bundle; the population gate is exercised
+      // in `stylePopulationGate.test.ts`, so it is stubbed out to keep this suite on
+      // the sha and caching behaviour it is about.
+      readPopulationsImpl: () => ({ fast_paced: 20000, slow_ambient: 20000 }),
       readFileImpl: async () => Buffer.from("bytes from an older pin"),
       fetchImpl: async () => makeResponse(pinned),
       writeFileImpl: async (_path: string, data: Buffer) => {
@@ -84,6 +92,10 @@ describe("fetch-sidcorr sha256 pin (§8.4)", () => {
     // integrity check moves to the downloaded payload, it does not disappear.
     let wrote = false;
     const result = await fetchSidcorr({
+      // The stub asset here is not a real bundle; the population gate is exercised
+      // in `stylePopulationGate.test.ts`, so it is stubbed out to keep this suite on
+      // the sha and caching behaviour it is about.
+      readPopulationsImpl: () => ({ fast_paced: 20000, slow_ambient: 20000 }),
       readFileImpl: async () => Buffer.from("bytes from an older pin"),
       fetchImpl: async () => makeResponse(Buffer.from("not the real sidcorr bundle")),
       writeFileImpl: async () => {
@@ -103,6 +115,10 @@ describe("fetch-sidcorr sha256 pin (§8.4)", () => {
     expect(verifyBundleSha256(real)).toBe(true);
     let written: Buffer | null = null;
     const result = await fetchSidcorr({
+      // The stub asset here is not a real bundle; the population gate is exercised
+      // in `stylePopulationGate.test.ts`, so it is stubbed out to keep this suite on
+      // the sha and caching behaviour it is about.
+      readPopulationsImpl: () => ({ fast_paced: 20000, slow_ambient: 20000 }),
       readFileImpl: async () => {
         throw enoent;
       },

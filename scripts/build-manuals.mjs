@@ -1195,7 +1195,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "You will be offered three kinds of station:",
     "",
-    "- **A mood.** Nine of them, such as Fast-Paced, Chill / Ambient and Melodic. Each tile tells you how many tunes it has to draw on. A mood with nothing to offer is greyed out, so you cannot start a station that has no music in it.",
+    "- **A mood.** Nine of them, such as Fast-Paced, Chill / Ambient and Melodic. Every one of them draws on tens of thousands of tunes, so pick whichever suits you and do not worry about running short.",
     "- **Tunes you like.** This appears once you have marked a few favourites, and builds a station out of them.",
     "- **Surprise me.** Anything at all.",
     "",

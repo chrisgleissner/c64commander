@@ -69,6 +69,38 @@ const logError = (message) => {
 // fs is injectable so the sha-drift / write paths are unit-testable without
 // touching the real asset. The function is side-effect-free w.r.t. process
 // exit; the CLI runner maps the returned status to an exit code (see below).
+/**
+ * Check the populations of a bundle that is now on disk, and report offenders.
+ *
+ * Kept next to the fetch so the build has exactly one place that decides whether
+ * the shipped corpus is fit to release.
+ */
+const gateStylePopulations = (buffer, readPopulationsImpl = readStylePopulations) => {
+  let populations;
+  try {
+    populations = readPopulationsImpl(buffer);
+  } catch (error) {
+    console.error(`[fetch-sidcorr] could not read style populations: ${error.message}`);
+    return { ok: false };
+  }
+  const offenders = assertStylePopulations(populations);
+  if (offenders.length === 0) {
+    const smallest = Object.entries(populations).sort(([, a], [, b]) => a - b)[0];
+    console.log(
+      `[fetch-sidcorr] style populations ok (${Object.keys(populations).length} styles, ` +
+        `smallest ${smallest[0]} at ${smallest[1].toLocaleString()}, floor ${MIN_STYLE_POPULATION.toLocaleString()})`,
+    );
+    return { ok: true };
+  }
+  for (const { key, count } of offenders) {
+    console.error(
+      `[fetch-sidcorr] style "${key}" has ${count.toLocaleString()} tracks, ` +
+        `below the ${MIN_STYLE_POPULATION.toLocaleString()} a release must offer.`,
+    );
+  }
+  return { ok: false };
+};
+
 export const fetchSidcorr = async ({
   required = false,
   fetchImpl = fetch,
@@ -78,6 +110,9 @@ export const fetchSidcorr = async ({
   // Injectable alongside the rest so a test can exercise the accept path with
   // stand-in bytes; the real bundle is git-ignored and may not be on disk.
   expectedSha = SIDCORR_RELEASE.bundleSha256,
+  // Injectable so a test can exercise the sha and caching paths with a stub asset
+  // that is deliberately not a real bundle. A build never overrides it.
+  readPopulationsImpl = readStylePopulations,
 } = {}) => {
   const targetPath = path.join(REPO_ROOT, "public", SIDCORR_RELEASE.publicPath);
 
@@ -85,6 +120,9 @@ export const fetchSidcorr = async ({
   if (existing) {
     if (verifyBundleSha256(existing, expectedSha)) {
       console.log(`[fetch-sidcorr] up to date (${existing.length} bytes, sha ok): ${SIDCORR_RELEASE.publicPath}`);
+      if (!gateStylePopulations(existing, readPopulationsImpl).ok) {
+        return { status: "style-population-too-small", path: targetPath };
+      }
       return { status: "cached", path: targetPath };
     }
     // A local file that does not match the pin is a STALE CACHE, not an attack:
@@ -132,11 +170,88 @@ export const fetchSidcorr = async ({
   await mkdirImpl(path.dirname(targetPath), { recursive: true });
   await writeFileImpl(targetPath, buffer);
   console.log(`[fetch-sidcorr] downloaded ${buffer.length} bytes → ${SIDCORR_RELEASE.publicPath} (sha ok)`);
+  if (!gateStylePopulations(buffer, readPopulationsImpl).ok) {
+    return { status: "style-population-too-small", path: targetPath };
+  }
   return { status: "downloaded", path: targetPath };
 };
 
+/**
+ * The smallest a mood may be before a release is not worth shipping.
+ *
+ * The launcher no longer prints a per-mood track count, because every mood drew
+ * on tens of thousands of tunes and the figures sat within a few per cent of each
+ * other — the number told a listener nothing about which mood to pick. Dropping
+ * it means a release that quietly lost most of a mood would no longer be visible
+ * on screen, so the check moves here, where it can stop the build instead of
+ * reaching a listener.
+ */
+export const MIN_STYLE_POPULATION = 10_000;
+
+/**
+ * Count how many tracks carry each style, straight from the bundle.
+ *
+ * Deliberately a re-count rather than a read of the manifest's own figures: the
+ * bundle is the only artefact the app ships, so it is the only one worth
+ * believing. The offsets mirror `parseSidcorrTiny`; a unit test builds a fixture
+ * with known populations and asserts this reader and the app's parser agree, so
+ * the two cannot drift apart unnoticed.
+ */
+export const readStylePopulations = (buffer) => {
+  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  const decoder = new TextDecoder();
+  const magic = decoder.decode(buffer.subarray(0, 8));
+  if (magic !== "SIDTINY1") {
+    throw new Error(`not a sidcorr-tiny-1 bundle (magic ${JSON.stringify(magic)})`);
+  }
+
+  const trackCount = view.getUint32(12, true);
+  const styleCount = view.getUint16(20, true);
+  const styleTableOffset = view.getUint32(32, true);
+  const styleMaskOffset = view.getUint32(44, true);
+
+  // STYLE_TABLE: a 12-byte section header, then one fixed-width record per style,
+  // then a payload the records point into for the key and label text.
+  const recordBytes = view.getUint16(styleTableOffset + 4, true);
+  const recordStart = styleTableOffset + 12;
+  const payloadStart = recordStart + recordBytes * styleCount;
+
+  const populations = {};
+  const maskBits = [];
+  for (let index = 0; index < styleCount; index += 1) {
+    const record = recordStart + index * recordBytes;
+    const maskBit = view.getUint8(record + 1);
+    const keyOffset = view.getUint32(record + 8, true);
+    const keyLength = view.getUint16(record + 12, true);
+    const key = decoder.decode(buffer.subarray(payloadStart + keyOffset, payloadStart + keyOffset + keyLength));
+    populations[key] = 0;
+    maskBits.push({ key, maskBit });
+  }
+
+  // STYLE_MASK_TABLE: one u16 per track, a set bit meaning the track carries that style.
+  for (let ordinal = 0; ordinal < trackCount; ordinal += 1) {
+    const mask = view.getUint16(styleMaskOffset + ordinal * 2, true);
+    for (const { key, maskBit } of maskBits) {
+      if ((mask & (1 << maskBit)) !== 0) populations[key] += 1;
+    }
+  }
+  return populations;
+};
+
+/**
+ * Fail the build when any mood has too little to offer.
+ *
+ * Returns the offending entries rather than throwing, so the caller decides what
+ * to do and a test can assert on the result without catching.
+ */
+export const assertStylePopulations = (populations, minimum = MIN_STYLE_POPULATION) =>
+  Object.entries(populations)
+    .filter(([, count]) => count < minimum)
+    .map(([key, count]) => ({ key, count }));
+
 /** Statuses a build must treat as fatal (pin drift, or a required-but-missing asset). */
-export const isFatalStatus = (status) => status === "sha-mismatch" || status === "download-failed";
+export const isFatalStatus = (status) =>
+  status === "sha-mismatch" || status === "download-failed" || status === "style-population-too-small";
 
 const isDirectRun = () => {
   const invoked = process.argv[1];
