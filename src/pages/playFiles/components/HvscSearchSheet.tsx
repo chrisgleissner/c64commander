@@ -50,18 +50,6 @@ export type HvscSearchSheetProps = {
 };
 
 /**
- * Reaching for a particular tune, by name, anywhere in HVSC.
- *
- * A station is endless and chooses for you, which is the point of it — right up to the moment you
- * want to hear one specific thing. Before this there was no way to do that without stopping the
- * station, going to the picker, drilling down through the composer folders to a tune you could
- * already name, adding it to the playlist and losing the station entirely.
- *
- * So the tune is played as an interruption rather than as a replacement: the station keeps its
- * place, the tune plays, and the station carries on. Seeding a new station from what was found is
- * the other thing people want here, and it is one tap away on the same row.
- */
-/**
  * One tune, as a row.
  *
  * Shared by the search results and by what was recently played, so the two can never disagree about
@@ -134,6 +122,18 @@ const TuneList = ({
   </ul>
 );
 
+/**
+ * Reaching for a particular tune, by name, anywhere in HVSC.
+ *
+ * A station is endless and chooses for you, which is the point of it — right up to the moment you
+ * want to hear one specific thing. Before this there was no way to do that without stopping the
+ * station, going to the picker, drilling down through the composer folders to a tune you could
+ * already name, adding it to the playlist and losing the station entirely.
+ *
+ * So the tune is played as an interruption rather than as a replacement: the station keeps its
+ * place, the tune plays, and the station carries on. Seeding a new station from what was found is
+ * the other thing people want here, and it is one tap away on the same row.
+ */
 export const HvscSearchSheet = ({
   open,
   onOpenChange,
@@ -143,16 +143,6 @@ export const HvscSearchSheet = ({
   stationActive,
 }: HvscSearchSheetProps) => {
   const search = useHvscArchiveSearch({ enabled: open });
-  /**
-   * Whether the explanatory text is still worth its height.
-   *
-   * The keyboard takes roughly half this sheet the moment the field is focused, and measured on a
-   * Pixel 4 the three-line description plus the title left about one and a half result rows visible,
-   * with the second clipped mid-line. The description is onboarding — it answers "what does this
-   * search do" — and once somebody has typed they have stopped asking that and started reading
-   * results. So it is spent on the empty state and reclaimed for the list afterwards.
-   */
-  const showIntro = !search.query.trim();
   // Read once per opening: it changes only when a track starts, which cannot happen while this is
   // the thing being looked at.
   const [recent, setRecent] = useState<HvscSearchHit[]>([]);
@@ -160,6 +150,17 @@ export const HvscSearchSheet = ({
     if (!open) return;
     setRecent(recentlyPlayedTunes());
   }, [open]);
+  /**
+   * Whether the explanatory text is still worth its height.
+   *
+   * The keyboard takes roughly half this sheet the moment the field is focused, and measured on a
+   * Pixel 4 the three-line description plus the title left about one and a half result rows visible,
+   * with the second clipped mid-line. The description is onboarding — it answers "what does this
+   * search do" — so it is worth its height exactly while there is nothing else to read, and not once
+   * there is: results, or the tunes just heard. Both of those answer the same question better than
+   * the sentence does.
+   */
+  const showIntro = !search.query.trim() && recent.length === 0;
   // Act first, close second: the action is the point, and a handler that needed this sheet still
   // mounted would otherwise break silently.
   const play = useCallback(
