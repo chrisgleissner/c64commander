@@ -134,10 +134,12 @@ const normalizeDisplayValue = (value: string | null | undefined) =>
  * folded, so typing the accent still works too.
  *
  * The ASCII test first is what keeps this cheap: almost all of the archive is plain ASCII, and
- * `normalize` on a string that needs nothing still allocates.
+ * `normalize` on a string that needs nothing still allocates. It asks whether anything above ASCII
+ * is present rather than testing a printable range — a haystack that merely contains a newline (the
+ * walked-source matcher builds one) is still pure ASCII and needs no work.
  */
 const COMBINING_MARKS = /[\u0300-\u036f]/g;
-const HAS_NON_ASCII = /[^\u0020-\u007e]/;
+const HAS_NON_ASCII = /[\u0080-\uFFFF]/;
 
 export const foldForSearch = (value: string): string =>
   HAS_NON_ASCII.test(value) ? value.normalize("NFD").replace(COMBINING_MARKS, "") : value;
