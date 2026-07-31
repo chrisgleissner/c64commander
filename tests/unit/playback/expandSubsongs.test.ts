@@ -161,3 +161,35 @@ describe("hasAllTunesQueued", () => {
     expect(hasAllTunesQueued([tune(1), otherFile, otherFile], "/A/multi.sid", 3)).toBe(false);
   });
 });
+
+describe("expandSubsongs tune titles", () => {
+  const multi = () =>
+    item({
+      id: "seed",
+      path: "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
+      request: { source: "hvsc", path: "/MUSICIANS/H/Hubbard_Rob/Commando.sid", songNr: 1 } as never,
+    });
+
+  it("gives each tune its own name, so the rows are not nineteen copies", () => {
+    const { items } = expandSubsongs([multi()], 0, 3, [], ["BGM1", "Base", "Level Complete"]);
+    expect(items.map((entry) => entry.tuneTitle)).toEqual(["BGM1", "Base", "Level Complete"]);
+  });
+
+  it("leaves a tune STIL did not name without one, rather than borrowing a neighbour's", () => {
+    const { items } = expandSubsongs([multi()], 0, 3, [], ["BGM1", "", undefined]);
+    expect(items.map((entry) => entry.tuneTitle)).toEqual(["BGM1", undefined, undefined]);
+  });
+
+  it("names the tune that is already playing without disturbing its identity", () => {
+    // Its id and duration are what the transport and the session store are holding.
+    const seed = multi();
+    const { items, index } = expandSubsongs([seed], 0, 3, [], ["BGM1", "Base", "Level Complete"]);
+    expect(items[index]?.id).toBe(seed.id);
+    expect(items[index]?.tuneTitle).toBe("BGM1");
+  });
+
+  it("expands with no titles at all, which is the case for most of the archive", () => {
+    const { items } = expandSubsongs([multi()], 0, 3);
+    expect(items.map((entry) => entry.tuneTitle)).toEqual([undefined, undefined, undefined]);
+  });
+});

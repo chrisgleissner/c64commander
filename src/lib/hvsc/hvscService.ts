@@ -47,6 +47,8 @@ import {
 import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "./hvscSongLengthService";
 import { hydrateHvscMetadata } from "./hvscMetadataHydrator";
 import { getHvscHydrationGeneration } from "./hvscHydrationControl";
+import { getStilEntry } from "./stilStore";
+import { primaryCredit } from "./stilParser";
 
 export type HvscProgressListener = (event: HvscProgressEvent) => void;
 
@@ -517,6 +519,27 @@ export const getHvscSubsongDurationsSeconds = async (virtualPath: string): Promi
   if (!snapshot) return [];
   const song = getHvscSongFromBrowseIndex(snapshot, virtualPath);
   return song?.durationsSeconds ? [...song.durationsSeconds] : [];
+};
+
+/**
+ * What STIL calls each tune in a file, indexed by `songNr - 1`.
+ *
+ * Empty for the majority of the archive, which STIL does not describe, and sparse even where it
+ * does: an entry may name tunes 1 and 3 and say nothing about 2. Callers treat a missing title as
+ * "this tune has no name of its own", never as an error.
+ */
+export const getHvscSubsongTitles = async (virtualPath: string, tuneCount: number): Promise<string[]> => {
+  if (tuneCount <= 0) return [];
+  const entry = await getStilEntry(virtualPath);
+  if (!entry) return [];
+  const titles: string[] = [];
+  for (let songNr = 1; songNr <= tuneCount; songNr += 1) {
+    // Only the tune's own block. Falling back to the file's title here would stamp the same name on
+    // every row and undo the thing this exists to fix.
+    const title = primaryCredit(entry.subsongs?.[songNr])?.title ?? "";
+    titles.push(title);
+  }
+  return titles;
 };
 
 export const getHvscSongsRecursive = async (

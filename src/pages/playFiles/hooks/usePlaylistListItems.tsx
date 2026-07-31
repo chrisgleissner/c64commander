@@ -19,6 +19,7 @@ import { LOCAL_DEVICE_LABEL, connectedDeviceLabel } from "@/lib/sourceNavigation
 import type { ActionListItem, ActionListMenuItem } from "@/components/lists/SelectableActionList";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 import type { PlaylistItem } from "@/pages/playFiles/types";
+import { buildPlaylistRowSubtitle } from "@/pages/playFiles/playlistRowSubtitle";
 
 export type PlaylistListItemsOptions = {
   filteredPlaylist: PlaylistItem[];
@@ -119,6 +120,10 @@ export const usePlaylistListItems = ({
           value: formatPlayCategory(item.category),
         },
         { type: "info", label: "Duration", value: durationLabel },
+        // Always here, because the row itself shows the path only when it has nothing more useful
+        // to say: on the tunes of an expanded file every row has the same path, and which tune it
+        // is takes its place. See `buildPlaylistRowSubtitle`.
+        { type: "info", label: "Path", value: item.path },
         {
           type: "info",
           label: "Status",
@@ -204,7 +209,7 @@ export const usePlaylistListItems = ({
         id: item.id,
         title: display.title,
         titleClassName: "whitespace-normal break-words block",
-        subtitle: item.path,
+        subtitle: buildPlaylistRowSubtitle(item),
         subtitleClassName: "truncate block",
         meta: (
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">

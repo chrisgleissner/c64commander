@@ -27,6 +27,8 @@ import {
   type PendingSeekPresentation,
   type PoliteAnnouncement,
 } from "@/lib/playback/pendingSeekStatus";
+import { buildStilTuneLine } from "@/lib/playback/nowPlayingMetadata";
+import { TuneNotes } from "./TuneNotes";
 
 export type PlaybackControlsCardProps = {
   hasCurrentItem: boolean;
@@ -38,6 +40,20 @@ export type PlaybackControlsCardProps = {
    * rather than in this component's JSX. `null` when the header carried nothing worth a line.
    */
   currentItemMetadata?: string | null;
+  /**
+   * What STIL says about this tune, where it says anything.
+   *
+   * Kept apart from `currentItemMetadata` because it is a different kind of fact. That line is the
+   * SID header — what the file declares about itself. This is the archive's editors describing the
+   * music: what this particular tune is called, who originally wrote it, and any note they left.
+   * STIL covers under a third of the archive, so all three are usually absent and the card renders
+   * exactly as it did before.
+   */
+  stil?: {
+    title: string | null;
+    originalArtist: string | null;
+    note: string | null;
+  };
   canTransport: boolean;
   hasPrev: boolean;
   hasNext: boolean;
@@ -274,6 +290,7 @@ export const PlaybackControlsCard = ({
   hasCurrentItem,
   currentItemLabel,
   currentItemMetadata = null,
+  stil,
   canTransport,
   hasPrev,
   hasNext,
@@ -313,6 +330,10 @@ export const PlaybackControlsCard = ({
   stationIndicator,
   stationActive = false,
 }: PlaybackControlsCardProps) => {
+  const stilTuneLine = buildStilTuneLine({
+    title: stil?.title ?? null,
+    originalArtist: stil?.originalArtist ?? null,
+  });
   const pendingAnnouncement = usePoliteAnnouncement(pendingSeek?.liveText ?? null);
   const scrubHandlers = { start: onScrubStart, step: onScrubStep, end: onScrubEnd };
   const holdRewind = useHoldToSeek(-SEEK_STEP_SECONDS, onSeek, scrubHandlers);
@@ -389,6 +410,19 @@ export const PlaybackControlsCard = ({
                 {currentItemMetadata}
               </p>
             ) : null}
+            {/* What this tune is, from STIL — above the header line because it is the more specific
+                answer to "what am I listening to". A file called `Commando` playing tune 1 of 19 is
+                told here that the tune is "BGM1" and that the music is Tamayo Kawamoto's, which the
+                header cannot say: its author field names Rob Hubbard, who arranged it.
+
+                One line, and only the parts STIL actually has. Both absent for most of the archive,
+                in which case nothing renders and the card is unchanged. */}
+            {stilTuneLine ? (
+              <p className="mt-0.5 text-sm leading-snug text-foreground/90" data-testid="playback-current-stil">
+                {stilTuneLine}
+              </p>
+            ) : null}
+            {stil?.note ? <TuneNotes note={stil.note} /> : null}
           </>
         ) : (
           "Select a playlist item to start"

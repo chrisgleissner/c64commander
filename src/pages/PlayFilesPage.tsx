@@ -56,7 +56,7 @@ import { calculatePlaylistTotals } from "@/lib/playback/playlistTotals";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { createHvscSourceLocation } from "@/lib/sourceNavigation/hvscSourceAdapter";
 import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
-import { getHvscSubsongDurationsSeconds } from "@/lib/hvsc";
+import { getHvscSubsongDurationsSeconds, getHvscSubsongTitles } from "@/lib/hvsc";
 import { createStationDurationResolver } from "@/pages/playFiles/stationDurationResolver";
 import { Checkbox } from "@/components/ui/checkbox";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
@@ -71,6 +71,7 @@ import { buildSelectedDeviceBoundOrigin } from "@/lib/savedDevices/deviceBoundOr
 import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
 import { parseSidHeaderMetadata, type SidClock, type SidModel } from "@/lib/sid/sidUtils";
 import { buildNowPlayingMetadata } from "@/lib/playback/nowPlayingMetadata";
+import { useStilInfo } from "@/pages/playFiles/hooks/useStilInfo";
 import { resolveTrackDisplayName, type SidChipCount } from "@/lib/playback/sidDisplayName";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
@@ -1872,12 +1873,27 @@ export default function PlayFilesPage() {
     //
     // Read from the browse index, which carries the whole array. The songlength store answers per
     // file rather than per tune, so it can say how long the SID is but not how long tune twelve is.
-    const seconds = item.request.source === "hvsc" ? await getHvscSubsongDurationsSeconds(item.path) : [];
+    const isHvsc = item.request.source === "hvsc";
+    // Both resolved before the expansion rather than after it, because both belong on the items the
+    // expansion creates: their own length, so each tune ends when it ends rather than at the
+    // three-minute default, and their own name, so nineteen rows are not nineteen copies of the
+    // file name. Requested together so the expansion is one state change, not three.
+    const [seconds, titles] = await Promise.all([
+      isHvsc ? getHvscSubsongDurationsSeconds(item.path) : Promise.resolve<number[]>([]),
+      isHvsc ? getHvscSubsongTitles(item.path, knownSubsongCount) : Promise.resolve<string[]>([]),
+    ]);
     const durationsMs = seconds.map((value) => (typeof value === "number" && value > 0 ? value * 1000 : null));
-    const { items, index } = expandSubsongs(playlist, currentIndex, knownSubsongCount, durationsMs);
+    const { items, index } = expandSubsongs(playlist, currentIndex, knownSubsongCount, durationsMs, titles);
     if (items.length === playlist.length) return;
     void startPlaylist(items, index, { replaceQueue: true });
   }, [currentIndex, knownSubsongCount, playlist, startPlaylist]);
+  // What the archive's editors say about this tune, as opposed to what its header declares. Only
+  // HVSC has STIL, so anything played from a device, a local file or an archive resolves to nothing
+  // without a lookup.
+  const stilInfo = useStilInfo({
+    virtualPath: currentItem?.request.source === "hvsc" ? currentItem.path : null,
+    songNr: clampedSongNr ?? undefined,
+  });
   // Everything the tune's own header says about itself, on one line under the title. The order and
   // the omission rules live in buildNowPlayingMetadata; this only supplies the fields.
   const currentItemMetadata = currentItem
@@ -2305,6 +2321,7 @@ export default function PlayFilesPage() {
                 hasCurrentItem={Boolean(currentItem)}
                 currentItemLabel={currentDisplay?.title ?? null}
                 currentItemMetadata={currentItemMetadata}
+                stil={stilInfo}
                 // Which station (or, when none is running, which playlist) is producing this tune
                 // leads the card: it is context for the title, the transport and everything else
                 // below it. Rendered in both states, and the same height in both, so that starting

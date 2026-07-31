@@ -127,3 +127,22 @@ export const buildNowPlayingMetadata = (input: NowPlayingMetadataInput): string 
   const segments = buildNowPlayingMetadataSegments(input);
   return segments.length ? segments.join(NOW_PLAYING_METADATA_SEPARATOR) : null;
 };
+
+/**
+ * The STIL line: what this tune is called, and who wrote the music.
+ *
+ * Separate from the header line above because the two disagree by design. The header names whoever
+ * produced the C64 version; a large share of C64 music is an arrangement of something else, and
+ * STIL is the only record of the original. Spelled out as "music by" rather than the conventional
+ * "after", which assumes the reader knows the term.
+ *
+ * Returns null when STIL has neither, which is the case for most of the archive.
+ */
+export const buildStilTuneLine = (input: { title: string | null; originalArtist: string | null }): string | null => {
+  const title = clean(input.title);
+  const artist = clean(input.originalArtist);
+  const segments: string[] = [];
+  if (title) segments.push(title);
+  if (artist) segments.push(`music by ${artist}`);
+  return segments.length ? segments.join(NOW_PLAYING_METADATA_SEPARATOR) : null;
+};

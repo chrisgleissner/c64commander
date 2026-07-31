@@ -7,7 +7,11 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { buildNowPlayingMetadata, type NowPlayingMetadataInput } from "@/lib/playback/nowPlayingMetadata";
+import {
+  buildNowPlayingMetadata,
+  buildStilTuneLine,
+  type NowPlayingMetadataInput,
+} from "@/lib/playback/nowPlayingMetadata";
 
 const build = (overrides: Partial<NowPlayingMetadataInput> = {}) =>
   buildNowPlayingMetadata({
@@ -83,5 +87,30 @@ describe("the line under the now-playing title", () => {
     expect(
       build({ author: null, released: null, sidModels: [], clock: null, tuneCount: null, lengthLabel: null }),
     ).toBeNull();
+  });
+});
+
+describe("buildStilTuneLine", () => {
+  it("names the tune and who wrote the music", () => {
+    // Commando: the SID header says Rob Hubbard, who arranged the arcade score. This line is the
+    // only place the person who actually wrote it appears.
+    expect(buildStilTuneLine({ title: "BGM1", originalArtist: "Tamayo Kawamoto" })).toBe(
+      "BGM1 · music by Tamayo Kawamoto",
+    );
+  });
+
+  it("shows a title on its own", () => {
+    expect(buildStilTuneLine({ title: "Central Park", originalArtist: null })).toBe("Central Park");
+  });
+
+  it("shows the original composer even when STIL gave the tune no name", () => {
+    expect(buildStilTuneLine({ title: null, originalArtist: "Jean-Michel Jarre" })).toBe(
+      "music by Jean-Michel Jarre",
+    );
+  });
+
+  it("says nothing for the majority of the archive, which STIL does not describe", () => {
+    expect(buildStilTuneLine({ title: null, originalArtist: null })).toBeNull();
+    expect(buildStilTuneLine({ title: "  ", originalArtist: "  " })).toBeNull();
   });
 });

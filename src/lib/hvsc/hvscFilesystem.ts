@@ -22,6 +22,15 @@ const HVSC_LIBRARY_DIR = `${HVSC_WORK_DIR}/library`;
 const HVSC_LIBRARY_STAGING_DIR = `${HVSC_WORK_DIR}/library-staging`;
 const HVSC_LIBRARY_OLD_DIR = `${HVSC_WORK_DIR}/library-old`;
 const HVSC_CACHE_DIR = `${HVSC_WORK_DIR}/cache`;
+/**
+ * STIL lives beside the library rather than inside it.
+ *
+ * The library directory is staged and promoted wholesale on every update, so anything inside it has
+ * to take part in that dance. STIL is derived data with its own lifecycle — it is rewritten when an
+ * archive is ingested and can also be fetched on its own for a library installed before this
+ * existed — so it is simpler and safer to keep it out of the way of the promotion.
+ */
+const HVSC_STIL_DIR = `${HVSC_WORK_DIR}/stil`;
 export const MAX_BRIDGE_READ_BYTES = 5 * 1024 * 1024;
 
 const normalizeFilePath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
@@ -337,6 +346,47 @@ export const writeLibraryFile = async (virtualPath: string, data: Uint8Array) =>
 export const deleteLibraryFile = async (virtualPath: string) => {
   const path = resolveLibraryPath(virtualPath);
   await Filesystem.deleteFile({ directory: Directory.Data, path });
+};
+
+// ── STIL shards ──────────────────────────────────────────────────
+//
+// Plain UTF-8 JSON, one file per shard, written by `stilStore`. Kept here so that every
+// `Filesystem` call in the HVSC subsystem stays in this module.
+
+export const writeStilFile = async (name: string, text: string) => {
+  await ensureDir(HVSC_STIL_DIR);
+  await writeFileWithRetry(`${HVSC_STIL_DIR}/${name}`, encodeText(text));
+};
+
+export const readStilFile = async (name: string): Promise<string | null> => {
+  try {
+    const result = await readFileWithSizeGuard(`${HVSC_STIL_DIR}/${name}`);
+    const raw = result.data;
+    if (typeof raw !== "string") return null;
+    return decodeBase64Text(raw);
+  } catch (error) {
+    // A missing shard is the normal answer for a library installed before STIL was stored, and for
+    // every shard of an archive whose STIL has not been fetched yet.
+    if (!isMissingPathError(error)) {
+      logFilesystemWarning("Failed to read STIL file", { name, error });
+    }
+    return null;
+  }
+};
+
+export const resetStilStore = async () => {
+  try {
+    await Filesystem.rmdir({
+      directory: Directory.Data,
+      path: HVSC_STIL_DIR,
+      recursive: true,
+    });
+  } catch (error) {
+    logFilesystemWarning("Failed to remove HVSC STIL directory", {
+      path: HVSC_STIL_DIR,
+      error,
+    });
+  }
 };
 
 export const resetLibraryRoot = async () => {

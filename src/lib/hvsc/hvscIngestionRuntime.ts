@@ -58,6 +58,8 @@ import {
   parseDeletionList,
 } from "./hvscDownload";
 import { extractArchiveEntries } from "./hvscArchiveExtraction";
+import { storeStilFromArchive } from "./stilService";
+import { clearStil } from "./stilStore";
 import {
   createArchivePipelineStateMachine,
   type HvscPipelineState,
@@ -177,6 +179,9 @@ export const resetHvscLibraryData = async (): Promise<void> => {
   await resetLibraryRoot();
   await resetHvscCache();
   await clearHvscBrowseIndexSnapshot();
+  // STIL describes the library that is being removed. Leaving it behind would make a fresh install
+  // of an older release look like it already had current tune notes.
+  await clearStil();
 
   updateHvscState({
     installedBaselineVersion: null,
@@ -380,6 +385,8 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
   const browseIndex = await createHvscBrowseIndexMutable(plan.type);
 
   const deletions: string[] = [];
+  /** `DOCUMENTS/STIL.txt`, held until extraction is done. See the entry handler. */
+  let stilBytes: Uint8Array | null = null;
   if (!extractionStarted) {
     pipeline.transition("EXTRACTING");
     emitProgress({
@@ -429,6 +436,14 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
         }
 
         const lowered = normalized.toLowerCase();
+        if (lowered.endsWith("documents/stil.txt")) {
+          // Held rather than parsed here: parsing costs a few hundred milliseconds on a phone, and
+          // doing it inside the entry loop would stall extraction progress for no reason. The
+          // archive is the cheapest source of this document, so taking it now saves the separate
+          // download that an already-installed library needs.
+          stilBytes = data;
+          return;
+        }
         if (lowered.endsWith("songlengths.md5") || lowered.endsWith("songlengths.txt")) {
           const targetPath =
             plan.type === "baseline" ? normalizeLibraryPath(normalized) : normalizeUpdateLibraryPath(normalized);
@@ -571,6 +586,14 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
   ensureNotCancelledLocal();
   if (plan.type === "baseline") {
     await promoteLibraryStagingDir();
+  }
+
+  if (stilBytes) {
+    emitProgress({ stage: "stil", message: "Reading tune notes…", archiveName });
+    // Never fatal: `storeStilFromArchive` swallows its own failures, because STIL enriches what is
+    // shown about a tune and a library that installed without it still plays everything.
+    await storeStilFromArchive(stilBytes, plan.version);
+    stilBytes = null;
   }
 
   ensureNotCancelledLocal();
