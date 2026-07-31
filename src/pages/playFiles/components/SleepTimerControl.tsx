@@ -9,6 +9,7 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
+  armTimed,
   describeSleepTimer,
   SLEEP_TIMER_MINUTES,
   SLEEP_TIMER_OFF,
@@ -18,7 +19,15 @@ import {
 export type SleepTimerControlProps = {
   mode: SleepTimerMode;
   onChange: (mode: SleepTimerMode) => void;
-  /** Passed in rather than read here, so the countdown ticks from one clock. */
+  /**
+   * The clock the countdown is *drawn* from, ticking once a second while a timer is armed.
+   *
+   * Display only. Arming reads `Date.now()` at the moment of the tap instead, because this value
+   * stands still whenever no timed sleep timer is running — which is exactly the state the control
+   * is in when somebody arms one. Using it to compute the end time dated the timer from whenever
+   * the page last happened to tick: on the device, tapping "15m" eleven minutes after opening the
+   * page produced a timer with 3:33 left on it.
+   */
   nowMs: number;
 };
 
@@ -32,20 +41,20 @@ export type SleepTimerControlProps = {
  */
 export const SleepTimerControl = ({ mode, onChange, nowMs }: SleepTimerControlProps) => {
   const armed = mode.kind !== "off";
-  const options: Array<{ key: string; label: string; next: SleepTimerMode; active: boolean }> = [
-    { key: "off", label: "Off", next: SLEEP_TIMER_OFF, active: mode.kind === "off" },
+  // `next` is a function, not a value: a timed choice has to be dated from the tap, and a value
+  // computed during render is dated from the render.
+  const options: Array<{ key: string; label: string; next: () => SleepTimerMode; active: boolean }> = [
+    { key: "off", label: "Off", next: () => SLEEP_TIMER_OFF, active: mode.kind === "off" },
     {
       key: "after-tune",
       label: "This tune",
-      next: { kind: "after-tune" },
+      next: () => ({ kind: "after-tune" }),
       active: mode.kind === "after-tune",
     },
     ...SLEEP_TIMER_MINUTES.map((minutes) => ({
       key: `m${minutes}`,
       label: `${minutes}m`,
-      // Armed from the moment it is chosen, so the countdown starts on the tap rather than on some
-      // later render.
-      next: { kind: "timed" as const, minutes, endsAtMs: nowMs + minutes * 60_000 },
+      next: () => armTimed(minutes, Date.now()),
       active: mode.kind === "timed" && mode.minutes === minutes,
     })),
   ];
@@ -73,7 +82,7 @@ export const SleepTimerControl = ({ mode, onChange, nowMs }: SleepTimerControlPr
             className="h-8 px-2.5 text-xs"
             aria-pressed={option.active}
             data-testid={`sleep-timer-${option.key}`}
-            onClick={() => onChange(option.next)}
+            onClick={() => onChange(option.next())}
           >
             {option.label}
           </Button>
