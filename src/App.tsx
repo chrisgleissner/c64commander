@@ -18,6 +18,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { TabBar } from "@/components/TabBar";
 import { ConnectionController } from "@/components/ConnectionController";
 import { AvMirrorGovernorDriver } from "@/components/streams/AvMirrorGovernorDriver";
+import { LocalSidModelDriver } from "@/components/playback/LocalSidModelDriver";
 import { DemoModeInterstitial } from "@/components/DemoModeInterstitial";
 import { DeviceDiscoveryInterstitial } from "@/components/DeviceDiscoveryInterstitial";
 import { DeviceAuthChallengeDialog } from "@/components/DeviceAuthChallengeDialog";
@@ -282,6 +283,7 @@ const AppRoutes = () => {
             <GlobalNavigationBlocker />
             <RouteRefresher />
             <AvMirrorGovernorDriver />
+            <LocalSidModelDriver />
             <DebugStartupLogger />
             <DiagnosticsRuntimeBridge />
             <TraceContextBridge />

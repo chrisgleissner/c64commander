@@ -18,6 +18,7 @@ type RenderOptions = {
   canControlVolume?: boolean;
   profile?: "compact" | "medium" | "expanded";
   useNativeRangeInput?: boolean;
+  volumeLabel?: string;
   onToggleMute?: () => void;
   onVolumeDraftChange?: (value: number) => void;
   onVolumePreview?: (value: number) => Promise<void> | void;
@@ -29,6 +30,7 @@ const ProfileHarness = ({
   canControlVolume = true,
   profile,
   useNativeRangeInput = false,
+  volumeLabel = "0 dB",
   onToggleMute = vi.fn(),
   onVolumeDraftChange = vi.fn(),
   onVolumePreview = vi.fn(),
@@ -51,7 +53,7 @@ const ProfileHarness = ({
       onVolumePreview={onVolumePreview}
       onVolumeCommit={onVolumeCommit}
       previewIntervalMs={200}
-      volumeLabel="0 dB"
+      volumeLabel={volumeLabel}
       useNativeRangeInput={useNativeRangeInput}
     />
   );
@@ -65,32 +67,86 @@ const renderVolumeControls = (options: RenderOptions) =>
   );
 
 describe("VolumeControls", () => {
-  it("keeps the unmute button persistently highlighted while muted", () => {
+  // These assertions used to be about the caption element and the button's text. Neither exists any
+  // more: the row now reads as [speaker] [slider] [-6 dB], so the state a listener can see is the
+  // speaker glyph and the accessible name behind it, and that is what is checked instead. The
+  // behaviour a user cares about is unchanged — the control still says whether it is muted, and
+  // still says so to a screen reader and to Android's accessibility tree.
+  it("shows the muted state on the speaker button and names the action it offers", () => {
     renderVolumeControls({ volumeMuted: true });
 
-    expect(screen.getByTestId("volume-mute")).toHaveAttribute(CTA_PERSISTENT_ACTIVE_ATTR, "true");
-    expect(screen.getByTestId("volume-mute")).toHaveTextContent("Unmute");
+    const mute = screen.getByTestId("volume-mute");
+    expect(mute).toHaveAttribute(CTA_PERSISTENT_ACTIVE_ATTR, "true");
+    expect(mute).toHaveAttribute("aria-label", "Unmute");
+    expect(mute).toHaveAttribute("title", "Unmute");
+    // The crossed-out speaker: the icon shows the state, not the action, which is the idiom
+    // everywhere else a person plays music.
+    expect(mute.querySelector(".lucide-volume-x")).not.toBeNull();
   });
 
-  it("clears the persistent highlight when not muted", () => {
+  it("shows the unmuted state and offers Mute", () => {
     renderVolumeControls({ volumeMuted: false });
 
-    expect(screen.getByTestId("volume-mute")).not.toHaveAttribute(CTA_PERSISTENT_ACTIVE_ATTR);
-    expect(screen.getByTestId("volume-mute")).toHaveTextContent("Mute");
+    const mute = screen.getByTestId("volume-mute");
+    expect(mute).not.toHaveAttribute(CTA_PERSISTENT_ACTIVE_ATTR);
+    expect(mute).toHaveAttribute("aria-label", "Mute");
+    expect(mute.querySelector(".lucide-volume-2")).not.toBeNull();
   });
 
-  it("uses the compact vertical layout and disables controls when playback volume is locked", () => {
+  it("keeps mute, slider and readout on one row whatever the display profile", () => {
+    // The point of the row: it used to be three lines, and on the narrow profile the button and the
+    // slider were stacked on top of that. Vertical space on the Play page belongs to the playlist.
+    for (const profile of ["compact", "medium", "expanded"] as const) {
+      const { unmount } = renderVolumeControls({ volumeMuted: false, profile });
+
+      const row = screen.getByTestId("volume-row");
+      expect(row.className).toContain("flex");
+      expect(row.className).not.toContain("flex-col");
+      expect(row).toContainElement(screen.getByTestId("volume-mute"));
+      expect(row).toContainElement(screen.getByTestId("volume-slider"));
+      expect(row).toContainElement(screen.getByTestId("volume-label"));
+      // No caption line, and no word standing in for what the readout already says.
+      expect(row.textContent).not.toContain("Playback volume");
+      expect(row.textContent).not.toContain("Vol");
+
+      unmount();
+    }
+  });
+
+  it("reserves the readout's width so a dragging finger does not resize the slider under it", () => {
+    // A row that reflows while it is being touched has already cost this project a run of automated
+    // taps that landed on the wrong control, so the width is fixed rather than fitted to the text.
+    const short = renderVolumeControls({ volumeMuted: false, volumeLabel: "0 dB" });
+    const shortClass = screen.getByTestId("volume-label").className;
+    short.unmount();
+
+    const long = renderVolumeControls({ volumeMuted: false, volumeLabel: "-42 dB" });
+    const longLabel = screen.getByTestId("volume-label");
+
+    expect(longLabel.className).toBe(shortClass);
+    expect(longLabel.className).toContain("w-[52px]");
+    expect(longLabel.className).toContain("shrink-0");
+    // Proportional digits are a second source of width jitter, one figure to the next.
+    expect(longLabel.className).toContain("tabular-nums");
+    long.unmount();
+  });
+
+  it("keeps a 44px touch target on both controls even though the row is shorter", () => {
+    renderVolumeControls({ volumeMuted: false });
+
+    // h-11 is 44px in this project's scale, and the same size the transport buttons above use.
+    expect(screen.getByTestId("volume-mute").className).toContain("h-11");
+    expect(screen.getByTestId("volume-mute").className).toContain("w-11");
+    // The slider's hit area is the whole row height, not just the 20px the thumb occupies; on Android
+    // the transparent range input that receives the touch is sized from this element.
+    expect(screen.getByTestId("volume-slider").className).toContain("h-11");
+  });
+
+  it("disables both controls when playback volume is locked", () => {
     renderVolumeControls({ volumeMuted: false, canControlVolume: false, profile: "compact" });
 
     expect(screen.getByTestId("volume-mute")).toBeDisabled();
     expect(screen.getByTestId("volume-slider")).toHaveAttribute("data-disabled");
-    expect(screen.getByTestId("volume-caption").parentElement?.parentElement).toHaveClass("flex-col", "items-stretch");
-  });
-
-  it("uses the expanded slider width on expanded displays", () => {
-    renderVolumeControls({ volumeMuted: false, profile: "expanded" });
-
-    expect(screen.getByTestId("volume-caption").parentElement).toHaveClass("min-w-[200px]");
   });
 
   it("renders an Android-friendly native range input that keeps drag feedback local until commit", () => {
@@ -113,6 +169,7 @@ describe("VolumeControls", () => {
     expect(onVolumeDraftChange).toHaveBeenCalledWith(4);
     expect(onVolumePreview).not.toHaveBeenCalled();
     expect(onVolumeCommit).toHaveBeenCalledWith(4);
+    // The caption is gone, so this is now the control's only name.
     expect(nativeInput).toHaveAttribute("aria-label", "Playback volume");
   });
 });

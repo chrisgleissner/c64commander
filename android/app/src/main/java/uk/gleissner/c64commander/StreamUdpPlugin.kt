@@ -463,6 +463,23 @@ class StreamUdpPlugin : Plugin() {
     call.resolve(JSObject())
   }
 
+  /**
+   * Set the on-device playback attenuation, 0.0 (silent) to 1.0 (unchanged).
+   *
+   * Applied on the player thread as samples leave the ring, not where they are produced: the sink
+   * keeps up to twenty seconds scheduled ahead, so attenuating at production means the listener
+   * hears the change twenty seconds after moving the slider. The device's media volume is never
+   * touched — this only scales the samples this app is about to play.
+   */
+  @PluginMethod
+  fun setAudioTrackGain(call: PluginCall) {
+    val gain = call.getDouble("gain") ?: 1.0
+    synchronized(audioLifecycleLock) {
+      audioPipeline?.setGain(gain)
+    }
+    call.resolve(JSObject())
+  }
+
   @PluginMethod
   fun closeAudioTrack(call: PluginCall) {
     nativeAudioOwnsPlayback = false

@@ -117,7 +117,7 @@ Concrete application rules:
 | Button   | "Root"                    | Jump to source root         | **MEDIUM**   | ⚠️ PARTIAL    | uxInteractions.spec.ts:584   | Quick navigation    |
 | Button   | "Select all" (in browser) | Select all files in view    | **MEDIUM**   | ✅ FULL       | uxInteractions.spec.ts:173   | Bulk selection      |
 | Button   | "Add selected"            | Confirm and add to playlist | **CRITICAL** | ✅ FULL       | ui.spec.ts:174               | Confirmation        |
-| Checkbox | "Recurse folders"         | Include subfolders          | **MEDIUM**   | ✅ FULL       | playlistControls.spec.ts:181 | Option toggle       |
+| Checkbox | "Include subfolders"      | Include subfolders          | **MEDIUM**   | ✅ FULL       | playlistControls.spec.ts:190 | Add items sheet     |
 | Dropdown | File type filter          | Filter by PRG/SID/etc       | **MEDIUM**   | ❌ NONE       | -                            | Filter control      |
 | Checkbox | File/folder checkbox      | Select for addition         | **HIGH**     | ✅ FULL       | uxInteractions.spec.ts:173   | Selection mechanism |
 

@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { addLog } from "@/lib/logging";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { DEFAULT_STATION_BALANCE } from "@/lib/sidRadio/stationEngine";
 import type { StationCandidate, StationReason, StationResult } from "@/lib/sidRadio/stationEngine";
@@ -38,10 +39,10 @@ export type ResolvePathFn = (md5_48: string) => string | null;
  * Keyed by the resolved virtual path rather than the md5, because that is what the songlengths index
  * is keyed by and what the provider has in hand at the moment it decides.
  */
-export type ResolveDurationFn = (virtualPath: string, songIndex: number) => number | null | Promise<number | null>;
+export type ResolveDurationFn = (virtualPath: string, songNr: number) => number | null | Promise<number | null>;
 export type BuildStationItemFn = (input: {
   virtualPath: string;
-  songIndex: number;
+  songNr: number;
   reason: StationReason;
   trackOrdinal: number;
   md5_48: string;
@@ -85,6 +86,20 @@ export interface StationQueueProviderOptions {
   minSeconds?: number;
   /** Songlength lookup for {@link minSeconds}. Absent → no length filtering here. */
   resolveDuration?: ResolveDurationFn;
+  /**
+   * Awaited once before the first candidate is resolved.
+   *
+   * `resolvePath` is a synchronous lookup into an index that is built as a side effect of loading
+   * the HVSC songlengths, and a station resumed on app start refills immediately — so the two
+   * raced. Measured on the Pixel 4 against a fully ingested HVSC: **2,454 candidates dropped as
+   * unresolved and none emitted**, leaving a live station unable to produce a single track.
+   *
+   * The cost is not just the failed refill. A candidate is consumed before it is resolved, so every
+   * one of those tracks was added to the exclude set and can never be offered again — the station
+   * permanently lost 2,454 tunes to a race. Waiting once, here, is what makes the first refill ask
+   * a question the index can answer.
+   */
+  ensureResolvable?: () => Promise<unknown>;
 }
 
 export interface StationRefillResult {
@@ -148,6 +163,8 @@ export class StationQueueProvider {
   private itemsEmitted = 0;
   /** Engine computes issued, so a refill's cost can be attributed to count rather than guessed. */
   private computeCalls = 0;
+  /** Whether {@link StationQueueProviderOptions.ensureResolvable} has been awaited. */
+  private resolvableAwaited = false;
 
   constructor(private readonly options: StationQueueProviderOptions) {
     this.lookahead = options.lookahead ?? DEFAULT_LOOKAHEAD;
@@ -175,6 +192,21 @@ export class StationQueueProvider {
 
   /** Resolve the next `count` (default: lookahead) playable items, advancing the exclude set. */
   async refill(count = this.lookahead): Promise<StationRefillResult> {
+    // Once per provider, and before anything is consumed.
+    if (this.options.ensureResolvable && !this.resolvableAwaited) {
+      this.resolvableAwaited = true;
+      try {
+        await this.options.ensureResolvable();
+      } catch (error) {
+        // A path index that will not load is reported by the empty refill that follows. Failing to
+        // wait is not a reason to burn the candidates this wait exists to protect, so the refill
+        // proceeds — but silently proceeding would make the next empty station inexplicable.
+        addLog("warn", "SID Radio: path index was not ready before the first refill", {
+          service: "sid-radio",
+          error: (error as Error)?.message ?? String(error),
+        });
+      }
+    }
     const items: PlaylistItem[] = [];
     // Bound the work: even if every candidate is unresolved, we cannot loop forever.
     let guard = 0;
@@ -222,7 +254,7 @@ export class StationQueueProvider {
         // between pieces reads as broken. Skipped exactly like a removed tune: the ordinal is already
         // consumed, so the next refill asks the engine for somewhere else rather than offering it
         // again. An unknown length is admitted — never drop a tune because the songlengths are thin.
-        const seconds = await this.options.resolveDuration(virtualPath, candidate.songIndex);
+        const seconds = await this.options.resolveDuration(virtualPath, candidate.songNr);
         durationSeconds = seconds === null || seconds === undefined || !Number.isFinite(seconds) ? null : seconds;
         if (this.minSeconds <= 0) {
           // Filtering is off, so nothing is rejected and nothing is counted as an unknown-length
@@ -241,7 +273,7 @@ export class StationQueueProvider {
       items.push(
         this.options.buildItem({
           virtualPath,
-          songIndex: candidate.songIndex,
+          songNr: candidate.songNr,
           reason: candidate.reason,
           trackOrdinal: candidate.trackOrdinal,
           md5_48: candidate.md5_48,

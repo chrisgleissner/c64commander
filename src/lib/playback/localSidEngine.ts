@@ -8,11 +8,13 @@
 
 import { LocalSidChunkScheduler, type AudioScheduleSink, type AudioScheduleSource } from "./localSidChunkScheduler";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage } from "./localSidWorkerProtocol";
+import { toEngineSidModel } from "./localSidWorkerProtocol";
 import { hasCompleteRomSet, loadStoredRoms } from "@/lib/roms/romStore";
 import { Capacitor } from "@capacitor/core";
 import {
   effectiveSidEmulationEngine,
   loadPlaybackCrossfadeMs,
+  resolveLocalSidModel,
   type SidEmulationEngine,
 } from "@/lib/config/appSettings";
 import { StreamUdp } from "@/lib/native/streamUdp";
@@ -852,7 +854,17 @@ export class LocalSidEngine {
       this.openPending = { resolve: settle(resolve), reject: settle(reject) };
       // Transfer the SID bytes to the worker (single owner).
       worker.postMessage(
-        { type: "open", id, sidBytes, songIndex, sampleRate: this.requestedSampleRate, roms: romPayload },
+        {
+          type: "open",
+          id,
+          sidBytes,
+          songIndex,
+          sampleRate: this.requestedSampleRate,
+          roms: romPayload,
+          // Read per-play, like the ROMs above and for the same reason: changing the chip in
+          // Settings then applies from the very next tune rather than after a restart.
+          sidModel: toEngineSidModel(resolveLocalSidModel()),
+        },
         transfer,
       );
     });
@@ -1589,6 +1601,22 @@ export class LocalSidEngine {
     this.audio?.setGain?.(muted ? 0 : this.volume);
   }
 
+  /**
+   * The level and mute state on-device playback is currently using.
+   *
+   * The engine outlives any one mount of the Play page — it is a process-wide singleton — so it, and
+   * not the page, is where the listener's choice actually persists. The page reads these on mount so
+   * the slider and the speaker button come up showing what is really being played, rather than a
+   * default that disagrees with the sound.
+   */
+  getVolume(): number {
+    return this.volume;
+  }
+
+  getMuted(): boolean {
+    return this.muted;
+  }
+
   /** A fully-rendered tune, when this one has been cached. */
   getRenderedTune(key: string): RenderedTune | null {
     return this.renderCache.get(key);
@@ -1662,6 +1690,7 @@ export class LocalSidEngine {
         seconds,
         sampleRate: this.requestedSampleRate,
         roms: { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer },
+        sidModel: toEngineSidModel(resolveLocalSidModel()),
       } as LocalSidMainToWorker,
       [sidBytes],
     );
@@ -1862,6 +1891,7 @@ export class LocalSidEngine {
         sampleRate: this.requestedSampleRate,
         seconds,
         roms: { kernal, basic },
+        sidModel: toEngineSidModel(resolveLocalSidModel()),
       },
       [sidBytes, kernal, basic],
     );

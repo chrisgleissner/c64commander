@@ -28,7 +28,7 @@
  */
 
 /** Seconds, or null when this store cannot answer. */
-export type StationDurationSource = (virtualPath: string, songIndex: number) => Promise<number | null>;
+export type StationDurationSource = (virtualPath: string, songNr: number) => Promise<number | null>;
 
 export interface StationDurationResolverDeps {
   /** The ingested HVSC songlength store. Awaits its own readiness. */
@@ -45,9 +45,9 @@ export interface StationDurationResolverDeps {
  */
 export const createStationDurationResolver =
   ({ resolveHvscSeconds, resolveFileSeconds }: StationDurationResolverDeps) =>
-  async (virtualPath: string, songIndex: number): Promise<number | null> => {
-    const fromHvsc = await resolveHvscSeconds(virtualPath, songIndex);
+  async (virtualPath: string, songNr: number): Promise<number | null> => {
+    const fromHvsc = await resolveHvscSeconds(virtualPath, songNr);
     if (fromHvsc !== null && fromHvsc !== undefined && Number.isFinite(fromHvsc)) return fromHvsc;
-    const fromFile = await resolveFileSeconds(virtualPath, songIndex);
+    const fromFile = await resolveFileSeconds(virtualPath, songNr);
     return fromFile !== null && fromFile !== undefined && Number.isFinite(fromFile) ? fromFile : null;
   };

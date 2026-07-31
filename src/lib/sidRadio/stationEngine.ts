@@ -194,7 +194,8 @@ export interface StationEngineOptions {
 export interface StationCandidate {
   trackOrdinal: number;
   md5_48: string;
-  songIndex: number;
+  /** Which tune of the file, counting from 1 — see `SidcorrResolvedTrack.songNr`. */
+  songNr: number;
   score: number;
   reason: StationReason;
   /**
@@ -424,7 +425,7 @@ export const computeStation = (options: StationEngineOptions): StationResult => 
     return {
       trackOrdinal: ordinal,
       md5_48: track.md5_48,
-      songIndex: track.songIndex,
+      songNr: track.songNr,
       score,
       reason,
       fileTrackOrdinals: bundle.trackOrdinalsForMd548(track.md5_48),

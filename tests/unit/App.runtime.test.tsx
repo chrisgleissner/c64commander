@@ -197,6 +197,8 @@ vi.mock("@/lib/config/appSettings", () => ({
   },
   loadDebugLoggingEnabled: mocks.loadDebugLoggingEnabled,
   loadEnableSwipeNavigation: mocks.loadEnableSwipeNavigation,
+  // Read by the app-root LocalSidModelDriver, which learns the connected machine's SID chip.
+  loadLocalSidModelFromDevice: vi.fn(() => true),
 }));
 vi.mock("@/lib/native/platform", () => ({ getPlatform: mocks.getPlatform }));
 vi.mock("@/lib/native/safUtils", () => ({ redactTreeUri: mocks.redactTreeUri }));

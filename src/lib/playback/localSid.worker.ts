@@ -19,7 +19,7 @@
  */
 
 import { toLocalSidError } from "./localSidWorkerCore";
-import type { LocalSidMainToWorker, LocalSidWorkerToMain } from "./localSidWorkerProtocol";
+import type { EngineSidModel, LocalSidMainToWorker, LocalSidWorkerToMain } from "./localSidWorkerProtocol";
 
 /**
  * Absolute path to the loader, served from the app root like the SID Radio bundle.
@@ -38,6 +38,8 @@ interface SidAudioEngineLike {
   getChannels(): number;
   getTuneInfo(): Record<string, unknown> | null;
   renderSeconds(seconds: number): Promise<Int16Array>;
+  setEmulationConfig?(config: { sidModel?: EngineSidModel }): Promise<void>;
+  getEmulationConfig?(): { sidModel?: string } | null;
   dispose(): void;
 }
 interface SidAudioEngineCtor {
@@ -73,6 +75,26 @@ async function ensureModule(): Promise<SidAudioEngineCtor> {
   const mod = (await import(/* @vite-ignore */ LIBSIDPLAYFP_URL)) as LibsidplayfpModule;
   EngineCtor = mod.SidAudioEngine;
   return EngineCtor;
+}
+
+/**
+ * Tell the engine which chip to assume for a tune that does not name one.
+ *
+ * Only `sidModel` is set. `forceSidModel` is left alone on purpose: libsidplayfp takes the model
+ * from the tune's own header, per chip, and consults this value only where the header says
+ * `UNKNOWN` or `ANY`. Forcing it would override every tune's declaration — the opposite of what
+ * the setting is for.
+ *
+ * Applied AFTER `loadSidBuffer`, which is the only order the vendored engine allows: its player
+ * context does not exist until a tune has been loaded, and `setEmulationConfig` throws without
+ * one. Because the call then reloads the tune so the change takes effect from its start, the
+ * engine is asked what it is already using first — with the model the engine defaults to, that
+ * turns a wasted reload on every open into a synchronous read.
+ */
+async function applySidModel(target: SidAudioEngineLike, sidModel: EngineSidModel | undefined): Promise<void> {
+  if (!sidModel || !target.setEmulationConfig) return;
+  if (target.getEmulationConfig?.()?.sidModel === sidModel) return;
+  await target.setEmulationConfig({ sidModel });
 }
 
 function disposeEngine(): void {
@@ -143,6 +165,7 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
         await engine.setSystemROMs(new Uint8Array(message.roms.kernal), new Uint8Array(message.roms.basic), null);
         const romsReadyAt = performance.now();
         await engine.loadSidBuffer(bytes, message.songIndex);
+        await applySidModel(engine, message.sidModel);
         ctx.postMessage({
           type: "opened",
           id: message.id,
@@ -202,6 +225,9 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
         try {
           await offline.setSystemROMs(new Uint8Array(message.roms.kernal), new Uint8Array(message.roms.basic), null);
           await offline.loadSidBuffer(bytes, message.songIndex);
+          // Same chip as the playing engine, or the cached render and the live render of one tune
+          // would be two different performances with an audible seam between them.
+          await applySidModel(offline, message.sidModel);
           const sampleRate = offline.getSampleRate();
           const channels = offline.getChannels();
           // Rendered in slices so progress can be reported and the worker stays
