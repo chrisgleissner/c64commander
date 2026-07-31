@@ -454,8 +454,12 @@ export const PlaybackControlsCard = ({
 
                 One line, and only the parts STIL actually has. Both absent for most of the archive,
                 in which case nothing renders and the card is unchanged. */}
+            {/* Smaller than the header line above it, not larger. Measured on the device this line
+                runs to two or three lines on a tune like Commando, whose STIL title carries the
+                source of the music as well as its name; at `text-sm` it outweighed the composer and
+                pushed the transport down the card. At `text-xs` it reads as the annotation it is. */}
             {stilTuneLine ? (
-              <p className="mt-0.5 text-sm leading-snug text-foreground/90" data-testid="playback-current-stil">
+              <p className="mt-0.5 text-xs leading-snug text-foreground/80" data-testid="playback-current-stil">
                 {stilTuneLine}
               </p>
             ) : null}

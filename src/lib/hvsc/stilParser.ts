@@ -86,7 +86,36 @@ const isEntryHeading = (line: string) => line.startsWith("/") && line.toLowerCas
  */
 export const decodeStilText = (bytes: Uint8Array): string => new TextDecoder("windows-1252").decode(bytes);
 
-const finishComment = (lines: string[]): string => lines.join("\n").trim();
+/**
+ * Reflow a comment into a single block of prose.
+ *
+ * STIL is a fixed-width text file and its comments are hard-wrapped at about seventy columns. Those
+ * line breaks belong to the file, not to the writing: kept, they wrap again at a phone's width and
+ * produce a ragged block that breaks mid-clause ("I went down to their" / "office and started
+ * working"). Every break is dropped and the text is rewrapped by the layout, which is the only
+ * thing that knows how wide the card actually is.
+ *
+ * Blank lines go too. They are far rarer than the wrapping and mixing the two rules produced a
+ * block that was flush in most places and split in a few, which reads as a rendering fault rather
+ * than as structure.
+ */
+const finishComment = (lines: string[]): string =>
+  lines
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+/**
+ * Section start times, as STIL writes them: `(0:00)`, `(1:16-1:32)`.
+ *
+ * Meaningful in the full credit list, where they say when each part of a medley arrives. Noise on
+ * the one credit that is actually shown, whose time is by definition where the tune starts.
+ */
+const SECTION_TIMESTAMP = /\s*\(\d+:\d{2}(?:\s*-\s*\d+:\d{2})?\)\s*$/;
+
+export const stripSectionTimestamp = (title: string): string => title.replace(SECTION_TIMESTAMP, "").trim();
 
 /**
  * Parse STIL into one entry per file.

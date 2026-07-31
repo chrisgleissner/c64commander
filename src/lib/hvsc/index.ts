@@ -42,7 +42,7 @@ export {
   searchHvscSongs,
 } from "./hvscService";
 export { recoverStaleIngestionState } from "./hvscIngestionRuntime";
-export { decodeStilText, parseStil, primaryCredit, stilInfoForSubsong } from "./stilParser";
+export { decodeStilText, parseStil, primaryCredit, stilInfoForSubsong, stripSectionTimestamp } from "./stilParser";
 export type { StilCredit, StilEntry, StilInfo } from "./stilParser";
 export { clearStil, getStilEntry, getStilInfo, isStilInstalled, readStilManifest } from "./stilStore";
 export { ensureStilReady } from "./stilService";

@@ -68,7 +68,9 @@ export const TuneNotes = ({ note, className }: TuneNotesProps) => {
     <div className={cn("mt-1", className)} data-testid="tune-notes">
       <p
         ref={textRef}
-        className={cn("whitespace-pre-line text-xs leading-snug text-muted-foreground/80", !expanded && "line-clamp-3")}
+        // No `whitespace-pre-line`: the note arrives as one block with STIL's fixed-width line
+        // breaks already removed, and honouring breaks here would only let them back in.
+        className={cn("text-xs leading-snug text-muted-foreground/80", !expanded && "line-clamp-3")}
         style={expanded ? undefined : { WebkitLineClamp: COLLAPSED_LINES }}
         data-testid="tune-notes-text"
         data-expanded={expanded ? "true" : "false"}

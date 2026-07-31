@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from "react";
 
-import { ensureStilReady, getStilInfo, primaryCredit, type StilInfo } from "@/lib/hvsc";
+import { ensureStilReady, getStilInfo, primaryCredit, stripSectionTimestamp, type StilInfo } from "@/lib/hvsc";
 import { addErrorLog } from "@/lib/logging";
 
 export type StilDisplay = {
@@ -36,8 +36,9 @@ const clean = (value: string | null | undefined): string | null => {
 export const toStilDisplay = (info: StilInfo | null): StilDisplay => {
   if (!info) return EMPTY;
   const credit = primaryCredit(info);
+  const title = clean(credit?.title);
   return {
-    title: clean(credit?.title) ?? clean(info.name),
+    title: (title ? clean(stripSectionTimestamp(title)) : null) ?? clean(info.name),
     originalArtist: clean(credit?.artist),
     note: clean(info.comment),
   };

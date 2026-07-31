@@ -104,9 +104,7 @@ describe("buildStilTuneLine", () => {
   });
 
   it("shows the original composer even when STIL gave the tune no name", () => {
-    expect(buildStilTuneLine({ title: null, originalArtist: "Jean-Michel Jarre" })).toBe(
-      "music by Jean-Michel Jarre",
-    );
+    expect(buildStilTuneLine({ title: null, originalArtist: "Jean-Michel Jarre" })).toBe("music by Jean-Michel Jarre");
   });
 
   it("says nothing for the majority of the archive, which STIL does not describe", () => {

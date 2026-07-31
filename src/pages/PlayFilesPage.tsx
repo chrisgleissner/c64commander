@@ -72,6 +72,8 @@ import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
 import { parseSidHeaderMetadata, type SidClock, type SidModel } from "@/lib/sid/sidUtils";
 import { buildNowPlayingMetadataParts } from "@/lib/playback/nowPlayingMetadata";
 import { useStilInfo } from "@/pages/playFiles/hooks/useStilInfo";
+import { useSleepTimer } from "@/pages/playFiles/hooks/useSleepTimer";
+import { SleepTimerControl } from "@/pages/playFiles/components/SleepTimerControl";
 import { resolveTrackDisplayName, type SidChipCount } from "@/lib/playback/sidDisplayName";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
@@ -569,6 +571,31 @@ export default function PlayFilesPage() {
   useEffect(() => {
     handleNextRef.current = handleNext;
   }, [handleNext]);
+  const sleepTimer = useSleepTimer({
+    onExpire: () => {
+      void handleStop();
+    },
+    isPlaying,
+  });
+  const sleepTimerRef = useRef(sleepTimer);
+  sleepTimerRef.current = sleepTimer;
+  /**
+   * A tune has ended on its own: advance, unless the sleep timer says that was the last one.
+   *
+   * Every automatic advance goes through here — the foreground timeline reconciliation and the
+   * background watchdog both — so the two cannot disagree about whether the session is over. A
+   * user pressing next is deliberately not routed through this: they are asking for the next tune,
+   * not telling the timer anything.
+   */
+  const advanceOnTrackEnd = useCallback(
+    (trackInstanceId?: number) => {
+      if (sleepTimerRef.current.notifyTuneEnded()) return Promise.resolve();
+      return handleNextRef.current("auto", trackInstanceId);
+    },
+    [handleNextRef],
+  );
+  const advanceOnTrackEndRef = useRef(advanceOnTrackEnd);
+  advanceOnTrackEndRef.current = advanceOnTrackEnd;
   const playbackStateRef = useRef({ isPlaying, isPaused });
   useEffect(() => {
     playbackStateRef.current = { isPlaying, isPaused };
@@ -1334,10 +1361,10 @@ export default function PlayFilesPage() {
           nowMs: now,
           overdueMs: now - guard.dueAtMs,
         });
-        void handleNext("auto", guard.trackInstanceId);
+        void advanceOnTrackEnd(guard.trackInstanceId);
       }
     },
-    [currentIndex, handleNext, isPaused, isPlaying, playedClockRef],
+    [advanceOnTrackEnd, currentIndex, isPaused, isPlaying, playedClockRef],
   );
   const syncPlaybackTimelineRef = useRef(syncPlaybackTimeline);
   useEffect(() => {
@@ -1369,7 +1396,7 @@ export default function PlayFilesPage() {
           const expectedTrackInstanceId = guard.trackInstanceId;
           void (async () => {
             try {
-              await handleNextRef.current("auto", expectedTrackInstanceId);
+              await advanceOnTrackEndRef.current(expectedTrackInstanceId);
               if (cancelled) return;
               const nextGuard = autoAdvanceGuardRef.current;
               if (!nextGuard) {
@@ -2545,6 +2572,10 @@ export default function PlayFilesPage() {
                   ) : null}
                 </div>
               ) : null}
+              {/* Above the panel's own settings rather than inside it: this is a decision about the
+                  listening session, not about how a file is played, and it is the one control here
+                  that has to be findable in the dark. */}
+              <SleepTimerControl mode={sleepTimer.mode} onChange={sleepTimer.setMode} nowMs={sleepTimer.nowMs} />
               <PlaybackSettingsPanel
                 durationSliderMax={DURATION_SLIDER_STEPS}
                 durationSliderValue={durationSecondsToSlider(durationSeconds)}

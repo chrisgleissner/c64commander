@@ -35,7 +35,7 @@ const MANIFEST_NAME = "index.json";
  * Bumped when the parsed shape changes, so a shard written by an older build is discarded rather
  * than read as though it were current.
  */
-export const STIL_STORE_VERSION = 1;
+export const STIL_STORE_VERSION = 2;
 /**
  * Enough to cover playing a file's tunes back to back and a station's jumps between composers,
  * without the cache itself becoming the memory problem the sharding avoids. Four shards is roughly

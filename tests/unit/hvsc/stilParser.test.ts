@@ -8,7 +8,13 @@
 
 import { describe, expect, it } from "vitest";
 
-import { decodeStilText, parseStil, primaryCredit, stilInfoForSubsong } from "@/lib/hvsc/stilParser";
+import {
+  decodeStilText,
+  parseStil,
+  primaryCredit,
+  stilInfoForSubsong,
+  stripSectionTimestamp,
+} from "@/lib/hvsc/stilParser";
 
 /**
  * Every fixture below is copied verbatim out of the real `DOCUMENTS/STIL.txt` (v84), including its
@@ -133,5 +139,57 @@ describe("stilInfoForSubsong", () => {
 
   it("returns nothing for a file STIL has never heard of", () => {
     expect(stilInfoForSubsong(undefined, 1)).toBeUndefined();
+  });
+});
+
+describe("comment reflow", () => {
+  it("joins STIL's fixed-width wrapping back into a paragraph", () => {
+    // The breaks are an artifact of a 79-column text file. Kept, they wrap again on a phone and
+    // break mid-clause: "I went down to their" / "office and started working".
+    const text = `/MUSICIANS/H/Hubbard_Rob/Commando.sid
+COMMENT: "There is an interesting story behind Commando. I went down to their
+         office and started working on it late at night." (RH)
+`;
+    const entry = parseStil(text).get("/MUSICIANS/H/Hubbard_Rob/Commando.sid");
+    expect(entry?.comment).toBe(
+      '"There is an interesting story behind Commando. I went down to their office and started working on it late at night." (RH)',
+    );
+    expect(entry?.comment).not.toContain("\n");
+  });
+
+  it("renders as one block, blank lines included", () => {
+    // Blank lines are far rarer than the wrapping, so honouring only those produced a note that
+    // was flush in most places and split in a few — which reads as a rendering fault.
+    const text = `/DEMOS/X/A.sid
+COMMENT: First paragraph, which
+         wraps.
+
+         Second paragraph.
+`;
+    const comment = parseStil(text).get("/DEMOS/X/A.sid")?.comment;
+    expect(comment).toBe("First paragraph, which wraps. Second paragraph.");
+    expect(comment).not.toContain("\n");
+  });
+
+  it("leaves no run of whitespace for the layout to trip over", () => {
+    const text = `/DEMOS/X/B.sid
+COMMENT: Spaced    out    text
+             and   more.
+`;
+    expect(parseStil(text).get("/DEMOS/X/B.sid")?.comment).toBe("Spaced out text and more.");
+  });
+});
+
+describe("stripSectionTimestamp", () => {
+  it("drops the section start time, which says nothing on the one credit that is shown", () => {
+    expect(stripSectionTimestamp("BGM1 [from the arcade game Commando] (0:00)")).toBe(
+      "BGM1 [from the arcade game Commando]",
+    );
+    expect(stripSectionTimestamp("Level Complete (1:16-1:32)")).toBe("Level Complete");
+  });
+
+  it("leaves a title that merely ends in brackets alone", () => {
+    expect(stripSectionTimestamp("Theme (Reprise)")).toBe("Theme (Reprise)");
+    expect(stripSectionTimestamp("Ocean Loader 3")).toBe("Ocean Loader 3");
   });
 });

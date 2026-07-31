@@ -48,7 +48,7 @@ import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } 
 import { hydrateHvscMetadata } from "./hvscMetadataHydrator";
 import { getHvscHydrationGeneration } from "./hvscHydrationControl";
 import { getStilEntry } from "./stilStore";
-import { primaryCredit } from "./stilParser";
+import { primaryCredit, stripSectionTimestamp } from "./stilParser";
 
 export type HvscProgressListener = (event: HvscProgressEvent) => void;
 
@@ -537,7 +537,8 @@ export const getHvscSubsongTitles = async (virtualPath: string, tuneCount: numbe
     // Only the tune's own block. Falling back to the file's title here would stamp the same name on
     // every row and undo the thing this exists to fix.
     const title = primaryCredit(entry.subsongs?.[songNr])?.title ?? "";
-    titles.push(title);
+    // The section start time is noise on a playlist row for the same reason it is on the card.
+    titles.push(stripSectionTimestamp(title));
   }
   return titles;
 };
