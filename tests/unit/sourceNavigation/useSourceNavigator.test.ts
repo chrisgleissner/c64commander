@@ -339,3 +339,169 @@ describe("useSourceNavigator", () => {
     });
   });
 });
+
+/**
+ * Searching beyond the folder on screen.
+ *
+ * The filter box used to narrow the current folder and nothing else. For a source arranged by
+ * composer that means a query can only ever find what is already visible, which is the one case
+ * where a search is not needed. The navigator therefore carries a scope, and the source says whether
+ * it can answer a whole-source search at all and whether that answer is cheap enough to run while
+ * the person is still typing.
+ */
+describe("useSourceNavigator whole-source search", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  const makeSource = (overrides: Partial<SourceLocation> = {}): SourceLocation => ({
+    id: "hvsc-library",
+    type: "hvsc",
+    name: "HVSC",
+    rootPath: "/",
+    isAvailable: true,
+    listEntries: vi.fn(async () => [{ type: "file" as const, name: "in-folder.sid", path: "/in-folder.sid" }]),
+    listFilesRecursive: vi.fn(async () => []),
+    ...overrides,
+  });
+
+  it("starts scoped to the folder, so nothing changes until it is asked to", async () => {
+    const source = makeSource({ searchEntries: vi.fn(), searchIsInstant: true });
+    const { result } = renderHook(() => useSourceNavigator(source));
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+    expect(result.current.searchScope).toBe("folder");
+    expect(result.current.isSearching).toBe(false);
+    expect(result.current.canSearchSource).toBe(true);
+  });
+
+  it("reports no whole-source search for a source that cannot do one", async () => {
+    const { result } = renderHook(() => useSourceNavigator(makeSource()));
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+    expect(result.current.canSearchSource).toBe(false);
+    expect(result.current.runSourceSearch).toBeUndefined();
+  });
+
+  it("searches the whole source on every keystroke when the source is indexed", async () => {
+    const searchEntries = vi.fn(async () => ({
+      entries: [{ type: "file" as const, name: "Commando.sid", path: "/M/H/Hubbard_Rob/Commando.sid" }],
+      totalCount: 1,
+      nextOffset: null,
+    }));
+    const source = makeSource({ searchEntries, searchIsInstant: true });
+    const { result } = renderHook(() => useSourceNavigator(source));
+    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+
+    act(() => result.current.setSearchScope("source"));
+    act(() => result.current.setQuery?.("commando"));
+
+    await waitFor(() => expect(searchEntries).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.entries[0]?.name).toBe("Commando.sid"));
+    expect(result.current.isSearching).toBe(true);
+    expect(searchEntries).toHaveBeenCalledWith(expect.objectContaining({ query: "commando" }));
+  });
+
+  it("never starts a walk while the person is typing", async () => {
+    // A source that has to be walked costs seconds to minutes per search. Firing one per keystroke
+    // would queue walks far faster than they complete.
+    const searchEntries = vi.fn(async () => ({ entries: [], totalCount: 0, nextOffset: null }));
+    const source = makeSource({ searchEntries, searchIsInstant: false });
+    const { result } = renderHook(() => useSourceNavigator(source));
+    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+
+    act(() => result.current.setSearchScope("source"));
+    act(() => result.current.setQuery?.("commando"));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    expect(searchEntries).not.toHaveBeenCalled();
+
+    act(() => result.current.runSourceSearch?.());
+    await waitFor(() => expect(searchEntries).toHaveBeenCalledTimes(1));
+  });
+
+  it("goes back to the folder listing when the scope returns to this folder", async () => {
+    const searchEntries = vi.fn(async () => ({
+      entries: [{ type: "file" as const, name: "Commando.sid", path: "/M/Commando.sid" }],
+      totalCount: 1,
+      nextOffset: null,
+    }));
+    const source = makeSource({ searchEntries, searchIsInstant: true });
+    const { result } = renderHook(() => useSourceNavigator(source));
+    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+
+    act(() => result.current.setSearchScope("source"));
+    act(() => result.current.setQuery?.("commando"));
+    await waitFor(() => expect(result.current.isSearching).toBe(true));
+
+    act(() => result.current.setSearchScope("folder"));
+
+    await waitFor(() => expect(result.current.isSearching).toBe(false));
+    await waitFor(() => expect(result.current.entries[0]?.name).toBe("in-folder.sid"));
+  });
+
+  it("leaves the search when the person navigates, rather than filtering the new folder by it", async () => {
+    // Up and Root have nothing to mean inside a flat list of results, so reaching for one is how a
+    // person says they are done searching. Carrying the query over would land them on a folder
+    // listing filtered by a term they had moved on from.
+    const searchEntries = vi.fn(async () => ({
+      entries: [{ type: "file" as const, name: "Commando.sid", path: "/M/Commando.sid" }],
+      totalCount: 1,
+      nextOffset: null,
+    }));
+    const source = makeSource({ searchEntries, searchIsInstant: true });
+    const { result } = renderHook(() => useSourceNavigator(source));
+    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+
+    act(() => result.current.setSearchScope("source"));
+    act(() => result.current.setQuery?.("commando"));
+    await waitFor(() => expect(result.current.isSearching).toBe(true));
+
+    act(() => result.current.navigateRoot());
+
+    await waitFor(() => expect(result.current.isSearching).toBe(false));
+    expect(result.current.query).toBe("");
+    expect(result.current.searchScope).toBe("folder");
+  });
+
+  it("pages further results without losing the ones already shown", async () => {
+    const searchEntries = vi.fn(async ({ offset }: { offset?: number }) =>
+      offset
+        ? { entries: [{ type: "file" as const, name: "b.sid", path: "/b.sid" }], totalCount: 2, nextOffset: null }
+        : { entries: [{ type: "file" as const, name: "a.sid", path: "/a.sid" }], totalCount: 2, nextOffset: 1 },
+    );
+    const source = makeSource({ searchEntries, searchIsInstant: true });
+    const { result } = renderHook(() => useSourceNavigator(source));
+    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+
+    act(() => result.current.setSearchScope("source"));
+    act(() => result.current.setQuery?.("sid"));
+    await waitFor(() => expect(result.current.hasMore).toBe(true));
+
+    act(() => result.current.loadMore?.());
+
+    await waitFor(() => expect(result.current.entries).toHaveLength(2));
+    expect(result.current.hasMore).toBe(false);
+  });
+
+  it("clearing the search restores the folder listing", async () => {
+    const searchEntries = vi.fn(async () => ({
+      entries: [{ type: "file" as const, name: "Commando.sid", path: "/M/Commando.sid" }],
+      totalCount: 1,
+      nextOffset: null,
+    }));
+    const source = makeSource({ searchEntries, searchIsInstant: true });
+    const { result } = renderHook(() => useSourceNavigator(source));
+    await waitFor(() => expect(result.current.entries).toHaveLength(1));
+
+    act(() => result.current.setSearchScope("source"));
+    act(() => result.current.setQuery?.("commando"));
+    await waitFor(() => expect(result.current.isSearching).toBe(true));
+
+    act(() => result.current.clearSearch());
+
+    await waitFor(() => expect(result.current.entries[0]?.name).toBe("in-folder.sid"));
+    expect(result.current.query).toBe("");
+  });
+});

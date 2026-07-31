@@ -13,6 +13,14 @@ export type SourceEntry = {
   name: string;
   path: string;
   subtitle?: string | null;
+  /**
+   * A third line, below the subtitle.
+   *
+   * Used by a search that spans the whole source to say where the result actually lives. Browsing a
+   * folder does not need it — the path is already on screen — but a flat list of results drawn from
+   * everywhere is ambiguous without it.
+   */
+  detail?: string | null;
   durationMs?: number;
   songNr?: number;
   subsongCount?: number;
@@ -61,6 +69,32 @@ export type SourceLocation = {
     offset?: number;
     limit?: number;
   }) => Promise<SourceEntryPage>;
+  /**
+   * Find files anywhere in this source, not only in the folder being browsed.
+   *
+   * `listEntriesPage`'s query narrows one folder row, which is the right behaviour for cutting a
+   * long listing down and the wrong behaviour for finding something. A source arranged by composer
+   * or by publisher hides everything one level deeper than wherever the person happens to be
+   * standing, so a search that stops at the current level can only find what is already on screen.
+   *
+   * `path` restricts the search to a subtree; omitting it searches the whole source. Results are
+   * flat files, so they carry `detail` saying which folder each one came from.
+   */
+  searchEntries?: (options: {
+    query: string;
+    path?: string;
+    offset?: number;
+    limit?: number;
+    signal?: AbortSignal;
+  }) => Promise<SourceEntryPage>;
+  /**
+   * Whether {@link searchEntries} answers from an index rather than by walking the source.
+   *
+   * An index lookup costs milliseconds and can run on every keystroke. A walk costs seconds to
+   * minutes and must only run when it has been asked for, so the UI offers it as an action rather
+   * than as a filter that fires while you type.
+   */
+  searchIsInstant?: boolean;
   listFilesRecursive: (
     path: string,
     // `onProgress(delta)` reports newly-discovered file entries as the recursive

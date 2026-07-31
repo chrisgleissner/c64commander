@@ -8,12 +8,13 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createHvscSourceLocation } from "@/lib/sourceNavigation/hvscSourceAdapter";
-import { getHvscFolderListing, getHvscFolderListingPaged, getHvscSongsRecursive } from "@/lib/hvsc";
+import { getHvscFolderListing, getHvscFolderListingPaged, getHvscSongsRecursive, searchHvscSongs } from "@/lib/hvsc";
 
 vi.mock("@/lib/hvsc", () => ({
   getHvscFolderListing: vi.fn(),
   getHvscFolderListingPaged: vi.fn(),
   getHvscSongsRecursive: vi.fn(),
+  searchHvscSongs: vi.fn(),
 }));
 
 describe("hvscSourceAdapter", () => {
@@ -21,6 +22,7 @@ describe("hvscSourceAdapter", () => {
     vi.mocked(getHvscFolderListing).mockReset();
     vi.mocked(getHvscFolderListingPaged).mockReset();
     vi.mocked(getHvscSongsRecursive).mockReset();
+    vi.mocked(searchHvscSongs).mockReset();
   });
 
   it("lists folders and songs sorted by name", async () => {
@@ -387,5 +389,67 @@ describe("hvscSourceAdapter", () => {
 
     expect(entries).toMatchObject([{ type: "file", name: "c.sid", path: "/DEMOS/c.sid" }]);
     expect(getHvscFolderListingPaged).toHaveBeenCalled();
+  });
+});
+
+describe("hvscSourceAdapter archive-wide search", () => {
+  beforeEach(() => {
+    vi.mocked(searchHvscSongs).mockReset();
+  });
+
+  it("declares itself searchable and instant, so the picker can search while you type", () => {
+    const source = createHvscSourceLocation("/");
+    expect(source.searchEntries).toBeTypeOf("function");
+    expect(source.searchIsInstant).toBe(true);
+  });
+
+  it("says which folder each result came from", async () => {
+    // A flat list drawn from sixty thousand files is ambiguous without it: two composers can both
+    // have a tune called Theme.
+    vi.mocked(searchHvscSongs).mockResolvedValue({
+      songs: [{ virtualPath: "/MUSICIANS/H/Hubbard_Rob/Commando.sid", fileName: "Commando.sid" }],
+      totalSongs: 1,
+      offset: 0,
+      limit: 200,
+      query: "commando",
+    } as never);
+
+    const source = createHvscSourceLocation("/");
+    const page = await source.searchEntries!({ query: "commando" });
+
+    expect(page.entries).toMatchObject([
+      {
+        type: "file",
+        path: "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
+        detail: "/MUSICIANS/H/Hubbard_Rob",
+      },
+    ]);
+  });
+
+  it("reports more results to fetch while the total exceeds what was returned", async () => {
+    vi.mocked(searchHvscSongs).mockResolvedValue({
+      songs: [{ virtualPath: "/A/one.sid", fileName: "one.sid" }],
+      totalSongs: 5,
+      offset: 0,
+      limit: 1,
+      query: "one",
+    } as never);
+
+    const source = createHvscSourceLocation("/");
+    const page = await source.searchEntries!({ query: "one", limit: 1 });
+
+    expect(page.totalCount).toBe(5);
+    expect(page.nextOffset).toBe(1);
+  });
+
+  it("returns an empty page when the index is not loaded", async () => {
+    // Not the same as "no such tune". The caller has to be able to tell the difference, so a missing
+    // index must not come back looking like a completed search that found nothing.
+    vi.mocked(searchHvscSongs).mockResolvedValue(null);
+
+    const source = createHvscSourceLocation("/");
+    const page = await source.searchEntries!({ query: "commando" });
+
+    expect(page).toEqual({ entries: [], totalCount: 0, nextOffset: null });
   });
 });

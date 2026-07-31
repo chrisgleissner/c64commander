@@ -726,6 +726,14 @@ class NativeLocalSidSink implements AudioScheduleSink {
     this.suspended = true;
     // The ring holds a couple of seconds, which would otherwise keep sounding after a pause.
     this.queue = [];
+    // Rebase the write counter onto what was actually heard, exactly as the other two paths that
+    // discard audio do (`flush` and `reopenAfterStall`). The playhead is derived as
+    // "written minus still queued", so throwing audio away while leaving it counted as written puts
+    // the playhead that far ahead of the sound — and on resume the pump writes the audio that piled
+    // up during the pause on top of an already-overstated base. Measured on a Pixel 4: pausing for
+    // twelve seconds made the transport clock jump forward by about eight the moment it resumed.
+    this.writtenFrames = Math.max(0, Math.round(this.playheadSec * this.sampleRate));
+    this.queuedSec = 0;
     void this.backend.flushAudioTrack?.().catch(() => {
       // A pipeline that has already gone has nothing to flush.
     });

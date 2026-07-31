@@ -13,6 +13,7 @@ import { FolderPicker, type SafFolderEntry } from "@/lib/native/folderPicker";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import { normalizeSourcePath } from "./paths";
+import { createDeepScanSearch } from "./deepScanSearch";
 import type { SourceEntry, SourceLocation } from "./types";
 import {
   getLocalSourceListingMode,
@@ -228,6 +229,10 @@ export const createLocalSourceLocation = (source: LocalSourceRecord): SourceLoca
     isAvailable: !source.requiresReselect && hasRuntimeFiles && (!isAndroid || isSaf),
     listEntries,
     listFilesRecursive,
+    // A SAF-backed folder is walked one directory at a time over the Capacitor bridge, so this is a
+    // scan the person asks for rather than a filter that fires while they type.
+    searchEntries: createDeepScanSearch(listFilesRecursive, rootPath),
+    searchIsInstant: false,
   };
 };
 

@@ -150,6 +150,11 @@ export class LocalSidPlaybackController {
     return this.engine?.getPendingSeek() ?? null;
   }
 
+  /** True while any seek is still being worked on; see {@link LocalSidEngine.isSeeking}. */
+  isSeeking(): boolean {
+    return this.engine?.isSeeking() ?? false;
+  }
+
   /** Seconds of the current tune already rendered; drives the progress bar's pre-render fill. */
   renderedSeconds(): number | null {
     return this.engine?.getRenderedSeconds() ?? null;

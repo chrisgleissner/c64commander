@@ -14,6 +14,7 @@ import {
   parseMd548PathIndex,
   rebuildMd548PathIndex,
   resetMd548PathIndex,
+  md548ForVirtualPath,
   resolveVirtualPath,
 } from "@/lib/sidRadio/md5PathIndex";
 
@@ -113,5 +114,52 @@ describe("rebuildMd548PathIndex — staleness & force", () => {
     rebuildMd548PathIndex([partA, partB], { force: true });
     expect(resolveVirtualPath("111111111111")).toBe("/A/one.sid");
     expect(resolveVirtualPath("222222222222")).toBe("/B/two.sid");
+  });
+});
+
+/**
+ * The index read backwards.
+ *
+ * Serving a neighbour needs `md5_48 → path`. Choosing a tune BY NAME needs the opposite: a search
+ * result is a path, and seeding a station from it means turning that path back into the identity the
+ * similarity corpus uses. Hashing the file would answer the same question at the cost of a file read
+ * and a digest for something the parse already knew.
+ */
+describe("md548ForVirtualPath", () => {
+  beforeEach(() => {
+    resetMd548PathIndex();
+    rebuildMd548PathIndex(SONGLENGTHS);
+  });
+
+  it("gives the corpus identity of a path", () => {
+    expect(md548ForVirtualPath("/MUSICIANS/H/Hubbard_Rob/Commando.sid")).toBe(COMMANDO_MD5.slice(0, 12));
+  });
+
+  it("normalises a path the same way the forward lookup does", () => {
+    expect(md548ForVirtualPath("MUSICIANS/H/Hubbard_Rob/Commando.sid")).toBe(COMMANDO_MD5.slice(0, 12));
+  });
+
+  it("answers null for a tune the archive does not list", () => {
+    // Not the same as an error: such a tune can still be played, it just cannot seed a station.
+    expect(md548ForVirtualPath("/MUSICIANS/X/Nobody/Unknown.sid")).toBeNull();
+  });
+
+  it("maps every duplicate of a shared identity back to it", () => {
+    // HVSC keeps the same tune in more than one place. Each path has exactly one hash, so the
+    // inversion is unambiguous even though the forward direction is one-to-many.
+    expect(md548ForVirtualPath("/GAMES/A/Alpha.sid")).toBe(DUP_MD5_A.slice(0, 12));
+    expect(md548ForVirtualPath("/DEMOS/B/Beta.sid")).toBe(DUP_MD5_B.slice(0, 12));
+  });
+
+  it("is emptied by a reset, so a stale library cannot answer for a new one", () => {
+    resetMd548PathIndex();
+    expect(md548ForVirtualPath("/MUSICIANS/H/Hubbard_Rob/Commando.sid")).toBeNull();
+  });
+
+  it("follows a rebuild onto the new library", () => {
+    rebuildMd548PathIndex(["; /NEW/Only.sid", `${OTHER_MD5}=1:00`].join("\n"));
+
+    expect(md548ForVirtualPath("/NEW/Only.sid")).toBe(OTHER_MD5.slice(0, 12));
+    expect(md548ForVirtualPath("/MUSICIANS/H/Hubbard_Rob/Commando.sid")).toBeNull();
   });
 });

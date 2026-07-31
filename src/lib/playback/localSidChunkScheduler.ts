@@ -82,6 +82,19 @@ export class LocalSidChunkScheduler {
   private firstStartTime = 0;
   private started = false;
   private chunksScheduled = 0;
+  /**
+   * Chunks scheduled since the last {@link resetTo}, which is what "has this tune finished playing"
+   * has to be measured against.
+   *
+   * The engine decides a tune is over when every source it scheduled has reported back. It counts
+   * those reports itself and zeroes the count on a seek — but `chunksScheduled` is a session total
+   * that a seek deliberately does not reset, so after one seek the two could never meet again.
+   * Measured on a Pixel 4: a tune seeked into ran to the end of its audio with 114 scheduled against
+   * 28 reported, never fired "ended", and the playlist sat on a silent track. A seek also silences
+   * the sources still in flight, and those have their `onended` removed, so they can never report —
+   * which is why this counts from the reset rather than subtracting.
+   */
+  private chunksSinceReset = 0;
   private underruns = 0;
   private scheduledSeconds = 0;
   /**
@@ -145,6 +158,7 @@ export class LocalSidChunkScheduler {
     this.nextStartTime = startAt + duration;
     this.scheduledSeconds += duration;
     this.chunksScheduled += 1;
+    this.chunksSinceReset += 1;
     return this.nextStartTime;
   }
 
@@ -176,6 +190,11 @@ export class LocalSidChunkScheduler {
     return this.started;
   }
 
+  /** Chunks scheduled since the last seek; see {@link chunksSinceReset}. */
+  chunksScheduledSinceReset(): number {
+    return this.chunksSinceReset;
+  }
+
   /**
    * Drop everything still queued and rebase the clock to `positionSeconds`.
    *
@@ -195,6 +214,9 @@ export class LocalSidChunkScheduler {
     this.firstStartTime = 0;
     this.started = false;
     this.scheduledSeconds = 0;
+    // Reset, unlike `chunksScheduled`: this one exists to be compared against a report count the
+    // engine also zeroes here, and the sources just silenced will never report.
+    this.chunksSinceReset = 0;
     this.positionOffsetSeconds = Math.max(0, positionSeconds);
   }
 

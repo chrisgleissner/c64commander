@@ -13,6 +13,7 @@ import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { addLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
 import type { SourceEntry, SourceLocation, SourceRecursiveFailure, SourceRecursiveResult } from "./types";
+import { createDeepScanSearch } from "./deepScanSearch";
 import { SOURCE_LABELS } from "./sourceTerms";
 
 type FtpCacheRecord = {
@@ -309,6 +310,9 @@ export const createUltimateSourceLocation = (options?: { name?: string }): Sourc
   isAvailable: true,
   listEntries,
   listFilesRecursive,
+  // A walk over FTP, so it runs only when asked for — never per keystroke.
+  searchEntries: createDeepScanSearch(listFilesRecursive),
+  searchIsInstant: false,
   clearCacheForPath: (path) => {
     const { deviceHost: rawHost } = getC64APIConfigSnapshot();
     const host = normalizeFtpHost(rawHost);
