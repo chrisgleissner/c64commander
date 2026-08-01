@@ -266,12 +266,15 @@ test.describe("Playlist controls and advanced features", () => {
 
     await expectRestTraceSequence(page, testInfo, /\/v1\/runners:sidplay/);
 
-    const songButton = page.getByRole("button", { name: /Tune 1 of 3/ });
-    await expect(songButton).toBeVisible();
-    await snap(page, testInfo, "song-selector-visible");
-
+    // Addressed by its test id rather than by its name. Two controls now say "Tune 1 of 3": this
+    // one in the playback settings, and the same text on the credits line, which opens the fuller
+    // list of the file's tunes with their names and lengths. The name alone no longer identifies
+    // either of them, and this test is about this one — the same element the rest of the test
+    // drives.
     const trigger = page.getByTestId("song-selector-trigger");
     await expect(trigger).toBeVisible();
+    await expect(trigger).toHaveText(/Tune 1 of 3/);
+    await snap(page, testInfo, "song-selector-visible");
     await trigger.scrollIntoViewIfNeeded();
     await trigger.dispatchEvent("pointerdown");
     await trigger.dispatchEvent("click");
