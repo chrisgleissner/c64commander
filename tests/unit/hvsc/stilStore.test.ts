@@ -26,6 +26,7 @@ vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
 
 import {
   __resetStilStoreCachesForTest,
+  clearStil,
   getStilEntry,
   getStilInfo,
   isStilInstalled,
@@ -134,5 +135,29 @@ describe("stilStore", () => {
     expect(shardForPath("/MUSICIANS/H/Hubbard_Rob/Commando.sid")).toBe(
       shardForPath("/musicians/h/hubbard_rob/commando.SID"),
     );
+  });
+});
+
+describe("clearing the store while a read is in flight", () => {
+  beforeEach(async () => {
+    files.clear();
+    readCounts.clear();
+    __resetStilStoreCachesForTest();
+  });
+
+  it("does not let a read that was already running repopulate the cache", async () => {
+    // The read still resolves after the store is gone — the caller gets what was on disk when it
+    // asked — but caching it would put a shard of a deleted library back into a cache that was
+    // just emptied, where the next lookup would find it.
+    await writeStilShards(parseStil(DOCUMENT), 84);
+    __resetStilStoreCachesForTest();
+
+    const path = "/MUSICIANS/H/Hubbard_Rob/Commando.sid";
+    const inFlightRead = getStilEntry(path);
+    await clearStil();
+    await inFlightRead;
+
+    // Nothing on disk, nothing cached: the next lookup has to come back empty.
+    expect(await getStilEntry(path)).toBeNull();
   });
 });

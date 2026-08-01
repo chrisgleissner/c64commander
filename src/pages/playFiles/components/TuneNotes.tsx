@@ -31,10 +31,10 @@ export type TuneNotesProps = {
  * The notes are written by the archive's editors and their length is unbounded: measured across the
  * real document the median is 64 characters and the longest is 2,390. Putting the long ones on the
  * card unclamped would push the transport off the screen; putting all of them behind a control
- * would hide the short ones — the majority — behind a tap that reveals two lines, and would give no
+ * would hide the short ones — the majority — behind a tap that reveals a line or two, and would give no
  * hint that there was anything to reveal.
  *
- * So it is clamped to three lines and the control appears only when the note is actually longer
+ * So it is clamped to two lines and the control appears only when the note is actually longer
  * than that. That is measured, not guessed from the character count: what fits depends on the
  * width of the card and the size of the text, and a guess is wrong at both ends. In practice the
  * great majority of notes show in full with no control at all.

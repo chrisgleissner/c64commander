@@ -100,6 +100,15 @@ type Shard = Record<string, StilEntry>;
 
 /** Most-recently-used last. Small enough that an array beats a Map here. */
 const shardCache: Array<{ shard: number; entries: Shard }> = [];
+/**
+ * Bumped whenever the store is replaced or removed.
+ *
+ * A read already in flight when that happens still resolves, and it would otherwise cache what it
+ * read — putting a shard of a library that no longer exists back into a cache that was just
+ * emptied. Dropping the in-flight map is not enough on its own, because the promise holds its own
+ * reference to the work; the generation is what lets the read notice it has been overtaken.
+ */
+let storeGeneration = 0;
 let manifestPromise: Promise<StilManifest | null> | null = null;
 const inFlight = new Map<number, Promise<Shard | null>>();
 
@@ -120,12 +129,15 @@ const readShard = async (shard: number): Promise<Shard | null> => {
   const running = inFlight.get(shard);
   if (running) return running;
 
+  const generation = storeGeneration;
   const load = (async (): Promise<Shard | null> => {
     const text = await readStilFile(shardName(shard));
     if (!text) return null;
     try {
       const parsed = JSON.parse(text) as Shard;
-      touch(shard, parsed);
+      // Read, but from a store that has since been replaced or removed. The caller gets what was on
+      // disk when it asked; the cache does not, because caching it would resurrect it.
+      if (generation === storeGeneration) touch(shard, parsed);
       return parsed;
     } catch (error) {
       addErrorLog("STIL shard is not readable", { shard, error: (error as Error).message });
@@ -189,6 +201,8 @@ export const writeStilShards = async (entries: Map<string, StilEntry>, release: 
     shards[shardForPath(path)]![path] = entry;
   }
   await resetStilStore();
+  storeGeneration += 1;
+  inFlight.clear();
   for (let shard = 0; shard < STIL_SHARD_COUNT; shard += 1) {
     await writeStilFile(shardName(shard), JSON.stringify(shards[shard]));
   }
@@ -236,11 +250,16 @@ export const clearStil = async (): Promise<void> => {
   await resetStilStore();
   manifestPromise = null;
   shardCache.length = 0;
+  // A read already in flight when the store was removed still resolves, and would otherwise cache
+  // a shard of the library that has just been deleted.
+  storeGeneration += 1;
+  inFlight.clear();
 };
 
 /** Test seam: drops the in-memory caches without touching what is on disk. */
 export const __resetStilStoreCachesForTest = () => {
   manifestPromise = null;
   shardCache.length = 0;
+  storeGeneration += 1;
   inFlight.clear();
 };
