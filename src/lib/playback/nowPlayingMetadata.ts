@@ -86,13 +86,14 @@ const clean = (value: string | null | undefined): string | null => {
 /**
  * Which field a segment came from.
  *
- * Only the author is named, because it is the only one the card treats differently: it is a person,
- * and a person is somewhere to go. Everything else is a fact about the file and is rendered as
- * text.
+ * Two are named, because two of them are somewhere to go rather than something to read. The author
+ * is a person, and "more by this person" is a real question. "Tune 3 of 19" says the file holds
+ * eighteen others and gives no way to reach them. Everything else is a fact about the file and is
+ * rendered as text.
  */
 export type NowPlayingMetadataSegment = {
   text: string;
-  kind: "author" | "detail";
+  kind: "author" | "tunes" | "detail";
 };
 
 /**
@@ -130,7 +131,7 @@ export const buildNowPlayingMetadataParts = (input: NowPlayingMetadataInput): No
   // and calling them subsongs only ever meant something to the people who wrote the format.
   // Suppressed on a single-tune file, where "Tune 1 of 1" says nothing.
   if (input.tuneNumber && input.tuneCount && input.tuneCount > 1) {
-    push(`Tune ${input.tuneNumber} of ${input.tuneCount}`);
+    push(`Tune ${input.tuneNumber} of ${input.tuneCount}`, "tunes");
   }
 
   const length = clean(input.lengthLabel);

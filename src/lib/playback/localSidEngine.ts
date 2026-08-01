@@ -788,6 +788,19 @@ export class LocalSidEngine {
     // this one's work. A stall recovery re-opens the same tune and counts as a new instance too:
     // what the old instance was waiting for did not survive the worker being thrown away.
     this.trackInstanceId += 1;
+    // The listener has left whatever they were waiting for. `activePendingSeek` would discard it
+    // on the next read anyway; clearing it here as well keeps `debugState()` and anything reading
+    // the field directly honest from the first moment of the new tune.
+    this.pendingSeek = null;
+    this.followingPrerender = false;
+    // Every other per-tune latch as well. `seekTo` and `stop` both clear these; opening a tune did
+    // not, so a skip carried the previous tune's state into the new one — an `endReceived` left set
+    // stands the stall watchdog down for good, and an inflated render budget stops `pump()` before
+    // it starts.
+    this.inFlightRenders = 0;
+    this.endReceived = false;
+    this.endedFired = false;
+    this.chunksEnded = 0;
     // Remembered, not just assigned. Opening a tune tears the previous one down, and that teardown
     // clears `currentKey` — so setting it here and nothing else left it null for the whole tune. With it
     // null the pre-render cache cannot be found by any of the three things that need it: the progress
@@ -935,7 +948,6 @@ export class LocalSidEngine {
         // instance, or one a newer seek has already superseded, must be discarded rather than
         // applied — applying it would jump the tune now playing to a position somebody asked for in
         // a different one.
-        if (this.pendingSeek && this.isStalePendingSeek(this.pendingSeek)) this.pendingSeek = null;
         // Wait for a cushion past the target, not merely for the target.
         //
         // The chunk that crosses the target leaves nothing after it, so resuming exactly there
@@ -945,8 +957,9 @@ export class LocalSidEngine {
         // it answers this one too. It costs a fraction of a second more waiting on a wait that is
         // measured in tens of them.
         const cushion = startupBufferSeconds();
-        if (this.pendingSeek !== null && message.seconds > this.pendingSeek.targetSeconds + cushion) {
-          const awaited = this.pendingSeek.targetSeconds;
+        const awaiting = this.activePendingSeek;
+        if (awaiting !== null && message.seconds > awaiting.targetSeconds + cushion) {
+          const awaited = awaiting.targetSeconds;
           this.pendingSeek = null;
           this.cached = {
             partial: true,
@@ -1053,6 +1066,17 @@ export class LocalSidEngine {
         return;
       }
       case "chunk": {
+        // The budget is settled first, before any of the reasons this chunk might be thrown away.
+        //
+        // `pump()` counts a render when it posts one and refuses to post more at
+        // `MAX_IN_FLIGHT_RENDERS`. That count is a record of work outstanding in the worker, not of
+        // audio worth keeping: the render has finished either way, and the slot belongs back in the
+        // budget either way. Returning above the decrement — which all three discards below used to
+        // do — spent a slot permanently every time a chunk was dropped. Skipping is what made it
+        // add up, because every render still in flight when the next tune opens comes back with the
+        // previous tune's id and is dropped; once the budget was gone `pump()` could never ask for
+        // audio again and the tune went silent with the clock still running.
+        this.inFlightRenders = Math.max(0, this.inFlightRenders - 1);
         if (message.id !== this.activeId) return; // stale tune
         // The worker handles messages in order, so anything still arriving
         // before the "seeked" reply was rendered for the position we just left.
@@ -1066,8 +1090,7 @@ export class LocalSidEngine {
         // the exact "heard the old position while the bar showed the new one" failure the wait exists
         // to avoid. Flushing the queued audio was not enough on its own, because the renderer kept
         // refilling it.
-        if (this.pendingSeek) return;
-        this.inFlightRenders = Math.max(0, this.inFlightRenders - 1);
+        if (this.activePendingSeek) return;
         this.recordRender(message.renderMs, message.samples);
         // Learn how fast this device renders, so the next tune knows how much to buffer before it
         // starts. Only real renders count — a chunk served from the cache took no time and would
@@ -1082,6 +1105,9 @@ export class LocalSidEngine {
         return;
       }
       case "end": {
+        // Settled before the discards, for the same reason as "chunk": the render is over whether
+        // or not its result is wanted.
+        this.inFlightRenders = Math.max(0, this.inFlightRenders - 1);
         if (message.id !== this.activeId) return;
         // Same reasoning as "chunk": an end raised before the seek completed
         // describes the old position and must not finish the tune.
@@ -1089,8 +1115,7 @@ export class LocalSidEngine {
         // And an end that arrives while a seek waits on the pre-render describes the live renderer
         // running off the tune from the OLD position. The tune the listener is waiting for has not
         // finished; ending it here would skip to the next track mid-wait.
-        if (this.pendingSeek) return;
-        this.inFlightRenders = Math.max(0, this.inFlightRenders - 1);
+        if (this.activePendingSeek) return;
         this.endReceived = true;
         this.maybeFireEnded();
         return;
@@ -1351,6 +1376,32 @@ export class LocalSidEngine {
   }
 
   /**
+   * The seek still being waited for, or null — including when what is stored belongs to a tune that
+   * has been left behind.
+   *
+   * Every gating read goes through here rather than touching the field, because a leftover is not
+   * harmless. A pending seek stops `pump()` asking for chunks, makes the chunk and end handlers
+   * discard what does arrive, and stands the stall watchdog down. Left set across a skip, those
+   * three together are a tune that plays the start-up buffer already scheduled — about half a
+   * second — and is then silent for good, with nothing watching to notice and nothing to advance
+   * the playlist. Stop and Play cleared it, because `stop()` resets the field, which is exactly the
+   * shape the bug was reported in.
+   *
+   * Self-clearing rather than merely reporting: once the tune or the seek epoch has moved on there
+   * is no reader who wants the old value, and leaving it for the next caller to trip over is what
+   * made a single missing reset in `play()` reachable from eight places.
+   */
+  private get activePendingSeek(): PendingSeekState | null {
+    const pending = this.pendingSeek;
+    if (!pending) return null;
+    if (this.isStalePendingSeek(pending)) {
+      this.pendingSeek = null;
+      return null;
+    }
+    return pending;
+  }
+
+  /**
    * Settle a seek that was still waiting when the pre-render finished.
    *
    * In practice the target is past the end of the tune whenever this runs — a drag into the closing
@@ -1454,7 +1505,7 @@ export class LocalSidEngine {
   private checkLiveness(): void {
     if (!this.scheduler || this.endReceived || this.paused || this.stallRecoveryInFlight) return;
     if (this.openPending || this.seekPending) return;
-    if (this.pendingSeek !== null) return;
+    if (this.activePendingSeek !== null) return;
     // Waiting for the pre-render to reach a seek target is quiet for a reason too, and this timer is
     // the wrong judge of it: no worker call is outstanding, the buffer is deliberately empty, and the
     // wait lasts exactly as long as the rendering does — which for a position deep into a tune is far
@@ -1567,7 +1618,7 @@ export class LocalSidEngine {
     // arrival (they are the old position), so asking for them only spends the CPU that the
     // pre-render — the thread the listener is actually waiting for — needs to finish. Measured on a
     // Pixel 4, the two renderers competing is a material part of how long that wait lasts.
-    if (this.pendingSeek) return;
+    if (this.activePendingSeek) return;
     while (
       this.inFlightRenders < MAX_IN_FLIGHT_RENDERS &&
       this.scheduler.bufferedSeconds() + this.inFlightRenders * this.chunkSeconds < this.targetBufferSeconds
@@ -1957,7 +2008,7 @@ export class LocalSidEngine {
    * gets there. Surfaced because a listener must never be left guessing whether a drag did anything.
    */
   getAwaitedSeekSeconds(): number | null {
-    return this.pendingSeek?.targetSeconds ?? null;
+    return this.activePendingSeek?.targetSeconds ?? null;
   }
 
   /**
@@ -1969,7 +2020,8 @@ export class LocalSidEngine {
    * caller holding on to it cannot see the engine's own record change underneath them.
    */
   getPendingSeek(): PendingSeekState | null {
-    return this.pendingSeek ? { ...this.pendingSeek } : null;
+    const pending = this.activePendingSeek;
+    return pending ? { ...pending } : null;
   }
 
   /**
@@ -1986,7 +2038,7 @@ export class LocalSidEngine {
    * the listener is waiting to hear.
    */
   isSeeking(): boolean {
-    return this.seekPending !== null || this.pendingSeek !== null;
+    return this.seekPending !== null || this.activePendingSeek !== null;
   }
 
   /**

@@ -66,6 +66,13 @@ export type PlaybackControlsCardProps = {
    * rendered for playback from a device, where the archive is not involved.
    */
   onComposerSelected?: (composer: string) => void;
+  /**
+   * Open the list of tunes in this file.
+   *
+   * The same gesture as the composer beside it: "Tune 3 of 19" states that eighteen others exist,
+   * and until now gave no way to reach any of them.
+   */
+  onTunesSelected?: () => void;
   canTransport: boolean;
   hasPrev: boolean;
   hasNext: boolean;
@@ -304,6 +311,7 @@ export const PlaybackControlsCard = ({
   currentItemMetadataParts = [],
   stil,
   onComposerSelected,
+  onTunesSelected,
   canTransport,
   hasPrev,
   hasNext,
@@ -437,6 +445,16 @@ export const PlaybackControlsCard = ({
                         onClick={() => onComposerSelected(part.text)}
                         data-testid="playback-current-composer"
                         title={`Find more by ${part.text}`}
+                      >
+                        {part.text}
+                      </button>
+                    ) : part.kind === "tunes" && onTunesSelected ? (
+                      <button
+                        type="button"
+                        className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                        onClick={onTunesSelected}
+                        data-testid="playback-current-tunes"
+                        title="Choose a tune from this file"
                       >
                         {part.text}
                       </button>

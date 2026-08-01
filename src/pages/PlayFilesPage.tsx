@@ -103,6 +103,7 @@ import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
 import { HvscSearchSheet } from "@/pages/playFiles/components/HvscSearchSheet";
+import { TuneListSheet } from "@/pages/playFiles/components/TuneListSheet";
 import type { HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
 import { buildFoundTuneItem, insertAfterCurrent } from "@/pages/playFiles/insertTuneNext";
 import { expandSubsongs, hasAllTunesQueued, MIN_TUNES_TO_EXPAND } from "@/pages/playFiles/expandSubsongs";
@@ -343,6 +344,8 @@ export default function PlayFilesPage() {
    * what that entry point means.
    */
   const [hvscSearchSeed, setHvscSearchSeed] = useState<string | null>(null);
+  /** Whether the list of tunes in the current file is open. */
+  const [tuneListOpen, setTuneListOpen] = useState(false);
   const likedTuneCount = useLikedTuneCount();
 
   const {
@@ -2363,6 +2366,7 @@ export default function PlayFilesPage() {
                 currentItemMetadataParts={currentItemMetadataParts}
                 stil={stilInfo}
                 onComposerSelected={openSearchForComposer}
+                {...((knownSubsongCount ?? 0) > 1 ? { onTunesSelected: () => setTuneListOpen(true) } : {})}
                 // Which station (or, when none is running, which playlist) is producing this tune
                 // leads the card: it is context for the title, the transport and everything else
                 // below it. Rendered in both states, and the same height in both, so that starting
@@ -2840,6 +2844,19 @@ export default function PlayFilesPage() {
             songStyleBit={sidRadio.station?.seedKind === "song" ? sidRadio.station.styleBit : null}
             onStartSong={startSidRadioSongMood}
           />
+          <TuneListSheet
+            open={tuneListOpen}
+            onOpenChange={setTuneListOpen}
+            fileLabel={currentDisplay?.title ?? currentItem?.label ?? ""}
+            virtualPath={currentItem?.request.source === "hvsc" ? currentItem.path : null}
+            tuneCount={knownSubsongCount ?? 0}
+            currentSongNr={clampedSongNr ?? 1}
+            onSelectTune={(songNr) => {
+              setTuneListOpen(false);
+              void handleSongSelection(songNr);
+            }}
+          />
+
           <HvscSearchSheet
             open={hvscSearchOpen}
             onOpenChange={(open) => {
