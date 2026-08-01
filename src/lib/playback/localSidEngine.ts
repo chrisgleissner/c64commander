@@ -100,6 +100,16 @@ export interface LocalSidAudioSink {
   /** Judge the next stretch afresh: a new tune, a resume, or a recovery just attempted. */
   resetSilence?: () => void;
   /**
+   * Hand over audio rendered but not yet played, so the next tune can fade it out underneath itself.
+   *
+   * A crossfade needs both tunes sounding at once and there is only one output. Two sinks writing to
+   * it interleave rather than mix, and a sink's gain ramp is applied when a slice is converted, so it
+   * cannot reach audio already converted. The incoming sink therefore does the mixing.
+   */
+  takeCrossfadeTail?: (seconds: number) => Int16Array[];
+  /** Sum a predecessor's tail under this sink's own output, fading it away across `seconds`. */
+  adoptCrossfadeTail?: (slices: Int16Array[], seconds: number) => void;
+  /**
    * Throw away audio already handed to the output, for a seek.
    *
    * Web Audio needs nothing here — stopping the scheduled sources is enough. A native sink does:
@@ -572,6 +582,10 @@ export class LocalSidEngine {
   private muted = false;
   /** Crossfade length to apply to the tune currently being opened (0 = cut). */
   private pendingCrossfadeMs = 0;
+  /** The outgoing tune's audio, waiting for the incoming sink to fade it out underneath itself. */
+  private crossfadeTail: Int16Array[] | null = null;
+  /** How long that tail should take to disappear. */
+  private crossfadeSeconds = 0;
   private totalRenderMs = 0;
   private totalRenderedSeconds = 0;
   private peakRenderMsPerSec = 0;
@@ -1212,6 +1226,11 @@ export class LocalSidEngine {
     });
     // A new tune gets its own silence clock; the previous tune's quiet ending is not its fault.
     this.audio.resetSilence?.();
+    // And it inherits the outgoing tune's tail, so the two overlap instead of butting together.
+    if (this.crossfadeTail?.length) {
+      this.audio.adoptCrossfadeTail?.(this.crossfadeTail, this.crossfadeSeconds);
+      this.crossfadeTail = null;
+    }
     // Supervise from the moment there is something to supervise. The clock starts here rather than
     // at the first chunk, so a tune that never produces one at all is caught too.
     this.startWatchdog();
@@ -2167,6 +2186,12 @@ export class LocalSidEngine {
     this.scheduler?.stopAll(fadeMs > 0 ? { keepSourcesFor: fadeMs } : undefined);
     this.scheduler = null;
     this.audio = null;
+    if (outgoing && fadeMs > 0) {
+      // Taken now, while the outgoing sink still holds it: it stops writing the moment the next
+      // tune's first slice reaches the track, and this is the audio that has to sound underneath.
+      this.crossfadeTail = outgoing.takeCrossfadeTail?.(fadeMs / 1000) ?? null;
+      this.crossfadeSeconds = fadeMs / 1000;
+    }
     if (outgoing && fadeMs > 0 && outgoing.fadeOut) {
       // Deliberate crossfade: let the tail ring out under the incoming tune, then
       // close. The context is detached from this engine already, so nothing can

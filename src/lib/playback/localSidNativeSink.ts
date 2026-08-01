@@ -227,6 +227,21 @@ class NativeLocalSidSink implements AudioScheduleSink {
   /** Queue depth the pipeline last reported, in seconds. */
   private queuedSec = 0;
   private nativeUnderruns = 0;
+  /** Where this sink comes in the order they were created; later retires earlier. */
+  private readonly serial: number;
+  /**
+   * The outgoing tune's continuing audio, to be summed under this one for a crossfade.
+   *
+   * A crossfade means two tunes sounding at once, and there is only one AudioTrack. Writing from
+   * two sinks does not mix them — the slices interleave — and the per-sink gain ramp is applied
+   * when a slice is converted, so it cannot touch audio that has already been converted and queued.
+   * Both routes to an overlap are therefore closed, and the transition came out as a hard cut.
+   *
+   * So the incoming sink does the mixing itself: it takes what the outgoing sink had rendered but
+   * not yet written, and adds it to its own slices with a falling ramp while its own `fadeIn`
+   * raises it. One writer, two tunes, a real overlap.
+   */
+  private tail: { slices: Int16Array[]; cursor: number; frame: number; frames: number } | null = null;
   /** How long the speaker has been given a flat signal. See `SilenceDetector`. */
   private readonly silence = new SilenceDetector();
   private suspended = false;
@@ -276,10 +291,8 @@ class NativeLocalSidSink implements AudioScheduleSink {
     readonly sampleRate: number,
     private readonly backend: NativeLocalAudioBackend,
   ) {
-    // The newest sink owns the shared track. Claimed on construction rather than on first write,
-    // because the engine creates the incoming tune's sink while the outgoing one is still fading:
-    // from this moment the outgoing sink must not flush or close the track out from under it.
-    claimNativeTrack(this.backend, this);
+    // Ownership is claimed on the first write, not here; the serial fixes the order. See `send`.
+    this.serial = nextSerial();
   }
 
   /** How long the output has been flat, in seconds. Zero while anything audible is going out. */
@@ -295,6 +308,59 @@ class NativeLocalSidSink implements AudioScheduleSink {
   /** Called when a new tune starts or playback resumes, so a fresh attempt is judged afresh. */
   resetSilence(): void {
     this.silence.reset();
+  }
+
+  /**
+   * Hand over what has been rendered but not yet played, so a successor can fade it out under
+   * itself. Capped, because only the crossfade's worth is wanted — the rest of the tune is not.
+   */
+  takeTail(maxSeconds: number): Int16Array[] {
+    const maxFrames = Math.max(0, Math.round(maxSeconds * this.sampleRate));
+    const out: Int16Array[] = [];
+    let frames = 0;
+    while (this.queue.length && frames < maxFrames) {
+      const slice = this.queue.shift() as Int16Array;
+      out.push(slice);
+      frames += slice.length / 2;
+    }
+    return out;
+  }
+
+  /** Sum `slices` under this sink's own output, fading them away across `seconds`. */
+  adoptTail(slices: Int16Array[], seconds: number): void {
+    const frames = slices.reduce((sum, s) => sum + s.length / 2, 0);
+    if (frames === 0 || seconds <= 0) return;
+    this.tail = { slices, cursor: 0, frame: 0, frames: Math.min(frames, Math.round(seconds * this.sampleRate)) };
+  }
+
+  /**
+   * Mix the outgoing tune into this slice, in place.
+   *
+   * Summed rather than averaged, and clamped: two tunes at their own levels can exceed full scale
+   * where they happen to peak together, and wrapping an Int16 turns that into a crack rather than
+   * the clip it should be.
+   */
+  private mixTail(slice: Int16Array): void {
+    const tail = this.tail;
+    if (!tail) return;
+    for (let i = 0; i + 1 < slice.length; i += 2) {
+      if (!tail.slices.length || tail.frame >= tail.frames) {
+        this.tail = null;
+        return;
+      }
+      const from = tail.slices[0] as Int16Array;
+      const gain = 1 - tail.frame / tail.frames;
+      for (let ch = 0; ch < 2; ch += 1) {
+        const mixed = (slice[i + ch] as number) + (from[tail.cursor + ch] as number) * gain;
+        slice[i + ch] = mixed > 32767 ? 32767 : mixed < -32768 ? -32768 : mixed;
+      }
+      tail.cursor += 2;
+      tail.frame += 1;
+      if (tail.cursor >= from.length) {
+        tail.slices.shift();
+        tail.cursor = 0;
+      }
+    }
   }
 
   /** Supply-side counters, for HIL diagnosis. */
@@ -462,7 +528,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
         // interleave and the listener hears the old tune, a fragment of the new one, the old tune
         // again, and so on. Being superseded therefore makes a sink inert: it stops writing as well
         // as leaving the track alone for its successor to close.
-        if (!ownsNativeTrack(this.backend, this)) {
+        if (isSuperseded(this.backend, this.serial)) {
           this.queue = [];
           this.endings = [];
           return;
@@ -612,8 +678,27 @@ class NativeLocalSidSink implements AudioScheduleSink {
   }
 
   private async send(slice: Int16Array): Promise<void> {
+    // Fold the outgoing tune in before the slice leaves for the track: this is the only place both
+    // tunes exist as PCM in one writer, which is what a crossfade needs.
+    this.mixTail(slice);
     const bytes = new Uint8Array(slice.buffer, slice.byteOffset, slice.byteLength);
     try {
+      // Replaced while this write was already on its way. Dropping it here as well as in the pump
+      // loop is what makes the handover atomic: without it a sink that had been superseded would
+      // re-claim the track simply by writing, and the two would trade it back and forth — which is
+      // the interleaving this exists to prevent.
+      if (isSuperseded(this.backend, this.serial)) return;
+      // Take the track with the first slice that actually goes to it.
+      //
+      // Not on construction: the engine builds the incoming tune's sink well before that tune has
+      // rendered anything, and a sink that has been superseded stops writing at once. Claiming
+      // early therefore silenced the outgoing tune while the incoming one was still a second or two
+      // from its first sample, and the listener heard a gap where the crossfade should have been.
+      //
+      // Claiming on the first write hands over at the only moment that is both safe and seamless:
+      // exactly one sink is ever writing, so the slices cannot interleave, and the outgoing tail
+      // keeps the speaker fed right up to the instant the new tune has something to say.
+      claimNativeTrack(this.backend, this, this.serial);
       const stats = await this.backend.writeAudioTrack({ data: toBase64(bytes) });
       this.lastWriteAtMs = performance.now();
       // Watched here rather than anywhere upstream: this is the last point the audio is still audio
@@ -752,7 +837,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
     this.playheadSec = 0;
     this.playheadAtMs = performance.now();
     // Superseded: the audio in the track belongs to the tune that replaced this one.
-    if (!ownsNativeTrack(this.backend, this)) return;
+    if (isSuperseded(this.backend, this.serial)) return;
     void this.backend.flushAudioTrack?.().catch((error) => {
       addLog("debug", "Native audio: flush failed", { error: (error as Error)?.message ?? String(error) });
     });
@@ -800,9 +885,12 @@ class NativeLocalSidSink implements AudioScheduleSink {
     }
     this.queue = [];
     this.endings = [];
-    const owned = ownsNativeTrack(this.backend, this);
+    // Tear the track down only if it is still ours to tear down. A sink that never wrote owns
+    // nothing but may still have opened a track, and closing that is right; one that has been
+    // replaced must leave its successor's track alone.
+    const mayTouchTrack = !isSuperseded(this.backend, this.serial);
     this.opened = false;
-    if (!owned) return;
+    if (!mayTouchTrack) return;
     releaseNativeTrack(this.backend, this);
     void this.backend.flushAudioTrack?.().catch(() => {
       // Nothing queued, or no pipeline left to queue into.
@@ -844,16 +932,44 @@ export const nativeLocalAudioAvailable = (): boolean =>
  * sinks over two different backends are not in competition. Production has a single backend, so it
  * is the same thing there.
  */
-const trackOwners = new WeakMap<object, object>();
+const trackOwners = new WeakMap<object, { sink: object; serial: number }>();
+let nextSinkSerial = 1;
 
-const claimNativeTrack = (backend: object, sink: object): void => {
-  trackOwners.set(backend, sink);
+/** A sink's place in the order they were created. Later beats earlier. */
+const nextSerial = (): number => nextSinkSerial++;
+
+/**
+ * Take the track, if this sink is not already behind a newer one.
+ *
+ * Called from the write path rather than from the constructor, and ordered by age rather than by
+ * who got there last. Both matter:
+ *
+ * - Claiming at construction silenced the outgoing tune the moment the incoming sink existed, which
+ *   is a second or two before that tune has rendered anything — heard as a gap where the crossfade
+ *   should be.
+ * - Claiming unconditionally on write let the outgoing sink take the track straight back, so the
+ *   two traded it and their slices interleaved.
+ *
+ * Ordering by serial gives the handover the app actually wants: the outgoing tail keeps the speaker
+ * fed right up to the incoming tune's first sample, and from that sample on the older sink is
+ * finished.
+ */
+const claimNativeTrack = (backend: object, sink: object, serial: number): void => {
+  const owner = trackOwners.get(backend);
+  if (owner && owner.serial > serial) return;
+  trackOwners.set(backend, { sink, serial });
 };
 
-const ownsNativeTrack = (backend: object, sink: object): boolean => trackOwners.get(backend) === sink;
+const ownsNativeTrack = (backend: object, sink: object): boolean => trackOwners.get(backend)?.sink === sink;
+
+/** Whether a NEWER sink has already begun writing, which is what retires this one. */
+const isSuperseded = (backend: object, serial: number): boolean => {
+  const owner = trackOwners.get(backend);
+  return owner !== undefined && owner.serial > serial;
+};
 
 const releaseNativeTrack = (backend: object, sink: object): void => {
-  if (trackOwners.get(backend) === sink) trackOwners.delete(backend);
+  if (trackOwners.get(backend)?.sink === sink) trackOwners.delete(backend);
 };
 
 export const createNativeLocalSidSink = (
@@ -869,6 +985,8 @@ export const createNativeLocalSidSink = (
     sink,
     audioUnderruns: () => sink.underruns(),
     isSilentFault: () => sink.isSilentFault(),
+    takeCrossfadeTail: (seconds: number) => sink.takeTail(seconds),
+    adoptCrossfadeTail: (slices: Int16Array[], seconds: number) => sink.adoptTail(slices, seconds),
     resetSilence: () => sink.resetSilence(),
     resume: () => sink.resume(),
     suspend: () => sink.suspend(),

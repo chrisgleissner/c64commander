@@ -781,18 +781,28 @@ describe("when the pipeline refuses the level", () => {
  * the engine reporting 0.15 s of buffer for the whole of each silent track.
  */
 describe("a sink that has been replaced", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("leaves the shared track alone when it is closed after its successor opened", async () => {
     const backend = createBackend();
-    const outgoing = createNativeLocalSidSink(RATE, backend)!;
-    await outgoing.resume?.();
-    const incoming = createNativeLocalSidSink(RATE, backend)!;
-    await incoming.resume?.();
+    const outgoing = createNativeLocalSidSink(RATE, backend);
+    await outgoing!.resume?.();
+    const incoming = createNativeLocalSidSink(RATE, backend);
+    await incoming!.resume?.();
+    // The new tune has begun: it is writing, which is what takes the track.
+    scheduleChunk(incoming, 0.5);
+    await settle(200);
 
     const closesBefore = backend.closes;
     const flushesBefore = backend.flushes;
 
     // The crossfade timer fires: the outgoing sink closes, well after the new tune started.
-    outgoing.close();
+    outgoing!.close();
 
     expect(backend.closes).toBe(closesBefore);
     expect(backend.flushes).toBe(flushesBefore);
@@ -811,18 +821,20 @@ describe("a sink that has been replaced", () => {
 
   it("does not flush the shared track on behalf of a tune that has been replaced", async () => {
     const backend = createBackend();
-    const outgoing = createNativeLocalSidSink(RATE, backend)!;
-    await outgoing.resume?.();
-    const incoming = createNativeLocalSidSink(RATE, backend)!;
-    await incoming.resume?.();
+    const outgoing = createNativeLocalSidSink(RATE, backend);
+    await outgoing!.resume?.();
+    const incoming = createNativeLocalSidSink(RATE, backend);
+    await incoming!.resume?.();
+    scheduleChunk(incoming, 0.5);
+    await settle(200);
 
     const flushesBefore = backend.flushes;
     // A late seek settling on the outgoing tune would otherwise empty the new tune's queue.
-    outgoing.flush?.();
+    outgoing!.flush?.();
     expect(backend.flushes).toBe(flushesBefore);
 
     // The current sink may still flush its own audio.
-    incoming.flush?.();
+    incoming!.flush?.();
     expect(backend.flushes).toBe(flushesBefore + 1);
   });
 });
@@ -854,10 +866,13 @@ describe("a superseded sink goes quiet", () => {
 
     const incoming = createNativeLocalSidSink(RATE, backend);
     await incoming!.resume?.();
+    // The new tune produces its first audio: that write is what takes the track.
+    scheduleChunk(incoming, 0.5);
+    await settle(200);
     const writesBefore = backend.writes.length;
 
     // The outgoing tune keeps producing for the length of the crossfade. None of it may reach the
-    // track, because the track is the new tune's now.
+    // track any more, because the track is the new tune's now.
     for (let i = 0; i < 4; i += 1) scheduleChunk(outgoing, 0.5);
     await settle(200);
 
@@ -876,5 +891,108 @@ describe("a superseded sink goes quiet", () => {
     await settle(200);
 
     expect(backend.writes.length).toBeGreaterThan(writesBefore);
+  });
+});
+
+/**
+ * A crossfade means both tunes sounding at once.
+ *
+ * There is one AudioTrack, so two sinks cannot overlap by both writing — their slices interleave.
+ * And a sink's gain ramp is applied when a slice is *converted*, so it cannot reach audio that has
+ * already been converted and queued. Both routes to an overlap are closed, which is why the
+ * transition was heard on a Pixel 4 as a hard cut with no fade at all.
+ *
+ * So the incoming sink mixes: it takes what the outgoing one had rendered but not yet played and
+ * sums it under its own output with a falling ramp. These tests use two constant levels, so an
+ * overlap is arithmetic rather than a matter of opinion.
+ */
+describe("crossfade mixing", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** A slice of `frames` stereo frames, every sample `value`. */
+  const flat = (frames: number, value: number) => {
+    const pcm = new Int16Array(frames * 2);
+    pcm.fill(value);
+    return pcm;
+  };
+
+  it("hands over what was rendered but never played, and no more than asked for", async () => {
+    const backend = createBackend();
+    const outgoing = createNativeLocalSidSink(RATE, backend);
+    await outgoing!.resume?.();
+    // Far more queued than the crossfade wants: the rest of the tune is not part of the fade.
+    for (let i = 0; i < 8; i += 1) scheduleChunk(outgoing, 0.5);
+
+    const tail = outgoing!.takeCrossfadeTail?.(1.0) ?? [];
+    const frames = tail.reduce((sum, s) => sum + s.length / 2, 0);
+    expect(frames).toBeGreaterThan(0);
+    expect(frames).toBeLessThanOrEqual(Math.round(1.5 * RATE));
+  });
+
+  it("sums the outgoing tune under the incoming one instead of replacing it", async () => {
+    const backend = createBackend();
+    const incoming = createNativeLocalSidSink(RATE, backend);
+    await incoming!.resume?.();
+
+    // The outgoing tune, as a steady level.
+    incoming!.adoptCrossfadeTail?.([flat(RATE, 4000)], 0.5);
+    scheduleChunk(incoming, 0.25);
+    await settle(200);
+
+    const written = backend.pcm[0]!;
+    // The incoming chunk alone is 0.5 full scale. With the outgoing tune folded in at its opening
+    // gain of 1, the first frame has to be louder than the incoming tune on its own.
+    const alone = Math.round(0.5 * (INT16_MAX - 1));
+    expect(written[0]).toBeGreaterThan(alone);
+  });
+
+  it("fades the outgoing tune away rather than dropping it", async () => {
+    const backend = createBackend();
+    const incoming = createNativeLocalSidSink(RATE, backend);
+    await incoming!.resume?.();
+
+    incoming!.adoptCrossfadeTail?.([flat(RATE, 8000)], 0.5);
+    scheduleChunk(incoming, 0.5);
+    await settle(200);
+
+    const written = backend.pcm[0]!;
+    const first = written[0] as number;
+    const later = written[Math.floor(written.length / 2)] as number;
+    // Same incoming level throughout, so any fall is the outgoing tune receding.
+    expect(later).toBeLessThan(first);
+  });
+
+  it("adds nothing once the fade is over", async () => {
+    const backend = createBackend();
+    const incoming = createNativeLocalSidSink(RATE, backend);
+    await incoming!.resume?.();
+
+    incoming!.adoptCrossfadeTail?.([flat(RATE / 10, 8000)], 0.1);
+    scheduleChunk(incoming, 0.5);
+    await settle(200);
+
+    const written = backend.pcm[0]!;
+    const alone = Math.round(0.5 * (INT16_MAX - 1));
+    // The tail is a tenth of a second; the end of a half-second slice is the incoming tune alone.
+    expect(written[written.length - 2]).toBe(alone);
+  });
+
+  it("clamps rather than wrapping when both tunes peak together", async () => {
+    // Two loud tunes summed can exceed full scale. Wrapping an Int16 turns that into a crack.
+    const backend = createBackend();
+    const incoming = createNativeLocalSidSink(RATE, backend);
+    await incoming!.resume?.();
+
+    incoming!.adoptCrossfadeTail?.([flat(RATE, 30000)], 0.5);
+    scheduleChunk(incoming, 0.25);
+    await settle(200);
+
+    const written = backend.pcm[0]!;
+    for (const sample of written) expect(sample).toBeGreaterThan(0);
   });
 });
