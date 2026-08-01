@@ -373,108 +373,11 @@ Preferred path: Share before restart when you are trying to preserve evidence.
 
 The tour showed you where everything lives, and the flows above are quick recipes. A few features reward a closer look. This chapter takes its time with them.
 
-### SID Radio
+### SID Music
 
-A **SID** — short for **Sound Interface Device** — is the sound chip inside every Commodore 64. It gives the machine three voices, and composers have been coaxing remarkable music out of those three voices since 1982.
+A **SID** — short for **Sound Interface Device** — is the sound chip inside every Commodore 64. It gives the machine three voices, and composers have been coaxing remarkable music out of those three voices since 1982. The same name is given to the small files that hold C64 music, because each one is really a tiny program that plays the chip. Most have been gathered into a free archive called the **High Voltage SID Collection**, or **HVSC**.
 
-The same name is given to the small files that hold C64 music, because each one is really a tiny program that plays the chip. Thousands were written for games and demos, and people are still writing them today. Most have been gathered into a free archive called the **High Voltage SID Collection**, or **HVSC** for short.
-
-SID Radio plays that archive like a radio station. You choose a mood, or a tune you already like, and the app keeps finding more music of the same kind for as long as you care to listen. You never have to build a playlist.
-
-It needs no internet connection. The app already knows which tunes resemble one another, so once the music is on your phone or tablet there is nothing further to download.
-
-![The Now Playing card: Rob Hubbard's "Monty on the Run" playing, with the heart and cross beside the title](../../img/app/play/sid-radio/01-controls.png)
-
-#### Starting a station
-
-1. Go to the **Play** page.
-2. Tap **SID Radio**.
-3. Pick what you are in the mood for.
-
-You will be offered three kinds of station:
-
-- **A mood.** Nine of them, such as Fast-Paced, Chill / Ambient and Melodic. Every one of them draws on tens of thousands of tunes, so pick whichever suits you and do not worry about running short.
-- **Tunes you like.** This appears once you have marked a few favourites, and builds a station out of them.
-- **Surprise me.** Anything at all.
-
-You can also start a station from whatever is already playing. Tap **More like this**, and the app goes looking for more music in the same vein. It is there whenever a SID is playing — including while a station is already running, which is when you are most likely to want it. Hearing a tune you like is what prompts the thought, and one tap takes the station off in that direction; you never have to stop what is playing first.
-
-Switch on **Based on my likes** to tilt any mood towards your own taste — "Fast-Paced from your Likes", for example.
-
-![Choosing a station: a tune, a mood, or your own taste](../../img/app/play/sid-radio/02-stations.png)
-
-#### Telling it what you like
-
-While a tune plays, a heart and a cross sit beside its title.
-
-- Tap the **heart** to keep the tune. It joins your **Liked Tunes** list.
-- Tap the **cross** to move on. The station plays something else at once, and remembers to steer clear of anything similar.
-
-You never have to use either. The station works perfectly well if you simply listen.
-
-Your choices stay on your phone or tablet and nowhere else. They are attached to the music itself rather than to a file name, so they survive an update to your copy of HVSC even if the tune has since moved to a different folder.
-
-**Liked Tunes** is an ordinary playable list. Open it to play your favourites, shuffle them, or take a tune off the list again. If a tune is no longer in the copy of HVSC you have installed, it is shown greyed out rather than quietly dropped.
-
-#### What a station will and will not do
-
-**It never repeats itself.** A station will not play the same tune twice, nor two pieces from the same file one after the other. It always moves on to something you have not heard yet.
-
-**It skips the very short pieces.** HVSC holds jingles, sound effects and test tones alongside the music, and a station that slipped those between songs would feel broken. Anything shorter than fifteen seconds is passed over. Change that under **Settings → SID Radio → Shortest tune to play**, or set it to zero to hear everything. Raising it will not leave a station short of music; it simply searches further afield.
-
-**It can run out, eventually.** A station follows a trail of similar music, and once in a great while that trail comes to an end — usually only after you have skipped through a great many tunes in one sitting. The app says so plainly instead of leaving you on a tune that never advances, and you can choose another mood.
-
-#### While a station is playing
-
-There is very little to fiddle with, which is rather the point of radio. The station chooses what comes next, so Shuffle, Repeat and Reshuffle disappear from the Play page while one is running. They come back, set as you left them, as soon as you stop the station and play an ordinary list.
-
-The line across the top of the Now Playing card always tells you where the music is coming from: the name of the station, or simply your playlist when no station is running. Tap it to stop the station, or to see a short note about why this particular tune was chosen. The line is the same size whether or not a station is playing, so the buttons below it never shift under your thumb.
-
-Every station starts fresh, so the same mood gives you a different evening each time.
-
-#### Finding one particular tune
-
-A station chooses for you, which is the point of it — right up until you want to hear one specific piece. Tap **Find a tune** and type part of a title or a composer's name, and the app searches the whole of HVSC: sixty thousand tunes, filed by composer, so this finds pieces you would otherwise have to know the whereabouts of.
-
-You can type any part of a word, in any case, and accents make no difference — "oorni" finds Lasse Öörni, "mando" finds Commando. Add a second word to narrow it: "hubbard commando" finds the one tune that answers to both. Each result shows the composer and the folder it came from, because the same title turns up under several composers.
-
-Tap a result and it plays straight away. Your station is not disturbed: it keeps its place, and when the tune ends it carries on exactly where it was. If instead you would like more music like the tune you just found, tap the radio icon beside it and a new station starts from there.
-
-![Finding one tune by name, anywhere in HVSC](../../img/app/play/sid-radio/04-find-a-tune.png)
-
-When you have not typed anything, the sheet shows what you have recently heard, with the same two actions on each row. A station is endless and only goes forwards, so this is the way back to a tune that has just gone by.
-
-![What was just played, and the way back to it](../../img/app/play/sid-radio/05-recently-played.png)
-
-#### A SID is a small album
-
-Many SID files hold more than one tune — a title screen, a high-score jingle, a loading tune, and sometimes twenty more. The line under the title says so: **Tune 1 of 19**.
-
-Tap **Play all 19 tunes** and every one of them joins your playlist, in order, each with its own length. From then on they behave like any other tracks: skip between them, shuffle them, repeat them, or remove the ones you do not care for. The button appears only when a file holds more than one tune, and goes away once you have added them.
-
-Each of those tunes shows which one it is — **Tune 7 of 19** — and, where the collection names it, what it is called. Otherwise nineteen rows would read identically and differ only in length.
-
-If you would rather go straight to one tune than queue them all, tap **Tune 1 of 19** on the line under the title. That lists every tune in the file with its number, its name where there is one, and how long it runs; tap one and it plays. Tunes vary enormously in length — a five-minute piece and a one-second jingle in the same file is entirely normal — so the lengths are worth reading before you choose.
-
-![Every tune in one SID file, with its name and length](../../img/app/play/sid-radio/07-tunes-in-this-file.png)
-
-#### What the tune is, and who wrote it
-
-The line under the title comes from the SID file itself: the composer, the year, the chip it wants, and how long it runs. There are two things a SID file cannot tell you, and for a good part of the collection the archive's editors have written them down separately.
-
-The first is that a tune is an arrangement, and of whose music. A great deal of C64 music is a cover — of pop records, of film scores, of arcade originals — and the name in the file belongs to whoever made the C64 version. Rob Hubbard's *Commando* is a case in point: the file credits him, and he wrote the C64 version, but the music is Tamayo Kawamoto's from the arcade game. When the archive knows this, a second line appears: **BGM1 · music by Tamayo Kawamoto**.
-
-The second is what the individual tunes inside a file are called, which is what turns a list of nineteen identical rows into a title screen, a high-score jingle and a game-over sting.
-
-Underneath, where the editors left a note about the tune, you get it. Most are a line or two and are shown in full. Longer ones are trimmed to three lines and marked **Show more**; tap anywhere on the note to read the rest, and again to fold it away.
-
-The composer's name is also a way to hear more of their work: tap it, and the search opens with their name already filled in.
-
-#### Stopping later
-
-A station never ends on its own, which is a problem if you are listening in bed. Under **Playback settings** is a **Sleep timer**. Choose **This tune** to stop when the current tune finishes, or 15, 30, 45 or 60 minutes to stop at that point. The setting always says what it is going to do and counts down while it waits, and **Off** cancels it.
-
-![The sleep timer, showing what it is going to do](../../img/app/play/sid-radio/06-sleep-timer.png)
+Your C64 will play any of it. So, for most tunes, will your phone or tablet — this section covers where the sound comes from, how to move about inside a piece, and the handful of settings that shape it. The next section, **SID Radio**, is about letting the app choose the music for you.
 
 #### Where the music plays
 
@@ -484,57 +387,97 @@ You have a choice about which machine actually makes the sound. When a SID tune 
 - **Remote** — your C64 plays the tune, and you listen to it in the room, exactly as it would have sounded in 1985.
 - **Both** — your C64 plays the tune and sends the sound across your network as well, so you hear it in both places at once.
 
-**Both** only appears when the sound can actually reach you. For that, your C64 needs a wired **Ethernet** connection to your router, and your phone or tablet needs to be on the same network. If there is no path for the sound, the app simply does not offer the option.
+**Both** appears only when the sound can reach you: your C64 needs wired **Ethernet** to your router, and your phone or tablet needs the same network. **Listen on** is for SID tunes only — programs and disks always run on your C64.
 
-**Listen on** appears for SID tunes only. Programs and disks always run on your C64, since that is the only machine that can run them.
-
-![Listen on: Local, Remote, or Both](../../img/app/play/sid-radio/03-listen-on.png)
-
-#### Playing tunes on your phone or tablet
-
-To play music on its own, without help from your C64, the app needs a copy of two small programs that live inside every C64: the **KERNAL** and the **BASIC** ROMs. A "ROM" is simply a program built into the machine at the factory. SID music leans on both constantly, so without them a tune starts and then sits in silence.
-
-These programs are still under copyright and cannot be included with an app, so C64 Commander borrows them from your own machine. Go to **Settings → SID Radio → C64 ROMs for on-device playback** and tap **Read from C64**. It takes a moment, and you only ever have to do it once.
-
-The copies stay on your phone or tablet. They are never uploaded, never shared, and never included in a diagnostics report. **Remove** deletes them again whenever you wish. Please only read them from a machine that is yours, or that you have permission to use.
-
-Until the ROMs are in place, SID tunes simply play on your C64 instead, and the app says so once.
+To play music on its own, your phone or tablet needs a copy of two small programs built into every C64 at the factory: the **KERNAL** and **BASIC** ROMs. SID music leans on both constantly, so without them a tune starts and then sits in silence. They are still under copyright and cannot be shipped with an app, so C64 Commander borrows them from your own machine — **Settings → SID Radio → C64 ROMs for on-device playback**, then **Read from C64** — which you only ever do once. The copies stay on your phone or tablet: never uploaded, never shared, never included in a diagnostics report, and **Remove** deletes them whenever you wish. Please only read them from a machine that is yours, or that you have permission to use. Until they are in place, SID tunes simply play on your C64 instead.
 
 #### Moving around inside a tune
 
 These work for tunes playing on your phone or tablet. On your C64 the buttons only skip from one tune to the next.
 
 - **Press and hold ⏭ or ⏮** to wind forwards or backwards, about five seconds at a time, for as long as you hold. A short tap still skips to the next or previous tune.
-- **Tap the progress bar** anywhere to jump to that point, or hold and slide along it to travel through the tune. The music picks up wherever you let go.
-- Jumping *forward* into a part of the tune your phone or tablet has not prepared yet is the one move that takes a moment: the music has to be worked out from where it is up to, and it cannot be skipped over. The app says so plainly — the timer holds at the last note you heard, and the bar shows how far along the preparation is and roughly how long is left. When it is ready, playing resumes exactly where you asked. Jumping back, or forward into a part already prepared, is immediate.
+- **Tap the progress bar** anywhere to jump to that point, or hold and slide along it. The music picks up wherever you let go.
+- Jumping *forward* past what has been prepared is the one move that takes a moment, because the music has to be worked out from where it is up to. The timer holds at the last note you heard while the bar shows how far along it is. Jumping back is immediate.
 
 #### The sound itself
 
-**Volume and Mute.** While your phone or tablet is playing a tune, these turn down the music alone. They do not touch your device's own volume, so muting a tune here leaves your ringer and your notifications exactly as they were.
+**Volume and Mute** turn down the music alone, leaving your ringer and notifications as they were. Your phone or tablet will either play a tune itself or play the sound sent from your C64, never both at once: whichever you start last takes over.
 
-**One sound at a time.** Your phone or tablet can either play a tune itself or play the sound sent from your C64, and it will never do both at once. Whichever you start last takes over and the other stops, so you never have to work out which of two sounds you are chasing.
-
-**Crossfading.** Normally one tune ends before the next begins. If you would rather they overlapped, **Settings → SID Radio → Crossfade** offers a short, medium or long fade. Fading one tune into another means playing both for a moment, and only your phone or tablet can do that — your C64 plays a single tune at a time — so the setting applies when **Listen on** is set to **Local**.
-
-**Which sound chip.** The Commodore 64 was made with two versions of the SID chip, the earlier **6581** and the later **8580**, and music written for one sounds a little different on the other. Most SID files record which chip the composer used, and those always play as intended. For the files that do not say, **Settings → SID Radio → SID chip for tunes that do not name one** decides. Leave **Match my Commodore 64** switched on and the app reads the chip from your own machine and remembers it, so your tunes keep that character even when the machine is switched off. Switch it off, and the app uses whichever chip you choose there instead. Either way, the choice applies from the next tune onwards.
-
-**How closely to copy the chip.** Under **Settings → SID Radio → SID emulation** you can choose between two ways of recreating the SID. **Accurate** follows the real chip in the finest detail. **Light** asks about a third as much of your phone or tablet and still sounds good — most listeners will not hear the difference. Choosing it leaves more headroom for everything else, so the app stays quick to answer while the music plays, and it makes a long listen kinder to the battery. Both play every tune, and you can change your mind at any time.
-
-#### What the tune tells you about itself
-
-Under the title you will find a single line describing the music: who wrote it, the year and who published it, which sound chip it asks for, whether it was written for **PAL** or **NTSC** (the two television standards the C64 was sold for, which ran at slightly different speeds), which tune of the file is playing, and how long it lasts. Anything the file does not record is simply left out rather than guessed at.
-
-Many SID files hold several separate pieces of music. When one does, the line says something like **Tune 3 of 15**, and that is exactly the piece you are hearing.
-
-Some modern tunes ask for more than one SID chip at once — two, or even three — giving six or nine voices instead of the usual three. When a tune does that, the line names every chip it calls for.
-
-![The SID Radio settings](../../img/app/settings/sid-radio.png)
+The rest lives under **Settings → SID Radio**. **Crossfade** overlaps one tune into the next by a short, medium or long fade — only your phone or tablet can play two at once, so it applies when **Listen on** is **Local**. The C64 was made with two versions of the SID, the earlier **6581** and the later **8580**, and music written for one sounds a little different on the other; most files record which the composer used, and for those that do not, **Match my Commodore 64** reads the chip from your own machine and remembers it. **SID emulation** chooses how closely the chip is recreated: **Accurate** follows the real thing in the finest detail, while **Light** asks about a third as much of your phone or tablet, still sounds good to most listeners, and is kinder to the battery on a long listen.
 
 SID Radio, the heart and cross, and playing tunes on your phone or tablet are all switched on and off under **Settings → SID Radio**, which also shows which version of the music map and of HVSC you have installed.
 
-### The SID Audio Mixer
+#### The SID Audio Mixer
 
 Your C64 makes its sound with a SID chip, and can host more than one. **Home > SID / Audio mixer** is a live mixing desk: a **master volume** for everything, and, for each SID it reports, that chip's own **volume** and **stereo position**. Slide one SID toward the left speaker and another toward the right for true stereo, or pull one down to let the other lead. Changes are heard at once, and the same controls appear in **Config > Audio Mixer** if you prefer the full tree.
+
+### SID Radio
+
+SID Radio plays that archive like a radio station. You choose a mood, or a tune you already like, and the app keeps finding more music of the same kind for as long as you care to listen. You never have to build a playlist, and it needs no internet connection: once the music is on your phone or tablet there is nothing further to download.
+
+![The Now Playing card: Rob Hubbard's "Monty on the Run" playing, with the heart and cross beside the title](../../img/app/play/sid-radio/01-controls.png)
+
+#### Starting a station
+
+Go to the **Play** page, tap **SID Radio**, and pick what you are in the mood for. You will be offered three kinds of station:
+
+- **A mood.** Nine of them, such as Fast-Paced, Chill / Ambient and Melodic. Every one draws on tens of thousands of tunes, so pick whichever suits you and do not worry about running short.
+- **Tunes you like.** This appears once you have marked a few favourites, and builds a station out of them.
+- **Surprise me.** Anything at all.
+
+Switch on **Based on my likes** to tilt any mood towards your own taste — "Fast-Paced from your Likes", for example.
+
+You can also start a station from whatever is already playing. Tap **More like this** and the app goes looking for more music in the same vein. It is there whenever a SID is playing, including while a station is already running — which is when you are most likely to want it, since hearing a tune you like is what prompts the thought.
+
+#### Telling it what you like
+
+While a tune plays, a heart and a cross sit beside its title. Tap the **heart** to keep it — it joins your **Liked Tunes** list. Tap the **cross** to move on: the station plays something else at once, and steers clear of anything similar. You never have to use either; the station works perfectly well if you simply listen.
+
+Your choices stay on your phone or tablet and are attached to the music itself rather than to a file name, so they survive an update to HVSC even if the tune has moved. **Liked Tunes** is an ordinary playable list: play it, shuffle it, or take a tune off it again.
+
+#### What a station will and will not do
+
+**It never repeats itself.** A station will not play the same tune twice, nor two pieces from the same file one after the other.
+
+**It skips the very short pieces.** HVSC holds jingles, sound effects and test tones alongside the music, and a station that slipped those between songs would feel broken. Anything shorter than fifteen seconds is passed over — change that under **Settings → SID Radio → Shortest tune to play**, or set it to zero to hear everything.
+
+**It can run out, eventually.** A station follows a trail of similar music, and once in a great while — usually after a great many skips in one sitting — that trail ends. The app says so plainly, and you choose another mood.
+
+While a station runs it chooses what comes next, so Shuffle, Repeat and Reshuffle disappear from the Play page and return, set as you left them, when you stop it. The line across the top of the Now Playing card always says where the music is coming from; tap it to stop the station or to see why this particular tune was chosen. Every station starts fresh, so the same mood gives you a different evening each time.
+
+#### Finding one particular tune
+
+A station chooses for you, which is the point of it — right up until you want to hear one specific piece. Tap **Find a tune** and type part of a title or a composer's name, and the app searches the whole of HVSC: sixty thousand tunes, filed by composer, so this finds pieces you would otherwise have to know the whereabouts of.
+
+Any part of a word will do, in any case, and accents make no difference — "oorni" finds Lasse Öörni, "mando" finds Commando. Add a second word to narrow it: "hubbard commando" finds the one tune that answers to both.
+
+Tap a result and it plays straight away. Your station is not disturbed: it keeps its place and carries on when the tune ends. If instead you would like more music like the tune you just found, tap the radio icon beside it. With nothing typed, the sheet shows what you have recently heard — a station only goes forwards, so this is the way back to a tune that has just gone by.
+
+![Finding one tune by name, anywhere in HVSC](../../img/app/play/sid-radio/04-find-a-tune.png)
+
+#### A SID is a small album
+
+Many SID files hold more than one tune — a title screen, a high-score jingle, a loading tune, and sometimes twenty more. The line under the title says so: **Tune 1 of 19**.
+
+Tap **Play all 19 tunes** and every one joins your playlist in order, each with its own length and each saying which tune it is and, where the collection names it, what it is called. From then on they behave like any other tracks. The button goes away once you have added them.
+
+To go straight to one tune instead, tap **Tune 1 of 19** itself. That lists every tune in the file with its number, its name where there is one, and how long it runs; tap one and it plays. Lengths vary enormously — a five-minute piece and a one-second jingle in the same file is entirely normal — so they are worth reading before you choose.
+
+![Every tune in one SID file, with its name and length](../../img/app/play/sid-radio/07-tunes-in-this-file.png)
+
+#### What the tune is, and who wrote it
+
+The line under the title comes from the SID file itself: the composer, the year and publisher, the chip it asks for, whether it was written for **PAL** or **NTSC**, which tune of the file is playing, and how long it lasts. Anything the file does not record is left out rather than guessed at.
+
+There are two things a SID file cannot tell you, and for a good part of the collection the archive's editors have written them down separately.
+
+The first is that a tune is an arrangement, and of whose music. A great deal of C64 music is a cover — of pop records, of film scores, of arcade originals — and the name in the file belongs to whoever made the C64 version. Rob Hubbard's *Commando* is a case in point: the file credits him, and he did write the C64 version, but the music is Tamayo Kawamoto's from the arcade game. When the archive knows this, a second line appears: **BGM1 · music by Tamayo Kawamoto**.
+
+The second is what the individual tunes inside a file are called, which turns nineteen identical rows into a title screen, a high-score jingle and a game-over sting. Where the editors left a note about the tune you get that too: most are a line or two and shown in full, longer ones are trimmed and marked **Show more**, and tapping anywhere on the note reads the rest. The composer's name is also a way to hear more of their work — tap it, and the search opens with their name already filled in.
+
+#### Stopping later
+
+A station never ends on its own, which is a problem if you are listening in bed. Under **Playback settings** is a **Sleep timer**: choose **This tune** to stop when the current one finishes, or 15, 30, 45 or 60 minutes. It always says what it is going to do and counts down while it waits, and **Off** cancels it.
 
 ### Live View
 

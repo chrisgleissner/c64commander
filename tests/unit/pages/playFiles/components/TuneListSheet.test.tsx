@@ -110,3 +110,15 @@ describe("TuneListSheet", () => {
     await waitFor(() => expect(screen.getAllByTestId("tune-list-row")).toHaveLength(3));
   });
 });
+
+describe("TuneListSheet terminology", () => {
+  it("calls them tunes, never subsongs", async () => {
+    // "Subsong" is format jargon; a listener is choosing between tunes. This assertion moved here
+    // from the playback settings panel, whose plain tune list this sheet replaced.
+    getHvscSubsongTitles.mockResolvedValue(["BGM1", "", ""]);
+    renderSheet();
+    await waitFor(() => expect(screen.getAllByTestId("tune-list-row")).toHaveLength(3));
+    expect(screen.queryByText(/subsong/i)).toBeNull();
+    expect(screen.getAllByTestId("tune-list-row")[0]).toHaveTextContent(/^Tune 1/);
+  });
+});
