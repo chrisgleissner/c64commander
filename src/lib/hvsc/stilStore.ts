@@ -164,6 +164,15 @@ export const readStilManifest = async (): Promise<StilManifest | null> => {
   return manifestPromise;
 };
 
+/**
+ * Whether a test has supplied STIL directly.
+ *
+ * Separate from `isStilInstalled` because the two answer different questions. This one means "do
+ * not go near the network or the disk"; that one means "is there anything to look up", which is
+ * also true of a stored copy that is out of date and ought to be refreshed.
+ */
+export const hasMockedStil = (): boolean => mockedStil() !== null;
+
 /** Whether there is anything to look up, so callers can skip the work rather than miss repeatedly. */
 export const isStilInstalled = async (): Promise<boolean> =>
   mockedStil() !== null || (await readStilManifest()) !== null;

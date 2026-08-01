@@ -26,6 +26,9 @@ import {
   resolveStagingPath,
   promoteLibraryStagingDir,
   cleanupStaleStagingDir,
+  writeStilFile,
+  readStilFile,
+  resetStilStore,
 } from "@/lib/hvsc/hvscFilesystem";
 import { saveHvscState } from "@/lib/hvsc/hvscStateStore";
 import * as logging from "@/lib/logging";
@@ -408,5 +411,36 @@ describe("hvscFilesystem", () => {
       // Should not throw even when neither directory exists
       await expect(cleanupStaleStagingDir()).resolves.toBeUndefined();
     });
+  });
+});
+
+describe("STIL files", () => {
+  beforeEach(() => {
+    files.clear();
+    vi.clearAllMocks();
+  });
+
+  it("round-trips a shard through its own directory, beside the library rather than inside it", async () => {
+    await writeStilFile("shard-7.json", '{"/A/b.sid":{"name":"x"}}');
+    // Inside the library it would have to take part in the staging-and-promotion dance every
+    // update performs; STIL has its own lifecycle and is deliberately kept out of the way of it.
+    expect([...files.keys()].some((path) => path.startsWith("hvsc/stil/"))).toBe(true);
+    expect([...files.keys()].some((path) => path.startsWith("hvsc/library/stil"))).toBe(false);
+    expect(await readStilFile("shard-7.json")).toBe('{"/A/b.sid":{"name":"x"}}');
+  });
+
+  it("answers nothing for a shard that was never written, without making noise about it", async () => {
+    // The normal answer for a library installed before STIL was stored, and for every shard of an
+    // archive whose STIL has not been fetched. Logging it as an error would bury the real ones.
+    const errorLog = vi.spyOn(logging, "addErrorLog");
+    expect(await readStilFile("shard-3.json")).toBeNull();
+    expect(errorLog).not.toHaveBeenCalled();
+  });
+
+  it("removes the whole store, so a reset cannot leave notes describing a library that has gone", async () => {
+    await writeStilFile("index.json", "{}");
+    await writeStilFile("shard-0.json", "{}");
+    await resetStilStore();
+    expect([...files.keys()].some((path) => path.startsWith("hvsc/stil/"))).toBe(false);
   });
 });

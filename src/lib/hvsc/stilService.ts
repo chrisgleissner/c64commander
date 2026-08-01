@@ -22,7 +22,7 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { loadHvscState } from "./hvscStateStore";
 import { getHvscBaseUrl } from "./hvscReleaseService";
 import { decodeStilText } from "./stilParser";
-import { ingestStilText, isStilInstalled, readStilManifest } from "./stilStore";
+import { hasMockedStil, ingestStilText, isStilInstalled, readStilManifest } from "./stilStore";
 
 /**
  * Releases sit in a directory named after their version, alongside the archives themselves:
@@ -76,9 +76,12 @@ let ensureInFlight: Promise<boolean> | null = null;
  * look up afterwards.
  */
 export const ensureStilReady = async (options?: { signal?: AbortSignal }): Promise<boolean> => {
-  // A test supplying STIL through the mock bridge has already answered this; downloading over the
-  // top of it would be both wrong and impossible offline.
-  if (await isStilInstalled()) return true;
+  // A test supplying STIL directly has already answered this; downloading over the top of it would
+  // be both wrong and impossible offline. Deliberately not `isStilInstalled()`, which is also true
+  // of a stored copy that is older than the installed release — that one has to be refreshed, and
+  // short-circuiting on it meant a library updated to a new release kept the previous release's
+  // notes for ever.
+  if (hasMockedStil()) return true;
   const state = loadHvscState();
   if (state.installedVersion <= 0) return false;
 
