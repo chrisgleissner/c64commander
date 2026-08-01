@@ -288,7 +288,6 @@ export default function PlayFilesPage() {
   } = useSonglengths({ playlist });
   const [recurseFolders, setRecurseFolders] = useState(true);
 
-  const [songPickerOpen, setSongPickerOpen] = useState(false);
   const [hvscPreparationOpen, setHvscPreparationOpen] = useState(false);
   const [browserInitialSourceId, setBrowserInitialSourceId] = useState<string | null>(null);
   const [addItemsProgress, setAddItemsProgress] = useState<AddItemsProgressState>({
@@ -1881,7 +1880,6 @@ export default function PlayFilesPage() {
   const currentSongNr = currentItem?.request.songNr ?? 1;
   const clampedSongNr = Math.min(Math.max(1, currentSongNr), subsongCount);
   const isSongPlaying = Boolean(currentItem && isSongCategory(currentItem.category) && (isPlaying || isPaused));
-  const songSelectorVisible = Boolean(isSongPlaying && knownSubsongCount && knownSubsongCount > 1);
   /**
    * Put every tune in this file into the queue.
    *
@@ -1959,7 +1957,7 @@ export default function PlayFilesPage() {
       // and the stale duration persists onto the playlist item (HARD11-004).
       const nextItem = buildSubsongSwitchItem(currentItem, nextSongNr, knownSubsongCount);
       setSongNrInput(String(nextItem.request.songNr));
-      setSongPickerOpen(false);
+      setTuneListOpen(false);
       setIsPlaylistLoading(true);
       try {
         cancelAutoAdvance();
@@ -1985,11 +1983,12 @@ export default function PlayFilesPage() {
     [cancelAutoAdvance, currentIndex, currentItem, knownSubsongCount, playItem],
   );
 
+  // The list of a file's tunes belongs to the tune that is playing, so it closes with it.
   useEffect(() => {
-    if (!isSongPlaying && songPickerOpen) {
-      setSongPickerOpen(false);
+    if (!isSongPlaying && tuneListOpen) {
+      setTuneListOpen(false);
     }
-  }, [isSongPlaying, songPickerOpen]);
+  }, [isSongPlaying, tuneListOpen]);
   const playlistIds = useMemo(() => playlist.map((item) => item.id), [playlist]);
   const selectedPlaylistCount = selectedPlaylistIds.size;
   const allPlaylistSelected = selectedPlaylistCount > 0 && selectedPlaylistCount === playlistIds.length;
@@ -2639,17 +2638,6 @@ export default function PlayFilesPage() {
                 songlengthsSizeLabel={songlengthsSummary.sizeLabel}
                 songlengthsEntryCount={songlengthsSummary.entryCount}
                 songlengthsError={songlengthsSummary.error}
-                songSelectorVisible={songSelectorVisible}
-                songPickerOpen={songPickerOpen}
-                onSongPickerPointerDown={() => setSongPickerOpen(true)}
-                onSongPickerClick={() => {
-                  setSongNrInput(String(clampedSongNr));
-                  setSongPickerOpen(true);
-                }}
-                clampedSongNr={clampedSongNr}
-                subsongCount={subsongCount}
-                onSelectSong={(value) => void handleSongSelection(value)}
-                onCloseSongPicker={() => setSongPickerOpen(false)}
               />
             </div>
 

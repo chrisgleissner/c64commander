@@ -678,3 +678,138 @@ describe("the in-flight render budget", () => {
     expect(worker.ofType("render").length).toBeGreaterThan(rendersBefore);
   });
 });
+
+/**
+ * "No silent playback unless the listener asked for silence", enforced at runtime.
+ *
+ * Every other counter the engine keeps describes supply and demand — frames written, buffer depth,
+ * renders in flight — and all of them look healthy while a tune renders a flat line. Two separate
+ * defects have now shipped where the app believed it was playing and the room stayed quiet, so the
+ * desired state is asserted continuously and restored when it drifts, rather than being assumed
+ * from the absence of an error.
+ */
+describe("silence self-healing", () => {
+  let worker: FakeWorker;
+  let silentFault: boolean;
+  let silenceResets: number;
+
+  const makeEngine = () => {
+    worker = new FakeWorker();
+    silentFault = false;
+    silenceResets = 0;
+    let handedOut = 0;
+    const factory = () => {
+      handedOut += 1;
+      if (handedOut === 1) return worker;
+      return new FakeWorker();
+    };
+    const { sink } = makeSink();
+    return new LocalSidEngine({
+      workerFactory: factory,
+      chunkSeconds: 0.5,
+      targetBufferSeconds: 4,
+      audioSinkFactory: (): LocalSidAudioSink => ({
+        sink,
+        resume: vi.fn(),
+        close: vi.fn(),
+        flush: vi.fn(),
+        isSilentFault: () => silentFault,
+        resetSilence: () => {
+          silenceResets += 1;
+        },
+      }),
+    });
+  };
+
+  const openTune = async (engine: LocalSidEngine) => {
+    const play = engine.play(new ArrayBuffer(8), 0, {}, "tune#0");
+    worker.emit({ type: "ready", moduleLoadMs: 1 });
+    for (let tick = 0; tick < 20 && worker.ofType("open").length === 0; tick += 1) await Promise.resolve();
+    const opens = worker.ofType("open");
+    worker.emit({
+      type: "opened",
+      id: (opens[opens.length - 1] as unknown as { id: number }).id,
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      tuneInfo: {},
+    } as never);
+    await play;
+  };
+
+  const tick = (engine: LocalSidEngine) => (engine as unknown as { checkLiveness: () => void }).checkLiveness();
+
+  beforeEach(() => {
+    __resetPhoneAudioOwnership();
+    localStorage.clear();
+  });
+
+  it("acts when the speaker has been handed a flat signal for too long", async () => {
+    const engine = makeEngine();
+    await openTune(engine);
+    const opensBefore = worker.ofType("open").length;
+
+    silentFault = true;
+    tick(engine);
+
+    // Recovery is the same one a stall gets: throw the worker away and re-open the tune.
+    expect(silenceResets).toBeGreaterThan(0);
+    expect(worker.terminated || worker.ofType("open").length > opensBefore).toBe(true);
+  });
+
+  it("leaves a muted tune alone, because that silence is what was asked for", async () => {
+    const engine = makeEngine();
+    await openTune(engine);
+    engine.setMuted(true);
+
+    // Opening a tune resets the clock, so compare against that rather than against zero.
+    const resetsAfterOpen = silenceResets;
+    silentFault = true;
+    tick(engine);
+
+    expect(silenceResets).toBe(resetsAfterOpen);
+  });
+
+  it("leaves a tune turned fully down alone for the same reason", async () => {
+    const engine = makeEngine();
+    await openTune(engine);
+    engine.setVolume(0);
+
+    const resetsAfterOpen = silenceResets;
+    silentFault = true;
+    tick(engine);
+
+    expect(silenceResets).toBe(resetsAfterOpen);
+  });
+
+  it("does nothing while the output is audible", async () => {
+    const engine = makeEngine();
+    await openTune(engine);
+    const resetsAfterOpen = silenceResets;
+    silentFault = false;
+    tick(engine);
+    expect(silenceResets).toBe(resetsAfterOpen);
+  });
+
+  it("gives a new tune its own silence clock", async () => {
+    // The previous tune's quiet ending must not count against the one that follows it.
+    const engine = makeEngine();
+    await openTune(engine);
+    expect(silenceResets).toBeGreaterThan(0);
+  });
+
+  it("gives a resumed tune its own silence clock too", async () => {
+    // The accumulator counts seconds of flat audio handed to the speaker, and nothing is handed over
+    // while paused — so without this reset it stays at whatever it had reached and the watchdog
+    // carries on judging from there. A tune paused eleven seconds into a quiet passage would cross
+    // the twelve-second tolerance about a second after the listener pressed play, and the recovery
+    // would re-open the tune: an audible jump caused by the pause rather than by a fault.
+    const engine = makeEngine();
+    await openTune(engine);
+    const resetsAfterOpen = silenceResets;
+
+    await engine.pause();
+    await engine.resume();
+
+    expect(silenceResets).toBeGreaterThan(resetsAfterOpen);
+  });
+});

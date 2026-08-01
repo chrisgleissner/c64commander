@@ -26,14 +26,6 @@ export type PlaybackSettingsPanelProps = {
   songlengthsSizeLabel: string | null;
   songlengthsEntryCount: number | null;
   songlengthsError: string | null;
-  songSelectorVisible: boolean;
-  songPickerOpen: boolean;
-  onSongPickerPointerDown: () => void;
-  onSongPickerClick: () => void;
-  clampedSongNr: number;
-  subsongCount: number;
-  onSelectSong: (value: number) => void;
-  onCloseSongPicker: () => void;
 };
 
 export const PlaybackSettingsPanel = ({
@@ -50,14 +42,6 @@ export const PlaybackSettingsPanel = ({
   songlengthsSizeLabel,
   songlengthsEntryCount,
   songlengthsError,
-  songSelectorVisible,
-  songPickerOpen,
-  onSongPickerPointerDown,
-  onSongPickerClick,
-  clampedSongNr,
-  subsongCount,
-  onSelectSong,
-  onCloseSongPicker,
 }: PlaybackSettingsPanelProps) => {
   const songlengthsMetadata = [
     songlengthsEntryCount !== null ? `${songlengthsEntryCount} Entries` : null,
@@ -120,57 +104,6 @@ export const PlaybackSettingsPanel = ({
           </Button>
         </div>
         {songlengthsError ? <p className="text-xs text-destructive">{songlengthsError}</p> : null}
-      </div>
-
-      <div className="space-y-3">
-        {songSelectorVisible ? (
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex flex-col gap-2 w-full max-w-full">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  data-testid="song-selector-trigger"
-                  data-open={songPickerOpen ? "true" : "false"}
-                  onPointerDown={onSongPickerPointerDown}
-                  onClick={onSongPickerClick}
-                >
-                  Tune {clampedSongNr} of {subsongCount}
-                </Button>
-              </div>
-            </div>
-            {songPickerOpen ? (
-              <div
-                role="dialog"
-                aria-label="Tune"
-                data-testid="song-selector-dialog"
-                className="w-full max-w-full rounded-lg border border-border bg-background p-3 shadow-sm space-y-2"
-              >
-                <p className="text-sm font-semibold">Tune</p>
-                <p className="text-xs text-muted-foreground">Choose which tune in this file to play.</p>
-                <div className="space-y-2" data-testid="song-selector-options">
-                  {Array.from({ length: subsongCount }, (_, index) => {
-                    const value = index + 1;
-                    return (
-                      <Button
-                        key={value}
-                        variant={value === clampedSongNr ? "default" : "outline"}
-                        className="w-full justify-start"
-                        onClick={() => onSelectSong(value)}
-                      >
-                        Tune {value}
-                      </Button>
-                    );
-                  })}
-                </div>
-                <p className="text-xs text-muted-foreground">Tunes available: 1–{subsongCount}</p>
-                <Button variant="outline" size="sm" className="w-full" onClick={onCloseSongPicker}>
-                  Close
-                </Button>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
       </div>
     </>
   );

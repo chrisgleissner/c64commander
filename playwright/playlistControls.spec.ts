@@ -244,7 +244,7 @@ test.describe("Playlist controls and advanced features", () => {
     await snap(page, testInfo, "duration-total-updated");
   });
 
-  test("song selector appears for multi-song SID and triggers playback @layout", async ({
+  test("the file's tunes are reachable from the credits line and play when chosen @layout", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
@@ -266,25 +266,25 @@ test.describe("Playlist controls and advanced features", () => {
 
     await expectRestTraceSequence(page, testInfo, /\/v1\/runners:sidplay/);
 
-    // Addressed by its test id rather than by its name. Two controls now say "Tune 1 of 3": this
-    // one in the playback settings, and the same text on the credits line, which opens the fuller
-    // list of the file's tunes with their names and lengths. The name alone no longer identifies
-    // either of them, and this test is about this one — the same element the rest of the test
-    // drives.
-    const trigger = page.getByTestId("song-selector-trigger");
+    // There is one control for choosing a tune, and it is the label that states which one is
+    // playing. The plain list that used to sit in the playback settings has gone: it offered the
+    // same choice from below the fold, without the names or the lengths, and having two buttons
+    // both reading "Tune 1 of 3" made neither of them addressable by name.
+    const trigger = page.getByTestId("playback-current-tunes");
     await expect(trigger).toBeVisible();
     await expect(trigger).toHaveText(/Tune 1 of 3/);
     await snap(page, testInfo, "song-selector-visible");
-    await trigger.scrollIntoViewIfNeeded();
-    await trigger.dispatchEvent("pointerdown");
-    await trigger.dispatchEvent("click");
-    const dialog = page.getByTestId("song-selector-dialog");
-    await expect(dialog).toBeVisible({ timeout: 10000 });
+    await trigger.click();
+    const sheet = page.getByTestId("tune-list-sheet");
+    await expect(sheet).toBeVisible({ timeout: 10000 });
+    // One row per tune in the file, and the one playing says so.
+    await expect(sheet.getByTestId("tune-list-row")).toHaveCount(3);
+    await expect(sheet.getByTestId("tune-list-row").first()).toHaveAttribute("data-current", "true");
     await snap(page, testInfo, "song-selector-open");
 
-    await dialog.getByRole("button", { name: /Tune 2/ }).click();
+    await sheet.getByTestId("tune-list-row").nth(1).click();
 
-    await expect(dialog).toBeHidden();
+    await expect(sheet).toBeHidden();
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(playCountBefore + 1);
     expect(server.sidplayRequests.at(-1)?.url).toContain("songnr=2");
     await snap(page, testInfo, "song-selector-updated");

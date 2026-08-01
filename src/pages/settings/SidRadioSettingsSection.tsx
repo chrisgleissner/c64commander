@@ -294,6 +294,7 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
                   [600, "Short (0.6s)"],
                   [1500, "Medium (1.5s)"],
                   [3000, "Long (3s)"],
+                  [4000, "Longest (4s)"],
                 ] as const
               ).map(([value, label]) => (
                 <Button

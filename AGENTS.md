@@ -242,6 +242,16 @@ At completion, summarize:
 - **Android HVSC engine**: `android/app/src/main/java/com/c64/commander/hvsc/`
 - **SID playback utilities**: `src/lib/sid/`
 
+## HIL audio tests play out loud in the user's room — be considerate
+
+The Pixel 4 sits next to the user and the host microphone listens to it, so every audio measurement
+is heard by whoever is working there. Runs last minutes and repeat dozens of times.
+
+- **Play calm music.** Choose a **Chill / Ambient** or **Melodic** station. Never Fast-Paced.
+- **Use the lowest volume that still measures.** The band-limited detector separates playing from
+  silence by tens of decibels, so a loud phone is not required. Turn the media stream down, confirm
+  the separation still holds at that level, and leave it there.
+
 ## Audio output: on-device playback and the A/V mirror share one native path
 
 Both routes reach the speaker through the same native `AudioPipeline`. This is not a tidiness

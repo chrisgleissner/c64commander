@@ -761,11 +761,20 @@ export const saveLocalEngineAutoRoms = (enabled: boolean) => {
 /**
  * The emulation to actually instantiate, given whether the ROMs are in hand.
  *
- * reSIDfp is libsidplayfp's accurate model and it needs the C64's own KERNAL and BASIC to advance a
- * tune at all — without them it initialises and then renders nothing, which on a Pixel 4 measured as
- * zero audio players and a microphone at room noise. SIDLite carries its own kernal-free playback,
- * so it is the honest thing to fall back to: worse timbre, but audible, and it costs a third of the
- * CPU. The preference is untouched — as soon as the images arrive, the next worker uses them.
+ * The substitution below is kept, but the reason once given for it was wrong and is corrected here
+ * so nobody builds on it again. SIDLite does **not** carry its own kernal-free playback. It is a SID
+ * *chip* model — four files, ADSR/Filter/SID/WavGen — plugged into libsidplayfp's own C64, with no
+ * CPU, no memory map and no ROM substitute of any kind. Standalone cRSID does have one
+ * (`cRSID_setROMcontent` fills $A000-$FFFF with RTS), but that code was never taken into
+ * libsidplayfp; the two WASM builds differ by a single compiler flag.
+ *
+ * Measured over 450 tunes on libsidplayfp-wasm 1.0.1, in every combination of engine and ROM state:
+ * the tunes that need ROMs are the *same tunes* on both engines (SIDLite 97, reSIDfp 98, intersection
+ * 97). Needing ROMs is a property of the tune, not of the engine.
+ *
+ * So this returns SIDLite when the images are missing only because it is cheaper, not because it can
+ * play anything the accurate model cannot. The preference is untouched — as soon as the images
+ * arrive, the next worker uses them.
  */
 export const effectiveSidEmulationEngine = (romsAvailable: boolean): SidEmulationEngine =>
   romsAvailable ? loadSidEmulationEngine() : "sidlite";
@@ -875,7 +884,17 @@ export const resolveLocalSidModel = (): LocalSidModel => {
  * overlap stays a deliberate musical effect rather than an ambiguous smear.
  */
 export const CROSSFADE_MS_MIN = 0;
-export const CROSSFADE_MS_MAX = 5000;
+/**
+ * The longest crossfade offered, in milliseconds.
+ *
+ * Music players commonly allow much more than this — Spotify and Apple Music both go to twelve
+ * seconds — but a longer blend is not better here. Two tunes audible together for several seconds
+ * stop sounding like a transition and start sounding like two tunes playing at once, and SID tunes
+ * are often short loops where four seconds is already a noticeable fraction of the piece. It also
+ * bounds the work: the outgoing tune's last seconds are held in memory for the whole blend, and the
+ * incoming tune's opening has to be rendered ahead of it.
+ */
+export const CROSSFADE_MS_MAX = 4000;
 export const DEFAULT_PLAYBACK_CROSSFADE_MS = 0;
 
 export const loadPlaybackCrossfadeMs = (): number => {

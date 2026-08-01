@@ -116,6 +116,18 @@ const drain = async (ticks = 12) => {
   for (let i = 0; i < ticks; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
+/**
+ * Wait for the worker to answer, rather than for a fixed number of turns.
+ *
+ * Opening a tune is asynchronous inside the worker, and a fixed tick count is a guess at how long
+ * that takes on an unloaded machine. Running this file alongside heavier ones made the guess wrong
+ * often enough to fail about one run in three, with the reply arriving just after the test had given
+ * up and read `undefined`.
+ */
+const drainUntil = async (done: () => boolean, ticks = 400) => {
+  for (let i = 0; i < ticks && !done(); i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+};
+
 beforeAll(async () => {
   posted = [];
   scope = {
@@ -152,7 +164,7 @@ const openTune = async (sidModel?: "MOS6581" | "MOS8580", id = 1) => {
     roms: FAKE_ROMS(),
     sidModel,
   } as LocalSidMainToWorker);
-  await drain();
+  await drainUntil(() => posted.some((m) => m.type === "opened"));
   const opened = posted.find((m) => m.type === "opened") as Extract<LocalSidWorkerToMain, { type: "opened" }>;
   return opened;
 };
