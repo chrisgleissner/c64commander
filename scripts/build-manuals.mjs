@@ -1276,6 +1276,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "A station never ends on its own, which is a problem if you are listening in bed. Under **Playback settings** is a **Sleep timer**. Choose **This tune** to stop when the current tune finishes, or 15, 30, 45 or 60 minutes to stop at that point. The setting always says what it is going to do and counts down while it waits, and **Off** cancels it.",
     "",
+    "![The sleep timer, showing what it is going to do](../../img/app/play/sid-radio/06-sleep-timer.png)",
+    "",
     "#### Where the music plays",
     "",
     "You have a choice about which machine actually makes the sound. When a SID tune is playing, the Play page offers **Listen on**:",

@@ -49,7 +49,7 @@ describe("TuneNotes", () => {
     render(<TuneNotes note={"There is an interesting story behind Commando. ".repeat(12)} />);
     // Clamped, not hidden: the first lines are readable without any interaction.
     expect(screen.getByTestId("tune-notes-text")).toHaveAttribute("data-expanded", "false");
-    expect(screen.getByTestId("tune-notes-text").className).toContain("line-clamp-3");
+    expect(screen.getByTestId("tune-notes-text").className).toContain("line-clamp-2");
     expect(screen.getByTestId("tune-notes-toggle")).toHaveTextContent("Show more");
     restore();
   });
@@ -61,7 +61,7 @@ describe("TuneNotes", () => {
 
     fireEvent.click(region);
     expect(screen.getByTestId("tune-notes-text")).toHaveAttribute("data-expanded", "true");
-    expect(screen.getByTestId("tune-notes-text").className).not.toContain("line-clamp-3");
+    expect(screen.getByTestId("tune-notes-text").className).not.toContain("line-clamp-2");
     expect(screen.getByTestId("tune-notes-toggle")).toHaveTextContent("Show less");
     expect(region).toHaveAttribute("aria-expanded", "true");
 

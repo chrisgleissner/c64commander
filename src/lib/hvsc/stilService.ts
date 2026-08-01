@@ -76,6 +76,9 @@ let ensureInFlight: Promise<boolean> | null = null;
  * look up afterwards.
  */
 export const ensureStilReady = async (options?: { signal?: AbortSignal }): Promise<boolean> => {
+  // A test supplying STIL through the mock bridge has already answered this; downloading over the
+  // top of it would be both wrong and impossible offline.
+  if (await isStilInstalled()) return true;
   const state = loadHvscState();
   if (state.installedVersion <= 0) return false;
 

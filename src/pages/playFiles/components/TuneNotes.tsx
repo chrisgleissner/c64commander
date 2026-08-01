@@ -10,8 +10,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
-/** How much is shown before the note is cut off. Three lines is roughly the median note in full. */
-const COLLAPSED_LINES = 3;
+/**
+ * How much is shown before the note is cut off.
+ *
+ * Two lines. Three took a visible bite out of the card next to everything else the now-playing
+ * panel has to carry, and two is still enough to see that there is a note and what it is about,
+ * which is what the collapsed state is for.
+ */
+const COLLAPSED_LINES = 2;
 
 export type TuneNotesProps = {
   /** The note itself. Nothing renders when this is absent, which is the case for most tunes. */
@@ -72,7 +78,7 @@ export const TuneNotes = ({ note, className }: TuneNotesProps) => {
       // only let them back in.
       className={cn(
         "text-xs leading-snug text-muted-foreground/80",
-        !expanded && "line-clamp-3",
+        !expanded && "line-clamp-2",
         // Expanded, the note gets its own scroll rather than the card's. The longest note in the
         // collection is 2,390 characters, which unbounded pushes the transport and the progress bar
         // off the screen entirely — measured on the device, where even "Show less" ended up below

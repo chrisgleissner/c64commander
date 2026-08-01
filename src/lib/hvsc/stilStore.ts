@@ -55,6 +55,22 @@ export type StilManifest = {
 const shardName = (shard: number) => `shard-${shard}.json`;
 
 /**
+ * STIL supplied by a test.
+ *
+ * The real store is a set of files, and the only way to fill it is to download and parse 3.7 MB of
+ * the archive — which a screenshot run has no business doing, and could not do offline anyway. A
+ * test that wants a tune to have notes says so directly.
+ *
+ * Deliberately its own global rather than a field on `__hvscMock__`: the presence of that object is
+ * what `isHvscBridgeAvailable` reads to decide the whole HVSC subsystem is mocked, so hanging STIL
+ * off it would change which sources the app offers in captures that are about something else.
+ */
+const mockedStil = (): Record<string, StilEntry> | null => {
+  if (typeof window === "undefined") return null;
+  return (window as Window & { __stilMock__?: Record<string, StilEntry> }).__stilMock__ ?? null;
+};
+
+/**
  * FNV-1a over the lowercased path, finished with an avalanche step.
  *
  * Lowercased so that a lookup cannot miss on a case difference between the archive listing and
@@ -149,7 +165,8 @@ export const readStilManifest = async (): Promise<StilManifest | null> => {
 };
 
 /** Whether there is anything to look up, so callers can skip the work rather than miss repeatedly. */
-export const isStilInstalled = async (): Promise<boolean> => (await readStilManifest()) !== null;
+export const isStilInstalled = async (): Promise<boolean> =>
+  mockedStil() !== null || (await readStilManifest()) !== null;
 
 /**
  * Write the parsed document out as shards.
@@ -193,6 +210,8 @@ export const ingestStilText = async (text: string, release: number): Promise<num
 /** Everything STIL says about one file, including its per-tune blocks. */
 export const getStilEntry = async (virtualPath: string): Promise<StilEntry | null> => {
   if (!virtualPath) return null;
+  const mock = mockedStil();
+  if (mock) return mock[virtualPath] ?? null;
   if (!(await isStilInstalled())) return null;
   const shard = await readShard(shardForPath(virtualPath));
   return shard?.[virtualPath] ?? null;

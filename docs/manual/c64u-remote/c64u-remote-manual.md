@@ -460,13 +460,15 @@ The first is that a tune is an arrangement, and of whose music. A great deal of 
 
 The second is what the individual tunes inside a file are called, which is what turns a list of nineteen identical rows into a title screen, a high-score jingle and a game-over sting.
 
-Underneath, where the editors left a note about the tune, you get it. Most are a line or two and are shown in full. Longer ones are trimmed to three lines with a **Show more** underneath.
+Underneath, where the editors left a note about the tune, you get it. Most are a line or two and are shown in full. Longer ones are trimmed to three lines and marked **Show more**; tap anywhere on the note to read the rest, and again to fold it away.
 
 The composer's name is also a way to hear more of their work: tap it, and the search opens with their name already filled in.
 
 #### Stopping later
 
 A station never ends on its own, which is a problem if you are listening in bed. Under **Playback settings** is a **Sleep timer**. Choose **This tune** to stop when the current tune finishes, or 15, 30, 45 or 60 minutes to stop at that point. The setting always says what it is going to do and counts down while it waits, and **Off** cancels it.
+
+![The sleep timer, showing what it is going to do](../../img/app/play/sid-radio/06-sleep-timer.png)
 
 #### Where the music plays
 
