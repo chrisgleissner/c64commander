@@ -996,3 +996,129 @@ describe("crossfade mixing", () => {
     for (const sample of written) expect(sample).toBeGreaterThan(0);
   });
 });
+
+/**
+ * The tail has to sound during the gap, not only once the new tune has something of its own.
+ *
+ * This is the case the first version of the mixing missed, and the tests missed it too because they
+ * handed the incoming sink audio immediately. On a device the incoming tune is a second or two from
+ * its first chunk, and during that time the outgoing tail is the only audio there is. Folding it
+ * only into the incoming tune's own slices meant it was never written at all: the listener heard the
+ * old tune, then a gap, then the new one — reported from a Pixel 4 as "there was no transition at
+ * all".
+ */
+describe("the crossfade tail carries the gap", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const flat = (frames: number, value: number) => {
+    const pcm = new Int16Array(frames * 2);
+    pcm.fill(value);
+    return pcm;
+  };
+
+  it("plays the outgoing tune while the incoming one has nothing to offer", async () => {
+    const backend = createBackend();
+    const incoming = createNativeLocalSidSink(RATE, backend);
+    await incoming!.resume?.();
+
+    // A tail, and not one sample of the new tune. This is the first second after a skip.
+    incoming!.adoptCrossfadeTail?.([flat(RATE, 6000)], 1.0);
+    await settle(400);
+
+    expect(backend.writes.length).toBeGreaterThan(0);
+    const written = backend.pcm[0]!;
+    expect(Math.max(...Array.from(written).map(Math.abs))).toBeGreaterThan(1000);
+  });
+
+  it("stops once the tail is spent, rather than writing silence for ever", async () => {
+    const backend = createBackend();
+    const incoming = createNativeLocalSidSink(RATE, backend);
+    await incoming!.resume?.();
+
+    incoming!.adoptCrossfadeTail?.([flat(RATE / 10, 6000)], 0.1);
+    await settle(400);
+    const afterTail = backend.writes.length;
+    await settle(400);
+
+    expect(backend.writes.length).toBe(afterTail);
+  });
+});
+
+describe("a crossfade is one continuous stream of samples", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("keeps the outgoing tune at full level until the incoming one has audio of its own", async () => {
+    const backend = createBackend();
+    const outgoing = createNativeLocalSidSink(RATE, backend)!;
+    scheduleChunk(outgoing, 0.5);
+    backend.bufferedMs = 400;
+    await settle();
+    const tail = outgoing.takeCrossfadeTail!(1.5);
+
+    const incoming = createNativeLocalSidSink(RATE, backend)!;
+    backend.pcm.length = 0;
+    incoming.adoptCrossfadeTail!(tail.length ? tail : [new Int16Array(RATE).fill(8000)], 1.5);
+    await settle(200);
+
+    // Nothing of the incoming tune has been scheduled, so every sample written so far is the
+    // outgoing tune's. It must still be at its own level: a fade that ran while the next tune was
+    // opening would reach zero before that tune made a sound, which is the gap this removes.
+    const written = backend.pcm.flatMap((chunk) => [...chunk]).filter((value) => value !== 0);
+    expect(written.length).toBeGreaterThan(0);
+    const quietest = Math.min(...written.map(Math.abs));
+    const loudest = Math.max(...written.map(Math.abs));
+    expect(quietest).toBe(loudest);
+  });
+
+  it("fades the outgoing tune only once the incoming one is playing", async () => {
+    const backend = createBackend();
+    const incoming = createNativeLocalSidSink(RATE, backend)!;
+    incoming.adoptCrossfadeTail!([new Int16Array(RATE * 2).fill(8000)], 1);
+    scheduleChunk(incoming, 1);
+    await settle(400);
+
+    const mixed = backend.pcm.flatMap((chunk) => [...chunk]);
+    expect(mixed.length).toBeGreaterThan(RATE);
+    // The tail is summed under the tune and ramps away, so the level falls across the fade.
+    const early = Math.max(...mixed.slice(0, 2000).map(Math.abs));
+    const late = Math.max(...mixed.slice(-2000).map(Math.abs));
+    expect(late).toBeLessThan(early);
+  });
+
+  it("inherits a track that is already open instead of replacing it", async () => {
+    const backend = createBackend();
+    const first = createNativeLocalSidSink(RATE, backend)!;
+    scheduleChunk(first, 0.2);
+    await settle();
+    expect(backend.opens.length).toBe(1);
+
+    // A second tune over the same backend must write onto the end of the running track. Opening
+    // again tears the track down and takes the outgoing tune's committed audio with it, which is
+    // heard as a hole at the seam.
+    const second = createNativeLocalSidSink(RATE, backend)!;
+    scheduleChunk(second, 0.2);
+    await settle();
+    expect(backend.opens.length).toBe(1);
+  });
+
+  it("releases the shared track to its successor without flushing it", async () => {
+    const backend = createBackend();
+    const outgoing = createNativeLocalSidSink(RATE, backend)!;
+    scheduleChunk(outgoing, 0.2);
+    await settle();
+    const flushesBefore = backend.flushes;
+    const closesBefore = backend.closes;
+
+    outgoing.releaseForHandover!();
+    await settle();
+
+    expect(backend.flushes).toBe(flushesBefore);
+    expect(backend.closes).toBe(closesBefore);
+  });
+});

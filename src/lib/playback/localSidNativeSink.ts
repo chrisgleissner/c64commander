@@ -44,6 +44,7 @@
  */
 
 import { addLog } from "@/lib/logging";
+import { traceLocalSid } from "./localSidTrace";
 import { SilenceDetector } from "./silenceDetector";
 import { startupBufferMs } from "./renderThroughput";
 import type { AudioScheduleBuffer, AudioScheduleSink, AudioScheduleSource } from "./localSidChunkScheduler";
@@ -139,6 +140,34 @@ const TRACK_BURSTS = 16;
  * be thrown away.
  */
 const HIGH_WATER_MS = 12000;
+
+/**
+ * How shallow the native ring is kept while a track change is in progress.
+ *
+ * The ring is first-in-first-out and shared by both tunes, so whatever is in it plays before
+ * anything written afterwards. At the normal 12 s depth the incoming tune's first sample would
+ * queue up to twelve seconds behind the outgoing one, and no amount of mixing could overlap them.
+ * During a transition the outgoing tune therefore writes only a fraction of a second at a time,
+ * which is the most that can still be committed when the incoming tune takes over.
+ */
+const TRANSITION_HIGH_WATER_MS = 250;
+
+/**
+ * How much of what has been written is kept, in seconds.
+ *
+ * The ring holds up to `HIGH_WATER_MS`, and a track change flushes it — which throws away precisely
+ * the audio a crossfade needs to fade out. Keeping a copy of recent writes is what makes that audio
+ * available again as data.
+ *
+ * It has to be **deeper than the pipeline**, not merely as deep as the fade. What is recovered is
+ * the part of the history that has not been played yet, found by counting back from the most recent
+ * write by the pipeline's own depth. If the history is shallower than that depth the count runs off
+ * the end of it and recovery starts at the oldest sample there is, which is audio from further back
+ * in the tune that the listener has already heard: the transition would jump backwards by several
+ * seconds. A steady test tone cannot show this — every sample of it is identical — which is why it
+ * was found by counting samples rather than by listening.
+ */
+const TAIL_HISTORY_SECONDS = HIGH_WATER_MS / 1000 + 2;
 
 /**
  * How much audio goes in one write.
@@ -242,6 +271,10 @@ class NativeLocalSidSink implements AudioScheduleSink {
    * raises it. One writer, two tunes, a real overlap.
    */
   private tail: { slices: Int16Array[]; cursor: number; frame: number; frames: number } | null = null;
+  /** How much tail-only audio to emit at a time while the incoming tune has nothing of its own. */
+  private get tailSliceFrames(): number {
+    return Math.max(1, Math.round(this.sampleRate / 20));
+  }
   /** How long the speaker has been given a flat signal. See `SilenceDetector`. */
   private readonly silence = new SilenceDetector();
   private suspended = false;
@@ -283,6 +316,26 @@ class NativeLocalSidSink implements AudioScheduleSink {
   private lastDepthMs = Number.POSITIVE_INFINITY;
   /** When audio was last handed to the pipeline; a stall is only judged once writing has stopped. */
   private lastWriteAtMs = 0;
+  /**
+   * A copy of recent writes, oldest first, so the unplayed part can be recovered after a flush.
+   *
+   * Slices are stored by reference: `mixTail` is the only thing that alters one and it runs before
+   * the write, so nothing changes them afterwards.
+   */
+  private history: Int16Array[] = [];
+  private historyFrames = 0;
+  /** The pipeline's depth at the last write, with the time it was read, to work out what is unplayed. */
+  private lastBufferedMs = 0;
+  /** True from the start of a track change until this sink stops writing. */
+  private transitioning = false;
+  /**
+   * How much of the recovered tail belongs to the successor, in frames.
+   *
+   * Not held back from the pipeline — trying that starved it and put a gap exactly where the fade
+   * should have been. It is what the outgoing tune aims to still have in hand when the successor
+   * arrives, and the recovery is sized to leave it: budget for the open, plus this for the fade.
+   */
+  private tailReserveFrames = 0;
   /** Chunk ends still to be announced, as playhead seconds. */
   private endings: { at: number; fire: () => void }[] = [];
   private ticker: ReturnType<typeof setInterval> | null = null;
@@ -310,9 +363,107 @@ class NativeLocalSidSink implements AudioScheduleSink {
     this.silence.reset();
   }
 
+  /** Keep a copy of what went out, discarding anything older than the tail history needs. */
+  private rememberWrite(slice: Int16Array): void {
+    this.history.push(slice);
+    this.historyFrames += slice.length / 2;
+    const keep = TAIL_HISTORY_SECONDS * this.sampleRate;
+    while (this.history.length > 1 && this.historyFrames - this.history[0].length / 2 >= keep) {
+      this.historyFrames -= (this.history.shift() as Int16Array).length / 2;
+    }
+  }
+
+  /**
+   * Begin a track change: recover the audio this tune had queued but not yet played, and go on
+   * playing it from JS while the next tune opens.
+   *
+   * The ring is flushed first. That is not optional — it may hold twelve seconds of this tune, and
+   * the incoming tune cannot be heard until all of it has played. What the flush discards is put
+   * back a fraction of a second at a time, so when the incoming tune's first slice arrives only a
+   * little of this tune is committed and the rest can be mixed underneath it instead.
+   *
+   * `seconds` bounds how much is recovered. Enough is kept to cover opening the next tune as well as
+   * the fade, because until that tune has a sample to play this is the only audio there is.
+   */
+  beginTailPlayout(seconds: number, reserveSeconds = 0): void {
+    if (this.closed || this.transitioning) return;
+    this.transitioning = true;
+    this.tailReserveFrames = Math.max(0, Math.round(reserveSeconds * this.sampleRate));
+    const wanted = Math.max(0, Math.round(seconds * this.sampleRate));
+    // What is still in the pipeline: the depth at the last write, less the time since. Approximate
+    // by a few milliseconds, which shifts the seam by less than a slice.
+    const elapsedMs = this.lastWriteAtMs ? Math.max(0, performance.now() - this.lastWriteAtMs) : 0;
+    // Never count back further than the history actually holds: doing so starts the recovery at
+    // audio the listener has already heard. With `TAIL_HISTORY_SECONDS` deeper than the pipeline
+    // this cannot bite, and the clamp says so rather than relying on the two staying in step.
+    const unplayedFrames = Math.min(
+      this.historyFrames,
+      Math.round((Math.max(0, this.lastBufferedMs - elapsedMs) / 1000) * this.sampleRate),
+    );
+    const recovered: Int16Array[] = [];
+    let frames = 0;
+    // Walk back from the most recent write until the unplayed audio is covered, then keep the slices
+    // in play order. Anything older than that has already been heard.
+    for (let i = this.history.length - 1; i >= 0 && frames < unplayedFrames; i -= 1) {
+      recovered.unshift(this.history[i]);
+      frames += this.history[i].length / 2;
+    }
+    // Trim to what was asked for, taking it from the playhead forwards.
+    const capped: Int16Array[] = [];
+    let kept = 0;
+    for (const slice of recovered) {
+      if (kept >= wanted) break;
+      capped.push(slice);
+      kept += slice.length / 2;
+    }
+    // Split the first slice so the write that closes the flush is short. A half-second slice takes
+    // long enough to convert and hand across the bridge to be heard as part of the hole it is meant
+    // to fill.
+    const primerFrames = Math.round(this.sampleRate / 50);
+    if (capped.length && capped[0].length / 2 > primerFrames) {
+      const head = capped[0].subarray(0, primerFrames * 2);
+      const rest = capped[0].subarray(primerFrames * 2);
+      capped.splice(0, 1, head, rest);
+    }
+    this.queue = [...capped, ...this.queue];
+    this.queuedSec = 0;
+    this.history = [];
+    this.historyFrames = 0;
+    traceLocalSid("tail-playout-begin", { recovered: kept, unplayed: unplayedFrames, buffered: this.lastBufferedMs });
+    void this.refillAfterFlush();
+  }
+
+  /**
+   * Empty the pipeline and put the tail back into it, as one uninterrupted step.
+   *
+   * The gap between the two is audible. Flushing and then letting the ordinary pump loop discover
+   * there is work left it a hole of about 200 ms in the middle of the transition on a Pixel 4: the
+   * loop polls, sleeps, and re-reads the depth before it writes anything. This writes the first
+   * slice itself, the instant the flush returns, and only then hands back to the pump.
+   */
+  private async refillAfterFlush(): Promise<void> {
+    await (this.backend.flushAudioTrack?.() ?? Promise.resolve()).catch((error) => {
+      // A pipeline that cannot be flushed still plays; the transition is merely less tidy.
+      addLog("debug", "Native audio: flush before crossfade tail failed", {
+        error: (error as Error)?.message ?? String(error),
+      });
+    });
+    traceLocalSid("tail-playout-flushed", {});
+    // Prime with a short slice so the first write is as small, and therefore as quick, as it can be.
+    const first = this.queue.shift();
+    if (first && !this.closed) {
+      await this.send(first);
+      traceLocalSid("tail-playout-primed", { frames: first.length / 2 });
+    }
+    if (!this.closed) void this.pump();
+  }
+
   /**
    * Hand over what has been rendered but not yet played, so a successor can fade it out under
    * itself. Capped, because only the crossfade's worth is wanted — the rest of the tune is not.
+   *
+   * Emptying the queue is part of the handover: this sink must stop writing the moment its audio
+   * belongs to the successor, or both would play it.
    */
   takeTail(maxSeconds: number): Int16Array[] {
     const maxFrames = Math.max(0, Math.round(maxSeconds * this.sampleRate));
@@ -323,6 +474,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
       out.push(slice);
       frames += slice.length / 2;
     }
+    this.queue = [];
     return out;
   }
 
@@ -331,6 +483,9 @@ class NativeLocalSidSink implements AudioScheduleSink {
     const frames = slices.reduce((sum, s) => sum + s.length / 2, 0);
     if (frames === 0 || seconds <= 0) return;
     this.tail = { slices, cursor: 0, frame: 0, frames: Math.min(frames, Math.round(seconds * this.sampleRate)) };
+    // Start feeding at once. Nothing else will: the incoming tune has not rendered a sample yet, and
+    // during that gap the tail is the only audio there is.
+    if (!this.closed) void this.pump();
   }
 
   /**
@@ -340,27 +495,37 @@ class NativeLocalSidSink implements AudioScheduleSink {
    * where they happen to peak together, and wrapping an Int16 turns that into a crack rather than
    * the clip it should be.
    */
-  private mixTail(slice: Int16Array): void {
+  private mixTail(slice: Int16Array, sliceIsOwnAudio: boolean): number {
     const tail = this.tail;
-    if (!tail) return;
+    if (!tail) return 0;
+    let mixedFrames = 0;
     for (let i = 0; i + 1 < slice.length; i += 2) {
       if (!tail.slices.length || tail.frame >= tail.frames) {
         this.tail = null;
-        return;
+        return mixedFrames;
       }
       const from = tail.slices[0] as Int16Array;
-      const gain = 1 - tail.frame / tail.frames;
+      // The fade only runs while there is something to fade *into*. Opening the next tune takes a
+      // couple of seconds and rendering its first samples takes longer still, and until then this
+      // sink writes silence with the tail folded into it. Ramping down during that stretch faded the
+      // outgoing tune to nothing before the incoming one had made a sound, which the listener hears
+      // as a gap between the two — the very thing the crossfade exists to remove. So while these are
+      // empty slices the outgoing tune plays on at its own level, and the fade starts on the first
+      // slice that carries audio of this tune's own.
+      const gain = sliceIsOwnAudio ? 1 - tail.frame / tail.frames : 1;
       for (let ch = 0; ch < 2; ch += 1) {
         const mixed = (slice[i + ch] as number) + (from[tail.cursor + ch] as number) * gain;
         slice[i + ch] = mixed > 32767 ? 32767 : mixed < -32768 ? -32768 : mixed;
       }
       tail.cursor += 2;
-      tail.frame += 1;
+      mixedFrames += 1;
+      if (sliceIsOwnAudio) tail.frame += 1;
       if (tail.cursor >= from.length) {
         tail.slices.shift();
         tail.cursor = 0;
       }
     }
+    return mixedFrames;
   }
 
   /** Supply-side counters, for HIL diagnosis. */
@@ -523,7 +688,12 @@ class NativeLocalSidSink implements AudioScheduleSink {
     if (this.pumping) return;
     this.pumping = true;
     try {
-      while (!this.closed && this.queue.length) {
+      // `this.tail` keeps the loop alive on its own. The outgoing tune's audio only reaches the
+      // speaker through this sink, and the incoming tune may be a second or two from rendering its
+      // first chunk — so a loop that ran only while there was audio of its own to write left the
+      // tail sitting unplayed and the listener heard the old tune, a gap, then the new one. During
+      // that gap the tail IS the audio.
+      while (!this.closed && (this.queue.length || this.tail)) {
         // Replaced. There is one AudioTrack, and two sinks writing to it do not mix — the slices
         // interleave and the listener hears the old tune, a fragment of the new one, the old tune
         // again, and so on. Being superseded therefore makes a sink inert: it stops writing as well
@@ -537,7 +707,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
           await new Promise((resolve) => setTimeout(resolve, PUMP_IDLE_MS));
           continue;
         }
-        if (this.queuedSec * 1000 >= HIGH_WATER_MS) {
+        if (this.queuedSec * 1000 >= (this.transitioning ? TRANSITION_HIGH_WATER_MS : HIGH_WATER_MS)) {
           await new Promise((resolve) => setTimeout(resolve, PUMP_IDLE_MS));
           this.announceEndings();
           // Ask, do not guess.
@@ -545,9 +715,14 @@ class NativeLocalSidSink implements AudioScheduleSink {
           continue;
         }
         if (!(await this.ensureOpen())) break;
-        const slice = this.queue.shift();
+        // Nothing of this tune's own yet, but a tail to carry: give the mixer an empty slice to
+        // fold it into, so the outgoing tune keeps sounding until the incoming one can join it.
+        const own = this.queue.shift();
+        // Nothing of this tune's own yet, but a tail to carry: an empty slice for the mixer to fold
+        // it into. Marked as not this tune's audio, which is what holds the fade back — see mixTail.
+        const slice = own ?? (this.tail ? new Int16Array(this.tailSliceFrames * 2) : undefined);
         if (!slice) continue;
-        await this.send(slice);
+        await this.send(slice, own !== undefined);
         this.announceEndings();
       }
     } finally {
@@ -668,6 +843,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
     this.endings = [];
     for (const entry of orphaned) entry.fire();
     try {
+      openTracks.delete(this.backend);
       await this.backend.closeAudioTrack?.({});
     } catch (error) {
       addLog("debug", "Native audio: closing a stalled track failed; opening a new one anyway", {
@@ -677,10 +853,15 @@ class NativeLocalSidSink implements AudioScheduleSink {
     if (!this.closed) void this.pump();
   }
 
-  private async send(slice: Int16Array): Promise<void> {
+  private async send(slice: Int16Array, sliceIsOwnAudio = true): Promise<void> {
     // Fold the outgoing tune in before the slice leaves for the track: this is the only place both
     // tunes exist as PCM in one writer, which is what a crossfade needs.
-    this.mixTail(slice);
+    const mixedFrames = this.mixTail(slice, sliceIsOwnAudio);
+    // A slice of this tune's own is always worth writing. One that exists only to carry the outgoing
+    // tune is not: when the tail runs out partway through, the rest of that slice is silence, and
+    // writing it puts a hole between the two tunes exactly where they were meant to join. Measured
+    // as 50 ms of silence — one slice — in an otherwise continuous stream.
+    if (!sliceIsOwnAudio && mixedFrames * 2 < slice.length) return;
     const bytes = new Uint8Array(slice.buffer, slice.byteOffset, slice.byteLength);
     try {
       // Replaced while this write was already on its way. Dropping it here as well as in the pump
@@ -699,12 +880,17 @@ class NativeLocalSidSink implements AudioScheduleSink {
       // exactly one sink is ever writing, so the slices cannot interleave, and the outgoing tail
       // keeps the speaker fed right up to the instant the new tune has something to say.
       claimNativeTrack(this.backend, this, this.serial);
+      if (this.writtenFrames === 0) {
+        traceLocalSid("first-write", { serial: this.serial, tail: this.tail ? this.tail.frames : 0 });
+      }
       const stats = await this.backend.writeAudioTrack({ data: toBase64(bytes) });
       this.lastWriteAtMs = performance.now();
       // Watched here rather than anywhere upstream: this is the last point the audio is still audio
       // and the only one that sees what the speaker was actually given.
       this.silence.observe(slice, slice.length / 2 / this.sampleRate);
       this.writtenFrames += slice.length / 2;
+      this.lastBufferedMs = stats?.bufferedMs ?? this.lastBufferedMs;
+      this.rememberWrite(slice);
       // The playhead is what has been written less what is still queued, which ties the clock to the
       // DAC rather than to wall time.
       this.noteDepth(stats?.bufferedMs ?? 0);
@@ -729,16 +915,33 @@ class NativeLocalSidSink implements AudioScheduleSink {
   private ensureOpen(): Promise<boolean> {
     if (this.opened) return Promise.resolve(true);
     if (this.closed) return Promise.resolve(false);
+    const settings = {
+      sampleRate: Math.round(this.sampleRate),
+      bufferMs: TARGET_BUFFER_MS,
+      maxRingMs: MAX_RING_MS,
+      trackBursts: TRACK_BURSTS,
+      primeMs: primeMs(),
+    };
+    // Adopt a track that is already running on these settings rather than replacing it. Settings are
+    // compared rather than assumed equal: a tune at a different sample rate genuinely does need a
+    // new track, and inheriting one would play it at the wrong speed.
+    //
+    // `primeMs` is deliberately left out of the comparison. It is how much audio to gather before a
+    // track starts playing, derived from how fast this device has been rendering, so it changes as
+    // the estimate improves — and a track that is already playing has no start left to prime. Left
+    // in, the value drifting between two tunes was enough to make the second one replace the track
+    // and cut the stream in two.
+    const { primeMs: _primeMs, ...identity } = settings;
+    const signature = JSON.stringify(identity);
+    if (openTracks.get(this.backend) === signature) {
+      this.opened = true;
+      return Promise.resolve(true);
+    }
     this.opening ??= this.backend
-      .openAudioTrack({
-        sampleRate: Math.round(this.sampleRate),
-        bufferMs: TARGET_BUFFER_MS,
-        maxRingMs: MAX_RING_MS,
-        trackBursts: TRACK_BURSTS,
-        primeMs: primeMs(),
-      })
+      .openAudioTrack(settings)
       .then(() => {
         this.opened = true;
+        openTracks.set(this.backend, signature);
         return true;
       })
       .catch((error) => {
@@ -876,6 +1079,31 @@ class NativeLocalSidSink implements AudioScheduleSink {
     void this.pump();
   }
 
+  /**
+   * Stop feeding the track, but leave the track itself running.
+   *
+   * Used when this tune's remaining audio has been handed to the next one. `close` is wrong here:
+   * this sink has not been superseded yet — the incoming tune claims the track on its first write,
+   * which is still a moment away — so `close` would find the track still its own and flush it. That
+   * discards the audio already committed to the pipeline, which is exactly what was bridging the
+   * hundred milliseconds until the next tune writes. Measured on a Pixel 4 as a short but plainly
+   * audible hole in the middle of an otherwise correct crossfade.
+   *
+   * The track therefore keeps playing what it holds, and the next sink writes straight onto the end
+   * of it: one continuous stream of samples from one tune to the next.
+   */
+  releaseForHandover(): void {
+    this.closed = true;
+    if (this.ticker !== null) {
+      clearInterval(this.ticker);
+      this.ticker = null;
+    }
+    this.queue = [];
+    this.endings = [];
+    this.history = [];
+    this.historyFrames = 0;
+  }
+
   close(): void {
     this.closed = true;
     // Local teardown happens either way: this sink is finished with, whoever owns the track.
@@ -892,6 +1120,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
     this.opened = false;
     if (!mayTouchTrack) return;
     releaseNativeTrack(this.backend, this);
+    openTracks.delete(this.backend);
     void this.backend.flushAudioTrack?.().catch(() => {
       // Nothing queued, or no pipeline left to queue into.
     });
@@ -932,6 +1161,17 @@ export const nativeLocalAudioAvailable = (): boolean =>
  * sinks over two different backends are not in competition. Production has a single backend, so it
  * is the same thing there.
  */
+/**
+ * Which backends already have a track open, and with what settings.
+ *
+ * There is one native track shared by every tune, and a fresh sink starts out believing it has to
+ * open one. Opening a track that is already running tears it down and builds it again, which
+ * discards whatever the outgoing tune had committed — heard as a hole of about 100 ms at the seam of
+ * an otherwise correct crossfade. A sink that inherits a track opened with the same settings
+ * therefore writes straight onto the end of it, and the stream of samples never stops.
+ */
+const openTracks = new WeakMap<object, string>();
+
 const trackOwners = new WeakMap<object, { sink: object; serial: number }>();
 let nextSinkSerial = 1;
 
@@ -986,6 +1226,9 @@ export const createNativeLocalSidSink = (
     audioUnderruns: () => sink.underruns(),
     isSilentFault: () => sink.isSilentFault(),
     takeCrossfadeTail: (seconds: number) => sink.takeTail(seconds),
+    beginCrossfadeTailPlayout: (seconds: number, reserveSeconds?: number) =>
+      sink.beginTailPlayout(seconds, reserveSeconds),
+    releaseForHandover: () => sink.releaseForHandover(),
     adoptCrossfadeTail: (slices: Int16Array[], seconds: number) => sink.adoptTail(slices, seconds),
     resetSilence: () => sink.resetSilence(),
     resume: () => sink.resume(),

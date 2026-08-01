@@ -29,6 +29,16 @@ import { claimPhoneAudio, phoneAudioOwner, releasePhoneAudio } from "@/lib/audio
 import { clearLocalAudioHealth, reportLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
 import { notifyPlaybackActivityChanged } from "./playbackActivitySignal";
 import type { PendingSeekState } from "./pendingSeekStatus";
+import { traceLocalSid } from "./localSidTrace";
+
+/**
+ * How far beyond the fade the outgoing tune is kept available, in seconds.
+ *
+ * Opening the next tune takes about 2.6 s on a Pixel 4, and the outgoing tune has to cover that
+ * before the fade can even start. Too small and the listener hears silence in the middle of the
+ * transition; too large only costs a little memory.
+ */
+const CROSSFADE_TAIL_BUDGET_SECONDS = 4;
 import { RenderedTuneCache, type RenderedTune } from "./renderedTuneCache";
 
 /**
@@ -107,6 +117,10 @@ export interface LocalSidAudioSink {
    * cannot reach audio already converted. The incoming sink therefore does the mixing.
    */
   takeCrossfadeTail?: (seconds: number) => Int16Array[];
+  /** Start a track change: recover this tune's unplayed audio and keep playing it from JS. */
+  beginCrossfadeTailPlayout?: (seconds: number, reserveSeconds?: number) => void;
+  /** Stop feeding the shared track without tearing it down, so the next tune writes onto the end. */
+  releaseForHandover?: () => void;
   /** Sum a predecessor's tail under this sink's own output, fading it away across `seconds`. */
   adoptCrossfadeTail?: (slices: Int16Array[], seconds: number) => void;
   /**
@@ -584,6 +598,8 @@ export class LocalSidEngine {
   private pendingCrossfadeMs = 0;
   /** The outgoing tune's audio, waiting for the incoming sink to fade it out underneath itself. */
   private crossfadeTail: Int16Array[] | null = null;
+  /** The tune being faded out, still playing from JS while the next one opens. */
+  private crossfadeOut: LocalSidAudioSink | null = null;
   /** How long that tail should take to disappear. */
   private crossfadeSeconds = 0;
   private totalRenderMs = 0;
@@ -888,6 +904,8 @@ export class LocalSidEngine {
     this.pendingCrossfadeMs = crossfadeMs;
     this.stopPlayback({ crossfadeMs });
     this.callbacks = callbacks;
+    // Before the worker is even asked to open this tune. That open is the gap.
+    this.startFromPrerenderedIntro();
     const worker = this.ensureWorker();
     const id = this.nextId;
     this.nextId += 1;
@@ -1204,6 +1222,21 @@ export class LocalSidEngine {
     // callers to be well behaved. Any engine that still holds a sink is silenced
     // before this one opens its own, whatever created it and however the UI got
     // there. See claimAudioOwnership.
+    if (this.audio) {
+      // Already playing, from this tune's pre-rendered opening — see `startFromPrerenderedIntro`.
+      // The worker has caught up with audio the listener is hearing already, so there is no sink to
+      // build and nothing to hand over; building one here would replace a sink mid-tune.
+      this.startWatchdog();
+      this.pump();
+      pending?.resolve({
+        romRequired: false,
+        started: true,
+        sampleRate: message.sampleRate,
+        channels: message.channels,
+        tuneInfo: message.tuneInfo,
+      });
+      return;
+    }
     claimAudioOwnership(this);
     try {
       this.audio = this.audioSinkFactory(message.sampleRate);
@@ -1227,10 +1260,7 @@ export class LocalSidEngine {
     // A new tune gets its own silence clock; the previous tune's quiet ending is not its fault.
     this.audio.resetSilence?.();
     // And it inherits the outgoing tune's tail, so the two overlap instead of butting together.
-    if (this.crossfadeTail?.length) {
-      this.audio.adoptCrossfadeTail?.(this.crossfadeTail, this.crossfadeSeconds);
-      this.crossfadeTail = null;
-    }
+    this.takeOverFromOutgoingTune();
     // Supervise from the moment there is something to supervise. The clock starts here rather than
     // at the first chunk, so a tune that never produces one at all is caught too.
     this.startWatchdog();
@@ -1240,6 +1270,11 @@ export class LocalSidEngine {
     // beginning of a track. That is the worst possible moment for one: it is where a listener decides
     // whether the player is trustworthy.
     const warmed = this.currentKey ? this.renderCache.get(this.currentKey) : null;
+    traceLocalSid("opened", {
+      key: this.currentKey,
+      warm: warmed ? +warmed.durationSeconds.toFixed(2) : null,
+      cachedKeys: this.renderCache.keys(),
+    });
     if (warmed) {
       this.cached = warmed;
       this.cachedCursor = 0;
@@ -1258,6 +1293,84 @@ export class LocalSidEngine {
       channels: message.channels,
       tuneInfo: message.tuneInfo,
     });
+  }
+
+  /**
+   * Take the outgoing tune's remaining audio, so this tune can fade it out under itself.
+   *
+   * Everything that is left, not just the fade's worth: this tune spends it at full level while its
+   * own first samples are still rendering, and only what remains after that is faded. Capped at the
+   * fade length instead, the tail was used up covering the render and the ramp never ran.
+   */
+  private takeOverFromOutgoingTune(): void {
+    const fadingOut = this.crossfadeOut;
+    if (fadingOut) {
+      this.crossfadeTail = fadingOut.takeCrossfadeTail?.(CROSSFADE_TAIL_BUDGET_SECONDS + this.crossfadeSeconds) ?? null;
+      this.crossfadeOut = null;
+      // Released, not closed: closing would flush the shared track and punch a hole between the two
+      // tunes. See `releaseForHandover`.
+      if (fadingOut.releaseForHandover) fadingOut.releaseForHandover();
+      else fadingOut.close();
+    }
+    if (this.crossfadeTail?.length && this.audio) {
+      this.audio.adoptCrossfadeTail?.(this.crossfadeTail, this.crossfadeSeconds);
+    }
+    traceLocalSid("crossfade-tail-adopted", {
+      slices: this.crossfadeTail?.length ?? 0,
+      frames: (this.crossfadeTail ?? []).reduce((n, slice) => n + slice.length / 2, 0),
+    });
+    this.crossfadeTail = null;
+  }
+
+  /**
+   * Start this tune from its pre-rendered opening, before the worker has opened it.
+   *
+   * This is what removes the gap rather than merely covering it. Opening a tune costs about 2.6 s on
+   * a Pixel 4, and until now nothing of the new tune could reach the speaker until that finished —
+   * so a track change was the outgoing tune's remaining audio, then a hole, then the new tune. The
+   * neighbouring tracks are already rendered into the cache while the current one plays (see
+   * `warmLeadIn`), so at the moment of a change the next tune's opening is usually sitting in memory
+   * and can start immediately. The outgoing tune's outro then mixes with it directly, which is what
+   * a crossfade is.
+   *
+   * Does nothing when that tune has not been rendered ahead — over the network, say, or the first
+   * track of a session. The transition then falls back to the tail covering the open, which is
+   * continuous but has less to fade.
+   */
+  private startFromPrerenderedIntro(): void {
+    // `pendingCacheKey`, not `currentKey`: stopping the previous tune clears `currentKey`, and it is
+    // not restored until the new tune opens — which is the very wait this exists to get ahead of.
+    const key = this.pendingCacheKey ?? this.currentKey;
+    if (this.audio || !key) return;
+    const warmed = this.renderCache.get(key);
+    if (!warmed) return;
+    this.currentKey = key;
+    claimAudioOwnership(this);
+    try {
+      this.audio = this.audioSinkFactory(warmed.sampleRate);
+    } catch {
+      // No sink is not a failure here: the ordinary open follows and builds one.
+      releaseAudioOwnership(this);
+      return;
+    }
+    void this.audio.resume?.();
+    const level = this.muted ? 0 : this.volume;
+    if (this.volume !== 1 || this.muted) this.audio.setGain?.(level);
+    if (this.pendingCrossfadeMs > 0) this.audio.fadeIn?.(this.pendingCrossfadeMs, level);
+    this.pendingCrossfadeMs = 0;
+    this.scheduler = new LocalSidChunkScheduler(this.audio.sink, {
+      onSourceEnded: () => this.onSourceEnded(),
+    });
+    this.audio.resetSilence?.();
+    this.takeOverFromOutgoingTune();
+    this.cached = warmed;
+    this.cachedCursor = 0;
+    if (warmed.partial) this.beginPartialHandoff(warmed.durationSeconds);
+    traceLocalSid("started-from-prerendered-intro", {
+      key,
+      seconds: +warmed.durationSeconds.toFixed(2),
+    });
+    this.pump();
   }
 
   /**
@@ -2042,6 +2155,7 @@ export class LocalSidEngine {
       prerenderFraction: this.prerenderFraction,
       pendingWarms: this.pendingWarms.size,
       cachedTunes: this.renderCache.size,
+      cachedKeys: this.renderCache.keys(),
       scheduledAhead: this.scheduler?.bufferedSeconds() ?? null,
       // What the tune's end is waiting for. `maybeFireEnded` only fires once every scheduled source
       // has reported back, so a tune that has run out of audio but never advances is telling you
@@ -2186,18 +2300,32 @@ export class LocalSidEngine {
     this.scheduler?.stopAll(fadeMs > 0 ? { keepSourcesFor: fadeMs } : undefined);
     this.scheduler = null;
     this.audio = null;
-    if (outgoing && fadeMs > 0) {
-      // Taken now, while the outgoing sink still holds it: it stops writing the moment the next
-      // tune's first slice reaches the track, and this is the audio that has to sound underneath.
-      this.crossfadeTail = outgoing.takeCrossfadeTail?.(fadeMs / 1000) ?? null;
+    if (outgoing && fadeMs > 0 && outgoing.beginCrossfadeTailPlayout) {
+      // The outgoing tune keeps sounding, from JS, until the next one can be heard.
+      //
+      // Its audio is not taken here. Nothing has opened the next tune yet — on a Pixel 4 that costs
+      // about 2.6 s — and audio handed over now would simply sit idle while the listener heard
+      // nothing. Instead the sink recovers what it had queued and plays it a fraction of a second at
+      // a time; `onOpened` then takes whatever is left and gives it to the incoming tune to mix.
+      //
+      // The fade budget is deliberately larger than the fade: it has to cover opening the next tune
+      // as well, and this is the only audio there is until that finishes.
+      this.crossfadeOut = outgoing;
       this.crossfadeSeconds = fadeMs / 1000;
-    }
-    if (outgoing && fadeMs > 0 && outgoing.fadeOut) {
-      // Deliberate crossfade: let the tail ring out under the incoming tune, then
-      // close. The context is detached from this engine already, so nothing can
-      // schedule onto it and it cannot become a second live source.
-      outgoing.fadeOut(fadeMs);
-      setTimeout(() => outgoing.close(), fadeMs + 50);
+      outgoing.beginCrossfadeTailPlayout(CROSSFADE_TAIL_BUDGET_SECONDS + fadeMs / 1000, fadeMs / 1000);
+      traceLocalSid("crossfade-tail-playout", { fadeMs });
+      // A backstop only. `onOpened` closes it as soon as the next tune has the tail, and a tune that
+      // never opens must not leave the previous one playing forever.
+      setTimeout(
+        () => {
+          // Only if the handover never happened. Once it has, this sink has already been released and
+          // closing it here would flush the track the next tune is playing through.
+          if (this.crossfadeOut !== outgoing) return;
+          this.crossfadeOut = null;
+          outgoing.close();
+        },
+        (CROSSFADE_TAIL_BUDGET_SECONDS + fadeMs / 1000) * 1000 + 500,
+      );
     } else {
       outgoing?.close();
     }

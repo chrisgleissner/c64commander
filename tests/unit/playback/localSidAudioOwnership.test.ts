@@ -152,43 +152,62 @@ describe("crossfade is opt-in", () => {
     expect(first.closed.value).toBe(true);
   });
 
-  it("fades the outgoing tune out when a crossfade is configured", async () => {
+  it("hands the outgoing tune to the next one to fade under itself", async () => {
     vi.useFakeTimers();
     try {
       localStorage.setItem("c64u_playback_crossfade_ms", "1500");
-      const faded: number[] = [];
-      const sink = {
-        currentTime: 0,
-        sampleRate: 48000,
-        createBuffer: (channels: number, frames: number) => {
-          const data = Array.from({ length: channels }, () => new Float32Array(frames));
-          return { getChannelData: (c: number) => data[c]! } as unknown as AudioBuffer;
-        },
-        createSource: () => ({ start() {}, stop() {}, onended: null }) as never,
-      };
+      const tailSlices = [new Int16Array(4)];
+      const playoutBudgets: number[] = [];
+      const adopted: { slices: Int16Array[]; seconds: number }[] = [];
+      let released = false;
       let closed = false;
-      const engine = new LocalSidEngine({
-        workerFactory: () => new FakeWorker() as never,
-        audioSinkFactory: (() => ({
-          sink,
+      let sinkCount = 0;
+      const makeAudioSink = () => {
+        const mine = (sinkCount += 1);
+        return {
+          sink: {
+            currentTime: 0,
+            sampleRate: 48000,
+            createBuffer: (channels: number, frames: number) => {
+              const data = Array.from({ length: channels }, () => new Float32Array(frames));
+              return { getChannelData: (c: number) => data[c]! } as unknown as AudioBuffer;
+            },
+            createSource: () => ({ start() {}, stop() {}, onended: null }) as never,
+          },
           resume: () => {},
-          fadeOut: (ms: number) => faded.push(ms),
           fadeIn: () => {},
+          beginCrossfadeTailPlayout: (seconds: number) => playoutBudgets.push(seconds),
+          // Only the first sink has a tail to give; the second is the one that adopts it.
+          takeCrossfadeTail: () => (mine === 1 ? tailSlices : []),
+          adoptCrossfadeTail: (slices: Int16Array[], seconds: number) => adopted.push({ slices, seconds }),
+          releaseForHandover: () => {
+            released = true;
+          },
           close: () => {
             closed = true;
           },
-        })) as never,
+        };
+      };
+      const engine = new LocalSidEngine({
+        workerFactory: () => new FakeWorker() as never,
+        audioSinkFactory: makeAudioSink as never,
       });
 
       await engine.play(new ArrayBuffer(8), 0);
       await engine.play(new ArrayBuffer(8), 1);
 
-      expect(faded).toEqual([1500]);
-      // Still ringing out, not yet closed...
+      // The outgoing tune keeps playing from JS, with a budget larger than the fade: it has to cover
+      // opening the next tune as well, or the listener hears silence in the middle of the change.
+      expect(playoutBudgets).toHaveLength(1);
+      expect(playoutBudgets[0]).toBeGreaterThan(1.5);
+      // Its remaining audio goes to the incoming sink, which mixes it under its own output.
+      expect(adopted).toEqual([{ slices: tailSlices, seconds: 1.5 }]);
+      // Released rather than closed: closing flushes the shared track and cuts the stream in two.
+      expect(released).toBe(true);
       expect(closed).toBe(false);
-      vi.advanceTimersByTime(1600);
-      // ...and closed once the ramp has run, so it cannot linger as a source.
-      expect(closed).toBe(true);
+      // The backstop must not fire either, now that the handover has happened.
+      vi.advanceTimersByTime(60_000);
+      expect(closed).toBe(false);
     } finally {
       vi.useRealTimers();
     }

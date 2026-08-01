@@ -73,6 +73,11 @@ export class RenderedTuneCache {
   /** Insertion order is LRU order: re-reading a key moves it to the end. */
   private readonly entries = new Map<string, RenderedTune>();
 
+  /** What is cached, oldest first. For diagnosis: a warm miss is nearly always a key mismatch. */
+  keys(): string[] {
+    return [...this.entries.keys()];
+  }
+
   constructor(
     private readonly maxTunes: number = DEFAULT_MAX_TUNES,
     private readonly maxBytes: number = DEFAULT_MAX_BYTES,

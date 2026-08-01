@@ -12,6 +12,7 @@ import {
   type LocalSidPlayResult,
   type LocalSidStats,
 } from "./localSidEngine";
+import { traceLocalSid } from "./localSidTrace";
 import { addLog } from "@/lib/logging";
 import { notifyPlaybackActivityChanged } from "./playbackActivitySignal";
 import type { PendingSeekState } from "./pendingSeekStatus";
@@ -93,7 +94,9 @@ export class LocalSidPlaybackController {
     // Pixel 4 while a skip can take seconds, so the difference is upstream of
     // the engine and reading the bytes is the first suspect.
     const readStartedAt = performance.now();
+    traceLocalSid("play-requested", { key: options?.prerenderKey ?? null });
     const buffer = await file.arrayBuffer();
+    traceLocalSid("bytes-read", { ms: Math.round(performance.now() - readStartedAt), bytes: buffer.byteLength });
     // Taken before `play` transfers ownership of `buffer` to the worker.
     const copy = options?.prerenderKey ? buffer.slice(0) : new ArrayBuffer(0);
     addLog("debug", "Local SID bytes read", {
@@ -102,6 +105,10 @@ export class LocalSidPlaybackController {
       bytes: buffer.byteLength,
     });
     const result = await engine.play(buffer, songIndex, callbacks, options?.prerenderKey);
+    traceLocalSid("engine-play-returned", {
+      ms: Math.round(performance.now() - readStartedAt),
+      started: result.started,
+    });
     // Kick off a full render of this tune in the background so seeking inside
     // it becomes a buffer offset rather than a re-render from the start. Uses a
     // COPY of the bytes: `play` transferred the original to the worker, and the
