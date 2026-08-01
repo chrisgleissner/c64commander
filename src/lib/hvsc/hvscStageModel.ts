@@ -36,6 +36,8 @@ export interface HvscStageStep {
   id: HvscStageId;
   /** What the user is told is happening. */
   label: string;
+  /** One sentence saying what this step is actually doing. See `HVSC_STAGE_DESCRIPTIONS`. */
+  description: string;
   status: HvscStageStatus;
 }
 
@@ -44,6 +46,25 @@ export const HVSC_STAGE_LABELS: Record<HvscStageId, string> = {
   unpack: "Unpack",
   scan: "Find songs",
   details: "Song details",
+};
+
+/**
+ * What each step is doing, in a sentence.
+ *
+ * The labels have to fit under a 24-pixel circle four across, so they are two words at most and say
+ * almost nothing: "Unpack" and "Song details" name a step without explaining why the install has
+ * been sitting on it for four minutes. These do explain it, and they matter most on the two long
+ * steps — a first install spends the bulk of its time in "Song details", reading the header of
+ * every one of sixty thousand files, and there is nothing on screen that says so.
+ *
+ * Only the running step's sentence is shown. All four at once is a paragraph on a phone, and three
+ * of them describe work that is either finished or has not started.
+ */
+export const HVSC_STAGE_DESCRIPTIONS: Record<HvscStageId, string> = {
+  download: "Fetching the archive from the High Voltage SID Collection.",
+  unpack: "Decompressing the archive and writing the tunes to this device.",
+  scan: "Listing every tune in the collection and where it lives.",
+  details: "Reading each tune's name, composer and length. This is the long one.",
 };
 
 export const HVSC_STAGE_ORDER: HvscStageId[] = ["download", "unpack", "scan", "details"];
@@ -103,7 +124,12 @@ export interface HvscStageInput {
  */
 export const hvscStageSteps = (input: HvscStageInput): HvscStageStep[] => {
   const build = (statusAt: (index: number) => HvscStageStatus): HvscStageStep[] =>
-    HVSC_STAGE_ORDER.map((id, index) => ({ id, label: HVSC_STAGE_LABELS[id], status: statusAt(index) }));
+    HVSC_STAGE_ORDER.map((id, index) => ({
+      id,
+      label: HVSC_STAGE_LABELS[id],
+      description: HVSC_STAGE_DESCRIPTIONS[id],
+      status: statusAt(index),
+    }));
 
   if (input.state === "READY") return build(() => "done");
   if (input.state === "NOT_PRESENT") return build(() => "pending");

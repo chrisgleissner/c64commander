@@ -29,12 +29,37 @@ where it is for the person who wants to pick one.
 Everything needed is already in hand: `subsongCount`, `songNr`, per-subsong durations from
 songlengths, and an engine that already takes a song index.
 
-**2. STIL.** HVSC ships the SID Tune Information List beside `Songlengths.md5` — per-tune and
-per-subsong notes, and the cover/original relationships that are half the pleasure of the archive
-("this is Rob Hubbard's Commando; subsong 2 is the high-score tune"). The app already ingests one
-sidecar file from that archive on a discovery hook; this is the same shape of problem, solved a
-second time. It turns the credits line from a specification into a story, and it is the single
-richest thing the archive knows that the app currently ignores.
+**2. STIL, in two parts — and only two.** The SID Tune Information List is a hand-curated file in
+HVSC's `DOCUMENTS/` folder. It is editorial rather than technical: written by the archive's editors,
+not extracted from the files, and carried per file _and per subsong_.
+
+Everything the card shows today comes from the SID header, which tells you who did the C64 version
+and what hardware it wants. Two things a header structurally cannot say:
+
+- **That a tune is an arrangement, and of whose music.** A large share of C64 music is a cover of
+  something — pop, film scores, other games — and the header's author is the person who converted
+  it. STIL's `ARTIST:` is the only record of the original. Not derivable from anything else we hold.
+- **What the tunes inside a file are.** This one got stronger while the rest of this was being
+  built. "Play all N tunes" now puts nineteen rows in the playlist that read identically and differ
+  only by length. STIL's per-subsong `TITLE:` is what turns those into _Title screen_, _High score_,
+  _Game over_ — the difference between a usable list and one you can only navigate by trial.
+
+Where each goes, given that the credits line is already full: the per-subsong title belongs in the
+**playlist row's existing subtitle slot**, which is where the problem actually is and costs no new
+chrome. A cover credit belongs on the **credits line** as one short clause and only when present —
+"Rob Hubbard · after Jean-Michel Jarre". Neither adds a surface.
+
+**What to leave out.** STIL's free `COMMENT:` prose. Quality varies wildly, length is unbounded, and
+"trivia behind a tap" is the kind of thing that reads well in a proposal and clutters in practice.
+Taking two-thirds of STIL and refusing the third is what keeps this from becoming a second screen.
+
+**Blocked on a prerequisite, checked on the device (2026-07-31):** the installed archive's
+`DOCUMENTS/` folder contains `Songlengths.md5` and nothing else. `STIL.txt` is not extracted by the
+ingestion at all, so there is nothing on disk to parse. Doing this properly therefore starts in the
+archive ingestion — extracting and storing the file — before any of the parse, index and display
+work begins. That is a materially larger change than it looks from the outside, and it is why this
+was not built alongside the other two: half of it, against an archive that does not carry the file,
+would be worse than its absence.
 
 **3. Recently played.** A station is endless and strictly one-way. A tune goes by, you think "what
 _was_ that", and it is gone — Liked Tunes only holds what you reacted to in time. A short history
@@ -76,10 +101,11 @@ append. Without it the app plays one nineteenth of a large part of the archive b
 the rest behind a control most people will never find. It is also the most _conservative_ of the
 three: it adds an action, not a surface, and everything downstream of it already works.
 
-**STIL (2).** The one that makes the app feel like it belongs to the SID world rather than merely
-reading its files. It is a known quantity architecturally — the same discovery, parse, index and
-lookup path the songlengths already take — and it lands entirely inside an existing UI surface.
-This is the highest ceiling of the ten.
+**STIL's per-subsong titles and cover credits (2).** Architecturally a known quantity — the same
+discovery, parse, index and lookup path the songlengths already take — and both land inside UI that
+already exists. Rated higher than when this was first written, because "play all N tunes" shipped
+and created the nineteen-identical-rows problem the per-subsong titles solve. Rated narrower too:
+the free comment prose is deliberately not part of it.
 
 **Blocked on a prerequisite, checked on the device (2026-07-31):** the installed archive's
 `DOCUMENTS/` folder contains `Songlengths.md5` and nothing else. `STIL.txt` is not extracted by the

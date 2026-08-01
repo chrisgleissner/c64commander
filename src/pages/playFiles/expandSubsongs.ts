@@ -66,18 +66,32 @@ export const expandSubsongs = (
    * them means sitting through nearly three minutes of silence after most of them.
    */
   durationsMs: readonly (number | null | undefined)[] = [],
+  /**
+   * What STIL calls each tune, indexed by `songNr - 1`.
+   *
+   * This is what stops the expansion producing nineteen rows that read identically. STIL names
+   * tunes for a minority of files, so an absent title is the normal case and simply leaves the row
+   * as it was.
+   */
+  titles: readonly (string | null | undefined)[] = [],
 ): ExpandSubsongsResult => {
   const item = playlist[itemIndex];
   if (!item || tuneCount < MIN_TUNES_TO_EXPAND) {
     return { items: [...playlist], index: itemIndex };
   }
+  const titleFor = (songNr: number): string | undefined => {
+    const title = titles[songNr - 1];
+    return typeof title === "string" && title.trim() ? title.trim() : undefined;
+  };
   const currentSongNr = Math.min(Math.max(1, item.request.songNr ?? 1), tuneCount);
   const expanded: PlaylistItem[] = [];
   for (let songNr = 1; songNr <= tuneCount; songNr += 1) {
     if (songNr === currentSongNr) {
-      // The one that is playing, untouched: its duration is already resolved and its id is the one
-      // the session store and the transport are holding.
-      expanded.push(item);
+      // The one that is playing keeps its id, its duration and its place: the session store and the
+      // transport are holding that id. Only the title is added, because it was not known when the
+      // item was created and changing it moves nothing.
+      const title = titleFor(songNr);
+      expanded.push(title ? { ...item, tuneTitle: title } : item);
       continue;
     }
     const durationMs = durationsMs[songNr - 1];
@@ -91,6 +105,7 @@ export const expandSubsongs = (
       durationMs: typeof durationMs === "number" && durationMs > 0 ? durationMs : undefined,
       durationSource: null,
       subsongCount: tuneCount,
+      tuneTitle: titleFor(songNr),
     });
   }
   return {

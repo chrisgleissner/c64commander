@@ -452,6 +452,30 @@ Many SID files hold more than one tune — a title screen, a high-score jingle, 
 
 Tap **Play all 19 tunes** and every one of them joins your playlist, in order, each with its own length. From then on they behave like any other tracks: skip between them, shuffle them, repeat them, or remove the ones you do not care for. The button appears only when a file holds more than one tune, and goes away once you have added them.
 
+Each of those tunes shows which one it is — **Tune 7 of 19** — and, where the collection names it, what it is called. Otherwise nineteen rows would read identically and differ only in length.
+
+If you would rather go straight to one tune than queue them all, tap **Tune 1 of 19** on the line under the title. That lists every tune in the file with its number, its name where there is one, and how long it runs; tap one and it plays. Tunes vary enormously in length — a five-minute piece and a one-second jingle in the same file is entirely normal — so the lengths are worth reading before you choose.
+
+![Every tune in one SID file, with its name and length](../../img/app/play/sid-radio/07-tunes-in-this-file.png)
+
+#### What the tune is, and who wrote it
+
+The line under the title comes from the SID file itself: the composer, the year, the chip it wants, and how long it runs. There are two things a SID file cannot tell you, and for a good part of the collection the archive's editors have written them down separately.
+
+The first is that a tune is an arrangement, and of whose music. A great deal of C64 music is a cover — of pop records, of film scores, of arcade originals — and the name in the file belongs to whoever made the C64 version. Rob Hubbard's *Commando* is a case in point: the file credits him, and he wrote the C64 version, but the music is Tamayo Kawamoto's from the arcade game. When the archive knows this, a second line appears: **BGM1 · music by Tamayo Kawamoto**.
+
+The second is what the individual tunes inside a file are called, which is what turns a list of nineteen identical rows into a title screen, a high-score jingle and a game-over sting.
+
+Underneath, where the editors left a note about the tune, you get it. Most are a line or two and are shown in full. Longer ones are trimmed to three lines and marked **Show more**; tap anywhere on the note to read the rest, and again to fold it away.
+
+The composer's name is also a way to hear more of their work: tap it, and the search opens with their name already filled in.
+
+#### Stopping later
+
+A station never ends on its own, which is a problem if you are listening in bed. Under **Playback settings** is a **Sleep timer**. Choose **This tune** to stop when the current tune finishes, or 15, 30, 45 or 60 minutes to stop at that point. The setting always says what it is going to do and counts down while it waits, and **Off** cancels it.
+
+![The sleep timer, showing what it is going to do](../../img/app/play/sid-radio/06-sleep-timer.png)
+
 #### Where the music plays
 
 You have a choice about which machine actually makes the sound. When a SID tune is playing, the Play page offers **Listen on**:

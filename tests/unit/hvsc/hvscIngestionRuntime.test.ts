@@ -114,6 +114,10 @@ vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
   promoteLibraryStagingDir: vi.fn(async () => undefined),
   cleanupStaleStagingDir: vi.fn(async () => undefined),
   resetHvscCache: vi.fn(async () => undefined),
+  // STIL is stored beside the library and is cleared with it, so a reset touches this too.
+  resetStilStore: vi.fn(async () => undefined),
+  writeStilFile: vi.fn(async () => undefined),
+  readStilFile: vi.fn(async () => null),
 }));
 
 vi.mock("@/lib/hvsc/hvscStateStore", () => ({

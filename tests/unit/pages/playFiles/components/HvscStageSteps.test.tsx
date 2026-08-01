@@ -79,3 +79,29 @@ describe("HvscStageSteps", () => {
     expect(statusOf("scan")).toBe("pending");
   });
 });
+
+describe("HvscStageSteps explanations", () => {
+  it("says what the running step is actually doing", () => {
+    // The label under the circle is "Song details", which does not explain why a first install sits
+    // here for minutes. This is the line that does.
+    render(<HvscStageSteps state="INGESTING" stage="sid_metadata_hydration" />);
+    expect(screen.getByTestId("hvsc-stage-steps-explains")).toHaveTextContent(
+      "Reading each tune's name, composer and length.",
+    );
+  });
+
+  it("explains only the step that is running", () => {
+    render(<HvscStageSteps state="DOWNLOADING" stage="download" />);
+    const explains = screen.getByTestId("hvsc-stage-steps-explains");
+    expect(explains).toHaveTextContent("Fetching the archive");
+    // All four at once would be a paragraph, three-quarters of it about work that is done or has
+    // not started.
+    expect(explains).not.toHaveTextContent("Decompressing");
+    expect(explains).not.toHaveTextContent("Reading each tune");
+  });
+
+  it("says nothing once every step is done", () => {
+    render(<HvscStageSteps state="READY" />);
+    expect(screen.queryByTestId("hvsc-stage-steps-explains")).toBeNull();
+  });
+});

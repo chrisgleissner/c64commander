@@ -957,6 +957,31 @@ const seedHvscBrowseIndex = async (page: Page) => {
   }, tunes);
 };
 
+/**
+ * The real STIL entry for the tune the SID Radio captures are taken with, verbatim from
+ * `DOCUMENTS/STIL.txt` v85.
+ *
+ * Supplied rather than downloaded: the store is filled by parsing 3.7 MB of the archive, which a
+ * screenshot run cannot do offline and has no reason to do at all. Monty on the Run illustrates
+ * what STIL is for — its SID header credits Rob Hubbard, who wrote the C64 version, and STIL
+ * records that the music is Charles Williams's, from a 1940s radio serial.
+ */
+const seedStil = async (page: Page) => {
+  await page.addInitScript(() => {
+    (window as unknown as { __stilMock__: unknown }).__stilMock__ = {
+      "/MUSICIANS/H/Hubbard_Rob/Monty_on_the_Run.sid": {
+        subsongs: {
+          1: {
+            credits: [{ title: "The Devil's Gallop [from the Dick Barton radio show]", artist: "Charles Williams" }],
+            comment:
+              'Heavily inspired by the song Devil\'s Gallop, which was the title theme for the 1940\'s American detective radio show "Dick Barton". "Monty [...] started out as the theme from the old radio detective show, Dick Barton" (RH, in the UK magazine "Popular Computing") "MOTR was supposed to be this run around like a madman type music and has lots of energy. The middle section was an excuse to use the new pitch bend code that I wrote for this project." (RH)',
+          },
+        },
+      },
+    };
+  });
+};
+
 const waitForOverlaysToClear = async (page: Page) => {
   const notificationRegion = page.locator('[aria-label="Notifications (F8)"]');
   const openToasts = notificationRegion.locator('[data-state="open"], [role="status"]');
@@ -2498,6 +2523,7 @@ test.describe("App screenshots", () => {
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       test.slow();
       await seedHvscBrowseIndex(page);
+      await seedStil(page);
       await page.addInitScript(() => {
         localStorage.setItem(
           "c64u_recently_played:v1",
@@ -2665,12 +2691,37 @@ test.describe("App screenshots", () => {
       // than photographing a card that is still only showing a length.
       await expect(getActiveMain(page).getByTestId("playback-current-credits")).toContainText("Rob Hubbard");
 
+      // And wait for STIL, which arrives separately: the header line above is parsed from the file,
+      // this one is looked up. Photographing between the two would show a card mid-assembly.
+      await expect(getActiveMain(page).getByTestId("playback-current-stil")).toContainText("Charles Williams");
+
       // Stop the clock now that the tune is up, so the elapsed time, the remaining
       // time and the progress bar cannot move between here and the shutter. See
       // FEATURED_SID for why this happens after connecting rather than before.
       await page.clock.setFixedTime(Date.now());
       await page.evaluate(() => window.scrollTo(0, 0));
       await captureScreenshot(page, testInfo, "play/sid-radio/01-controls.png");
+
+      // The tunes inside the file, reached from "Tune 1 of 19" on the credits line. The seeded tune
+      // holds nineteen, which is what makes the list worth having.
+      const tunesLink = getActiveMain(page).getByTestId("playback-current-tunes");
+      await expect(tunesLink).toBeVisible();
+      await tunesLink.click();
+      const tuneSheet = page.getByTestId("tune-list-sheet");
+      await expect(tuneSheet).toBeVisible();
+      // Wait for the names and lengths, which are looked up after the numbered rows are drawn.
+      await expect(tuneSheet.getByTestId("tune-list-row").first()).toContainText("Devil's Gallop");
+      await captureScreenshot(page, testInfo, "play/sid-radio/07-tunes-in-this-file.png", { locator: tuneSheet });
+      await page.keyboard.press("Escape");
+      await expect(tuneSheet).toBeHidden();
+
+      // The sleep timer, which lives with the playback settings rather than on the transport: it is
+      // a decision about the listening session, not about how a file is played. Captured as its own
+      // locator shot because the settings section is taller than the viewport.
+      const sleepTimer = getActiveMain(page).getByTestId("sleep-timer");
+      await sleepTimer.scrollIntoViewIfNeeded();
+      await expect(sleepTimer).toBeVisible();
+      await captureScreenshot(page, testInfo, "play/sid-radio/06-sleep-timer.png", { locator: sleepTimer });
     },
   );
 

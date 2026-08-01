@@ -56,7 +56,7 @@ import { calculatePlaylistTotals } from "@/lib/playback/playlistTotals";
 import { createUltimateSourceLocation } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { createHvscSourceLocation } from "@/lib/sourceNavigation/hvscSourceAdapter";
 import { ensureHvscSonglengthsReadyOnColdStart, resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
-import { getHvscSubsongDurationsSeconds } from "@/lib/hvsc";
+import { getHvscSubsongDurationsSeconds, getHvscSubsongTitles } from "@/lib/hvsc";
 import { createStationDurationResolver } from "@/pages/playFiles/stationDurationResolver";
 import { Checkbox } from "@/components/ui/checkbox";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
@@ -70,7 +70,10 @@ import { buildSelectedDeviceBoundOrigin } from "@/lib/savedDevices/deviceBoundOr
 
 import { buildEnabledSidMuteUpdates } from "@/lib/config/sidVolumeControl";
 import { parseSidHeaderMetadata, type SidClock, type SidModel } from "@/lib/sid/sidUtils";
-import { buildNowPlayingMetadata } from "@/lib/playback/nowPlayingMetadata";
+import { buildNowPlayingMetadataParts } from "@/lib/playback/nowPlayingMetadata";
+import { useStilInfo } from "@/pages/playFiles/hooks/useStilInfo";
+import { useSleepTimer } from "@/pages/playFiles/hooks/useSleepTimer";
+import { SleepTimerControl } from "@/pages/playFiles/components/SleepTimerControl";
 import { resolveTrackDisplayName, type SidChipCount } from "@/lib/playback/sidDisplayName";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
@@ -100,6 +103,7 @@ import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
 import { HvscSearchSheet } from "@/pages/playFiles/components/HvscSearchSheet";
+import { TuneListSheet } from "@/pages/playFiles/components/TuneListSheet";
 import type { HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
 import { buildFoundTuneItem, insertAfterCurrent } from "@/pages/playFiles/insertTuneNext";
 import { expandSubsongs, hasAllTunesQueued, MIN_TUNES_TO_EXPAND } from "@/pages/playFiles/expandSubsongs";
@@ -333,6 +337,15 @@ export default function PlayFilesPage() {
   const [likedTunesSheetOpen, setLikedTunesSheetOpen] = useState(false);
   const [sidRadioLauncherOpen, setSidRadioLauncherOpen] = useState(false);
   const [hvscSearchOpen, setHvscSearchOpen] = useState(false);
+  /**
+   * What the search sheet should open with, when it was opened from a composer's name.
+   *
+   * Cleared when the sheet closes so that opening it again from the toolbar starts empty, which is
+   * what that entry point means.
+   */
+  const [hvscSearchSeed, setHvscSearchSeed] = useState<string | null>(null);
+  /** Whether the list of tunes in the current file is open. */
+  const [tuneListOpen, setTuneListOpen] = useState(false);
   const likedTuneCount = useLikedTuneCount();
 
   const {
@@ -561,6 +574,31 @@ export default function PlayFilesPage() {
   useEffect(() => {
     handleNextRef.current = handleNext;
   }, [handleNext]);
+  const sleepTimer = useSleepTimer({
+    onExpire: () => {
+      void handleStop();
+    },
+    isPlaying,
+  });
+  const sleepTimerRef = useRef(sleepTimer);
+  sleepTimerRef.current = sleepTimer;
+  /**
+   * A tune has ended on its own: advance, unless the sleep timer says that was the last one.
+   *
+   * Every automatic advance goes through here — the foreground timeline reconciliation and the
+   * background watchdog both — so the two cannot disagree about whether the session is over. A
+   * user pressing next is deliberately not routed through this: they are asking for the next tune,
+   * not telling the timer anything.
+   */
+  const advanceOnTrackEnd = useCallback(
+    (trackInstanceId?: number) => {
+      if (sleepTimerRef.current.notifyTuneEnded()) return Promise.resolve();
+      return handleNextRef.current("auto", trackInstanceId);
+    },
+    [handleNextRef],
+  );
+  const advanceOnTrackEndRef = useRef(advanceOnTrackEnd);
+  advanceOnTrackEndRef.current = advanceOnTrackEnd;
   const playbackStateRef = useRef({ isPlaying, isPaused });
   useEffect(() => {
     playbackStateRef.current = { isPlaying, isPaused };
@@ -1326,10 +1364,10 @@ export default function PlayFilesPage() {
           nowMs: now,
           overdueMs: now - guard.dueAtMs,
         });
-        void handleNext("auto", guard.trackInstanceId);
+        void advanceOnTrackEnd(guard.trackInstanceId);
       }
     },
-    [currentIndex, handleNext, isPaused, isPlaying, playedClockRef],
+    [advanceOnTrackEnd, currentIndex, isPaused, isPlaying, playedClockRef],
   );
   const syncPlaybackTimelineRef = useRef(syncPlaybackTimeline);
   useEffect(() => {
@@ -1361,7 +1399,7 @@ export default function PlayFilesPage() {
           const expectedTrackInstanceId = guard.trackInstanceId;
           void (async () => {
             try {
-              await handleNextRef.current("auto", expectedTrackInstanceId);
+              await advanceOnTrackEndRef.current(expectedTrackInstanceId);
               if (cancelled) return;
               const nextGuard = autoAdvanceGuardRef.current;
               if (!nextGuard) {
@@ -1872,16 +1910,37 @@ export default function PlayFilesPage() {
     //
     // Read from the browse index, which carries the whole array. The songlength store answers per
     // file rather than per tune, so it can say how long the SID is but not how long tune twelve is.
-    const seconds = item.request.source === "hvsc" ? await getHvscSubsongDurationsSeconds(item.path) : [];
+    const isHvsc = item.request.source === "hvsc";
+    // Both resolved before the expansion rather than after it, because both belong on the items the
+    // expansion creates: their own length, so each tune ends when it ends rather than at the
+    // three-minute default, and their own name, so nineteen rows are not nineteen copies of the
+    // file name. Requested together so the expansion is one state change, not three.
+    const [seconds, titles] = await Promise.all([
+      isHvsc ? getHvscSubsongDurationsSeconds(item.path) : Promise.resolve<number[]>([]),
+      isHvsc ? getHvscSubsongTitles(item.path, knownSubsongCount) : Promise.resolve<string[]>([]),
+    ]);
     const durationsMs = seconds.map((value) => (typeof value === "number" && value > 0 ? value * 1000 : null));
-    const { items, index } = expandSubsongs(playlist, currentIndex, knownSubsongCount, durationsMs);
+    const { items, index } = expandSubsongs(playlist, currentIndex, knownSubsongCount, durationsMs, titles);
     if (items.length === playlist.length) return;
     void startPlaylist(items, index, { replaceQueue: true });
   }, [currentIndex, knownSubsongCount, playlist, startPlaylist]);
+  // "More by this person" — the composer's name has been printed on the card all along without
+  // doing anything, and the archive-wide search that answers it already exists.
+  const openSearchForComposer = useCallback((composer: string) => {
+    setHvscSearchSeed(composer);
+    setHvscSearchOpen(true);
+  }, []);
+  // What the archive's editors say about this tune, as opposed to what its header declares. Only
+  // HVSC has STIL, so anything played from a device, a local file or an archive resolves to nothing
+  // without a lookup.
+  const stilInfo = useStilInfo({
+    virtualPath: currentItem?.request.source === "hvsc" ? currentItem.path : null,
+    songNr: clampedSongNr ?? undefined,
+  });
   // Everything the tune's own header says about itself, on one line under the title. The order and
-  // the omission rules live in buildNowPlayingMetadata; this only supplies the fields.
-  const currentItemMetadata = currentItem
-    ? buildNowPlayingMetadata({
+  // the omission rules live in buildNowPlayingMetadataParts; this only supplies the fields.
+  const currentItemMetadataParts = currentItem
+    ? buildNowPlayingMetadataParts({
         author: currentItemCredits.author,
         released: currentItemCredits.released,
         sidModels: currentItemCredits.sidModels,
@@ -1890,7 +1949,7 @@ export default function PlayFilesPage() {
         tuneCount: knownSubsongCount,
         lengthLabel: currentDurationLabel,
       })
-    : null;
+    : [];
 
   const handleSongSelection = useCallback(
     async (nextSongNr: number) => {
@@ -2304,7 +2363,10 @@ export default function PlayFilesPage() {
               <PlaybackControlsCard
                 hasCurrentItem={Boolean(currentItem)}
                 currentItemLabel={currentDisplay?.title ?? null}
-                currentItemMetadata={currentItemMetadata}
+                currentItemMetadataParts={currentItemMetadataParts}
+                stil={stilInfo}
+                onComposerSelected={openSearchForComposer}
+                {...((knownSubsongCount ?? 0) > 1 ? { onTunesSelected: () => setTuneListOpen(true) } : {})}
                 // Which station (or, when none is running, which playlist) is producing this tune
                 // leads the card: it is context for the title, the transport and everything else
                 // below it. Rendered in both states, and the same height in both, so that starting
@@ -2514,6 +2576,15 @@ export default function PlayFilesPage() {
                   ) : null}
                 </div>
               ) : null}
+              {/* Above the panel's own settings rather than inside it: this is a decision about the
+                  listening session, not about how a file is played, and it is the one control here
+                  that has to be findable in the dark. */}
+              <SleepTimerControl
+                mode={sleepTimer.mode}
+                onChange={sleepTimer.setMode}
+                nowMs={sleepTimer.nowMs}
+                isPlaying={isPlaying}
+              />
               <PlaybackSettingsPanel
                 durationSliderMax={DURATION_SLIDER_STEPS}
                 durationSliderValue={durationSecondsToSlider(durationSeconds)}
@@ -2773,13 +2844,30 @@ export default function PlayFilesPage() {
             songStyleBit={sidRadio.station?.seedKind === "song" ? sidRadio.station.styleBit : null}
             onStartSong={startSidRadioSongMood}
           />
+          <TuneListSheet
+            open={tuneListOpen}
+            onOpenChange={setTuneListOpen}
+            fileLabel={currentDisplay?.title ?? currentItem?.label ?? ""}
+            virtualPath={currentItem?.request.source === "hvsc" ? currentItem.path : null}
+            tuneCount={knownSubsongCount ?? 0}
+            currentSongNr={clampedSongNr ?? 1}
+            onSelectTune={(songNr) => {
+              setTuneListOpen(false);
+              void handleSongSelection(songNr);
+            }}
+          />
+
           <HvscSearchSheet
             open={hvscSearchOpen}
-            onOpenChange={setHvscSearchOpen}
+            onOpenChange={(open) => {
+              setHvscSearchOpen(open);
+              if (!open) setHvscSearchSeed(null);
+            }}
             onPlay={playFoundTune}
             onStartStation={startStationFromFoundTune}
             canSeedStation={canSeedStationFrom}
             stationActive={sidRadio.active}
+            {...(hvscSearchSeed ? { initialQuery: hvscSearchSeed } : {})}
           />
 
           <AlertDialog

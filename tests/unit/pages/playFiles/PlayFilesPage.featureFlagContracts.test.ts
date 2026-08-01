@@ -33,7 +33,13 @@ describe("PlayFilesPage feature-flag contracts", () => {
     expect(playFilesPageSource).toContain("syncPlaybackTimelineRef.current({ allowAutoAdvance: false });");
     expect(playFilesPageSource).toContain("const playbackState = playbackStateRef.current;");
     expect(playFilesPageSource).toContain("if (event.dueAtMs !== guard.dueAtMs) return;");
-    expect(playFilesPageSource).toContain('await handleNextRef.current("auto", expectedTrackInstanceId);');
+    // Through `advanceOnTrackEnd`, not straight to `handleNext`: both automatic advances — this
+    // background watchdog and the foreground timeline reconciliation — go through the one function
+    // that asks the sleep timer whether that was meant to be the last tune. Calling `handleNext`
+    // directly here would let the background path keep playing through a sleep timer the foreground
+    // path honours.
+    expect(playFilesPageSource).toContain("await advanceOnTrackEndRef.current(expectedTrackInstanceId);");
+    expect(playFilesPageSource).toContain("if (sleepTimerRef.current.notifyTuneEnded()) return Promise.resolve();");
     expect(playFilesPageSource).toContain(
       "const backgroundDueWriteLaneRef = useRef<LatestIntentWriteLane<number | null> | null>(null);",
     );

@@ -84,19 +84,37 @@ const clean = (value: string | null | undefined): string | null => {
 };
 
 /**
+ * Which field a segment came from.
+ *
+ * Two are named, because two of them are somewhere to go rather than something to read. The author
+ * is a person, and "more by this person" is a real question. "Tune 3 of 19" says the file holds
+ * eighteen others and gives no way to reach them. Everything else is a fact about the file and is
+ * rendered as text.
+ */
+export type NowPlayingMetadataSegment = {
+  text: string;
+  kind: "author" | "tunes" | "detail";
+};
+
+/**
  * The fields in order, ready to be joined.
  *
  * Returned as segments rather than one string so a caller can render them apart if it ever wants to,
  * and so the tests can name what is missing rather than diff a sentence.
  */
-export const buildNowPlayingMetadataSegments = (input: NowPlayingMetadataInput): string[] => {
-  const segments: string[] = [];
+export const buildNowPlayingMetadataSegments = (input: NowPlayingMetadataInput): string[] =>
+  buildNowPlayingMetadataParts(input).map((part) => part.text);
+
+/** The same segments, each labelled with where it came from. */
+export const buildNowPlayingMetadataParts = (input: NowPlayingMetadataInput): NowPlayingMetadataSegment[] => {
+  const segments: NowPlayingMetadataSegment[] = [];
+  const push = (text: string, kind: NowPlayingMetadataSegment["kind"] = "detail") => segments.push({ text, kind });
 
   const author = clean(input.author);
-  if (author) segments.push(author);
+  if (author) push(author, "author");
 
   const released = clean(input.released);
-  if (released) segments.push(released);
+  if (released) push(released);
 
   // An unnamed chip is dropped rather than shown as a gap or guessed at. In practice this costs
   // nothing on multi-chip tunes: addressing a second chip needs a version 3 header, and every header
@@ -104,20 +122,20 @@ export const buildNowPlayingMetadataSegments = (input: NowPlayingMetadataInput):
   const models = input.sidModels
     .map((model) => (model ? SID_MODEL_LABELS[model] : null))
     .filter((label): label is string => Boolean(label));
-  if (models.length) segments.push(models.join(SID_MODEL_SEPARATOR));
+  if (models.length) push(models.join(SID_MODEL_SEPARATOR));
 
   const clock = input.clock ? CLOCK_LABELS[input.clock] : null;
-  if (clock) segments.push(clock);
+  if (clock) push(clock);
 
   // "Tune", never "subsong": the pieces inside a SID file are what a listener is choosing between,
   // and calling them subsongs only ever meant something to the people who wrote the format.
   // Suppressed on a single-tune file, where "Tune 1 of 1" says nothing.
   if (input.tuneNumber && input.tuneCount && input.tuneCount > 1) {
-    segments.push(`Tune ${input.tuneNumber} of ${input.tuneCount}`);
+    push(`Tune ${input.tuneNumber} of ${input.tuneCount}`, "tunes");
   }
 
   const length = clean(input.lengthLabel);
-  if (length) segments.push(length);
+  if (length) push(length);
 
   return segments;
 };
@@ -125,5 +143,24 @@ export const buildNowPlayingMetadataSegments = (input: NowPlayingMetadataInput):
 /** The whole line, or null when the header said nothing worth a line. */
 export const buildNowPlayingMetadata = (input: NowPlayingMetadataInput): string | null => {
   const segments = buildNowPlayingMetadataSegments(input);
+  return segments.length ? segments.join(NOW_PLAYING_METADATA_SEPARATOR) : null;
+};
+
+/**
+ * The STIL line: what this tune is called, and who wrote the music.
+ *
+ * Separate from the header line above because the two disagree by design. The header names whoever
+ * produced the C64 version; a large share of C64 music is an arrangement of something else, and
+ * STIL is the only record of the original. Spelled out as "music by" rather than the conventional
+ * "after", which assumes the reader knows the term.
+ *
+ * Returns null when STIL has neither, which is the case for most of the archive.
+ */
+export const buildStilTuneLine = (input: { title: string | null; originalArtist: string | null }): string | null => {
+  const title = clean(input.title);
+  const artist = clean(input.originalArtist);
+  const segments: string[] = [];
+  if (title) segments.push(title);
+  if (artist) segments.push(`music by ${artist}`);
   return segments.length ? segments.join(NOW_PLAYING_METADATA_SEPARATOR) : null;
 };

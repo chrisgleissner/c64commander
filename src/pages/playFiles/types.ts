@@ -67,6 +67,16 @@ export type PlaylistItem = {
   durationMs?: number;
   durationSource?: PlaylistItemDurationSource | null;
   subsongCount?: number;
+  /**
+   * What STIL calls this particular tune, where it names it.
+   *
+   * Resolved once, when a file is expanded into its tunes, and carried on the item from then on.
+   * The alternative — looking it up while rendering rows — would put a filesystem read behind a
+   * list that scrolls. This is the only place the title is needed in the playlist, because it is
+   * the only place where rows would otherwise be indistinguishable: nineteen entries with the same
+   * file name, differing only in length.
+   */
+  tuneTitle?: string;
   sourceId?: string | null;
   sizeBytes?: number | null;
   modifiedAt?: string | null;

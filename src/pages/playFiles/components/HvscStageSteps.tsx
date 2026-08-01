@@ -44,6 +44,7 @@ export const HvscStageSteps = ({
   // first six hundred of them and looks stuck.
   const counts = stageCountLabel(stageDone, stageTotal);
   const percent = counts === null ? activeStepPercent(stagePercent) : null;
+  const activeStep = steps.find((step) => step.status === "active") ?? null;
 
   return (
     <div className="space-y-2" data-testid={testId}>
@@ -106,6 +107,16 @@ export const HvscStageSteps = ({
           </li>
         ))}
       </ol>
+
+      {/* What the running step is doing, in a sentence. The labels under the circles are two words
+          because that is all that fits beneath them, which leaves "Song details" to account for
+          most of the wait on a first install without saying what it is doing. Only the running
+          step's sentence appears: the other three describe work that is done or has not begun. */}
+      {activeStep ? (
+        <p className="text-center text-[11px] leading-snug text-muted-foreground" data-testid={`${testId}-explains`}>
+          {activeStep.description}
+        </p>
+      ) : null}
 
       {/* The running step's own counter. Scoped to one step, where a percentage is honest. */}
       {counts !== null || percent !== null || detailLabel ? (

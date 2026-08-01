@@ -27,6 +27,12 @@ import {
   type PendingSeekPresentation,
   type PoliteAnnouncement,
 } from "@/lib/playback/pendingSeekStatus";
+import {
+  buildStilTuneLine,
+  NOW_PLAYING_METADATA_SEPARATOR,
+  type NowPlayingMetadataSegment,
+} from "@/lib/playback/nowPlayingMetadata";
+import { TuneNotes } from "./TuneNotes";
 
 export type PlaybackControlsCardProps = {
   hasCurrentItem: boolean;
@@ -34,10 +40,39 @@ export type PlaybackControlsCardProps = {
   /**
    * The single line under the title: composer, year, SID models, video standard, which tune, length.
    *
-   * Built by `buildNowPlayingMetadata` so the order and the omission rules live in one tested place
-   * rather than in this component's JSX. `null` when the header carried nothing worth a line.
+   * Built by `buildNowPlayingMetadataParts` so the order and the omission rules live in one tested
+   * place rather than in this component's JSX. Supplied as labelled parts rather than as a finished
+   * string because the composer is a control and the rest is text; joining first and splitting again
+   * here would mean guessing at where the name ended, and composer names contain the separator's
+   * neighbours often enough for that to be wrong.
    */
-  currentItemMetadata?: string | null;
+  currentItemMetadataParts?: NowPlayingMetadataSegment[];
+  /**
+   * What STIL says about this tune, where it says anything.
+   *
+   * Kept apart from `currentItemMetadata` because it is a different kind of fact. That line is the
+   * SID header — what the file declares about itself. This is the archive's editors describing the
+   * music: what this particular tune is called, who originally wrote it, and any note they left.
+   * STIL covers under a third of the archive, so all three are usually absent and the card renders
+   * exactly as it did before.
+   */
+  stil?: {
+    title: string | null;
+    originalArtist: string | null;
+    note: string | null;
+  };
+  /**
+   * Go and find more by this composer. Omitted where there is nothing to search — the card is also
+   * rendered for playback from a device, where the archive is not involved.
+   */
+  onComposerSelected?: (composer: string) => void;
+  /**
+   * Open the list of tunes in this file.
+   *
+   * The same gesture as the composer beside it: "Tune 3 of 19" states that eighteen others exist,
+   * and until now gave no way to reach any of them.
+   */
+  onTunesSelected?: () => void;
   canTransport: boolean;
   hasPrev: boolean;
   hasNext: boolean;
@@ -273,7 +308,10 @@ const useHoldToSeek = (
 export const PlaybackControlsCard = ({
   hasCurrentItem,
   currentItemLabel,
-  currentItemMetadata = null,
+  currentItemMetadataParts = [],
+  stil,
+  onComposerSelected,
+  onTunesSelected,
   canTransport,
   hasPrev,
   hasNext,
@@ -313,6 +351,10 @@ export const PlaybackControlsCard = ({
   stationIndicator,
   stationActive = false,
 }: PlaybackControlsCardProps) => {
+  const stilTuneLine = buildStilTuneLine({
+    title: stil?.title ?? null,
+    originalArtist: stil?.originalArtist ?? null,
+  });
   const pendingAnnouncement = usePoliteAnnouncement(pendingSeek?.liveText ?? null);
   const scrubHandlers = { start: onScrubStart, step: onScrubStep, end: onScrubEnd };
   const holdRewind = useHoldToSeek(-SEEK_STEP_SECONDS, onSeek, scrubHandlers);
@@ -384,11 +426,62 @@ export const PlaybackControlsCard = ({
             {/* Composer, year, chips, video standard, which tune, and how long — in that order, with
                 anything the header does not carry left out along with its separator. See
                 `buildNowPlayingMetadata`. */}
-            {currentItemMetadata ? (
+            {currentItemMetadataParts.length ? (
               <p className="mt-0.5 text-sm leading-snug text-muted-foreground" data-testid="playback-current-credits">
-                {currentItemMetadata}
+                {currentItemMetadataParts.map((part, index) => (
+                  <span key={`${part.kind}-${index}`}>
+                    {index > 0 ? NOW_PLAYING_METADATA_SEPARATOR : null}
+                    {/* The composer is the one thing on this line that is a person rather than a
+                        fact about the file, and "more by this person" is the commonest thing to
+                        want next. It has been printed here inertly all along; now it opens the
+                        search that was already there, pre-filled with the name.
+
+                        Underlined rather than coloured, so the line still reads as one line and
+                        does not gain a second accent colour competing with the transport. */}
+                    {part.kind === "author" && onComposerSelected ? (
+                      <button
+                        type="button"
+                        className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                        onClick={() => onComposerSelected(part.text)}
+                        data-testid="playback-current-composer"
+                        title={`Find more by ${part.text}`}
+                      >
+                        {part.text}
+                      </button>
+                    ) : part.kind === "tunes" && onTunesSelected ? (
+                      <button
+                        type="button"
+                        className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                        onClick={onTunesSelected}
+                        data-testid="playback-current-tunes"
+                        title="Choose a tune from this file"
+                      >
+                        {part.text}
+                      </button>
+                    ) : (
+                      part.text
+                    )}
+                  </span>
+                ))}
               </p>
             ) : null}
+            {/* What this tune is, from STIL — above the header line because it is the more specific
+                answer to "what am I listening to". A file called `Commando` playing tune 1 of 19 is
+                told here that the tune is "BGM1" and that the music is Tamayo Kawamoto's, which the
+                header cannot say: its author field names Rob Hubbard, who arranged it.
+
+                One line, and only the parts STIL actually has. Both absent for most of the archive,
+                in which case nothing renders and the card is unchanged. */}
+            {/* Smaller than the header line above it, not larger. Measured on the device this line
+                runs to two or three lines on a tune like Commando, whose STIL title carries the
+                source of the music as well as its name; at `text-sm` it outweighed the composer and
+                pushed the transport down the card. At `text-xs` it reads as the annotation it is. */}
+            {stilTuneLine ? (
+              <p className="mt-0.5 text-xs leading-snug text-foreground/80" data-testid="playback-current-stil">
+                {stilTuneLine}
+              </p>
+            ) : null}
+            {stil?.note ? <TuneNotes note={stil.note} /> : null}
           </>
         ) : (
           "Select a playlist item to start"

@@ -464,3 +464,217 @@ describe("a seek waiting for the pre-render to reach it", () => {
     });
   });
 });
+
+/**
+ * Skipping to the next tune while a seek is still waiting for the pre-render.
+ *
+ * The pending seek belongs to the tune that was playing. Opening a different tune does not clear
+ * it, and it gates three things at once: `pump()` refuses to ask for chunks, the chunk and end
+ * handlers discard whatever does arrive, and the stall watchdog is deliberately disabled while a
+ * seek is outstanding. Together that is a tune which plays the start-up buffer already scheduled,
+ * about half a second, and is then silent for good — with nothing to notice, so no recovery and no
+ * advance to the next track. Stop and Play clears it, because `stop()` does reset the field.
+ */
+describe("skipping while a seek is still waiting", () => {
+  let worker: FakeWorker;
+  let scheduled: Float32Array[];
+
+  const makeEngine = () => {
+    worker = new FakeWorker();
+    let handedOut = 0;
+    const factory = () => {
+      handedOut += 1;
+      if (handedOut === 1) return worker;
+      return new FakeWorker();
+    };
+    const { sink, scheduled: s } = makeSink();
+    scheduled = s;
+    return new LocalSidEngine({
+      workerFactory: factory,
+      chunkSeconds: 0.5,
+      targetBufferSeconds: 1.0,
+      audioSinkFactory: (): LocalSidAudioSink => ({
+        sink,
+        resume: vi.fn(),
+        close: vi.fn(),
+        flush: vi.fn(),
+      }),
+    });
+  };
+
+  const open = async (engine: LocalSidEngine, key: string, first: boolean) => {
+    const before = worker.ofType("open").length;
+    const play = engine.play(new ArrayBuffer(8), 0, {}, key);
+    if (first) {
+      worker.emit({ type: "ready", moduleLoadMs: 1 });
+    }
+    // `play()` awaits the module load before it posts anything, so the message is not there yet.
+    // Wait for it rather than guessing, and read the id the engine actually used rather than
+    // counting opens: a pre-render consumes one from the same sequence.
+    for (let tick = 0; tick < 20 && worker.ofType("open").length === before; tick += 1) {
+      await Promise.resolve();
+    }
+    const opens = worker.ofType("open");
+    const openId = (opens[opens.length - 1] as unknown as { id: number }).id;
+    worker.emit({ type: "opened", id: openId, sampleRate: SAMPLE_RATE, channels: CHANNELS, tuneInfo: {} } as never);
+    await play;
+  };
+
+  beforeEach(() => {
+    __resetPhoneAudioOwnership();
+    localStorage.clear();
+  });
+
+  it("does not leave the next tune gated by the previous tune's pending seek", async () => {
+    const engine = makeEngine();
+    await open(engine, "tune#0", true);
+    engine.prerender("tune#0", new ArrayBuffer(8), 0, 300);
+
+    // Seek past the render head: this is the path that parks a pending seek and waits. Asserted on
+    // the stored seek, not merely on `isSeeking()`, because the whole test is about what happens to
+    // that stored value — a setup that quietly took the re-render path instead would prove nothing.
+    await engine.seekTo(120);
+    expect(engine.getPendingSeek()).toMatchObject({ targetSeconds: 120 });
+
+    // Now skip. The listener has left that tune, and with it the position they were waiting for.
+    await open(engine, "tune#1", false);
+
+    // Nothing about the new tune is waiting for anything.
+    expect(engine.isSeeking()).toBe(false);
+
+    // And it actually plays: chunks asked for, chunks delivered, audio scheduled.
+    const before = scheduled.length;
+    const opens = worker.ofType("open");
+    worker.emit({
+      type: "chunk",
+      id: (opens[opens.length - 1] as unknown as { id: number }).id,
+      pcm: pcmOf(0.5, 1000),
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+    } as never);
+    expect(scheduled.length).toBeGreaterThan(before);
+  });
+
+  it("lets the stall watchdog judge the new tune again", async () => {
+    // The watchdog stands down while a seek is outstanding, which is right for the tune that is
+    // seeking and wrong for every tune after it: a leftover left the new tune with nothing watching
+    // it at all, which is why the silence never repaired itself.
+    const engine = makeEngine();
+    await open(engine, "tune#0", true);
+    engine.prerender("tune#0", new ArrayBuffer(8), 0, 300);
+    await engine.seekTo(120);
+    await open(engine, "tune#1", false);
+
+    const state = engine.debugState() as unknown as { pendingSeek: unknown };
+    expect(state.pendingSeek).toBeNull();
+  });
+});
+
+/**
+ * The render budget, and what happens when discarded chunks never give their slot back.
+ *
+ * `pump()` counts a render the moment it posts one and stops posting at `MAX_IN_FLIGHT_RENDERS`.
+ * The count is given back when the chunk is *accepted* — but a chunk can be discarded on arrival
+ * for three good reasons: it belongs to a tune that has been skipped past, or a seek is in flight,
+ * or a seek is waiting on the pre-render. Each of those returned before the decrement, so every
+ * discarded chunk permanently spent one slot of the budget.
+ *
+ * Skipping is what makes it reach the limit: every render still in flight when the next tune opens
+ * comes back with the previous tune's id and is dropped. Once the budget is gone `pump()` cannot
+ * ask for audio again, the scheduler drains, and the tune goes silent while the transport clock —
+ * which is not driven by the renderer — carries on. This is the "plays for half a second, then
+ * silence, and only Stop and Play brings it back" report.
+ */
+describe("the in-flight render budget", () => {
+  let worker: FakeWorker;
+
+  const makeEngine = () => {
+    worker = new FakeWorker();
+    let handedOut = 0;
+    const factory = () => {
+      handedOut += 1;
+      if (handedOut === 1) return worker;
+      return new FakeWorker();
+    };
+    const { sink } = makeSink();
+    return new LocalSidEngine({
+      workerFactory: factory,
+      chunkSeconds: 0.5,
+      targetBufferSeconds: 1.0,
+      audioSinkFactory: (): LocalSidAudioSink => ({
+        sink,
+        resume: vi.fn(),
+        close: vi.fn(),
+        flush: vi.fn(),
+      }),
+    });
+  };
+
+  const open = async (engine: LocalSidEngine, key: string, first: boolean) => {
+    const before = worker.ofType("open").length;
+    const play = engine.play(new ArrayBuffer(8), 0, {}, key);
+    if (first) worker.emit({ type: "ready", moduleLoadMs: 1 });
+    for (let tick = 0; tick < 20 && worker.ofType("open").length === before; tick += 1) {
+      await Promise.resolve();
+    }
+    const opens = worker.ofType("open");
+    const openId = (opens[opens.length - 1] as unknown as { id: number }).id;
+    worker.emit({ type: "opened", id: openId, sampleRate: SAMPLE_RATE, channels: CHANNELS, tuneInfo: {} } as never);
+    await play;
+  };
+
+  const inFlight = (engine: LocalSidEngine) => (engine as unknown as { inFlightRenders: number }).inFlightRenders;
+
+  beforeEach(() => {
+    __resetPhoneAudioOwnership();
+    localStorage.clear();
+  });
+
+  it("gives the slot back for a chunk that belongs to a tune already skipped past", async () => {
+    const engine = makeEngine();
+    await open(engine, "tune#0", true);
+    const staleId = (worker.ofType("render").at(-1) as unknown as { id: number } | undefined)?.id ?? 1;
+    expect(inFlight(engine)).toBeGreaterThan(0);
+
+    // Skip. The renders posted for the previous tune are still on their way.
+    await open(engine, "tune#1", false);
+
+    const budgetBefore = inFlight(engine);
+    worker.emit({
+      type: "chunk",
+      id: staleId,
+      pcm: pcmOf(0.5, 7),
+      samples: SAMPLE_RATE * 0.5 * CHANNELS,
+      renderMs: 10,
+    } as never);
+
+    // The chunk itself is rightly thrown away — it is the wrong tune's audio — but the render it
+    // came from is finished, and the budget has to know that.
+    expect(inFlight(engine)).toBeLessThan(budgetBefore);
+  });
+
+  it("keeps asking for audio after a skip rather than running out of budget", async () => {
+    const engine = makeEngine();
+    await open(engine, "tune#0", true);
+
+    // Skip repeatedly, letting each tune's in-flight renders come back late, as they do in life.
+    for (let round = 0; round < 6; round += 1) {
+      const staleIds = worker.ofType("render").map((m) => (m as unknown as { id: number }).id);
+      await open(engine, `tune#${round + 1}`, false);
+      for (const id of staleIds.slice(-2)) {
+        worker.emit({
+          type: "chunk",
+          id,
+          pcm: pcmOf(0.5, 7),
+          samples: SAMPLE_RATE * 0.5 * CHANNELS,
+          renderMs: 10,
+        } as never);
+      }
+    }
+
+    // The budget must still have room, or nothing will ever be rendered again.
+    const rendersBefore = worker.ofType("render").length;
+    (engine as unknown as { pump: () => void }).pump();
+    expect(worker.ofType("render").length).toBeGreaterThan(rendersBefore);
+  });
+});
