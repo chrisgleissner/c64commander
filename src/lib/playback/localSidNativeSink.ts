@@ -44,6 +44,7 @@
  */
 
 import { addLog } from "@/lib/logging";
+import { SilenceDetector } from "./silenceDetector";
 import { startupBufferMs } from "./renderThroughput";
 import type { AudioScheduleBuffer, AudioScheduleSink, AudioScheduleSource } from "./localSidChunkScheduler";
 import type { LocalSidAudioSink } from "./localSidEngine";
@@ -226,6 +227,8 @@ class NativeLocalSidSink implements AudioScheduleSink {
   /** Queue depth the pipeline last reported, in seconds. */
   private queuedSec = 0;
   private nativeUnderruns = 0;
+  /** How long the speaker has been given a flat signal. See `SilenceDetector`. */
+  private readonly silence = new SilenceDetector();
   private suspended = false;
   private closed = false;
   private opening: Promise<boolean> | null = null;
@@ -276,12 +279,28 @@ class NativeLocalSidSink implements AudioScheduleSink {
     // The newest sink owns the shared track. Claimed on construction rather than on first write,
     // because the engine creates the incoming tune's sink while the outgoing one is still fading:
     // from this moment the outgoing sink must not flush or close the track out from under it.
-    claimNativeTrack(this);
+    claimNativeTrack(this.backend, this);
+  }
+
+  /** How long the output has been flat, in seconds. Zero while anything audible is going out. */
+  silentSeconds(): number {
+    return this.silence.silentSeconds;
+  }
+
+  /** True once the flat stretch has gone on long enough to be a fault rather than a rest. */
+  isSilentFault(): boolean {
+    return this.silence.isFaulty;
+  }
+
+  /** Called when a new tune starts or playback resumes, so a fresh attempt is judged afresh. */
+  resetSilence(): void {
+    this.silence.reset();
   }
 
   /** Supply-side counters, for HIL diagnosis. */
   debug(): Record<string, number> {
     return {
+      silentSec: this.silence.silentSeconds,
       queuedSlices: this.queue.length,
       queuedSec: this.queuedSec,
       writtenSec: this.writtenFrames / this.sampleRate,
@@ -439,6 +458,15 @@ class NativeLocalSidSink implements AudioScheduleSink {
     this.pumping = true;
     try {
       while (!this.closed && this.queue.length) {
+        // Replaced. There is one AudioTrack, and two sinks writing to it do not mix — the slices
+        // interleave and the listener hears the old tune, a fragment of the new one, the old tune
+        // again, and so on. Being superseded therefore makes a sink inert: it stops writing as well
+        // as leaving the track alone for its successor to close.
+        if (!ownsNativeTrack(this.backend, this)) {
+          this.queue = [];
+          this.endings = [];
+          return;
+        }
         if (this.suspended) {
           await new Promise((resolve) => setTimeout(resolve, PUMP_IDLE_MS));
           continue;
@@ -588,6 +616,9 @@ class NativeLocalSidSink implements AudioScheduleSink {
     try {
       const stats = await this.backend.writeAudioTrack({ data: toBase64(bytes) });
       this.lastWriteAtMs = performance.now();
+      // Watched here rather than anywhere upstream: this is the last point the audio is still audio
+      // and the only one that sees what the speaker was actually given.
+      this.silence.observe(slice, slice.length / 2 / this.sampleRate);
       this.writtenFrames += slice.length / 2;
       // The playhead is what has been written less what is still queued, which ties the clock to the
       // DAC rather than to wall time.
@@ -721,7 +752,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
     this.playheadSec = 0;
     this.playheadAtMs = performance.now();
     // Superseded: the audio in the track belongs to the tune that replaced this one.
-    if (!ownsNativeTrack(this)) return;
+    if (!ownsNativeTrack(this.backend, this)) return;
     void this.backend.flushAudioTrack?.().catch((error) => {
       addLog("debug", "Native audio: flush failed", { error: (error as Error)?.message ?? String(error) });
     });
@@ -769,10 +800,10 @@ class NativeLocalSidSink implements AudioScheduleSink {
     }
     this.queue = [];
     this.endings = [];
-    const owned = ownsNativeTrack(this);
+    const owned = ownsNativeTrack(this.backend, this);
     this.opened = false;
     if (!owned) return;
-    releaseNativeTrack(this);
+    releaseNativeTrack(this.backend, this);
     void this.backend.flushAudioTrack?.().catch(() => {
       // Nothing queued, or no pipeline left to queue into.
     });
@@ -803,24 +834,26 @@ export const nativeLocalAudioAvailable = (): boolean =>
  * new tune had queued and stopping its output: measured on a Pixel 4, every other Next left the
  * track silent after a fraction of a second.
  *
- * So a sink may only flush or close the track while it is still the current one. Everything local
- * to the sink — its ticker, its queue, its own flag — is torn down either way.
+ * So a superseded sink becomes inert: it stops writing, and it leaves the track for its successor
+ * to close. Everything local to it — ticker, queue, its own flag — is torn down either way. It must
+ * stop writing as well as stop closing, because one AudioTrack cannot carry two streams: the slices
+ * interleave, and the listener hears the old tune, a fragment of the new one, the old tune again,
+ * and so on.
+ *
+ * Keyed by the backend rather than held in one global, because ownership is of one track and two
+ * sinks over two different backends are not in competition. Production has a single backend, so it
+ * is the same thing there.
  */
-let currentTrackOwner: object | null = null;
+const trackOwners = new WeakMap<object, object>();
 
-const claimNativeTrack = (sink: object): void => {
-  currentTrackOwner = sink;
+const claimNativeTrack = (backend: object, sink: object): void => {
+  trackOwners.set(backend, sink);
 };
 
-const ownsNativeTrack = (sink: object): boolean => currentTrackOwner === sink;
+const ownsNativeTrack = (backend: object, sink: object): boolean => trackOwners.get(backend) === sink;
 
-const releaseNativeTrack = (sink: object): void => {
-  if (currentTrackOwner === sink) currentTrackOwner = null;
-};
-
-/** Test seam: forget which sink owns the shared track. */
-export const __resetNativeTrackOwnerForTest = (): void => {
-  currentTrackOwner = null;
+const releaseNativeTrack = (backend: object, sink: object): void => {
+  if (trackOwners.get(backend) === sink) trackOwners.delete(backend);
 };
 
 export const createNativeLocalSidSink = (
@@ -835,6 +868,8 @@ export const createNativeLocalSidSink = (
   return {
     sink,
     audioUnderruns: () => sink.underruns(),
+    isSilentFault: () => sink.isSilentFault(),
+    resetSilence: () => sink.resetSilence(),
     resume: () => sink.resume(),
     suspend: () => sink.suspend(),
     fadeOut: (ms: number) => sink.fadeTo(0, ms),

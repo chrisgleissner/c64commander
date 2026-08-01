@@ -132,15 +132,24 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
         disposeEngine();
         const bytes = new Uint8Array(message.sidBytes);
         if (!message.roms) {
-          // No C64 ROMs available, so nothing can play here.
+          // No C64 ROMs available, so this refuses and the tune is routed to the C64.
           //
-          // This used to gate only on RSID, on the assumption that PSID tunes
-          // are ROM-independent. Measured against real hardware, that is wrong:
-          // without KERNAL/BASIC libsidplayfp initialises *any* tune and then
-          // never advances it, producing a flat drone (envelope correlation
-          // ~0.008 against the machine, vs 0.625 with ROMs — see
-          // docs/plans/sid-station/AUDIO-FIDELITY-TEST.md §6.2). Routing to the
-          // C64 is the only correct answer.
+          // The justification recorded here — that without KERNAL/BASIC libsidplayfp initialises
+          // *any* tune and then never advances it — does not hold on the shipped build. Re-measured
+          // over a random sample of 200 PSID tunes on libsidplayfp-wasm 1.0.1, rendered with and
+          // without ROMs on both engines: none lost level, and per-second RMS is fully modulated
+          // rather than a drone. PSID is 93.8% of HVSC. The original finding most likely predates
+          // c08fde2, which fixed a heap-use-after-free that made the engine render wrongly whatever
+          // the ROM state.
+          //
+          // What is true is narrower: libsidplayfp synthesizes a minimal KERNAL when none is given,
+          // so nearly every RSID still plays (about 1.3% do not), and there is no BASIC substitute
+          // at all, so RSID/BASIC — 1.0% of the archive — really is silent without the images.
+          //
+          // Refusing everything is therefore stricter than the evidence requires. It is left in
+          // place because relaxing it is a behavioural change that has not been decided, and
+          // because `romFallbackDecision` currently promises the opposite to the listener; the two
+          // have to be changed together.
           ctx.postMessage({
             type: "opened",
             id: message.id,

@@ -826,3 +826,55 @@ describe("a sink that has been replaced", () => {
     expect(backend.flushes).toBe(flushesBefore + 1);
   });
 });
+
+/**
+ * A superseded sink must go quiet, not just stop tearing things down.
+ *
+ * There is one AudioTrack. Two sinks writing to it do not mix — their slices interleave, and the
+ * listener hears the old tune, a fragment of the new one, the old tune again, and so on until the
+ * outgoing one runs out. Reported from a Pixel 4 as "instead of a smooth fadeover... that is
+ * nonsense", and it is: a shared track cannot carry two streams at once.
+ *
+ * So being replaced makes a sink inert. It stops writing as well as leaving the track alone.
+ */
+describe("a superseded sink goes quiet", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("writes nothing more once another sink has taken the track", async () => {
+    const backend = createBackend();
+    const outgoing = createNativeLocalSidSink(RATE, backend);
+    await outgoing!.resume?.();
+    scheduleChunk(outgoing, 0.5);
+    await settle(200);
+
+    const incoming = createNativeLocalSidSink(RATE, backend);
+    await incoming!.resume?.();
+    const writesBefore = backend.writes.length;
+
+    // The outgoing tune keeps producing for the length of the crossfade. None of it may reach the
+    // track, because the track is the new tune's now.
+    for (let i = 0; i < 4; i += 1) scheduleChunk(outgoing, 0.5);
+    await settle(200);
+
+    expect(backend.writes.length).toBe(writesBefore);
+  });
+
+  it("still lets the current sink write", async () => {
+    const backend = createBackend();
+    const outgoing = createNativeLocalSidSink(RATE, backend);
+    await outgoing!.resume?.();
+    const incoming = createNativeLocalSidSink(RATE, backend);
+    await incoming!.resume?.();
+
+    const writesBefore = backend.writes.length;
+    scheduleChunk(incoming, 0.5);
+    await settle(200);
+
+    expect(backend.writes.length).toBeGreaterThan(writesBefore);
+  });
+});

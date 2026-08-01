@@ -90,6 +90,16 @@ export interface LocalSidAudioSink {
   /** Set output level, 0..1. Used by the Play page's volume control. */
   setGain?: (value: number) => void;
   /**
+   * Whether the speaker has been handed a flat signal for long enough to be a fault.
+   *
+   * The invariant is "no silent playback unless the listener asked for silence". Every other
+   * counter here describes supply and demand — frames written, buffer depth, underruns — and all of
+   * them look perfectly healthy while a tune renders a flat line. See `SilenceDetector`.
+   */
+  isSilentFault?: () => boolean;
+  /** Judge the next stretch afresh: a new tune, a resume, or a recovery just attempted. */
+  resetSilence?: () => void;
+  /**
    * Throw away audio already handed to the output, for a seek.
    *
    * Web Audio needs nothing here — stopping the scheduled sources is enough. A native sink does:
@@ -1200,6 +1210,8 @@ export class LocalSidEngine {
     this.scheduler = new LocalSidChunkScheduler(this.audio.sink, {
       onSourceEnded: () => this.onSourceEnded(),
     });
+    // A new tune gets its own silence clock; the previous tune's quiet ending is not its fault.
+    this.audio.resetSilence?.();
     // Supervise from the moment there is something to supervise. The clock starts here rather than
     // at the first chunk, so a tune that never produces one at all is caught too.
     this.startWatchdog();
@@ -1512,6 +1524,26 @@ export class LocalSidEngine {
     // wait lasts exactly as long as the rendering does — which for a position deep into a tune is far
     // longer than the stall timeout. Killing the worker here would restart the very render being
     // waited on, and the progress bar is already telling the listener what is happening.
+    // Silence that the listener did not ask for.
+    //
+    // Everything above this line asks whether audio is being *produced*. This asks whether any of
+    // it can be *heard*, which is the thing the listener actually cares about and the one condition
+    // none of the other counters can see: a tune rendering a flat line keeps the buffer full, the
+    // frames flowing and the clock advancing, and sounds like nothing at all. Muting is excluded
+    // because a muted tune is silent on purpose — that is the listener's desired state, and this
+    // exists to restore theirs, not to override it.
+    //
+    // The recovery is the same one a stall gets: re-open the tune once, and if it happens again let
+    // the playlist move on. That keeps one mechanism rather than two.
+    if (!this.muted && this.volume > 0 && this.audio?.isSilentFault?.()) {
+      addErrorLog("Local SID playback is silent", {
+        service: "local-sid",
+        recoverable: !this.stallRecoveryUsed,
+      });
+      this.audio.resetSilence?.();
+      void this.recoverFromStall();
+      return;
+    }
     if (this.scheduler.bufferedSeconds() > STARVED_BUFFER_SECONDS) return;
     if (Date.now() - this.lastAudioAtMs < AUDIO_STALL_TIMEOUT_MS) return;
     void this.recoverFromStall();
