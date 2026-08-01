@@ -796,4 +796,20 @@ describe("silence self-healing", () => {
     await openTune(engine);
     expect(silenceResets).toBeGreaterThan(0);
   });
+
+  it("gives a resumed tune its own silence clock too", async () => {
+    // The accumulator counts seconds of flat audio handed to the speaker, and nothing is handed over
+    // while paused — so without this reset it stays at whatever it had reached and the watchdog
+    // carries on judging from there. A tune paused eleven seconds into a quiet passage would cross
+    // the twelve-second tolerance about a second after the listener pressed play, and the recovery
+    // would re-open the tune: an audible jump caused by the pause rather than by a fault.
+    const engine = makeEngine();
+    await openTune(engine);
+    const resetsAfterOpen = silenceResets;
+
+    await engine.pause();
+    await engine.resume();
+
+    expect(silenceResets).toBeGreaterThan(resetsAfterOpen);
+  });
 });

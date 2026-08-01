@@ -328,14 +328,6 @@ class NativeLocalSidSink implements AudioScheduleSink {
   private lastBufferedMs = 0;
   /** True from the start of a track change until this sink stops writing. */
   private transitioning = false;
-  /**
-   * How much of the recovered tail belongs to the successor, in frames.
-   *
-   * Not held back from the pipeline — trying that starved it and put a gap exactly where the fade
-   * should have been. It is what the outgoing tune aims to still have in hand when the successor
-   * arrives, and the recovery is sized to leave it: budget for the open, plus this for the fade.
-   */
-  private tailReserveFrames = 0;
   /** Chunk ends still to be announced, as playhead seconds. */
   private endings: { at: number; fire: () => void }[] = [];
   private ticker: ReturnType<typeof setInterval> | null = null;
@@ -382,13 +374,15 @@ class NativeLocalSidSink implements AudioScheduleSink {
    * back a fraction of a second at a time, so when the incoming tune's first slice arrives only a
    * little of this tune is committed and the rest can be mixed underneath it instead.
    *
-   * `seconds` bounds how much is recovered. Enough is kept to cover opening the next tune as well as
-   * the fade, because until that tune has a sample to play this is the only audio there is.
+   * `seconds` bounds how much is recovered, and is the whole budget: the caller sizes it to cover
+   * opening the next tune AND the fade that follows, because until that tune has a sample to play
+   * this is the only audio there is. Nothing is held back from the pipeline — an earlier version
+   * reserved the fade's share and fed only the rest, which starved the pipeline and put a gap
+   * exactly where the fade should have been.
    */
-  beginTailPlayout(seconds: number, reserveSeconds = 0): void {
+  beginTailPlayout(seconds: number): void {
     if (this.closed || this.transitioning) return;
     this.transitioning = true;
-    this.tailReserveFrames = Math.max(0, Math.round(reserveSeconds * this.sampleRate));
     const wanted = Math.max(0, Math.round(seconds * this.sampleRate));
     // What is still in the pipeline: the depth at the last write, less the time since. Approximate
     // by a few milliseconds, which shifts the seam by less than a slice.
@@ -444,7 +438,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
   private async refillAfterFlush(): Promise<void> {
     await (this.backend.flushAudioTrack?.() ?? Promise.resolve()).catch((error) => {
       // A pipeline that cannot be flushed still plays; the transition is merely less tidy.
-      addLog("debug", "Native audio: flush before crossfade tail failed", {
+      addLog("warn", "Native audio: flush before crossfade tail failed", {
         error: (error as Error)?.message ?? String(error),
       });
     });
@@ -935,6 +929,21 @@ class NativeLocalSidSink implements AudioScheduleSink {
     const signature = JSON.stringify(identity);
     if (openTracks.get(this.backend) === signature) {
       this.opened = true;
+      // Take the track here, not on the first write.
+      //
+      // This branch only runs from the pump loop with a slice ready to go, so it is the same moment
+      // as the first write for every purpose the claim exists to serve — the outgoing tail has
+      // already fed the speaker right up to this point. But it is one await earlier, and that await
+      // is enough. Until the claim lands the previous opener is not superseded, so a `close()` on it
+      // in the meantime passes its `mayTouchTrack` gate and runs `releaseNativeTrack`,
+      // `openTracks.delete`, `flushAudioTrack` and `closeAudioTrack` — tearing down the very track
+      // this sink has just decided to inherit. This sink still believes it is open, so its next
+      // `ensureOpen` short-circuits and `send` writes into a destroyed track: the write throws, gets
+      // logged, and the tune goes quiet until the silence detector notices.
+      //
+      // `claimNativeTrack` orders by serial, so a sink that has already been superseded cannot take
+      // the track back by adopting it.
+      claimNativeTrack(this.backend, this, this.serial);
       return Promise.resolve(true);
     }
     this.opening ??= this.backend
@@ -1042,7 +1051,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
     // Superseded: the audio in the track belongs to the tune that replaced this one.
     if (isSuperseded(this.backend, this.serial)) return;
     void this.backend.flushAudioTrack?.().catch((error) => {
-      addLog("debug", "Native audio: flush failed", { error: (error as Error)?.message ?? String(error) });
+      addLog("warn", "Native audio: flush failed", { error: (error as Error)?.message ?? String(error) });
     });
   }
 
@@ -1067,8 +1076,12 @@ class NativeLocalSidSink implements AudioScheduleSink {
     // twelve seconds made the transport clock jump forward by about eight the moment it resumed.
     this.writtenFrames = Math.max(0, Math.round(this.playheadSec * this.sampleRate));
     this.queuedSec = 0;
-    void this.backend.flushAudioTrack?.().catch(() => {
-      // A pipeline that has already gone has nothing to flush.
+    void this.backend.flushAudioTrack?.().catch((error) => {
+      // A pipeline that has already gone has nothing to flush, so this is not fatal — but it is
+      // still worth a line, because a flush that fails on a live track leaves the paused audio in it.
+      addLog("warn", "Native audio: flush on suspend failed", {
+        error: (error as Error)?.message ?? String(error),
+      });
     });
   }
 
@@ -1121,11 +1134,19 @@ class NativeLocalSidSink implements AudioScheduleSink {
     if (!mayTouchTrack) return;
     releaseNativeTrack(this.backend, this);
     openTracks.delete(this.backend);
-    void this.backend.flushAudioTrack?.().catch(() => {
-      // Nothing queued, or no pipeline left to queue into.
+    void this.backend.flushAudioTrack?.().catch((error) => {
+      // Nothing queued, or no pipeline left to queue into. Logged rather than ignored so a device
+      // whose track has stopped responding leaves a trail before the close below fails too.
+      addLog("warn", "Native audio: flush on close failed", {
+        error: (error as Error)?.message ?? String(error),
+      });
     });
-    void this.backend.closeAudioTrack().catch(() => {
-      // Closing a track that is already gone is not worth reporting.
+    void this.backend.closeAudioTrack().catch((error) => {
+      // Closing a track that is already gone is expected; any other failure means the track is
+      // still holding the device, which is what the next open will trip over.
+      addLog("warn", "Native audio: close failed", {
+        error: (error as Error)?.message ?? String(error),
+      });
     });
   }
 }
@@ -1226,8 +1247,7 @@ export const createNativeLocalSidSink = (
     audioUnderruns: () => sink.underruns(),
     isSilentFault: () => sink.isSilentFault(),
     takeCrossfadeTail: (seconds: number) => sink.takeTail(seconds),
-    beginCrossfadeTailPlayout: (seconds: number, reserveSeconds?: number) =>
-      sink.beginTailPlayout(seconds, reserveSeconds),
+    beginCrossfadeTailPlayout: (seconds: number) => sink.beginTailPlayout(seconds),
     releaseForHandover: () => sink.releaseForHandover(),
     adoptCrossfadeTail: (slices: Int16Array[], seconds: number) => sink.adoptTail(slices, seconds),
     resetSilence: () => sink.resetSilence(),

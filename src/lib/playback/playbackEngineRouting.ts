@@ -71,14 +71,14 @@ export function shouldAttemptLocalEngine(input: EngineRouteInput): boolean {
  * A correction, because the reasoning recorded here was wrong in two ways and the conclusions built
  * on it are still in the code below.
  *
- * It claimed libsidplayfp needs the kernal and basic images to run ANY tune, so that an ordinary
+ * It claimed libsidplayfp needs the KERNAL and BASIC images to run ANY tune, so that an ordinary
  * PSID plays silence without them. That is not reproducible on the shipped build: over a random
  * sample of 200 PSID tunes rendered with and without ROMs, on both engines, not one lost level
  * (0 of 200 down by even 6 dB). PSID is 93.8% of HVSC. The likely explanation is that the original
  * measurement predates the engine fix in c08fde2, which repaired a heap-use-after-free that made
  * the shipped engine render wrongly regardless of ROMs.
  *
- * It also claimed the lighter engine has kernal-free playback of its own. It does not — see
+ * It also claimed the lighter engine has KERNAL-free playback of its own. It does not — see
  * `effectiveSidEmulationEngine`.
  *
  * What is actually true, measured: needing the images is a property of the TUNE. libsidplayfp
@@ -91,7 +91,7 @@ export function shouldAttemptLocalEngine(input: EngineRouteInput): boolean {
  * it is a behavioural decision that has not been taken, so it is left as it is and documented here.
  */
 export function romFallbackDecision(romRequired: boolean, romsAvailable = true): PreRouteDecision {
-  // An RSID drives the C64's kernal to make its sound, so no emulation without the real images can
+  // An RSID drives the C64's KERNAL to make its sound, so no emulation without the real images can
   // play it — that one genuinely belongs on the C64.
   if (romRequired) return { route: "c64", notice: "rom-on-c64" };
   // An ordinary tune does not need the images at all — see the correction above. Note that this

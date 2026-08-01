@@ -117,8 +117,13 @@ export interface LocalSidAudioSink {
    * cannot reach audio already converted. The incoming sink therefore does the mixing.
    */
   takeCrossfadeTail?: (seconds: number) => Int16Array[];
-  /** Start a track change: recover this tune's unplayed audio and keep playing it from JS. */
-  beginCrossfadeTailPlayout?: (seconds: number, reserveSeconds?: number) => void;
+  /**
+   * Start a track change: recover this tune's unplayed audio and keep playing it from JS.
+   *
+   * `seconds` is the whole budget — long enough to cover opening the next tune and then to fade
+   * under it — because this is the only audio there is until the next tune renders a sample.
+   */
+  beginCrossfadeTailPlayout?: (seconds: number) => void;
   /** Stop feeding the shared track without tearing it down, so the next tune writes onto the end. */
   releaseForHandover?: () => void;
   /** Sum a predecessor's tail under this sink's own output, fading it away across `seconds`. */
@@ -1361,8 +1366,17 @@ export class LocalSidEngine {
     claimAudioOwnership(this);
     try {
       this.audio = this.audioSinkFactory(warmed.sampleRate);
-    } catch {
-      // No sink is not a failure here: the ordinary open follows and builds one.
+    } catch (error) {
+      // No sink is not fatal here: the ordinary open follows and builds one, so the tune still
+      // plays — it just starts from the worker rather than from the cached opening, which costs the
+      // listener the gapless start. Logged because a factory that throws here will throw for the
+      // ordinary open too, and without this line the only symptom is a transition that got worse.
+      addLog("warn", "Native audio: pre-rendered intro sink factory failed", {
+        service: "local-sid",
+        error: (error as Error)?.message ?? String(error),
+        key,
+        sampleRate: warmed.sampleRate,
+      });
       releaseAudioOwnership(this);
       return;
     }
@@ -1928,6 +1942,13 @@ export class LocalSidEngine {
     // The buffer drained while the clock was suspended; give the pipeline the same grace a fresh
     // start gets rather than judging it on how long the pause lasted.
     this.lastAudioAtMs = Date.now();
+    // The silence accumulator gets the same grace, and for the same reason. It counts seconds of
+    // flat audio handed to the speaker, and nothing is handed over while paused — so it freezes at
+    // whatever it had reached and the watchdog carries on judging from there the moment playback
+    // resumes. A tune paused eleven seconds into a quiet passage would then cross the twelve-second
+    // tolerance about a second after the listener pressed play, and `recoverFromStall` would throw
+    // the worker away and re-open the tune: an audible jump caused by the pause, not by a fault.
+    this.audio?.resetSilence?.();
     await this.audio?.resume?.();
   }
 
@@ -2328,7 +2349,7 @@ export class LocalSidEngine {
       // as well, and this is the only audio there is until that finishes.
       this.crossfadeOut = outgoing;
       this.crossfadeSeconds = fadeMs / 1000;
-      outgoing.beginCrossfadeTailPlayout(CROSSFADE_TAIL_BUDGET_SECONDS + fadeMs / 1000, fadeMs / 1000);
+      outgoing.beginCrossfadeTailPlayout(CROSSFADE_TAIL_BUDGET_SECONDS + fadeMs / 1000);
       traceLocalSid("crossfade-tail-playout", { fadeMs });
       // A backstop only. `onOpened` closes it as soon as the next tune has the tail, and a tune that
       // never opens must not leave the previous one playing forever.

@@ -102,8 +102,12 @@ export const buildTestSid = ({ hz, waveform = "triangle", name, volume = 4 }) =>
   header.write((name ?? `Tone ${Math.round(hz)}Hz`).slice(0, 31), 22, "latin1");
   header.write("C64 Commander test tone", 54, "latin1");
   header.write("2026", 86, "latin1");
-  // Flags: built-in player, PAL, 6581. The clock matters — see PAL_CLOCK.
-  header.writeUInt16BE(0b00100100, 118);
+  // Flags, laid out as PSIDv2NG defines them and as `src/lib/sid/sidUtils.ts` reads them back:
+  // bit 0 clear is a built-in player rather than MUS data, bits 2-3 are the clock (01 = PAL), and
+  // bits 4-5 are the SID model (01 = 6581). The clock matters — see PAL_CLOCK — and the model is
+  // declared rather than left at "unknown" so `parseSidHeaderMetadata` reports the same chip the
+  // tone was designed against.
+  header.writeUInt16BE(0b00010100, 118);
   return Buffer.concat([header, Buffer.from(init), Buffer.from(play)]);
 };
 
@@ -120,9 +124,21 @@ const main = () => {
     process.exit(2);
   }
   const hz = args.note ? noteToHz(args.note) : Number(args.hz);
+  // `noteToHz` rejects a bad pitch name; `--hz` needs the same guard. Without it `Number("foo")` is
+  // NaN, `frequencyRegister(NaN)` is NaN, and `NaN & 0xff` / `NaN >> 8` are both 0 — so the file is
+  // a perfectly valid 166-byte SID whose frequency registers are zero and which plays silence. A
+  // transition probe run against it grades a silent pipeline and reports nothing wrong.
+  if (!Number.isFinite(hz) || hz <= 0) {
+    console.error(`--hz needs a positive number, not ${JSON.stringify(args.hz)}.`);
+    process.exit(2);
+  }
   const label = args.note ?? `${Math.round(hz)}Hz`;
   const out = args.out ?? `./tone-${label.toLowerCase().replace("#", "s")}.sid`;
   const volume = args.volume === undefined ? 4 : Number(args.volume);
+  if (!Number.isFinite(volume) || volume < 0 || volume > 15) {
+    console.error(`--volume needs a number from 0 to 15, not ${JSON.stringify(args.volume)}.`);
+    process.exit(2);
+  }
   const waveform = args.waveform ?? "triangle";
   const sid = buildTestSid({ hz, waveform, name: args.name ?? `Tone ${label}`, volume });
   writeFileSync(out, sid);

@@ -1128,6 +1128,44 @@ describe("a crossfade is one continuous stream of samples", () => {
     expect(backend.opens.length).toBe(1);
   });
 
+  it("takes ownership of an inherited track at once, not at the inheritor's first write", async () => {
+    // Inheriting the track and owning it are two separate steps, and the gap between them is where a
+    // tune goes silent. The inheritor marks itself open the moment it adopts the running track, but
+    // the claim used to wait for its first write — and a write does not always follow: a slice that
+    // carries only the outgoing tail is dropped when the tail runs out partway through it, because
+    // writing the silent remainder would put a hole exactly at the seam. Until the claim lands the
+    // previous opener is not superseded, so closing it tears down the track the inheritor is using.
+    const backend = createBackend();
+    const opener = createNativeLocalSidSink(RATE, backend)!;
+    scheduleChunk(opener, 0.2);
+    await settle();
+    expect(backend.opens.length).toBe(1);
+
+    // The inheritor's only audio is a tail far shorter than one tail slice, so it adopts the track
+    // and then writes nothing at all.
+    const inheritor = createNativeLocalSidSink(RATE, backend)!;
+    const writesBefore = backend.writes.length;
+    inheritor.adoptCrossfadeTail!([new Int16Array(500 * 2).fill(8000)], 500 / RATE);
+    await settle();
+    expect(backend.writes.length).toBe(writesBefore);
+
+    // The opener is finished with and closes. The track must survive, because the inheritor is the
+    // one using it now.
+    const flushesBefore = backend.flushes;
+    const closesBefore = backend.closes;
+    opener.close?.();
+    await settle();
+
+    expect(backend.closes).toBe(closesBefore);
+    expect(backend.flushes).toBe(flushesBefore);
+
+    // And the inheritor can still play through it, without reopening.
+    scheduleChunk(inheritor, 0.2);
+    await settle();
+    expect(backend.writes.length).toBeGreaterThan(writesBefore);
+    expect(backend.opens.length).toBe(1);
+  });
+
   it("releases the shared track to its successor without flushing it", async () => {
     const backend = createBackend();
     const outgoing = createNativeLocalSidSink(RATE, backend)!;
