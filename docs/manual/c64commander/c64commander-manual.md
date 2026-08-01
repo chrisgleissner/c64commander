@@ -413,7 +413,7 @@ Your C64 makes its sound with a SID chip, and can host more than one. **Home > S
 
 ### SID Radio
 
-SID Radio plays that archive like a radio station. You choose a mood, or a tune you already like, and the app keeps finding more music of the same kind for as long as you care to listen. You never have to build a playlist, and it needs no internet connection: once the music is on your phone or tablet there is nothing further to download.
+The **High Voltage SID Collection** holds some sixty thousand tunes, which is far too many to go through by hand. SID Radio plays it like a radio station: you choose a mood, or a tune you already like, and the app keeps finding more music of the same kind for as long as you care to listen. You never have to build a playlist, and it needs no internet connection — once the collection is on your phone or tablet there is nothing further to download.
 
 ![The Now Playing card: Rob Hubbard's "Monty on the Run" playing, with the heart and cross beside the title](../../img/app/play/sid-radio/01-controls.png)
 

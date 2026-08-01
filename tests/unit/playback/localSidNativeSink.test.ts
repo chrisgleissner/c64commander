@@ -766,3 +766,63 @@ describe("when the pipeline refuses the level", () => {
     expect(calls).toBe(1);
   });
 });
+
+/**
+ * A superseded sink must not tear down the track its successor is using.
+ *
+ * There is one native AudioTrack, and each tune gets a fresh sink object over it. A crossfade
+ * deliberately keeps the outgoing sink alive so its tail can ring out under the incoming tune, and
+ * closes it on a timer afterwards — `crossfadeMs + 50`, which with the default 1.5 s fade lands a
+ * second and a half into the new tune.
+ *
+ * That close used to flush and close the shared track, throwing away the audio the *new* tune had
+ * queued and stopping its output. Measured on a Pixel 4 with the microphone: pressing Next left
+ * every other track silent after a fraction of a second — 4 of 8 trials, alternating exactly, with
+ * the engine reporting 0.15 s of buffer for the whole of each silent track.
+ */
+describe("a sink that has been replaced", () => {
+  it("leaves the shared track alone when it is closed after its successor opened", async () => {
+    const backend = createBackend();
+    const outgoing = createNativeLocalSidSink(RATE, backend)!;
+    await outgoing.resume?.();
+    const incoming = createNativeLocalSidSink(RATE, backend)!;
+    await incoming.resume?.();
+
+    const closesBefore = backend.closes;
+    const flushesBefore = backend.flushes;
+
+    // The crossfade timer fires: the outgoing sink closes, well after the new tune started.
+    outgoing.close();
+
+    expect(backend.closes).toBe(closesBefore);
+    expect(backend.flushes).toBe(flushesBefore);
+  });
+
+  it("still closes the track when it is the last sink standing", async () => {
+    // The ordinary case must keep working, or the track is never released at all.
+    const backend = createBackend();
+    const only = createNativeLocalSidSink(RATE, backend)!;
+    await only.resume?.();
+
+    only.close();
+
+    expect(backend.closes).toBe(1);
+  });
+
+  it("does not flush the shared track on behalf of a tune that has been replaced", async () => {
+    const backend = createBackend();
+    const outgoing = createNativeLocalSidSink(RATE, backend)!;
+    await outgoing.resume?.();
+    const incoming = createNativeLocalSidSink(RATE, backend)!;
+    await incoming.resume?.();
+
+    const flushesBefore = backend.flushes;
+    // A late seek settling on the outgoing tune would otherwise empty the new tune's queue.
+    outgoing.flush?.();
+    expect(backend.flushes).toBe(flushesBefore);
+
+    // The current sink may still flush its own audio.
+    incoming.flush?.();
+    expect(backend.flushes).toBe(flushesBefore + 1);
+  });
+});

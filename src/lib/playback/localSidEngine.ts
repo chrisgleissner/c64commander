@@ -61,6 +61,7 @@ export type LocalSidWorkerFactory = () => LocalSidWorkerLike;
 /** An audio sink instance plus its teardown. */
 export interface LocalSidAudioSink {
   sink: AudioScheduleSink;
+
   /**
    * Cumulative underruns the OUTPUT itself reported, where the sink can see them.
    *

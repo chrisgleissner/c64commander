@@ -272,7 +272,12 @@ class NativeLocalSidSink implements AudioScheduleSink {
   constructor(
     readonly sampleRate: number,
     private readonly backend: NativeLocalAudioBackend,
-  ) {}
+  ) {
+    // The newest sink owns the shared track. Claimed on construction rather than on first write,
+    // because the engine creates the incoming tune's sink while the outgoing one is still fading:
+    // from this moment the outgoing sink must not flush or close the track out from under it.
+    claimNativeTrack(this);
+  }
 
   /** Supply-side counters, for HIL diagnosis. */
   debug(): Record<string, number> {
@@ -715,6 +720,8 @@ class NativeLocalSidSink implements AudioScheduleSink {
     this.queuedSec = 0;
     this.playheadSec = 0;
     this.playheadAtMs = performance.now();
+    // Superseded: the audio in the track belongs to the tune that replaced this one.
+    if (!ownsNativeTrack(this)) return;
     void this.backend.flushAudioTrack?.().catch((error) => {
       addLog("debug", "Native audio: flush failed", { error: (error as Error)?.message ?? String(error) });
     });
@@ -755,21 +762,23 @@ class NativeLocalSidSink implements AudioScheduleSink {
 
   close(): void {
     this.closed = true;
-    void this.backend.flushAudioTrack?.().catch(() => {
-      // Nothing queued, or no pipeline left to queue into.
-    });
+    // Local teardown happens either way: this sink is finished with, whoever owns the track.
     if (this.ticker !== null) {
       clearInterval(this.ticker);
       this.ticker = null;
     }
     this.queue = [];
     this.endings = [];
-    if (this.opened || this.opening) {
-      void this.backend.closeAudioTrack().catch(() => {
-        // Closing a track that is already gone is not worth reporting.
-      });
-    }
+    const owned = ownsNativeTrack(this);
     this.opened = false;
+    if (!owned) return;
+    releaseNativeTrack(this);
+    void this.backend.flushAudioTrack?.().catch(() => {
+      // Nothing queued, or no pipeline left to queue into.
+    });
+    void this.backend.closeAudioTrack().catch(() => {
+      // Closing a track that is already gone is not worth reporting.
+    });
   }
 }
 
@@ -784,6 +793,36 @@ export const nativeLocalAudioAvailable = (): boolean =>
  * Returning null rather than throwing is deliberate: the caller falls back to Web Audio, which is
  * the only option on the web build and on iOS, where the plugin does not exist at all.
  */
+/**
+ * Which sink may act on the one shared native track.
+ *
+ * There is a single AudioTrack, and each tune gets a fresh sink object over it. A crossfade keeps
+ * the outgoing sink alive so its tail can ring out under the incoming tune and closes it on a timer
+ * — `crossfadeMs + 50`, which with the default 1.5 s fade lands a second and a half into the new
+ * tune. Without this, that close flushed and closed the shared track, throwing away the audio the
+ * new tune had queued and stopping its output: measured on a Pixel 4, every other Next left the
+ * track silent after a fraction of a second.
+ *
+ * So a sink may only flush or close the track while it is still the current one. Everything local
+ * to the sink — its ticker, its queue, its own flag — is torn down either way.
+ */
+let currentTrackOwner: object | null = null;
+
+const claimNativeTrack = (sink: object): void => {
+  currentTrackOwner = sink;
+};
+
+const ownsNativeTrack = (sink: object): boolean => currentTrackOwner === sink;
+
+const releaseNativeTrack = (sink: object): void => {
+  if (currentTrackOwner === sink) currentTrackOwner = null;
+};
+
+/** Test seam: forget which sink owns the shared track. */
+export const __resetNativeTrackOwnerForTest = (): void => {
+  currentTrackOwner = null;
+};
+
 export const createNativeLocalSidSink = (
   sampleRate: number,
   backend: NativeLocalAudioBackend | null,
