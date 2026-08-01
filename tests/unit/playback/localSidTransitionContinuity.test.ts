@@ -90,9 +90,18 @@ const createRecorder = (): Recorder => {
     },
     writeAudioTrack: async ({ data }) => {
       const pcm = decodePcm(data);
-      const room = Math.min(pcm.length, recorder.stream.length - recorder.written);
-      recorder.stream.set(pcm.subarray(0, room), recorder.written);
-      recorder.written += room;
+      // Overflow is a broken harness, not a quiet truncation. Clamping here would leave `written`
+      // pinned at the capacity while the playhead below kept advancing, so an assertion over
+      // `subarray(before, written)` would inspect a partial range — or an empty one — and still
+      // pass. A test whose evidence has silently gone missing must fail, not go green.
+      if (recorder.written + pcm.length > recorder.stream.length) {
+        throw new Error(
+          `Recorder overflow: ${recorder.written + pcm.length} samples into a ${recorder.stream.length}-sample ` +
+            `buffer. Raise the allocation in createRecorder rather than letting the recording be truncated.`,
+        );
+      }
+      recorder.stream.set(pcm, recorder.written);
+      recorder.written += pcm.length;
       const now = performance.now();
       const durationMs = (pcm.length / 2 / RATE) * 1000;
       if (started && now > bufferedUntil) recorder.underrunMs += now - bufferedUntil;

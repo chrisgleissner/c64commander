@@ -64,13 +64,28 @@ The probe exits non-zero unless every recording passes, so it can gate a loop.
 
 ## Running the app hands-free
 
-Attach over CDP (see the `hil-attach` skill) and drive it from there. Both the crossfade length and
-the SID engine are read fresh for **every tune**, so they can be changed between runs without
-restarting the app:
+Attach over CDP (see the `hil-attach` skill) and drive it from there.
+
+**The crossfade length is read fresh for every tune. The SID engine is not.** `play()` calls
+`loadPlaybackCrossfadeMs()` each time, so the fade can be changed between runs with the app still
+up:
 
 ```bash
-./campaign/js.sh '(()=>{localStorage.setItem("c64u_playback_crossfade_ms","1500");
-                        localStorage.setItem("c64u_sid_emulation_engine","residfp");return "set";})()'
+./campaign/js.sh '(()=>{localStorage.setItem("c64u_playback_crossfade_ms","1500");return "set";})()'
+```
+
+The engine is different. `LocalSidEngine.load()` returns immediately once `moduleReady` is set, so a
+second `load` never reaches the worker, and the worker's `requestedEmulation` — the value it passes
+to every `new Ctor(...)` — only ever changes on a `load` message. Writing
+`c64u_sid_emulation_engine` and playing another tune therefore leaves the renderer as it was. The
+run reports two engines and measured one, twice.
+
+So to change the engine, restart the app:
+
+```bash
+./campaign/js.sh '(()=>{localStorage.setItem("c64u_sid_emulation_engine","residfp");return "set";})()'
+adb shell am force-stop uk.gleissner.c64commander
+adb shell monkey -p uk.gleissner.c64commander -c android.intent.category.LAUNCHER 1
 ```
 
 `c64u_sid_emulation_engine` is `residfp` or `sidlite`. **Measure both.** They are different
