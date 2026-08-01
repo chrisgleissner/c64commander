@@ -2702,6 +2702,19 @@ test.describe("App screenshots", () => {
       await page.evaluate(() => window.scrollTo(0, 0));
       await captureScreenshot(page, testInfo, "play/sid-radio/01-controls.png");
 
+      // The tunes inside the file, reached from "Tune 1 of 19" on the credits line. The seeded tune
+      // holds nineteen, which is what makes the list worth having.
+      const tunesLink = getActiveMain(page).getByTestId("playback-current-tunes");
+      await expect(tunesLink).toBeVisible();
+      await tunesLink.click();
+      const tuneSheet = page.getByTestId("tune-list-sheet");
+      await expect(tuneSheet).toBeVisible();
+      // Wait for the names and lengths, which are looked up after the numbered rows are drawn.
+      await expect(tuneSheet.getByTestId("tune-list-row").first()).toContainText("Devil's Gallop");
+      await captureScreenshot(page, testInfo, "play/sid-radio/07-tunes-in-this-file.png", { locator: tuneSheet });
+      await page.keyboard.press("Escape");
+      await expect(tuneSheet).toBeHidden();
+
       // The sleep timer, which lives with the playback settings rather than on the transport: it is
       // a decision about the listening session, not about how a file is played. Captured as its own
       // locator shot because the settings section is taller than the viewport.

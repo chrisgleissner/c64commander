@@ -1262,6 +1262,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "If you would rather go straight to one tune than queue them all, tap **Tune 1 of 19** on the line under the title. That lists every tune in the file with its number, its name where there is one, and how long it runs; tap one and it plays. Tunes vary enormously in length — a five-minute piece and a one-second jingle in the same file is entirely normal — so the lengths are worth reading before you choose.",
     "",
+    "![Every tune in one SID file, with its name and length](../../img/app/play/sid-radio/07-tunes-in-this-file.png)",
+    "",
     "#### What the tune is, and who wrote it",
     "",
     "The line under the title comes from the SID file itself: the composer, the year, the chip it wants, and how long it runs. There are two things a SID file cannot tell you, and for a good part of the collection the archive's editors have written them down separately.",
