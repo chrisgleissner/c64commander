@@ -14,6 +14,13 @@ Work down the ladder. Each rung rules a layer in or out, and each is cheap. Do n
 code until a rung has actually implicated something — several "obvious" causes on this rig
 turned out to be measurement artifacts.
 
+## Before the ladder: is it a gap between tunes?
+
+A silence that falls exactly at a track change is a different fault from one that interrupts a tune,
+and the ladder below will not find it — none of these measurements look at the join between two
+pieces of music. Use `audio-transition-probe` for that, which grades the join itself from two
+generated tunes holding steady tones.
+
 ## 0. Which source is even playing?
 
 The single most wasted hour on this rig was grading the *mirror* while believing it was the

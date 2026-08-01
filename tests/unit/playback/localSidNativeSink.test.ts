@@ -1076,6 +1076,27 @@ describe("a crossfade is one continuous stream of samples", () => {
     expect(quietest).toBe(loudest);
   });
 
+  it("raises the incoming tune from silence, so the two ramps are the two halves of one fade", async () => {
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend)!;
+    // What the engine does when a crossfade is configured: open this tune at the listener's level,
+    // blending in over the fade.
+    sink.fadeIn!(1000, 1);
+    scheduleChunk(sink, 1);
+    await settle(400);
+
+    const written = backend.pcm.flatMap((chunk) => [...chunk]);
+    expect(written.length).toBeGreaterThan(RATE);
+    // A fresh sink's blend gain is already 1, so a fade "to 1" changed nothing and the tune arrived
+    // at full level — a crossfade on one side only. The opening samples must be well below the
+    // level the tune reaches later.
+    const opening = Math.max(...written.slice(0, 400).map(Math.abs));
+    const later = Math.max(...written.slice(RATE, RATE + 400).map(Math.abs));
+    expect(opening).toBeLessThan(later * 0.25);
+    // And it does reach full level rather than staying quiet.
+    expect(later).toBeGreaterThan(0);
+  });
+
   it("fades the outgoing tune only once the incoming one is playing", async () => {
     const backend = createBackend();
     const incoming = createNativeLocalSidSink(RATE, backend)!;

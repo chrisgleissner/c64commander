@@ -884,7 +884,17 @@ export const resolveLocalSidModel = (): LocalSidModel => {
  * overlap stays a deliberate musical effect rather than an ambiguous smear.
  */
 export const CROSSFADE_MS_MIN = 0;
-export const CROSSFADE_MS_MAX = 5000;
+/**
+ * The longest crossfade offered, in milliseconds.
+ *
+ * Music players commonly allow much more than this — Spotify and Apple Music both go to twelve
+ * seconds — but a longer blend is not better here. Two tunes audible together for several seconds
+ * stop sounding like a transition and start sounding like two tunes playing at once, and SID tunes
+ * are often short loops where four seconds is already a noticeable fraction of the piece. It also
+ * bounds the work: the outgoing tune's last seconds are held in memory for the whole blend, and the
+ * incoming tune's opening has to be rendered ahead of it.
+ */
+export const CROSSFADE_MS_MAX = 4000;
 export const DEFAULT_PLAYBACK_CROSSFADE_MS = 0;
 
 export const loadPlaybackCrossfadeMs = (): number => {

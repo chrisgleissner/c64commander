@@ -1237,8 +1237,19 @@ export const createNativeLocalSidSink = (
     // A tune opening at the listener's level: the level is the master, the blend is the fade. Setting
     // the master outright rather than ramping into it is what the engine has always done here, and it
     // is right — this runs before the new tune's first sample, so there is nothing to click against.
+    //
+    // The blend has to *start* at silence. A fresh sink's fade gain is already 1, so ramping it "to
+    // 1" changed nothing and the incoming tune arrived at full level while the outgoing one faded
+    // away underneath it — a crossfade on one side only, described from the room as the next tune
+    // suddenly kicking in. Dropped to zero first, the two ramps are the two halves of one crossfade:
+    // this gain is applied when a slice is converted, and the outgoing tune is summed in afterwards
+    // with its own falling ramp, so one rises exactly as the other falls.
+    //
+    // Both ramps advance per converted frame rather than by the clock, so neither moves while this
+    // tune has nothing of its own to play and the blend always spans its real first seconds.
     fadeIn: (ms: number, toGain = 1) => {
       sink.setMasterGain(toGain, 0);
+      if (ms > 0) sink.fadeTo(0, 0);
       sink.fadeTo(1, ms);
     },
     setGain: (value: number) => sink.setMasterGain(value),

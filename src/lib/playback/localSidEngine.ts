@@ -600,6 +600,8 @@ export class LocalSidEngine {
   private crossfadeTail: Int16Array[] | null = null;
   /** The tune being faded out, still playing from JS while the next one opens. */
   private crossfadeOut: LocalSidAudioSink | null = null;
+  /** Where the live renderer takes over from a pre-rendered opening, once the worker has the tune. */
+  private prerenderedSeamSeconds: number | null = null;
   /** How long that tail should take to disappear. */
   private crossfadeSeconds = 0;
   private totalRenderMs = 0;
@@ -904,8 +906,6 @@ export class LocalSidEngine {
     this.pendingCrossfadeMs = crossfadeMs;
     this.stopPlayback({ crossfadeMs });
     this.callbacks = callbacks;
-    // Before the worker is even asked to open this tune. That open is the gap.
-    this.startFromPrerenderedIntro();
     const worker = this.ensureWorker();
     const id = this.nextId;
     this.nextId += 1;
@@ -957,6 +957,13 @@ export class LocalSidEngine {
         },
         transfer,
       );
+      // Start sounding now, without waiting for that open to finish — the open is the gap.
+      //
+      // After the open has been posted, not before: the worker takes its messages in order, and a
+      // render that arrives ahead of the open asks it to render a tune it has not got. Called
+      // earlier it also ran before `activeId` was assigned, so every chunk came back stale and the
+      // open ran to its 15 s timeout. Measured as an 18 s open on a Pixel 4, heard as a hard cut.
+      this.startFromPrerenderedIntro();
     });
   }
 
@@ -1226,6 +1233,12 @@ export class LocalSidEngine {
       // Already playing, from this tune's pre-rendered opening — see `startFromPrerenderedIntro`.
       // The worker has caught up with audio the listener is hearing already, so there is no sink to
       // build and nothing to hand over; building one here would replace a sink mid-tune.
+      //
+      // The renderer can be positioned now, though: this is the first point at which it has the tune
+      // open and the request means anything.
+      const seam = this.prerenderedSeamSeconds;
+      this.prerenderedSeamSeconds = null;
+      if (seam !== null) this.beginPartialHandoff(seam);
       this.startWatchdog();
       this.pump();
       pending?.resolve({
@@ -1365,7 +1378,10 @@ export class LocalSidEngine {
     this.takeOverFromOutgoingTune();
     this.cached = warmed;
     this.cachedCursor = 0;
-    if (warmed.partial) this.beginPartialHandoff(warmed.durationSeconds);
+    // Where the live renderer has to take over when the cached opening runs out. Held rather than
+    // acted on: positioning the renderer means asking the worker, and the worker has not opened
+    // this tune yet. `onOpened` does it, which is the first moment the request means anything.
+    this.prerenderedSeamSeconds = warmed.partial ? warmed.durationSeconds : null;
     traceLocalSid("started-from-prerendered-intro", {
       key,
       seconds: +warmed.durationSeconds.toFixed(2),

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { CROSSFADE_MS_MAX } from "@/lib/config/appSettings";
 import { LocalSidEngine } from "@/lib/playback/localSidEngine";
 import { createNativeLocalSidSink, type NativeLocalAudioBackend } from "@/lib/playback/localSidNativeSink";
 import { clearLocalSidTrace, readLocalSidTrace } from "@/lib/playback/localSidTrace";
@@ -41,8 +42,16 @@ const decodePcm = (base64: string): Int16Array => {
 };
 
 interface Recorder extends NativeLocalAudioBackend {
-  /** Every sample handed to the track, in order. */
-  stream: number[];
+  /**
+   * Every sample handed to the track, in order, in a buffer sized once.
+   *
+   * A plain array cost a million pushes per test and enough memory to slow the other test files
+   * running alongside it, which showed up as an unrelated worker test failing only when the whole
+   * directory ran.
+   */
+  stream: Int16Array;
+  /** How much of `stream` has been written. */
+  written: number;
   /** Total time the track had nothing to play, in milliseconds. This is the gap a listener hears. */
   underrunMs: number;
   opens: number;
@@ -67,7 +76,9 @@ const createRecorder = (): Recorder => {
   let started = false;
   const depthMs = () => Math.max(0, bufferedUntil - performance.now());
   const recorder: Recorder = {
-    stream: [],
+    // Twenty seconds of stereo, comfortably more than any test here produces.
+    stream: new Int16Array(RATE * 2 * 20),
+    written: 0,
     underrunMs: 0,
     opens: 0,
     resetUnderruns: () => {
@@ -79,7 +90,9 @@ const createRecorder = (): Recorder => {
     },
     writeAudioTrack: async ({ data }) => {
       const pcm = decodePcm(data);
-      for (const sample of pcm) recorder.stream.push(sample);
+      const room = Math.min(pcm.length, recorder.stream.length - recorder.written);
+      recorder.stream.set(pcm.subarray(0, room), recorder.written);
+      recorder.written += room;
       const now = performance.now();
       const durationMs = (pcm.length / 2 / RATE) * 1000;
       if (started && now > bufferedUntil) recorder.underrunMs += now - bufferedUntil;
@@ -217,14 +230,14 @@ describe("one continuous stream of samples across a track change", () => {
     const engine = buildEngine(recorder);
 
     await playSettled(engine, 0);
-    const before = recorder.stream.length;
+    const before = recorder.written;
     recorder.resetUnderruns();
     FakeWorker.openDelayMs = 2600;
     FakeWorker.amplitude = 12000;
     // Long enough for the open this is about, and then some.
     await playSettled(engine, 1, undefined, 4000);
 
-    expect(recorder.stream.length).toBeGreaterThan(before);
+    expect(recorder.written).toBeGreaterThan(before);
     // None, not "little enough to get away with". The hole this replaced measured 2.7 s on a Pixel 4
     // and the same test reports 1051 ms against the previous implementation; a few tens of
     // milliseconds would still be heard as a click between the tunes.
@@ -273,22 +286,50 @@ describe("one continuous stream of samples across a track change", () => {
     expect(recorder.underrunMs).toBe(0);
   });
 
+  // The settings screen offers exactly these, and `CROSSFADE_MS_MAX` is the last of them so a stored
+  // value can never exceed what is offered here. Each is driven end to end rather than assumed to
+  // behave like its neighbour: the tail budget, the history depth and the ramp all scale with the
+  // fade, and a longer one has more chances to run out of audio partway through.
+  for (const fadeMs of [600, 1500, 3000, CROSSFADE_MS_MAX]) {
+    it(`plays a ${fadeMs} ms crossfade with no gap and audio to fade`, async () => {
+      localStorage.setItem("c64u_playback_crossfade_ms", String(fadeMs));
+      const recorder = createRecorder();
+      const engine = buildEngine(recorder);
+
+      await playSettled(engine, 0, "tune-0");
+      engine.prerender("tune-1", new ArrayBuffer(8), 1, 8);
+      await settle();
+      clearLocalSidTrace();
+      recorder.resetUnderruns();
+
+      FakeWorker.openDelayMs = 2600;
+      FakeWorker.amplitude = 12000;
+      await playSettled(engine, 1, "tune-1", 4000);
+
+      expect(recorder.underrunMs).toBe(0);
+      const adopted = readLocalSidTrace().find((entry) => entry.event === "crossfade-tail-adopted");
+      // Enough of the outgoing tune to cover the whole fade, not merely a non-empty handover.
+      expect(adopted?.detail?.frames as number).toBeGreaterThanOrEqual((fadeMs / 1000) * RATE);
+    });
+  }
+
   it("cuts straight over when no crossfade is configured, still without a gap", async () => {
     localStorage.setItem("c64u_playback_crossfade_ms", "0");
     const recorder = createRecorder();
     const engine = buildEngine(recorder);
 
     await playSettled(engine, 0);
-    const before = recorder.stream.length;
+    const before = recorder.written;
     FakeWorker.amplitude = 12000;
     await playSettled(engine, 1);
 
-    const transition = recorder.stream.slice(before).filter((value) => value !== 0);
+    const transition = recorder.stream.subarray(before, recorder.written);
     // No overlap is expected here — the listener asked for none — but nothing is mixed either, so
     // no sample should exceed the louder tune's own level.
     // Reduced rather than spread: the stream runs to hundreds of thousands of samples, which is
     // more arguments than a call can take.
-    const loudest = transition.reduce((peak, value) => Math.max(peak, Math.abs(value)), 0);
+    let loudest = 0;
+    for (const value of transition) loudest = Math.max(loudest, Math.abs(value));
     expect(loudest).toBeLessThanOrEqual(12000);
   });
 
