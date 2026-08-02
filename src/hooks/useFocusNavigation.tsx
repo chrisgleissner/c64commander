@@ -165,6 +165,8 @@ export interface KeypadShortcutHandlers {
   readonly openDeviceSwitcher?: () => void;
   /** Open the keypad quick menu (Menu-key fallback when the item has no context menu). */
   readonly openQuickMenu?: () => void;
+  /** Enter Game Mode (0) — one keystroke from anywhere to the playing state. */
+  readonly openGameMode?: () => void;
 }
 
 export interface FocusNavigationProviderProps {
@@ -403,6 +405,16 @@ export const FocusNavigationProvider = ({
       const shortcutDigit = digitForAction(action);
       if (shortcutDigit !== null && shortcutDigit >= 1 && shortcutDigit <= TAB_ROUTES.length && shortcuts.jumpToTab) {
         shortcuts.jumpToTab(shortcutDigit - 1);
+        setInputModality("key-navigation");
+        event.preventDefault();
+        return;
+      }
+      // `0` only enters. Leaving stays on Back, per the app's "OK goes in, Back
+      // comes out" rule; a key that did both would be ambiguous the moment the
+      // sheet has focus — and inside the sheet `0` is a joystick direction, which
+      // the open-overlay exclusion above already keeps this handler away from.
+      if (action === "digit0" && shortcuts.openGameMode) {
+        shortcuts.openGameMode();
         setInputModality("key-navigation");
         event.preventDefault();
         return;

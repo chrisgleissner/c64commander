@@ -139,18 +139,34 @@ describe("PlayFilesPage feature-flag contracts", () => {
     expect(playFilesPageSource).toContain('data-testid="play-open-controller"');
   });
 
-  it("places Remote Input after the two station actions", () => {
-    // All three open a sheet, so they share one wrapping row. Remote Input comes last because it
-    // leaves the music behind, while SID Radio and Liked Tunes are about what plays next and belong
-    // nearer the controls that play it.
+  it("places the controller actions after the two station actions", () => {
+    // All of them open a sheet, so they share one wrapping row. The controller actions come last
+    // because they leave the music behind, while SID Radio and Liked Tunes are about what plays
+    // next and belong nearer the controls that play it.
     const launcher = playFilesPageSource.indexOf('data-testid="sid-radio-launcher"');
     const likedTunes = playFilesPageSource.indexOf('data-testid="sid-radio-liked-tunes-open"');
-    const remoteInput = playFilesPageSource.indexOf('data-testid="play-open-controller"');
+    const controllerRow = playFilesPageSource.indexOf("gameModeLeadsTransportRow ? (");
     expect(launcher).toBeGreaterThan(-1);
     expect(likedTunes).toBeGreaterThan(launcher);
-    expect(remoteInput).toBeGreaterThan(likedTunes);
+    expect(controllerRow).toBeGreaterThan(likedTunes);
     // And it is no longer handed to the playback card, which drew it above all three.
     expect(playFilesPageSource).not.toContain("openControllerAction=");
+  });
+
+  // GM-1: a running program, cartridge or disk image is overwhelmingly likely to be a game,
+  // so Game Mode leads the row there; a running tune is not, so it follows Remote Input.
+  it("leads the transport row with Game Mode only for a non-song item", () => {
+    const row = playFilesPageSource.slice(
+      playFilesPageSource.indexOf("gameModeLeadsTransportRow ? ("),
+      playFilesPageSource.indexOf("gameModeLeadsTransportRow ? (") + 400,
+    );
+    const leadBranch = row.slice(0, row.indexOf(") : ("));
+    const followBranch = row.slice(row.indexOf(") : ("));
+    expect(leadBranch.indexOf("playGameModeButton")).toBeLessThan(leadBranch.indexOf("playRemoteInputButton"));
+    expect(followBranch.indexOf("playRemoteInputButton")).toBeLessThan(followBranch.indexOf("playGameModeButton"));
+    expect(playFilesPageSource).toContain(
+      "const gameModeLeadsTransportRow = Boolean(currentItem && !isSongCategory(currentItem.category));",
+    );
   });
 
   it("does not overwrite playItem's resolved subsong playlist entry with the stripped switch item", () => {

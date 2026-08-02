@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAvMirror } from "@/hooks/useAvMirror";
 import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
-import { saveMirrorC64Audio } from "@/lib/config/appSettings";
+import { saveMirrorC64Audio, saveMirrorC64Video } from "@/lib/config/appSettings";
 
 /** A subtle pulsing "live" dot, so an active-but-invisible stream isn't ambiguous. */
 export const LiveDot = ({ className }: { className?: string }) => (
@@ -78,7 +78,12 @@ export function AvMirrorControls({
           size={size}
           variant={videoLive ? "default" : "outline"}
           aria-pressed={videoLive}
-          onClick={() => void toggleVideo()}
+          onClick={() => {
+            // The same record Listen keeps, for the same reason: a C64 wired to a television
+            // needs Watch turned off once, not at every Game Mode launch.
+            saveMirrorC64Video(!videoLive);
+            void toggleVideo();
+          }}
           data-testid="av-video-toggle"
           data-state={video.state}
         >

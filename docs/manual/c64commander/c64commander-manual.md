@@ -517,6 +517,8 @@ Press the **menu key** — or the on-screen **Adjust** button — to switch betw
 | **0**, **5**, or the centre/OK key | Fit the whole screen back on |
 | the **menu** key | Return to driving the C64 |
 
+While the border is blue and the keys are driving the C64, **#** brings the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again — so the picture can be turned off and on again without a touchscreen.
+
 The same four moves have on-screen buttons too — **＋** and **−** to zoom, **⤢** to fit, and **◎** to turn Follow on and off — so a touchscreen and a keypad reach every control. However large you make the game controls, the picture always stays fully in view above them — the controls never creep up and cover it.
 
 #### Smooth playback, and what it costs
@@ -559,8 +561,8 @@ Remote Input turns your phone or tablet into a second-screen controller for the 
 
 Open it in either of two places:
 
-- From **Home**, tap the **Remote Input** tile in Quick Actions.
-- From **Play**, tap the **Remote Input** button that appears while an item is playing.
+- From **Home**, tap the **Remote Input** tile in Quick Actions, or **Game Mode** beside it.
+- From **Play**, tap **Remote Input** or **Game Mode** while an item is playing.
 
 Each place opens its own copy of the controller, so a key you are holding in one never leaks into the other.
 
@@ -575,7 +577,27 @@ At the top of the sheet you choose between two modes, **Joystick** and **Keys**.
 - resize the controls from M up to XXL with the **Size** stepper (L by default);
 - turn on **Autofire** and set its rate from 1 to 10 presses per second (the default is 5, and you can also set it in Settings).
 
-A companion quick-keys bar beside the joystick keeps the keys you reach for mid-game one tap away — RUN/STOP, SPACE, RETURN, the function keys f1 to f8, the cursor keys, and the CTRL, C=, and SHIFT modifiers — so you can nudge a menu or answer a prompt without leaving the joystick. For distraction-free play, tap **Game mode**: the app hides every other control and anchors the stick and FIRE button to the edges of the screen for no-look thumbs. Leave it with **Exit game mode** or your device's Back button. Both release everything you were holding.
+A companion quick-keys bar beside the joystick keeps the keys you reach for mid-game one tap away — RUN/STOP, SPACE, RETURN, the function keys f1 to f8, the cursor keys, and the CTRL, C=, and SHIFT modifiers — so you can nudge a menu or answer a prompt without leaving the joystick.
+
+#### Game Mode
+
+**Game Mode** is the app set up for playing: the picture and sound as you last left them, everything else out of the way, and whichever control surface suits how you are driving. It is one action — the **Game Mode** tile on Home, the **Game Mode** button on Play, or the **0** key from anywhere — and it leaves you in the playing state with nothing else to press.
+
+![Game Mode](../../img/app/home/remote-input/02-game-mode.png)
+
+The on-screen joystick and keyboard follow how you are actually playing. Use the touchscreen and they are there; press a physical key and they step aside so the picture has the whole screen. Whichever you do next brings the right one back, and you never have to tell it which you are.
+
+![Game Mode, played on the physical keys](../../img/app/home/remote-input/07-game-mode-keys.png)
+
+With the controls out of the way, three keys still reach everything. **#** brings up RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches over the bottom of the picture, and puts them away again. **✱** switches between driving the C64 and adjusting the view. **Back** leaves. On a touchscreen the floating **Controls** handle at the top brings the whole toolbar back.
+
+Playing on a television? Turn **Watch** off once and Game Mode will keep opening without the picture — the controls take the space instead, so it is never blank.
+
+#### Steering with a physical keyboard
+
+**Settings → Remote Input → Joystick keys** decides which keys steer. **Classic T9** uses 2, 4, 6 and 8 with 5 as fire; **Diamond** uses the four keys around 8, with 8 as fire; and **Custom** lets you press the key you want for each direction. The mapping turns with your device, so you only ever set it up one way up.
+
+Leave with **Exit game mode** or your device's Back button. Both release everything you were holding. Closing the sheet also stops the picture and sound if Game Mode was what started them, and leaves them running if they were already on before you arrived.
 
 **Keys** shows a full Commodore 64 keyboard, including the SHIFT, CTRL, and C= modifiers, SHIFT LOCK, the function keys f1 to f8, and RESTORE. Tap a modifier once to arm it for the next key, or hold it down to chord.
 
@@ -585,12 +607,7 @@ Full Joystick relay uses the device's `machine:input` REST endpoint. It needs re
 
 Remote Input is careful never to leave a key or direction stuck on the real C64. Everything you are holding is released automatically when you close the sheet, switch mode or port, switch to another device, or send the app to the background. If a message does not reach the device, the header shows **Reconnecting…** until the next one gets through. And at any moment you can tap **Release All** to let go of every key and button at once.
 
-To steer a game you have just launched:
-
-1. On **Play**, start the game, then tap **Remote Input**.
-2. Choose **Joystick** and set the port (most games use **Port 2**).
-3. Pick a movement style, then play with the stick and **FIRE**.
-4. Tap **Release All**, or close the sheet, when you finish.
+To steer a game you have just launched, tap **Game Mode** — on **Play**, on **Home**, or with the **0** key. That is the whole of it: the picture and sound come back as you last had them, the controller opens ready to play, and most games read **Port 2**, which is where it starts. Press **Back** when you finish; everything you were holding is released on the way out.
 
 On by default. You can change it in Settings > Stable Features.
 
@@ -856,7 +873,7 @@ The rule is simple: **OK goes in, Back comes out**.
 
 #### Number Keys
 
-Outside text fields, number keys jump to pages:
+Outside text fields, number keys jump to pages, and **0** goes straight to playing:
 
 | Key | Page |
 | --- | --- |
@@ -866,6 +883,7 @@ Outside text fields, number keys jump to pages:
 | 4 | Config |
 | 5 | Settings |
 | 6 | Docs |
+| 0 | Game Mode |
 
 #### Star and Pound
 

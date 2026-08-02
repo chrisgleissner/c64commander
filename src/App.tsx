@@ -34,6 +34,7 @@ import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnos
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { requestDeviceSwitcherOpen, requestQuickMenuOpen } from "@/lib/input/keypadCommands";
+import { GAME_MODE_HOST_PATHS, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
 import { createActionContext, getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordActionEnd, recordActionStart, recordTraceError } from "@/lib/tracing/traceSession";
@@ -254,8 +255,17 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
       openDiagnostics: () => requestDiagnosticsOpen("header"),
       openDeviceSwitcher: () => requestDeviceSwitcherOpen(),
       openQuickMenu: () => requestQuickMenuOpen(),
+      openGameMode: flags.remote_input_enabled
+        ? () => {
+            // The sheet is mounted by Home and Play, so a request raised anywhere
+            // else needs a page that can answer it. The request itself is claimed
+            // by whichever sheet mounts next, so the navigation cannot outrun it.
+            if (!GAME_MODE_HOST_PATHS.has(window.location.pathname)) navigate(TAB_ROUTES[0].path);
+            void startGameMode();
+          }
+        : undefined,
     }),
-    [navigate],
+    [navigate, flags.remote_input_enabled],
   );
   return (
     <FocusNavigationProvider

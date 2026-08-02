@@ -43,6 +43,12 @@ export type VirtualJoystickProps = {
   scale?: number;
   /** Immersive/gaming layout: edge-anchored, maximized, no-look thumb reach. */
   immersive?: boolean;
+  /**
+   * Whether the controls own the whole sheet body. False when they share it with the
+   * live picture, which then takes the height they do not reserve — without this both
+   * claim the same flex space and the picture collapses to nothing.
+   */
+  fillHeight?: boolean;
   /** HARD21-006: session release-all epoch, forwarded to the D-pad's ref reset. */
   releaseAllEpoch?: number;
 };
@@ -82,6 +88,7 @@ export const VirtualJoystick = ({
   disabledHint,
   scale = 1,
   immersive = false,
+  fillHeight,
   releaseAllEpoch,
 }: VirtualJoystickProps) => {
   const stickZoneRef = useRef<HTMLDivElement | null>(null);
@@ -315,7 +322,10 @@ export const VirtualJoystick = ({
   );
 
   return (
-    <div className={cn("flex flex-col gap-3", immersive && "h-full")} data-testid="remote-input-virtual-joystick">
+    <div
+      className={cn("flex flex-col gap-3", immersive && (fillHeight ?? true) && "h-full")}
+      data-testid="remote-input-virtual-joystick"
+    >
       {disabled ? (
         <p
           className="flex items-center justify-center gap-1.5 px-4 text-center text-sm text-muted-foreground"

@@ -81,19 +81,13 @@ describe("MachineControls keypad focus ring (C64U Remote)", () => {
     renderInRing({}, focusContext);
 
     // Selection starts on the labelled Quick Actions group; OK descends to the
-    // first child, then stepping down walks Reset → Reboot → Pause → Menu.
+    // first child, then stepping down walks Menu → Pause → Reset → Reboot.
     expect(focusContext.current?.engine.sourceForId("home-machine-reset")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("home-machine-reboot")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("home-machine-pause-resume")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("home-machine-menu")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("home-machine-power-off")).toBe("dom+explicit");
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Reset" }));
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Reboot" }));
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Pause" }));
-    fireEvent.keyDown(document.body, { code: "DpadDown" });
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Menu" }));
 
     // Center fires only the focused (non-destructive) action; no dialog, no other handler.
@@ -127,8 +121,8 @@ describe("MachineControls keypad focus ring (C64U Remote)", () => {
     // Descend, then five DpadDown steps from the first child wrap exactly back to the first card,
     // confirming the ring holds only the five visible actions.
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Reset" }));
-    const order = ["Reboot", "Pause", "Menu", "Power Off", "Reset"];
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Menu" }));
+    const order = ["Pause", "Reset", "Reboot", "Power Off", "Menu"];
     for (const name of order) {
       fireEvent.keyDown(document.body, { code: "DpadDown" });
       expect(document.activeElement).toBe(screen.getByRole("button", { name }));

@@ -173,4 +173,84 @@ describe("AvMirrorImmersive", () => {
     act(() => vi.advanceTimersByTime(2600));
     expect(screen.getByTestId("av-mirror-immersive")).toHaveAttribute("data-mode", "drive");
   });
+
+  describe("rotation", () => {
+    it("reports the rotation it was given and turns the stage back by it", () => {
+      const { rerender } = render(<AvMirrorImmersive />);
+      expect(screen.getByTestId("av-mirror-immersive")).toHaveAttribute("data-rotation", "0");
+
+      rerender(<AvMirrorImmersive rotation={90} />);
+      expect(screen.getByTestId("av-mirror-immersive")).toHaveAttribute("data-rotation", "90");
+      expect(screen.getByTestId("av-mirror-immersive-stage")).toHaveStyle({
+        transform: "translate(-50%, -50%) rotate(-90deg)",
+      });
+    });
+
+    it("leaves the chrome unrotated, because a player reading it is looking at the phone", () => {
+      render(<AvMirrorImmersive rotation={90} />);
+      expect(screen.getByTestId("av-mirror-mode-chip").closest("div")).not.toHaveStyle({
+        transform: "translate(-50%, -50%) rotate(-90deg)",
+      });
+      expect(screen.getByTestId("av-mirror-immersive-controls").getAttribute("style")).toBeNull();
+    });
+
+    it("swaps the frame aspect at a quarter turn so a turned picture gains width", () => {
+      const measuredBox = () => screen.getByTestId("av-mirror-immersive-stage").parentElement!;
+      const { rerender } = render(<AvMirrorImmersive />);
+      expect(measuredBox()).toHaveStyle({ aspectRatio: "384 / 272" });
+      rerender(<AvMirrorImmersive rotation={270} />);
+      expect(measuredBox()).toHaveStyle({ aspectRatio: "272 / 384" });
+    });
+
+    it("takes every pixel it is given when told to fill, rather than sizing to the aspect", () => {
+      render(<AvMirrorImmersive fill />);
+      const root = screen.getByTestId("av-mirror-immersive");
+      const measuredBox = screen.getByTestId("av-mirror-immersive-stage").parentElement!;
+      expect(root.className).toContain("flex-1");
+      expect(measuredBox.getAttribute("style")).toBeNull();
+      expect(measuredBox.className).toContain("absolute");
+    });
+
+    // GM-12: the argument handed to panBy is the assertion, not a pixel — a drag
+    // along the axis the player sees must pan the picture along the axis it belongs to.
+    it("pans along the axis the player sees at 90°", () => {
+      render(<AvMirrorImmersive rotation={90} />);
+      const stage = stubStage();
+      // Drag rightward across the player's view.
+      fireEvent.pointerDown(stage, { pointerId: 1, clientX: 100, clientY: 100 });
+      fireEvent.pointerMove(stage, { pointerId: 1, clientX: 140, clientY: 100 });
+
+      const [dx, dy] = mirror.ops.panBy.mock.calls[0];
+      // R(90) sends (+40, 0) to (0, +40): the picture's own y axis, not its x.
+      expect(dx).toBeCloseTo(0, 10);
+      expect(dy).toBeLessThan(0);
+    });
+
+    it("pans along the opposite axis at 270°", () => {
+      render(<AvMirrorImmersive rotation={270} />);
+      const stage = stubStage();
+      fireEvent.pointerDown(stage, { pointerId: 1, clientX: 100, clientY: 100 });
+      fireEvent.pointerMove(stage, { pointerId: 1, clientX: 140, clientY: 100 });
+
+      const [dx, dy] = mirror.ops.panBy.mock.calls[0];
+      expect(dx).toBeCloseTo(0, 10);
+      expect(dy).toBeGreaterThan(0);
+    });
+
+    it("keeps the pinch focal point in the picture's own frame at 90°", () => {
+      render(<AvMirrorImmersive rotation={90} />);
+      const stage = stubStage();
+      fireEvent.pointerDown(stage, { pointerId: 1, clientX: 150, clientY: 136 });
+      fireEvent.pointerDown(stage, { pointerId: 2, clientX: 250, clientY: 136 });
+      fireEvent.pointerMove(stage, { pointerId: 2, clientX: 350, clientY: 136 });
+
+      const [factor, focal] = mirror.ops.zoomBy.mock.calls[0];
+      expect(factor).toBe(2);
+      // The midpoint sits right of the stage centre and on its horizontal centre
+      // line. At 90° that offset belongs to the picture's OWN y axis, so the focal
+      // point stays on the picture's vertical centre line and moves down it.
+      expect(focal.x).toBeCloseTo(0.5, 10);
+      expect(focal.y).toBeGreaterThan(0.5);
+    });
+  });
 });

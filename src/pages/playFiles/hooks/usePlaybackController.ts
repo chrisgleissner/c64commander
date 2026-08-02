@@ -12,6 +12,7 @@ import { getCachedArchivePlayback, setCachedArchivePlayback } from "@/lib/archiv
 import { buildArchivePlayPlan } from "@/lib/archive/execution";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { getC64API } from "@/lib/c64api";
+import type { PlaybackLaunchOrigin } from "@/lib/remoteInput/gameModeLaunch";
 import { beginMachineTransition } from "@/lib/deviceInteraction/deviceActivityGate";
 import {
   getMachineExecutionSnapshot,
@@ -238,6 +239,11 @@ interface UsePlaybackControllerProps {
     item: PlaylistItem,
     context: { configFileName: string | null; reason: string },
   ) => Promise<"play-without-config" | "cancel">;
+  /**
+   * A track the USER asked for has actually launched. Never fires for a playlist
+   * moving on by itself, and never for a launch that failed.
+   */
+  onUserLaunchedItem?: (item: PlaylistItem) => void;
   resolveSonglengthDurationMsForPath: (
     path: string,
     file: LocalPlayFile | null,
@@ -327,6 +333,7 @@ export function usePlaybackController({
   deviceProduct,
   ensurePlaybackConnection,
   resolveUnavailableConfigDecision,
+  onUserLaunchedItem,
   resolveSonglengthDurationMsForPath,
   applySonglengthsToItems,
   archiveConfigs,
@@ -361,6 +368,10 @@ export function usePlaybackController({
   const lastAppliedPlaybackConfigSignatureRef = useRef<string | null>(null);
   const sessionDeclinedPlaybackConfigRef = useRef(new Map<string, string>());
   const playlistRef = useRef(playlist);
+  // Held in a ref so the caller can pass an inline arrow without rebuilding playItem,
+  // which is memoised over a long dependency list.
+  const onUserLaunchRef = useRef(onUserLaunchedItem);
+  onUserLaunchRef.current = onUserLaunchedItem;
   const currentIndexRef = useRef(currentIndex);
   const isPlayingRef = useRef(isPlaying);
   const isPausedRef = useRef(isPaused);
@@ -863,7 +874,13 @@ export function usePlaybackController({
   const playItem = useCallback(
     async (
       item: PlaylistItem,
-      options?: { rebootBeforePlay?: boolean; playlistIndex?: number; playlistSize?: number },
+      options?: {
+        rebootBeforePlay?: boolean;
+        playlistIndex?: number;
+        playlistSize?: number;
+        /** `auto` marks a playlist moving on by itself; anything else is the user asking. */
+        origin?: PlaybackLaunchOrigin;
+      },
     ) => {
       return enqueuePlayTransition(async () => {
         // HARD18-009 (M5): claim a fresh generation for this transition. If
@@ -1386,6 +1403,9 @@ export function usePlaybackController({
         writeMachineExecutionFromPlay("running");
         setIsPlaying(true);
         setIsPaused(false);
+        // The single point at which a track has actually launched, so it is also the
+        // only honest place to report a launch that succeeded.
+        if ((options?.origin ?? "user") === "user") onUserLaunchRef.current?.(item);
       });
     },
     [
@@ -1491,7 +1511,11 @@ export function usePlaybackController({
           }
         }
         try {
-          await playItem(item, { playlistIndex: index, playlistSize: playlistRef.current.length });
+          await playItem(item, {
+            playlistIndex: index,
+            playlistSize: playlistRef.current.length,
+            origin: "auto",
+          });
           // §12.6 `engineSwitchMs`: press → the tune is audible again.
           updateSidRadioStats({ engineSwitchMs: performance.now() - startedAt });
         } catch (error) {
@@ -2149,6 +2173,7 @@ export function usePlaybackController({
           await playItem(nextItem, {
             rebootBeforePlay: shouldReboot,
             playlistIndex: nextIndex,
+            origin: "auto",
           });
           setIsPaused(false);
         } catch (error) {

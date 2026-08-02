@@ -27,6 +27,8 @@
 
 import { useCallback, useEffect, useRef } from "react";
 
+import { useConnectionState } from "@/hooks/useConnectionState";
+import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
 import { useFocusNavigationContext, type FocusNavigationContextValue } from "@/hooks/useFocusNavigation";
 import {
   accessibleLabelFor,
@@ -38,7 +40,7 @@ import {
 } from "@/lib/input";
 
 /** Assemble the DOM-free {@link GuidanceState} the pure resolver consumes. */
-const buildGuidanceState = (context: FocusNavigationContextValue): GuidanceState => {
+const buildGuidanceState = (context: FocusNavigationContextValue, gameModeShortcut: boolean): GuidanceState => {
   const { controller, engine, enabled } = context;
   const focus = controller.focus;
   const current = focus.current();
@@ -62,8 +64,16 @@ const buildGuidanceState = (context: FocusNavigationContextValue): GuidanceState
     fieldEngaged: controller.isFieldEngaged,
     layerOpen: controller.layerDepth > 0,
     hasMenu: hasContextMenu(currentElement),
+    gameModeShortcut,
   };
 };
+
+/** The two pages where entering Game Mode is the obvious next thing to do. */
+const GAME_MODE_SHORTCUT_PATHS = new Set(["/", "/play"]);
+
+const currentPathname = (): string => (typeof window === "undefined" ? "" : window.location.pathname);
+
+const isGameModeShortcutPath = (pathname: string): boolean => GAME_MODE_SHORTCUT_PATHS.has(pathname);
 
 /**
  * Imperative writes with a VALUE-EQUALITY BAIL — only touch the DOM when the value
@@ -94,6 +104,9 @@ const applySlot = (slot: HTMLElement | null, action: HTMLElement | null, label: 
 
 export const KeypadGuidanceBar = () => {
   const context = useFocusNavigationContext();
+  const connection = useConnectionState();
+  const remoteInputEnabled = useFeatureFlagValue("remote_input_enabled");
+  const gameModeAvailable = remoteInputEnabled && connection.state === "REAL_CONNECTED";
   const rootRef = useRef<HTMLDivElement>(null);
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const leftActionRef = useRef<HTMLSpanElement>(null);
@@ -101,11 +114,18 @@ export const KeypadGuidanceBar = () => {
   const centerActionRef = useRef<HTMLSpanElement>(null);
   const rightSlotRef = useRef<HTMLSpanElement>(null);
   const rightActionRef = useRef<HTMLSpanElement>(null);
+  const shortcutSlotRef = useRef<HTMLSpanElement>(null);
+  const shortcutActionRef = useRef<HTMLSpanElement>(null);
 
   const refresh = useCallback(() => {
     const root = rootRef.current;
     if (!root || !context) return;
-    const labels = resolveGuidanceLabels(buildGuidanceState(context));
+    // The path is read at refresh time rather than through `useLocation`: the bar
+    // already refreshes on every ring change and modality flip, and a router hook
+    // would make this piece of chrome unrenderable outside a Router.
+    const labels = resolveGuidanceLabels(
+      buildGuidanceState(context, gameModeAvailable && isGameModeShortcutPath(currentPathname())),
+    );
     if (!labels.visible) {
       setAttrIfChanged(root, "data-visible", "false");
       return;
@@ -121,7 +141,8 @@ export const KeypadGuidanceBar = () => {
     setTextIfChanged(leftActionRef.current, labels.left);
     applySlot(centerSlotRef.current, centerActionRef.current, labels.center);
     applySlot(rightSlotRef.current, rightActionRef.current, labels.right);
-  }, [context]);
+    applySlot(shortcutSlotRef.current, shortcutActionRef.current, labels.shortcut);
+  }, [context, gameModeAvailable]);
 
   // Subscribe imperatively (mirrors refreshHighlight). The provider's notifyRing
   // fans out here on assembly, on each handled key, and on a modality flip, so
@@ -169,6 +190,16 @@ export const KeypadGuidanceBar = () => {
         >
           <kbd className="keypad-guidance-cap">Menu</kbd>
           <span ref={rightActionRef} className="keypad-guidance-action" />
+        </span>
+        <span
+          ref={shortcutSlotRef}
+          className="keypad-guidance-key"
+          data-soft="shortcut"
+          data-testid="keypad-guidance-shortcut"
+          hidden
+        >
+          <kbd className="keypad-guidance-cap">0</kbd>
+          <span ref={shortcutActionRef} className="keypad-guidance-action" />
         </span>
       </div>
     </div>

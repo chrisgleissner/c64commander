@@ -8,7 +8,19 @@
 
 import { ReactNode, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { RotateCcw, Power, PowerOff, Pause, Menu, Upload, Play, Download, RefreshCw, LucideIcon } from "lucide-react";
+import {
+  RotateCcw,
+  Power,
+  PowerOff,
+  Pause,
+  Menu,
+  Upload,
+  Play,
+  Download,
+  RefreshCw,
+  Gamepad2,
+  LucideIcon,
+} from "lucide-react";
 import { SectionHeader } from "@/components/SectionHeader";
 import { QuickActionCard } from "@/components/QuickActionCard";
 import { ProfileActionGrid } from "@/components/layout/PageContainer";
@@ -65,6 +77,9 @@ export interface MachineControlsProps {
   menuLoading?: boolean;
   powerCycleLoading?: boolean;
   extraActions?: MachineExtraAction[];
+  /** The one action that starts play rather than maintaining the machine; leads the grid. */
+  gameModeVisible?: boolean;
+  onGameMode?: () => void;
   onAction: (fn: () => Promise<void>, label: string) => void;
   telnetBusy?: boolean;
   footer?: ReactNode;
@@ -92,6 +107,8 @@ export function MachineControls({
   menuLoading = false,
   powerCycleLoading = false,
   extraActions = [],
+  gameModeVisible = false,
+  onGameMode,
   onAction,
   telnetBusy = false,
   footer,
@@ -129,6 +146,43 @@ export function MachineControls({
     void action.run();
   };
 
+  // The ring follows the DOM, so grouping the destructive tiles is a matter of
+  // where they are rendered, not of their focusOrder. Extras arrive interleaved,
+  // which is what used to scatter the red tiles through the safe ones.
+  const safeExtraActions = extraActions.filter((action) => action.variant !== "danger");
+  const destructiveExtraActions = extraActions.filter((action) => action.variant === "danger");
+
+  const renderExtraAction = (action: MachineExtraAction, focusOrder: number) => {
+    const Icon = action.icon ?? RefreshCw;
+    const requiresConfirmation = REBOOT_CLEAR_MEMORY_ACTION_IDS.has(action.id);
+    return (
+      <QuickActionCard
+        key={action.id}
+        icon={Icon}
+        label={action.loading ? `${action.label}…` : action.label}
+        dataTestId={`home-machine-inline-${action.id}`}
+        focusId={`home-machine-${action.id}`}
+        focusOrder={focusOrder}
+        onClick={() => {
+          if (!requiresConfirmation) {
+            void action.onSelect();
+            return;
+          }
+          openDestructiveConfirmation({
+            actionName: action.label,
+            consequence: "This reboots the C64 Ultimate, clears memory, and interrupts the current session.",
+            run: action.onSelect,
+            isDisabled: () => Boolean(action.disabled),
+          });
+        }}
+        disabled={action.disabled}
+        loading={action.loading}
+        variant={action.variant}
+        className={action.className}
+      />
+    );
+  };
+
   return (
     <>
       <motion.div
@@ -149,13 +203,71 @@ export function MachineControls({
             cardDensity="compact"
             testId="home-machine-controls"
           >
+            {/* Frequent and safe first, destructive last in increasing severity, pairs
+                kept adjacent, and one focus group throughout — splitting the grid would
+                cost a keypad user a ring level to descend into. */}
+            {gameModeVisible ? (
+              <QuickActionCard
+                icon={Gamepad2}
+                label="Game Mode"
+                dataTestId="home-machine-inline-openGameMode"
+                focusId="home-machine-openGameMode"
+                focusOrder={100}
+                onClick={() => onGameMode?.()}
+                disabled={!status.isConnected}
+              />
+            ) : null}
+            <QuickActionCard
+              icon={Menu}
+              label="Menu"
+              focusId="home-machine-menu"
+              focusOrder={110}
+              onClick={() => void onToggleMenu()}
+              disabled={!status.isConnected || effectiveBusy}
+              loading={menuLoading}
+            />
+            <QuickActionCard
+              icon={machineExecutionState === "paused" ? Play : Pause}
+              label={machineExecutionState === "paused" ? "Resume" : "Pause"}
+              className={machineExecutionState === "paused" ? "border-primary/60 bg-primary/10" : undefined}
+              focusId="home-machine-pause-resume"
+              focusOrder={120}
+              onClick={() => void onPauseResume()}
+              disabled={!status.isConnected || effectiveBusy}
+              loading={pauseResumePending}
+            />
+            {safeExtraActions.map((action, index) => renderExtraAction(action, 130 + index * 2))}
+            {ramActionsVisible ? (
+              <>
+                <QuickActionCard
+                  icon={Download}
+                  label="Save RAM"
+                  dataTestId="home-save-ram"
+                  focusId="home-machine-save-ram"
+                  focusOrder={150}
+                  onClick={() => void onSaveRam()}
+                  disabled={!status.isConnected || effectiveBusy}
+                  loading={machineTaskId === "save-ram"}
+                />
+                <QuickActionCard
+                  icon={Upload}
+                  label="Load RAM"
+                  dataTestId="home-load-ram"
+                  focusId="home-machine-load-ram"
+                  focusOrder={160}
+                  onClick={() => void onLoadRam()}
+                  disabled={!status.isConnected || effectiveBusy}
+                  loading={machineTaskId === "load-ram"}
+                />
+              </>
+            ) : null}
             <QuickActionCard
               icon={RotateCcw}
               label="Reset"
               variant="danger"
               className="border-destructive/40 bg-destructive/[0.04]"
               focusId="home-machine-reset"
-              focusOrder={100}
+              focusOrder={170}
               onClick={() =>
                 openDestructiveConfirmation({
                   actionName: "Reset",
@@ -182,7 +294,7 @@ export function MachineControls({
               variant="danger"
               className="border-destructive/40 bg-destructive/[0.04]"
               focusId="home-machine-reboot"
-              focusOrder={110}
+              focusOrder={180}
               onClick={() =>
                 openDestructiveConfirmation({
                   actionName: "Reboot",
@@ -194,49 +306,7 @@ export function MachineControls({
               disabled={!status.isConnected || effectiveBusy}
               loading={rebootLoading}
             />
-            <QuickActionCard
-              icon={machineExecutionState === "paused" ? Play : Pause}
-              label={machineExecutionState === "paused" ? "Resume" : "Pause"}
-              className={machineExecutionState === "paused" ? "border-primary/60 bg-primary/10" : undefined}
-              focusId="home-machine-pause-resume"
-              focusOrder={120}
-              onClick={() => void onPauseResume()}
-              disabled={!status.isConnected || effectiveBusy}
-              loading={pauseResumePending}
-            />
-            <QuickActionCard
-              icon={Menu}
-              label="Menu"
-              focusId="home-machine-menu"
-              focusOrder={130}
-              onClick={() => void onToggleMenu()}
-              disabled={!status.isConnected || effectiveBusy}
-              loading={menuLoading}
-            />
-            {ramActionsVisible ? (
-              <>
-                <QuickActionCard
-                  icon={Download}
-                  label="Save RAM"
-                  dataTestId="home-save-ram"
-                  focusId="home-machine-save-ram"
-                  focusOrder={140}
-                  onClick={() => void onSaveRam()}
-                  disabled={!status.isConnected || effectiveBusy}
-                  loading={machineTaskId === "save-ram"}
-                />
-                <QuickActionCard
-                  icon={Upload}
-                  label="Load RAM"
-                  dataTestId="home-load-ram"
-                  focusId="home-machine-load-ram"
-                  focusOrder={150}
-                  onClick={() => void onLoadRam()}
-                  disabled={!status.isConnected || effectiveBusy}
-                  loading={machineTaskId === "load-ram"}
-                />
-              </>
-            ) : null}
+            {destructiveExtraActions.map((action, index) => renderExtraAction(action, 190 + index * 2))}
             {showPowerCycle ? (
               <QuickActionCard
                 icon={RefreshCw}
@@ -245,7 +315,7 @@ export function MachineControls({
                 className="border-destructive/40 bg-destructive/[0.04]"
                 dataTestId="home-power-cycle"
                 focusId="home-machine-power-cycle"
-                focusOrder={160}
+                focusOrder={200}
                 onClick={() =>
                   openDestructiveConfirmation({
                     actionName: "Power Cycle",
@@ -258,36 +328,6 @@ export function MachineControls({
                 loading={powerCycleLoading}
               />
             ) : null}
-            {extraActions.map((action, index) => {
-              const Icon = action.icon ?? RefreshCw;
-              const requiresConfirmation = REBOOT_CLEAR_MEMORY_ACTION_IDS.has(action.id);
-              return (
-                <QuickActionCard
-                  key={action.id}
-                  icon={Icon}
-                  label={action.loading ? `${action.label}…` : action.label}
-                  dataTestId={`home-machine-inline-${action.id}`}
-                  focusId={`home-machine-${action.id}`}
-                  focusOrder={170 + index * 2}
-                  onClick={() => {
-                    if (!requiresConfirmation) {
-                      void action.onSelect();
-                      return;
-                    }
-                    openDestructiveConfirmation({
-                      actionName: action.label,
-                      consequence: "This reboots the C64 Ultimate, clears memory, and interrupts the current session.",
-                      run: action.onSelect,
-                      isDisabled: () => Boolean(action.disabled),
-                    });
-                  }}
-                  disabled={action.disabled}
-                  loading={action.loading}
-                  variant={action.variant}
-                  className={action.className}
-                />
-              );
-            })}
             {powerOffVisible ? (
               <QuickActionCard
                 icon={PowerOff}
@@ -295,7 +335,7 @@ export function MachineControls({
                 variant="danger"
                 className="border-destructive/30 bg-destructive/[0.03] opacity-80"
                 focusId="home-machine-power-off"
-                focusOrder={190}
+                focusOrder={210}
                 onClick={() => void onPowerOff()}
                 disabled={!status.isConnected || effectiveBusy}
                 loading={controls.powerOff.isPending}

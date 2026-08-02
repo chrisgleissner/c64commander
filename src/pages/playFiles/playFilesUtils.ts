@@ -11,7 +11,7 @@ import {
   type AudioMixerItem,
 } from "@/lib/config/audioMixerItems";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
-import type { PlayFileCategory } from "@/lib/playback/fileTypes";
+import { getPlayCategory, type PlayFileCategory } from "@/lib/playback/fileTypes";
 import type { PlaylistItem } from "./types";
 export type { AudioMixerItem } from "@/lib/config/audioMixerItems";
 export const extractAudioMixerItems = extractAudioMixerItemsFromLib;
@@ -59,6 +59,33 @@ export const formatDate = (value?: string | null) => {
 };
 
 export const isSongCategory = (category: PlayFileCategory) => category === "sid" || category === "mod";
+
+export const PICKER_ADD_LABEL = "Add to playlist";
+export const PICKER_PLAY_LABEL = "Play";
+
+export interface PickerConfirmSelection {
+  readonly type: string;
+  readonly path: string;
+}
+
+/**
+ * What the picker's confirm button says, and whether confirming also launches.
+ *
+ * Choosing one game and then having to find the transport again is the last
+ * keystroke that can honestly be removed from the launch path, so a single
+ * non-song file confirms as **Play**. Everything else — several files, a folder,
+ * a tune — keeps queueing, because for those the queue is the point.
+ */
+export const resolvePickerConfirm = (
+  selections: readonly PickerConfirmSelection[],
+): { label: string; launches: boolean } => {
+  if (selections.length !== 1) return { label: PICKER_ADD_LABEL, launches: false };
+  const [only] = selections;
+  if (only.type !== "file") return { label: PICKER_ADD_LABEL, launches: false };
+  const category = getPlayCategory(only.path);
+  if (category === null || isSongCategory(category)) return { label: PICKER_ADD_LABEL, launches: false };
+  return { label: PICKER_PLAY_LABEL, launches: true };
+};
 
 export const normalizeLocalPath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
 

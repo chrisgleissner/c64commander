@@ -25,6 +25,7 @@ import {
   Plus,
   Trash,
   Search,
+  ShieldCheck,
 } from "lucide-react";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
@@ -52,6 +53,8 @@ import {
   MIN_AUTOFIRE_RATE_HZ,
   MAX_AUTOFIRE_RATE_HZ,
 } from "@/lib/remoteInput/autofire";
+import { GameModeSettingsSection } from "@/pages/settings/GameModeSettingsSection";
+import { SettingsSection } from "@/pages/settings/SettingsSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { VicPaletteRow } from "@/pages/settings/VicPaletteRow";
 import { toast } from "@/hooks/use-toast";
@@ -198,7 +201,7 @@ import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
 import { useNavigate } from "react-router-dom";
 import { DISPLAY_PROFILE_OVERRIDE_LABELS, DISPLAY_PROFILE_OVERRIDE_SEQUENCE } from "@/lib/displayProfiles";
 import { useDisplayProfile, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
-import { PageContainer, PageStack, ProfileSplitSection } from "@/components/layout/PageContainer";
+import { PageContainer, PageStack } from "@/components/layout/PageContainer";
 import { buildDefaultArchiveClientConfig, validateArchiveHost, resolveArchiveClientConfig } from "@/lib/archive/config";
 import { OnlineArchiveDialog } from "@/components/archive/OnlineArchiveDialog";
 import { getStoredTelnetPort, setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
@@ -1154,21 +1157,14 @@ export default function SettingsPage() {
 
       <PageContainer size="reading">
         <PageStack>
-          <ProfileSplitSection minColumnWidth="20rem" testId="settings-top-layout">
+          <div className="space-y-3" data-testid="settings-top-layout">
             {/* 1. Appearance */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.02 }}
-              className="profile-card bg-card border border-border rounded-xl p-4 space-y-4"
+            <SettingsSection
+              id="appearance"
+              title="Appearance"
+              summary="Theme, text size, orientation, full screen"
+              icon={Monitor}
             >
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Monitor className="h-5 w-5 text-primary" />
-                </div>
-                <h2 className="font-medium">Appearance</h2>
-              </div>
-
               <div className="grid grid-cols-3 gap-2">
                 {themeOptions.map((option) => {
                   const Icon = option.icon;
@@ -1278,21 +1274,16 @@ export default function SettingsPage() {
                   </div>
                 ) : null}
               </div>
-            </motion.div>
+            </SettingsSection>
 
             {/* 2. Connection Settings */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="profile-card bg-card border border-border rounded-xl p-4 space-y-4"
+            <SettingsSection
+              id="connection"
+              title="Connection"
+              summary="Saved devices, discovery, passwords, demo mode"
+              icon={Wifi}
+              defaultOpen
             >
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Wifi className="h-5 w-5 text-primary" />
-                </div>
-                <h2 className="font-medium">Connection</h2>
-              </div>
-
               <div className="space-y-3">
                 <div className="space-y-2 rounded-lg border border-border/70 p-3">
                   <div className="flex items-center justify-between gap-3 min-w-0">
@@ -1749,24 +1740,17 @@ export default function SettingsPage() {
                       ? `Demo mode — ${baseUrl}`
                       : status.error || "Not connected"}
               </div>
-            </motion.div>
-          </ProfileSplitSection>
+            </SettingsSection>
+          </div>
 
-          <ProfileSplitSection minColumnWidth="20rem" testId="settings-middle-layout">
+          <div className="space-y-3" data-testid="settings-middle-layout">
             {/* 3. Diagnostics */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 }}
-              className="profile-card bg-card border border-border rounded-xl p-4 space-y-4"
+            <SettingsSection
+              id="diagnostics"
+              title="Diagnostics"
+              summary="Logs, debug logging, diagnostics report"
+              icon={FileText}
             >
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <FileText className="h-5 w-5 text-primary" />
-                </div>
-                <h2 className="font-medium">Diagnostics</h2>
-              </div>
-
               <div className="space-y-4">
                 <Button
                   variant="outline"
@@ -1879,22 +1863,15 @@ export default function SettingsPage() {
                   />
                 </div>
               </div>
-            </motion.div>
+            </SettingsSection>
 
             {/* 4. Play and Disk */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-              className="profile-card bg-card border border-border rounded-xl p-4 space-y-4"
+            <SettingsSection
+              id="play-and-disk"
+              title="Play and Disk"
+              summary="Launching, Live View streaming, Remote Input"
+              icon={Play}
             >
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Play className="h-5 w-5 text-primary" />
-                </div>
-                <h2 className="font-medium">Play and Disk</h2>
-              </div>
-
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="listPreviewLimit" className="text-sm">
@@ -2230,6 +2207,8 @@ export default function SettingsPage() {
                   </div>
                 )}
 
+                <GameModeSettingsSection />
+
                 <div className="flex items-start justify-between gap-3 min-w-0">
                   <div className="min-w-0">
                     <Label htmlFor="settings-show-autofire" className="font-medium">
@@ -2271,8 +2250,8 @@ export default function SettingsPage() {
                   </p>
                 </div>
               </div>
-            </motion.div>
-          </ProfileSplitSection>
+            </SettingsSection>
+          </div>
 
           {featureGroups.map((group, index) => (
             <motion.div
@@ -2336,19 +2315,7 @@ export default function SettingsPage() {
 
           {/* 6. HVSC (hidden when the HVSC feature is disabled for the variant) */}
           {hvscEnabled && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25 }}
-              className="bg-card border border-border rounded-xl p-4 space-y-4"
-            >
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Cpu className="h-5 w-5 text-primary" />
-                </div>
-                <h2 className="font-medium">HVSC</h2>
-              </div>
-
+            <SettingsSection id="hvsc" title="HVSC" summary="Where the SID music collection comes from" icon={Cpu}>
               <div className="space-y-3 text-sm">
                 <p className="text-xs text-muted-foreground">
                   HVSC visibility follows the unified feature registry, and the archive mirror can be overridden here
@@ -2397,25 +2364,18 @@ export default function SettingsPage() {
                   </p>
                 </div>
               </div>
-            </motion.div>
+            </SettingsSection>
           )}
 
           {/* 7. Online Archive (hidden when CommoServe is disabled for the variant) */}
           {commoserveEnabled && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-card border border-border rounded-xl p-4 space-y-4"
-              data-testid="settings-online-archive"
+            <SettingsSection
+              id="online-archive"
+              title="Online Archive"
+              summary="The CommoServe address and app identity"
+              icon={Globe}
+              testId="settings-online-archive"
             >
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Globe className="h-5 w-5 text-primary" />
-                </div>
-                <h2 className="font-medium">Online Archive</h2>
-              </div>
-
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
                   CommoServe availability now follows the unified Experimental Features registry. Host and header
@@ -2509,23 +2469,16 @@ export default function SettingsPage() {
                   Open archive browser
                 </Button>
               </div>
-            </motion.div>
+            </SettingsSection>
           )}
 
           {/* 8. Device Safety */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35 }}
-            className="bg-card border border-border rounded-xl p-4 space-y-4"
+          <SettingsSection
+            id="device-safety"
+            title="Device Safety"
+            summary="Safety mode, network timing, advanced controls"
+            icon={ShieldCheck}
           >
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Cpu className="h-5 w-5 text-primary" />
-              </div>
-              <h2 className="font-medium">Device Safety</h2>
-            </div>
-
             {isRelaxedSafetyActive ? (
               <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
                 Relaxed safety mode may affect hardware stability.
@@ -3009,22 +2962,15 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-          </motion.div>
+          </SettingsSection>
 
           {/* Notifications */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.38 }}
-            className="bg-card border border-border rounded-xl p-4 space-y-4"
+          <SettingsSection
+            id="notifications"
+            title="Notifications"
+            summary="Which messages appear, and for how long"
+            icon={Bell}
           >
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Bell className="h-5 w-5 text-primary" />
-              </div>
-              <h2 className="font-medium">Notifications</h2>
-            </div>
-
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="font-medium">Visibility</Label>
@@ -3063,31 +3009,24 @@ export default function SettingsPage() {
                 <p className="text-xs text-muted-foreground">Default 4s. Range 2–8s.</p>
               </div>
             </div>
-          </motion.div>
+          </SettingsSection>
 
           {/* Last. About */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="bg-card border border-border rounded-xl p-4 space-y-4 cursor-pointer"
-            onClick={handleDeveloperTap}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                handleDeveloperTap();
-              }
-            }}
-          >
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Info className="h-5 w-5 text-primary" />
-              </div>
-              <h2 className="font-medium">About</h2>
-            </div>
-
-            <div className="space-y-2 text-sm">
+          <SettingsSection id="about" title="About" summary="Version, licences, settings transfer" icon={Info}>
+            {/* The developer-mode gesture: repeated taps on the version block. It lives on the
+                block rather than on the card, so it cannot fight the section's own toggle. */}
+            <div
+              className="cursor-pointer space-y-2 text-sm"
+              onClick={handleDeveloperTap}
+              role="button"
+              aria-label="About"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  handleDeveloperTap();
+                }
+              }}
+            >
               {buildInfoRows.map((row) => (
                 <div key={row.testId} className="flex items-start justify-between gap-3">
                   <span className="text-muted-foreground">{row.label}</span>
@@ -3124,7 +3063,7 @@ export default function SettingsPage() {
               <FileText className="h-4 w-4" />
               Open Source Licenses
             </button>
-          </motion.div>
+          </SettingsSection>
         </PageStack>
       </PageContainer>
 

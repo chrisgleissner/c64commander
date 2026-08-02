@@ -17,6 +17,7 @@ const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = "c64u_background_rediscovery_inte
 const DISCOVERY_PROBE_TIMEOUT_MS_KEY = "c64u_discovery_probe_timeout_ms";
 const DISK_AUTOSTART_MODE_KEY = "c64u_disk_autostart_mode";
 const MIRROR_C64_AUDIO_KEY = "c64u_mirror_c64_audio";
+const MIRROR_C64_VIDEO_KEY = "c64u_mirror_c64_video";
 const LOCAL_ENGINE_AUTO_ROMS_KEY = "c64u_local_engine_auto_roms";
 const SID_RADIO_MIN_SECONDS_KEY = "c64u_sid_radio_min_seconds";
 const FRIENDLY_SID_NAMES_KEY = "c64u_friendly_sid_names";
@@ -447,6 +448,26 @@ export const saveMirrorC64Audio = (enabled: boolean) => {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(MIRROR_C64_AUDIO_KEY, enabled ? "1" : "0");
   broadcast(MIRROR_C64_AUDIO_KEY, enabled);
+};
+
+/**
+ * Whether the C64's picture should also be shown on this device.
+ *
+ * The counterpart to {@link loadMirrorC64Audio}, and the same kind of record: what the user last
+ * pressed on the Watch button, not a setting to be found and configured. A C64 wired to a
+ * television already shows its picture there, so Game Mode must be able to open without one —
+ * turning Watch off once is what makes every later launch skip the video stream.
+ *
+ * Default on: a Game Mode launch on a phone should show the picture unless asked otherwise.
+ */
+export const DEFAULT_MIRROR_C64_VIDEO = true;
+
+export const loadMirrorC64Video = () => readBoolean(MIRROR_C64_VIDEO_KEY, DEFAULT_MIRROR_C64_VIDEO);
+
+export const saveMirrorC64Video = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(MIRROR_C64_VIDEO_KEY, enabled ? "1" : "0");
+  broadcast(MIRROR_C64_VIDEO_KEY, enabled);
 };
 
 export const DEFAULT_STREAM_NATIVE_AUDIO = true;

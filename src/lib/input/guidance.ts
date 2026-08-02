@@ -51,6 +51,12 @@ export interface GuidanceState {
   readonly layerOpen: boolean;
   /** True when the current item or scope exposes a context/overflow menu. */
   readonly hasMenu: boolean;
+  /**
+   * True where the `0` Game Mode shortcut currently applies — Home and Play, with a
+   * device connected. A shortcut nobody knows about saves nobody anything, and this
+   * bar is on screen exactly when the user is driving by keys.
+   */
+  readonly gameModeShortcut: boolean;
 }
 
 /** The resolved labels for the three soft keys + the breadcrumb to render. */
@@ -65,6 +71,8 @@ export interface GuidanceLabels {
   readonly center: string | null;
   /** Right soft key — "Menu" when a context menu exists, else hidden (null). */
   readonly right: string | null;
+  /** The `0` hint — "Game Mode" where the shortcut applies, else hidden (null). */
+  readonly shortcut: string | null;
 }
 
 /** OK-key label per control kind (CONFIRMED DECISION 3). */
@@ -110,8 +118,9 @@ export const resolveGuidanceLabels = (state: GuidanceState): GuidanceLabels => {
   else center = CENTER_LABEL_BY_KIND[state.currentKind] || "Activate";
 
   const right = state.hasMenu ? "Menu" : null;
+  const shortcut = state.gameModeShortcut ? "Game Mode" : null;
 
-  return { visible, breadcrumb, left, center, right };
+  return { visible, breadcrumb, left, center, right, shortcut };
 };
 
 /**

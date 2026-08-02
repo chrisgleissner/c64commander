@@ -183,8 +183,10 @@ export const variantConfig = {
     publishToGooglePlay: true,
     runtime: {
       defaultDisplayProfile: "auto",
+      defaultGameModeOnLaunch: false,
       defaultHideNavigationBar: false,
       defaultHideStatusBar: false,
+      defaultJoystickKeyLayout: "classicT9",
       defaultSidEmulationEngine: "residfp",
       defaultT9InputEnabled: false,
       endpoints: {

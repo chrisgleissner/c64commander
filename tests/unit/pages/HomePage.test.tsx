@@ -1232,7 +1232,7 @@ describe("HomePage SID status", () => {
       within(machineControls)
         .getAllByRole("button")
         .map((button) => button.textContent),
-    ).toEqual(["Reset", "Reboot", "Pause", "Menu", "Save RAM", "Load RAM", "Power Off"]);
+    ).toEqual(["Menu", "Pause", "Save RAM", "Load RAM", "Reset", "Reboot", "Power Off"]);
     expect(within(machineControls).getAllByRole("button", { name: /^pause$/i })).toHaveLength(1);
     expect(within(machineControls).queryByRole("button", { name: /^resume$/i })).toBeNull();
     expect(within(machineControls).queryByRole("button", { name: /^power cycle$/i })).toBeNull();
