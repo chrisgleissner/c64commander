@@ -560,6 +560,10 @@ ordinary focus-ring CTAs in both output modes.
   right-aligned on the same row (see below)
 - Connection indicator — status text — `remote-input-connection-indicator` —
   not interactive
+- Held joystick inputs — `data-held-joystick` on the sheet root — not interactive
+  _(what the transport is currently asked to hold, comma-separated and sorted. A direction
+  stuck on the real C64 is this feature's worst failure, so the answer is on the surface
+  rather than only in a log)_
 - Control size stepper (Joystick mode only) — decrease/increase buttons + label
   — `remote-input-size-decrease`, `remote-input-size-increase`,
   `remote-input-size-label` — R✅ I✅ (M/L/XL/XXL, persisted; scales the
