@@ -499,7 +499,7 @@ const featureRows = ({ features, variant }) => {
       "**Header badge long-press / `#`**, Settings > Connection",
       "Use Device Switcher for fast switching; Settings for editing.",
     ],
-    ["Reset / Reboot / Pause / Menu", "**Home > Quick Actions**", "Main daily control path."],
+    ["Menu / Pause / Reset / Reboot", "**Home > Quick Actions**", "Main daily control path."],
   ];
 
   if (includeFeature(features, "home_telnet_power_cycle_enabled")) {
@@ -520,6 +520,11 @@ const featureRows = ({ features, variant }) => {
     rows.push(["Save / Load RAM", "**Home > Quick Actions**", featureAvailability(features.ram_snapshots_enabled)]);
   }
   if (includeFeature(features, "remote_input_enabled")) {
+    rows.push([
+      "Game Mode",
+      "**Home > Quick Actions**, Play (while an item plays), `0`",
+      "The first tile in Quick Actions. Opens the controller with the picture and sound as you last left them.",
+    ]);
     rows.push([
       "Remote Input",
       "**Home > Quick Actions**, Play (while an item plays)",
@@ -799,7 +804,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "serial bus mode",
     "video output",
     "scan lines",
-    "interface behavior",
+    "interface behaviour",
   ];
   if (includeFeature(features, "lighting_studio_enabled")) quickConfigItems.push("lighting");
 
@@ -880,7 +885,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Home overview", profile, "home/profiles/{profile}/01-overview.png"),
     "",
-    "Start at the top. The system strip confirms which app build, device, and firmware you are using. Below it, Quick Actions give you the familiar front-panel moves: Reset, Reboot, Pause/Resume, Menu, RAM snapshots when enabled, and power actions when the device supports them.",
+    "Start at the top. The system strip confirms which app build, device, and firmware you are using. Below it, Quick Actions are ordered from the ones you reach for most: Game Mode, Menu, Pause/Resume, Remote Input, RAM snapshots when enabled, then Reset and Reboot. The actions that interrupt the machine — a clear-RAM reboot, and power off or power cycle where the device supports them — are grouped apart at the end, so you do not meet one while reaching for a routine control.",
     "",
     `Keep moving down and you reach Quick Config. These are the settings you are likely to touch in the middle of a session: ${choiceList(quickConfigItems)}.`,
     "",
@@ -890,7 +895,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     ...(includeFeature(features, "remote_input_enabled")
       ? [
-          "Quick Actions also holds **Remote Input**, a second-screen joystick and keyboard for the C64. It has its own walkthrough in [Remote Input](#remote-input), later in this guide.",
+          "**Game Mode** and **Remote Input** are the second-screen joystick and keyboard for the C64. Both have their own walkthrough in [Remote Input](#remote-input), later in this guide.",
           "",
         ]
       : []),
@@ -940,7 +945,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "For multi-disk titles, put related disks in a group. Once grouped, the drive controls can rotate through them.",
     "",
-    "Organize the disk collection around the titles you use.",
+    "Organise the disk collection around the titles you use.",
     "",
     "Add a single image, a folder of images, or an archive search result. Then filter by name, path, source, or group. Filtering helps you find; it does not delete or move anything.",
     "",
@@ -950,7 +955,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Drive settings live beside the collection because they shape how mounted images behave. Bus ID, drive type, enable state, reset, and Soft IEC path all matter when software expects a particular drive setup.",
     "",
-    "Use Disks for collection work because the collection, filters, grouping, and mount flow are on the same page.",
+    "Prefer Disks whenever a job spans more than one image: the collection, its filters, grouping, and mounting are all on the one page, so nothing sends you elsewhere mid-task.",
     "",
     "### Config",
     "",
@@ -960,7 +965,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Search for a category, open it, and edit rows directly. The app chooses the right control for each item: slider, switch, select, or text field.",
     "",
-    "A change is sent to the active device immediately. The firmware applies it at once.",
+    "A change is sent to the active device as soon as you make it, and the firmware applies it straight away.",
     "",
     saveToFlashGuidance(variant),
     "",
@@ -970,13 +975,13 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "### Settings",
     "",
-    "Settings controls app behavior and saved connection details.",
+    "Settings controls app behaviour and saved connection details.",
     "",
     image("Settings overview", profile, "settings/profiles/{profile}/01-overview.png"),
     "",
     "Settings is a list of chapters rather than one long page of controls. Each chapter is closed until you tap it, and its heading says in one line what it decides, so you can find the right chapter without reading through the others. A chapter you leave open stays open the next time you visit.",
     "",
-    "The chapters are **Appearance**, **Connection**, **Diagnostics**, **Play and Disk**, **HVSC**, **Online Archive**, **Device Safety**, **Notifications**, and **About**, followed by SID Radio and the feature toggles.",
+    "The chapters are **Appearance**, **Connection**, **Diagnostics**, **Play and Disk**, **Stable Features**, **Experimental Features**, **SID Radio**, **HVSC**, **Online Archive**, **Device Safety**, **Notifications**, and **About**. The two feature chapters carry a count of how many toggles are on, so you can read that without opening them.",
     "",
     `**Settings transfer**, in the About chapter, exports every app preference to a file you can import onto another ${appDeviceName(
       variant,
@@ -986,7 +991,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Settings also holds saved devices. Use it to edit a name, host, HTTP port, FTP port, Telnet port, or password. When you save and connect, the app probes the device and reports whether the chosen services answer.",
     "",
-    "Display settings are local to the app. They do not change your C64. Use them to choose the display profile, full-screen behavior, notification style, and how dense the interface should feel.",
+    "Display settings are local to the app. They do not change your C64. Use them to choose the display profile, full-screen behaviour, notification style, and how dense the interface should feel.",
     "",
     "Feature toggles appear only when a feature is safe for normal users to change in this variant. If a feature is not supported by this variant, it is absent from Settings and from this manual.",
     "",
@@ -1006,7 +1011,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Open it when a control fails, playback does not start, a file transfer stalls, or the badge looks unhealthy. It includes Problems, Actions, Logs, Errors, Traces, health checks, latency views, heat maps, filters, Share, and Clear.",
     "",
-    "Start with Problems when you want a plain-language summary. Move to Errors when something failed. Use Traces when timing, request order, or endpoint behavior matters. Health checks are the quickest way to confirm whether REST, FTP, and Telnet are alive.",
+    "Start with Problems when you want a plain-language summary. Move to Errors when something failed. Use Traces when timing, request order, or endpoint behaviour matters. Health checks are the quickest way to confirm whether REST, FTP, and Telnet are alive.",
     "",
     "The Share action packages useful evidence. Use it before restarting the app if you are investigating a recurring issue, because the most useful details are often the last few actions before a failure.",
     "",
@@ -1202,7 +1207,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `**Both** appears only when the sound can actually reach you: your C64 needs a wired **Ethernet** connection to your router, and your ${appDeviceName(variant)} needs to be on the same network. **Listen on** is offered for SID tunes only — programs and disks always run on the C64, since that is the only machine that can run them.`,
     "",
-    `To play music on its own, your ${appDeviceName(variant)} needs a copy of two programs built into every C64: the **KERNAL** and **BASIC** ROMs. Some tunes call into them, and without them those tunes start and then play nothing. The ROMs are still under copyright and cannot be shipped with an app, so C64 Commander copies them from your own machine: **Settings → SID Radio → C64 ROMs for on-device playback**, then **Read from C64**. You only need to do this once. The copies stay on your ${appDeviceName(variant)} — never uploaded, never shared, never included in a diagnostics report — and **Remove** deletes them. Only read them from a machine that is yours, or that you have permission to use.`,
+    `To play music on its own, your ${appDeviceName(variant)} needs a copy of two programs built into every C64: the **KERNAL** and **BASIC** ROMs. Some tunes call into them, and without them those tunes start and then play nothing. The ROMs are still under copyright and cannot be shipped with an app, so ${variant.displayName} copies them from your own machine: **Settings → SID Radio → C64 ROMs for on-device playback**, then **Read from C64**. You only need to do this once. The copies stay on your ${appDeviceName(variant)} — never uploaded, never shared, never included in a diagnostics report — and **Remove** deletes them. Only read them from a machine that is yours, or that you have permission to use.`,
     "",
     "#### Moving around inside a tune",
     "",
@@ -1330,7 +1335,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
                   variant,
                 )} with a physical keypad, those same keys could either work the C64 or move the picture, so Live View makes the difference impossible to mistake. The mirror wears a coloured border that tells you at a glance which one you are doing: a **blue “Driving C64”** border means your keys go straight to the machine, as usual; an **amber “Adjusting view”** border means your keys zoom and pan the picture instead.`,
                 "",
-                "Press the **menu key** — or the on-screen **Adjust** button — to switch between the two. You are never stranded looking at a frozen game: adjusting view slips quietly back to driving on its own after a short pause. While the border is amber, the keypad moves the view like this:",
+                "Press **✱** or the **menu key** — or the on-screen **Adjust** button — to switch between the two. You are never stranded looking at a frozen game: adjusting view slips quietly back to driving on its own after a short pause. While the border is amber, the keypad moves the view like this:",
                 "",
                 "| Key | What it does |",
                 "| --- | --- |",
@@ -1353,7 +1358,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "The sound also plays through a **fast, low-latency path** so what you hear follows your keypresses closely — the app holds far less sound waiting to play than the ordinary in-app audio does, so the delay is much shorter. This is on by default; if you ever need to compare, or the sound misbehaves on your device, you can switch **Low-latency audio (native)** off in **Settings**.",
                 "",
-                "Your C64 sends colour *numbers* rather than colours, so the app decides what shade to paint each one. **Settings → Screen colours** offers nine palettes, with all sixteen colours shown before you choose: **Default** matches the machine\'s own palette, and the rest are alternatives — warmer, cooler, monochrome, and so on. It changes only how Live View looks on your device; the C64 carries on exactly as before, and it costs the picture nothing.",
+                "Your C64 sends colour *numbers* rather than colours, so the app decides what shade to paint each one. **Settings → Play and Disk → Screen colours** offers nine palettes, with all sixteen colours shown before you choose: **Default** matches the machine\'s own palette, and the rest are alternatives — warmer, cooler, monochrome, and so on. It changes only how Live View looks on your device; the C64 carries on exactly as before, and it costs the picture nothing.",
                 "",
                 "The **picture** is the demanding part, so you get a say in how much of it to draw. Open **Stats** — it appears under Live View while it is playing — and choose a **Video frame rate**:",
                 "",
@@ -1373,7 +1378,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
               ]
             : []),
-          "Live View is ready to use out of the box; the picture and sound simply stay off until you press **Watch** or **Listen**, so nothing streams until you ask for it. The device streams to two network ports (11000 for the picture, 11001 for the sound); if your setup needs different ones, you can change them in **Settings**, under Play and disk behaviour. Live View borrows the same feeds as **Streams** (below), and while it is playing it takes charge of them — see there for how the two work together.",
+          "Live View is ready to use out of the box; the picture and sound simply stay off until you press **Watch** or **Listen**, so nothing streams until you ask for it. The device streams to two network ports (11000 for the picture, 11001 for the sound); if your setup needs different ones, you can change them in **Settings → Play and Disk**. Live View borrows the same feeds as **Streams** (below), and while it is playing it takes charge of them — see there for how the two work together.",
           "",
           featureAvailability(features.video_mirror_enabled ?? features.audio_mirror_enabled),
           "",
@@ -1395,7 +1400,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "Open it in either of two places:",
           "",
-          "- From **Home**, tap the **Remote Input** tile in Quick Actions, or **Game Mode** beside it.",
+          "- From **Home**, tap **Game Mode** — the first tile in Quick Actions — or **Remote Input** further along the same row.",
           "- From **Play**, tap **Remote Input** or **Game Mode** while an item is playing.",
           "",
           "Each place opens its own copy of the controller, so a key you are holding in one never leaks into the other.",
@@ -1423,7 +1428,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           image("Game Mode, played on the physical keys", profile, "home/remote-input/07-game-mode-keys.png"),
           "",
-          "With the controls out of the way, three keys still reach everything. **#** brings up RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches over the bottom of the picture, and puts them away again. **✱** switches between driving the C64 and adjusting the view. **Back** leaves. On a touchscreen the floating **Controls** handle at the top brings the whole toolbar back.",
+          "With the controls out of the way, three keys still reach everything. **#** brings up RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches over the bottom of the picture, and puts them away again. **✱**, or the menu key, switches between driving the C64 and adjusting the view. **Back** leaves. On a touchscreen the floating **Controls** handle at the top brings the whole toolbar back.",
           "",
           "Playing on a television? Turn **Watch** off once and Game Mode will keep opening without the picture — the controls take the space instead, so it is never blank.",
           "",
@@ -1461,12 +1466,12 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "Lying down, or somewhere the sensor cannot tell? The **Orientation** control in Game Mode's toolbar pins it — **Auto**, **0°**, **90°** or **270°** — for as long as the sheet is open.",
                 "",
-                "Prefer different keys? **Settings → Remote Input → Joystick keys** offers **Classic T9** (2, 4, 6 and 8 with 5 as fire) or **Custom**, where you press the key you want for each direction. You only ever set it up upright; every other way round is worked out from that.",
+                "Prefer different keys? **Settings → Play and Disk → Joystick keys** offers **Classic T9** (2, 4, 6 and 8 with 5 as fire) or **Custom**, where you press the key you want for each direction. You only ever set it up upright; every other way round is worked out from that.",
               ]
             : [
                 "#### Steering with a physical keyboard",
                 "",
-                "**Settings → Remote Input → Joystick keys** decides which keys steer. **Classic T9** uses 2, 4, 6 and 8 with 5 as fire; **Diamond** uses the four keys around 8, with 8 as fire; and **Custom** lets you press the key you want for each direction. The mapping turns with your device, so you only ever set it up one way up.",
+                "**Settings → Play and Disk → Joystick keys** decides which keys steer. **Classic T9** uses 2, 4, 6 and 8 with 5 as fire; **Diamond** uses the four keys around 8, with 8 as fire; and **Custom** lets you press the key you want for each direction. The mapping turns with your device, so you only ever set it up one way up.",
               ]),
           "",
           "Leave with **Exit game mode** or your device's Back button. Both release everything you were holding. Closing the sheet also stops the picture and sound if Game Mode was what started them, and leaves them running if they were already on before you arrived.",
@@ -1478,8 +1483,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           remoteInputJoystickFirmware(variant),
           "",
           "Remote Input is careful never to leave a key or direction stuck on the real C64. Everything you are holding is released automatically when you close the sheet, switch mode or port, switch to another device, or send the app to the background. If a message does not reach the device, the header shows **Reconnecting…** until the next one gets through. And at any moment you can tap **Release All** to let go of every key and button at once.",
-          "",
-          "To steer a game you have just launched, tap **Game Mode** — on **Play**, on **Home**, or with the **0** key. That is the whole of it: the picture and sound come back as you last had them, the controller opens ready to play, and most games read **Port 2**, which is where it starts. Press **Back** when you finish; everything you were holding is released on the way out.",
+
           "",
           featureAvailability(features.remote_input_enabled),
           "",
@@ -1547,7 +1551,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "Some setups have a freezer cartridge (Action Replay / Retro Replay style) configured. On those, launching a program directly can occasionally reset into the cartridge's own menu instead — which looks exactly like the app misbehaving. Launch Safety prevents that: around every direct launch it briefly *parks* the configured cartridge, then restores it afterwards. It never writes to the device's saved (flash) settings, so a power cycle always brings the cartridge back, and when no cartridge is configured it does nothing at all. This happens automatically; there is no per-launch control.",
                 "",
-                "One advanced option sits in **Settings**, under Play and disk behaviour: **Answer cartridge boot menu after reset**. It is off by default and helps only one narrow case — a cartridge that shows a boot menu when the machine resets, which could otherwise swallow the LOAD that Mount & Load types. Turn it on to choose the **menu key** (F1–F8, RETURN, or SPACE) and a **boot settle** time; the app then presses that key after a Mount & Load reset to clear the menu first. Leave it off unless you run such a cartridge.",
+                "One advanced option sits in **Settings → Play and Disk**: **Answer cartridge boot menu after reset**. It is off by default and helps only one narrow case — a cartridge that shows a boot menu when the machine resets, which could otherwise swallow the LOAD that Mount & Load types. Turn it on to choose the **menu key** (F1–F8, RETURN, or SPACE) and a **boot settle** time; the app then presses that key after a Mount & Load reset to clear the menu first. Leave it off unless you run such a cartridge.",
                 "",
                 featureAvailability(features.launch_safety_enabled),
                 "",
@@ -1557,7 +1561,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
             ? [
                 "#### Searching Inside Disk Images",
                 "",
-                "By default, searching your media matches disk images by their file name. Turn on **Search inside disk images** — in **Settings**, under Play and disk behaviour — and search also reaches the programs *inside* your `.d64`, `.d71`, and `.d81` images. A match found inside a disk is shown as **DISK → PROGRAM**, so you can see exactly which disk holds the program you want, then Run or Load it just like any other.",
+                "By default, searching your media matches disk images by their file name. Turn on **Search inside disk images** — in **Settings → Play and Disk** — and search also reaches the programs *inside* your `.d64`, `.d71`, and `.d81` images. A match found inside a disk is shown as **DISK → PROGRAM**, so you can see exactly which disk holds the program you want, then Run or Load it just like any other.",
                 "",
                 featureAvailability(features.in_image_search_enabled),
                 "",
@@ -1711,7 +1715,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
       ? [
           "### Remote Input joystick is unavailable",
           "",
-          "The **Joystick** tab appears only when the connected device supports the `machine:input` endpoint. **Keys** always works.",
+          "The **Joystick** tab appears only when the connected device supports the `machine:input` endpoint. **Keys** is always available.",
           "",
           remoteInputTroubleshootFirmware(variant),
           "- If the device is password-protected, enter its password in Settings; both Joystick and Keys need it.",
