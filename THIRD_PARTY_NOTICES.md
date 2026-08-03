@@ -324,7 +324,7 @@ Summary: 812 dependencies across NPM (795), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | @vitest/utils | 3.2.7 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/@vitest/utils/-/utils-3.2.7.tgz](https://registry.npmjs.org/@vitest/utils/-/utils-3.2.7.tgz) |
 | NPM | @xmldom/xmldom | 0.8.13 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/@xmldom/xmldom/-/xmldom-0.8.13.tgz](https://registry.npmjs.org/@xmldom/xmldom/-/xmldom-0.8.13.tgz) |
 | NPM | @yarnpkg/lockfile | 1.1.0 | [BSD-2-Clause](https://spdx.org/licenses/BSD-2-Clause.html) | [https://registry.npmjs.org/@yarnpkg/lockfile/-/lockfile-1.1.0.tgz](https://registry.npmjs.org/@yarnpkg/lockfile/-/lockfile-1.1.0.tgz) |
-| NPM | 7z-wasm | 1.2.0 | SEE LICENSE IN License.txt | [https://registry.npmjs.org/7z-wasm/-/7z-wasm-1.2.0.tgz](https://registry.npmjs.org/7z-wasm/-/7z-wasm-1.2.0.tgz) |
+| NPM | 7z-wasm | 1.2.0 | [LGPL-2.1-or-later WITH unRAR-restriction](https://spdx.org/licenses/LGPL-2.1-or-later.html) | [https://registry.npmjs.org/7z-wasm/-/7z-wasm-1.2.0.tgz](https://registry.npmjs.org/7z-wasm/-/7z-wasm-1.2.0.tgz) |
 | NPM | acorn | 8.16.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/acorn/-/acorn-8.16.0.tgz](https://registry.npmjs.org/acorn/-/acorn-8.16.0.tgz) |
 | NPM | acorn-jsx | 5.3.2 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/acorn-jsx/-/acorn-jsx-5.3.2.tgz](https://registry.npmjs.org/acorn-jsx/-/acorn-jsx-5.3.2.tgz) |
 | NPM | agent-base | 6.0.2 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/agent-base/-/agent-base-6.0.2.tgz](https://registry.npmjs.org/agent-base/-/agent-base-6.0.2.tgz) |
@@ -409,7 +409,7 @@ Summary: 812 dependencies across NPM (795), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | d3-timer | 3.0.1 | [ISC](https://spdx.org/licenses/ISC.html) | [https://registry.npmjs.org/d3-timer/-/d3-timer-3.0.1.tgz](https://registry.npmjs.org/d3-timer/-/d3-timer-3.0.1.tgz) |
 | NPM | data-urls | 7.0.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/data-urls/-/data-urls-7.0.0.tgz](https://registry.npmjs.org/data-urls/-/data-urls-7.0.0.tgz) |
 | NPM | date-fns | 3.6.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/date-fns/-/date-fns-3.6.0.tgz](https://registry.npmjs.org/date-fns/-/date-fns-3.6.0.tgz) |
-| NPM | dateformat | 1.0.7-1.2.3 | UNKNOWN | [https://registry.npmjs.org/dateformat/-/dateformat-1.0.7-1.2.3.tgz](https://registry.npmjs.org/dateformat/-/dateformat-1.0.7-1.2.3.tgz) |
+| NPM | dateformat | 1.0.7-1.2.3 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/dateformat/-/dateformat-1.0.7-1.2.3.tgz](https://registry.npmjs.org/dateformat/-/dateformat-1.0.7-1.2.3.tgz) |
 | NPM | debug | 4.4.3 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/debug/-/debug-4.4.3.tgz](https://registry.npmjs.org/debug/-/debug-4.4.3.tgz) |
 | NPM | decamelize | 1.2.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/decamelize/-/decamelize-1.2.0.tgz](https://registry.npmjs.org/decamelize/-/decamelize-1.2.0.tgz) |
 | NPM | decimal.js | 10.6.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/decimal.js/-/decimal.js-10.6.0.tgz](https://registry.npmjs.org/decimal.js/-/decimal.js-10.6.0.tgz) |
@@ -731,7 +731,7 @@ Summary: 812 dependencies across NPM (795), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | strip-json-comments | 3.1.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/strip-json-comments/-/strip-json-comments-3.1.1.tgz](https://registry.npmjs.org/strip-json-comments/-/strip-json-comments-3.1.1.tgz) |
 | NPM | strip-literal | 3.1.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/strip-literal/-/strip-literal-3.1.0.tgz](https://registry.npmjs.org/strip-literal/-/strip-literal-3.1.0.tgz) |
 | NPM | sucrase | 3.35.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/sucrase/-/sucrase-3.35.1.tgz](https://registry.npmjs.org/sucrase/-/sucrase-3.35.1.tgz) |
-| NPM | suncalc | 2.0.1 | UNKNOWN | [https://registry.npmjs.org/suncalc/-/suncalc-2.0.1.tgz](https://registry.npmjs.org/suncalc/-/suncalc-2.0.1.tgz) |
+| NPM | suncalc | 2.0.1 | [BSD-2-Clause](https://spdx.org/licenses/BSD-2-Clause.html) | [https://registry.npmjs.org/suncalc/-/suncalc-2.0.1.tgz](https://registry.npmjs.org/suncalc/-/suncalc-2.0.1.tgz) |
 | NPM | supports-color | 7.2.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/supports-color/-/supports-color-7.2.0.tgz](https://registry.npmjs.org/supports-color/-/supports-color-7.2.0.tgz) |
 | NPM | supports-preserve-symlinks-flag | 1.0.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/supports-preserve-symlinks-flag/-/supports-preserve-symlinks-flag-1.0.0.tgz](https://registry.npmjs.org/supports-preserve-symlinks-flag/-/supports-preserve-symlinks-flag-1.0.0.tgz) |
 | NPM | symbol-tree | 3.2.4 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/symbol-tree/-/symbol-tree-3.2.4.tgz](https://registry.npmjs.org/symbol-tree/-/symbol-tree-3.2.4.tgz) |
