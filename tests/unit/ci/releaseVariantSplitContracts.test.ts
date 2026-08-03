@@ -107,4 +107,14 @@ describe("release variant split contracts", () => {
     expect(generated.repo.publishDefaults.ci).toEqual([...publishDefaults.ci].sort());
     expect(generated.repo.publishDefaults.release).toEqual([...publishDefaults.release].sort());
   });
+
+  // A release APK is only rebuildable while its CI artifact survives, and the default 7 days
+  // is shorter than a hand-off can take.
+  it("retains the release APK artifact for 30 days", () => {
+    const raw = readFileSync(repoFile(".github/workflows/android.yaml"), "utf8");
+    const uploadStep = raw.indexOf("- name: Upload APK artifact (release)");
+
+    expect(uploadStep).toBeGreaterThan(-1);
+    expect(raw.slice(uploadStep, uploadStep + 500)).toContain("retention-days: 30");
+  });
 });
