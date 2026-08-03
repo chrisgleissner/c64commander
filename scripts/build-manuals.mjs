@@ -348,10 +348,9 @@ const includeFeature = (features, id) => Boolean(features[id]?.isMentionable);
 const isC64uRemoteVariant = (variant) => variant.id === "c64u-remote";
 
 // The device that runs the app. C64U Remote is an Android-only variant built for
-// the Commodore Callback 8020 — a compact, keypad-first phone — so its manual
-// always speaks of a "phone" (the Callback 8020 name is established once, in
-// Before You Start, then left implicit). The broad C64 Commander edition also
-// runs on tablets, so it keeps the wider "phone or tablet" phrasing unchanged.
+// a compact, keypad-first phone, so its manual always speaks of a "phone" and
+// never names a model. The broad C64 Commander edition also runs on tablets, so
+// it keeps the wider "phone or tablet" phrasing unchanged.
 const appDeviceName = (variant) => (isC64uRemoteVariant(variant) ? "phone" : "phone or tablet");
 
 // Subject noun for the app-host device, e.g. "on your phone" vs "on the Android
@@ -394,7 +393,7 @@ const supportedMachinesSection = ({ appName, variant }) =>
     ? [
         "### Your C64 Ultimate",
         "",
-        `${appName} is made for controlling a Commodore 64 Ultimate on your local network. It runs on the Commodore Callback 8020 — the compact, keypad-first phone it was designed for — which this guide simply calls your phone.`,
+        `${appName} is made for controlling a Commodore 64 Ultimate on your local network. It runs on a compact, keypad-first phone, which this guide simply calls your phone.`,
       ]
     : [
         "### Supported Machines",

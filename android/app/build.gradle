@@ -171,7 +171,8 @@ def androidArtifactBasename = variantMetadata.exportedFileBasename.toString()
 // Variants that disable background execution (e.g. C64U Remote) use a reduced
 // manifest without the media-playback foreground service and its
 // FOREGROUND_SERVICE / FOREGROUND_SERVICE_MEDIA_PLAYBACK / WAKE_LOCK permissions,
-// which are unused when the feature is off and which AppSupport restricts anyway.
+// which are unused when the feature is off and which some restricted Android
+// runtimes withhold anyway.
 // A missing flag defaults to the full manifest (safe).
 def backgroundExecutionEnabled = !(variantMetadata.featureFlags?.background_execution_enabled?.enabled == false)
 def selectedAndroidManifest = backgroundExecutionEnabled
@@ -226,6 +227,26 @@ android {
         androidTest {
             assets.srcDirs += ['src/test/fixtures']
         }
+    }
+
+    // Optional external branding overlay, e.g.
+    //   ./gradlew assembleRelease -PbrandOverlayDir=/path/to/brand/res
+    // so a launcher icon, app label or splash can be replaced without anything in this
+    // tree changing. Absent by default, in which case the build is unaffected.
+    //
+    // The overlay goes into the build-type source sets, not main. The resource merger
+    // only overrides by name ACROSS source sets, and a build type outranks main; adding
+    // the directory to main merges it into the same source set instead, which fails with
+    // "Duplicate resources" for every name the overlay is meant to replace.
+    if (project.hasProperty('brandOverlayDir')) {
+        def brandOverlayDir = file(project.property('brandOverlayDir'))
+        if (!brandOverlayDir.isDirectory()) {
+            throw new GradleException("brandOverlayDir is not a directory: ${brandOverlayDir}")
+        }
+        buildTypes.all { buildType ->
+            sourceSets.getByName(buildType.name).res.srcDirs += brandOverlayDir
+        }
+        logger.lifecycle("Branding overlay for ${androidApplicationId}: ${brandOverlayDir}")
     }
 
     signingConfigs {

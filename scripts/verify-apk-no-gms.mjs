@@ -8,8 +8,7 @@
  * Google component. Mere code references to GMS symbols are NOT a hard
  * dependency (the GMS client libraries are designed to degrade gracefully), so
  * this static check intentionally only flags required manifest declarations.
- * The authoritative complement is a runtime launch test on a non-GMS image
- * (see docs/plans/callback8020/sailfish-callback-8020-emulation.md).
+ * The authoritative complement is a runtime launch test on a non-GMS image.
  *
  * Usage:
  *   node scripts/verify-apk-no-gms.mjs <apk> [--json]

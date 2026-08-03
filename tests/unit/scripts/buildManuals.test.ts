@@ -15,14 +15,13 @@ describe("manual generator", () => {
 
     expect(c64uRemote).toContain("# C64U Remote Manual");
     expect(c64uRemote).not.toContain("# C64 Commander Manual");
-    // C64U Remote targets the Commodore Callback 8020 phone: the name is
-    // established once, and the manual must never speak of a tablet.
-    expect(c64uRemote).toContain("Commodore Callback 8020");
+    // C64U Remote targets a compact keypad phone. The manual describes it generically
+    // rather than naming a model, so it survives new supported handsets, and it must
+    // never speak of a tablet.
+    expect(c64uRemote).toContain("It runs on a compact, keypad-first phone, which this guide simply calls your phone.");
     expect(c64uRemote).not.toMatch(/tablet/i);
-    // The broad C64 Commander edition also runs on tablets and never names the
-    // Callback 8020, so its wider phrasing stays intact.
+    // The broad C64 Commander edition also runs on tablets, so its wider phrasing stays intact.
     expect(c64Commander).toContain("phone or tablet");
-    expect(c64Commander).not.toContain("Callback 8020");
     expect(c64uRemote).toContain("profiles/compact/04-app-ready.png");
     expect(c64uRemote).toContain("HVSC preparation");
     // HVSC ships on in the keypad edition too, so the manual states that rather than telling the
@@ -35,6 +34,28 @@ describe("manual generator", () => {
     expect(c64Commander).toContain("profiles/medium/04-app-ready.png");
     expect(c64Commander).toContain("HVSC preparation");
     expect(c64Commander).toContain("On by default. You can change it in Settings > Stable Features.");
+  });
+
+  /**
+   * Both manuals describe the phone running the app through the naming helpers, never by
+   * model. A model name would date the manual and need revising for each newly supported
+   * handset.
+   *
+   * The guard is a shape rather than a list of names, deliberately: writing the names we
+   * do not want into a tracked file would put them back in the tree, which is what naming
+   * the device generically was for. A capitalised word followed by a four-digit number is
+   * the shape a handset model takes, and neither manual contains one today. Bare
+   * four-digit numbers are left alone because the manuals are full of legitimate ones -
+   * $0801, the 1541/1571/1581 drives, the 6581/8580 SIDs, 1982.
+   */
+  it("names no device model in either manual", async () => {
+    const contexts = await contextByVariant();
+    const modelShape = /\b[A-Z][A-Za-z]+[ -]?[0-9]{4}\b/;
+
+    for (const variantId of ["c64u-remote", "c64commander"]) {
+      const manual = renderManualMarkdown(contexts[variantId]);
+      expect(manual.match(modelShape)?.[0] ?? null).toBeNull();
+    }
   });
 
   it("documents each variant's supported machines and safety profile guidance", async () => {

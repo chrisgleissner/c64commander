@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import { resolveKeyboardProfile } from "@/lib/remoteInput/keyboardProfile";
 
 describe("resolveKeyboardProfile", () => {
-  it("classifies a tiny portrait content box (Callback 8020-like) as compact", () => {
+  it("classifies a tiny portrait content box (small keypad handset) as compact", () => {
     expect(resolveKeyboardProfile(300, 480)).toBe("compact");
     expect(resolveKeyboardProfile(240, 320)).toBe("compact");
   });

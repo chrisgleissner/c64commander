@@ -693,13 +693,13 @@ export type SidEmulationEngine = "residfp" | "sidlite";
  *
  * Measured like-for-like on identical tunes: reSIDfp runs at 4.3x realtime
  * (~39% of one core on a Pixel 4, zero underruns) and SIDLite at 23.8x. The
- * cheap engine is tempting for the keypad variant, which targets the Commodore
- * Callback 8020 — but that device is unreleased and cannot be measured.
+ * cheap engine is tempting for the keypad variant, which targets a low-power
+ * keypad handset — but that device is unreleased and cannot be measured.
  * Defaulting it to SIDLite on a spec-sheet projection would ship an audible
  * quality regression on the hardware that exists to protect hardware that does
  * not. Sounding like a C64 is the point of playing a SID.
  *
- * When the 8020 ships, measure it (gate L1) and flip
+ * When such a handset ships, measure it (gate L1) and flip
  * `default_sid_emulation_engine` in variants.yaml if it cannot hold realtime.
  */
 export const DEFAULT_SID_EMULATION_ENGINE: SidEmulationEngine =

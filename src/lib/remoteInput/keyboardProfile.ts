@@ -11,7 +11,7 @@
  * device name. Three profiles, deliberately named to match the app's global
  * display-profile vocabulary (`compact | medium | expanded`):
  *
- * - `compact`  — very small portrait displays (Callback 8020-like). A
+ * - `compact`  — very small portrait displays (small keypad handsets). A
  *                task-oriented controller: pinned cursor pad + high-value deck,
  *                the rest scrolls. NOT a physical C64 replica.
  * - `medium`   — normal phones. Recognizable C64 ordering with a protected

@@ -2,6 +2,7 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(
   path.dirname(new URL(import.meta.url).pathname),
@@ -29,7 +30,7 @@ const fileExists = async (filePath) => {
   }
 };
 
-const normalizeLicense = (value) => {
+export const normalizeLicense = (value) => {
   if (!value) return 'UNKNOWN';
   if (typeof value === 'string') return value;
   if (typeof value === 'object') {
@@ -47,12 +48,132 @@ const normalizeLicense = (value) => {
 const normalizeSource = (value) =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : '-';
 
+// 7-Zip is LGPL, but its RAR decompression carries a use restriction inherited from
+// unRAR. SPDX has no identifier for that restriction, so it is named after a WITH
+// operator and defined in the Licence notes section of the generated file.
+export const UNRAR_LICENSE_ID = 'LGPL-2.1-or-later WITH unRAR-restriction';
+
+export const LICENSE_NOTES = [
+  '## Licence notes',
+  '',
+  'Identifiers below that are not plain SPDX expressions are defined here.',
+  '',
+  `### ${UNRAR_LICENSE_ID}`,
+  '',
+  'The package is [LGPL-2.1-or-later](https://spdx.org/licenses/LGPL-2.1-or-later.html), with one additional restriction that SPDX has no identifier for. Its own `License.txt` states that the RAR decompression engine was developed from unRAR sources, and that:',
+  '',
+  '> The unRAR sources cannot be used to re-create the RAR compression algorithm, which is proprietary. Distribution of modified unRAR sources in separate form or as a part of other software is permitted, provided that it is clearly stated in the documentation and source comments that the code may not be used to develop a RAR (WinRAR) compatible archiver.',
+  '',
+  'The restriction attaches to the files implementing RAR support. The full text ships in the package as `License.txt` and `unRarLicense.txt`.',
+].join('\n');
+
+// A package may carry no SPDX `license` field at all, or set it to
+// "SEE LICENSE IN <file>", which npm defines as an instruction to read the bundled
+// licence text. Either way the package itself states its terms; the generator reads
+// that file rather than reporting the entry as UNKNOWN.
+const LICENSE_FILE_NAMES = [
+  'LICENSE',
+  'LICENCE',
+  'LICENSE.txt',
+  'LICENCE.txt',
+  'LICENSE.md',
+  'License.txt',
+  'license.txt',
+  'COPYING',
+  'COPYING.txt',
+];
+
+// Matched in order against the licence text with whitespace collapsed and lowercased,
+// so the more specific variant of a family must come first.
+const LICENSE_FINGERPRINTS = [
+  {
+    // 7-Zip is LGPL, but its RAR decompression carries a use restriction inherited from
+    // unRAR: the sources may not be used to build a RAR-compatible archiver. SPDX has no
+    // identifier for that restriction, so it is named after a WITH operator.
+    license: UNRAR_LICENSE_ID,
+    matches: (text) =>
+      text.includes('gnu lesser general public license') &&
+      text.includes('unrar restriction'),
+  },
+  {
+    license: 'LGPL-2.1-or-later',
+    matches: (text) =>
+      text.includes('gnu lesser general public license') &&
+      text.includes(
+        'version 2.1 of the license, or (at your option) any later version',
+      ),
+  },
+  {
+    license: 'MIT',
+    matches: (text) =>
+      text.includes('permission is hereby granted, free of charge') &&
+      text.includes(
+        'the above copyright notice and this permission notice shall be included',
+      ),
+  },
+  {
+    license: 'ISC',
+    matches: (text) =>
+      text.includes(
+        'permission to use, copy, modify, and/or distribute this software for any purpose',
+      ),
+  },
+  {
+    // The third clause is the only thing separating BSD-3-Clause from BSD-2-Clause.
+    license: 'BSD-3-Clause',
+    matches: (text) =>
+      text.includes('redistribution and use in source and binary forms') &&
+      text.includes('neither the name'),
+  },
+  {
+    license: 'BSD-2-Clause',
+    matches: (text) =>
+      text.includes('redistribution and use in source and binary forms') &&
+      text.includes('redistributions in binary form must reproduce'),
+  },
+  {
+    license: 'Apache-2.0',
+    matches: (text) =>
+      text.includes('apache license') && text.includes('version 2.0'),
+  },
+];
+
+const safeReadText = async (filePath) => {
+  try {
+    return await fs.readFile(filePath, 'utf8');
+  } catch (error) {
+    if (error?.code === 'ENOENT' || error?.code === 'EISDIR') return null;
+    throw error;
+  }
+};
+
+export const isUnresolvedLicense = (license) =>
+  !license || license === 'UNKNOWN' || /^SEE LICENSE IN\b/i.test(license);
+
+export const detectLicenseFromFiles = async (packageDir) => {
+  for (const fileName of LICENSE_FILE_NAMES) {
+    const text = await safeReadText(path.join(packageDir, fileName));
+    if (!text) continue;
+
+    const normalized = text.toLowerCase().replace(/\s+/g, ' ');
+    const fingerprint = LICENSE_FINGERPRINTS.find((candidate) =>
+      candidate.matches(normalized),
+    );
+    if (fingerprint) return fingerprint.license;
+  }
+  return null;
+};
+
 const licenseUrlFallbacks = new Map([
   ['JSON', 'https://www.json.org/license.html'],
   ['Public-Domain / BSD-style', 'https://tukaani.org/xz/java.html'],
+  // SPDX has no identifier for the unRAR restriction, so the link cannot point there.
+  // It points instead at the Licence notes section below, which states the restriction
+  // and links the base licence, so following the link is self-contained.
+  [UNRAR_LICENSE_ID, '#licence-notes'],
 ]);
 
-const resolveLicenseUrl = (license) => {
+export const resolveLicenseUrl = (license) => {
   if (!license || license === 'UNKNOWN') return '-';
 
   const fallback = licenseUrlFallbacks.get(license);
@@ -101,6 +222,11 @@ const collectNpmEntries = async () => {
       if (packageJson) {
         license = normalizeLicense(packageJson.license);
       }
+    }
+
+    if (isUnresolvedLicense(license)) {
+      const detected = await detectLicenseFromFiles(path.join(rootDir, lockPath));
+      if (detected) license = detected;
     }
 
     entriesByName.set(name, {
@@ -420,6 +546,12 @@ const main = async () => {
     (entry) => entry.license === 'UNKNOWN',
   ).length;
 
+  // Only emitted when an entry actually uses a non-SPDX identifier, so the anchor the
+  // table links to exists exactly when something links to it.
+  const needsLicenseNotes = allEntries.some(
+    (entry) => entry.license === UNRAR_LICENSE_ID,
+  );
+
   const markdown = [
     '# Third-Party Notices',
     '',
@@ -431,6 +563,7 @@ const main = async () => {
     '',
     renderNotices(allEntries),
     '',
+    ...(needsLicenseNotes ? [LICENSE_NOTES, ''] : []),
     DATA_NOTICES,
   ].join('\n');
 
@@ -452,7 +585,17 @@ const main = async () => {
   );
 };
 
-main().catch((error) => {
-  console.error('third-party notice generation failed', error);
-  process.exitCode = 1;
-});
+// Only generate when run as a script. The licence helpers above are imported by
+// tests, which must not trigger a full notices run as a side effect.
+const isDirectInvocation = () => {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  return path.resolve(entry) === fileURLToPath(import.meta.url);
+};
+
+if (isDirectInvocation()) {
+  main().catch((error) => {
+    console.error('third-party notice generation failed', error);
+    process.exitCode = 1;
+  });
+}
