@@ -41,7 +41,7 @@ Start with the walkthrough if you are new to the app. Use the reference sections
 
 ### Your C64 Ultimate
 
-C64U Remote is made for controlling a Commodore 64 Ultimate on your local network. It runs on the Commodore Callback 8020 — the compact, keypad-first phone it was designed for — which this guide simply calls your phone.
+C64U Remote is made for controlling a Commodore 64 Ultimate on your local network. It runs on a compact, keypad-first phone, which this guide simply calls your phone.
 
 Connection has three parts: your phone, the Commodore 64 Ultimate, and the local network between them.
 
