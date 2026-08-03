@@ -1741,7 +1741,7 @@ describe("SettingsPage", () => {
   it("enables developer mode after repeated taps", () => {
     renderSettingsPage();
 
-    const aboutCard = within(sectionBody("about")).getByRole("button", { name: /about/i });
+    const aboutCard = screen.getByTestId("settings-about-build-info");
     for (let i = 0; i < 7; i += 1) {
       fireEvent.click(aboutCard);
     }
@@ -1891,7 +1891,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    const aboutCard = within(sectionBody("about")).getByRole("button", { name: /about/i });
+    const aboutCard = screen.getByTestId("settings-about-build-info");
     for (let index = 0; index < 7; index += 1) {
       fireEvent.click(aboutCard);
     }
