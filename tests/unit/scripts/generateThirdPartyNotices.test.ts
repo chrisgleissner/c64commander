@@ -3,6 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  LICENSE_NOTES,
+  UNRAR_LICENSE_ID,
   detectLicenseFromFiles,
   isUnresolvedLicense,
   normalizeLicense,
@@ -127,7 +129,7 @@ describe("third-party notice licence resolution", () => {
 
       // The restriction is part of the identifier. Reporting the base licence alone would
       // hide a term that constrains what may be done with the package.
-      await expect(detectLicenseFromFiles(dir)).resolves.toBe("LGPL-2.1-or-later WITH unRAR-restriction");
+      await expect(detectLicenseFromFiles(dir)).resolves.toBe(UNRAR_LICENSE_ID);
     });
 
     it("does not attach the restriction to an LGPL package that has none", async () => {
@@ -166,12 +168,21 @@ describe("third-party notice licence resolution", () => {
       expect(resolveLicenseUrl("BSD-2-Clause")).toBe("https://spdx.org/licenses/BSD-2-Clause.html");
     });
 
-    it("links the restricted 7-Zip identifier to its base licence", () => {
+    it("links the restricted 7-Zip identifier to the notes that define it", () => {
       // A composite expression would otherwise render as a bare dash, which is unhelpful
-      // for the one entry whose terms most need looking up.
-      expect(resolveLicenseUrl("LGPL-2.1-or-later WITH unRAR-restriction")).toBe(
-        "https://spdx.org/licenses/LGPL-2.1-or-later.html",
-      );
+      // for the one entry whose terms most need looking up. SPDX cannot describe the
+      // restriction, so the link goes to the section of the generated file that does.
+      expect(resolveLicenseUrl(UNRAR_LICENSE_ID)).toBe("#licence-notes");
+    });
+
+    it("defines that identifier in a section the link actually resolves to", () => {
+      // A "#licence-notes" link is only useful if the heading GitHub slugs to that
+      // anchor is emitted, and if the section states the restriction rather than just
+      // naming it.
+      expect(LICENSE_NOTES).toContain("## Licence notes");
+      expect(LICENSE_NOTES).toContain(`### ${UNRAR_LICENSE_ID}`);
+      expect(LICENSE_NOTES).toContain("cannot be used to re-create the RAR compression algorithm");
+      expect(LICENSE_NOTES).toContain("https://spdx.org/licenses/LGPL-2.1-or-later.html");
     });
 
     it("gives no link for an unresolved licence", () => {

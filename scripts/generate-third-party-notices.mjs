@@ -48,6 +48,25 @@ export const normalizeLicense = (value) => {
 const normalizeSource = (value) =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : '-';
 
+// 7-Zip is LGPL, but its RAR decompression carries a use restriction inherited from
+// unRAR. SPDX has no identifier for that restriction, so it is named after a WITH
+// operator and defined in the Licence notes section of the generated file.
+export const UNRAR_LICENSE_ID = 'LGPL-2.1-or-later WITH unRAR-restriction';
+
+export const LICENSE_NOTES = [
+  '## Licence notes',
+  '',
+  'Identifiers below that are not plain SPDX expressions are defined here.',
+  '',
+  `### ${UNRAR_LICENSE_ID}`,
+  '',
+  'The package is [LGPL-2.1-or-later](https://spdx.org/licenses/LGPL-2.1-or-later.html), with one additional restriction that SPDX has no identifier for. Its own `License.txt` states that the RAR decompression engine was developed from unRAR sources, and that:',
+  '',
+  '> The unRAR sources cannot be used to re-create the RAR compression algorithm, which is proprietary. Distribution of modified unRAR sources in separate form or as a part of other software is permitted, provided that it is clearly stated in the documentation and source comments that the code may not be used to develop a RAR (WinRAR) compatible archiver.',
+  '',
+  'The restriction attaches to the files implementing RAR support. The full text ships in the package as `License.txt` and `unRarLicense.txt`.',
+].join('\n');
+
 // A package may carry no SPDX `license` field at all, or set it to
 // "SEE LICENSE IN <file>", which npm defines as an instruction to read the bundled
 // licence text. Either way the package itself states its terms; the generator reads
@@ -71,7 +90,7 @@ const LICENSE_FINGERPRINTS = [
     // 7-Zip is LGPL, but its RAR decompression carries a use restriction inherited from
     // unRAR: the sources may not be used to build a RAR-compatible archiver. SPDX has no
     // identifier for that restriction, so it is named after a WITH operator.
-    license: 'LGPL-2.1-or-later WITH unRAR-restriction',
+    license: UNRAR_LICENSE_ID,
     matches: (text) =>
       text.includes('gnu lesser general public license') &&
       text.includes('unrar restriction'),
@@ -148,12 +167,10 @@ export const detectLicenseFromFiles = async (packageDir) => {
 const licenseUrlFallbacks = new Map([
   ['JSON', 'https://www.json.org/license.html'],
   ['Public-Domain / BSD-style', 'https://tukaani.org/xz/java.html'],
-  // Links the base licence; the unRAR restriction itself is stated in the package's
-  // own License.txt and has no canonical URL.
-  [
-    'LGPL-2.1-or-later WITH unRAR-restriction',
-    'https://spdx.org/licenses/LGPL-2.1-or-later.html',
-  ],
+  // SPDX has no identifier for the unRAR restriction, so the link cannot point there.
+  // It points instead at the Licence notes section below, which states the restriction
+  // and links the base licence, so following the link is self-contained.
+  [UNRAR_LICENSE_ID, '#licence-notes'],
 ]);
 
 export const resolveLicenseUrl = (license) => {
@@ -529,6 +546,12 @@ const main = async () => {
     (entry) => entry.license === 'UNKNOWN',
   ).length;
 
+  // Only emitted when an entry actually uses a non-SPDX identifier, so the anchor the
+  // table links to exists exactly when something links to it.
+  const needsLicenseNotes = allEntries.some(
+    (entry) => entry.license === UNRAR_LICENSE_ID,
+  );
+
   const markdown = [
     '# Third-Party Notices',
     '',
@@ -540,6 +563,7 @@ const main = async () => {
     '',
     renderNotices(allEntries),
     '',
+    ...(needsLicenseNotes ? [LICENSE_NOTES, ''] : []),
     DATA_NOTICES,
   ].join('\n');
 

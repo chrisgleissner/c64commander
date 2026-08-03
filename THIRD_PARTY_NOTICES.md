@@ -324,7 +324,7 @@ Summary: 812 dependencies across NPM (795), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | @vitest/utils | 3.2.7 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/@vitest/utils/-/utils-3.2.7.tgz](https://registry.npmjs.org/@vitest/utils/-/utils-3.2.7.tgz) |
 | NPM | @xmldom/xmldom | 0.8.13 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/@xmldom/xmldom/-/xmldom-0.8.13.tgz](https://registry.npmjs.org/@xmldom/xmldom/-/xmldom-0.8.13.tgz) |
 | NPM | @yarnpkg/lockfile | 1.1.0 | [BSD-2-Clause](https://spdx.org/licenses/BSD-2-Clause.html) | [https://registry.npmjs.org/@yarnpkg/lockfile/-/lockfile-1.1.0.tgz](https://registry.npmjs.org/@yarnpkg/lockfile/-/lockfile-1.1.0.tgz) |
-| NPM | 7z-wasm | 1.2.0 | [LGPL-2.1-or-later WITH unRAR-restriction](https://spdx.org/licenses/LGPL-2.1-or-later.html) | [https://registry.npmjs.org/7z-wasm/-/7z-wasm-1.2.0.tgz](https://registry.npmjs.org/7z-wasm/-/7z-wasm-1.2.0.tgz) |
+| NPM | 7z-wasm | 1.2.0 | [LGPL-2.1-or-later WITH unRAR-restriction](#licence-notes) | [https://registry.npmjs.org/7z-wasm/-/7z-wasm-1.2.0.tgz](https://registry.npmjs.org/7z-wasm/-/7z-wasm-1.2.0.tgz) |
 | NPM | acorn | 8.16.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/acorn/-/acorn-8.16.0.tgz](https://registry.npmjs.org/acorn/-/acorn-8.16.0.tgz) |
 | NPM | acorn-jsx | 5.3.2 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/acorn-jsx/-/acorn-jsx-5.3.2.tgz](https://registry.npmjs.org/acorn-jsx/-/acorn-jsx-5.3.2.tgz) |
 | NPM | agent-base | 6.0.2 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/agent-base/-/agent-base-6.0.2.tgz](https://registry.npmjs.org/agent-base/-/agent-base-6.0.2.tgz) |
@@ -820,6 +820,18 @@ Summary: 812 dependencies across NPM (795), Gradle (13), CocoaPods (4), SwiftPM 
 | CocoaPods | CapacitorCordova | 6.2.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://github.com/ionic-team/capacitor](https://github.com/ionic-team/capacitor) |
 | CocoaPods | CapacitorFilesystem | 6.0.4 | [MIT](https://spdx.org/licenses/MIT.html) | [https://github.com/ionic-team/capacitor-plugins.git](https://github.com/ionic-team/capacitor-plugins.git) |
 | CocoaPods | CapacitorShare | 6.0.4 | [MIT](https://spdx.org/licenses/MIT.html) | [https://github.com/ionic-team/capacitor-plugins.git](https://github.com/ionic-team/capacitor-plugins.git) |
+
+## Licence notes
+
+Identifiers below that are not plain SPDX expressions are defined here.
+
+### LGPL-2.1-or-later WITH unRAR-restriction
+
+The package is [LGPL-2.1-or-later](https://spdx.org/licenses/LGPL-2.1-or-later.html), with one additional restriction that SPDX has no identifier for. Its own `License.txt` states that the RAR decompression engine was developed from unRAR sources, and that:
+
+> The unRAR sources cannot be used to re-create the RAR compression algorithm, which is proprietary. Distribution of modified unRAR sources in separate form or as a part of other software is permitted, provided that it is clearly stated in the documentation and source comments that the code may not be used to develop a RAR (WinRAR) compatible archiver.
+
+The restriction attaches to the files implementing RAR support. The full text ships in the package as `License.txt` and `unRarLicense.txt`.
 
 ## Data notices
 

@@ -7,8 +7,14 @@ set -eu
 # checks there without imposing them on anyone else. exec passes through the ref
 # list git supplies on stdin, and the local hook's exit status becomes this one.
 LOCAL_HOOK="$(git rev-parse --absolute-git-dir)/local-hooks/pre-push"
-if [ -x "$LOCAL_HOOK" ]; then
-  exec "$LOCAL_HOOK" "$@"
+if [ -e "$LOCAL_HOOK" ]; then
+  if [ -x "$LOCAL_HOOK" ]; then
+    exec "$LOCAL_HOOK" "$@"
+  fi
+  # Distinguish "no local hook" from "local hook that cannot run". Both would
+  # otherwise exit 0 silently, and someone who forgot chmod +x would believe
+  # their checks had passed.
+  printf '%s\n' "warning: $LOCAL_HOOK is not executable; skipping it (chmod +x to enable)" >&2
 fi
 
 exit 0
