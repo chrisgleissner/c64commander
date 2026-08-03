@@ -33,8 +33,10 @@ jobs:
     name: Variant | Resolve publish set
     runs-on: ubuntu-latest
     outputs:
-      publish_variants_json: ${{ steps.variant.outputs.publish_variants_json }}
-      publish_variants_csv: ${{ steps.variant.outputs.publish_variants_csv }}
+      ci_variants_json: ${{ steps.variant.outputs.ci_variants_json }}
+      ci_variants_csv: ${{ steps.variant.outputs.ci_variants_csv }}
+      release_variants_json: ${{ steps.variant.outputs.release_variants_json }}
+      release_variants_csv: ${{ steps.variant.outputs.release_variants_csv }}
 
     steps:
       - name: Checkout
@@ -61,8 +63,28 @@ jobs:
           import fs from 'node:fs';
 
           const config = JSON.parse(fs.readFileSync('src/generated/variant.json', 'utf8'));
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `publish_variants_json=${JSON.stringify(config.repo.selectedPublishVariants)}\n`);
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `publish_variants_csv=${config.repo.selectedPublishVariants.join(',')}\n`);
+
+          // The set of variants CI builds and verifies is not the same as the set it
+          // publishes, so each matrix resolves its own list. A workflow_dispatch
+          // override, when supplied, still replaces both.
+          const override = (process.env.APP_PUBLISH_VARIANTS ?? '')
+            .split(',')
+            .map((entry) => entry.trim())
+            .filter(Boolean);
+          const select = (target) => {
+            const selected = override.length > 0 ? override : config.repo.publishDefaults[target];
+            if (!selected || selected.length === 0) {
+              throw new Error(`repo.publishDefaults.${target} is missing or empty`);
+            }
+            return selected;
+          };
+          const ciVariants = select('ci');
+          const releaseVariants = select('release');
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `ci_variants_json=${JSON.stringify(ciVariants)}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `ci_variants_csv=${ciVariants.join(',')}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `release_variants_json=${JSON.stringify(releaseVariants)}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `release_variants_csv=${releaseVariants.join(',')}\n`);
           NODE
 
   notices:
@@ -1481,11 +1503,11 @@ jobs:
       HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && 'true' || 'false' }}
       GRADLE_MAX_WORKERS: "6"
       APP_VARIANT: ${{ matrix.variant }}
-      APP_PUBLISH_VARIANTS: ${{ needs.variant-selection.outputs.publish_variants_csv }}
+      APP_PUBLISH_VARIANTS: ${{ needs.variant-selection.outputs.ci_variants_csv }}
     strategy:
       fail-fast: false
       matrix:
-        variant: ${{ fromJson(needs.variant-selection.outputs.publish_variants_json) }}
+        variant: ${{ fromJson(needs.variant-selection.outputs.ci_variants_json) }}
 
     steps:
       - name: Checkout
@@ -1715,14 +1737,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: ${{ fromJson(needs.variant-selection.outputs.publish_variants_json) }}
+        variant: ${{ fromJson(needs.variant-selection.outputs.release_variants_json) }}
     permissions:
       contents: write
     env:
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && 'true' || 'false' }}
       APP_VARIANT: ${{ matrix.variant }}
-      APP_PUBLISH_VARIANTS: ${{ needs.variant-selection.outputs.publish_variants_csv }}
+      APP_PUBLISH_VARIANTS: ${{ needs.variant-selection.outputs.release_variants_csv }}
 
     steps:
       - name: Checkout

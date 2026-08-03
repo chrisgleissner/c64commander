@@ -373,9 +373,9 @@ describe("real variants.yaml — c64u-remote migration", () => {
     });
   });
 
-  it("publishes both c64commander and c64u-remote on release and ci", () => {
-    expect(config.repo.publishDefaults.release).toEqual(["c64commander", "c64u-remote"]);
+  it("builds both variants on ci and publishes only the release list", () => {
     expect(config.repo.publishDefaults.ci).toEqual(["c64commander", "c64u-remote"]);
+    expect(config.repo.publishDefaults.release).toEqual(["c64commander"]);
   });
 
   it("retains no stale c64u-controller variant", () => {

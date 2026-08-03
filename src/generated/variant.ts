@@ -16,9 +16,9 @@ export const variantConfig = {
     defaultVariant: "c64commander",
     publishDefaults: {
       ci: ["c64commander", "c64u-remote"],
-      release: ["c64commander", "c64u-remote"],
+      release: ["c64commander"],
     },
-    selectedPublishVariants: ["c64commander", "c64u-remote"],
+    selectedPublishVariants: ["c64commander"],
   },
   schemaVersion: 1,
   selectedVariantId: "c64commander",

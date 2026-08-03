@@ -3,9 +3,10 @@ schema_version: 1
 repo:
   default_variant: c64commander
   publish_defaults:
+    # Variants attached to a GitHub release.
     release:
       - c64commander
-      - c64u-remote
+    # Variants built, packaged and verified on every CI run.
     ci:
       - c64commander
       - c64u-remote
