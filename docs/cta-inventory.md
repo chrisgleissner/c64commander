@@ -382,9 +382,15 @@ opens on a first visit; every other section starts closed, and which are open is
 section headers, **OK descends** into a section, **Back** leaves it — the same rule the rest of
 the app follows.
 
-Sections, in page order: `appearance`, `connection`, `diagnostics`, `play-and-disk`, the
-feature-flag groups, SID Radio, `hvsc`, `online-archive`, `device-safety`, `notifications`,
-`about`.
+Sections, in page order: `appearance`, `connection`, `diagnostics`, `play-and-disk`,
+`feature-group-stable`, `feature-group-experimental`, `sid-radio`, `hvsc`, `online-archive`,
+`device-safety`, `notifications`, `about`. Every block on the page is one of these — there is no
+always-expanded card left. The two feature-flag chapters carry an "N/M on" badge, so how many
+flags are set is readable without opening them.
+
+Making SID Radio a chapter also unblocked the keypad: its minimum-song-length number input was a
+top-level ring stop, and Up/Down on a number input changes its value, so the ring could not get
+past it to anything below.
 
 - **Display**: Theme (Auto/Light/Dark) — segmented buttons — R✅ I✅ ; Display
   profile (Small/Standard/Large/Auto) — segmented — R✅ I✅ ; Orientation
