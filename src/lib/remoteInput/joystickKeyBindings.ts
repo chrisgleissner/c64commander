@@ -99,14 +99,30 @@ export const CLASSIC_T9_BINDING: JoystickKeyBinding = {
 /**
  * A hardware D-pad steers whatever else is bound, and turns with the chassis in
  * the same way, so a device with both a D-pad and a keypad keeps both working.
+ *
+ * A slot may answer to more than one action because the D-pad's centre key does not
+ * arrive as one thing. Measured on a Pixel 4, Android delivers `KEYCODE_DPAD_CENTER`
+ * to the WebView as `key: "Enter"`, `keyCode: 13` and an EMPTY `code` — a DOM
+ * `KeyboardEvent` carries the DOM key code, never the Android one — so the `keypad`
+ * profile's `DpadCenter`/`23` bindings never match and the press resolves to `enter`.
+ * With `fire` bound to `center` alone, the most natural fire button on the hardware
+ * this feature exists for did nothing at all.
+ *
+ * Both are listed rather than one being rewritten into the other, because `center`
+ * IS what a WebView that reports the named code sends, and a desktop keyboard's
+ * Space still has to fire.
  */
-const DPAD_BINDING: JoystickKeyBinding = {
-  up: "dpadUp",
-  down: "dpadDown",
-  left: "dpadLeft",
-  right: "dpadRight",
-  fire: "center",
-};
+const DPAD_BINDING: readonly { slot: JoystickSlot; actions: readonly SemanticAction[] }[] = [
+  { slot: "up", actions: ["dpadUp"] },
+  { slot: "down", actions: ["dpadDown"] },
+  { slot: "left", actions: ["dpadLeft"] },
+  { slot: "right", actions: ["dpadRight"] },
+  { slot: "fire", actions: ["center", "enter"] },
+];
+
+/** Slots the always-on D-pad map drives for `action`. */
+const dpadSlotsForAction = (action: SemanticAction): JoystickSlot[] =>
+  DPAD_BINDING.filter((entry) => entry.actions.includes(action)).map((entry) => entry.slot);
 
 /**
  * Actions that already do something inside the sheet and so may not be bound to a
@@ -156,7 +172,7 @@ export const resolveJoystickInputs = (
   rotation: DeviceRotation = 0,
 ): JoystickInputName[] => {
   if (isReservedJoystickAction(action)) return [];
-  const slots = [...slotsForAction(binding, action), ...slotsForAction(DPAD_BINDING, action)];
+  const slots = [...slotsForAction(binding, action), ...dpadSlotsForAction(action)];
   const inputs = new Set<JoystickInputName>();
   slots.forEach((slot) => {
     SLOT_INPUTS[rotateSlot(slot, rotation)].forEach((input) => inputs.add(input));

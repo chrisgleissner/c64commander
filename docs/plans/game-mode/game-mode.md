@@ -835,7 +835,7 @@ physical relay ─┘   (the sheet feeds the modality as well as reading it)
 | GM-3 | Closing the sheet stops only the streams that launch started; exiting game mode without closing stops nothing. |
 | GM-4 | Turning Watch off inside game mode is remembered: the next Game Mode launch opens without a picture, with no Settings visit and no prompt. |
 | GM-5 | Watch and Listen are reachable from inside game mode in every configuration, including chrome hidden with no touchscreen (`#`). |
-| GM-6 | Game mode is never blank: with the video mirror off, the on-screen controls are shown whatever the modality and the setting say. |
+| GM-6 | Game mode is never blank by accident: with the video mirror off and the setting on **Auto**, the on-screen controls are shown whatever the modality says. The guard applies to `Auto` only, because only `Auto` guesses — a user who chose **Never show** has said they are driving with physical keys, and overriding that reads as the setting being broken. The sheet still has the floating **Controls** handle and `#`. |
 | GM-6a | With the setting on **Auto**, the on-screen controls are hidden while the modality is `key-navigation` and shown while it is `pointer`; **Always show** and **Never show** override both. |
 | GM-6b | A physical key relayed to the joystick sets the modality to `key-navigation`, so the controls hide during play on a keypad handset without the user asking. |
 | GM-7 | Physical keys resolve through the active binding permuted by `deviceRotation`, in game mode and in the ordinary joystick sheet. |
@@ -883,9 +883,9 @@ physical relay ─┘   (the sheet feeds the modality as well as reading it)
   `RemoteInputSheet` intercepts the key without reporting it.
 - With controls hidden **and the picture live**, `VirtualJoystick` is absent and
   `av-mirror-immersive` is present; the restore handle brings the chrome back.
-- With controls hidden **and the video mirror off**, `VirtualJoystick` is present (GM-6) —
-  the guard against a blank sheet, and the test that fails if the hide rule is written
-  without the "while the picture is live" condition.
+- With controls hidden **and the video mirror off**, and the setting on **Auto**,
+  `VirtualJoystick` is present (GM-6) — the guard against a blank sheet, and the test that
+  fails if the hide rule is written without the "while the picture is live" condition.
 - Turning Watch off in game mode writes the preference, and a subsequent launch does not
   call `startVideo` (GM-4).
 - Rotation change while a key is held emits one held-set update, releasing the old input

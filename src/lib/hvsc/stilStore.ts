@@ -73,9 +73,10 @@ const mockedStil = (): Record<string, StilEntry> | null => {
 /**
  * FNV-1a over the lowercased path, finished with an avalanche step.
  *
- * Lowercased so that a lookup cannot miss on a case difference between the archive listing and
- * STIL's own spelling. That is safe here: the real document has no two entries whose paths differ
- * only by case, so the fold cannot merge two distinct tunes.
+ * Lowercased so that a path spelled differently by the archive listing and by STIL still lands in
+ * the same shard — which is what makes {@link findInShard}'s fallback able to find it at all. That
+ * is safe here: the real document has no two entries whose paths differ only by case, so the fold
+ * cannot merge two distinct tunes.
  *
  * The avalanche is not decoration. FNV-1a's low bits mix poorly, and taking a shard number straight
  * from them means highly patterned inputs — which is exactly what these paths are, a fixed prefix
@@ -230,14 +231,37 @@ export const ingestStilText = async (text: string, release: number): Promise<num
   return entries.size;
 };
 
+/**
+ * Find a path in a shard, ignoring case when the exact spelling is not there.
+ *
+ * {@link shardForPath} hashes the lowercased path so a case difference between the archive listing
+ * and STIL's own spelling still lands in the same shard. That was only half of it: the shard is a
+ * plain object keyed by the path as written, so the lookup inside it still had to match exactly and
+ * the fold bought nothing. STIL is a hand-maintained document and does write `.SID` in places.
+ *
+ * The scan runs only when the exact key misses, and a shard holds a few hundred entries, so a hit
+ * costs one property read and a miss costs one pass over a shard already in memory. Deliberately
+ * not a rebuild of the store into folded keys: that would make every installed library re-download
+ * and re-parse 3.7 MB to fix a lookup that can be fixed here.
+ */
+const findInShard = (shard: Shard, virtualPath: string): StilEntry | null => {
+  const exact = shard[virtualPath];
+  if (exact) return exact;
+  const folded = virtualPath.toLowerCase();
+  for (const key of Object.keys(shard)) {
+    if (key.toLowerCase() === folded) return shard[key] as StilEntry;
+  }
+  return null;
+};
+
 /** Everything STIL says about one file, including its per-tune blocks. */
 export const getStilEntry = async (virtualPath: string): Promise<StilEntry | null> => {
   if (!virtualPath) return null;
   const mock = mockedStil();
-  if (mock) return mock[virtualPath] ?? null;
+  if (mock) return findInShard(mock, virtualPath);
   if (!(await isStilInstalled())) return null;
   const shard = await readShard(shardForPath(virtualPath));
-  return shard?.[virtualPath] ?? null;
+  return shard ? findInShard(shard, virtualPath) : null;
 };
 
 /** What STIL says about one tune, falling back to what it says about the file. */

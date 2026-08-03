@@ -74,6 +74,13 @@ const ASSUMED_RATIO = 2;
 
 let cached: number | null = null;
 /**
+ * How many measurements have been folded in this session.
+ *
+ * Kept because {@link accurateEngineViable} may only demote the renderer on evidence, and one
+ * chunk is not evidence. See {@link MIN_SAMPLES_TO_DEMOTE}.
+ */
+let samples = 0;
+/**
  * Whether `cached` came from a measurement rather than from {@link ASSUMED_RATIO}.
  *
  * `renderRatio()` deliberately never returns null — the startup buffer has to be sized before
@@ -105,8 +112,14 @@ export const renderRatio = (): number => {
   if (cached === null) {
     const stored = readStored();
     // A remembered ratio is still a measurement — it was measured in an earlier session — so it
-    // counts as evidence. The assumption does not.
-    if (stored !== null) measured = true;
+    // counts as evidence. The assumption does not. It also counts as ALREADY past the demotion
+    // threshold: it is the settled average of an earlier session's samples, not a single reading,
+    // so a device measured too slow yesterday must not be handed the accurate renderer again today
+    // while this session works its way back up to five samples.
+    if (stored !== null) {
+      measured = true;
+      samples = Math.max(samples, MIN_SAMPLES_TO_DEMOTE);
+    }
     cached = stored ?? ASSUMED_RATIO;
   }
   return cached;
@@ -136,6 +149,7 @@ export const recordRenderMeasurement = (audioSeconds: number, wallMs: number): v
   if (ratio < MIN_PLAUSIBLE_RATIO || ratio > MAX_PLAUSIBLE_RATIO) return;
   const next = cached === null ? ratio : cached * (1 - SMOOTHING) + ratio * SMOOTHING;
   cached = next;
+  samples += 1;
   measured = true;
   try {
     globalThis.localStorage?.setItem(STORAGE_KEY, String(next));
@@ -173,21 +187,39 @@ export const startupBufferMs = (): number => Math.round(startupBufferSeconds() *
 const VIABLE_RATIO = 1.15;
 
 /**
+ * Measurements needed before the ratio is allowed to demote the renderer.
+ *
+ * The smoothing is 0.2, so the first sample carries the whole estimate and the second still carries
+ * a fifth of it. A launch, a screen rotation or a config read landing on the same thread as one
+ * chunk is enough to put a single ratio under {@link VIABLE_RATIO} — and demotion is audible, so
+ * paying for it with one chunk's evidence is the wrong trade. Five samples is about two and a half
+ * seconds of rendering on a device that is keeping up, which is long enough for a transient to have
+ * been averaged away and short enough that a device which genuinely cannot manage is caught inside
+ * the first tune.
+ *
+ * A ratio restored from storage counts as fully evidenced: it is the settled result of an earlier
+ * session's samples, not a single reading.
+ */
+const MIN_SAMPLES_TO_DEMOTE = 5;
+
+/**
  * Whether the accurate emulation can keep up here.
  *
  * SIDLite is the cheaper renderer, and materially so. It does not sound the same — see
  * `local-sid-engine-residfp-and-roms` — so it is a fallback rather than a choice, taken only when the
  * accurate one has been measured failing to keep pace. Sounding slightly different beats pausing.
  *
- * Deliberately requires several measurements first: one slow chunk during a launch or a screen rotation
- * is not evidence that a device cannot manage.
+ * Requires several measurements first: one slow chunk during a launch or a screen rotation is not
+ * evidence that a device cannot manage. Before that threshold the accurate renderer is kept, which
+ * is the same answer an unmeasured device already got.
  */
-export const accurateEngineViable = (): boolean => cached === null || cached >= VIABLE_RATIO;
+export const accurateEngineViable = (): boolean => renderRatio() >= VIABLE_RATIO || samples < MIN_SAMPLES_TO_DEMOTE;
 
 /** Test seam: forget what has been learned. */
 export const __resetRenderThroughput = (): void => {
   cached = null;
   measured = false;
+  samples = 0;
   try {
     globalThis.localStorage?.removeItem(STORAGE_KEY);
   } catch (error) {

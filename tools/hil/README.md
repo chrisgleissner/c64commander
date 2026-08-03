@@ -10,6 +10,65 @@ physical rig), while the host-deterministic budget checks run in CI.
 - **`av_sync_hil.py`** — Live View A/V sync + input latency. See **A/V sync** below.
 - **`seek_latency_hil.py`** — what a backward seek costs the listener, measured at the speaker.
   See **Seek latency** below.
+- **`joystick_rotation_hil.mjs`** — physical keys → joystick, asserted on the C64's own screen at
+  three handset orientations. See **Physical keys and rotation** below. This one is the exception to
+  "no raw ADB product input": the thing under test IS Android's key pipeline, so the keys have to
+  enter the app the way a handset's keypad enters it.
+
+## Physical keys and rotation
+
+`joystick_rotation_hil.mjs` answers a question no unit test can: did the key the player pressed
+reach the machine as the direction they expected, after the handset was turned?
+
+`joystickKeyBindings.test.ts` proves the app computes the right joystick line for a key at a
+rotation. Everything past that pure function — the held-set merge, the relay's coalescing,
+`machine:input`, and the CIA — is out of its reach, and each of those has broken this feature
+before. So the assertion is made where the player would make it: on the screen.
+
+The C64 runs `tools/c64/joystick-probe.asm`, written for this and nothing else. A filled PETSCII
+circle moves one cell per joystick press; fire advances its colour and sounds a short blip on SID
+voice 1. State is published in plain RAM at `$C000` (position, colour, per-direction press counts,
+fire count, a magic marker and a frame counter), so a run reads it over
+`GET /v1/machine:readmem` without parsing the display — and then checks the display anyway, because
+that is what the player sees and the two must agree.
+
+Movement is **edge-triggered, one cell per press**. A held direction moves the circle a distance
+that depends on how long the key was down, which over a network relay is not a quantity a test can
+predict. One cell per new press is the same answer every time.
+
+```bash
+# The probe is committed pre-assembled; rebuild it with 64tass after editing the source:
+64tass --cbm-prg -o tools/c64/joystick-probe.prg tools/c64/joystick-probe.asm
+
+# App foregrounded on the phone, CDP forwarded (see the hil-attach skill):
+node tools/hil/joystick_rotation_hil.mjs --rotations 0,90,270
+```
+
+Rotation is set through the sheet's manual override rather than by turning the phone, because a
+test rig cannot turn a phone. The override is not a test seam — it is the shipped control for a
+player lying down or a handset whose sensor cannot answer — and it sets the same `deviceRotation`
+the sensor path sets. The sensor path's own quantiser is covered by `DeviceRotationPluginTest.kt`
+and `deviceRotation.test.ts`.
+
+### Verified on the Pixel 4, 2026-08-04 — 30/30 against the C64U (fw 1.2.0, core 1.4D)
+
+Ten keys (T9 `2/4/6/8/5` and D-pad up/down/left/right/centre) at 0°, 90° and 270°. The run found
+one defect: **the D-pad centre key fired nothing**. Android delivers `KEYCODE_DPAD_CENTER` to the
+WebView as `key: "Enter"`, `code: ""`, `keyCode: 13` — a DOM `KeyboardEvent` carries the DOM key
+code, never the Android one — so the `keypad` profile's `{ code: "DpadCenter" }` and
+`{ keyCode: 23 }` bindings could not match and the press resolved to `enter`, which the `fire` slot
+was not bound to. Fixed by binding the D-pad's fire slot to both actions; the run went 27/30 → 30/30
+on the same hardware.
+
+### Two traps this rig has already paid for
+
+- **`run_prg` types RUN into the keyboard matrix.** A key press shorts a matrix COLUMN to a row,
+  and the columns are `$DC00` — the same register the joystick is read from. `N` sits on column 4,
+  which is the fire bit, so every start produced one phantom fire. The probe discards its first
+  second and seeds its baseline from the mask left at the end of it.
+- **`jsr` clobbers the accumulator.** Shifting the edge mask along in `A` across the direction
+  handlers made one press arrive as up, down, left, right and fire together — a fault that looks
+  exactly like the app relaying garbage. Each bit is re-read from memory instead.
 
 ## Audio overlap + transport
 

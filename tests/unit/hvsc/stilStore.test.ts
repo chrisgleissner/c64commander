@@ -136,6 +136,29 @@ describe("stilStore", () => {
       shardForPath("/musicians/h/hubbard_rob/commando.SID"),
     );
   });
+
+  /**
+   * Landing in the right shard was only half of the case-insensitive lookup the hash was written
+   * for. A shard is a plain object keyed by the path as STIL spells it, so the lookup inside it
+   * still had to match exactly and a browse index that wrote `.SID` where STIL wrote `.sid` found
+   * nothing — the tune showed no notes and no original composer, with no error anywhere.
+   */
+  it("finds an entry whose stored spelling differs only by case", async () => {
+    await writeStilShards(parseStil(DOCUMENT), 84);
+    const entry = await getStilEntry("/MUSICIANS/H/Hubbard_Rob/COMMANDO.SID");
+    expect(entry?.comment).toContain("arrangement");
+  });
+
+  it("still prefers the exact spelling when both are present", async () => {
+    await writeStilShards(
+      new Map([
+        ["/MUSICIANS/H/Hubbard_Rob/Commando.sid", { comment: "exact" }],
+        ["/MUSICIANS/H/Hubbard_Rob/COMMANDO.SID", { comment: "folded" }],
+      ]),
+      84,
+    );
+    expect((await getStilEntry("/MUSICIANS/H/Hubbard_Rob/Commando.sid"))?.comment).toBe("exact");
+  });
 });
 
 describe("clearing the store while a read is in flight", () => {

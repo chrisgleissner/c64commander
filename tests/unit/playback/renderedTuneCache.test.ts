@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { RenderedTuneCache, DEFAULT_MAX_TUNES } from "@/lib/playback/renderedTuneCache";
+// The ROM images are 8 KB each and fingerprint-checked, so the cheapest honest way to say
+// "this device can run the accurate emulation" is to answer the one question the key asks.
+const romsPresent = vi.hoisted(() => ({ value: true }));
+vi.mock("@/lib/roms/romStore", () => ({
+  hasCompleteRomSet: () => romsPresent.value,
+}));
+
+import { buildRenderedTuneKey, RenderedTuneCache, DEFAULT_MAX_TUNES } from "@/lib/playback/renderedTuneCache";
 
 /**
  * Rendered audio is big — 48 kHz stereo 16-bit is 192 KB per second, so a
@@ -98,5 +105,43 @@ describe("seeking from a cached render", () => {
     // Seeking past the end clamps rather than reading out of bounds.
     const past = Math.min(hit.pcm.length, Math.floor(99 * hit.sampleRate) * hit.channels);
     expect(past).toBe(hit.pcm.length);
+  });
+});
+
+/**
+ * The cache holds fully-rendered PCM, so anything that changes what a render sounds like has to
+ * separate one key from another. Without that, changing the setting keeps serving audio produced
+ * under the old one — and the pre-rendered lead-in of the next track hands over to live rendering
+ * under the new one part-way through, which is a change of timbre mid-tune.
+ */
+describe("buildRenderedTuneKey", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    romsPresent.value = true;
+  });
+
+  it("separates the two tunes of one file", () => {
+    expect(buildRenderedTuneKey("item", 0)).not.toBe(buildRenderedTuneKey("item", 1));
+  });
+
+  it("separates the fallback SID chips", () => {
+    localStorage.setItem("c64u_local_sid_model", "6581");
+    const on6581 = buildRenderedTuneKey("item", 0);
+    localStorage.setItem("c64u_local_sid_model", "8580");
+    expect(buildRenderedTuneKey("item", 0)).not.toBe(on6581);
+  });
+
+  it("separates the two emulations", () => {
+    localStorage.setItem("c64u_sid_emulation_engine", "residfp");
+    const accurate = buildRenderedTuneKey("item", 0);
+    localStorage.setItem("c64u_sid_emulation_engine", "sidlite");
+    expect(buildRenderedTuneKey("item", 0)).not.toBe(accurate);
+  });
+
+  it("separates a render made without the ROMs, which is SIDLite whatever the setting says", () => {
+    localStorage.setItem("c64u_sid_emulation_engine", "residfp");
+    const withRoms = buildRenderedTuneKey("item", 0);
+    romsPresent.value = false;
+    expect(buildRenderedTuneKey("item", 0)).not.toBe(withRoms);
   });
 });

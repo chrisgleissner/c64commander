@@ -7,7 +7,8 @@
  */
 
 import { addLog } from "@/lib/logging";
-import { resolveLocalSidModel } from "@/lib/config/appSettings";
+import { effectiveSidEmulationEngine, resolveLocalSidModel } from "@/lib/config/appSettings";
+import { hasCompleteRomSet } from "@/lib/roms/romStore";
 
 /**
  * The cache key for one rendered tune.
@@ -15,14 +16,24 @@ import { resolveLocalSidModel } from "@/lib/config/appSettings";
  * Item and tune, because two tunes of one file are different music. The `tuneIndex` is the
  * zero-based index handed to the engine, not the one-based number shown to the listener, so the key
  * names the tune that was actually rendered rather than the one that was asked for — see
- * `sidTuneIndex`. The fallback SID chip is in the key too, because it changes what the render sounds
- * like: without it, switching chip would keep serving PCM produced by the previous one, and a
- * lead-in cached under the old chip would hand over to live rendering under the new one part-way
- * through a track. Entries keyed to a chip the listener has moved away from are simply never read
- * again and fall out of the LRU window.
+ * `sidTuneIndex`.
+ *
+ * Everything that changes what the render SOUNDS like belongs in the key, or the cache serves audio
+ * produced under settings the listener has since moved away from — and a lead-in cached under the
+ * old ones hands over to live rendering under the new ones part-way through a track.
+ *
+ * Two things do:
+ *
+ *  - the fallback SID chip, for a tune whose header does not name one;
+ *  - the emulation itself. reSIDfp and SIDLite do not sound alike — that difference is the whole
+ *    reason the accurate one is preferred — and which is in use is not fixed for a session: it
+ *    follows a Settings control, and it drops to SIDLite on its own when the ROMs are missing.
+ *
+ * Entries keyed to settings the listener has left are simply never read again and fall out of the
+ * LRU window.
  */
 export const buildRenderedTuneKey = (itemId: string, tuneIndex: number): string =>
-  `${itemId}#${tuneIndex}@${resolveLocalSidModel()}`;
+  `${itemId}#${tuneIndex}@${resolveLocalSidModel()}/${effectiveSidEmulationEngine(hasCompleteRomSet())}`;
 
 /**
  * A rolling cache of fully-rendered tunes, so seeking is instant.
