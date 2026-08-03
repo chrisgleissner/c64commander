@@ -330,9 +330,10 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
   // decision, not a taste one: measured like-for-like, reSIDfp costs ~5.5x
   // SIDLite (4.3x realtime vs 23.8x on the same tunes), and a Pixel 4 spends
   // ~39% of a core on it. The keypad variant targets low-power handsets whose
-  // single-thread performance is roughly 2-3x below the Pixel's Snapdragon 855,
-  // where reSIDfp would land at or past realtime, so such a variant can default
-  // to the cheap engine.
+  // single-thread performance is projected at roughly 2-3x below the Pixel's
+  // Snapdragon 855. That projection is not sufficient to flip the default:
+  // every variant stays on reSIDfp until measurement on the real hardware shows
+  // it cannot hold realtime there.
   const defaultSidEmulationEngine =
     runtime.default_sid_emulation_engine !== undefined
       ? requireOneOf(

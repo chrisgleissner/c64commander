@@ -36,6 +36,28 @@ describe("manual generator", () => {
     expect(c64Commander).toContain("On by default. You can change it in Settings > Stable Features.");
   });
 
+  /**
+   * Both manuals describe the phone running the app through the naming helpers, never by
+   * model. A model name would date the manual and need revising for each newly supported
+   * handset.
+   *
+   * The guard is a shape rather than a list of names, deliberately: writing the names we
+   * do not want into a tracked file would put them back in the tree, which is what naming
+   * the device generically was for. A capitalised word followed by a four-digit number is
+   * the shape a handset model takes, and neither manual contains one today. Bare
+   * four-digit numbers are left alone because the manuals are full of legitimate ones -
+   * $0801, the 1541/1571/1581 drives, the 6581/8580 SIDs, 1982.
+   */
+  it("names no device model in either manual", async () => {
+    const contexts = await contextByVariant();
+    const modelShape = /\b[A-Z][A-Za-z]+[ -]?[0-9]{4}\b/;
+
+    for (const variantId of ["c64u-remote", "c64commander"]) {
+      const manual = renderManualMarkdown(contexts[variantId]);
+      expect(manual.match(modelShape)?.[0] ?? null).toBeNull();
+    }
+  });
+
   it("documents each variant's supported machines and safety profile guidance", async () => {
     const contexts = await contextByVariant();
     const c64uRemote = renderManualMarkdown(contexts["c64u-remote"]);

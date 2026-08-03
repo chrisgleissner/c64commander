@@ -2,6 +2,7 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(
   path.dirname(new URL(import.meta.url).pathname),
@@ -29,7 +30,7 @@ const fileExists = async (filePath) => {
   }
 };
 
-const normalizeLicense = (value) => {
+export const normalizeLicense = (value) => {
   if (!value) return 'UNKNOWN';
   if (typeof value === 'string') return value;
   if (typeof value === 'object') {
@@ -127,10 +128,10 @@ const safeReadText = async (filePath) => {
   }
 };
 
-const isUnresolvedLicense = (license) =>
+export const isUnresolvedLicense = (license) =>
   !license || license === 'UNKNOWN' || /^SEE LICENSE IN\b/i.test(license);
 
-const detectLicenseFromFiles = async (packageDir) => {
+export const detectLicenseFromFiles = async (packageDir) => {
   for (const fileName of LICENSE_FILE_NAMES) {
     const text = await safeReadText(path.join(packageDir, fileName));
     if (!text) continue;
@@ -155,7 +156,7 @@ const licenseUrlFallbacks = new Map([
   ],
 ]);
 
-const resolveLicenseUrl = (license) => {
+export const resolveLicenseUrl = (license) => {
   if (!license || license === 'UNKNOWN') return '-';
 
   const fallback = licenseUrlFallbacks.get(license);
@@ -560,7 +561,17 @@ const main = async () => {
   );
 };
 
-main().catch((error) => {
-  console.error('third-party notice generation failed', error);
-  process.exitCode = 1;
-});
+// Only generate when run as a script. The licence helpers above are imported by
+// tests, which must not trigger a full notices run as a side effect.
+const isDirectInvocation = () => {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  return path.resolve(entry) === fileURLToPath(import.meta.url);
+};
+
+if (isDirectInvocation()) {
+  main().catch((error) => {
+    console.error('third-party notice generation failed', error);
+    process.exitCode = 1;
+  });
+}
