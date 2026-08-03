@@ -3015,7 +3015,11 @@ export default function SettingsPage() {
               className="cursor-pointer space-y-2 text-sm"
               onClick={handleDeveloperTap}
               role="button"
-              aria-label="About"
+              // Named for what it shows, not for the chapter it sits in: the chapter header is
+              // already called "About", and two buttons of that name on one page is ambiguous
+              // for a screen reader and for anything else that navigates by name.
+              aria-label="Build information"
+              data-testid="settings-about-build-info"
               tabIndex={0}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
