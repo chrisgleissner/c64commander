@@ -206,10 +206,25 @@ jobs:
       - name: Run HVSC microbenchmarks
         run: npm run test:bench
 
+      # The perf scenarios drive a preview server through Playwright, whose webServer has a
+      # 120 s timeout. With no dist present that command builds the app first, so the build
+      # raced the timeout and lost on a slow runner (b29002a5), and each of the two perf steps
+      # paid for its own build. Building once here takes the build out of the race. The env
+      # matches the one playwright.config.ts bakes into its own build command, so the dist the
+      # scenarios measure is the same one they would have produced themselves.
+      - name: Build the web app for the perf scenarios
+        env:
+          VITE_ENABLE_TEST_PROBES: "1"
+        run: npm run build
+
       - name: Collect quick HVSC full scenario summary
+        env:
+          PLAYWRIGHT_SKIP_BUILD: "1"
         run: npm run test:perf:quick
 
       - name: Collect quick HVSC secondary summary
+        env:
+          PLAYWRIGHT_SKIP_BUILD: "1"
         run: npm run test:perf:secondary:quick
 
       - name: Apply optional perf budgets
