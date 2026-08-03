@@ -93,6 +93,32 @@ export const resolvePickerConfirm = (
   return { label: PICKER_PLAY_LABEL, launches: true };
 };
 
+/**
+ * Run what confirming the picker does: add the selections, then launch when confirm means Play.
+ *
+ * The launch is deliberately not allowed to fail the add. By the time it runs the item is
+ * already in the playlist, so letting a rejection through would make the picker report
+ * "Add items failed" over an add that worked, and leave the user unsure whether the item is
+ * queued at all. The launch reports its own failure, with the reason the launch actually gave.
+ */
+export const addThenMaybeLaunch = async <TItem>({
+  launches,
+  add,
+  takeLaunchTarget,
+  launch,
+}: {
+  launches: boolean;
+  add: () => Promise<boolean>;
+  takeLaunchTarget: () => TItem | undefined;
+  launch: (item: TItem) => Promise<unknown>;
+}): Promise<boolean> => {
+  const added = await add();
+  if (!added || !launches) return added;
+  const target = takeLaunchTarget();
+  if (target !== undefined) await launch(target).catch(() => undefined);
+  return added;
+};
+
 export const normalizeLocalPath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
 
 export const getLocalFilePath = (file: LocalPlayFile) => {

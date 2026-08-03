@@ -189,6 +189,7 @@ import {
   formatTime,
   isSongCategory,
   normalizeDurationInputDraft,
+  addThenMaybeLaunch,
   resolvePickerConfirm,
   parseDurationInput,
   sliderToDurationSeconds,
@@ -1349,11 +1350,12 @@ export default function PlayFilesPage() {
     async (source: SourceLocation, selections: SelectedItem[]) => {
       const { launches } = resolvePickerConfirm(selections);
       const indexBeforeAdd = playlistSnapshotRef.current.length;
-      const added = await handleAddFileSelections(source, selections);
-      if (!added || !launches) return added;
-      const launched = playlistSnapshotRef.current[indexBeforeAdd];
-      if (launched) await playItem(launched, { playlistIndex: indexBeforeAdd });
-      return added;
+      return addThenMaybeLaunch({
+        launches,
+        add: () => handleAddFileSelections(source, selections),
+        takeLaunchTarget: () => playlistSnapshotRef.current[indexBeforeAdd],
+        launch: (item) => playItem(item, { playlistIndex: indexBeforeAdd }),
+      });
     },
     [handleAddFileSelections, playItem, playlistSnapshotRef],
   );

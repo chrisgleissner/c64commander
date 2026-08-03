@@ -8,7 +8,12 @@
 
 import { describe, expect, it } from "vitest";
 import { shouldEnterGameModeOnLaunch } from "@/lib/remoteInput/gameModeLaunch";
-import { PICKER_ADD_LABEL, PICKER_PLAY_LABEL, resolvePickerConfirm } from "@/pages/playFiles/playFilesUtils";
+import {
+  addThenMaybeLaunch,
+  PICKER_ADD_LABEL,
+  PICKER_PLAY_LABEL,
+  resolvePickerConfirm,
+} from "@/pages/playFiles/playFilesUtils";
 import { resolveGuidanceLabels, type GuidanceState } from "@/lib/input/guidance";
 
 const launch = (overrides: Partial<Parameters<typeof shouldEnterGameModeOnLaunch>[0]> = {}) =>
@@ -126,5 +131,50 @@ describe("the guidance bar's Game Mode hint", () => {
     expect(labels.left).toBe("Back");
     expect(labels.center).toBe("Activate");
     expect(labels.right).toBeNull();
+  });
+});
+
+describe("addThenMaybeLaunch", () => {
+  const stub = (overrides: Partial<Parameters<typeof addThenMaybeLaunch<string>>[0]> = {}) => ({
+    launches: true,
+    add: () => Promise.resolve(true),
+    takeLaunchTarget: () => "the-item" as string | undefined,
+    launch: () => Promise.resolve(),
+    ...overrides,
+  });
+
+  it("launches the added item when confirming means Play", async () => {
+    const launched: string[] = [];
+    const added = await addThenMaybeLaunch(stub({ launch: (item) => (launched.push(item), Promise.resolve()) }));
+    expect(added).toBe(true);
+    expect(launched).toEqual(["the-item"]);
+  });
+
+  it("does not launch when confirming only queues", async () => {
+    const launched: string[] = [];
+    await addThenMaybeLaunch(stub({ launches: false, launch: (item) => (launched.push(item), Promise.resolve()) }));
+    expect(launched).toEqual([]);
+  });
+
+  it("does not launch when the add itself failed", async () => {
+    const launched: string[] = [];
+    const added = await addThenMaybeLaunch(
+      stub({ add: () => Promise.resolve(false), launch: (item) => (launched.push(item), Promise.resolve()) }),
+    );
+    expect(added).toBe(false);
+    expect(launched).toEqual([]);
+  });
+
+  // The defect this guards: the item is already in the playlist when the launch runs, so a
+  // launch failure that rejected out of here made the picker report "Add items failed" over an
+  // add that had worked. The launch reports its own failure with the real reason.
+  it("still reports the add as successful when the launch fails", async () => {
+    await expect(
+      addThenMaybeLaunch(stub({ launch: () => Promise.reject(new Error("Host unreachable")) })),
+    ).resolves.toBe(true);
+  });
+
+  it("does nothing beyond the add when there is no item to launch", async () => {
+    await expect(addThenMaybeLaunch(stub({ takeLaunchTarget: () => undefined }))).resolves.toBe(true);
   });
 });
