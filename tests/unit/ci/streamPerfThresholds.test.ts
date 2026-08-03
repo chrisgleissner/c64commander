@@ -93,12 +93,27 @@ describe("committed stream perf thresholds", () => {
     expect(script).not.toMatch(/current\[name\] = Math\.round\(median\(values\)\)/);
   });
 
-  it("still normalises away a uniformly slower runner", () => {
-    // Shape, not absolute throughput: a runner half as fast shifts every stage
-    // equally, and dividing by the median per-stage ratio cancels it. Without
-    // this the gate is an absolute CPU gate in disguise, which §14.3 says a
-    // shared runner cannot support.
-    const script = readFileSync(resolve(process.cwd(), "scripts/assert-stream-perf.mjs"), "utf8");
-    expect(script).toMatch(/const scale = median\(shared\.map\(/);
+  // Asserted through the comparison itself rather than by matching the script's source: the
+  // normalisation now lives in scripts/lib/streamPerfCompare.mjs, and a regex over the script
+  // text passes or fails on where the code sits rather than on what it does.
+  it("still normalises away a uniformly slower runner", async () => {
+    // Shape, not absolute throughput: a runner half as fast shifts every stage equally, and
+    // dividing by the median per-stage ratio cancels it. Without this the gate is an absolute
+    // CPU gate in disguise, which §14.3 says a shared runner cannot support.
+    const { compareStages } = (await import("../../../scripts/lib/streamPerfCompare.mjs")) as {
+      compareStages: (input: {
+        current: Record<string, number>;
+        baseline: Record<string, number>;
+        maxRegressionPct: number;
+      }) => { scale: number | null; regressions: Array<{ name: string }> };
+    };
+
+    const baseline = { a: 1000, b: 2000, c: 4000, d: 8000 };
+    const halfSpeed = Object.fromEntries(Object.entries(baseline).map(([name, hz]) => [name, hz / 2]));
+
+    const { scale, regressions } = compareStages({ current: halfSpeed, baseline, maxRegressionPct: 25 });
+
+    expect(scale).toBeCloseTo(0.5, 6);
+    expect(regressions).toEqual([]);
   });
 });

@@ -24,6 +24,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { compareStages } from "./lib/streamPerfCompare.mjs";
 
 const ROOT = process.cwd();
 const THRESHOLDS = join(ROOT, "ci/perf/stream-perf-thresholds.json");
@@ -40,12 +41,6 @@ if (!existsSync(THRESHOLDS)) fail(2, `Missing thresholds config: ${THRESHOLDS}`)
 const cfg = JSON.parse(readFileSync(THRESHOLDS, "utf8"));
 const maxRegressionPct = cfg?.hostBenchmark?.thresholds?.maxRegressionPct;
 if (typeof maxRegressionPct !== "number") fail(2, "thresholds.hostBenchmark.thresholds.maxRegressionPct missing");
-
-const median = (values) => {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = sorted.length >> 1;
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-};
 
 /**
  * How many times to run the whole benchmark file before comparing, and why the
@@ -121,50 +116,23 @@ if (update || !existsSync(BASELINE)) {
 const baseline = JSON.parse(readFileSync(BASELINE, "utf8")).hz ?? {};
 
 /**
- * Compare SHAPE, not absolute speed.
- *
- * This gate is documented above as relative, but comparing raw ops/s against a
- * baseline captured on one machine makes it an absolute CPU gate in disguise —
- * exactly what §14.3 says a shared runner cannot support. It showed: `main`
- * itself measures 575k-598k against a 576,956 baseline, i.e. no headroom at
- * all, so any runner slower than the one that seeded it fails. CI measured
- * 269k and 360k for `governor tick` on commits that changed no streaming code,
- * and the same commit both passed and failed.
- *
- * Dividing every stage by the MEDIAN of the per-stage current/baseline ratios
- * cancels a uniform machine-speed factor: a runner half as fast shifts every
- * stage equally and the normalised shape is unchanged. A real regression in one
- * hot path still moves that stage's share and is still caught, at the same
- * tolerance as before. The median rather than the mean so that one stage which
- * happens to scale differently on a given CPU cannot drag the others with it.
- *
- * The trade-off, stated plainly: a regression that slowed EVERY stage by the
- * same factor would normalise away. That is implausible for six unrelated hot
- * paths, and it is the price of a gate that can run on a shared runner at all —
- * the alternative is the absolute gate that §14.3 already rules out. Absolute
- * ops/s stay in the output as evidence.
+ * Compare each stage's share of the run against its share of the baseline, and require a genuine
+ * absolute slowdown before calling it a regression. The rule, the evidence behind it and what it
+ * costs are documented on `compareStages` in scripts/lib/streamPerfCompare.mjs.
  */
-const shared = Object.keys(current).filter((name) => typeof baseline[name] === "number");
-if (shared.length === 0) fail(2, "No stages in common between the run and the baseline");
-// Median of the per-stage ratios, not the mean: one stage that happens to scale
-// differently on a given CPU (cache, JIT) must not drag every other stage's
-// share with it. The median is unmoved by a single outlier.
-const scale = median(shared.map((name) => current[name] / baseline[name]));
+const { scale, rows, regressions } = compareStages({ current, baseline, maxRegressionPct });
+if (scale === null) fail(2, "No stages in common between the run and the baseline");
 
-const regressions = [];
 console.log(`\nStage                                            baseline    current    Δ% (shape)`);
-for (const [name, hz] of Object.entries(current)) {
-  const base = baseline[name];
-  if (typeof base !== "number") {
-    console.log(`  (new) ${name}: ${hz.toLocaleString()} ops/s — no baseline`);
+for (const row of rows) {
+  if (row.base === null) {
+    console.log(`  (new) ${row.name}: ${row.hz.toLocaleString()} ops/s — no baseline`);
     continue;
   }
-  const deltaPct = (hz / base / scale - 1) * 100;
-  const flag = -deltaPct > maxRegressionPct ? "  ✗ REGRESSION" : "";
+  const flag = row.regressed ? "  ✗ REGRESSION" : row.suppressed ? "  · below share, but faster than baseline" : "";
   console.log(
-    `  ${name.padEnd(46)} ${String(base).padStart(9)} ${String(hz).padStart(10)} ${deltaPct.toFixed(1).padStart(7)}${flag}`,
+    `  ${row.name.padEnd(46)} ${String(row.base).padStart(9)} ${String(row.hz).padStart(10)} ${row.deltaPct.toFixed(1).padStart(7)}${flag}`,
   );
-  if (-deltaPct > maxRegressionPct) regressions.push({ name, base, hz, deltaPct });
 }
 console.log(
   `\nRunner speed vs the baseline machine: ${(scale * 100).toFixed(0)}% ` +
