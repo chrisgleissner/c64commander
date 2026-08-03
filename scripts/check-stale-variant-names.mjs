@@ -33,9 +33,8 @@ export const ALLOWED_FILES = new Set([
 ]);
 
 // Directory prefixes whose contents are historical/research/plan docs and exempt.
-// The C64U Remote / keypad design docs live under docs/plans/callback8020/;
-// the historical variant spec lives under docs/research/.
-export const ALLOWED_PREFIXES = ['docs/research/', 'docs/plans/callback8020/'];
+// The historical variant spec lives under docs/research/.
+export const ALLOWED_PREFIXES = ['docs/research/'];
 
 export const isAllowed = (relativePath) => {
     if (ALLOWED_FILES.has(relativePath)) return true;

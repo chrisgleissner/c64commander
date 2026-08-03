@@ -22,9 +22,9 @@ The certification target is:
 - Full app behavior across every page, overlay, modal, dialog, sheet, native picker, visible state, error state, loading state, empty state, retry state, and flow.
 - Performance, reliability, lifecycle behavior, C64U interaction, and cleanup.
 
-The commercial context is a large rollout to Commodore Callback 8020 users. However, no real Callback 8020 is available. This is not a blocker and must not be used as an early exit. The scope note is only:
+The commercial context is a large rollout to users of a compact keypad handset. However, no such handset is available. This is not a blocker and must not be used as an early exit. The scope note is only:
 
-This run certifies Pixel 4 behavior using touch and injected Android key events. Real Callback 8020 hardware is not available and is outside this run.
+This run certifies Pixel 4 behavior using touch and injected Android key events. Real keypad-handset hardware is not available and is outside this run.
 
 Do not create a broad residual-hardware-risk report unless a real Pixel 4 observation requires one.
 
@@ -54,7 +54,7 @@ This run must explicitly correct each omission.
 6. Do not stop because the installed APK is stale. Build, install, launch, and test the current APK.
 7. Do not stop because the generic CTA runner is incomplete. Extend it or use targeted gate runners plus agent-directed DroidMind flows until every CTA and every flow is accounted for.
 8. Do not stop because Config is blocked. Diagnose Config through app-visible evidence, diagnostics, retry, relaunch, Save-and-Connect, and safe target health probes. Record a root cause or a precise blocker.
-9. Do not stop because real Callback 8020 hardware is unavailable. This run is Pixel 4 certification using touch and injected key events.
+9. Do not stop because real keypad-handset hardware is unavailable. This run is Pixel 4 certification using touch and injected key events.
 10. Do not use `NO-GO` as an early-exit mechanism. `NO-GO` is allowed only after the exhaustive device-work floor below is complete, or after a hard blocker prevents further meaningful device interaction and the blocker is proven with artifacts.
 11. Do not classify runtime CTAs as passed merely because they were visible. Visibility is discovery only.
 12. Do not leave any discovered CTA unaccounted.
@@ -865,14 +865,14 @@ Use `PIXEL4-NO-GO` only when:
 - Exhaustive accounting cannot be completed because of a proven blocker.
 - Cleanup fails.
 
-Do not use real Callback 8020 hardware absence as the reason for `PIXEL4-NO-GO`.
+Do not use real keypad-handset hardware absence as the reason for `PIXEL4-NO-GO`.
 
 ## Final report format
 
 Write `docs/testing/agentic-tests/full-cta-coverage/final-report-3.md` with:
 
 1. Recommendation: `PIXEL4-GO`, `PIXEL4-CONDITIONAL`, or `PIXEL4-NO-GO`.
-2. Scope note: Pixel 4 with touch and injected Android key events; real Callback 8020 hardware outside scope.
+2. Scope note: Pixel 4 with touch and injected Android key events; real keypad-handset hardware outside scope.
 3. Build identity.
 4. Installed APK identity.
 5. Git state.

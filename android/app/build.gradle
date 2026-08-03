@@ -171,7 +171,8 @@ def androidArtifactBasename = variantMetadata.exportedFileBasename.toString()
 // Variants that disable background execution (e.g. C64U Remote) use a reduced
 // manifest without the media-playback foreground service and its
 // FOREGROUND_SERVICE / FOREGROUND_SERVICE_MEDIA_PLAYBACK / WAKE_LOCK permissions,
-// which are unused when the feature is off and which AppSupport restricts anyway.
+// which are unused when the feature is off and which some restricted Android
+// runtimes withhold anyway.
 // A missing flag defaults to the full manifest (safe).
 def backgroundExecutionEnabled = !(variantMetadata.featureFlags?.background_execution_enabled?.enabled == false)
 def selectedAndroidManifest = backgroundExecutionEnabled

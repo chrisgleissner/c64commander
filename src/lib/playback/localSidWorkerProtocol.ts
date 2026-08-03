@@ -17,7 +17,7 @@
  * drift. The worker owns the WASM module + the currently-open tune; the main
  * thread pulls PCM one **chunk** at a time (v1 chunked pre-render, D6 default —
  * no `SharedArrayBuffer`, no AudioWorklet, no COOP/COEP; the portability win for
- * the Callback 8020 / SailfishOS Android runtime).
+ * restricted Android runtimes).
  */
 
 /**

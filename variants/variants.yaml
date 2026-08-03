@@ -88,8 +88,8 @@ variants:
       default_t9_input_enabled: true
       # Deliberately NOT overridden to `sidlite`.
       #
-      # This variant targets the Commodore Callback 8020, which has not been
-      # released and cannot be measured. Defaulting it to the lesser engine on
+      # This variant targets a compact keypad handset that has not been released
+      # and cannot be measured. Defaulting it to the lesser engine on
       # the strength of a spec-sheet projection would ship a real, audible
       # quality regression on every device that DOES exist, to protect one that
       # does not. reSIDfp is what makes a SID sound like a C64, and the only

@@ -10,7 +10,7 @@ Handover 7 continuation addendum: the next attempted S1 replay did not reach Cyc
 
 ## 2. Scope Note
 
-Scope is Pixel 4 behavior using touch and injected Android key events through DroidMind. Real Callback 8020 hardware is outside this run.
+Scope is Pixel 4 behavior using touch and injected Android key events through DroidMind. Real keypad-handset hardware is outside this run.
 
 ## 3. Build Identity
 

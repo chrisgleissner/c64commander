@@ -867,25 +867,25 @@ the instrument at hardware. Grade against published standards — ITU-R BT.1359-
 BS.1770/EBU R128 for level — so the verdict means something outside this repo, and report median
 with IQR rather than a bare mean so one dropout cannot move the headline.
 
-## The hardware that exists — and the Callback 8020, which does not
+## The hardware that exists — and the keypad handset, which does not
 
 **The available rig is exactly: the Pixel 4 (adb), the C64U, and the U64.** That is all
 of it. Plan every gate, task and acceptance criterion against that list.
 
-**The Callback 8020 does not exist yet.** It is an unreleased handset. Neither it nor
-SailfishOS can be tested on, now or by waiting — so:
+**The compact keypad handset the `c64u-remote` variant targets does not exist yet.** It
+is unreleased and cannot be tested on, now or by waiting — so:
 
-- **The Pixel 4 stands in for every phone**, the 8020 included. A result proven on the
-  Pixel 4 is the phone-side result; report it as measured on the Pixel 4 and move on.
-- **Never write a task, gate or "remaining work" item whose venue is the 8020.** Such an
-  item is not blocked, it is unrunnable, and it has repeatedly been re-created and
+- **The Pixel 4 stands in for every phone**, that handset included. A result proven on
+  the Pixel 4 is the phone-side result; report it as measured on the Pixel 4 and move on.
+- **Never write a task, gate or "remaining work" item whose venue is that handset.** Such
+  an item is not blocked, it is unrunnable, and it has repeatedly been re-created and
   re-carried across sessions as though hardware were about to arrive.
-- Where a spec names the 8020 (e.g. keypad-first / low-power sizing), treat it as a
+- Where a spec assumes it (e.g. keypad-first / low-power sizing), treat that as a
   _design constraint to build for_, not a device to measure on: satisfy it by
   construction, prove what is provable on the Pixel 4, and say plainly which part is
   unverifiable until the handset ships.
-- The same applies to the `c64u-remote` variant's manual, which names the 8020 as the
-  target handset: writing for it is fine, testing on it is not.
+- The same applies to the `c64u-remote` variant's manual: writing for a keypad handset is
+  fine, testing on one is not.
 
 Physically power-cycling the C64 is a rare, ask-first exception; the U64 may be absent,
 so probe it rather than assuming.
@@ -900,7 +900,7 @@ so probe it rather than assuming.
 The user manual is **generated** by `scripts/build-manuals.mjs` (`npm run manuals:build`) into `docs/manual/<variant>/…` (the `.md` is tracked; the `.pdf`/`.last-build` are git-ignored). It is emitted once **per variant**, and the two editions have deliberately different scope — write for the right one via the naming helpers, never hard-coded device names.
 
 - **C64 Commander** (`c64commander` variant, `variant.id !== "c64u-remote"`) — the **broad** edition. The controlled machine is **the Ultimate-family device** and covers the **Commodore 64 Ultimate**, the **Ultimate 64 / Elite / Elite II**, and the **Ultimate-II+(L)** — the last being a cartridge that lacks streaming, joystick relay, and other Ultimate-only features, so never assert those unconditionally here. The app runs on a **phone, tablet, or self-hosted web** build (iOS/Android/web).
-- **C64U Remote** (`c64u-remote` variant) — the **specific** edition for a **Commodore 64 Ultimate** driven by a compact keypad **phone**. The exact phone model (currently the Callback 8020) is named **once**, in "Before You Start", then left implicit — do not repeat it, so the manual survives new supported handsets.
+- **C64U Remote** (`c64u-remote` variant) — the **specific** edition for a **Commodore 64 Ultimate** driven by a compact keypad **phone**. No phone model is named anywhere in it: the guide simply says "your phone", so the manual survives new supported handsets.
 
 **Device terminology — one machine, named consistently:**
 

@@ -588,16 +588,16 @@ fully into view; dynamic insertion/removal preserves a valid ring; hardware-Back
 The runner distinguishes `DISCOVERED` / `KEYPAD_REACHABLE` / `KEYPAD_ACTIVATABLE` /
 `TOUCH_ACTIVATABLE`. A touch pass cannot compensate for a keypad failure.
 
-## 15. Pixel 4 versus Callback 8020 scope
+## 15. Pixel 4 versus keypad-handset scope
 
-The production use case includes the Callback 8020 keypad-first form factor, but this run uses the
-Pixel 4. Therefore: use DroidMind key injection to exercise Callback keypad key codes and semantic
+The production use case includes a keypad-first form factor, but this run uses the
+Pixel 4. Therefore: use DroidMind key injection to exercise keypad key codes and semantic
 mappings; set the display profile to **Small display** for the primary compact-layout pass and
 also test the Pixel 4's automatic profile; test portrait and landscape; test lock/sleep/doze/
 background/foreground/process-recreation. Do not claim Pixel 4 testing proves physical hinge,
-flip-close, keypad tactility, or Callback OEM power-policy behavior — list those as residual
-hardware-certification gaps. Keypad-navigation correctness, small-display layout, and Android
-lifecycle behavior remain mandatory.
+flip-close, keypad tactility, or OEM power-policy behavior on such a handset — list those as
+residual hardware-certification gaps. Keypad-navigation correctness, small-display layout, and
+Android lifecycle behavior remain mandatory.
 
 ## 16. Runner validation before broad execution
 
@@ -985,7 +985,7 @@ reuse vs. new code); runner validation results; assumptions; specification discr
 AOQ/SPEC IDs); CTA inventory reconciliation; keypad coverage; touch parity; page-by-page results;
 cross-page results; lifecycle results; background-playback results; two-hour soak result;
 performance; C64 instability timeline; defects by severity; blocked and inconclusive cases; cleanup
-result; Pixel 4 vs Callback 8020 residual risk; release-recommendation rationale; evidence index.
+result; Pixel 4 vs keypad-handset residual risk; release-recommendation rationale; evidence index.
 
 Report at least: documented CTAs; runtime-discovered CTAs; static-only CTAs; undocumented CTAs;
 tested CTAs; passed CTAs; failed CTAs; blocked CTAs; spec gaps; unclassified CTAs;

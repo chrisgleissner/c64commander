@@ -25,7 +25,7 @@ describe("SID emulation engine setting", () => {
 
   it("defaults to the accurate engine on every shipped variant", () => {
     // No variant may quietly ship the lesser engine. The keypad variant targets
-    // the unreleased Callback 8020; defaulting it to SIDLite on a spec-sheet
+    // an unreleased handset; defaulting it to SIDLite on a spec-sheet
     // projection would degrade the hardware that exists to protect hardware that
     // does not. Change this only alongside a measurement on the real device.
     expect(variant.runtime.defaultSidEmulationEngine).toBe("residfp");
