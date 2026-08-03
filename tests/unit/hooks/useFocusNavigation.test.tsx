@@ -631,6 +631,60 @@ describe("FocusNavigationProvider global shortcuts", () => {
     expect(openDeviceSwitcher).not.toHaveBeenCalled();
   });
 
+  // GM-17: from anywhere in the app, with a game already running, one keystroke.
+  it("enters Game Mode from 0 outside text fields", () => {
+    const openGameMode = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ openGameMode }}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "Digit0" });
+    expect(openGameMode).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves 0 to T9 while a text field holds the ring", () => {
+    const openGameMode = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ openGameMode }}>
+        <input aria-label="host" />
+      </FocusNavigationProvider>,
+    );
+    const input = screen.getByLabelText("host");
+    input.focus();
+
+    fireEvent.keyDown(input, { code: "Digit0" });
+    expect(openGameMode).not.toHaveBeenCalled();
+  });
+
+  // Inside the Remote Input sheet `0` is a joystick direction, and the sheet is an
+  // open overlay — so this handler must never see the key at all.
+  it("never reaches the joystick relay: 0 inside an open overlay does nothing", () => {
+    const openGameMode = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ openGameMode }}>
+        <div role="dialog" data-state="open">
+          <button type="button" aria-label="in sheet" />
+        </div>
+      </FocusNavigationProvider>,
+    );
+    const inSheet = screen.getByLabelText("in sheet");
+    inSheet.focus();
+
+    fireEvent.keyDown(inSheet, { code: "Digit0" });
+    expect(openGameMode).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when no Game Mode handler is wired (feature flag off)", () => {
+    render(
+      <FocusNavigationProvider shortcuts={{}}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+    expect(() => fireEvent.keyDown(document.body, { code: "Digit0" })).not.toThrow();
+  });
+
   it("opens the quick menu from the Menu key when the focused item has no context menu", () => {
     const openQuickMenu = vi.fn();
     render(

@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Gamepad2, Heart, ListMusic, Search } from "lucide-react";
+import { Gamepad2, Heart, Keyboard, ListMusic, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RemoteInputSheet } from "@/components/remoteInput/RemoteInputSheet";
 import { PlaybackConfigSheet } from "@/pages/playFiles/components/PlaybackConfigSheet";
@@ -152,6 +152,7 @@ import {
 } from "@/pages/playFiles/backgroundExecutionPolicy";
 import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
+import { loadGameModeOnLaunch, shouldEnterGameModeOnLaunch, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { planPlaylistItemRemoval, resolveAutoAdvanceDueAtMsOnDurationChange } from "@/pages/playFiles/playbackGuards";
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "@/pages/playFiles/types";
 import {
@@ -188,6 +189,8 @@ import {
   formatTime,
   isSongCategory,
   normalizeDurationInputDraft,
+  addThenMaybeLaunch,
+  resolvePickerConfirm,
   parseDurationInput,
   sliderToDurationSeconds,
   shuffleArray,
@@ -484,6 +487,32 @@ export default function PlayFilesPage() {
     }
     return configs;
   }, [archiveConfig, commoserveEnabled]);
+
+  const remoteInputSheetOpenRef = useRef(remoteInputSheetOpen);
+  remoteInputSheetOpenRef.current = remoteInputSheetOpen;
+
+  /**
+   * Launching a game ends in the playing state without a further keystroke, which is
+   * the whole point on a handset with no touchscreen. Every condition that keeps it
+   * from becoming a surprise lives in `shouldEnterGameModeOnLaunch`.
+   */
+  const handleUserLaunchedItem = useCallback(
+    (item: PlaylistItem) => {
+      if (!remoteInputEnabled) return;
+      if (
+        !shouldEnterGameModeOnLaunch({
+          category: item.category,
+          origin: "user",
+          sheetAlreadyOpen: remoteInputSheetOpenRef.current,
+          enabled: loadGameModeOnLaunch(),
+        })
+      ) {
+        return;
+      }
+      void startGameMode();
+    },
+    [remoteInputEnabled],
+  );
 
   const resolveUnavailableConfigDecision = useCallback(
     (item: PlaylistItem, context: { configFileName: string | null; reason: string }) =>
@@ -1311,6 +1340,26 @@ export default function PlayFilesPage() {
     ],
   );
 
+  /**
+   * Confirming the picker with exactly one game in the selection launches it as well
+   * as queueing it, which is what the button has already said it would do. The item
+   * is read back from the playlist snapshot rather than rebuilt, because the add
+   * handler is what resolves a selection into a playable item.
+   */
+  const handlePickerConfirm = useCallback(
+    async (source: SourceLocation, selections: SelectedItem[]) => {
+      const { launches } = resolvePickerConfirm(selections);
+      const indexBeforeAdd = playlistSnapshotRef.current.length;
+      return addThenMaybeLaunch({
+        launches,
+        add: () => handleAddFileSelections(source, selections),
+        takeLaunchTarget: () => playlistSnapshotRef.current[indexBeforeAdd],
+        launch: (item) => playItem(item, { playlistIndex: indexBeforeAdd }),
+      });
+    },
+    [handleAddFileSelections, playItem, playlistSnapshotRef],
+  );
+
   const handleCancelAddItems = useCallback(() => {
     addItemsAbortControllerRef.current?.abort();
   }, []);
@@ -1880,6 +1929,23 @@ export default function PlayFilesPage() {
   const currentSongNr = currentItem?.request.songNr ?? 1;
   const clampedSongNr = Math.min(Math.max(1, currentSongNr), subsongCount);
   const isSongPlaying = Boolean(currentItem && isSongCategory(currentItem.category) && (isPlaying || isPaused));
+
+  const gameModeLeadsTransportRow = Boolean(currentItem && !isSongCategory(currentItem.category));
+  const playGameModeButton = (
+    <Button variant="outline" size="sm" data-testid="play-open-game-mode" onClick={() => void startGameMode()}>
+      <Gamepad2 className="mr-1.5 h-4 w-4" /> Game Mode
+    </Button>
+  );
+  const playRemoteInputButton = (
+    <Button
+      variant="outline"
+      size="sm"
+      data-testid="play-open-controller"
+      onClick={() => setRemoteInputSheetOpen(true)}
+    >
+      <Keyboard className="mr-1.5 h-4 w-4" /> Remote Input
+    </Button>
+  );
   /**
    * Put every tune in this file into the queue.
    *
@@ -2551,15 +2617,21 @@ export default function PlayFilesPage() {
                         </Button>
                       </>
                     ) : null}
+                    {/* A running program, cartridge or disk image is overwhelmingly likely to be
+                        a game, so Game Mode leads the row there; a running tune is not, so it
+                        follows Remote Input instead. */}
                     {remoteInputEnabled && isPlaying ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        data-testid="play-open-controller"
-                        onClick={() => setRemoteInputSheetOpen(true)}
-                      >
-                        <Gamepad2 className="mr-1.5 h-4 w-4" /> Remote Input
-                      </Button>
+                      gameModeLeadsTransportRow ? (
+                        <>
+                          {playGameModeButton}
+                          {playRemoteInputButton}
+                        </>
+                      ) : (
+                        <>
+                          {playRemoteInputButton}
+                          {playGameModeButton}
+                        </>
+                      )
                     ) : null}
                   </div>
                   {sidRadioFlags.sidRadioEnabled && sidRadio.notice ? (
@@ -2720,12 +2792,12 @@ export default function PlayFilesPage() {
             open={browserOpen}
             onOpenChange={handleBrowserOpenChange}
             title="Add items"
-            confirmLabel="Add to playlist"
+            confirmLabel={(selections) => resolvePickerConfirm(selections).label}
             initialSourceId={browserInitialSourceId}
             sourceGroups={sourceGroups}
             archiveConfigs={archiveConfigs}
             onAddLocalSource={async () => (await addSourceFromPicker(localSourceInputRef.current))?.id ?? null}
-            onConfirm={handleAddFileSelections}
+            onConfirm={handlePickerConfirm}
             onSelectSource={handleHvscSourceSelection}
             filterEntry={(entry) => entry.type === "dir" || isSupportedPlayFile(entry.path)}
             allowFolderSelection

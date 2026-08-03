@@ -9,6 +9,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AvMirrorControls, LiveDot } from "@/components/streams/AvMirrorControls";
+import { loadMirrorC64Audio, loadMirrorC64Video } from "@/lib/config/appSettings";
 
 const mirror = vi.hoisted(() => ({
   toggleAudio: vi.fn(),
@@ -93,6 +94,26 @@ describe("AvMirrorControls", () => {
     rerender(<AvMirrorControls showAudio={false} />);
     expect(screen.queryByTestId("av-audio-toggle")).toBeNull();
     expect(screen.getByTestId("av-video-toggle")).toBeInTheDocument();
+  });
+
+  it("records the answer each toggle gives, so Game Mode can open the way it was left", () => {
+    localStorage.clear();
+    render(<AvMirrorControls />);
+
+    fireEvent.click(screen.getByTestId("av-video-toggle"));
+    fireEvent.click(screen.getByTestId("av-audio-toggle"));
+    expect(loadMirrorC64Video()).toBe(true);
+    expect(loadMirrorC64Audio()).toBe(true);
+  });
+
+  it("remembers Watch being turned off for a television session", () => {
+    localStorage.clear();
+    mirror.state.videoLive = true;
+    mirror.state.video = { state: "live", error: null };
+    render(<AvMirrorControls />);
+
+    fireEvent.click(screen.getByTestId("av-video-toggle"));
+    expect(loadMirrorC64Video()).toBe(false);
   });
 
   it("LiveDot renders an aria-hidden marker", () => {

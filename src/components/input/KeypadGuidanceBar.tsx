@@ -26,7 +26,10 @@
  */
 
 import { useCallback, useEffect, useRef } from "react";
+import { useInRouterContext, useLocation } from "react-router-dom";
 
+import { useConnectionState } from "@/hooks/useConnectionState";
+import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
 import { useFocusNavigationContext, type FocusNavigationContextValue } from "@/hooks/useFocusNavigation";
 import {
   accessibleLabelFor,
@@ -38,7 +41,7 @@ import {
 } from "@/lib/input";
 
 /** Assemble the DOM-free {@link GuidanceState} the pure resolver consumes. */
-const buildGuidanceState = (context: FocusNavigationContextValue): GuidanceState => {
+const buildGuidanceState = (context: FocusNavigationContextValue, gameModeShortcut: boolean): GuidanceState => {
   const { controller, engine, enabled } = context;
   const focus = controller.focus;
   const current = focus.current();
@@ -62,8 +65,35 @@ const buildGuidanceState = (context: FocusNavigationContextValue): GuidanceState
     fieldEngaged: controller.isFieldEngaged,
     layerOpen: controller.layerDepth > 0,
     hasMenu: hasContextMenu(currentElement),
+    gameModeShortcut,
   };
 };
+
+/** The two pages where entering Game Mode is the obvious next thing to do. */
+const GAME_MODE_SHORTCUT_PATHS = new Set(["/", "/play"]);
+
+const currentPathname = (): string => (typeof window === "undefined" ? "" : window.location.pathname);
+
+/**
+ * Refreshes the bar when the route changes.
+ *
+ * The bar reads the path imperatively so it stays renderable outside a Router, but the path
+ * still has to be re-read when it changes: navigating off `/` or `/play` must drop the Game
+ * Mode hint straight away, not whenever the next unrelated ring change happens to arrive. A
+ * `popstate` listener would not do — in-app navigation is `pushState`, which fires no event.
+ *
+ * So the router subscription lives in a child that is mounted ONLY when there is a Router,
+ * which keeps `useLocation` off the bar's own render path.
+ */
+const RouteChangeRefresh = ({ onRouteChange }: { onRouteChange: () => void }) => {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    onRouteChange();
+  }, [pathname, onRouteChange]);
+  return null;
+};
+
+const isGameModeShortcutPath = (pathname: string): boolean => GAME_MODE_SHORTCUT_PATHS.has(pathname);
 
 /**
  * Imperative writes with a VALUE-EQUALITY BAIL — only touch the DOM when the value
@@ -94,6 +124,9 @@ const applySlot = (slot: HTMLElement | null, action: HTMLElement | null, label: 
 
 export const KeypadGuidanceBar = () => {
   const context = useFocusNavigationContext();
+  const connection = useConnectionState();
+  const remoteInputEnabled = useFeatureFlagValue("remote_input_enabled");
+  const gameModeAvailable = remoteInputEnabled && connection.state === "REAL_CONNECTED";
   const rootRef = useRef<HTMLDivElement>(null);
   const breadcrumbRef = useRef<HTMLDivElement>(null);
   const leftActionRef = useRef<HTMLSpanElement>(null);
@@ -101,11 +134,21 @@ export const KeypadGuidanceBar = () => {
   const centerActionRef = useRef<HTMLSpanElement>(null);
   const rightSlotRef = useRef<HTMLSpanElement>(null);
   const rightActionRef = useRef<HTMLSpanElement>(null);
+  const shortcutSlotRef = useRef<HTMLSpanElement>(null);
+  const shortcutActionRef = useRef<HTMLSpanElement>(null);
+
+  // Called unconditionally and safe with no Router above; `useLocation` is not.
+  const inRouter = useInRouterContext();
 
   const refresh = useCallback(() => {
     const root = rootRef.current;
     if (!root || !context) return;
-    const labels = resolveGuidanceLabels(buildGuidanceState(context));
+    // The path is read at refresh time rather than through `useLocation`: the bar
+    // already refreshes on every ring change and modality flip, and a router hook
+    // would make this piece of chrome unrenderable outside a Router.
+    const labels = resolveGuidanceLabels(
+      buildGuidanceState(context, gameModeAvailable && isGameModeShortcutPath(currentPathname())),
+    );
     if (!labels.visible) {
       setAttrIfChanged(root, "data-visible", "false");
       return;
@@ -121,7 +164,8 @@ export const KeypadGuidanceBar = () => {
     setTextIfChanged(leftActionRef.current, labels.left);
     applySlot(centerSlotRef.current, centerActionRef.current, labels.center);
     applySlot(rightSlotRef.current, rightActionRef.current, labels.right);
-  }, [context]);
+    applySlot(shortcutSlotRef.current, shortcutActionRef.current, labels.shortcut);
+  }, [context, gameModeAvailable]);
 
   // Subscribe imperatively (mirrors refreshHighlight). The provider's notifyRing
   // fans out here on assembly, on each handled key, and on a modality flip, so
@@ -145,6 +189,7 @@ export const KeypadGuidanceBar = () => {
       data-testid="keypad-guidance-bar"
       aria-hidden="true"
     >
+      {inRouter ? <RouteChangeRefresh onRouteChange={refresh} /> : null}
       <div ref={breadcrumbRef} className="keypad-guidance-breadcrumb" data-testid="keypad-guidance-breadcrumb" />
       <div className="keypad-guidance-keys">
         <span className="keypad-guidance-key" data-soft="left" data-testid="keypad-guidance-left">
@@ -169,6 +214,16 @@ export const KeypadGuidanceBar = () => {
         >
           <kbd className="keypad-guidance-cap">Menu</kbd>
           <span ref={rightActionRef} className="keypad-guidance-action" />
+        </span>
+        <span
+          ref={shortcutSlotRef}
+          className="keypad-guidance-key"
+          data-soft="shortcut"
+          data-testid="keypad-guidance-shortcut"
+          hidden
+        >
+          <kbd className="keypad-guidance-cap">0</kbd>
+          <span ref={shortcutActionRef} className="keypad-guidance-action" />
         </span>
       </div>
     </div>

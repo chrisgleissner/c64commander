@@ -353,6 +353,46 @@ describe("generate-variant", () => {
     expect(config.variants["c64commander"].runtime.defaultHideNavigationBar).toBe(false);
   });
 
+  it("normalizes the per-variant Game Mode runtime defaults, defaulting to Classic T9 and off", () => {
+    const repoRoot = createTempDir("variant-config-");
+    writeRepoFixtures(repoRoot);
+    const config = parseVariantSource(
+      buildVariantsYaml({
+        runtimeExtras: {
+          "c64u-remote": ["default_joystick_key_layout: diamond8", "default_game_mode_on_launch: true"],
+        },
+      }),
+      { repoRoot },
+    ) as any;
+    expect(config.variants["c64u-remote"].runtime.defaultJoystickKeyLayout).toBe("diamond8");
+    expect(config.variants["c64u-remote"].runtime.defaultGameModeOnLaunch).toBe(true);
+    // A variant that does not opt in keeps the arrangement the app shipped with.
+    expect(config.variants["c64commander"].runtime.defaultJoystickKeyLayout).toBe("classicT9");
+    expect(config.variants["c64commander"].runtime.defaultGameModeOnLaunch).toBe(false);
+  });
+
+  it("rejects a joystick layout it does not recognise", () => {
+    const repoRoot = createTempDir("variant-config-");
+    writeRepoFixtures(repoRoot);
+    expect(() =>
+      parseVariantSource(
+        buildVariantsYaml({ runtimeExtras: { "c64u-remote": ["default_joystick_key_layout: hexagon"] } }),
+        { repoRoot },
+      ),
+    ).toThrow(/default_joystick_key_layout must be one of/);
+  });
+
+  it("rejects a non-boolean auto-enter default", () => {
+    const repoRoot = createTempDir("variant-config-");
+    writeRepoFixtures(repoRoot);
+    expect(() =>
+      parseVariantSource(
+        buildVariantsYaml({ runtimeExtras: { "c64u-remote": ['default_game_mode_on_launch: "yes"'] } }),
+        { repoRoot },
+      ),
+    ).toThrow(/default_game_mode_on_launch must be a boolean/);
+  });
+
   it("fails when schema_version is absent", () => {
     const repoRoot = createTempDir("variant-config-");
     writeRepoFixtures(repoRoot);

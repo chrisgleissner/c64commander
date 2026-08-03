@@ -458,6 +458,32 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
             `c64u_initial_snapshot_session:${new URL(baseUrlArg).toString()}`,
           ]),
         ).forEach((snapshotSessionKey) => sessionStorage.setItem(snapshotSessionKey, "1"));
+        // Settings is a set of collapsible chapters, and a first visit opens only Connection.
+        // Every spec that drives a Settings control is about that control, not about the
+        // collapse, so the fixture starts from the state a returning user is in: all open.
+        // The collapsed default has its own test in `settingsSections.spec.ts`.
+        //
+        // Written only when nothing is stored yet. This init script re-runs on every navigation,
+        // so writing unconditionally would overwrite a chapter the test had just opened or
+        // closed, and no test could show that the choice survives leaving the page.
+        if (localStorage.getItem("c64u_settings_open_sections") === null)
+          localStorage.setItem(
+            "c64u_settings_open_sections",
+            JSON.stringify([
+              "appearance",
+              "connection",
+              "diagnostics",
+              "play-and-disk",
+              "feature-group-stable",
+              "feature-group-experimental",
+              "sid-radio",
+              "hvsc",
+              "online-archive",
+              "device-safety",
+              "notifications",
+              "about",
+            ]),
+          );
         if (seedFeatureFlags) {
           localStorage.setItem("c64u_dev_mode_enabled", "1");
           localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");

@@ -94,13 +94,47 @@ describe("MachineControls", () => {
 
     const buttons = screen.getByTestId("home-machine-controls").querySelectorAll("button");
     expect(Array.from(buttons).map((button) => button.textContent)).toEqual([
+      "Menu",
+      "Pause",
       "Reset",
       "Reboot",
-      "Pause",
-      "Menu",
       "Power Off",
     ]);
     expect(screen.getByTestId("home-machine-controls")).toHaveAttribute("data-compact-columns", "2");
+  });
+
+  // GM-19: the first row at two columns used to be Reset + Reboot — the two most
+  // destructive actions, where a thumb lands and where the keypad ring starts.
+  it("leads with Game Mode and keeps every destructive tile after every safe one", () => {
+    render(
+      <MachineControls
+        {...defaultProps}
+        gameModeVisible
+        onGameMode={vi.fn()}
+        ramActionsVisible
+        onPowerCycle={vi.fn()}
+        extraActions={[
+          { id: "openRemoteInput", label: "Remote Input", onSelect: vi.fn() },
+          {
+            id: "rebootClearMemory",
+            label: "Reboot (Clr Mem)",
+            variant: "danger" as const,
+            onSelect: vi.fn(),
+          },
+          { id: "saveReuMemory", label: "Save REU", onSelect: vi.fn() },
+        ]}
+      />,
+    );
+
+    const labels = Array.from(screen.getByTestId("home-machine-controls").querySelectorAll("button")).map(
+      (button) => button.textContent,
+    );
+    expect(labels[0]).toBe("Game Mode");
+
+    const destructive = ["Reset", "Reboot", "Reboot (Clr Mem)", "Power Cycle", "Power Off"];
+    const firstDestructive = labels.findIndex((label) => destructive.includes(label ?? ""));
+    const lastSafe = labels.reduce((last, label, index) => (destructive.includes(label ?? "") ? last : index), -1);
+    expect(firstDestructive).toBeGreaterThan(lastSafe);
   });
 
   it("renders experimental RAM actions only when requested", () => {
@@ -205,10 +239,10 @@ describe("MachineControls", () => {
     render(<MachineControls {...defaultProps} onPowerCycle={onPowerCycle} />);
     const buttons = screen.getByTestId("home-machine-controls").querySelectorAll("button");
     expect(Array.from(buttons).map((button) => button.textContent)).toEqual([
+      "Menu",
+      "Pause",
       "Reset",
       "Reboot",
-      "Pause",
-      "Menu",
       "Power Cycle",
       "Power Off",
     ]);
@@ -304,7 +338,12 @@ describe("MachineControls", () => {
         ramActionsVisible={true}
         onPowerCycle={vi.fn()}
         extraActions={[
-          { id: "rebootClearMemory", label: "Reboot (Clr Mem)", onSelect: vi.fn() },
+          {
+            id: "rebootClearMemory",
+            label: "Reboot (Clr Mem)",
+            variant: "danger" as const,
+            onSelect: vi.fn(),
+          },
           { id: "saveReuMemory", label: "Save REU", onSelect: vi.fn() },
         ]}
       />,
@@ -312,15 +351,15 @@ describe("MachineControls", () => {
 
     const buttons = screen.getByTestId("home-machine-controls").querySelectorAll("button");
     expect(Array.from(buttons).map((button) => button.textContent)).toEqual([
-      "Reset",
-      "Reboot",
-      "Pause",
       "Menu",
+      "Pause",
+      "Save REU",
       "Save RAM",
       "Load RAM",
-      "Power Cycle",
+      "Reset",
+      "Reboot",
       "Reboot (Clr Mem)",
-      "Save REU",
+      "Power Cycle",
       "Power Off",
     ]);
     expect(screen.getByTestId("home-machine-controls")).toHaveAttribute("data-compact-columns", "2");

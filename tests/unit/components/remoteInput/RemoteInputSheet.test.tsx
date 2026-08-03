@@ -7,7 +7,7 @@
  */
 
 import { useState } from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const tierState = {
@@ -221,38 +221,72 @@ describe("RemoteInputSheet", () => {
     expect(sheet.className).toContain("app-sheet-bottom-clearance");
   });
 
-  it("collapses ALL chrome in game mode leaving only the screen + joystick, restorable via the floating handle", () => {
+  it("collapses ALL chrome on entering game mode, with no separate Hide-controls step", () => {
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
-    // Enter game mode → the collapse-chrome affordance appears.
     fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
-    expect(screen.queryByTestId("remote-input-restore-chrome")).not.toBeInTheDocument();
-    const collapse = screen.getByTestId("remote-input-collapse-chrome");
 
-    // Collapse: the pinned toolbar (mirror controls), the sheet Close and the collapse button itself
-    // all disappear; the joystick action zone survives and a single restore handle takes their place.
-    fireEvent.click(collapse);
-    expect(screen.queryByTestId("remote-input-collapse-chrome")).not.toBeInTheDocument();
+    // One action, not two: the pinned toolbar and the sheet Close are already gone,
+    // the joystick action zone survives, and a single restore handle takes their place.
     expect(screen.queryByTestId("remote-input-close")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("remote-input-mirror-controls")).not.toBeInTheDocument();
     expect(screen.getByTestId("remote-input-joystick-action-zone")).toBeInTheDocument();
-    const restore = screen.getByTestId("remote-input-restore-chrome");
-
-    // Restore: intuitive one-tap brings the chrome (and its Close) back.
-    fireEvent.click(restore);
-    expect(screen.queryByTestId("remote-input-restore-chrome")).not.toBeInTheDocument();
-    expect(screen.getByTestId("remote-input-collapse-chrome")).toBeInTheDocument();
-    expect(screen.getByTestId("remote-input-close")).toBeInTheDocument();
+    expect(screen.getByTestId("remote-input-restore-chrome")).toBeInTheDocument();
+    // The button that used to be the second step no longer exists anywhere.
+    expect(screen.queryByTestId("remote-input-collapse-chrome")).not.toBeInTheDocument();
   });
 
-  it("auto-restores the chrome when leaving game mode while collapsed", () => {
+  it("brings the chrome, and its Close, back through the floating handle", () => {
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
+    fireEvent.click(screen.getByTestId("remote-input-restore-chrome"));
+
+    expect(screen.queryByTestId("remote-input-restore-chrome")).not.toBeInTheDocument();
+    expect(screen.getByTestId("remote-input-close")).toBeInTheDocument();
+    expect(screen.getByTestId("remote-input-immersive-toggle")).toBeInTheDocument();
+  });
+
+  it("puts the restored chrome away again once it has been left alone", () => {
+    vi.useFakeTimers();
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
+    fireEvent.click(screen.getByTestId("remote-input-restore-chrome"));
+    expect(screen.getByTestId("remote-input-close")).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(7000);
+    });
+    expect(screen.getByTestId("remote-input-restore-chrome")).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  // The toolbar carries Watch, Listen, the orientation control and the way out. Reaching
+  // across it took longer than the idle period, so it vanished under the user's thumb.
+  it("keeps the restored chrome up while it is still being used", () => {
+    vi.useFakeTimers();
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
+    fireEvent.click(screen.getByTestId("remote-input-restore-chrome"));
+
+    for (let elapsed = 0; elapsed < 15000; elapsed += 4000) {
+      act(() => {
+        vi.advanceTimersByTime(4000);
+      });
+      fireEvent.pointerDown(screen.getByTestId("remote-input-size-stepper"));
+    }
+
+    expect(screen.getByTestId("remote-input-close")).toBeInTheDocument();
+    expect(screen.queryByTestId("remote-input-restore-chrome")).not.toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  it("restores the ordinary chrome when leaving game mode", () => {
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
     fireEvent.click(screen.getByTestId("remote-input-immersive-toggle")); // enter game mode
-    fireEvent.click(screen.getByTestId("remote-input-collapse-chrome")); // collapse
-    // Exit game mode via a physical/other path: the immersive toggle is hidden while collapsed, so
-    // restore the chrome first, then exit — the collapsed state must not persist outside game mode.
+    // The toggle is inside the chrome, so come back to it the way a touch user would.
     fireEvent.click(screen.getByTestId("remote-input-restore-chrome"));
     fireEvent.click(screen.getByTestId("remote-input-immersive-toggle")); // exit game mode
     expect(screen.queryByTestId("remote-input-restore-chrome")).not.toBeInTheDocument();
-    expect(screen.getByTestId("remote-input-mode-joystick")).toBeInTheDocument(); // normal chrome back
+    expect(screen.getByTestId("remote-input-mode-joystick")).toBeInTheDocument();
   });
 
   it("shifts a key only while SHIFT is held on the on-screen keyboard, and never latches a bare tap", () => {
@@ -357,6 +391,9 @@ describe("RemoteInputSheet", () => {
     expect(screen.getByTestId("remote-input-virtual-joystick")).toBeInTheDocument();
     expect(screen.getByTestId("remote-input-fire-button")).toBeInTheDocument();
 
+    // Game mode hides the chrome that carries the toggle, so leaving goes through
+    // the floating handle first — the same route a touch user takes.
+    fireEvent.click(screen.getByTestId("remote-input-restore-chrome"));
     fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
     expect(screen.getByTestId("remote-input-output-mode-toggle")).toBeInTheDocument();
     expect(screen.getByTestId("remote-input-panic-button")).toBeInTheDocument();

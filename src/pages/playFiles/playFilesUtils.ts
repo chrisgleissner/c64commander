@@ -11,7 +11,7 @@ import {
   type AudioMixerItem,
 } from "@/lib/config/audioMixerItems";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
-import type { PlayFileCategory } from "@/lib/playback/fileTypes";
+import { getPlayCategory, type PlayFileCategory } from "@/lib/playback/fileTypes";
 import type { PlaylistItem } from "./types";
 export type { AudioMixerItem } from "@/lib/config/audioMixerItems";
 export const extractAudioMixerItems = extractAudioMixerItemsFromLib;
@@ -59,6 +59,65 @@ export const formatDate = (value?: string | null) => {
 };
 
 export const isSongCategory = (category: PlayFileCategory) => category === "sid" || category === "mod";
+
+export const PICKER_ADD_LABEL = "Add to playlist";
+export const PICKER_PLAY_LABEL = "Play";
+
+export interface PickerConfirmSelection {
+  readonly type: string;
+  readonly path: string;
+}
+
+/**
+ * What the picker's confirm button says, and whether confirming also launches.
+ *
+ * Choosing one game and then having to find the transport again is the last
+ * keystroke that can honestly be removed from the launch path, so a single
+ * non-song file confirms as **Play**. Everything else — several files, a folder,
+ * a tune — keeps queueing, because for those the queue is the point.
+ *
+ * The decision is made from the file extension, so it deliberately does NOT apply to Online
+ * Archive results. Those carry `"<id>/<numeric archive category>"` as their path, and what an
+ * archive entry actually contains is only known once it has been fetched. Promising **Play**
+ * before that would mislabel the button whenever the entry turns out to be a tune, so archive
+ * selections keep queueing and are launched from the transport like any other playlist item.
+ */
+export const resolvePickerConfirm = (
+  selections: readonly PickerConfirmSelection[],
+): { label: string; launches: boolean } => {
+  if (selections.length !== 1) return { label: PICKER_ADD_LABEL, launches: false };
+  const [only] = selections;
+  if (only.type !== "file") return { label: PICKER_ADD_LABEL, launches: false };
+  const category = getPlayCategory(only.path);
+  if (category === null || isSongCategory(category)) return { label: PICKER_ADD_LABEL, launches: false };
+  return { label: PICKER_PLAY_LABEL, launches: true };
+};
+
+/**
+ * Run what confirming the picker does: add the selections, then launch when confirm means Play.
+ *
+ * The launch is deliberately not allowed to fail the add. By the time it runs the item is
+ * already in the playlist, so letting a rejection through would make the picker report
+ * "Add items failed" over an add that worked, and leave the user unsure whether the item is
+ * queued at all. The launch reports its own failure, with the reason the launch actually gave.
+ */
+export const addThenMaybeLaunch = async <TItem>({
+  launches,
+  add,
+  takeLaunchTarget,
+  launch,
+}: {
+  launches: boolean;
+  add: () => Promise<boolean>;
+  takeLaunchTarget: () => TItem | undefined;
+  launch: (item: TItem) => Promise<unknown>;
+}): Promise<boolean> => {
+  const added = await add();
+  if (!added || !launches) return added;
+  const target = takeLaunchTarget();
+  if (target !== undefined) await launch(target).catch(() => undefined);
+  return added;
+};
 
 export const normalizeLocalPath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
 

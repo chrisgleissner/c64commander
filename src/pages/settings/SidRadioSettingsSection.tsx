@@ -45,6 +45,7 @@ import {
 import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { LocalEngineRomsRow } from "./LocalEngineRomsRow";
+import { SettingsSection } from "./SettingsSection";
 
 type ToggleRowProps = {
   id: string;
@@ -110,17 +111,13 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
   };
 
   return (
-    <div
-      className="profile-card bg-card border border-border rounded-xl p-4 space-y-4"
-      data-testid="settings-sid-radio"
+    <SettingsSection
+      id="sid-radio"
+      title="SID Radio"
+      summary="Stations, crossfade, SID chip and emulation, C64 ROMs"
+      icon={Radio}
+      testId="settings-sid-radio"
     >
-      <div className="flex items-center gap-2">
-        <div className="p-2 rounded-lg bg-primary/10">
-          <Radio className="h-5 w-5 text-primary" />
-        </div>
-        <h2 className="font-medium">SID Radio</h2>
-      </div>
-
       <div className="space-y-3">
         {developerMode ? (
           <ToggleRow
@@ -357,6 +354,6 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
           </Button>
         </div>
       </div>
-    </div>
+    </SettingsSection>
   );
 };

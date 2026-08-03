@@ -1070,6 +1070,12 @@ const captureScreenshot = async (
     borderColor?: { r: number; g: number; b: number; alpha?: number };
     writeWhenTrackedDuplicate?: boolean;
     skipFuzzyHeadRestore?: boolean;
+    /**
+     * Turn the finished image, for a state the reader sees by turning the phone. The app is
+     * portrait-locked, so the framebuffer stays upright while the picture inside it is
+     * counter-rotated; rotating the capture puts the reader where the player is.
+     */
+    rotateDegrees?: 90 | 180 | 270;
   },
 ) => {
   const filePath = screenshotPath(relativePath);
@@ -1083,6 +1089,9 @@ const captureScreenshot = async (
         caret: "hide",
         fullPage: options?.fullPage ?? false,
       });
+  if (options?.rotateDegrees) {
+    screenshotBuffer = await sharp(screenshotBuffer).rotate(options.rotateDegrees).png().toBuffer();
+  }
   if ((options?.borderPx ?? 0) > 0) {
     const borderPx = options?.borderPx ?? 0;
     const color = options?.borderColor ?? { r: 255, g: 255, b: 255, alpha: 1 };
@@ -1800,6 +1809,13 @@ test.describe("App screenshots", () => {
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       allowWarnings(testInfo, "Remote Input capability probe + relay logging during screenshots.");
       allowVisualOverflow(testInfo, "Remote Input keyboard grid scrolls inside the sheet.");
+      // This capture documents the sheet's chrome, not the streams. Game Mode starts
+      // whatever Watch and Listen were last left on, and there is no stream source here,
+      // so record them as off rather than screenshot a connection error.
+      await page.addInitScript(() => {
+        localStorage.setItem("c64u_mirror_c64_audio", "0");
+        localStorage.setItem("c64u_mirror_c64_video", "0");
+      });
 
       await page.goto("/");
       await waitForConnected(page);
@@ -1851,9 +1867,14 @@ test.describe("App screenshots", () => {
         await expect(page.getByTestId("remote-input-virtual-joystick")).toBeVisible();
         await captureScreenshot(page, testInfo, "home/remote-input/01-joystick.png", { locator: sheet });
         console.log("[remote-input] captured 01-joystick.png");
+
+        // Game Mode collapses the chrome in one action; the floating handle brings it
+        // back, which is the state the manual describes and screenshots.
         await page.getByTestId("remote-input-immersive-toggle").click();
+        await page.getByTestId("remote-input-restore-chrome").click();
         await captureScreenshot(page, testInfo, "home/remote-input/02-game-mode.png", { locator: sheet });
         console.log("[remote-input] captured 02-game-mode.png");
+
         await page.getByTestId("remote-input-immersive-toggle").click();
       } catch (error) {
         console.warn("[remote-input] joystick/game-mode capture failed:", error);
@@ -2315,9 +2336,10 @@ test.describe("App screenshots", () => {
       await page.goto("/settings");
       const bootMenuAnswer = getActiveMain(page).getByTestId("settings-boot-menu-answer");
       await expect(bootMenuAnswer).toBeVisible();
-      const playAndDiskCard = getActiveMain(page)
-        .locator(".profile-card")
-        .filter({ has: page.getByTestId("settings-boot-menu-answer") });
+      // The launch-safety controls live in their own bordered block inside the Play and Disk
+      // chapter. Shooting that block rather than the whole chapter keeps the image about
+      // launch safety, which is what the manual section around it is explaining.
+      const playAndDiskCard = getActiveMain(page).getByTestId("settings-launch-safety");
       await playAndDiskCard.scrollIntoViewIfNeeded();
       await captureScreenshot(page, testInfo, "settings/content-explorer/01-launch-safety.png", {
         locator: playAndDiskCard,
@@ -2383,7 +2405,7 @@ test.describe("App screenshots", () => {
               if (!isVideo) return;
               let n = 0;
               const tick = () => {
-                if (this.closed || n > 400) return; // ~13s of frames covers the whole capture
+                if (this.closed || n > 1500) return; // ~50s of frames covers the whole capture
                 for (const p of packets) this.onmessage?.({ data: p.slice(0) });
                 n += 1;
                 setTimeout(tick, 33);
@@ -2435,6 +2457,32 @@ test.describe("App screenshots", () => {
         await immersiveMirror.getByTestId("av-immersive-zoom-in").click();
         await expect(immersiveMirror.getByTestId("av-mirror-minimap")).toBeVisible({ timeout: 4000 });
         await captureScreenshot(page, testInfo, "home/remote-input/06-av-mirror-immersive.png", { locator: sheet });
+        await immersiveMirror.getByTestId("av-immersive-fit").click();
+
+        // Game Mode, driven by key: the on-screen controls step aside so the picture has
+        // the whole sheet. This state cannot be shown without a live picture to give the
+        // space to — GM-6 keeps the controls up otherwise.
+        await page.getByTestId("remote-input-immersive-toggle").click();
+        // Pressed AT the sheet: a key sent to the body once the chrome has gone would be a
+        // tab jump that navigates away instead of a joystick relay.
+        await sheet.press("2");
+        await expect(page.getByTestId("remote-input-virtual-joystick")).toHaveCount(0, { timeout: 8000 });
+        await expect(page.getByTestId("remote-input-restore-chrome")).toBeVisible({ timeout: 10000 });
+        await captureScreenshot(page, testInfo, "home/remote-input/07-game-mode-keys.png", { locator: sheet });
+
+        // The same state with the handset turned a quarter clockwise. The app stays
+        // portrait and counter-rotates only the picture, so the capture is turned back by
+        // the same amount — which puts the reader where the player holding it is.
+        await page.getByTestId("remote-input-restore-chrome").click();
+        await page.getByTestId("remote-input-rotation-90").click();
+        await expect(immersiveMirror).toHaveAttribute("data-rotation", "90");
+        await sheet.press("2");
+        await expect(page.getByTestId("remote-input-virtual-joystick")).toHaveCount(0, { timeout: 8000 });
+        await expect(page.getByTestId("remote-input-restore-chrome")).toBeVisible({ timeout: 10000 });
+        await captureScreenshot(page, testInfo, "home/remote-input/08-game-mode-rotated.png", {
+          locator: sheet,
+          rotateDegrees: 90,
+        });
       }
     },
   );
@@ -2938,8 +2986,38 @@ test.describe("App screenshots", () => {
       await waitForConnected(page);
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
 
+      // The overview is the one shot that has to show the page as a FIRST visit sees it: a short
+      // list of named chapters rather than every control at once. The shared fixture seeds every
+      // chapter open so the other specs can reach the controls inside them, so the first-visit
+      // state is written explicitly here — only Connection open. Clearing the key instead would
+      // not work, because the fixture's seed writes it again on the next navigation.
+      await page.evaluate(() => localStorage.setItem("c64u_settings_open_sections", JSON.stringify(["connection"])));
+      await page.reload();
+      await waitForConnected(page);
+      await expect(page.getByTestId("settings-section-appearance")).toHaveAttribute("data-open", "false");
       await page.evaluate(() => window.scrollTo(0, 0));
       await captureScreenshot(page, testInfo, "settings/01-overview.png");
+
+      // Everything after this shot is about the controls themselves, so put the chapters back.
+      await page.evaluate(() => {
+        const ids = [
+          "appearance",
+          "connection",
+          "diagnostics",
+          "play-and-disk",
+          "feature-group-stable",
+          "feature-group-experimental",
+          "sid-radio",
+          "hvsc",
+          "online-archive",
+          "device-safety",
+          "notifications",
+          "about",
+        ];
+        localStorage.setItem("c64u_settings_open_sections", JSON.stringify(ids));
+      });
+      await page.reload();
+      await waitForConnected(page);
       await capturePageSections(page, testInfo, "settings");
 
       await page.evaluate(() => window.scrollTo(0, 0));

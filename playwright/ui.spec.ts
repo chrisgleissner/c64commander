@@ -95,7 +95,9 @@ test.describe("UI coverage", () => {
 
   const enableDeveloperMode = async (page: Page) => {
     await page.goto("/settings");
-    const aboutButton = page.getByRole("button", { name: "About" });
+    // The build-info block, not the About chapter header — the gesture is repeated taps on the
+    // version text, and the header would just open and close the chapter.
+    const aboutButton = page.getByTestId("settings-about-build-info");
     for (let i = 0; i < 7; i += 1) {
       await aboutButton.click();
     }

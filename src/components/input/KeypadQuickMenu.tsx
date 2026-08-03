@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 import { requestDeviceSwitcherOpen, subscribeQuickMenuOpen } from "@/lib/input/keypadCommands";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
+import { startGameMode } from "@/lib/remoteInput/gameModeLaunch";
+import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 
 /**
@@ -27,6 +29,7 @@ import { useSavedDevices } from "@/hooks/useSavedDevices";
 export function KeypadQuickMenu() {
   const navigate = useNavigate();
   const savedDevices = useSavedDevices();
+  const remoteInputEnabled = useFeatureFlagValue("remote_input_enabled");
   const [open, setOpen] = useState(false);
 
   useEffect(() => subscribeQuickMenuOpen(() => setOpen(true)), []);
@@ -57,6 +60,18 @@ export function KeypadQuickMenu() {
               {route.label}
             </Button>
           ))}
+          {/* Carried here as well as on `0`, so the shortcut is discoverable without
+              reading the manual — in the same place the page jumps already are. */}
+          {remoteInputEnabled ? (
+            <Button
+              variant="ghost"
+              className="justify-start"
+              data-testid="keypad-quick-menu-game-mode"
+              onClick={() => run(() => void startGameMode())}
+            >
+              Game Mode
+            </Button>
+          ) : null}
           <Button
             variant="ghost"
             className="justify-start"

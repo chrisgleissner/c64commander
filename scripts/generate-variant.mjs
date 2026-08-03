@@ -29,6 +29,7 @@ export const DEFAULT_ANDROID_LAUNCHER_BACKGROUND_XML_PATH = path.join(
 export const DEFAULT_IOS_VARIANT_XCCONFIG_PATH = path.join(REPO_ROOT, "ios/App/App/Config/Variant.generated.xcconfig");
 export const ALLOWED_ENDPOINT_KEYS = ["device_host", "hvsc_base_url", "commoserve_base_url"];
 const ALLOWED_DEFAULT_DISPLAY_PROFILES = ["auto", "compact", "medium", "expanded"];
+const ALLOWED_JOYSTICK_KEY_LAYOUTS = ["diamond8", "classicT9", "custom"];
 
 const VARIANT_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 
@@ -348,6 +349,24 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
     runtime.default_hide_navigation_bar !== undefined
       ? requireBoolean(runtime.default_hide_navigation_bar, `variants.${variantId}.runtime.default_hide_navigation_bar`)
       : false;
+  // Which physical keys steer the joystick out of the box. The keypad edition
+  // centres the diamond on `8` because that is where a thumb rests on a numeric
+  // keypad; the general edition keeps the classic T9 arrangement it shipped with.
+  const defaultJoystickKeyLayout =
+    runtime.default_joystick_key_layout !== undefined
+      ? requireOneOf(
+          runtime.default_joystick_key_layout,
+          ALLOWED_JOYSTICK_KEY_LAYOUTS,
+          `variants.${variantId}.runtime.default_joystick_key_layout`,
+        )
+      : "classicT9";
+  const defaultGameModeOnLaunch =
+    runtime.default_game_mode_on_launch !== undefined
+      ? requireBoolean(
+          runtime.default_game_mode_on_launch,
+          `variants.${variantId}.runtime.default_game_mode_on_launch`,
+        )
+      : false;
 
   const platform = {
     android: {
@@ -432,6 +451,8 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
       defaultSidEmulationEngine,
       defaultHideStatusBar,
       defaultHideNavigationBar,
+      defaultJoystickKeyLayout,
+      defaultGameModeOnLaunch,
       endpoints: Object.fromEntries(endpointKeys.map((key) => [key, runtimeEndpointsRaw[key].trim()])),
     },
   };

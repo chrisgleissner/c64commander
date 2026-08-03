@@ -21,6 +21,8 @@ import { cn } from "@/lib/utils";
 import { useAvMirror, useAvMirrorCanvas } from "@/hooks/useAvMirror";
 import { useMirrorViewport } from "@/hooks/useMirrorViewport";
 import { viewportRect } from "@/lib/streams/mirrorViewport";
+import { fitStageSize, unrotateDelta, unrotatePoint } from "@/lib/remoteInput/deviceRotation";
+import type { DeviceRotation } from "@/lib/remoteInput/joystickKeyBindings";
 import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
 import { addLog } from "@/lib/logging";
 import { AvMirrorMinimap } from "./AvMirrorMinimap";
@@ -43,12 +45,19 @@ const KEY_PAN_STEP = 0.35; // fraction of the visible region per key press
 export interface AvMirrorImmersiveProps {
   session?: AvMirrorSession;
   onModeChange?: (mode: MirrorInputMode) => void;
+  /** How far the app's frame appears turned to the player; the picture is turned back by this. */
+  rotation?: DeviceRotation;
+  /** Take all the height available instead of sizing to the frame's aspect. */
+  fill?: boolean;
   className?: string;
 }
 
 const DOUBLE_TAP_MS = 300;
-const CONTROLS_HIDE_MS = 2600;
+export const CONTROLS_HIDE_MS = 2600;
 const ZOOM_STEP = 1.5;
+const FRAME_WIDTH = 384;
+const FRAME_HEIGHT = 272;
+const FRAME_ASPECT = FRAME_WIDTH / FRAME_HEIGHT;
 
 const haptic = () => {
   try {
@@ -62,15 +71,19 @@ const haptic = () => {
 
 /**
  * The maximised, controllable screen mirror for Remote Input game mode. Native-res
- * decode is GPU-scaled, so zoom is fixed-cost even on the Callback 8020. The one hard
- * rule (06-av-mirror-ux §7.1): physical input is NEVER ambiguous — a colour-coded
- * view-lock mode (blue = Driving C64, amber = Adjusting view) makes the current role
- * unmistakable, flippable by an on-screen button, a physical key (via the ref), and it
- * auto-reverts to Drive after idle. Touch on the picture always adjusts; the joystick /
- * keyboard controls always relay.
+ * decode is GPU-scaled, so zoom is fixed-cost. The one hard rule (06-av-mirror-ux
+ * §7.1): physical input is NEVER ambiguous — a colour-coded view-lock mode
+ * (blue = Driving C64, amber = Adjusting view) makes the current role unmistakable,
+ * flippable by an on-screen button, a physical key (via the ref), and it
+ * auto-reverts to Drive after idle. Touch on the picture always adjusts; the
+ * joystick / keyboard controls always relay.
+ *
+ * Only the picture turns with the handset. The zoom cluster, the minimap and the
+ * mode chip stay anchored to the app frame — they are app chrome, and a player
+ * using them is looking at the phone rather than at the game.
  */
 export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImmersiveProps>(function AvMirrorImmersive(
-  { session, onModeChange, className },
+  { session, onModeChange, rotation = 0, fill = false, className },
   ref,
 ) {
   const { videoLive, video } = useAvMirror(session);
@@ -78,13 +91,38 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
   const { viewport, zoomBy, panBy, centerOn, reset } = useMirrorViewport({ session, follow });
   const [mode, setModeState] = useState<MirrorInputMode>("drive");
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   useAvMirrorCanvas(canvasRef, session);
 
   const viewportStateRef = useRef(viewport);
   viewportStateRef.current = viewport;
+
+  const quarterTurned = rotation === 90 || rotation === 270;
+
+  // The picture uses the whole space it is given, so the drawn size has to be
+  // measured rather than declared: at 90° and 270° the aspect that fits is the
+  // reciprocal one, which is exactly what lets a turned picture claim the width.
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+    const measure = () => {
+      const bounds = element.getBoundingClientRect();
+      const next = fitStageSize(bounds.width, bounds.height, FRAME_ASPECT, rotation);
+      setStageSize((current) => (current.width === next.width && current.height === next.height ? current : next));
+    };
+    measure();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    observer?.observe(element);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [rotation]);
 
   const modeRef = useRef(mode);
   modeRef.current = mode;
@@ -150,18 +188,31 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
   const pinchRef = useRef<{ dist: number } | null>(null);
   const lastTapRef = useRef(0);
 
-  const stageMetrics = () => {
-    const el = stageRef.current;
-    if (!el) return null;
-    const b = el.getBoundingClientRect();
-    return b.width > 0 && b.height > 0 ? b : null;
+  /**
+   * The stage in its OWN frame: the centre a rotation turns about, and the width
+   * and height before that rotation. The element's bounding rect is its rotated
+   * bounding box, so at a quarter turn its two sides are the ones that swap.
+   */
+  const stageFrame = () => {
+    const element = stageRef.current;
+    if (!element) return null;
+    const bounds = element.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) return null;
+    return {
+      centre: { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 },
+      width: quarterTurned ? bounds.height : bounds.width,
+      height: quarterTurned ? bounds.width : bounds.height,
+    };
   };
 
-  const focalFromPoint = (clientX: number, clientY: number, bounds: DOMRect) => {
+  type StageFrame = NonNullable<ReturnType<typeof stageFrame>>;
+
+  const focalFromPoint = (clientX: number, clientY: number, frame: StageFrame) => {
+    const local = unrotatePoint(clientX, clientY, frame.centre, rotation);
     const rect = viewportRect(viewport);
     return {
-      x: rect.x + ((clientX - bounds.left) / bounds.width) * rect.w,
-      y: rect.y + ((clientY - bounds.top) / bounds.height) * rect.h,
+      x: rect.x + (0.5 + local.x / frame.width) * rect.w,
+      y: rect.y + (0.5 + local.y / frame.height) * rect.h,
     };
   };
 
@@ -174,11 +225,11 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
       pinchRef.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) };
     } else if (pointers.current.size === 1) {
       const now = Date.now();
-      const bounds = stageMetrics();
-      if (now - lastTapRef.current < DOUBLE_TAP_MS && bounds) {
+      const frame = stageFrame();
+      if (now - lastTapRef.current < DOUBLE_TAP_MS && frame) {
         // double-tap: zoom toward the point, or reset when already zoomed in
         if (viewport.scale > 1.05) reset();
-        else zoomBy(3, focalFromPoint(event.clientX, event.clientY, bounds));
+        else zoomBy(3, focalFromPoint(event.clientX, event.clientY, frame));
         lastTapRef.current = 0;
       } else {
         lastTapRef.current = now;
@@ -189,23 +240,25 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const prev = pointers.current.get(event.pointerId);
     if (!prev) return;
-    const bounds = stageMetrics();
+    const frame = stageFrame();
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    if (!bounds) return;
+    if (!frame) return;
 
     if (pointers.current.size === 2 && pinchRef.current) {
       const [a, b] = [...pointers.current.values()];
       const dist = Math.hypot(a.x - b.x, a.y - b.y);
       if (pinchRef.current.dist > 0) {
         const factor = dist / pinchRef.current.dist;
-        const midX = (a.x + b.x) / 2;
-        const midY = (a.y + b.y) / 2;
-        zoomBy(factor, focalFromPoint(midX, midY, bounds));
+        zoomBy(factor, focalFromPoint((a.x + b.x) / 2, (a.y + b.y) / 2, frame));
       }
       pinchRef.current.dist = dist;
     } else if (pointers.current.size === 1) {
-      const dx = -((event.clientX - prev.x) / bounds.width) / viewport.scale;
-      const dy = -((event.clientY - prev.y) / bounds.height) / viewport.scale;
+      // Turn the drag into the picture's own frame first, or a drag along the axis
+      // the player sees pans along the picture's other axis — a defect that only
+      // appears once the handset is turned.
+      const local = unrotateDelta(event.clientX - prev.x, event.clientY - prev.y, rotation);
+      const dx = -(local.x / frame.width) / viewport.scale;
+      const dy = -(local.y / frame.height) / viewport.scale;
       if (dx !== 0 || dy !== 0) panBy(dx, dy);
     }
   };
@@ -224,65 +277,82 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
   return (
     <div
       className={cn(
-        // shrink-0: keep the aspect-ratio height inside the Remote Input flex column,
-        // which would otherwise collapse the mirror to its borders.
-        "relative shrink-0 overflow-hidden rounded-lg border-2 bg-black transition-colors",
+        "relative overflow-hidden rounded-lg border-2 bg-black transition-colors",
+        // shrink-0 keeps the measured height inside the Remote Input flex column, which
+        // would otherwise collapse the mirror to its borders. Filling instead gives the
+        // picture every pixel the sheet body is not using.
+        fill ? "min-h-0 flex-1" : "shrink-0",
         adjust ? "border-amber-400" : "border-primary",
         className,
       )}
       data-testid="av-mirror-immersive"
       data-mode={mode}
+      data-rotation={rotation}
     >
-      {/* Mode banner — the glanceable, unmistakable "who owns input" signal. */}
-      <div className="pointer-events-none absolute left-2 top-2 z-10">
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-white shadow",
-            adjust ? "bg-amber-500" : "bg-primary",
-          )}
-          data-testid="av-mirror-mode-chip"
+      {/* The measured box. In flow with the frame's aspect when the mirror sizes itself,
+          so the root has a real height for the controls below it to stack against;
+          absolutely filling the root when the mirror is told to take what is left. */}
+      <div
+        ref={containerRef}
+        className={fill ? "absolute inset-0" : "relative w-full"}
+        style={fill ? undefined : { aspectRatio: quarterTurned ? "272 / 384" : "384 / 272" }}
+      >
+        {/* Mode banner — the glanceable, unmistakable "who owns input" signal. */}
+        <div className="pointer-events-none absolute left-2 top-2 z-10">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-white shadow",
+              adjust ? "bg-amber-500" : "bg-primary",
+            )}
+            data-testid="av-mirror-mode-chip"
+          >
+            {adjust ? <ScanEye className="h-3 w-3" /> : <Gamepad2 className="h-3 w-3" />}
+            {adjust ? "Adjusting view" : "Driving C64"}
+          </span>
+        </div>
+
+        <div
+          ref={stageRef}
+          className="absolute left-1/2 top-1/2 touch-none select-none"
+          style={{
+            width: stageSize.width || undefined,
+            height: stageSize.height || undefined,
+            transform: `translate(-50%, -50%) rotate(${-rotation}deg)`,
+          }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          data-testid="av-mirror-immersive-stage"
         >
-          {adjust ? <ScanEye className="h-3 w-3" /> : <Gamepad2 className="h-3 w-3" />}
-          {adjust ? "Adjusting view" : "Driving C64"}
-        </span>
+          <canvas
+            ref={canvasRef}
+            width={FRAME_WIDTH}
+            height={FRAME_HEIGHT}
+            className="block h-full w-full origin-top-left will-change-transform"
+            style={{ imageRendering: "pixelated", transform }}
+            data-testid="av-mirror-immersive-canvas"
+          />
+        </div>
       </div>
 
-      <div
-        ref={stageRef}
-        className="relative w-full touch-none select-none"
-        style={{ aspectRatio: "384 / 272" }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        data-testid="av-mirror-immersive-stage"
-      >
-        <canvas
-          ref={canvasRef}
-          width={384}
-          height={272}
-          className="block w-full origin-top-left will-change-transform"
-          style={{ imageRendering: "pixelated", aspectRatio: "384 / 272", transform }}
-          data-testid="av-mirror-immersive-canvas"
-        />
-        {!videoLive && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-sm text-white/70">
-            {video.state === "connecting"
-              ? "Connecting…"
-              : video.state === "error"
-                ? "Video unavailable"
-                : "Not watching"}
-          </div>
-        )}
-        {videoLive && video.fps > 0 && (
-          <span
-            className="absolute right-2 top-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-xs leading-tight text-white/80"
-            data-testid="av-mirror-immersive-fps"
-          >
-            {video.standard ?? "PAL"} {video.fps} fps
-          </span>
-        )}
-      </div>
+      {!videoLive && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-sm text-white/70">
+          {video.state === "connecting"
+            ? "Connecting…"
+            : video.state === "error"
+              ? "Video unavailable"
+              : "Not watching"}
+        </div>
+      )}
+      {videoLive && video.fps > 0 && (
+        <span
+          className="absolute right-2 top-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-xs leading-tight text-white/80"
+          data-testid="av-mirror-immersive-fps"
+        >
+          {video.standard ?? "PAL"} {video.fps} fps
+        </span>
+      )}
 
       {/* Minimap — only meaningful once zoomed in. */}
       {videoLive && viewport.scale > 1.05 && (

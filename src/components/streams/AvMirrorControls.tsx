@@ -6,12 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useCallback, useState } from "react";
 import { Volume2, VolumeX, Tv, TvMinimal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAvMirror } from "@/hooks/useAvMirror";
 import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
-import { saveMirrorC64Audio } from "@/lib/config/appSettings";
+import { saveMirrorC64Audio, saveMirrorC64Video } from "@/lib/config/appSettings";
 
 /** A subtle pulsing "live" dot, so an active-but-invisible stream isn't ambiguous. */
 export const LiveDot = ({ className }: { className?: string }) => (
@@ -45,7 +46,27 @@ export function AvMirrorControls({
   className,
 }: AvMirrorControlsProps) {
   const { audioLive, videoLive, audio, video, toggleAudio, toggleVideo } = useAvMirror(session);
-  const error = audio.error ?? video.error;
+
+  // The session reports the failures it knows how to describe (a blocked route, a refused
+  // start) through its own snapshot, but a toggle can still reject — a socket that will not
+  // open, a plugin that is not there. Discarding that promise would lose the failure entirely
+  // and leave the button looking as though nothing had happened, so it is caught and shown in
+  // the same place as every other mirror error.
+  const [toggleError, setToggleError] = useState<string | null>(null);
+  // `await` rather than `.catch`, so a toggle that throws synchronously, one that rejects, and
+  // one that returns nothing at all are all handled by the same three lines.
+  const runToggle = useCallback((toggle: () => Promise<void> | void) => {
+    setToggleError(null);
+    void (async () => {
+      try {
+        await toggle();
+      } catch (cause: unknown) {
+        setToggleError(cause instanceof Error ? cause.message : String(cause));
+      }
+    })();
+  }, []);
+
+  const error = audio.error ?? video.error ?? toggleError;
 
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)} data-testid="av-mirror-controls">
@@ -59,7 +80,7 @@ export function AvMirrorControls({
             // Turning listening off here and having the next track switch it back on again is the
             // identical defect wearing a different hat.
             saveMirrorC64Audio(!audioLive);
-            void toggleAudio();
+            runToggle(toggleAudio);
           }}
           data-testid="av-audio-toggle"
           data-state={audio.state}
@@ -78,7 +99,12 @@ export function AvMirrorControls({
           size={size}
           variant={videoLive ? "default" : "outline"}
           aria-pressed={videoLive}
-          onClick={() => void toggleVideo()}
+          onClick={() => {
+            // The same record Listen keeps, for the same reason: a C64 wired to a television
+            // needs Watch turned off once, not at every Game Mode launch.
+            saveMirrorC64Video(!videoLive);
+            runToggle(toggleVideo);
+          }}
           data-testid="av-video-toggle"
           data-state={video.state}
         >

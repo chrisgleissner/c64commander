@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   ChevronDown,
   Gamepad2,
@@ -14,7 +14,6 @@ import {
   Maximize2,
   Minimize2,
   Minus,
-  PanelTopClose,
   Plus,
   Wifi,
   WifiOff,
@@ -25,9 +24,11 @@ import { cn } from "@/lib/utils";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useRemoteInputCapabilityTier } from "@/hooks/useRemoteInputCapabilityTier";
 import { useRemoteInputSession, type RemoteInputOutputMode } from "@/hooks/useRemoteInputSession";
-import { resolveInputProfile } from "@/lib/input/profiles";
-import { resolveSemanticAction } from "@/lib/input/keyEvent";
-import { dpadActionToJoystickInputs, t9KeyToJoystickInputs } from "@/lib/remoteInput/joystickDigitalMapping";
+import { useRemoteInputPhysicalKeys } from "@/hooks/useRemoteInputPhysicalKeys";
+import { useRemoteInputGameMode } from "@/hooks/useRemoteInputGameMode";
+import { useDeviceRotation } from "@/hooks/useDeviceRotation";
+import { useAutoHide } from "@/hooks/useAutoHide";
+import { getInputModality, subscribeInputModality } from "@/lib/input/inputModality";
 import {
   remoteInputSupportsJoystick,
   REMOTE_INPUT_AUTH_REQUIRED_HINT,
@@ -42,6 +43,18 @@ import {
   stepRemoteInputControlSize,
   type RemoteInputControlSize,
 } from "@/lib/remoteInput/remoteInputControlSettings";
+import {
+  bindingForLayout,
+  loadCustomBinding,
+  loadJoystickLayout,
+  type DeviceRotation,
+} from "@/lib/remoteInput/joystickKeyBindings";
+import {
+  GAME_MODE_CONTROLS_CHANGE_EVENT,
+  loadGameModeControls,
+  resolveControlSurface,
+} from "@/lib/remoteInput/gameModeControlSurface";
+import { startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { AUTOFIRE_VISIBILITY_CHANGE_EVENT, loadShowAutofireButton } from "@/lib/remoteInput/autofire";
 import { VirtualJoystick } from "@/components/remoteInput/VirtualJoystick";
 import { TypeKeyboard } from "@/components/remoteInput/TypeKeyboard";
@@ -49,25 +62,33 @@ import { QuickKeysBar } from "@/components/remoteInput/QuickKeysBar";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
 import { useAvMirror } from "@/hooks/useAvMirror";
 import { AvMirrorControls } from "@/components/streams/AvMirrorControls";
-import { AvMirrorImmersive, type AvMirrorImmersiveHandle } from "@/components/streams/AvMirrorImmersive";
-import type { JoystickInputName } from "@/lib/c64api";
+import {
+  AvMirrorImmersive,
+  CONTROLS_HIDE_MS,
+  type AvMirrorImmersiveHandle,
+} from "@/components/streams/AvMirrorImmersive";
 
 export type RemoteInputSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
-// Matches the profile the app applies globally (App.tsx's FocusNavigationProvider
-// profileId) so physical-key resolution is consistent with the rest of the UI.
-const PHYSICAL_INPUT_KEYMAP = resolveInputProfile("keypad");
+/** How long a summoned Game Mode overlay waits, with no interaction at all, before it goes. */
+const GAME_MODE_CHROME_HIDE_MS = 6000;
+
+const ROTATION_CHOICES: ReadonlyArray<{ label: string; value: DeviceRotation | "auto" }> = [
+  { label: "Auto", value: "auto" },
+  { label: "0°", value: 0 },
+  { label: "90°", value: 90 },
+  { label: "270°", value: 270 },
+];
 
 /**
- * HARD12-017 v1 / HARD13 ergonomics: the "Remote Input" sheet — a second-screen
- * joystick and keyboard for the C64.
+ * The "Remote Input" sheet — a second-screen joystick and keyboard for the C64.
  * Thin shell over the tested pure mappings (`@/lib/remoteInput/*`) and the
  * coalesced transport (`useRemoteInputSession`). Controls scale with a persisted
- * size preference and an immersive gaming mode strips everything but the
- * joystick action controls for no-look play — see docs/plans/hardening/13.
+ * size preference; Game Mode strips the sheet to the picture and whatever control
+ * surface suits how the user is driving the app (spec §5.1).
  */
 export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) => {
   const { tier, loading: tierLoading, resolved } = useRemoteInputCapabilityTier(open);
@@ -78,20 +99,17 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   // is wrong on this tier specifically.
   const joystickUnavailableHint =
     tier === "auth-required" ? REMOTE_INPUT_AUTH_REQUIRED_HINT : REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT;
-  const heldPhysicalKeysRef = useRef<Set<string>>(new Set());
-  const previousPhysicalInputsRef = useRef<Set<JoystickInputName>>(new Set());
   // On a compact (small) display the Joystick / Keys / Release All buttons are
   // too wide to share one non-scrolling row, so drop the leading icons on the
-  // toggle buttons there (text-only) to reclaim the width. Wider profiles keep
-  // the icons.
+  // toggle buttons there (text-only) to reclaim the width.
   const { profile } = useDisplayProfile();
   const isCompactDisplay = profile === "compact";
   const [controlSize, setControlSize] = useState<RemoteInputControlSize>(DEFAULT_REMOTE_INPUT_CONTROL_SIZE);
-  const [immersive, setImmersive] = useState(false);
-  // Game mode can further collapse ALL remaining chrome (sheet header + pinned toolbar + mirror
-  // controls) so only the live screen and the joystick remain — maximum picture, minimum clutter.
-  const [chromeCollapsed, setChromeCollapsed] = useState(false);
   const [showAutofire, setShowAutofire] = useState(loadShowAutofireButton);
+  const [joystickBinding, setJoystickBinding] = useState(() =>
+    bindingForLayout(loadJoystickLayout(), loadCustomBinding()),
+  );
+  const [controlsSetting, setControlsSetting] = useState(loadGameModeControls);
   const scale = remoteInputControlScale(controlSize);
 
   // Content Explorer A/V mirror: pair the live screen with driving the machine. The Live View
@@ -107,13 +125,68 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const [mirrorAdjust, setMirrorAdjust] = useState(false);
   const showMirrorScreen = videoMirrorEnabled && mirror.video.state !== "off";
 
-  // Rehydrate the persisted control-size / autofire-visibility preferences when the sheet opens.
+  const { deviceRotation, frameRotation, source: rotationSource, pin, clearPin } = useDeviceRotation(open);
+
+  const requestSheetOpen = useCallback(() => onOpenChange(true), [onOpenChange]);
+  const { immersive, enterGameMode, exitGameMode, releaseLaunchedStreams } = useRemoteInputGameMode({
+    open,
+    joystickAvailable,
+    tierResolved: resolved && !tierLoading,
+    outputMode: session.outputMode,
+    setOutputMode: session.setOutputMode,
+    requestSheetOpen,
+    session: mirror.session,
+  });
+
+  // `immersive` is what was ASKED for; `gameMode` is what is actually in effect. Every
+  // place that strips the sheet keys off the latter, so a request that cannot be honoured
+  // — no joystick relay, or Keys mode — leaves the ordinary sheet with its way out intact
+  // rather than a stripped header with no control on it.
+  const gameMode = joystickAvailable && session.outputMode === "joystick" && immersive;
+  // Longer than the mirror's own floating cluster: this is a whole toolbar the user asked
+  // for, with Watch, Listen, the orientation control and the way out on it, and it is
+  // re-armed by every interaction — so it stays while it is being used.
+  const chrome = useAutoHide(GAME_MODE_CHROME_HIDE_MS);
+  const quickKeysOverlay = useAutoHide(GAME_MODE_CHROME_HIDE_MS);
+  const chromeHidden = gameMode && !chrome.visible;
+
+  const modality = useSyncExternalStore(subscribeInputModality, getInputModality, getInputModality);
+  const controlSurface = resolveControlSurface({
+    setting: controlsSetting,
+    modality,
+    videoLive: showMirrorScreen,
+  });
+
+  // Showing is immediate, hiding is delayed: controls that vanish mid-tap would be
+  // worse than controls that linger for a moment after the first physical key.
+  const [inputControlsHidden, setInputControlsHidden] = useState(false);
   useEffect(() => {
-    if (open) {
-      setControlSize(loadRemoteInputControlSize());
-      setShowAutofire(loadShowAutofireButton());
+    if (!gameMode || controlSurface === "shown") {
+      setInputControlsHidden(false);
+      return;
     }
+    const timer = setTimeout(() => setInputControlsHidden(true), CONTROLS_HIDE_MS);
+    return () => clearTimeout(timer);
+  }, [gameMode, controlSurface]);
+  const showInputControls = !gameMode || !inputControlsHidden;
+
+  // Rehydrate the persisted preferences when the sheet opens.
+  useEffect(() => {
+    if (!open) return;
+    setControlSize(loadRemoteInputControlSize());
+    setShowAutofire(loadShowAutofireButton());
+    setJoystickBinding(bindingForLayout(loadJoystickLayout(), loadCustomBinding()));
+    setControlsSetting(loadGameModeControls());
   }, [open]);
+
+  // The sheet is mounted for the life of the page, so a Settings change made between two
+  // Game Mode launches would otherwise not be read until the next open — and a user who has
+  // just turned the on-screen controls off would still see them.
+  useEffect(() => {
+    const sync = () => setControlsSetting(loadGameModeControls());
+    window.addEventListener(GAME_MODE_CONTROLS_CHANGE_EVENT, sync);
+    return () => window.removeEventListener(GAME_MODE_CONTROLS_CHANGE_EVENT, sync);
+  }, []);
 
   // Hot-swap the autofire-button visibility if the Settings toggle changes while a session is live.
   useEffect(() => {
@@ -123,9 +196,8 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   }, []);
 
   // A hidden Autofire button must be a STOPPED autofire. The session owns `autofireEnabled`, so
-  // merely un-rendering the toggle (default, or via the Settings switch mid-session) would leave the
-  // dedicated interval pulsing FIRE with no UI left to turn it off. Force it off whenever the control
-  // is not shown, so a hidden control is a stopped control.
+  // merely un-rendering the toggle would leave the dedicated interval pulsing FIRE with no UI left
+  // to turn it off.
   const setAutofireEnabled = session.setAutofireEnabled;
   useEffect(() => {
     if (!showAutofire) setAutofireEnabled(false);
@@ -139,164 +211,23 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     });
   }, []);
 
-  // HARD13 residual (E2): merge with the session's current held set instead
-  // of replacing it wholesale - a device with both physical keys and touch
-  // (e.g. a fire button held via touch) must not have the touch-held inputs
-  // clobbered by a physical key press/release. Only inputs this function
-  // itself contributed last time are eligible for removal; anything the
-  // rest of the sheet (touch) is holding survives untouched.
-  const recomputePhysicalHeldSet = useCallback(() => {
-    const currentPhysicalInputs = new Set<JoystickInputName>();
-    heldPhysicalKeysRef.current.forEach((action) => {
-      t9KeyToJoystickInputs(action as never).forEach((input) => currentPhysicalInputs.add(input));
-      dpadActionToJoystickInputs(action as never).forEach((input) => currentPhysicalInputs.add(input));
-    });
-    const next = new Set(session.heldJoystickInputs);
-    previousPhysicalInputsRef.current.forEach((input) => {
-      if (!currentPhysicalInputs.has(input)) next.delete(input);
-    });
-    currentPhysicalInputs.forEach((input) => next.add(input));
-    previousPhysicalInputsRef.current = currentPhysicalInputs;
-    session.setHeldJoystickInputs(next);
-  }, [session.heldJoystickInputs, session.setHeldJoystickInputs]);
-
-  // Physical T9/D-pad raw capture (Joystick mode only): while focus is inside
-  // this sheet ([role=dialog]), the app's global keypad-navigation handler
-  // already bows out entirely (see useFocusNavigation.tsx's
-  // isWithinOpenOverlay guard), so these keys are free for us to reinterpret
-  // as joystick input instead of focus movement — no conflict with the
-  // existing focus-ring, and no changes needed to it.
-  const handlePhysicalKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      // A/V mirror view-lock (06-av-mirror-ux §7.1): the `*`/menu key ALWAYS flips
-      // between Driving C64 and Adjusting view (never ambiguous); while Adjusting,
-      // physical keys pan/zoom the mirror instead of relaying to the C64.
-      const mirrorHandle = mirrorRef.current;
-      if (mirrorHandle) {
-        const mirrorAction = resolveSemanticAction(PHYSICAL_INPUT_KEYMAP, event);
-        if (mirrorAction === "star" || mirrorAction === "openMenu") {
-          event.preventDefault();
-          mirrorHandle.toggleMode();
-          return;
-        }
-        if (mirrorHandle.getMode() === "adjust" && mirrorAction) {
-          let handled = true;
-          switch (mirrorAction) {
-            case "dpadUp":
-            case "digit2":
-              mirrorHandle.panStep(0, -1);
-              break;
-            case "dpadDown":
-            case "digit8":
-              mirrorHandle.panStep(0, 1);
-              break;
-            case "dpadLeft":
-            case "digit4":
-              mirrorHandle.panStep(-1, 0);
-              break;
-            case "dpadRight":
-            case "digit6":
-              mirrorHandle.panStep(1, 0);
-              break;
-            case "digit3":
-            case "digit9":
-              mirrorHandle.zoomIn();
-              break;
-            case "digit1":
-            case "digit7":
-              mirrorHandle.zoomOut();
-              break;
-            case "digit0":
-            case "digit5":
-            case "center":
-            case "enter":
-              mirrorHandle.reset();
-              break;
-            default:
-              handled = false;
-          }
-          if (handled) {
-            event.preventDefault();
-            return;
-          }
-        }
-      }
-
-      if (session.outputMode !== "joystick") return;
-      const action = resolveSemanticAction(PHYSICAL_INPUT_KEYMAP, event);
-      if (!action) return;
-      const inputs = [...t9KeyToJoystickInputs(action), ...dpadActionToJoystickInputs(action)];
-      if (!inputs.length) return;
-      event.preventDefault();
-      if (heldPhysicalKeysRef.current.has(action)) return;
-      heldPhysicalKeysRef.current.add(action);
-      recomputePhysicalHeldSet();
-    },
-    [session.outputMode, recomputePhysicalHeldSet],
-  );
-
-  const handlePhysicalKeyUp = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      const action = resolveSemanticAction(PHYSICAL_INPUT_KEYMAP, event);
-      if (!action || !heldPhysicalKeysRef.current.has(action)) return;
-      heldPhysicalKeysRef.current.delete(action);
-      recomputePhysicalHeldSet();
-    },
-    [recomputePhysicalHeldSet],
-  );
-
-  // Clear tracked physical keys (and what they last contributed) on every
-  // output-mode change. Without this, a direction held while switching to
-  // Type mode (no keyup, e.g. the user's thumb never lifts) stays recorded,
-  // and switching back to Joystick mode later resurrects it as phantom-held
-  // alongside whatever is pressed next - or, for `previousPhysicalInputsRef`,
-  // wrongly strips a same-named input a NEW touch hold contributed in the
-  // meantime (E2's merge logic only knows to remove what it itself added).
-  useEffect(() => {
-    heldPhysicalKeysRef.current.clear();
-    previousPhysicalInputsRef.current.clear();
-  }, [session.outputMode]);
-
-  // HARD21-006: the mode-change and sheet-close cleanups above cover their
-  // triggers, but releaseAll (panic button, backgrounding/visibilitychange) also
-  // clears the session's shared joystick held set while THIS component stays
-  // mounted — and had no channel into these physical refs. A direction held via a
-  // physical keypad/controller key when Release All fires (or the OS eats the
-  // keyup on background) stayed recorded, so returning and pressing a new
-  // direction re-asserted the old one (phantom-held / SOCD), and
-  // recomputePhysicalHeldSet's merge would wrongly strip a same-named input a
-  // later touch hold contributed. Reset both refs on the EXPLICIT releaseAllEpoch
-  // signal — NOT on an empty shared set: a physical and a touch/analog source can
-  // hold the same direction, so releasing one can momentarily empty the set while
-  // a physical key is still down, and clearing then would drop that live hold.
-  // Clearing already-empty refs on mount is a harmless no-op. Pure ref clears.
-  useEffect(() => {
-    heldPhysicalKeysRef.current.clear();
-    previousPhysicalInputsRef.current.clear();
-  }, [session.releaseAllEpoch]);
-
-  // Immersive mode is joystick-only; drop out of it if joystick relay becomes
-  // unavailable (tier downgrade) so the user is never stranded in a stripped
-  // layout that can't do anything.
-  useEffect(() => {
-    if (!joystickAvailable && immersive) setImmersive(false);
-  }, [joystickAvailable, immersive]);
-
-  // Chrome-collapse only makes sense inside game mode; restore it whenever game mode ends, so the
-  // controls can never stay hidden after the user has left the stripped layout.
-  useEffect(() => {
-    if (!immersive || session.outputMode !== "joystick") setChromeCollapsed(false);
-  }, [immersive, session.outputMode]);
+  const { handleKeyDown, handleKeyUp, clearHeldKeys } = useRemoteInputPhysicalKeys({
+    outputMode: session.outputMode,
+    heldJoystickInputs: session.heldJoystickInputs,
+    setHeldJoystickInputs: session.setHeldJoystickInputs,
+    releaseAllEpoch: session.releaseAllEpoch,
+    mirrorRef,
+    binding: joystickBinding,
+    rotation: deviceRotation,
+    onHashKey: gameMode ? quickKeysOverlay.toggle : undefined,
+  });
 
   // Smart default: when the connected device's REST API has no machine:input
   // support (keyboard-only), open straight into Type mode rather than a disabled
-  // Joystick tab. Gated on `resolved` (HARD15-006), not merely `!tierLoading` -
-  // the tier also reads as the default kernal-fallback value before any probe
-  // has ever run AND during a transient connection blip mid-session (the tier
-  // hook resets synchronously on disconnect). `resolved` distinguishes a
-  // genuine probed answer from both of those, so a transient blip no longer
-  // bounces the user out of Joystick mode - it only disables the tab (see the
-  // hint below) until the tier resolves again.
+  // Joystick tab. Gated on `resolved`, not merely `!tierLoading` — the tier also
+  // reads as the default kernal-fallback value before any probe has run AND during
+  // a transient connection blip mid-session, and `resolved` distinguishes a genuine
+  // probed answer from both.
   useEffect(() => {
     if (open && resolved && !tierLoading && !joystickAvailable && session.outputMode === "joystick") {
       session.setOutputMode("type");
@@ -306,21 +237,15 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       if (!nextOpen) {
-        heldPhysicalKeysRef.current.clear();
-        // HARD18-004: mirrors the output-mode-change cleanup above - without
-        // this, a direction held while closing the sheet (Android back/X,
-        // key never released) leaves previousPhysicalInputsRef stale. The
-        // sheet stays mounted (Home/Play render it persistently), so on
-        // reopen a later touch-held input of the same name gets wrongly
-        // stripped by recomputePhysicalHeldSet's merge (it only knows to
-        // remove what it itself last added).
-        previousPhysicalInputsRef.current.clear();
+        clearHeldKeys();
         session.releaseAll();
-        setImmersive(false);
+        releaseLaunchedStreams();
+        chrome.hide();
+        quickKeysOverlay.hide();
       }
       onOpenChange(nextOpen);
     },
-    [onOpenChange, session.releaseAll],
+    [onOpenChange, session.releaseAll, clearHeldKeys, releaseLaunchedStreams, chrome, quickKeysOverlay],
   );
 
   const handleOutputModeChange = (mode: RemoteInputOutputMode) => {
@@ -330,7 +255,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
 
   // The size stepper scales the JOYSTICK action controls; the Type-tab keyboard
   // sizes itself from the measured available space instead, so this control is
-  // joystick-only and hidden in Type mode (no compact vertical space spent on it).
+  // joystick-only and hidden in Type mode.
   const sizeStepper = (
     <div className="flex items-center gap-1" data-testid="remote-input-size-stepper">
       <span className="mr-1 text-xs text-muted-foreground">Size</span>
@@ -362,76 +287,106 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     </div>
   );
 
-  const gameMode = joystickAvailable && session.outputMode === "joystick" && immersive;
-  // Fully collapsed: only the live screen + joystick remain (game mode with the chrome hidden).
-  const fullyImmersive = gameMode && chromeCollapsed;
-
-  const immersiveToggle = joystickAvailable && session.outputMode === "joystick" && (
-    <div className="flex items-center gap-2">
-      <Button
-        size="sm"
-        variant={immersive ? "default" : "secondary"}
-        data-testid="remote-input-immersive-toggle"
-        aria-pressed={immersive}
-        onClick={() => setImmersive((value) => !value)}
-      >
-        {immersive ? <Minimize2 className="mr-1.5 h-4 w-4" /> : <Maximize2 className="mr-1.5 h-4 w-4" />}
-        {immersive ? "Exit game mode" : "Game mode"}
-      </Button>
-      {/* Inside game mode, one more tap hides ALL chrome so only the screen + joystick remain. */}
-      {gameMode ? (
+  // Per session, not persisted: an orientation pinned for one game should not
+  // silently still apply to the next launch weeks later. It is also what makes the
+  // orientation behaviour testable, and usable, with no sensor at all.
+  const selectedRotation: DeviceRotation | "auto" = rotationSource === "auto" ? "auto" : deviceRotation;
+  const rotationOverride = (
+    <div
+      className="flex items-center gap-1"
+      data-testid="remote-input-rotation-override"
+      data-rotation={deviceRotation}
+      data-source={rotationSource}
+    >
+      <span className="mr-1 text-xs text-muted-foreground">Orientation</span>
+      {ROTATION_CHOICES.map(({ label, value }) => (
         <Button
+          key={label}
           size="sm"
-          variant="secondary"
-          data-testid="remote-input-collapse-chrome"
-          aria-label="Hide controls — full screen"
-          onClick={() => setChromeCollapsed(true)}
+          variant={selectedRotation === value ? "default" : "secondary"}
+          className="h-8 px-2"
+          aria-pressed={selectedRotation === value}
+          data-testid={`remote-input-rotation-${value}`}
+          onClick={() => (value === "auto" ? clearPin() : pin(value))}
         >
-          <PanelTopClose className="mr-1.5 h-4 w-4" />
-          Hide controls
+          {label}
         </Button>
-      ) : null}
+      ))}
     </div>
   );
 
-  const showFooterActions = !(immersive && session.outputMode === "joystick");
+  const gameModeToggle = joystickAvailable && session.outputMode === "joystick" && (
+    <Button
+      size="sm"
+      variant={immersive ? "default" : "secondary"}
+      data-testid="remote-input-immersive-toggle"
+      aria-pressed={immersive}
+      onClick={() => {
+        if (immersive) exitGameMode();
+        else void startGameMode();
+      }}
+    >
+      {immersive ? <Minimize2 className="mr-1.5 h-4 w-4" /> : <Maximize2 className="mr-1.5 h-4 w-4" />}
+      {immersive ? "Exit game mode" : "Game mode"}
+    </Button>
+  );
+
+  const showFooterActions = !gameMode;
+
+  const quickKeysBar = (className?: string) => (
+    <QuickKeysBar
+      onChar={session.sendChar}
+      onKey={session.sendKeyboardInputs}
+      onCursor={session.sendCursor}
+      onSpecialKey={session.sendSpecialKey}
+      heldKeyboardInputs={session.heldKeyboardInputs}
+      onHeldKeyboardInputsChange={session.setHeldKeyboardInputs}
+      releaseAllEpoch={session.releaseAllEpoch}
+      tier={tier}
+      scale={scale}
+      className={className}
+    />
+  );
 
   return (
     <AppSheet open={open} onOpenChange={handleOpenChange}>
       <AppSheetContent
         data-testid="remote-input-sheet"
-        // The top-right X is now the sole Close (the duplicate footer Close was
-        // removed); give it a stable testid for keypad-reachability coverage.
-        // In fully-immersive game mode even the X is hidden — the floating restore
-        // handle brings the chrome (and its Close) back.
-        showClose={!fullyImmersive}
+        data-game-mode={gameMode ? "true" : "false"}
+        // What the transport is currently asked to hold. A direction stuck on the real C64 is
+        // this feature's worst failure, so the answer is on the surface rather than only in a
+        // log — and it is what lets a test assert the relayed direction rather than a repaint.
+        data-held-joystick={[...session.heldJoystickInputs].sort().join(",")}
+        // The top-right X is the sole Close; give it a stable testid for
+        // keypad-reachability coverage. With the chrome hidden in Game Mode even the
+        // X is gone — the floating restore handle brings it, and everything else, back.
+        showClose={!chromeHidden}
         closeTestId="remote-input-close"
         // The sheet reserves a 5rem bottom clearance (to sit above the app tab
         // bar), but the tab bar is hidden while any sheet is open. In normal
         // mode there is no footer, so drop that dead space (pb-0) and let the
-        // scrollable body own its bottom safe-area padding. Immersive game mode
-        // keeps the default clearance so its edge-anchored controls clear the
-        // navigation bar.
+        // scrollable body own its bottom safe-area padding. Game Mode keeps the
+        // default clearance so its edge-anchored controls clear the navigation bar.
         className={showFooterActions ? "pb-0" : undefined}
-        onKeyDown={handlePhysicalKeyDown}
-        onKeyUp={handlePhysicalKeyUp}
+        onKeyDown={handleKeyDown}
+        onKeyUp={handleKeyUp}
       >
-        {/* Fully-immersive game mode hides the header, the pinned toolbar and the mirror controls so
-            only the live screen + joystick remain. A single always-visible floating handle brings it
-            all back — an intuitive "pull the controls down" affordance over the top of the picture. */}
-        {fullyImmersive ? (
+        {/* Game Mode hides the header, the pinned toolbar and the mirror controls so only the
+            live screen and whatever control surface applies remain. A single always-visible
+            floating handle brings it all back — "pull the controls down" over the picture. */}
+        {chromeHidden ? (
           <button
             type="button"
             data-testid="remote-input-restore-chrome"
             aria-label="Show controls"
-            onClick={() => setChromeCollapsed(false)}
+            onClick={chrome.show}
             className="absolute left-1/2 top-1 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/55 px-3 py-1 text-xs font-medium text-white/90 shadow backdrop-blur transition-colors hover:bg-black/70"
           >
             <ChevronDown className="h-4 w-4" />
             Controls
           </button>
         ) : null}
-        {fullyImmersive ? null : (
+        {chromeHidden ? null : (
           <AppSheetHeader>
             <AppSheetTitle className="flex items-center gap-2">
               Remote Input
@@ -452,18 +407,17 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
           </AppSheetHeader>
         )}
         {/* Pinned chrome: the Joystick/Keys toggle and Release All live OUTSIDE
-            the scrollable body (shrink-0), so they never scroll away and stay
-            reachable however far the joystick/keyboard content scrolls. Release
-            All sits top-right, right-aligned past the toggle; the top-right X
-            (AppSheetContent) is the sole Close affordance. Size + Game mode ride
-            a second pinned row so the toggle+Release All row always fits one
-            line. HARD16-008: chrome keeps the standard px-4 gutter; the joystick
-            zone and keyboard grid below stay edge-to-edge. Hidden entirely in
-            fully-immersive game mode (restored via the floating handle). */}
-        {fullyImmersive ? null : (
-          <div className="flex shrink-0 flex-col gap-2 border-b border-border px-4 py-2">
+            the scrollable body (shrink-0), so they never scroll away. Size, Game mode
+            and the orientation override ride further pinned rows so the toggle +
+            Release All row always fits one line. Chrome keeps the standard px-4 gutter;
+            the joystick zone and keyboard grid below stay edge-to-edge. */}
+        {chromeHidden ? null : (
+          <div
+            className="flex shrink-0 flex-col gap-2 border-b border-border px-4 py-2"
+            {...(gameMode ? chrome.keepAliveProps : {})}
+          >
             <div className="flex items-center justify-between gap-2">
-              {immersive ? (
+              {gameMode ? (
                 <span className="text-sm font-semibold text-muted-foreground">Game mode</span>
               ) : (
                 <div className="flex min-w-0 items-center gap-2" data-testid="remote-input-output-mode-toggle">
@@ -504,9 +458,13 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
             {session.outputMode === "joystick" ? (
               <div className="flex items-center justify-between gap-2">
                 {sizeStepper}
-                {immersiveToggle}
+                {gameModeToggle}
               </div>
             ) : null}
+            {/* Game Mode's chrome carries the orientation control: it is what makes the
+                picture and the keys followable when the sensor cannot answer, and the
+                ordinary sheet has no room to spare for a row nobody there is using. */}
+            {gameMode ? <div className="flex flex-wrap items-center gap-2">{rotationOverride}</div> : null}
             {mirrorEnabled ? (
               <div
                 className="flex flex-wrap items-center justify-between gap-2"
@@ -526,36 +484,61 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
           className={cn(
             "flex flex-col gap-4",
             // The footer is gone; give the body its own bottom safe-area
-            // clearance in normal mode. Immersive keeps the sheet's default
-            // bottom clearance instead (edge-anchored controls clear the nav bar).
+            // clearance in normal mode. Game Mode keeps the sheet's default bottom
+            // clearance instead (edge-anchored controls clear the nav bar).
             showFooterActions && "pb-[calc(0.75rem+var(--safe-area-inset-bottom))]",
           )}
         >
           {showMirrorScreen ? (
-            <AvMirrorImmersive
-              ref={mirrorRef}
-              onModeChange={(nextMode) => setMirrorAdjust(nextMode === "adjust")}
-              className="mx-4"
-            />
+            // Only Game Mode's mirror claims the leftover height. Outside it the picture
+            // sizes to its own aspect and the controls stack below, so a wrapper that
+            // flexed here would leave the picture overflowing onto them.
+            <div className={cn("relative flex flex-col", gameMode ? "min-h-0 flex-1" : "shrink-0")}>
+              <AvMirrorImmersive
+                ref={mirrorRef}
+                onModeChange={(nextMode) => setMirrorAdjust(nextMode === "adjust")}
+                rotation={frameRotation}
+                fill={gameMode}
+                className={gameMode ? undefined : "mx-4"}
+              />
+              {/* `#` puts RETURN, SPACE, the other quick keys and the Live View switches over
+                  the bottom of the picture — the route to both that survives a handset with no
+                  touchscreen and no on-screen controls. */}
+              {gameMode && quickKeysOverlay.visible ? (
+                <div
+                  className="absolute inset-x-0 bottom-0 z-20 flex flex-col gap-2 bg-black/70 px-2 pb-2 pt-1 backdrop-blur"
+                  data-testid="remote-input-quick-keys-toggle"
+                  {...quickKeysOverlay.keepAliveProps}
+                >
+                  {quickKeysBar()}
+                  {mirrorEnabled ? (
+                    <AvMirrorControls showAudio={audioMirrorEnabled} showVideo={videoMirrorEnabled} />
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           ) : null}
 
           {session.outputMode === "joystick" ? (
-            <VirtualJoystick
-              port={session.port}
-              onSetPort={session.setPort}
-              heldInputs={session.heldJoystickInputs}
-              onHeldInputsChange={session.setHeldJoystickInputs}
-              autofireEnabled={session.autofireEnabled}
-              onAutofireEnabledChange={session.setAutofireEnabled}
-              autofireRateHz={session.autofireRateHz}
-              onAutofireRateHzChange={session.setAutofireRateHz}
-              showAutofire={showAutofire}
-              disabled={!joystickAvailable}
-              disabledHint={joystickUnavailableHint}
-              scale={scale}
-              immersive={immersive}
-              releaseAllEpoch={session.releaseAllEpoch}
-            />
+            showInputControls ? (
+              <VirtualJoystick
+                port={session.port}
+                onSetPort={session.setPort}
+                heldInputs={session.heldJoystickInputs}
+                onHeldInputsChange={session.setHeldJoystickInputs}
+                autofireEnabled={session.autofireEnabled}
+                onAutofireEnabledChange={session.setAutofireEnabled}
+                autofireRateHz={session.autofireRateHz}
+                onAutofireRateHzChange={session.setAutofireRateHz}
+                showAutofire={showAutofire}
+                disabled={!joystickAvailable}
+                disabledHint={joystickUnavailableHint}
+                scale={scale}
+                immersive={gameMode}
+                fillHeight={!showMirrorScreen}
+                releaseAllEpoch={session.releaseAllEpoch}
+              />
+            ) : null
           ) : (
             <TypeKeyboard
               className="min-h-0 flex-1"
@@ -573,20 +556,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
           {/* The quick-keys bar rides alongside the JOYSTICK for one-tap
               SPACE/RETURN/cursor without leaving game control; in Type mode the
               keyboard's own pinned deck already covers these, so it's omitted. */}
-          {!immersive && session.outputMode === "joystick" ? (
-            <QuickKeysBar
-              onChar={session.sendChar}
-              onKey={session.sendKeyboardInputs}
-              onCursor={session.sendCursor}
-              onSpecialKey={session.sendSpecialKey}
-              heldKeyboardInputs={session.heldKeyboardInputs}
-              onHeldKeyboardInputsChange={session.setHeldKeyboardInputs}
-              releaseAllEpoch={session.releaseAllEpoch}
-              tier={tier}
-              scale={scale}
-              className="border-t border-border pt-3"
-            />
-          ) : null}
+          {!gameMode && session.outputMode === "joystick" ? quickKeysBar("border-t border-border pt-3") : null}
         </AppSheetBody>
       </AppSheetContent>
     </AppSheet>

@@ -415,7 +415,9 @@ test.describe("Layout overflow safeguards", () => {
         const badge = page.getByTestId("unified-health-badge");
         const scrollContainer = page.locator('main[data-page-scroll-container="true"]').first();
         const tabBar = page.locator("nav.tab-bar").first();
-        const firstCard = page.locator("main .profile-card").first();
+        // Settings' content blocks are now collapsible chapters, which carry their padding on
+        // the header and body rather than on the card, so they are not `.profile-card`.
+        const firstCard = page.locator("main .profile-card, main section[data-testid^='settings-section-']").first();
 
         await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
         await expect(badge).toBeVisible();
@@ -756,9 +758,12 @@ test.describe("Layout overflow safeguards", () => {
       await snap(page, testInfo, `matrix-settings-${viewport.label}`);
       await expectNoHorizontalOverflow(page);
 
-      const logsButton = page.getByRole("button", {
-        name: /Logs( and Traces)?/i,
-      });
+      // Settings' collapsible chapter headers are navigation, not dialog triggers, and the
+      // Diagnostics chapter's summary line mentions logs. Excluding them keeps this looking for
+      // a real Logs dialog trigger.
+      const logsButton = page
+        .locator("button:not([data-testid^='settings-section-toggle-'])")
+        .filter({ hasText: /Logs( and Traces)?/i });
       if (await logsButton.isVisible({ timeout: 2000 }).catch(() => false)) {
         await logsButton.click();
         const logsDialog = page.getByRole("dialog");

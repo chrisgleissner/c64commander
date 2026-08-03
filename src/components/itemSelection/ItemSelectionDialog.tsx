@@ -52,7 +52,11 @@ export type ItemSelectionDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  confirmLabel: string;
+  /**
+   * The confirm button's text. A function is given the current selection, so a caller whose
+   * confirm does something different for one particular selection can say so before it happens.
+   */
+  confirmLabel: string | ((selections: readonly SelectedItem[]) => string);
   initialSourceId?: string | null;
   sourceGroups: SourceGroup[];
   onAddLocalSource: () => Promise<string | null>;
@@ -288,6 +292,25 @@ export const ItemSelectionDialog = ({
 
   const activeSelectionCount = isArchiveSource ? archiveSelection.size : selection.size;
 
+  const currentSelections: SelectedItem[] = isArchiveSource
+    ? Array.from(archiveSelection.values()).map((result) => ({
+        type: "file" as const,
+        name: result.name,
+        path: `${result.id}/${result.category}`,
+      }))
+    : Array.from(selection.values()).map((entry) => ({
+        type: entry.type,
+        name: entry.name,
+        path: entry.path,
+        durationMs: entry.durationMs,
+        songNr: entry.songNr,
+        subsongCount: entry.subsongCount,
+        sizeBytes: entry.sizeBytes ?? null,
+        modifiedAt: entry.modifiedAt ?? null,
+      }));
+
+  const resolvedConfirmLabel = typeof confirmLabel === "function" ? confirmLabel(currentSelections) : confirmLabel;
+
   const handleConfirm = async () => {
     if (!source) return;
     if (isConfirming || autoConfirming) return;
@@ -299,22 +322,7 @@ export const ItemSelectionDialog = ({
       });
       return;
     }
-    const selections: SelectedItem[] = isArchiveSource
-      ? Array.from(archiveSelection.values()).map((result) => ({
-          type: "file" as const,
-          name: result.name,
-          path: `${result.id}/${result.category}`,
-        }))
-      : Array.from(selection.values()).map((entry) => ({
-          type: entry.type,
-          name: entry.name,
-          path: entry.path,
-          durationMs: entry.durationMs,
-          songNr: entry.songNr,
-          subsongCount: entry.subsongCount,
-          sizeBytes: entry.sizeBytes ?? null,
-          modifiedAt: entry.modifiedAt ?? null,
-        }));
+    const selections = currentSelections;
     try {
       const success = await onConfirm(source, selections);
       if (success) {
@@ -583,7 +591,7 @@ export const ItemSelectionDialog = ({
                   data-testid="add-items-confirm"
                   className="shrink-0"
                 >
-                  {confirmLabel}
+                  {resolvedConfirmLabel}
                 </Button>
               ) : null}
             </div>
@@ -783,7 +791,7 @@ export const ItemSelectionDialog = ({
                   disabled={isConfirming || autoConfirming || activeSelectionCount === 0}
                   data-testid="add-items-confirm"
                 >
-                  {confirmLabel}
+                  {resolvedConfirmLabel}
                 </Button>
               )}
             </div>

@@ -336,28 +336,56 @@ const buildRouter = (ui: JSX.Element) =>
     },
   });
 
-const renderSettingsPage = () =>
-  render(
-    <RouterProvider
-      router={buildRouter(<SettingsPage />)}
-      future={{
-        v7_startTransition: true,
-        v7_relativeSplatPath: true,
-      }}
-    />,
-  );
+/**
+ * The page is a set of collapsible chapters, so the controls inside them are not in the DOM
+ * until their section is opened. These tests are about what those controls do, not about the
+ * collapse — which has its own tests below — so every section is opened first.
+ */
+const expandAllSections = () => {
+  const toggles = screen.queryAllByTestId(/^settings-section-toggle-/);
+  toggles.forEach((toggle) => {
+    if (toggle.getAttribute("aria-expanded") !== "true") fireEvent.click(toggle);
+  });
+};
 
-const renderSettingsPageWithDisplayProfileProvider = () =>
-  render(
-    <DisplayProfileProvider>
+/** The controls of one section, without its own header button. */
+const sectionBody = (id: string): HTMLElement => {
+  const body = document.getElementById(`settings-section-body-${id}`);
+  if (!body) throw new Error(`Settings section "${id}" is not open`);
+  return body;
+};
+
+const withSectionsOpen = <T,>(result: T): T => {
+  expandAllSections();
+  return result;
+};
+
+const renderSettingsPage = () =>
+  withSectionsOpen(
+    render(
       <RouterProvider
         router={buildRouter(<SettingsPage />)}
         future={{
           v7_startTransition: true,
           v7_relativeSplatPath: true,
         }}
-      />
-    </DisplayProfileProvider>,
+      />,
+    ),
+  );
+
+const renderSettingsPageWithDisplayProfileProvider = () =>
+  withSectionsOpen(
+    render(
+      <DisplayProfileProvider>
+        <RouterProvider
+          router={buildRouter(<SettingsPage />)}
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true,
+          }}
+        />
+      </DisplayProfileProvider>,
+    ),
   );
 
 // Renders the real SettingsPage inside the keypad focus ring (C64U Remote) so the
@@ -369,17 +397,19 @@ const FocusContextCapture = ({ target }: { target: { current: FocusNavigationCon
 };
 
 const renderSettingsPageInFocusRing = (focusContext?: { current: FocusNavigationContextValue | null }) =>
-  render(
-    <FocusNavigationProvider profileId="keypad">
-      {focusContext ? <FocusContextCapture target={focusContext} /> : null}
-      <RouterProvider
-        router={buildRouter(<SettingsPage />)}
-        future={{
-          v7_startTransition: true,
-          v7_relativeSplatPath: true,
-        }}
-      />
-    </FocusNavigationProvider>,
+  withSectionsOpen(
+    render(
+      <FocusNavigationProvider profileId="keypad">
+        {focusContext ? <FocusContextCapture target={focusContext} /> : null}
+        <RouterProvider
+          router={buildRouter(<SettingsPage />)}
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true,
+          }}
+        />
+      </FocusNavigationProvider>,
+    ),
   );
 
 vi.mock("@/lib/uiErrors", () => ({
@@ -1544,6 +1574,72 @@ describe("SettingsPage", () => {
     expect(mockSetListPreviewLimit).toHaveBeenCalledWith(75);
   });
 
+  describe("collapsible sections", () => {
+    it("opens on Connection and leaves the rest closed, so the page can be read at a glance", () => {
+      render(
+        <RouterProvider
+          router={buildRouter(<SettingsPage />)}
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        />,
+      );
+
+      expect(screen.getByTestId("settings-section-connection")).toHaveAttribute("data-open", "true");
+      for (const id of ["appearance", "diagnostics", "play-and-disk", "device-safety", "notifications", "about"]) {
+        expect(screen.getByTestId(`settings-section-${id}`)).toHaveAttribute("data-open", "false");
+      }
+    });
+
+    it("says what each closed section decides, so nothing has to be opened to find it", () => {
+      render(
+        <RouterProvider
+          router={buildRouter(<SettingsPage />)}
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        />,
+      );
+
+      expect(screen.getByTestId("settings-section-appearance")).toHaveTextContent(/theme, text size/i);
+      expect(screen.getByTestId("settings-section-play-and-disk")).toHaveTextContent(/live view streaming/i);
+      expect(screen.getByTestId("settings-section-device-safety")).toHaveTextContent(/network timing/i);
+    });
+
+    it("keeps a section open across visits once it has been opened", () => {
+      const first = render(
+        <RouterProvider
+          router={buildRouter(<SettingsPage />)}
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        />,
+      );
+      fireEvent.click(screen.getByTestId("settings-section-toggle-notifications"));
+      expect(screen.getByTestId("settings-section-notifications")).toHaveAttribute("data-open", "true");
+      first.unmount();
+
+      render(
+        <RouterProvider
+          router={buildRouter(<SettingsPage />)}
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        />,
+      );
+      expect(screen.getByTestId("settings-section-notifications")).toHaveAttribute("data-open", "true");
+    });
+
+    it("holds every control it always did — they are only behind their section", () => {
+      render(
+        <RouterProvider
+          router={buildRouter(<SettingsPage />)}
+          future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        />,
+      );
+      expect(screen.queryByTestId("settings-show-autofire")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId("settings-section-toggle-play-and-disk"));
+
+      expect(screen.getByTestId("settings-show-autofire")).toBeInTheDocument();
+      // The Game Mode block moved with the rest of Remote Input, not away from it.
+      expect(screen.getByTestId("settings-game-mode-on-launch")).toBeInTheDocument();
+      expect(screen.getByTestId("settings-game-mode-section")).toBeInTheDocument();
+    });
+  });
+
   it("changes theme when selecting a new option", () => {
     renderSettingsPage();
 
@@ -1555,11 +1651,7 @@ describe("SettingsPage", () => {
   it("changes theme when selecting the auto option", () => {
     renderSettingsPage();
 
-    const appearanceSection = screen.getByRole("heading", { name: "Appearance" }).closest(".rounded-xl");
-    expect(appearanceSection).toBeTruthy();
-    if (!appearanceSection) return;
-
-    fireEvent.click(within(appearanceSection).getAllByRole("button")[0]);
+    fireEvent.click(within(sectionBody("appearance")).getAllByRole("button")[0]);
 
     expect(mockSetTheme).toHaveBeenCalledWith("system");
   });
@@ -1567,11 +1659,7 @@ describe("SettingsPage", () => {
   it("shows appearance theme options in auto light dark order", () => {
     renderSettingsPage();
 
-    const appearanceSection = screen.getByRole("heading", { name: "Appearance" }).closest(".rounded-xl");
-    expect(appearanceSection).toBeTruthy();
-    if (!appearanceSection) return;
-
-    const buttons = within(appearanceSection).getAllByRole("button");
+    const buttons = within(sectionBody("appearance")).getAllByRole("button");
     const themeLabels = buttons.slice(0, 3).map((button) => button.textContent?.trim() ?? "");
     expect(themeLabels).toEqual(["Auto", "Light", "Dark"]);
   });
@@ -1653,7 +1741,7 @@ describe("SettingsPage", () => {
   it("enables developer mode after repeated taps", () => {
     renderSettingsPage();
 
-    const aboutCard = screen.getByRole("button", { name: /about/i });
+    const aboutCard = screen.getByTestId("settings-about-build-info");
     for (let i = 0; i < 7; i += 1) {
       fireEvent.click(aboutCard);
     }
@@ -1803,7 +1891,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    const aboutCard = screen.getByRole("button", { name: /about/i });
+    const aboutCard = screen.getByTestId("settings-about-build-info");
     for (let index = 0; index < 7; index += 1) {
       fireEvent.click(aboutCard);
     }
@@ -2501,18 +2589,34 @@ describe("SettingsPage screen orientation lock", () => {
 describe("SettingsPage keypad focus ring (C64U Remote)", () => {
   vi.setConfig({ testTimeout: 20000 });
 
+  /**
+   * The page is now a set of chapters, so its ring has a level the controls live inside.
+   * "OK goes in" — a walk that meets a section header descends into it, which is exactly
+   * what a keypad user does and what keeps every control reachable by d-pad alone.
+   */
+  const stepRing = (): Element | null => {
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
+    const current = document.activeElement;
+    // The ring lands on the section GROUP, whose children are the controls inside it.
+    if (current instanceof HTMLElement && current.hasAttribute("data-section-label")) {
+      fireEvent.keyDown(document.body, { code: "DpadCenter" });
+      return document.activeElement;
+    }
+    return current;
+  };
+
   const visitByDpadDown = (steps: number): Set<Element> => {
     const visited = new Set<Element>();
     for (let index = 0; index < steps; index += 1) {
-      fireEvent.keyDown(document.body, { code: "DpadDown" });
-      if (document.activeElement) visited.add(document.activeElement);
+      const current = stepRing();
+      if (current) visited.add(current);
     }
     return visited;
   };
 
-  const focusByDpadDown = (target: Element, steps = 60): void => {
+  const focusByDpadDown = (target: Element, steps = 120): void => {
     for (let index = 0; index < steps && document.activeElement !== target; index += 1) {
-      fireEvent.keyDown(document.body, { code: "DpadDown" });
+      stepRing();
     }
     expect(document.activeElement).toBe(target);
   };
@@ -2537,7 +2641,7 @@ describe("SettingsPage keypad focus ring (C64U Remote)", () => {
     expect(focusContext.current?.engine.sourceForId("settings-save-connection")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("settings-refresh-connection")).toBe("dom+explicit");
 
-    const visited = visitByDpadDown(30);
+    const visited = visitByDpadDown(80);
     for (const element of [nameRow, hostRow, httpRow, ftpRow, telnetRow, saveButton, refreshButton]) {
       expect(visited.has(element)).toBe(true);
     }
@@ -2587,7 +2691,7 @@ describe("SettingsPage keypad focus ring (C64U Remote)", () => {
     const refreshButton = screen.getByLabelText("Refresh connection");
     expect(screen.getByLabelText("Refresh connection")).toBeDisabled();
 
-    const visited = visitByDpadDown(30);
+    const visited = visitByDpadDown(80);
     expect(visited.has(saveButton)).toBe(true);
     expect(visited.has(refreshButton)).toBe(false);
     expect(focusContext.current?.engine.sourceForId("settings-refresh-connection")).toBeNull();

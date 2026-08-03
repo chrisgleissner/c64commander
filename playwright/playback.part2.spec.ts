@@ -294,7 +294,10 @@ test.describe("Playback file browser (part 2)", () => {
     await openRemoteFolder(dialog, "Demos");
     await openRemoteFolder(dialog, "Demo Collection");
     await selectEntryCheckbox(dialog, "Part 1.d64");
-    await page.getByRole("button", { name: "Add to playlist" }).click();
+    // By testid, not by label: confirming ONE game now reads "Play" rather than "Add to
+    // playlist" (it launches as well as queueing). This test is about the size and date shown
+    // in the playlist menu, so it should not care which of the two the button says.
+    await page.getByTestId("add-items-confirm").click();
     await expect(page.getByRole("dialog")).toBeHidden();
 
     await expectFtpTraceSequence(page, testInfo, (event) => {

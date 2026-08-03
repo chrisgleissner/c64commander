@@ -43,10 +43,11 @@ fallback, and the legacy Android key code).
 | D-pad **OK / Center** | `DPAD_CENTER` 23     | `center`          | **"OK goes in":** descend into the focused group, or activate the focused leaf. On a Select: opens the dropdown.                         |
 | **Back / Clear**      | `BACK` 4             | `back`            | **"Back goes out":** dismiss overlay → leave field → ascend group → finally route back. (Capacitor may intercept hardware Back; see §6.) |
 | **Call / Send**       | `CALL` 5             | `activate`        | Primary activate of the focused leaf.                                                                                                    |
-| **Menu**              | `MENU` 82            | `openMenu`        | Right soft-key "Menu": focused item's context menu, else the **Quick Menu** (jump-to-page / Diagnostics / Switch Device).                |
+| **Menu**              | `MENU` 82            | `openMenu`        | Right soft-key "Menu": focused item's context menu, else the **Quick Menu** (jump-to-page / Game Mode / Diagnostics / Switch Device).    |
 | **Left soft key**     | `SOFTLEFT` 1         | `softLeft`        | Follows the Back chain (Back/Exit/Close/Done).                                                                                           |
 | **Right soft key**    | `SOFTRIGHT` 2        | `softRight`       | Opens current item/scope menu.                                                                                                           |
-| **0–9**               | `KEYCODE_0..9` 7–16  | `digit0`–`digit9` | In a text field: T9 entry. Outside a field: **jump to tab 1–6** (Home/Play/Disks/Config/Settings/Docs).                                  |
+| **1–9**               | `KEYCODE_1..9` 8–16  | `digit1`–`digit9` | In a text field: T9 entry. Outside a field: **jump to tab 1–6** (Home/Play/Disks/Config/Settings/Docs); 7–9 unbound at app level.        |
+| **0**                 | `KEYCODE_0` 7        | `digit0`          | In a text field: T9 entry. Outside a field: **enter Game Mode** (starts the remembered Watch/Listen and opens the sheet ready to play). Inside the Remote Input sheet it is a joystick direction, which the open-overlay exclusion keeps this shortcut away from. |
 | **✱ (star)**          | `STAR` 17            | `star`            | In a hostname field: cycle separators `. : - _ /`. Otherwise **open Diagnostics**.                                                       |
 | **# (pound)**         | `POUND` 18           | `hash`            | In a text field: toggle T9 mode. Otherwise **open the Device Switcher** (= badge long-press).                                            |
 | (desktop equiv.)      | `ESCAPE` 111 / `Esc` | `escape`          | Dismiss overlay / ascend — **never navigates the route** (only Back/soft-left do).                                                       |
@@ -63,7 +64,9 @@ Backspace = delete, Esc = back, F1/F2 = soft keys, number row + `*`/`#` = T9.
   clears it the same frame.
 - **Guidance bar:** a fixed bar above the TabBar showing the breadcrumb plus the
   contextual soft-key labels — left = Back/Exit, center = Open/Select/Adjust/
-  Activate (by control kind), right = Menu.
+  Activate (by control kind), right = Menu. On Home and Play with a device
+  connected it also carries the **0 Game Mode** hint, so the shortcut is on screen
+  exactly when the user is driving by keys.
 - **Group scope outline:** `data-key-scope` dashed outline around the enclosing
   group while the ring is descended inside it.
 
@@ -87,6 +90,9 @@ Backspace = delete, Esc = back, F1/F2 = soft keys, number row + `*`/`#` = T9.
 - **Text fields (T9):** digits/`*`/`#` route through the T9 composer when the
   field is the ring's current item under key-navigation modality; every other
   key passes through.
+- **Always-reachable shortcuts:** digits `1`–`6` jump to a tab, `0` enters Game
+  Mode, `*` opens Diagnostics and `#` opens the Device Switcher. All four share the
+  same exclusions — never in a text field, never inside an open overlay.
 
 Reachability is **complete by construction**: the provider scans the active
 scope (topmost dialog/menu/sheet, else the routed page + bottom TabBar) and
@@ -103,9 +109,9 @@ persistent status badge that appear on every page).
 
 | Page     | Route       |                        CTAs | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | -------- | ----------- | --------------------------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home     | `/`         |                    113 (+3) | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. `+1` Remote Input tile behind `remote_input_enabled` (stable, enabled and user-visible by default in C64 Commander; disabled and hidden in C64U Remote per `variants/feature-flags/c64u-remote.yaml`). `+2` Content Explorer **Live View** card (`live-view-card`) beneath the quick actions — one Audio toggle (`av-audio-toggle`, `audio_mirror_enabled`) and one Video toggle (`av-video-toggle`, `video_mirror_enabled`) sharing the single app-wide A/V mirror session; both user-visible and non-developer, off by default until the phone stream receiver ships. Mounted only when the device advertises streaming (code-verified — see note below). |
-| Settings | `/settings` |                     81 (+8) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. Includes the 3 SID chip controls in the SID Radio group (one switch plus a two-button chip choice, §4.5), which are shown whenever on-device playback is on. The Crossfade group gained a fifth length (4 s), taking the page from 80 to 81. `+6` Content Explorer **Play and Disk** controls: Search inside disk images (`in_image_search_enabled`), Answer cartridge boot menu (`launch_safety_enabled`, default on) plus its Menu key select and Boot settle input, and Video/Audio stream port inputs (shown when `audio_mirror_enabled` or `video_mirror_enabled`) (code-verified — see note below).                                                                                                |
-| Play     | `/play`     | 31 (+1, +20 SID Radio, +16) | Transport, volume, playback flags, playlist, type filters, HVSC. Include subfolders moved off this page into the Add items sheet (32 → 31). `+1` Remote Input button, shown only while playing, behind `remote_input_enabled`, last in the sheet-actions row. `+20` the seekable progress bar, the **Listen on** group and the **SID Radio** controls, behind `c64u_sid_radio_enabled` / `c64u_local_engine_enabled`. `+16` **Find a tune** (open, search box, per-row play and seed-a-station), the composer and "Tune x of y" on the credits line, the tune-notes reveal, **Play all N tunes**, and the six sleep-timer choices. The playback settings' own tune list was removed when the credits-line one arrived, so the net count is unchanged by it.       |
+| Home     | `/`         |                    113 (+4) | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. `+1` **Game Mode** tile behind `remote_input_enabled`, first in the Quick Actions grid (§3.2.1 order: safe first, destructive last). `+1` Remote Input tile behind `remote_input_enabled` (stable, enabled and user-visible by default in C64 Commander; disabled and hidden in C64U Remote per `variants/feature-flags/c64u-remote.yaml`). `+2` Content Explorer **Live View** card (`live-view-card`) beneath the quick actions — one Audio toggle (`av-audio-toggle`, `audio_mirror_enabled`) and one Video toggle (`av-video-toggle`, `video_mirror_enabled`) sharing the single app-wide A/V mirror session; both user-visible and non-developer, off by default until the phone stream receiver ships. Mounted only when the device advertises streaming (code-verified — see note below). |
+| Settings | `/settings` |                    81 (+12) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. Includes the 3 SID chip controls in the SID Radio group (one switch plus a two-button chip choice, §4.5), which are shown whenever on-device playback is on. The Crossfade group gained a fifth length (4 s), taking the page from 80 to 81. `+6` Content Explorer **Play and Disk** controls: Search inside disk images (`in_image_search_enabled`), Answer cartridge boot menu (`launch_safety_enabled`, default on) plus its Menu key select and Boot settle input, and Video/Audio stream port inputs (shown when `audio_mirror_enabled` or `video_mirror_enabled`) (code-verified — see note below). `+4` the Game Mode block in **Remote Input**: `settings-joystick-key-layout`, `settings-game-mode-controls`, `settings-game-mode-on-launch`, and (for a Custom layout) the nine press-to-bind slots `settings-joystick-bind-<slot>` with their `settings-joystick-clear-<slot>` companions.                                                                                                |
+| Play     | `/play`     | 31 (+2, +20 SID Radio, +16) | Transport, volume, playback flags, playlist, type filters, HVSC. Include subfolders moved off this page into the Add items sheet (32 → 31). `+2` the **Game Mode** and Remote Input buttons, shown only while playing, behind `remote_input_enabled`, last in the sheet-actions row. `+20` the seekable progress bar, the **Listen on** group and the **SID Radio** controls, behind `c64u_sid_radio_enabled` / `c64u_local_engine_enabled`. `+16` **Find a tune** (open, search box, per-row play and seed-a-station), the composer and "Tune x of y" on the credits line, the tune-notes reveal, **Play all N tunes**, and the six sleep-timer choices. The playback settings' own tune list was removed when the credits-line one arrived, so the net count is unchanged by it.       |
 | Config   | `/config`   |                          30 | Search + 22 config-category accordions (each expands to config-item rows).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Disks    | `/disks`    |                     28 (+1) | Drive A/B/Soft-IEC controls, disk library. `+1` Content Explorer **New disk** button (`new_disk_enabled`); the per-disk **Open (Disk Explorer)…** overflow action (`disk_explorer_enabled`) and the New-disk / Disk-contents dialogs it opens are documented in §4.3/§5 (code-verified — see note below).                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Docs     | `/docs`     |                          18 | 8 doc-section toggles + 3 external links.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -153,11 +159,13 @@ not-connected / empty / single-device).
 - **Header**
   - Status badge — button — `unified-health-badge` — R✅ I✅
   - System info — button (`App … Device … Firmware …`) — `home-system-info` — R✅ I✅ (expands)
-- **Quick Actions** (`data-section-label="Quick Actions"` group)
-  - Reset — button — R✅ I✅ (confirm dialog)
-  - Reboot — button — R✅ I✅ (confirm dialog)
-  - Pause / Resume — button (toggles) — R✅ I✅
+- **Quick Actions** (`data-section-label="Quick Actions"` group — listed in RING ORDER, which
+  follows the DOM: frequent and safe first, destructive last in increasing severity)
+  - Game Mode — button — `home-machine-inline-openGameMode` — R✅ I✅ _(flag `remote_input_enabled`; disabled while disconnected)_ — starts the remembered picture/sound and opens the **Remote Input sheet** in Game Mode (§5)
   - Menu — button — R✅ I✅
+  - Pause / Resume — button (toggles) — R✅ I✅
+  - Remote Input — button — `home-machine-inline-openRemoteInput` — R✅ I✅ _(flag `remote_input_enabled`; stable, enabled and visible by default in C64 Commander, disabled+hidden in C64U Remote)_ — opens the **Remote Input sheet** (§5)
+  - Save REU memory — button — `home-machine-inline-saveReuMemory` — R✅ I✅ _(flag `home_telnet_reu_snapshot_enabled`)_
   - Save RAM — button — `home-save-ram` — R✅ I✅ _(flag `ram_snapshots_enabled`)_
   - **Save RAM dialog** (`save-ram-dialog`, opened by `home-save-ram`)
     - CPU + RAM Snapshot — button — `save-ram-type-cpu` — R✅ I✅ _(conditional on CPU-snapshot capability; `save-ram-type-list` scope)_
@@ -168,8 +176,11 @@ not-connected / empty / single-device).
     - Add range — button — `save-ram-custom-add-range` — R✅ I✅
     - Save custom — button — `save-ram-custom-confirm` — R✅ I✅
   - Load RAM — button — `home-load-ram` — R✅ I✅ _(flag)_
+  - Reset — button (danger) — R✅ I✅ (confirm dialog)
+  - Reboot — button (danger) — R✅ I✅ (confirm dialog)
+  - Reboot (Clr Mem) — button (danger) — `home-machine-inline-rebootClearMemory` — R✅ I✅ (confirm dialog) _(flag `home_telnet_clear_ram_reboot_enabled`)_
+  - Power Cycle — button (danger) — `home-power-cycle` — R✅ I✅ (confirm dialog) _(conditional on device capability)_
   - Power Off — button (danger) — R✅ I✅ (confirm dialog)
-  - Remote Input — button — `home-machine-inline-openRemoteInput` — R✅ I✅ _(flag `remote_input_enabled`; stable, enabled and visible by default in C64 Commander, disabled+hidden in C64U Remote)_ — opens the **Remote Input sheet** (§5)
   - RAM dump folder — button (`...`) — `ram-dump-folder-trigger` — R✅ I✅
 - **Quick Config → CPU & RAM** (`home-cpu-summary`)
   - Turbo Control — select — `home-cpu-turbo-control` — R✅ I✅ (verified: opens Off/Manual/C64U Turbo Registers/TurboEnable Bit)
@@ -271,7 +282,8 @@ not-connected / empty / single-device).
 - Type filters: SID / MOD / PRG / CRT / Disk — checkbox — `playlist-type-*` — R✅ I✅
 - Select all — button — `playlist-list-toggle-select-all` — R✅ I✅
 - HVSC: Download / Ingest / Reindex / Reset — button — R✅ I✅ _(flag `hvsc_enabled`)_
-- Remote Input — button — `play-open-controller` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — opens the **Remote Input sheet** (§5). Sits in the sheet-actions row **after** SID Radio and Liked Tunes: all three open a sheet, and the two station actions are about what plays next while this one leaves the music behind.
+- Game Mode — button — `play-open-game-mode` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — starts the remembered picture/sound and opens the **Remote Input sheet** in Game Mode (§5). **Leads** Remote Input for a `prg`/`crt`/`disk` item (overwhelmingly likely to be a game) and **follows** it for a `sid`/`mod` item.
+- Remote Input — button — `play-open-controller` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — opens the **Remote Input sheet** (§5). Both controller actions sit in the sheet-actions row **after** SID Radio and Liked Tunes: all of them open a sheet, and the two station actions are about what plays next while these leave the music behind.
 - Progress bar (seek) — button — `playback-progress-seek` — R✅ I✅ — tap or drag to jump within the tune; **also operable without a pointer**: `ArrowLeft`/`ArrowRight` step ±2%. Rendered only for audio this device renders (see _Listen on_ below); on the C64 route the bar is a plain indicator (`playback-progress`) and not focusable, because the machine plays the SID on its own chip and cannot be scrubbed.
 - Previous / Next **held** — scrub — same `playlist-prev|next` buttons — R✅ I✅ — a hold scrubs the current tune instead of changing track (local playback only); a tap still skips.
 
@@ -361,6 +373,25 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
 
 ### 4.5 Settings (`/settings`)
 
+The page is a set of **collapsible sections** (`settings-section-<id>` with
+`settings-section-toggle-<id>`, `data-open`, and a `data-section-label` that makes each one a
+focus group). Closed, a section is one line naming what it decides; open, it holds exactly the
+controls listed below — nothing was removed, and nothing moved between sections. **Connection**
+opens on a first visit; every other section starts closed, and which are open is remembered in
+`c64u_settings_open_sections`. For the keypad this adds one ring level: Up/Down walks the
+section headers, **OK descends** into a section, **Back** leaves it — the same rule the rest of
+the app follows.
+
+Sections, in page order: `appearance`, `connection`, `diagnostics`, `play-and-disk`,
+`feature-group-stable`, `feature-group-experimental`, `sid-radio`, `hvsc`, `online-archive`,
+`device-safety`, `notifications`, `about`. Every block on the page is one of these — there is no
+always-expanded card left. The two feature-flag chapters carry an "N/M on" badge, so how many
+flags are set is readable without opening them.
+
+Making SID Radio a chapter also unblocked the keypad: its minimum-song-length number input was a
+top-level ring stop, and Up/Down on a number input changes its value, so the ring could not get
+past it to anything below.
+
 - **Display**: Theme (Auto/Light/Dark) — segmented buttons — R✅ I✅ ; Display
   profile (Small/Standard/Large/Auto) — segmented — R✅ I✅ ; Orientation
   (Portrait/Landscape/Auto) — segmented — R✅ I✅
@@ -420,6 +451,22 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   Dynamic; firmware wifi=true — Wi‑Fi for audio-only, Ethernet with video, or
   Always Wi‑Fi / Always Ethernet)_
   `[developer-mode only — firmware wifi=true not yet in released firmware; the session forces Ethernet unless dev mode is on]`
+- **Remote Input** _(the Game Mode block, then autofire)_: Joystick keys — select —
+  `settings-joystick-key-layout` — R✅ I✅ _(Diamond (8-centred) / Classic T9 /
+  Custom; per-variant default from `variant.runtime.defaultJoystickKeyLayout`)_ ;
+  per-slot press-to-bind — button ×9 — `settings-joystick-bind-<slot>` (slots
+  `up|upRight|right|downRight|down|downLeft|left|upLeft|fire`) with
+  `settings-joystick-clear-<slot>` — R✅ I✅ `[shown only for the Custom layout;
+  capture is by PRESSING the key, which is the only route that works with no
+  touchscreen. A reserved action (✱/Menu, #, Back) is refused with
+  settings-joystick-bind-rejection naming what the key already does]` ;
+  On-screen controls in Game mode — select — `settings-game-mode-controls` — R✅ I✅
+  _(Auto / Always show / Never show; Auto follows the observed input modality)_ ;
+  Enter Game Mode when a game starts — checkbox — `settings-game-mode-on-launch` —
+  R✅ I✅ _(per-variant default from `variant.runtime.defaultGameModeOnLaunch`)_ ;
+  Show Autofire button — checkbox — `settings-show-autofire` — R✅ I✅ ; Autofire
+  rate — slider — `settings-autofire-rate-slider` — R✅ I✅ `[disabled while the
+  Autofire button is hidden]`
 - **SID Radio** (`settings-sid-radio`): Shortest tune to play — number input —
   `settings-sid-radio-min-seconds-input` (`settings-sid-radio-min-seconds`) — R✅ I✅
   _(always shown: SID Radio reached GA, so what a station will offer is a listener's
@@ -499,8 +546,9 @@ currently launching; non-PRG / unclosed (splat) rows show a reason instead of
 buttons]`.
 
 **Remote Input sheet** (`remote-input-sheet`, HARD12-017, behind
-`remote_input_enabled`; opened from Home's "Remote Input" tile or Play's "Open
-Controller" button): a Radix
+`remote_input_enabled`; opened from Home's **Remote Input** or **Game Mode** tile,
+Play's **Remote Input** or **Game Mode** button, the `0` key, the Quick Menu's Game
+Mode entry, or automatically when a game is launched with that setting on): a Radix
 `[role=dialog]` sheet, so it is a normal keypad-navigable overlay scope like any
 other (Up/Down/OK, Back closes) — **except** while **Joystick** output mode is
 selected, physical D-pad/T9 digit key presses are read directly by the sheet to
@@ -518,20 +566,33 @@ ordinary focus-ring CTAs in both output modes.
   right-aligned on the same row (see below)
 - Connection indicator — status text — `remote-input-connection-indicator` —
   not interactive
+- Held joystick inputs — `data-held-joystick` on the sheet root — not interactive
+  _(what the transport is currently asked to hold, comma-separated and sorted. A direction
+  stuck on the real C64 is this feature's worst failure, so the answer is on the surface
+  rather than only in a log)_
 - Control size stepper (Joystick mode only) — decrease/increase buttons + label
   — `remote-input-size-decrease`, `remote-input-size-increase`,
   `remote-input-size-label` — R✅ I✅ (M/L/XL/XXL, persisted; scales the
   joystick action controls, not the Type-tab keyboard, which sizes itself from
   measured space)
 - Game mode toggle (Joystick mode, joystick-capable tier only) — button —
-  `remote-input-immersive-toggle` — R✅ I✅ — enters/exits the stripped,
-  edge-anchored no-look layout; auto-exits if the tier downgrades mid-session
-- Hide controls (inside Game mode) — button — `remote-input-collapse-chrome` —
-  R✅ I✅ _(collapses ALL remaining chrome — sheet header, toolbar, mirror
-  controls, Close — leaving only the live screen + joystick; shown only in Game mode)_
+  `remote-input-immersive-toggle` — R✅ I✅ — ENTERING starts the remembered
+  Watch/Listen feeds and collapses ALL remaining chrome in one action (there is no
+  separate Hide-controls step); leaving restores it. Auto-exits if the tier
+  downgrades mid-session
+- Orientation override (inside Game mode) — buttons —
+  `remote-input-rotation-override` (group), `remote-input-rotation-{auto,0,90,270}`
+  — R✅ I✅ _(pins the picture rotation and the key permutation for this session;
+  `data-rotation` / `data-source` on the group carry the resolved state)_
 - Show controls handle — button — `remote-input-restore-chrome` — R✅ I✅ _(the
   floating top-center "Controls" pull-down that restores the chrome; the ONLY
-  affordance shown in fully-collapsed Game mode; auto-restores on leaving Game mode)_
+  affordance shown in collapsed Game mode; the restored chrome puts itself away
+  again after the same idle period the mirror controls use)_
+- Quick-keys + Live View overlay (inside Game mode) — container —
+  `remote-input-quick-keys-toggle` — R✅ I✅ via the `#` key _(carries the
+  QuickKeysBar and the Watch/Listen toggles over the bottom of the picture; `#`
+  shows and hides it, and it auto-hides on the same idle timer — this is what makes
+  Watch reachable with the controls hidden and no touchscreen)_
 - **A/V mirror controls** (`remote-input-mirror-controls`) _(Content Explorer
   A/V Mirror; pinned in the sheet chrome when `audio_mirror_enabled` or
   `video_mirror_enabled` is on and the device advertises streaming; shares the
@@ -659,13 +720,17 @@ the full machine:input tier]`; SPACE/RETURN/f-keys/cursors also work on the
   Android Back — releases all held inputs
 - **Joystick Game mode only**: Release All is intentionally hidden (no-look
   play); dismissal is via the sheet header X or the `remote-input-immersive-toggle`
-  "Exit game mode" control, both of which release all held inputs
+  "Exit game mode" control, both of which release all held inputs. Both live in the
+  chrome, which Game Mode collapses — the floating `remote-input-restore-chrome`
+  handle (touch) or the Back key (any input) is the way out
 
 **Keypad Quick Menu** (`keypad-quick-menu`, opened by the Menu key when the
 focused item has no context menu): a keypad-navigable list of jump-to-page (×6),
-Diagnostics, and Switch Device (when >1 saved device). Per-entry testids
-`keypad-quick-menu-tab-<label>`, `keypad-quick-menu-diagnostics`,
-`keypad-quick-menu-switch-device`.
+Game Mode (flag `remote_input_enabled`), Diagnostics, and Switch Device (when >1
+saved device). Per-entry testids `keypad-quick-menu-tab-<label>`,
+`keypad-quick-menu-game-mode`, `keypad-quick-menu-diagnostics`,
+`keypad-quick-menu-switch-device`. The Game Mode entry carries the `0` shortcut
+into a place it can be discovered without reading the manual.
 
 ---
 

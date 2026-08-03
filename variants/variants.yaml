@@ -101,3 +101,11 @@ variants:
       # navigation bars). The user can still override both in Settings -> Display.
       default_hide_status_bar: true
       default_hide_navigation_bar: true
+      # The keypad handset has no touchscreen joystick to fall back on, so the
+      # physical keys must be right without configuration: the four keys around
+      # `8`, with `8` itself as fire. The general edition keeps classic T9.
+      default_joystick_key_layout: diamond8
+      # Launching a game on a keypad handset should end in the playing state
+      # without a further keystroke. Off elsewhere, where a sheet opening by
+      # itself would be a surprise.
+      default_game_mode_on_launch: true

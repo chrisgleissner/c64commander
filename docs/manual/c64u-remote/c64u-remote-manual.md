@@ -173,7 +173,11 @@ Settings controls app behavior and saved connection details.
 
 ![Settings overview](../../img/app/settings/profiles/compact/01-overview.png)
 
-Connection and saved devices live here, along with Appearance (display profile, theme, full-screen, and screen orientation), Notifications, Diagnostics options, Device Safety and network timing, Play and Disk behavior, the HVSC and Online Archive sources, feature toggles, Settings transfer, and an About panel. **Settings transfer** exports every app preference to a file you can import onto another phone, so a second device starts up already configured.
+Settings is a list of chapters rather than one long page of controls. Each chapter is closed until you tap it, and its heading says in one line what it decides, so you can find the right chapter without reading through the others. A chapter you leave open stays open the next time you visit.
+
+The chapters are **Appearance**, **Connection**, **Diagnostics**, **Play and Disk**, **HVSC**, **Online Archive**, **Device Safety**, **Notifications**, and **About**, followed by SID Radio and the feature toggles.
+
+**Settings transfer**, in the About chapter, exports every app preference to a file you can import onto another phone, so a second device starts up already configured.
 
 If the device is hard to reach, start in **Connection**. If it is reachable but fragile, start in **Device Safety**.
 
@@ -515,6 +519,8 @@ Press the **menu key** — or the on-screen **Adjust** button — to switch betw
 | **0**, **5**, or the centre/OK key | Fit the whole screen back on |
 | the **menu** key | Return to driving the C64 |
 
+While the border is blue and the keys are driving the C64, **#** brings the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again — so the picture can be turned off and on again without a touchscreen.
+
 The same four moves have on-screen buttons too — **＋** and **−** to zoom, **⤢** to fit, and **◎** to turn Follow on and off — so a touchscreen and a keypad reach every control. However large you make the game controls, the picture always stays fully in view above them — the controls never creep up and cover it.
 
 #### Smooth playback, and what it costs
@@ -557,8 +563,8 @@ Remote Input turns your phone into a second-screen controller for the C64. It is
 
 Open it in either of two places:
 
-- From **Home**, tap the **Remote Input** tile in Quick Actions.
-- From **Play**, tap the **Remote Input** button that appears while an item is playing.
+- From **Home**, tap the **Remote Input** tile in Quick Actions, or **Game Mode** beside it.
+- From **Play**, tap **Remote Input** or **Game Mode** while an item is playing.
 
 Each place opens its own copy of the controller, so a key you are holding in one never leaks into the other.
 
@@ -573,7 +579,49 @@ At the top of the sheet you choose between two modes, **Joystick** and **Keys**.
 - resize the controls from M up to XXL with the **Size** stepper (L by default);
 - turn on **Autofire** and set its rate from 1 to 10 presses per second (the default is 5, and you can also set it in Settings).
 
-A companion quick-keys bar beside the joystick keeps the keys you reach for mid-game one tap away — RUN/STOP, SPACE, RETURN, the function keys f1 to f8, the cursor keys, and the CTRL, C=, and SHIFT modifiers — so you can nudge a menu or answer a prompt without leaving the joystick. For distraction-free play, tap **Game mode**: the app hides every other control and anchors the stick and FIRE button to the edges of the screen for no-look thumbs. Leave it with **Exit game mode** or your device's Back button. Both release everything you were holding.
+A companion quick-keys bar beside the joystick keeps the keys you reach for mid-game one tap away — RUN/STOP, SPACE, RETURN, the function keys f1 to f8, the cursor keys, and the CTRL, C=, and SHIFT modifiers — so you can nudge a menu or answer a prompt without leaving the joystick.
+
+#### Game Mode
+
+**Game Mode** is the app set up for playing: the picture and sound as you last left them, everything else out of the way, and whichever control surface suits how you are driving. It is one action — the **Game Mode** tile on Home, the **Game Mode** button on Play, or the **0** key from anywhere — and it leaves you in the playing state with nothing else to press.
+
+![Game Mode](../../img/app/home/remote-input/02-game-mode.png)
+
+The on-screen joystick and keyboard follow how you are actually playing. Use the touchscreen and they are there; press a physical key and they step aside so the picture has the whole screen. Whichever you do next brings the right one back, and you never have to tell it which you are.
+
+![Game Mode, played on the physical keys](../../img/app/home/remote-input/07-game-mode-keys.png)
+
+With the controls out of the way, three keys still reach everything. **#** brings up RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches over the bottom of the picture, and puts them away again. **✱** switches between driving the C64 and adjusting the view. **Back** leaves. On a touchscreen the floating **Controls** handle at the top brings the whole toolbar back.
+
+Playing on a television? Turn **Watch** off once and Game Mode will keep opening without the picture — the controls take the space instead, so it is never blank.
+
+#### Steering with the number keys
+
+The four keys around **8** steer, and **8** itself fires — a diamond your thumb finds without looking:
+
+| Key | Direction |
+| --- | --- |
+| 5 | Up |
+| 7 | Left |
+| 9 | Right |
+| 0 | Down |
+| 8 | Fire |
+
+The mapping turns with your phone. Hold it like a gamepad and the keys follow, so up is always up and the picture turns with you while the rest of the app stays upright:
+
+| Held | Up | Left | Right | Down | Fire |
+| --- | --- | --- | --- | --- | --- |
+| Upright | 5 | 7 | 9 | 0 | 8 |
+| Turned right | 7 | 0 | 5 | 9 | 8 |
+| Turned left | 9 | 5 | 0 | 7 | 8 |
+
+![Game Mode with the picture turned](../../img/app/home/remote-input/08-game-mode-rotated.png)
+
+Lying down, or somewhere the sensor cannot tell? The **Orientation** control in Game Mode's toolbar pins it — **Auto**, **0°**, **90°** or **270°** — for as long as the sheet is open.
+
+Prefer different keys? **Settings → Remote Input → Joystick keys** offers **Classic T9** (2, 4, 6 and 8 with 5 as fire) or **Custom**, where you press the key you want for each direction. You only ever set it up upright; every other way round is worked out from that.
+
+Leave with **Exit game mode** or your device's Back button. Both release everything you were holding. Closing the sheet also stops the picture and sound if Game Mode was what started them, and leaves them running if they were already on before you arrived.
 
 **Keys** shows a full Commodore 64 keyboard, including the SHIFT, CTRL, and C= modifiers, SHIFT LOCK, the function keys f1 to f8, and RESTORE. Tap a modifier once to arm it for the next key, or hold it down to chord.
 
@@ -583,12 +631,7 @@ Full Joystick relay uses the device's `machine:input` REST endpoint. It needs a 
 
 Remote Input is careful never to leave a key or direction stuck on the real C64. Everything you are holding is released automatically when you close the sheet, switch mode or port, switch to another device, or send the app to the background. If a message does not reach the device, the header shows **Reconnecting…** until the next one gets through. And at any moment you can tap **Release All** to let go of every key and button at once.
 
-To steer a game you have just launched:
-
-1. On **Play**, start the game, then tap **Remote Input**.
-2. Choose **Joystick** and set the port (most games use **Port 2**).
-3. Pick a movement style, then play with the stick and **FIRE**.
-4. Tap **Release All**, or close the sheet, when you finish.
+To steer a game you have just launched, tap **Game Mode** — on **Play**, on **Home**, or with the **0** key. That is the whole of it: the picture and sound come back as you last had them, the controller opens ready to play, and most games read **Port 2**, which is where it starts. Press **Back** when you finish; everything you were holding is released on the way out.
 
 On by default. You can change it in Settings > Stable Features.
 
@@ -816,8 +859,8 @@ Preferred locations are marked first.
 | App-stored config snapshots | **Home > Config actions** | Local app snapshots, separate from device flash. |
 | Disk Explorer (launch a program inside a disk) | **Disks > disk menu > Open (Disk Explorer)** | On by default. You can change it in Settings > Stable Features. |
 | Create a blank disk | **Disks > New disk** | On by default. You can change it in Settings > Stable Features. |
-| Search inside disk images | **Settings > Play and disk behavior** | Optional. Enable it in Settings > Experimental Features. |
-| Launch Safety (cartridge parking) | Automatic; boot-menu answer in **Settings > Play and disk behavior** | On by default. You can change it in Settings > Stable Features. |
+| Search inside disk images | **Settings > Play and Disk** | Optional. Enable it in Settings > Experimental Features. |
+| Launch Safety (cartridge parking) | Automatic; boot-menu answer in **Settings > Play and Disk** | On by default. You can change it in Settings > Stable Features. |
 | Live View — Audio Mirror | **Settings > Experimental Features** | On by default. You can change it in Settings > Experimental Features. |
 | Live View — Video Mirror | **Settings > Experimental Features** | On by default. You can change it in Settings > Experimental Features. |
 | Advanced config file actions | **Home > Config actions** | Optional. Enable it in Settings > Experimental Features. |
@@ -853,7 +896,7 @@ The rule is simple: **OK goes in, Back comes out**.
 
 #### Number Keys
 
-Outside text fields, number keys jump to pages:
+Outside text fields, number keys jump to pages, and **0** goes straight to playing:
 
 | Key | Page |
 | --- | --- |
@@ -863,6 +906,7 @@ Outside text fields, number keys jump to pages:
 | 4 | Config |
 | 5 | Settings |
 | 6 | Docs |
+| 0 | Game Mode |
 
 #### Star and Pound
 

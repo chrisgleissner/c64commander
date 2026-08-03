@@ -18,7 +18,7 @@ import {
   Download,
   FolderOpen,
   AlertCircle,
-  Gamepad2,
+  Keyboard,
 } from "lucide-react";
 import { variant } from "@/generated/variant";
 import { useC64ConfigItems, useC64Connection } from "@/hooks/useC64Connection";
@@ -109,6 +109,7 @@ import { useTelnetActions } from "@/hooks/useTelnetActions";
 import { TELNET_ACTIONS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
 import { withTelnetInteraction } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { publishMachineInterrupt } from "@/lib/deviceInteraction/machineInterrupt";
+import { startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import {
   getMachineExecutionSnapshot,
   resumeMachineExecutionIfPausedBy,
@@ -744,7 +745,7 @@ function HomePageContent() {
           {
             id: "openRemoteInput",
             label: "Remote Input",
-            icon: Gamepad2,
+            icon: Keyboard,
             onSelect: () => setRemoteInputSheetOpen(true),
             disabled: !isActive,
           },
@@ -1254,6 +1255,8 @@ function HomePageContent() {
             menuLoading={deviceControlActionId === "toggleMenu"}
             powerCycleLoading={telnet.activeActionId === "powerCycle"}
             extraActions={machineExtraActions}
+            gameModeVisible={remoteInputEnabled}
+            onGameMode={() => void startGameMode()}
             onAction={handleAction}
             telnetBusy={telnet.isBusy}
             footer={ramSnapshotsEnabled ? ramDumpFolderCard : null}

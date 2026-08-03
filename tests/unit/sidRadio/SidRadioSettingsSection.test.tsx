@@ -17,6 +17,18 @@ vi.mock("@/hooks/useC64Connection", () => ({
   useC64Connection: () => ({ deviceHost: "c64u.local" }),
 }));
 
+// The chapter body animates open. jsdom runs no animations, so the real components would keep
+// the entry style (height 0, opacity 0) forever and every control inside would read as hidden.
+// Same mock the other Settings suites use.
+vi.mock("framer-motion", () => ({
+  motion: {
+    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    span: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    section: ({ children, ...props }: any) => <section {...props}>{children}</section>,
+  },
+  AnimatePresence: ({ children }: any) => <>{children}</>,
+}));
+
 import { SidRadioSettingsSection } from "@/pages/settings/SidRadioSettingsSection";
 import {
   loadLocalEngineEnabled,
@@ -30,6 +42,10 @@ import { clearAllRankings, getRanking, setRanking } from "@/lib/sidRadio/ranking
 
 beforeEach(async () => {
   localStorage.clear();
+  // SID Radio is one of Settings' collapsible chapters and its controls are not rendered while
+  // it is closed. This suite is about those controls, not about the collapse (which has its own
+  // coverage), so it starts from the state of a user who has opened the chapter.
+  localStorage.setItem("c64u_settings_open_sections", JSON.stringify(["sid-radio"]));
   await clearAllRankings();
 });
 
