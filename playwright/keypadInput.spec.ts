@@ -58,11 +58,30 @@ const enableDebugLogging = (page: Page) => setFlagInitScript(page, DEBUG_LOG_KEY
 
 const selectedCount = (page: Page) => page.locator(`[${SELECTED}="true"]`).count();
 
-/** Steps the focus ring (ArrowDown) until `target` carries the highlight, bounded. */
+/**
+ * Steps the focus ring until `target` carries the highlight, bounded.
+ *
+ * ArrowDown walks the ring at its current level; a control inside a card or a Settings chapter
+ * is one level in. So this presses OK — "OK goes in" — whenever the ring is sitting on a
+ * container that holds the target, and whenever it is sitting on a closed Settings chapter,
+ * whose controls are not rendered at all until it is opened. Otherwise it steps to the next
+ * item. That is exactly the sequence a keypad user performs.
+ */
 const ringFocus = async (page: Page, target: Locator, maxSteps = 60): Promise<boolean> => {
   for (let step = 0; step < maxSteps; step += 1) {
     if ((await target.getAttribute(SELECTED)) === "true") return true;
-    await page.keyboard.press("ArrowDown");
+
+    // The ring marks its position with `data-key-selected` rather than by moving DOM focus.
+    const handle = await target.elementHandle({ timeout: 250 }).catch(() => null);
+    const goIn = await page.evaluate((node) => {
+      const selected = document.querySelector('[data-key-selected="true"]');
+      if (!selected) return false;
+      if (node instanceof Element && selected !== node && selected.contains(node)) return true;
+      return selected.matches("[data-section-label]") && selected.getAttribute("data-open") === "false";
+    }, handle);
+    await handle?.dispose();
+
+    await page.keyboard.press(goIn ? "Enter" : "ArrowDown");
   }
   return (await target.getAttribute(SELECTED)) === "true";
 };

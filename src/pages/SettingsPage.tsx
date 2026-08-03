@@ -1971,7 +1971,7 @@ export default function SettingsPage() {
                 )}
 
                 {flags.launch_safety_enabled && (
-                  <div className="space-y-3 rounded-md border border-border p-3">
+                  <div className="space-y-3 rounded-md border border-border p-3" data-testid="settings-launch-safety">
                     <div className="flex items-start justify-between gap-3 min-w-0">
                       <div className="min-w-0">
                         <Label htmlFor="settings-boot-menu-answer" className="font-medium">
@@ -2253,24 +2253,20 @@ export default function SettingsPage() {
             </SettingsSection>
           </div>
 
-          {featureGroups.map((group, index) => (
-            <motion.div
+          {featureGroups.map((group) => (
+            <SettingsSection
               key={group.key}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.24 + index * 0.02 }}
-              className="bg-card border border-border rounded-xl p-4 space-y-4"
-              data-testid={`settings-feature-group-${group.key}`}
+              id={`feature-group-${group.key}`}
+              title={group.metadata.label}
+              summary={group.metadata.description}
+              icon={Cpu}
+              testId={`settings-feature-group-${group.key}`}
+              badge={
+                <span className="rounded-full border border-border/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  {group.features.filter((feature) => feature.value).length}/{group.features.length} on
+                </span>
+              }
             >
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Cpu className="h-5 w-5 text-primary" />
-                </div>
-                <h2 className="font-medium">{group.metadata.label}</h2>
-              </div>
-
-              <p className="text-xs text-muted-foreground">{group.metadata.description}</p>
-
               <div className="space-y-3">
                 {group.features.map((feature) => (
                   <div key={feature.id} className="flex items-start justify-between gap-3 min-w-0">
@@ -2305,7 +2301,7 @@ export default function SettingsPage() {
                   </div>
                 ))}
               </div>
-            </motion.div>
+            </SettingsSection>
           ))}
 
           {/* 5. SID Radio. SHOWN TO EVERYONE: the feature itself reached GA, so the minimum song length

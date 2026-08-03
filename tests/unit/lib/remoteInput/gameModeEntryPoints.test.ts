@@ -65,6 +65,15 @@ describe("resolvePickerConfirm", () => {
     });
   });
 
+  // Online Archive results are `"<id>/<numeric archive category>"`, and what the entry holds is
+  // not known until it has been fetched. The button must not promise Play before then.
+  it("keeps queueing for an Online Archive result, whose contents are not yet known", () => {
+    expect(resolvePickerConfirm([{ type: "file", path: "31337/1" }])).toEqual({
+      label: PICKER_ADD_LABEL,
+      launches: false,
+    });
+  });
+
   it("keeps queueing for several files", () => {
     expect(
       resolvePickerConfirm([

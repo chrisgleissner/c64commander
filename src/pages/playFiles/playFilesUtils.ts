@@ -75,6 +75,12 @@ export interface PickerConfirmSelection {
  * keystroke that can honestly be removed from the launch path, so a single
  * non-song file confirms as **Play**. Everything else — several files, a folder,
  * a tune — keeps queueing, because for those the queue is the point.
+ *
+ * The decision is made from the file extension, so it deliberately does NOT apply to Online
+ * Archive results. Those carry `"<id>/<numeric archive category>"` as their path, and what an
+ * archive entry actually contains is only known once it has been fetched. Promising **Play**
+ * before that would mislabel the button whenever the entry turns out to be a tune, so archive
+ * selections keep queueing and are launched from the transport like any other playlist item.
  */
 export const resolvePickerConfirm = (
   selections: readonly PickerConfirmSelection[],

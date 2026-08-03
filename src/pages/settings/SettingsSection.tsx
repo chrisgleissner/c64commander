@@ -11,7 +11,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { useFocusItem } from "@/hooks/useFocusNavigation";
 
 const OPEN_SECTIONS_KEY = "c64u_settings_open_sections";
 
@@ -86,11 +85,6 @@ export const SettingsSection = ({
     });
   }, [id]);
 
-  const headerFocusRef = useFocusItem<HTMLButtonElement>({
-    id: `settings-section-${id}`,
-    group: "settings-sections",
-  });
-
   return (
     <motion.section
       initial={{ opacity: 0, y: 12 }}
@@ -101,7 +95,6 @@ export const SettingsSection = ({
       data-section-label={title}
     >
       <button
-        ref={headerFocusRef}
         type="button"
         onClick={toggle}
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
@@ -115,11 +108,12 @@ export const SettingsSection = ({
           </span>
           <span className="flex min-w-0 flex-col">
             {/* Still a real heading: the section titles are how the page is navigated, by a
-                screen reader and by anyone scanning it. */}
-            <h2 className="flex items-center gap-2 font-medium">
-              {title}
+                screen reader and by anyone scanning it. The badge sits beside the heading
+                rather than inside it, so the heading's accessible name stays the title alone. */}
+            <span className="flex items-center gap-2">
+              <h2 className="font-medium">{title}</h2>
               {badge}
-            </h2>
+            </span>
             {/* Wrapped, not truncated: a summary cut off mid-word tells the reader less than
                 no summary at all, and this page is read on a narrow screen. */}
             <span className="text-xs leading-snug text-muted-foreground">{summary}</span>

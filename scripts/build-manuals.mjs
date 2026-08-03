@@ -576,14 +576,14 @@ const featureRows = ({ features, variant }) => {
   if (includeFeature(features, "in_image_search_enabled")) {
     rows.push([
       "Search inside disk images",
-      "**Settings > Play and disk behavior**",
+      "**Settings > Play and Disk**",
       featureAvailability(features.in_image_search_enabled),
     ]);
   }
   if (includeFeature(features, "launch_safety_enabled")) {
     rows.push([
       "Launch Safety (cartridge parking)",
-      "Automatic; boot-menu answer in **Settings > Play and disk behavior**",
+      "Automatic; boot-menu answer in **Settings > Play and Disk**",
       featureAvailability(features.launch_safety_enabled),
     ]);
   }
@@ -974,7 +974,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Settings overview", profile, "settings/profiles/{profile}/01-overview.png"),
     "",
-    `Connection and saved devices live here, along with Appearance (display profile, theme, full-screen, and screen orientation), Notifications, Diagnostics options, Device Safety and network timing, Play and Disk behavior, the HVSC and Online Archive sources, feature toggles, Settings transfer, and an About panel. **Settings transfer** exports every app preference to a file you can import onto another ${appDeviceName(
+    "Settings is a list of chapters rather than one long page of controls. Each chapter is closed until you tap it, and its heading says in one line what it decides, so you can find the right chapter without reading through the others. A chapter you leave open stays open the next time you visit.",
+    "",
+    "The chapters are **Appearance**, **Connection**, **Diagnostics**, **Play and Disk**, **HVSC**, **Online Archive**, **Device Safety**, **Notifications**, and **About**, followed by SID Radio and the feature toggles.",
+    "",
+    `**Settings transfer**, in the About chapter, exports every app preference to a file you can import onto another ${appDeviceName(
       variant,
     )}, so a second device starts up already configured.`,
     "",

@@ -2336,9 +2336,10 @@ test.describe("App screenshots", () => {
       await page.goto("/settings");
       const bootMenuAnswer = getActiveMain(page).getByTestId("settings-boot-menu-answer");
       await expect(bootMenuAnswer).toBeVisible();
-      const playAndDiskCard = getActiveMain(page)
-        .locator(".profile-card")
-        .filter({ has: page.getByTestId("settings-boot-menu-answer") });
+      // The launch-safety controls live in their own bordered block inside the Play and Disk
+      // chapter. Shooting that block rather than the whole chapter keeps the image about
+      // launch safety, which is what the manual section around it is explaining.
+      const playAndDiskCard = getActiveMain(page).getByTestId("settings-launch-safety");
       await playAndDiskCard.scrollIntoViewIfNeeded();
       await captureScreenshot(page, testInfo, "settings/content-explorer/01-launch-safety.png", {
         locator: playAndDiskCard,
@@ -2985,8 +2986,35 @@ test.describe("App screenshots", () => {
       await waitForConnected(page);
       await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
 
+      // The overview is the one shot that has to show the page as a FIRST visit sees it: a short
+      // list of named chapters rather than every control at once. The shared fixture seeds every
+      // chapter open so the other specs can reach the controls inside them, so the first-visit
+      // state is written explicitly here — only Connection open. Clearing the key instead would
+      // not work, because the fixture's seed writes it again on the next navigation.
+      await page.evaluate(() => localStorage.setItem("c64u_settings_open_sections", JSON.stringify(["connection"])));
+      await page.reload();
+      await waitForConnected(page);
+      await expect(page.getByTestId("settings-section-appearance")).toHaveAttribute("data-open", "false");
       await page.evaluate(() => window.scrollTo(0, 0));
       await captureScreenshot(page, testInfo, "settings/01-overview.png");
+
+      // Everything after this shot is about the controls themselves, so put the chapters back.
+      await page.evaluate(() => {
+        const ids = [
+          "appearance",
+          "connection",
+          "diagnostics",
+          "play-and-disk",
+          "hvsc",
+          "online-archive",
+          "device-safety",
+          "notifications",
+          "about",
+        ];
+        localStorage.setItem("c64u_settings_open_sections", JSON.stringify(ids));
+      });
+      await page.reload();
+      await waitForConnected(page);
       await capturePageSections(page, testInfo, "settings");
 
       await page.evaluate(() => window.scrollTo(0, 0));

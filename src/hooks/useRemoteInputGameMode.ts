@@ -106,6 +106,9 @@ export const useRemoteInputGameMode = ({
         addLog("warn", `Game Mode: failed to stop the ${name} stream it started`, {
           service: "streams",
           error: error instanceof Error ? error.message : String(error),
+          // A stream that will not stop is hard to reproduce on a desk, so the diagnostics
+          // report has to carry where it failed, not just what it said.
+          stack: error instanceof Error ? error.stack : undefined,
         });
       });
     };

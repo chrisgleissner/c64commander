@@ -11,6 +11,7 @@ import { loadMirrorC64Audio, loadMirrorC64Video } from "@/lib/config/appSettings
 import { avMirrorSession, type AvMirrorSession } from "@/lib/streams/avMirrorSession";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 import { variant } from "@/generated/variant";
+import { addLog } from "@/lib/logging";
 
 /**
  * Which feeds this particular launch started. Closing the sheet stops exactly
@@ -51,8 +52,24 @@ export const startGameMode = async (opts?: { session?: AvMirrorSession }): Promi
   const started: GameModeStartResult = { startedVideo, startedAudio };
   requestGameMode(started);
 
-  if (startedVideo) await session.startVideo();
-  if (startedAudio) await session.startAudio();
+  // Every call site fires this and forgets it, because the sheet has already been asked to
+  // open and nothing downstream waits on the streams. A rejected start must therefore be
+  // logged and swallowed here; letting it escape would surface as an unhandled rejection.
+  // The record still claims the stream, which costs only an idempotent stop later.
+  const start = async (name: string, run: () => Promise<void>) => {
+    try {
+      await run();
+    } catch (error: unknown) {
+      addLog("warn", `Game Mode: failed to start the ${name} stream`, {
+        service: "streams",
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+    }
+  };
+
+  if (startedVideo) await start("video", () => session.startVideo());
+  if (startedAudio) await start("audio", () => session.startAudio());
   return started;
 };
 
