@@ -26,6 +26,7 @@
  */
 
 import { useCallback, useEffect, useRef } from "react";
+import { useInRouterContext, useLocation } from "react-router-dom";
 
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
@@ -73,6 +74,25 @@ const GAME_MODE_SHORTCUT_PATHS = new Set(["/", "/play"]);
 
 const currentPathname = (): string => (typeof window === "undefined" ? "" : window.location.pathname);
 
+/**
+ * Refreshes the bar when the route changes.
+ *
+ * The bar reads the path imperatively so it stays renderable outside a Router, but the path
+ * still has to be re-read when it changes: navigating off `/` or `/play` must drop the Game
+ * Mode hint straight away, not whenever the next unrelated ring change happens to arrive. A
+ * `popstate` listener would not do — in-app navigation is `pushState`, which fires no event.
+ *
+ * So the router subscription lives in a child that is mounted ONLY when there is a Router,
+ * which keeps `useLocation` off the bar's own render path.
+ */
+const RouteChangeRefresh = ({ onRouteChange }: { onRouteChange: () => void }) => {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    onRouteChange();
+  }, [pathname, onRouteChange]);
+  return null;
+};
+
 const isGameModeShortcutPath = (pathname: string): boolean => GAME_MODE_SHORTCUT_PATHS.has(pathname);
 
 /**
@@ -116,6 +136,9 @@ export const KeypadGuidanceBar = () => {
   const rightActionRef = useRef<HTMLSpanElement>(null);
   const shortcutSlotRef = useRef<HTMLSpanElement>(null);
   const shortcutActionRef = useRef<HTMLSpanElement>(null);
+
+  // Called unconditionally and safe with no Router above; `useLocation` is not.
+  const inRouter = useInRouterContext();
 
   const refresh = useCallback(() => {
     const root = rootRef.current;
@@ -166,6 +189,7 @@ export const KeypadGuidanceBar = () => {
       data-testid="keypad-guidance-bar"
       aria-hidden="true"
     >
+      {inRouter ? <RouteChangeRefresh onRouteChange={refresh} /> : null}
       <div ref={breadcrumbRef} className="keypad-guidance-breadcrumb" data-testid="keypad-guidance-breadcrumb" />
       <div className="keypad-guidance-keys">
         <span className="keypad-guidance-key" data-soft="left" data-testid="keypad-guidance-left">

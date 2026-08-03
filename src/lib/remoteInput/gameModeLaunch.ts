@@ -78,8 +78,7 @@ const NOTHING_STARTED: GameModeStartResult = { startedVideo: false, startedAudio
 /** How long an unclaimed request waits for a sheet to mount before it is stale. */
 const PENDING_REQUEST_TTL_MS = 5_000;
 
-let pendingRequest: { epoch: number; started: GameModeStartResult; atMs: number } | null = null;
-let requestEpoch = 0;
+let pendingRequest: { started: GameModeStartResult; atMs: number } | null = null;
 
 /**
  * Take the outstanding request, if there is one and it is still fresh.
@@ -104,8 +103,21 @@ const takePendingGameModeRequest = (): GameModeStartResult | null => {
  */
 export const requestGameMode = (started: GameModeStartResult = NOTHING_STARTED): void => {
   if (typeof window === "undefined") return;
-  requestEpoch += 1;
-  pendingRequest = { epoch: requestEpoch, started, atMs: Date.now() };
+  // Stream ownership from an unclaimed request is CARRIED OVER, not replaced. Pressing `0`
+  // twice in quick succession (or a key repeat) calls this twice: the first launch starts the
+  // feeds and records owning them, and by the time the second runs they are already live, so it
+  // starts nothing and reports owning nothing. Overwriting the record with that second result
+  // would discard the ownership of feeds this launch really did start, and the sheet would
+  // leave them running after it closed — the device keeps streaming to nobody.
+  const outstanding =
+    pendingRequest !== null && Date.now() - pendingRequest.atMs <= PENDING_REQUEST_TTL_MS ? pendingRequest : null;
+  const owned: GameModeStartResult = outstanding
+    ? {
+        startedVideo: started.startedVideo || outstanding.started.startedVideo,
+        startedAudio: started.startedAudio || outstanding.started.startedAudio,
+      }
+    : started;
+  pendingRequest = { started: owned, atMs: Date.now() };
   window.dispatchEvent(new CustomEvent(GAME_MODE_REQUEST_EVENT));
 };
 

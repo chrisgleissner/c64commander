@@ -33,6 +33,16 @@ import kotlin.math.roundToInt
 open class DeviceRotationPlugin : Plugin() {
   private var orientationListener: OrientationEventListener? = null
 
+  /**
+   * Whether the activity is in the foreground.
+   *
+   * Starts true: `load()` runs while the activity is coming up, and on some paths no
+   * `handleOnResume` arrives before the first `addListener`. Starting false there would leave
+   * the sensor off with a listener waiting on it, and Game Mode would never see a turn.
+   */
+  internal var resumed: Boolean = true
+    private set
+
   internal var publishedRotation: Int = 0
     private set
 
@@ -89,13 +99,33 @@ open class DeviceRotationPlugin : Plugin() {
     syncSensorRegistration()
   }
 
+  /**
+   * The sensor is worth its battery only while the UI can act on what it reports.
+   *
+   * A paused activity — backgrounded WebView, screen off — cannot: the JS listener is not
+   * running, so every callback is wasted work on a session that may already be busy with
+   * background playback or an HVSC scan. The rotation the app sees on resume is recomputed
+   * from the first callback after the sensor comes back, so nothing is lost by stopping.
+   */
+  override fun handleOnPause() {
+    resumed = false
+    disableSensor()
+    super.handleOnPause()
+  }
+
+  override fun handleOnResume() {
+    super.handleOnResume()
+    resumed = true
+    syncSensorRegistration()
+  }
+
   override fun handleOnDestroy() {
     disableSensor()
     super.handleOnDestroy()
   }
 
   internal fun syncSensorRegistration() {
-    if (hasListeners(ROTATION_EVENT)) enableSensor() else disableSensor()
+    if (resumed && hasListeners(ROTATION_EVENT)) enableSensor() else disableSensor()
   }
 
   internal fun onOrientationDegrees(degrees: Int) {

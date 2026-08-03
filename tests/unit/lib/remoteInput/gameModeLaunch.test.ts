@@ -27,6 +27,7 @@ import {
   startGameMode,
   subscribeGameModeRequest,
 } from "@/lib/remoteInput/gameModeLaunch";
+import type { GameModeStartResult } from "@/lib/remoteInput/gameModeLaunch";
 import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
 
 interface FakeSession {
@@ -197,5 +198,41 @@ describe("the auto-enter preference", () => {
   it("falls back to the default for an unrecognised stored value", () => {
     localStorage.setItem("c64u_game_mode_on_launch", "maybe");
     expect(loadGameModeOnLaunch()).toBe(DEFAULT_GAME_MODE_ON_LAUNCH);
+  });
+});
+
+// The `0` shortcut fires on every key-down, so a key repeat or a quick double-press calls
+// requestGameMode twice. The second launch finds the feeds already live and reports starting
+// nothing; if that replaced the record, the sheet would close without stopping the feeds the
+// FIRST launch really did start, and the device would keep streaming to nobody.
+describe("a repeated request keeps the stream ownership of the first", () => {
+  beforeEach(() => {
+    resetPendingGameModeRequest();
+  });
+
+  it("carries video and audio ownership forward when the second launch started nothing", () => {
+    requestGameMode({ startedVideo: true, startedAudio: true });
+    requestGameMode({ startedVideo: false, startedAudio: false });
+
+    let claimed: GameModeStartResult | null = null;
+    const stop = subscribeGameModeRequest((started) => {
+      claimed = started;
+    });
+    stop();
+
+    expect(claimed).toEqual({ startedVideo: true, startedAudio: true });
+  });
+
+  it("unions the two, so a feed started by either launch is owned", () => {
+    requestGameMode({ startedVideo: true, startedAudio: false });
+    requestGameMode({ startedVideo: false, startedAudio: true });
+
+    let claimed: GameModeStartResult | null = null;
+    const stop = subscribeGameModeRequest((started) => {
+      claimed = started;
+    });
+    stop();
+
+    expect(claimed).toEqual({ startedVideo: true, startedAudio: true });
   });
 });

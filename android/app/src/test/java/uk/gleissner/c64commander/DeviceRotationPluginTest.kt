@@ -17,6 +17,7 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginMethod
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -32,6 +33,12 @@ private class TestableDeviceRotationPlugin : DeviceRotationPlugin() {
   public override fun notifyListeners(eventName: String?, data: JSObject?) {
     if (eventName == ROTATION_EVENT) published.add(data?.getInteger("rotation") ?: -1)
   }
+
+  // Capacitor declares the lifecycle hooks `protected`, which in Kotlin is not visible to a
+  // same-package test. Widened here, as `notifyListeners` above already is.
+  public override fun handleOnPause() = super.handleOnPause()
+
+  public override fun handleOnResume() = super.handleOnResume()
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -109,6 +116,22 @@ class DeviceRotationPluginTest {
     plugin.current(call)
     org.mockito.Mockito.verify(call).resolve(org.mockito.ArgumentMatchers.any(JSObject::class.java))
     assertEquals(270, plugin.publishedRotation)
+  }
+
+  /**
+   * The sensor costs battery, and a paused activity cannot act on what it reports: the JS
+   * listener is not running, so every callback is wasted on a session that may already be busy
+   * with background playback or an HVSC scan.
+   */
+  @Test
+  fun theSensorFollowsTheActivityLifecycle() {
+    assertTrue("the plugin starts in the foreground", plugin.resumed)
+
+    plugin.handleOnPause()
+    assertFalse("a paused activity must not keep the sensor running", plugin.resumed)
+
+    plugin.handleOnResume()
+    assertTrue("coming back to the foreground re-enables it", plugin.resumed)
   }
 
   /**
