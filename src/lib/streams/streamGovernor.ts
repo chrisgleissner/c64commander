@@ -197,6 +197,14 @@ export class StreamGovernor {
     const before = this.effective;
     const audioActive = signals.audioActive !== false;
     const healthyMs = this.audioHealthyMs(signals);
+    // Drop the latch whenever audio is not playing. It has to be per audio START, not per session:
+    // the session is only reset when NEITHER feed is live, so turning Listen off and on again while
+    // the picture stays up left the latch set from the first start, and the second start's buffer —
+    // filling from 0, exactly as the first one did — read as starvation instead of warmup. The
+    // governor then shed video on every tick of the priming period and took the best part of half a
+    // minute to climb back, which the listener sees as the picture collapsing when they turn the
+    // sound on.
+    if (!audioActive) this.primed = false;
     // Latch "primed" the first time active audio reaches a healthy depth — before that the buffer is
     // filling (or absent), so its low value is warmup, not starvation, and must not drive a demote.
     if (audioActive && signals.audioBufferMs >= healthyMs) this.primed = true;
