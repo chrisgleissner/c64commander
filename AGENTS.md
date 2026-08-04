@@ -599,6 +599,39 @@ a failing test. Real regression: `src/pages/ConfigBrowserPage.tsx` fed `items`
 - Test names must describe the locked-in behavior precisely.
 - If a fix spans multiple layers, add the narrowest deterministic test at each affected layer instead of relying on a single broad integration test.
 
+## Hardware merge gate
+
+Some of what this app does cannot be checked anywhere but on the rig: a held joystick direction
+reaching a real CIA, a tone ladder coming out of a real speaker, the latency of a real Wi-Fi link.
+Every one of those has shipped broken while CI was green.
+
+**Whenever the user asks to "complete a PR", converge a PR, make something merge-ready, ship, or
+release, run the hardware merge gate and report its table:**
+
+```bash
+node tools/hil/merge_gate.mjs --host c64u --iface <this host's LAN ip> --json artifacts/hil-gate.json
+```
+
+See `docs/testing/hil-merge-gate.md` for the stages, what each asserts, and the reference numbers
+from this rig.
+
+- Green CI is necessary and not sufficient for a change to input relay, Live View, audio, playback
+  or the streaming pipeline.
+- The gate lists `sid-remote`, `sid-local` and `crossfade` as `pending`. A green run does **not**
+  clear them; the summary says so, and so must any completion report.
+- If no rig is attached, say that plainly in the PR and in the completion summary, and name the
+  stages that were not run. Do not describe the work as verified.
+- `--quiet-check` runs everything that makes no sound, for iterating without disturbing anyone.
+
+### Audio measurements run in someone's room
+
+The volume ceiling of 10 of 25 above is a hard limit, and the gate enforces it. Two further rules:
+
+- **Use the lowest volume that still measures**, which is 5 of 25 for these graders. They are
+  band-limited to 300-6000 Hz, so the room's low-frequency noise does not set the floor.
+- **Play only while measuring.** Silence the C64 between stages with `machine:reset` rather than
+  leaving a stimulus running, and keep each recording as short as its grader allows.
+
 ## Mandatory coverage gate before completion
 
 - For any plan/task that includes code changes, run `npm run test:coverage` before declaring completion.

@@ -193,8 +193,88 @@ return JSON.stringify({sheet:!!s,gameMode:s?.getAttribute("data-game-mode"),
   joystickUnavailable:!!q("remote-input-joystick-unavailable-hint")});`),
   );
 
+const JOYSTICK_SETTING_LABEL = { auto: "Auto", visible: "Visible", hidden: "Hidden" };
+
+/**
+ * Put the on-screen-joystick setting into a known state, through the control the user has.
+ *
+ * A phone that has been used before carries whatever was chosen on it last, and this run
+ * asserts what **Auto** does — so without this it reports a device configured to hide the
+ * joystick as a defect, which is how the first run of this script read. Driving Settings
+ * rather than writing `localStorage` also means the run proves the Settings control still
+ * reaches the sheet, which is a claim worth one page visit.
+ *
+ * Returns the raw stored value so the run can put it back, including the case where
+ * nothing was stored at all — which is not the same as `auto`, because the variant
+ * default applies there.
+ */
+const selectJoystickSetting = async (setting) => {
+  const label = JSON.stringify(JOYSTICK_SETTING_LABEL[setting]);
+  const before = await js(
+    inPage(`q("remote-input-close")?.click();await wait(600);
+q("tab-settings")?.click();await wait(2500);
+if(!q("settings-game-mode-joystick")){q("settings-section-toggle-play-and-disk")?.click();await wait(2000);}
+const t=q("settings-game-mode-joystick");
+if(!t) return JSON.stringify({error:"the on-screen joystick setting is not reachable in Settings"});
+t.scrollIntoView({block:"center"});await wait(300);
+return JSON.stringify({was:localStorage.getItem("c64u_game_mode_controls_visibility"),label:t.innerText});`),
+  );
+  if (before.error) throw new Error(before.error);
+
+  const after = await js(
+    inPage(`q("settings-game-mode-joystick").click();await wait(1200);
+const o=[...document.querySelectorAll('[role=option]')].find(e=>(e.textContent||"").trim()===${label});
+if(!o) return JSON.stringify({error:"no option labelled "+${label}});
+o.click();await wait(1200);
+return JSON.stringify({stored:localStorage.getItem("c64u_game_mode_controls_visibility"),
+  label:q("settings-game-mode-joystick")?.innerText});`),
+  );
+  if (after.error) throw new Error(after.error);
+  if (after.stored !== setting) throw new Error(`choosing ${label} stored "${after.stored}"`);
+
+  await js(inPage(`q("tab-home")?.click();await wait(2500);return "1";`));
+  return before.was;
+};
+
+/** Put back whatever the phone had, including having had nothing. */
+const restoreJoystickSetting = async (was) => {
+  if (was === null) {
+    await js('(()=>{localStorage.removeItem("c64u_game_mode_controls_visibility");return 1})()');
+    return;
+  }
+  // The old value names are still read by the app but can no longer be chosen in the
+  // picker, so they go back the only way they can.
+  if (JOYSTICK_SETTING_LABEL[was]) await selectJoystickSetting(was);
+  else await js(`(()=>{localStorage.setItem("c64u_game_mode_controls_visibility",${JSON.stringify(was)});return 1})()`);
+};
+
+/**
+ * Make sure there is a picture before Game Mode is opened.
+ *
+ * Everything this script asserts about the on-screen joystick is conditional on one: with the
+ * mirror off the joystick is shown unconditionally and the toolbar toggle is not offered at all,
+ * so a run on a phone whose Watch was left off silently tests nothing and then fails looking for
+ * a control that was correct to be absent. That is how the first gated run of this script read.
+ */
+const ensureWatching = async () => {
+  const state = await js(
+    inPage(`q("remote-input-close")?.click();await wait(600);
+q("tab-home")?.click();await wait(2000);
+const card=q("live-view-card");
+if(!card) return JSON.stringify({error:"the Live View card is not on Home; is the mirror flag on?"});
+card.scrollIntoView({block:"center"});await wait(400);
+const v=q("av-video-toggle");
+if(!v) return JSON.stringify({error:"the Watch switch is not on the Live View card"});
+if(v.getAttribute("aria-pressed")!=="true"){v.click();await wait(3000);}
+return JSON.stringify({video:q("av-video-toggle")?.getAttribute("aria-pressed")});`),
+  );
+  if (state.error) throw new Error(state.error);
+  if (state.video !== "true") throw new Error("Watch would not turn on, so there is no picture to give the screen to");
+};
+
 const openGameMode = async () => {
   await assertPageVisible();
+  await ensureWatching();
   let state = await readSheet();
   if (!state.sheet || state.gameMode !== "true") {
     await js('(()=>{document.querySelector("[data-testid=home-machine-inline-openGameMode]")?.click();return 1})()');
@@ -272,6 +352,11 @@ const main = async () => {
   const info = await (await fetch(`http://${HOST}/v1/info`)).json();
   console.log(`  device: ${info.product} fw ${info.firmware_version} core ${info.core_version}`);
 
+  // Assert what Auto does, from a known starting point rather than from whatever this
+  // phone was last left on.
+  const originalSetting = await selectJoystickSetting("auto");
+  console.log(`  setting: on-screen joystick was "${originalSetting ?? "(unset)"}", running as "auto"`);
+
   const sheet = await openGameMode();
   console.log(`\n=== the joystick is there to hold ===`);
   check(
@@ -346,6 +431,7 @@ return JSON.stringify({joystick:q("remote-input-sheet")?.getAttribute("data-joys
   check(restored.joystick === "visible", "the toolbar toggle brought the joystick back");
 
   await js(inPage(`await chrome();q("remote-input-close")?.click();await wait(800);return "1";`));
+  await restoreJoystickSetting(originalSetting);
 
   if (failures.length) {
     console.error(`\nFAILURES:\n- ${failures.join("\n- ")}`);
