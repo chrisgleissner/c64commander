@@ -110,3 +110,8 @@ variants:
       # without a further keystroke. Off elsewhere, where a sheet opening by
       # itself would be a surprise.
       default_game_mode_on_launch: true
+      # This handset has no touchscreen, so the on-screen joystick is a control
+      # nobody there can reach. Game Mode gives its space to the live picture
+      # from the start. Elsewhere the default waits until the app can see that
+      # the player is using physical keys.
+      default_game_mode_joystick: hidden

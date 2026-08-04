@@ -10,7 +10,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import { saveCoverageFromPage } from "./withCoverage";
-import { assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
+import { allowWarnings, assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 
 /**
  * Game Mode: one action from "I want to play" to playing, and the physical keys
@@ -40,6 +40,50 @@ const waitForConnected = async (page: Page) => {
     "data-connection-state",
     "REAL_CONNECTED",
     { timeout: 10000 },
+  );
+};
+
+/**
+ * Give the app a video mirror that connects, and nothing more.
+ *
+ * What the control-surface rule reads is only whether the picture is on, so this stops
+ * at a WebSocket that opens: decoded frames would prove something about the decoder,
+ * which is `screenshots.spec.ts`'s job and a much larger stub. The stream REST is
+ * answered so the controller is not torn down before it connects.
+ */
+const seedLiveVideoMirror = async (page: Page) => {
+  await page.addInitScript(() => {
+    for (const flag of ["audio_mirror_enabled", "video_mirror_enabled"]) {
+      localStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+      sessionStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+    }
+    const RealWebSocket = window.WebSocket;
+    class StubStreamWebSocket {
+      url: string;
+      binaryType = "blob";
+      readyState = 0;
+      onopen: ((e?: unknown) => void) | null = null;
+      onmessage: ((e: { data: unknown }) => void) | null = null;
+      onclose: ((e?: unknown) => void) | null = null;
+      onerror: ((e?: unknown) => void) | null = null;
+      constructor(url: string) {
+        this.url = String(url);
+        if (!this.url.includes("/streams/")) return new RealWebSocket(url) as unknown as StubStreamWebSocket;
+        setTimeout(() => {
+          this.readyState = 1;
+          this.onopen?.({});
+        }, 15);
+      }
+      send() {}
+      close() {
+        this.readyState = 3;
+        this.onclose?.({});
+      }
+    }
+    window.WebSocket = StubStreamWebSocket as unknown as typeof WebSocket;
+  });
+  await page.route("**/v1/streams/**", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ errors: [] }) }),
   );
 };
 
@@ -134,6 +178,51 @@ test.describe("Game Mode", () => {
     await page.getByTestId("keypad-quick-menu-game-mode").click();
 
     await expectInGameMode(page);
+  });
+
+  /**
+   * The reported defect, end to end: Game Mode drew the on-screen joystick and then took
+   * it away a couple of seconds later, on a touchscreen, with the user having done
+   * nothing but tap.
+   *
+   * `0` is what makes this reproduce rather than a contrived setup. It is the shortcut
+   * that opens Game Mode, and pressing it sets the app-wide input modality that the old
+   * rule read — so the joystick was already condemned before the sheet had finished
+   * opening. Watch is turned on first because the rule only applies with a live picture.
+   */
+  test("the joystick stays after `0` opens Game Mode, and goes on the first steer", async ({ page }, testInfo) => {
+    allowWarnings(testInfo, "the stubbed video stream carries no frames, only a live connection.");
+    await enableKeypad(page);
+    await seedLiveVideoMirror(page);
+    await page.goto("/");
+    await waitForConnected(page);
+
+    const liveView = page.locator('[data-panel-position="1"]').getByTestId("live-view-card");
+    await liveView.scrollIntoViewIfNeeded();
+    await liveView.getByTestId("av-video-toggle").click();
+
+    await page.keyboard.press("0");
+    await expectInGameMode(page);
+    const sheet = page.getByTestId("remote-input-sheet");
+    await expect(page.getByTestId("av-mirror-immersive")).toBeVisible();
+
+    // Well past the hide delay: the old behaviour failed HERE, a couple of seconds in.
+    await page.waitForTimeout(4000);
+    await expect(sheet).toHaveAttribute("data-joystick", "visible");
+    await expect(page.getByTestId("remote-input-virtual-joystick")).toBeVisible();
+
+    // Classic T9's `4` is left at rest, and steering the game is the one observation the
+    // Auto setting is allowed to act on. Pressed AT the sheet: a key sent to the body
+    // with the chrome gone would be a tab jump rather than a joystick relay.
+    await sheet.press("4");
+    await expect(sheet).toHaveAttribute("data-joystick", "hidden", { timeout: 8000 });
+    await expect(page.getByTestId("remote-input-virtual-joystick")).toHaveCount(0);
+
+    // And the toolbar is the way back, without leaving Game Mode.
+    await page.getByTestId("remote-input-restore-chrome").click();
+    await page.getByTestId("remote-input-joystick-visibility-toggle").click();
+    await expect(sheet).toHaveAttribute("data-joystick", "visible");
+    await expect(page.getByTestId("remote-input-virtual-joystick")).toBeVisible();
   });
 
   test("the picture turns with the handset while the app stays portrait", async ({ page }) => {

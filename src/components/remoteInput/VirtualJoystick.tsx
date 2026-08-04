@@ -51,6 +51,14 @@ export type VirtualJoystickProps = {
   fillHeight?: boolean;
   /** HARD21-006: session release-all epoch, forwarded to the D-pad's ref reset. */
   releaseAllEpoch?: number;
+  /**
+   * Called on any touch or click anywhere in these controls.
+   *
+   * Game Mode uses it as the counter-evidence to a physical key: a hand on the
+   * on-screen joystick is a hand that has not moved to the keypad, whatever a key
+   * press a moment ago suggested.
+   */
+  onPointerInput?: () => void;
 };
 
 type MovementStyle = "stick" | "dpad" | "swipe";
@@ -90,6 +98,7 @@ export const VirtualJoystick = ({
   immersive = false,
   fillHeight,
   releaseAllEpoch,
+  onPointerInput,
 }: VirtualJoystickProps) => {
   const stickZoneRef = useRef<HTMLDivElement | null>(null);
   const originRef = useRef<{ x: number; y: number } | null>(null);
@@ -325,6 +334,9 @@ export const VirtualJoystick = ({
     <div
       className={cn("flex flex-col gap-3", immersive && (fillHeight ?? true) && "h-full")}
       data-testid="remote-input-virtual-joystick"
+      // Capture, so it is reported even when the child that was touched stops the
+      // event from bubbling — the stick and the D-pad both capture their pointers.
+      onPointerDownCapture={onPointerInput}
     >
       {disabled ? (
         <p

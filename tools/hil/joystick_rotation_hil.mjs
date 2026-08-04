@@ -19,10 +19,12 @@
  *
  * So the assertion is made where the player would make it: on the screen. The C64 runs
  * `tools/c64/joystick-probe.asm`, which moves a PETSCII circle one cell per joystick
- * press and advances its colour on fire. Pressing the key the player thinks of as "up"
- * has to move the circle up — and after the handset is turned, the SAME key has to move
- * it in the direction that key now points, which is the whole of what Game Mode's
- * orientation handling claims to do.
+ * press — and on for as long as the direction is held — and advances its colour on fire.
+ * Pressing the key the player thinks of as "up" has to move the circle up, and after the
+ * handset is turned, the SAME key has to move it in the direction that key now points,
+ * which is the whole of what Game Mode's orientation handling claims to do.
+ *
+ * This script presses; `tools/hil/joystick_hold_hil.mjs` holds.
  *
  * WHAT IS DRIVEN, AND WHAT IS NOT
  *
@@ -94,7 +96,12 @@ const T = {
   magic1: 11,
   magic2: 12,
   frames: 13,
+  repeats: 14,
+  holdFrames: 15,
+  repeatDelay: 16,
+  repeatRate: 17,
 };
+const TELEMETRY_BYTES = 18;
 
 const SCREEN_BASE = 0x0400;
 const COLOUR_BASE = 0xd800;
@@ -199,7 +206,7 @@ const readMemory = (address, length) =>
   httpGetBytes(`http://${HOST}/v1/machine:readmem?address=${address.toString(16)}&length=${length}`);
 
 const readTelemetry = async () => {
-  const bytes = await readMemory(TELEMETRY_BASE, 16);
+  const bytes = await readMemory(TELEMETRY_BASE, TELEMETRY_BYTES);
   return Object.fromEntries(Object.entries(T).map(([name, offset]) => [name, bytes[offset]]));
 };
 
@@ -233,7 +240,9 @@ const runProbe = async () => {
 
 const pressKey = async (keycode) => {
   // `--longpress` holds the key long enough for the relay's coalescing window to see it.
-  // The probe is edge-triggered, so a longer hold is still exactly one move.
+  // It is still far shorter than the probe's repeat delay, so a press here is normally one
+  // cell — but the assertions below count the events the machine reported rather than
+  // assuming that, because a slow phone could stretch one press past the delay.
   await adb(["shell", "input", "keyevent", "--longpress", String(keycode)]);
   await sleep(900);
 };
@@ -402,12 +411,19 @@ const checkKey = async (layout, rotation, key) => {
       problems.push(`fire moved the circle to ${after.col},${after.row}`);
     }
   } else {
+    // Cells travelled must equal the direction events the machine counted. A press is
+    // normally one of each; if the press outlasted the probe's repeat delay it is
+    // several, and the circle has to have moved by exactly that many. Asserting a
+    // fixed one cell would report a correct machine as broken on a slow phone.
+    const events = (after[expectedSlot] - before[expectedSlot]) & 0xff;
     const delta = DELTA[expectedSlot];
-    const expectedCol = Math.min(39, Math.max(0, before.col + delta.col));
-    const expectedRow = Math.min(24, Math.max(2, before.row + delta.row));
+    const expectedCol = Math.min(39, Math.max(0, before.col + delta.col * events));
+    const expectedRow = Math.min(24, Math.max(2, before.row + delta.row * events));
+    if (events < 1) problems.push(`the machine counted no ${expectedSlot}`);
     if (after.col !== expectedCol || after.row !== expectedRow) {
       problems.push(
-        `circle ${before.col},${before.row} -> ${after.col},${after.row}, expected ${expectedCol},${expectedRow}`,
+        `circle ${before.col},${before.row} -> ${after.col},${after.row}, expected ${expectedCol},${expectedRow}` +
+          ` after ${events} ${expectedSlot} event${events === 1 ? "" : "s"}`,
       );
     }
   }

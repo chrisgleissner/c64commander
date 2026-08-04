@@ -63,9 +63,10 @@ a fixed action-zone height below it even when nobody is using the on-screen cont
 - **Orientation-following** physical-key mapping, and counter-rotation of the mirror only.
 - **Configurable** joystick key bindings with per-variant defaults, including the
   8-centred layout in §6.3 as the `c64u-remote` default.
-- The **on-screen joystick and keyboard shown or hidden by observed input modality**, so a
+- The **on-screen joystick put away once the game is being played on physical keys**, so a
   keypad handset and a tablet each get the right control surface with no configuration —
-  with a three-state setting for the cases observation cannot cover (§5).
+  with an explicit toolbar toggle and a three-state setting for the cases observation
+  cannot cover (§5).
 - The mirror using the **full width and remaining height** of the sheet.
 - Game mode remaining fully usable **with the picture off**, for a C64U wired to a
   television, with the choice remembered.
@@ -161,7 +162,8 @@ One action, in this order:
    actually started (§3.3).
 3. **Open the Remote Input sheet in the end state**, by passing a launch request (§8.2):
    output mode `joystick` and game mode on. The control surface is not part of the request:
-   it is resolved continuously from the input modality (§5.1).
+   it is resolved continuously from the setting, the toolbar and how the game is being
+   played (§5.1).
 4. **Degrade explicitly.** If the capability tier resolves to no joystick relay
    (firmware older than 1.2.0, or a password is required), the existing tier logic puts
    the sheet in **Keys** mode and shows `REMOTE_INPUT_JOYSTICK_UNAVAILABLE_HINT` or
@@ -290,10 +292,12 @@ setting, which is one less thing to keep in step with the toggles.
 
 **Degenerate state, prevented.** With the picture off, hiding the on-screen controls would
 leave an empty sheet. The hiding rule (§5.1) therefore applies **only while the video
-mirror is live**. With no picture the on-screen joystick and keyboard are shown whatever
-the modality and the setting say — harmless on a keypad handset, and the only sensible thing on a
-touchscreen. A status card in their place was considered and rejected for this revision: it
-is a new component that does nothing the existing controls do not.
+mirror is live**. With no picture the on-screen joystick is shown whatever the setting, the
+toolbar and the guess say — harmless on a keypad handset, and the only sensible thing on a
+touchscreen. This now holds for the explicit answers too, not just the guess: "maximise the
+picture" is not an instruction that means anything when there is no picture. A status card
+in their place was considered and rejected for this revision: it is a new component that
+does nothing the existing controls do not.
 
 **Layout with no picture.** The mirror is not rendered at all rather than rendered empty,
 so the controls take the full body height. The existing `showMirrorScreen` condition
@@ -543,28 +547,48 @@ the wrong primary mechanism here, for the reason that prompted this whole featur
 this is for cannot be expected to find Settings and know which switch to press. The app
 already knows the answer without asking.
 
-`src/lib/input/inputModality.ts` is an app-wide singleton that records whether the user
-most recently acted with a **recognised navigation key** or with a **pointer**. It is set
-from the existing handlers (`useFocusNavigation` sets `key-navigation` on a shortcut or ring
-key and `pointer` on a pointer event) and already has a subscriber API used through
-`useSyncExternalStore`. So:
+**Revised.** This section first specified reading `src/lib/input/inputModality.ts`, the
+app-wide singleton recording whether the user most recently acted with a recognised
+navigation key or with a pointer. That was wrong, and wrong in the direction that hurts:
+the singleton is set by ordinary keypad navigation ANYWHERE in the app, including the `0`
+key that opens game mode. A touchscreen user who used that shortcut — or who had used a
+D-pad at any earlier point in the session — arrived in game mode with the singleton already
+reading `key-navigation`, so the on-screen joystick they were about to tap was taken away a
+couple of seconds after it appeared. The table below claimed this "corrects itself"; it
+could not, because on a touchscreen nothing was going to set the singleton back before the
+controls had already gone.
 
-> **In game mode, the on-screen joystick and keyboard are shown while the modality is
-> `pointer`, and hidden while it is `key-navigation`.**
+The signal is now scoped to game mode and to the game:
 
-The consequences fall out without any per-variant configuration:
+> **In game mode, the on-screen joystick is put away once a physical key has relayed a
+> joystick input to the C64 in this game mode session — and put back if the on-screen
+> joystick is then touched.**
+
+Nothing else counts. Adjusting the mirror view with `*`, opening the quick keys with `#`,
+and pressing a key with no joystick binding are all things done with the phone in hand.
+Neither fact survives leaving game mode: the last game says nothing about how the next one
+is about to be played.
 
 | Device | What happens | Why |
 | --- | --- | --- |
-| Keypad handset (rows A/B) | Controls never appear | The user reached game mode with `0` or the ring, so the modality is already `key-navigation` at entry |
-| Tablet or large phone (rows C/D) | Controls appear | The user tapped the tile, so the modality is `pointer` |
-| Either, mid-game | It corrects itself | The first physical direction key hides them; the first touch brings them back |
+| Keypad handset (rows A/B) | Controls appear, then go on the first steer | Nothing is known about how the game will be played until it is played; `c64u-remote` skips even that by defaulting the setting to **Hidden** (§9), because it has no touchscreen |
+| Tablet or large phone (rows C/D) | Controls stay | Tapping the tile, and the `0` shortcut, say nothing about the game |
+| Either, mid-game | It corrects itself | The first physical direction key hides them; touching them brings them back |
+
+Two things this observation cannot answer are answered explicitly instead: the **Hide
+joystick** / **Show joystick** button on the game mode toolbar
+(`remote-input-joystick-visibility-toggle`), which settles the question for the rest of
+the session, and the setting in §9. The precedence is picture-off, then the toolbar, then
+the setting, then this guess.
 
 Two details make this pleasant rather than twitchy:
 
-- The Remote Input sheet must call `setInputModality("key-navigation")` when a physical key
-  relays to the joystick. It currently intercepts those keys before the global handler
-  reaches them, so without this the modality would never update inside the sheet.
+- `useRemoteInputPhysicalKeys` reports a relay to the sheet (`onJoystickKeyRelayed`) at the
+  point a key has resolved to joystick inputs — not merely at key-down, and not for the
+  keys that adjust the view or open the quick keys. It also still sets the app-wide
+  `setInputModality("key-navigation")`, because the sheet intercepts these keys before the
+  global handler sees them and the focus ring on the next screen depends on it; that
+  singleton is no longer what decides the control surface.
 - Hiding is **delayed** (reuse `AvMirrorImmersive`'s existing `CONTROLS_HIDE_MS`), showing
   is immediate. Controls that vanish mid-tap would be worse than controls that linger.
 
@@ -727,8 +751,14 @@ controls, and all following the existing `localStorage` + variant-default patter
 | --- | --- | --- | --- |
 | **Joystick key layout** (Diamond / Classic T9 / Custom) | `c64u_remote_input_joystick_layout` | `classicT9` | `diamond8` |
 | **Custom bindings** | `c64u_remote_input_joystick_binding` | — | — |
-| **On-screen controls in Game mode** (Auto / Always show / Never show) | `c64u_game_mode_controls_visibility` | `auto` | `auto` |
+| **On-screen joystick in Game mode** (Auto / Visible / Hidden) | `c64u_game_mode_controls_visibility` | `auto` | **`hidden`** |
 | **Enter Game Mode when a game starts** | `c64u_game_mode_on_launch` | off | **on** |
+
+The stored values were first `auto` / `always` / `never`. They name a STATE now, because
+"always" and "never" only mean something once you already know which way round the
+question was asked. The key is unchanged and the question is unchanged, so this is a
+rename: `always` reads as `visible` and `never` as `hidden`. Both spellings are read;
+only the new ones are written.
 
 One further preference is added but has **no Settings control**: the remembered Watch
 answer (`c64u_mirror_c64_video`, default on), written by the Watch button itself exactly as
@@ -741,24 +771,31 @@ Variant defaults are plumbed the same way as `default_t9_input_enabled` and
 ```
 variants/variants.yaml            runtime.default_joystick_key_layout: diamond8
                                   runtime.default_game_mode_on_launch: true
+                                  runtime.default_game_mode_joystick: hidden
 scripts/generate-variant.mjs      validate (allowlist / requireBoolean) → emit
-src/generated/variant.ts          runtime.defaultJoystickKeyLayout, defaultGameModeOnLaunch
+src/generated/variant.ts          runtime.defaultJoystickKeyLayout, defaultGameModeOnLaunch,
+                                  defaultGameModeJoystick
 src/lib/remoteInput/…             DEFAULT_… constants read from `variant.runtime`
 ```
 
-Only **two** variant entries, not three: the control-surface question answers itself from
-observed modality (§5.1), so it needs no per-variant default. Every variant entry is a
-divergence that has to be reasoned about again at every later change, so one that can be
-derived instead is worth deriving.
+**Three** variant entries, not two. This section originally argued for two, on the grounds
+that the control-surface question answers itself from observed modality and so needs no
+per-variant default. §5.1 records why that observation was wrong; with it corrected, the
+guess starts by showing the controls, and on `c64u-remote` those controls are a joystick
+nobody can touch sitting on top of the only thing on the screen that matters. That is a real
+divergence between the two products, not a derivable one, so it is declared.
 
 Settings copy:
 
-> **On-screen controls in Game mode** — Auto / Always show / Never show
-> **Auto** shows the on-screen joystick and keyboard while you are using the touchscreen
-> and hides them while you are using the physical keys, so the picture gets the whole
-> screen when you do not need them. Press `#` for RETURN, SPACE, the other quick keys and
-> the Live View switches, `*` to adjust the view, and Back to leave. With the picture
-> switched off the controls stay on screen, so Game mode is never blank.
+> **On-screen joystick in Game mode** — Auto / Visible / Hidden
+> Hiding the joystick gives the live picture the whole screen. **Auto** waits to see how
+> you play: the joystick stays until you steer the game with a physical key, then it goes,
+> and touching it brings it back. **Visible** always keeps it. **Hidden** takes it away as
+> soon as the picture is on. Whichever you choose, **Hide joystick** and **Show joystick**
+> on the Game mode toolbar switch for the game you are playing. Press `#` for RETURN,
+> SPACE, the other quick keys and the Live View switches, `*` to adjust the view, and Back
+> to leave. With the picture switched off the joystick stays on screen, so Game mode is
+> never blank.
 
 > **Enter Game Mode when a game starts**
 > Launching a program, cartridge or disk image goes straight into Game Mode. Tunes are
@@ -772,7 +809,7 @@ Settings copy:
 
 Entering game mode always collapses the sheet chrome (the existing `chromeCollapsed`
 state). Whether `VirtualJoystick` / `TypeKeyboard` render on top of that is §5.1's
-decision, re-evaluated as the modality changes. Today `chromeCollapsed` hides only the
+decision, re-evaluated as the setting, the toolbar answer and the first steer change it. Today `chromeCollapsed` hides only the
 header, the toolbar and the mirror controls; the joystick still renders and still reserves
 its action zone, which is the part that changes.
 
@@ -788,14 +825,14 @@ its action zone, which is the part that changes.
 | `src/lib/remoteInput/deviceRotation.ts` | Pure. `quantiseRotation(degrees, previous)` with the hysteresis band, the dwell filter, and `frameRotation(deviceRotation, windowRotation)`. |
 | `src/hooks/useDeviceRotation.ts` | Subscribes to the plugin (or a constant 0 where unavailable), applies the dwell, exposes `{ rotation, source: "auto" \| "pinned", pin, clearPin }`. |
 | `src/lib/remoteInput/gameModeLaunch.ts` | `RemoteInputLaunchRequest` type (`{ epoch, mode, immersive }`) and `startGameMode()`, which performs §3.1 steps 2–3 against the remembered Watch/Listen preferences and returns what it started for §3.3. |
-| `src/lib/remoteInput/gameModeControlSurface.ts` | Pure. `resolveControlSurface({ setting, modality, videoLive })` → `"shown" \| "hidden"`, the whole of §5.1 as one testable function. |
+| `src/lib/remoteInput/gameModeJoystick.ts` | Pure. `resolveJoystickVisibility({ setting, keyDriven, requested, videoLive })` → `"visible" \| "hidden"`, the whole of §5.1 as one testable function. Also owns the persisted setting and the read of its old value names. |
 | `android/…/DeviceRotationPlugin.kt` | `OrientationEventListener` registration, quantisation on the native side, `deviceRotation` events, start/stop with subscriber count. |
 
 ### 8.2 Changed files
 
 | File | Change |
 | --- | --- |
-| `RemoteInputSheet.tsx` | Accept `launch?: RemoteInputLaunchRequest` and apply it on a new `epoch`; resolve physical keys through `resolveJoystickInputs` with the live rotation; re-run `recomputePhysicalHeldSet` on rotation change (§6.6); render the input controls per `resolveControlSurface` and call `setInputModality("key-navigation")` when a physical key relays (§5.1); drop the **Hide controls** button (§5.2); host the rotation override (§4.4) and the `#` overlay (§5.3). It is already 594 lines — extract the launch/exit handling and the physical-key routing into hooks rather than growing the component (`AGENTS.md` modularization guardrails). |
+| `RemoteInputSheet.tsx` | Accept `launch?: RemoteInputLaunchRequest` and apply it on a new `epoch`; resolve physical keys through `resolveJoystickInputs` with the live rotation; re-run `recomputePhysicalHeldSet` on rotation change (§6.6); render the input controls per `resolveJoystickVisibility` and report a relayed key to the sheet (§5.1); drop the **Hide controls** button (§5.2); host the rotation override (§4.4) and the `#` overlay (§5.3). It is already 594 lines — extract the launch/exit handling and the physical-key routing into hooks rather than growing the component (`AGENTS.md` modularization guardrails). |
 | `AvMirrorImmersive.tsx` | `rotation` prop, `data-rotation`, un-rotated pointer maths (§4.5), measured fit sizing (§4.6). |
 | `VirtualJoystick.tsx` | Do not reserve the immersive action zone when the controls are hidden. |
 | `HomePage.tsx` / `MachineControls.tsx` | The `openGameMode` action, and the tile reorder in §3.2.1 (a JSX reorder — the ring follows the DOM, not `focusOrder`). The extra-actions block currently renders between Power Cycle and Power Off, which is what scatters the destructive tiles; safe extras move ahead of the block and destructive ones into it. |
@@ -820,8 +857,10 @@ Game Mode (tile / button / `0` / Quick Menu / launch)
         └─▶ startGameMode() ─┬─▶ avMirrorSession.startVideo/startAudio  (remembered prefs)
                              └─▶ RemoteInputLaunchRequest ─▶ RemoteInputSheet
 
-inputModality ──┬─▶ resolveControlSurface(setting, modality, videoLive) ─▶ on-screen controls
-physical relay ─┘   (the sheet feeds the modality as well as reading it)
+setting ───────────┬─▶ resolveJoystickVisibility(setting, keyDriven, requested, videoLive)
+joystick toggle ───┤       │
+physical relay ────┤       └─▶ on-screen joystick
+touch on joystick ─┘   (keyDriven and requested live in the sheet, per game mode session)
 ```
 
 ---
@@ -835,9 +874,9 @@ physical relay ─┘   (the sheet feeds the modality as well as reading it)
 | GM-3 | Closing the sheet stops only the streams that launch started; exiting game mode without closing stops nothing. |
 | GM-4 | Turning Watch off inside game mode is remembered: the next Game Mode launch opens without a picture, with no Settings visit and no prompt. |
 | GM-5 | Watch and Listen are reachable from inside game mode in every configuration, including chrome hidden with no touchscreen (`#`). |
-| GM-6 | Game mode is never blank by accident: with the video mirror off and the setting on **Auto**, the on-screen controls are shown whatever the modality says. The guard applies to `Auto` only, because only `Auto` guesses — a user who chose **Never show** has said they are driving with physical keys, and overriding that reads as the setting being broken. The sheet still has the floating **Controls** handle and `#`. |
-| GM-6a | With the setting on **Auto**, the on-screen controls are hidden while the modality is `key-navigation` and shown while it is `pointer`; **Always show** and **Never show** override both. |
-| GM-6b | A physical key relayed to the joystick sets the modality to `key-navigation`, so the controls hide during play on a keypad handset without the user asking. |
+| GM-6 | Game mode is never blank by accident: with the video mirror off the on-screen joystick is shown, whatever the setting, the toolbar and the first steer say. The guard covers the explicit answers too, because hiding the joystick is only meaningful when there is a picture to give its space to. The sheet still has the floating **Controls** handle and `#`. |
+| GM-6a | With the setting on **Auto**, the on-screen joystick is shown until a physical key relays a joystick input in this game mode session, and hidden after that; touching the joystick brings it back. **Visible** and **Hidden** override the guess, and the toolbar overrides all three. Nothing else hides it — in particular not the app-wide input modality, which ordinary keypad navigation sets anywhere in the app. |
+| GM-6b | The **Hide joystick** / **Show joystick** toggle on the game mode toolbar settles the question for the rest of the session, in both directions, and takes effect without waiting out the hide delay. It is offered only while the picture is live. |
 | GM-7 | Physical keys resolve through the active binding permuted by `deviceRotation`, in game mode and in the ordinary joystick sheet. |
 | GM-8 | The `c64u-remote` default binding produces exactly the table in §6.3 for 0°, 90° and 270°. |
 | GM-9 | A rotation change re-derives the held set in one transport update; no input stays asserted under the old mapping. |
@@ -875,12 +914,14 @@ physical relay ─┘   (the sheet feeds the modality as well as reading it)
 
 - A launch request opens the sheet in joystick + immersive, with the chrome collapsed when
   the setting is on and not collapsed when it is off.
-- `resolveControlSurface` as a pure function: the truth table of setting × modality ×
-  `videoLive`, including the never-blank guard (GM-6).
-- Entering game mode from a key press hides the controls; a subsequent pointer event shows
-  them again; **Always show** / **Never show** ignore both (GM-6a).
-- A relayed physical key sets the modality (GM-6b) — the test that fails if
-  `RemoteInputSheet` intercepts the key without reporting it.
+- `resolveJoystickVisibility` as a pure function: the truth table of setting × `keyDriven` ×
+  `requested` × `videoLive`, including the never-blank guard (GM-6), and the one-time swap
+  of a preference stored under the old key.
+- Arriving in game mode with the app-wide modality already `key-navigation` leaves the
+  joystick up; a key that steers the game takes it away; touching it brings it back;
+  **Visible** / **Hidden** ignore all of it (GM-6a).
+- The toolbar toggle maximises at once, restores, outranks the setting, and is absent with
+  the picture off; neither it nor the first steer carries into the next session (GM-6b).
 - With controls hidden **and the picture live**, `VirtualJoystick` is absent and
   `av-mirror-immersive` is present; the restore handle brings the chrome back.
 - With controls hidden **and the video mirror off**, and the setting on **Auto**,
@@ -977,8 +1018,8 @@ State these plainly in the as-built section rather than carrying them as open wo
 | Detect orientation changes automatically and update immediately | §4.2, §4.3, §6.6 |
 | Rotate only the C64U live view; rest of the app stays portrait | §4.1, §4.5, §2 (non-goals) |
 | Live view uses all available space including full width | §4.6 |
-| Setting to hide all on-screen controls in game mode | §5.1 — kept as a three-state setting, with **Auto** deciding from observed modality |
-| That setting enabled by default in `c64u-remote` | §5.1 — satisfied by construction: a keypad user is never in `pointer` modality, so Auto hides them. No variant entry, and the same rule gives a tablet the opposite, also correct, answer |
+| Setting to hide all on-screen controls in game mode | §5.1 — kept as a three-state setting (Auto / Visible / Hidden), with **Auto** deciding from the first key that steers the game |
+| That setting enabled by default in `c64u-remote` | §9 — a declared variant default (`default_game_mode_joystick: hidden`). The first revision claimed this was satisfied by construction from the input modality; §5.1 records why that was wrong |
 | Streamed games playable in all three orientations | §10.1, §10.3, §10.4 |
 | *(added)* One action to enter game mode, from Home and from Play | §3.1, §3.2 |
 | *(added)* "Game Mode" keeps one meaning across the three entry points | §3.0 |
@@ -1004,8 +1045,8 @@ State these plainly in the as-built section rather than carrying them as open wo
 | The in-sheet toggle now starts streams, which it did not before | Intended (§3.0), and reversible in one tap from the same sheet; the exit rule in §3.3 stops what it started |
 | Auto-enter opens a sheet the user did not ask for | Off by default outside `c64u-remote`; four conditions in GM-18, one test each; Back leaves in one keystroke |
 | `0` fires while the user means to type a digit | It sits on the existing shortcut path, which already excludes text fields and open overlays — the same exclusions that make `1`–`6` safe today (GM-17) |
-| Controls flicker in and out as modality changes mid-game | Hiding is delayed by the existing `CONTROLS_HIDE_MS`, showing is immediate, and only a real pointer event shows them; **Always show** is the escape hatch if a device proves noisy |
-| A touch device whose user starts game mode by key (e.g. a Bluetooth keyboard) loses its on-screen controls | One touch brings them back, and **Always show** makes it permanent |
+| The joystick flickers in and out mid-game | Hiding is delayed by the existing `CONTROLS_HIDE_MS` and showing is immediate, so a stray key press can be undone by touching the joystick before it goes; an explicit answer skips the delay because there is no tap to protect. **Visible** is the escape hatch if a device proves noisy |
+| A touch device whose user steers once with a Bluetooth keyboard loses its on-screen joystick | Touching it brings it back, the toolbar's **Show joystick** settles it for the session, and **Visible** makes it permanent |
 | The picker's confirm changing from "Add to playlist" to "Play" surprises someone | The label states the action before it happens, and it changes only for a single non-song selection; multi-select and tunes are untouched |
 | `#` conflicts with an app-level function | §5 — the global handler already bows out inside overlays; assert it in the reachability spec |
 
@@ -1025,9 +1066,9 @@ built as designed, what deviated and why, and what the hardware run proved.
 | GM-3 | `RemoteInputSheet.gameMode.test.tsx` "stops only the streams the launch started"; HIL "closing the sheet stopped the feeds Game Mode started" (0 packets on the wire afterwards) |
 | GM-4 | HIL "the next launch opens without a picture"; `AvMirrorControls.test.tsx` records the Watch answer |
 | GM-5 | `RemoteInputSheet.gameMode.test.tsx` GM-14 group; HIL "`#` shows the quick keys + Live View row" |
-| GM-6 | `gameModeControlSurface.test.ts` never-blank guard; HIL "GM-6 picture off + driving by key" |
-| GM-6a | `gameModeControlSurface.test.ts` truth table; `RemoteInputSheet.gameMode.test.tsx` Auto/Always/Never |
-| GM-6b | `RemoteInputSheet.gameMode.test.tsx` "hides the controls during play"; verified load-bearing; HIL "GM-6b driving by key hides the on-screen controls" |
+| GM-6 | `gameModeJoystick.test.ts` never-blank guard; `RemoteInputSheet.gameMode.test.tsx` "shows them with the picture off, whatever else says otherwise" |
+| GM-6a | `gameModeJoystick.test.ts` truth table; `RemoteInputSheet.gameMode.test.tsx` GM-6 group, including arrival with the app-wide modality already set; HIL `joystick_hold_hil.mjs` "the joystick survived a game played on the touchscreen" and "a physical key steering the game hid the joystick" |
+| GM-6b | `RemoteInputSheet.gameMode.test.tsx` GM-6b group; HIL `joystick_hold_hil.mjs` "the toolbar toggle brought the joystick back" |
 | GM-7 | `joystickKeyBindings.test.ts`; HIL keys 2/8/4/6/5 read at `$DC00` |
 | GM-8 | `joystickKeyBindings.test.ts` §6.3 table cell by cell; HIL asserts the same table at 0°, 90° and 270° on the machine |
 | GM-9 | `RemoteInputSheet.gameMode.test.tsx` (verified load-bearing), `gameMode.spec.ts`, HIL "left before the turn, up after it, nothing stranded" |

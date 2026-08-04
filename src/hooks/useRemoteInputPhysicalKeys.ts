@@ -35,6 +35,16 @@ export interface RemoteInputPhysicalKeysOptions {
   rotation: DeviceRotation;
   /** Called when `#` is pressed, where that key has a role — Game Mode's overlay row. */
   onHashKey?: () => void;
+  /**
+   * Called when a physical key is relayed to the C64 as a joystick input.
+   *
+   * Narrower than "a key was pressed" on purpose: this is the signal Game Mode's
+   * `auto` joystick setting acts on, and only a key that actually steered the game is
+   * evidence that the player has put the touchscreen down. Adjusting the mirror
+   * view, opening the quick keys, or pressing a key with no binding are all things
+   * a player does WITH the phone in hand, and none of them reaches this.
+   */
+  onJoystickKeyRelayed?: () => void;
 }
 
 export interface RemoteInputPhysicalKeys {
@@ -61,6 +71,7 @@ export const useRemoteInputPhysicalKeys = ({
   binding,
   rotation,
   onHashKey,
+  onJoystickKeyRelayed,
 }: RemoteInputPhysicalKeysOptions): RemoteInputPhysicalKeys => {
   const heldPhysicalKeysRef = useRef<Set<SemanticAction>>(new Set());
   const previousPhysicalInputsRef = useRef<Set<JoystickInputName>>(new Set());
@@ -170,16 +181,18 @@ export const useRemoteInputPhysicalKeys = ({
       const inputs = resolveJoystickInputs(action, binding, rotation);
       if (!inputs.length) return;
       event.preventDefault();
-      // The sheet intercepts these keys before the global handler sees them, so
-      // without reporting the relay the app would never learn that the user has
-      // put the touchscreen down — and Game Mode's control surface would stay on
-      // screen through a whole game played on the keypad.
+      // The sheet intercepts these keys before the global handler sees them, so the
+      // app-wide modality would otherwise still read "pointer" after a whole game
+      // played on the keypad — and the focus ring the next screen draws depends on
+      // it. Whether Game Mode keeps the on-screen joystick does NOT read this; it
+      // reads the callback below, which is scoped to keys that steered the game.
       setInputModality("key-navigation");
+      onJoystickKeyRelayed?.();
       if (heldPhysicalKeysRef.current.has(action)) return;
       heldPhysicalKeysRef.current.add(action);
       recomputePhysicalHeldSet();
     },
-    [outputMode, binding, rotation, recomputePhysicalHeldSet, handleMirrorKey, onHashKey],
+    [outputMode, binding, rotation, recomputePhysicalHeldSet, handleMirrorKey, onHashKey, onJoystickKeyRelayed],
   );
 
   const handleKeyUp = useCallback(

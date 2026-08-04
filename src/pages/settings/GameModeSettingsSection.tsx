@@ -32,12 +32,12 @@ import {
   type JoystickSlot,
 } from "@/lib/remoteInput/joystickKeyBindings";
 import {
-  CONTROLS_SETTINGS,
-  GAME_MODE_CONTROLS_LABEL,
-  loadGameModeControls,
-  saveGameModeControls,
-  type ControlsSetting,
-} from "@/lib/remoteInput/gameModeControlSurface";
+  GAME_MODE_JOYSTICK_LABEL,
+  GAME_MODE_JOYSTICK_SETTINGS,
+  loadGameModeJoystick,
+  saveGameModeJoystick,
+  type GameModeJoystickSetting,
+} from "@/lib/remoteInput/gameModeJoystick";
 import { loadGameModeOnLaunch, saveGameModeOnLaunch } from "@/lib/remoteInput/gameModeLaunch";
 
 const KEYPAD_KEYMAP = resolveInputProfile("keypad");
@@ -78,7 +78,7 @@ const describeAction = (action: SemanticAction | undefined): string =>
 export const GameModeSettingsSection = () => {
   const [layout, setLayout] = useState<JoystickLayoutId>(loadJoystickLayout);
   const [customBinding, setCustomBinding] = useState<JoystickKeyBinding>(loadCustomBinding);
-  const [controls, setControls] = useState<ControlsSetting>(loadGameModeControls);
+  const [joystick, setJoystick] = useState<GameModeJoystickSetting>(loadGameModeJoystick);
   const [onLaunch, setOnLaunch] = useState<boolean>(loadGameModeOnLaunch);
   const [capturingSlot, setCapturingSlot] = useState<JoystickSlot | null>(null);
   const [rejection, setRejection] = useState<string | null>(null);
@@ -192,34 +192,36 @@ export const GameModeSettingsSection = () => {
       ) : null}
 
       <div className="space-y-2">
-        <Label htmlFor="settings-game-mode-controls" className="text-sm">
-          On-screen controls in Game mode
+        <Label htmlFor="settings-game-mode-joystick" className="text-sm">
+          On-screen joystick in Game mode
         </Label>
         <Select
-          value={controls}
+          value={joystick}
           onValueChange={(value) => {
-            const next = value as ControlsSetting;
-            setControls(next);
-            saveGameModeControls(next);
+            const next = value as GameModeJoystickSetting;
+            setJoystick(next);
+            saveGameModeJoystick(next);
           }}
         >
-          <SelectTrigger id="settings-game-mode-controls" data-testid="settings-game-mode-controls">
-            <SelectValue placeholder="Select when to show them" />
+          <SelectTrigger id="settings-game-mode-joystick" data-testid="settings-game-mode-joystick">
+            <SelectValue placeholder="Select whether it is drawn" />
           </SelectTrigger>
           <SelectContent>
-            {CONTROLS_SETTINGS.map((setting) => (
+            {GAME_MODE_JOYSTICK_SETTINGS.map((setting) => (
               <SelectItem key={setting} value={setting}>
-                {GAME_MODE_CONTROLS_LABEL[setting]}
+                {GAME_MODE_JOYSTICK_LABEL[setting]}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          <strong>Auto</strong> shows the on-screen joystick and keyboard while you are using the touchscreen and hides
-          them while you are using the physical keys, so the picture gets the whole screen when you do not need them.
-          Press <kbd>#</kbd> for RETURN, SPACE, the other quick keys and the Live View switches, <kbd>*</kbd> to adjust
-          the view, and Back to leave. With the picture switched off the controls stay on screen, so Game mode is never
-          blank.
+          Hiding the joystick gives the live picture the whole screen. <strong>Auto</strong> waits to see how you play:
+          the joystick stays until you steer the game with a physical key, then it goes, and touching it brings it back.{" "}
+          <strong>Visible</strong> always keeps it. <strong>Hidden</strong> takes it away as soon as the picture is on.
+          Whichever you choose, <strong>Hide joystick</strong> and <strong>Show joystick</strong> on the Game mode
+          toolbar switch for the game you are playing. Press <kbd>#</kbd> for RETURN, SPACE, the other quick keys and
+          the Live View switches, <kbd>*</kbd> to adjust the view, and Back to leave. With the picture switched off the
+          joystick stays on screen, so Game mode is never blank.
         </p>
       </div>
 

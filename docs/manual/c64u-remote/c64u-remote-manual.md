@@ -600,11 +600,11 @@ A quick-keys bar beside the joystick keeps the keys you reach for mid-game one t
 
 ![Game Mode](../../img/app/home/remote-input/02-game-mode.png)
 
-The on-screen joystick and keyboard follow how you are actually playing. Use the touchscreen and they are there; press a physical key and they step aside so the picture has the whole screen. Whichever you do next brings the right one back, and you never have to say which you are. If you would rather decide yourself, **Settings → Play and Disk → On-screen controls in Game mode** offers **Always show** and **Never show** beside **Auto**.
+The picture takes the whole screen: this handset steers with its number keys, so there is no on-screen joystick worth the space. Press **Show joystick** on the Game Mode toolbar to bring one up for the game you are playing, or set **Settings → Play and Disk → On-screen joystick in Game mode** to **Visible** to keep it for good.
 
 ![Game Mode, played on the physical keys](../../img/app/home/remote-input/07-game-mode-keys.png)
 
-With the controls out of the way, three keys still reach everything. `#` brings RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again. `*`, or the menu key, changes between driving the C64 and adjusting the view. **Back** leaves. On a touchscreen the floating **Controls** handle at the top brings the whole toolbar back.
+With the controls out of the way, three keys still reach everything. `#` brings RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again. `*`, or the menu key, changes between driving the C64 and adjusting the view. **Back** leaves. The floating **Controls** handle at the top brings the whole toolbar back, and **Show joystick** on that toolbar brings the on-screen joystick back.
 
 Playing on a television? Turn **Watch** off once and Game Mode will keep opening without the picture — the controls take the space instead, so it is never blank.
 

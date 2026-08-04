@@ -183,6 +183,7 @@ export const variantConfig = {
     publishToGooglePlay: true,
     runtime: {
       defaultDisplayProfile: "auto",
+      defaultGameModeJoystick: "auto",
       defaultGameModeOnLaunch: false,
       defaultHideNavigationBar: false,
       defaultHideStatusBar: false,

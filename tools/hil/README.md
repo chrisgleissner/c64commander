@@ -72,14 +72,19 @@ before. So the assertion is made where the player would make it: on the screen.
 
 The C64 runs `tools/c64/joystick-probe.asm`, written for this and nothing else. A filled PETSCII
 circle moves one cell per joystick press; fire advances its colour and sounds a short blip on SID
-voice 1. State is published in plain RAM at `$C000` (position, colour, per-direction press counts,
-fire count, a magic marker and a frame counter), so a run reads it over
-`GET /v1/machine:readmem` without parsing the display — and then checks the display anyway, because
-that is what the player sees and the two must agree.
+voice 1. State is published in plain RAM at `$C000` (position, colour, per-direction event counts,
+fire count, a magic marker, a frame counter, the repeat counters and the repeat cadence), so a run
+reads it over `GET /v1/machine:readmem` without parsing the display — and then checks the display
+anyway, because that is what the player sees and the two must agree.
 
-Movement is **edge-triggered, one cell per press**. A held direction moves the circle a distance
-that depends on how long the key was down, which over a network relay is not a quantity a test can
-predict. One cell per new press is the same answer every time.
+**A held direction repeats.** One cell lands on the press; if the direction is still held
+`REPEAT_DELAY_F` frames later the next lands, and one more every `REPEAT_RATE_F` frames after that.
+Both constants are published in the telemetry block, so a harness computes the cells a hold earned
+from `HOLD_FRAMES` rather than from its own copy of the cadence or from the duration it asked for —
+neither of which survives a busy phone. Fire is still one event per press.
+
+`tests/unit/tools/joystickProbe.test.ts` runs this same committed binary in a 6502 interpreter, so
+the machine end is covered in CI. What needs hardware is everything between a finger and `$DC00`.
 
 ```bash
 # The probe is committed pre-assembled; rebuild it with 64tass after editing the source:
@@ -87,6 +92,10 @@ predict. One cell per new press is the same answer every time.
 
 # App foregrounded on the phone, CDP forwarded (see the hil-attach skill):
 node tools/hil/joystick_rotation_hil.mjs --layouts diamond8,classicT9 --rotations 0,90,270
+
+# Holding, rather than pressing: a real drag on the on-screen stick that stays down,
+# plus the two ways Game Mode is allowed to maximise the picture.
+node tools/hil/joystick_hold_hil.mjs --hold-ms 2000
 ```
 
 Both shipped defaults are run, because they are different products' defaults and a change to one

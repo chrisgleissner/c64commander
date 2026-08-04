@@ -371,6 +371,31 @@ describe("generate-variant", () => {
     expect(config.variants["c64commander"].runtime.defaultGameModeOnLaunch).toBe(false);
   });
 
+  // The keypad handset has no touchscreen, so its Game Mode gives the on-screen
+  // joystick's space to the picture from the start. Everywhere else the app waits
+  // until it can see that the player is using physical keys.
+  it("takes the on-screen joystick default from the variant, and waits for the keys otherwise", () => {
+    const repoRoot = createTempDir("variant-config-");
+    writeRepoFixtures(repoRoot);
+    const config = parseVariantSource(
+      buildVariantsYaml({ runtimeExtras: { "c64u-remote": ["default_game_mode_joystick: hidden"] } }),
+      { repoRoot },
+    ) as any;
+    expect(config.variants["c64u-remote"].runtime.defaultGameModeJoystick).toBe("hidden");
+    expect(config.variants["c64commander"].runtime.defaultGameModeJoystick).toBe("auto");
+  });
+
+  it("rejects an on-screen joystick default it does not recognise", () => {
+    const repoRoot = createTempDir("variant-config-");
+    writeRepoFixtures(repoRoot);
+    expect(() =>
+      parseVariantSource(
+        buildVariantsYaml({ runtimeExtras: { "c64u-remote": ["default_game_mode_joystick: sometimes"] } }),
+        { repoRoot },
+      ),
+    ).toThrow(/default_game_mode_joystick must be one of/);
+  });
+
   it("rejects a joystick layout it does not recognise", () => {
     const repoRoot = createTempDir("variant-config-");
     writeRepoFixtures(repoRoot);
