@@ -68,6 +68,13 @@ SNR_MARGIN_DB = 12.0
 #: and different fixes, and conflating them sent one investigation after the wrong one.
 ABSENT_FRACTION = 0.20
 
+#: The verdict thresholds, in one place because BOTH `main` and the self-test read them. Duplicated,
+#: they drift: tightening a default in `main` would leave the self-test asserting the old number, and
+#: the test written to catch a regression would pass it through.
+DEFAULT_MIN_PRESENT = 0.90
+DEFAULT_MAX_GAP_MS = 120.0
+DEFAULT_MIN_PEAK_DBFS = -60.0
+
 BAND = (300.0, 6000.0)
 
 
@@ -141,6 +148,23 @@ def grade(path: str, hz: float) -> dict:
     }
 
 
+def verdict_for(result: dict, min_present: float = DEFAULT_MIN_PRESENT,
+                max_gap_ms: float = DEFAULT_MAX_GAP_MS,
+                min_peak_dbfs: float = DEFAULT_MIN_PEAK_DBFS) -> str:
+    """The verdict for a graded result. One implementation, so `main` and the self-test agree.
+
+    Order matters: "nothing is playing" is decided before "too quiet to grade", because a silent
+    room is quiet by definition and the two have different causes and different fixes.
+    """
+    if result["present_fraction"] < ABSENT_FRACTION:
+        return "NO TONE"
+    if result["peak_dbfs"] < min_peak_dbfs:
+        return "TOO QUIET TO GRADE"
+    if result["present_fraction"] < min_present or result["longest_gap_ms"] > max_gap_ms:
+        return "DEFECTIVE"
+    return "clean"
+
+
 def self_test() -> int:
     """Feed the grader signals whose right answer is known, including the one it used to get wrong.
 
@@ -185,6 +209,10 @@ def self_test() -> int:
     for name, signal, expected in cases:
         handle, path = tempfile.mkstemp(suffix=".wav")
         os.close(handle)
+        # Seeded before the try: a case whose grade() raises must be reported as its own failure and
+        # the remaining cases still run. Letting it unwind would abandon them and hand the operator a
+        # traceback instead of the per-case verdicts they are reading.
+        got, detail = "ERROR", ""
         try:
             with wave.open(path, "wb") as fh:
                 fh.setnchannels(1)
@@ -192,23 +220,18 @@ def self_test() -> int:
                 fh.setframerate(rate)
                 fh.writeframes(np.clip(signal, -32768, 32767).astype("<i2").tobytes())
             result = grade(path, hz)
-            if result["present_fraction"] < ABSENT_FRACTION:
-                got = "NO TONE"
-            elif result["peak_dbfs"] < -60.0:
-                got = "TOO QUIET TO GRADE"
-            elif result["present_fraction"] < 0.90 or result["longest_gap_ms"] > 120.0:
-                got = "DEFECTIVE"
-            else:
-                got = "clean"
+            got = verdict_for(result)
+            detail = (
+                f"present {result['present_fraction'] * 100:.1f}%, "
+                f"peak {result['peak_dbfs']} dBFS, gap {result['longest_gap_ms']:.0f} ms"
+            )
+        except BaseException as error:  # noqa: BLE001 - the point is to survive anything one case does
+            detail = f"{type(error).__name__}: {error}"
         finally:
             os.unlink(path)
         ok = got == expected
         failures += 0 if ok else 1
-        print(
-            f"{'ok  ' if ok else 'FAIL'} {name}: {got}"
-            + (f" (expected {expected})" if not ok else "")
-            + f"   present {result['present_fraction'] * 100:.1f}%, peak {result['peak_dbfs']} dBFS"
-        )
+        print(f"{'ok  ' if ok else 'FAIL'} {name}: {got}" + (f" (expected {expected})" if not ok else "") + f"   {detail}")
     print(f"\n{len(cases) - failures}/{len(cases)} cases correct")
     return 0 if failures == 0 else 1
 
@@ -218,14 +241,14 @@ def main() -> int:
     ap.add_argument("file", nargs="?")
     ap.add_argument("--hz", type=float)
     ap.add_argument("--self-test", action="store_true", help="grade known signals and check the verdicts")
-    ap.add_argument("--min-present", type=float, default=0.90)
-    ap.add_argument("--max-gap-ms", type=float, default=120.0)
+    ap.add_argument("--min-present", type=float, default=DEFAULT_MIN_PRESENT)
+    ap.add_argument("--max-gap-ms", type=float, default=DEFAULT_MAX_GAP_MS)
     ap.add_argument("--max-cents", type=float, default=50.0)
     # Below this the tone is too close to the room to grade. A generated SID tone is far quieter
     # than the barcode stimulus the clarity stage uses, and at a low phone volume it lands near the
     # floor — where the presence test drifts in and out and reports a perfectly good pipeline as
     # full of dropouts. Refusing to grade is the honest answer; claiming a defect is not.
-    ap.add_argument("--min-peak-dbfs", type=float, default=-60.0)
+    ap.add_argument("--min-peak-dbfs", type=float, default=DEFAULT_MIN_PEAK_DBFS)
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
     if args.self_test:
