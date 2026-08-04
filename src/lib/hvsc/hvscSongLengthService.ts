@@ -216,9 +216,8 @@ const discoverSonglengthFiles = async (force = false): Promise<SongLengthSourceF
     }
     try {
       // Through the WebView's file server, not the base64 bridge: a real HVSC's Songlengths.md5 is
-      // 5.2 MB, which is the same shape of read that never returned for the 13.2 MB browse index.
-      // Everything downstream of this is what "Find a tune" waits on, so a read that takes seconds —
-      // or does not finish — is a search that never answers. See `readDataFileText`.
+      // 5.2 MB, the second largest read the app makes and the one every search waits behind. See
+      // `readDataFileText` for the measured difference between the two routes.
       const content = await readDataFileText(path);
       if (content === null) {
         addLog("debug", "HVSC songlengths file disappeared before read", {

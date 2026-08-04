@@ -68,15 +68,21 @@ const decodeBase64Text = (raw: string) => {
  * Read a text file out of the Data directory without paying the bridge's base64 tax.
  *
  * `Filesystem.readFile` hands the whole file back as one base64 string in a single Capacitor
- * message. That is fine for the small files here and is not fine for the browse index, which is
- * 13.2 MB for a real HVSC. Measured on a Pixel 4 against exactly that file: `readFile` did not
- * return at all — not slowly, at all — while the same file fetched through the WebView's own file
- * server took 14 ms to respond and 241 ms to read. {@link MAX_BRIDGE_READ_BYTES} already says the
- * bridge cannot carry a file this size; this is the route that can.
+ * message. That is fine for the small files here and expensive for the browse index, which is
+ * 13.2 MB for a real HVSC — 17.6 MB once base64-encoded, allocated as a single JavaScript string on
+ * a device whose memory class is 256 MB.
+ *
+ * Measured on a Pixel 4 against exactly that file, page visible:
+ *
+ * | route | time |
+ * | --- | --- |
+ * | `Filesystem.readFile` | 1,084 ms |
+ * | `fetch` via `convertFileSrc` | 14 ms to respond, 258 ms to read the body |
  *
  * `Capacitor.convertFileSrc` turns a `file://` URI into a `http://localhost/_capacitor_file_/…`
  * URL served by the native WebView, so the bytes arrive as a normal HTTP body: streamed, decoded by
- * the browser, never base64.
+ * the browser, never base64. {@link MAX_BRIDGE_READ_BYTES} already refuses reads this size on the
+ * paths that use the guard; this is the route that can carry them.
  *
  * A missing file answers `null`, which is how absence is reported everywhere else here. Anything
  * else falls back to the bridge, so a platform without the file server (the web build, tests)

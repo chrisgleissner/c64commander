@@ -60,9 +60,9 @@ export class FilesystemMediaIndexStorage implements MediaIndexStorage {
    * Read through the WebView's file server rather than the Capacitor bridge.
    *
    * This is the same file the HVSC browse index is persisted to, and for a real HVSC it is 13.2 MB.
-   * `Filesystem.readFile` returns a file as one base64 string in one bridge message; measured on a
-   * Pixel 4 against this exact file it did not return at all. Everything that waits on the index —
-   * "Find a tune" most visibly — waited with it. See `readDataFileText`.
+   * `Filesystem.readFile` returns a file as one base64 string in one bridge message: 1,084 ms and a
+   * 17.6 MB intermediate string on a Pixel 4, against 258 ms through the file server. See
+   * `readDataFileText`.
    */
   async read(): Promise<MediaIndexSnapshot | null> {
     try {

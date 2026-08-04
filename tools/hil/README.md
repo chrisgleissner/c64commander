@@ -14,6 +14,51 @@ physical rig), while the host-deterministic budget checks run in CI.
   three handset orientations. See **Physical keys and rotation** below. This one is the exception to
   "no raw ADB product input": the thing under test IS Android's key pipeline, so the keys have to
   enter the app the way a handset's keypad enters it.
+- **`hvsc_search_soak.mjs`** — "Find a tune" latency over many consecutive queries. See **HVSC
+  search** below.
+
+## THE trap: a hidden WebView
+
+**Read this before diagnosing any hang.** Chromium suspends timers in a hidden page, and Capacitor
+delivers plugin results by evaluating JavaScript in the WebView — so a phone that has locked itself
+produces, all at once:
+
+- debounces that never fire, so a search box sits on "Searching…" for ever;
+- `Filesystem.readFile` promises that never settle, which reads exactly like a bridge that cannot
+  carry a large file;
+- an in-app log that never reaches storage, so the diagnostics say the code never ran.
+
+`Runtime.evaluate` keeps working throughout, so the page looks responsive and every symptom points
+at the app. This cost the best part of a day and produced a confidently wrong root cause: a
+`Filesystem.readFile` measured as "never returns" was, with the page visible, 1,084 ms.
+
+```bash
+adb shell wm dismiss-keyguard     # the one that matters
+adb shell svc power stayon usb    # keeps the screen lit — does NOT dismiss the keyguard
+adb shell dumpsys window | grep -m1 isKeyguardShowing
+node scripts/bughunt-cdp.mjs eval '(()=>JSON.stringify({hidden:document.hidden}))()'
+```
+
+`hvsc_search_soak.mjs` refuses to report a hang without checking `document.hidden` first, and any
+new harness should do the same.
+
+## HVSC search
+
+`hvsc_search_soak.mjs` measures what the listener waits for: the time from a query landing in the
+box to rows being on screen, over many consecutive queries with a spread of result counts.
+
+```bash
+node tools/hil/hvsc_search_soak.mjs --iterations 100
+```
+
+Timed from the host on purpose — a page-side stopwatch stops ticking during exactly the stalls worth
+measuring, so it cannot include the fault. The CDP round trip is counted against the budget rather
+than excused from it.
+
+### Measured on the Pixel 4, 2026-08-04 — 100/100 against a real HVSC (61,157 songs, 13.2 MB index)
+
+From a cold app launch: **first query 497 ms**, then n=99 warm min 304 / p50 388 / p95 466 /
+max 495 ms. Budgets: 3,000 ms for the first query, 1,000 ms for every one after it.
 
 ## Physical keys and rotation
 
@@ -54,9 +99,7 @@ The diamond is also the layout that puts a direction on `0`, which is the app's 
 shortcut. That shortcut is supposed to go inert inside an open overlay so the key can steer
 instead — a rule that means nothing until something checks it against the machine.
 
-**The screen is the trap to watch.** A dozing or locked handset freezes the WebView's timers, so
-every `setTimeout` inside a page evaluation stops resolving and the run reports CDP timeouts that
-look like an app hang. `adb shell svc power stayon usb` before a long run.
+**The screen is the trap to watch** — see **THE trap: a hidden WebView** above.
 
 Rotation is set through the sheet's manual override rather than by turning the phone, because a
 test rig cannot turn a phone. The override is not a test seam — it is the shipped control for a
@@ -96,15 +139,15 @@ python3 tools/hil/audio_overlap_hil.py --serial <ADB_SERIAL> --switch-devices
 
 ### Verified on the Pixel 4, 2026-07-27 — 13/13 against the C64U
 
-| Check | Result |
-| --- | --- |
-| A local tune plays | 1 app audio stream, −30.2 dBFS (11.8 dB over the room floor) |
-| Live View audio started **on top of** a local tune | 1 stream — the tune is stopped, never layered |
-| A local tune started **on top of** the mirror | 1 stream — the mirror is stopped |
-| After a WebView reload | 0 streams (the native AudioTrack no longer outlives the page) |
-| Pause on a Play page mounted mid-tune | enabled, and it stops the audio |
-| Play/Stop, Previous, Next | usable, labelled for the running tune |
-| Progress bar seekable | yes on the local route, absent on the C64 route |
+| Check                                              | Result                                                        |
+| -------------------------------------------------- | ------------------------------------------------------------- |
+| A local tune plays                                 | 1 app audio stream, −30.2 dBFS (11.8 dB over the room floor)  |
+| Live View audio started **on top of** a local tune | 1 stream — the tune is stopped, never layered                 |
+| A local tune started **on top of** the mirror      | 1 stream — the mirror is stopped                              |
+| After a WebView reload                             | 0 streams (the native AudioTrack no longer outlives the page) |
+| Pause on a Play page mounted mid-tune              | enabled, and it stops the audio                               |
+| Play/Stop, Previous, Next                          | usable, labelled for the running tune                         |
+| Progress bar seekable                              | yes on the local route, absent on the C64 route               |
 
 Audio **quality** was checked separately, because "no overlap" is not "sounds right": a 14 s capture
 of `Use_My_Fire.sid` scored **melSim 0.716** against a `sidplayfp` render of the same file pulled off
