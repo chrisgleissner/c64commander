@@ -74,6 +74,7 @@ ABSENT_FRACTION = 0.20
 DEFAULT_MIN_PRESENT = 0.90
 DEFAULT_MAX_GAP_MS = 120.0
 DEFAULT_MIN_PEAK_DBFS = -60.0
+DEFAULT_MAX_CENTS = 50.0
 
 BAND = (300.0, 6000.0)
 
@@ -108,9 +109,12 @@ def grade(path: str, hz: float) -> dict:
         spectrum = np.abs(np.fft.rfft(chunk * np.hanning(len(chunk))))
         freqs = np.fft.rfftfreq(len(chunk), 1.0 / rate)
         in_band = (freqs >= BAND[0]) & (freqs <= BAND[1])
-        # A window either side of the nominal pitch, so a tone a few cents off is still ITS tone
-        # rather than counted as absent.
-        near = np.abs(freqs - hz) <= max(15.0, hz * 0.03)
+        # A window either side of the nominal pitch, so a tone some cents off is still ITS tone
+        # rather than counted as absent. It has to be comfortably WIDER than `DEFAULT_MAX_CENTS`,
+        # or the pitch check can never fire: at +-3% the window was 51 cents against a 50-cent
+        # tolerance, so a tone detuned enough to fail sat outside the window and was read as a
+        # present, in-tune tone at the window's edge instead. +-6% is about 100 cents.
+        near = np.abs(freqs - hz) <= max(15.0, hz * 0.06)
         tone_mag[i] = spectrum[near].max() if near.any() else 0.0
         peak_hz[i] = freqs[near][spectrum[near].argmax()] if near.any() else 0.0
         rest = in_band & ~near
@@ -148,21 +152,59 @@ def grade(path: str, hz: float) -> dict:
     }
 
 
-def verdict_for(result: dict, min_present: float = DEFAULT_MIN_PRESENT,
-                max_gap_ms: float = DEFAULT_MAX_GAP_MS,
-                min_peak_dbfs: float = DEFAULT_MIN_PEAK_DBFS) -> str:
-    """The verdict for a graded result. One implementation, so `main` and the self-test agree.
+def verdict_for(
+    result: dict,
+    min_present: float = DEFAULT_MIN_PRESENT,
+    max_gap_ms: float = DEFAULT_MAX_GAP_MS,
+    min_peak_dbfs: float = DEFAULT_MIN_PEAK_DBFS,
+    max_cents: float = DEFAULT_MAX_CENTS,
+) -> str:
+    """The verdict for a graded result — the ONLY place the comparisons live.
 
-    Order matters: "nothing is playing" is decided before "too quiet to grade", because a silent
+    Both `main` and the self-test call it, so a reordering, a changed comparison or a new branch
+    cannot appear in one and not the other. Sharing only the threshold numbers was not enough: the
+    logic could still drift, and then the test written to catch a regression would not see it.
+
+    Order matters. "Nothing is playing" is decided before "too quiet to grade", because a silent
     room is quiet by definition and the two have different causes and different fixes.
     """
     if result["present_fraction"] < ABSENT_FRACTION:
         return "NO TONE"
     if result["peak_dbfs"] < min_peak_dbfs:
         return "TOO QUIET TO GRADE"
-    if result["present_fraction"] < min_present or result["longest_gap_ms"] > max_gap_ms:
+    if (
+        result["present_fraction"] < min_present
+        or result["longest_gap_ms"] > max_gap_ms
+        or (not np.isnan(result["cents"]) and abs(result["cents"]) > max_cents)
+    ):
         return "DEFECTIVE"
     return "clean"
+
+
+def faults_for(result: dict, hz: float, min_present: float, max_gap_ms: float,
+               min_peak_dbfs: float, max_cents: float) -> list[str]:
+    """What to tell the operator, for the verdict [verdict_for] reached. Wording only, no decisions."""
+    verdict = verdict_for(result, min_present, max_gap_ms, min_peak_dbfs, max_cents)
+    if verdict == "NO TONE":
+        return [
+            f"no {hz:g} Hz tone in the recording — it is present in only "
+            f"{result['present_fraction'] * 100:.1f}% of windows, which is what an empty room looks "
+            f"like. Check that something is actually playing before reading anything else here"
+        ]
+    if verdict == "TOO QUIET TO GRADE":
+        return [
+            f"the tone peaks at {result['peak_dbfs']} dBFS, below the {min_peak_dbfs} dBFS this "
+            f"grader can separate from the room — raise the phone's volume (within the ceiling) or "
+            f"move the microphone closer to the grille, then measure again"
+        ]
+    faults = []
+    if result["present_fraction"] < min_present:
+        faults.append(f"tone present in only {result['present_fraction'] * 100:.1f}% of the recording")
+    if result["longest_gap_ms"] > max_gap_ms:
+        faults.append(f"longest dropout {result['longest_gap_ms']:.0f} ms")
+    if not np.isnan(result["cents"]) and abs(result["cents"]) > max_cents:
+        faults.append(f"pitch off by {result['cents']:.0f} cents")
+    return faults
 
 
 def self_test() -> int:
@@ -197,6 +239,7 @@ def self_test() -> int:
         # the recording, 11 cents sharp — a silent room graded as a quiet, slightly detuned tune.
         ("an empty room", room, "NO TONE"),
         ("a tone too quiet to grade", 100 * np.sin(2 * np.pi * hz * t), "TOO QUIET TO GRADE"),
+        ("a tone well off pitch", 8000 * np.sin(2 * np.pi * (hz * 1.05) * t), "DEFECTIVE"),
         # A tone that stops half way: present, but with a hole far longer than a dropout may be.
         (
             "a tone that stops half way",
@@ -243,7 +286,7 @@ def main() -> int:
     ap.add_argument("--self-test", action="store_true", help="grade known signals and check the verdicts")
     ap.add_argument("--min-present", type=float, default=DEFAULT_MIN_PRESENT)
     ap.add_argument("--max-gap-ms", type=float, default=DEFAULT_MAX_GAP_MS)
-    ap.add_argument("--max-cents", type=float, default=50.0)
+    ap.add_argument("--max-cents", type=float, default=DEFAULT_MAX_CENTS)
     # Below this the tone is too close to the room to grade. A generated SID tone is far quieter
     # than the barcode stimulus the clarity stage uses, and at a low phone volume it lands near the
     # floor — where the presence test drifts in and out and reports a perfectly good pipeline as
@@ -257,33 +300,16 @@ def main() -> int:
         ap.error("give a WAV file and --hz, or --self-test")
 
     result = grade(args.file, args.hz)
-    if result["present_fraction"] < ABSENT_FRACTION:
-        result["verdict"] = "NO TONE"
-        result["faults"] = [
-            f"no {args.hz:g} Hz tone in the recording — it is present in only "
-            f"{result['present_fraction'] * 100:.1f}% of windows, which is what an empty room looks "
-            f"like. Check that something is actually playing before reading anything else here"
-        ]
-        print(json.dumps(result) if args.json else f"VERDICT     {result['verdict']}  ({result['faults'][0]})")
+    thresholds = (args.min_present, args.max_gap_ms, args.min_peak_dbfs, args.max_cents)
+    result["verdict"] = verdict_for(result, *thresholds)
+    result["faults"] = faults_for(result, args.hz, *thresholds)
+    faults = result["faults"]
+
+    # A refusal to grade is not a defect report, and the two must not be confused by whatever runs
+    # this: 2 means the recording could not be graded, 1 means it was graded and found wanting.
+    if result["verdict"] in ("NO TONE", "TOO QUIET TO GRADE"):
+        print(json.dumps(result) if args.json else f"VERDICT     {result['verdict']}  ({faults[0]})")
         return 2
-    if result["peak_dbfs"] < args.min_peak_dbfs:
-        result["verdict"] = "TOO QUIET TO GRADE"
-        result["faults"] = [
-            f"the tone peaks at {result['peak_dbfs']} dBFS, below the {args.min_peak_dbfs} dBFS this "
-            f"grader can separate from the room — raise the phone's volume (within the ceiling) or "
-            f"move the microphone closer to the grille, then measure again"
-        ]
-        print(json.dumps(result) if args.json else f"VERDICT     {result['verdict']}  ({result['faults'][0]})")
-        return 2
-    faults = []
-    if result["present_fraction"] < args.min_present:
-        faults.append(f"tone present in only {result['present_fraction'] * 100:.1f}% of the recording")
-    if result["longest_gap_ms"] > args.max_gap_ms:
-        faults.append(f"longest dropout {result['longest_gap_ms']:.0f} ms")
-    if not np.isnan(result["cents"]) and abs(result["cents"]) > args.max_cents:
-        faults.append(f"pitch off by {result['cents']:.0f} cents")
-    result["faults"] = faults
-    result["verdict"] = "clean" if not faults else "DEFECTIVE"
 
     if args.json:
         print(json.dumps(result))
