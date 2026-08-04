@@ -85,17 +85,31 @@ vi.mock("@/hooks/useRemoteInputSession", () => ({
 import { RemoteInputSheet } from "@/components/remoteInput/RemoteInputSheet";
 import { requestGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { resetInputModality, setInputModality } from "@/lib/input/inputModality";
-import { saveGameModeControls } from "@/lib/remoteInput/gameModeControlSurface";
+import { saveGameModeJoystick } from "@/lib/remoteInput/gameModeJoystick";
 import { CONTROLS_HIDE_MS } from "@/components/streams/AvMirrorImmersive";
 
 const enterGameMode = () => fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
 const sheet = () => screen.getByTestId("remote-input-sheet");
+const joystick = () => screen.queryByTestId("remote-input-virtual-joystick");
+
+/** Steer the game with a physical key — Classic T9's `4` is left at rest. */
+const steerWithAKey = () => fireEvent.keyDown(sheet(), { code: "Numpad4", key: "4" });
 
 /** The controls hide on a delay, so the assertion has to let that delay pass. */
 const settleControlSurface = () =>
   act(() => {
     vi.advanceTimersByTime(CONTROLS_HIDE_MS + 10);
   });
+
+/**
+ * Bring the Game Mode toolbar back. It auto-hides the moment Game Mode is entered, and
+ * stays up for six idle seconds once summoned — so a second call inside that window
+ * finds no handle to press, and there is nothing to do.
+ */
+const summonChrome = () => {
+  const handle = screen.queryByTestId("remote-input-restore-chrome");
+  if (handle) fireEvent.click(handle);
+};
 
 describe("RemoteInputSheet — Game Mode", () => {
   beforeEach(() => {
@@ -167,84 +181,196 @@ describe("RemoteInputSheet — Game Mode", () => {
     });
   });
 
-  describe("GM-6 / GM-6a: which control surface is drawn", () => {
-    it("hides the on-screen controls while the picture is live and the user is driving by key", () => {
+  /**
+   * The reported defect: Game Mode showed the on-screen joystick, then took it away a
+   * couple of seconds later on a touchscreen, with the user having done nothing but
+   * tap. The cause was reading the app-wide input modality, which ordinary keypad
+   * navigation sets ANYWHERE in the app — including the `0` key that opens Game Mode.
+   *
+   * Hiding it now has exactly three triggers, and each is covered below: a physical
+   * key that steered the game, the toolbar CTA, and the setting.
+   */
+  describe("GM-6: the joystick goes away only when something asked for it", () => {
+    it("keeps the controls when the app-wide modality is already key-navigation on arrival", () => {
+      mirrorState.videoState = "live";
+      act(() => setInputModality("key-navigation"));
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      enterGameMode();
+      settleControlSurface();
+
+      expect(joystick()).toBeInTheDocument();
+      expect(sheet()).toHaveAttribute("data-joystick", "visible");
+    });
+
+    it("keeps them through a key that adjusts the view rather than steering the game", () => {
       mirrorState.videoState = "live";
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
       enterGameMode();
-      act(() => setInputModality("key-navigation"));
+
+      // `*` flips the mirror into Adjust; it never reaches the C64 as a joystick input.
+      fireEvent.keyDown(sheet(), { code: "NumpadMultiply", key: "*" });
       settleControlSurface();
 
-      expect(screen.queryByTestId("remote-input-virtual-joystick")).not.toBeInTheDocument();
+      expect(joystick()).toBeInTheDocument();
+    });
+
+    it("GM-6a: hides them once a physical key has steered the game", () => {
+      mirrorState.videoState = "live";
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      enterGameMode();
+      expect(joystick()).toBeInTheDocument();
+
+      steerWithAKey();
+      settleControlSurface();
+
+      expect(joystick()).not.toBeInTheDocument();
       expect(screen.getByTestId("av-mirror-immersive")).toBeInTheDocument();
     });
 
-    it("brings them straight back on the first touch", () => {
+    it("brings them back when the user touches them before the delay runs out", () => {
       mirrorState.videoState = "live";
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
       enterGameMode();
-      act(() => setInputModality("key-navigation"));
-      settleControlSurface();
-      expect(screen.queryByTestId("remote-input-virtual-joystick")).not.toBeInTheDocument();
+      steerWithAKey();
 
-      act(() => setInputModality("pointer"));
-      expect(screen.getByTestId("remote-input-virtual-joystick")).toBeInTheDocument();
+      fireEvent.pointerDown(screen.getByTestId("remote-input-virtual-joystick"));
+      settleControlSurface();
+
+      expect(joystick()).toBeInTheDocument();
     });
 
-    it("GM-6: shows them with the picture off, whatever the modality says", () => {
+    it("shows them with the picture off, whatever else says otherwise", () => {
       mirrorState.videoState = "off";
+      saveGameModeJoystick("hidden");
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
       enterGameMode();
-      act(() => setInputModality("key-navigation"));
+      steerWithAKey();
       settleControlSurface();
 
       expect(screen.queryByTestId("av-mirror-immersive")).not.toBeInTheDocument();
-      expect(screen.getByTestId("remote-input-virtual-joystick")).toBeInTheDocument();
+      expect(joystick()).toBeInTheDocument();
     });
 
-    it("Never show hides them even while the user is touching", () => {
+    it("hides it from the start when the setting says hidden", () => {
       mirrorState.videoState = "live";
-      saveGameModeControls("never");
+      saveGameModeJoystick("hidden");
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
       enterGameMode();
-      act(() => setInputModality("pointer"));
-      settleControlSurface();
 
-      expect(screen.queryByTestId("remote-input-virtual-joystick")).not.toBeInTheDocument();
+      // No delay: the user has already answered this question in Settings.
+      expect(joystick()).not.toBeInTheDocument();
     });
 
-    it("Always show keeps them even while the user is driving by key", () => {
+    it("keeps it through a whole game played on the keys when the setting says visible", () => {
       mirrorState.videoState = "live";
-      saveGameModeControls("always");
+      saveGameModeJoystick("visible");
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
       enterGameMode();
-      act(() => setInputModality("key-navigation"));
+      steerWithAKey();
       settleControlSurface();
 
-      expect(screen.getByTestId("remote-input-virtual-joystick")).toBeInTheDocument();
+      expect(joystick()).toBeInTheDocument();
     });
 
-    it("leaves the ordinary sheet's controls alone whatever the modality is", () => {
+    it("leaves the ordinary sheet's controls alone, keys or no keys", () => {
       mirrorState.videoState = "live";
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
-      act(() => setInputModality("key-navigation"));
+      steerWithAKey();
       settleControlSurface();
 
-      expect(screen.getByTestId("remote-input-virtual-joystick")).toBeInTheDocument();
+      expect(joystick()).toBeInTheDocument();
     });
   });
 
-  describe("GM-6b: a relayed physical key reports the modality", () => {
-    it("hides the controls during play without the user asking", () => {
+  describe("GM-6b: the joystick toggle on the Game Mode toolbar", () => {
+    it("hides it at once when asked, without waiting out the hide delay", () => {
       mirrorState.videoState = "live";
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
       enterGameMode();
-      expect(screen.getByTestId("remote-input-virtual-joystick")).toBeInTheDocument();
+      summonChrome();
 
-      fireEvent.keyDown(sheet(), { code: "ArrowUp", key: "ArrowUp" });
+      fireEvent.click(screen.getByTestId("remote-input-joystick-visibility-toggle"));
+
+      expect(joystick()).not.toBeInTheDocument();
+      expect(sheet()).toHaveAttribute("data-joystick", "hidden");
+    });
+
+    it("brings it back, and outranks the setting that took it away", () => {
+      mirrorState.videoState = "live";
+      saveGameModeJoystick("hidden");
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      enterGameMode();
+      summonChrome();
+      expect(joystick()).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId("remote-input-joystick-visibility-toggle"));
+
+      expect(joystick()).toBeInTheDocument();
+    });
+
+    it("keeps them once asked for, even after a physical key steers the game", () => {
+      mirrorState.videoState = "live";
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      enterGameMode();
+      summonChrome();
+      fireEvent.click(screen.getByTestId("remote-input-joystick-visibility-toggle"));
+      summonChrome();
+      fireEvent.click(screen.getByTestId("remote-input-joystick-visibility-toggle"));
+
+      steerWithAKey();
       settleControlSurface();
 
-      expect(screen.queryByTestId("remote-input-virtual-joystick")).not.toBeInTheDocument();
+      expect(joystick()).toBeInTheDocument();
+    });
+
+    /**
+     * The toggle has to describe the screen, not the rule. Hiding is delayed while the rule is
+     * guessing, so in that window the joystick is still there — and a button reading "Show
+     * joystick", reporting itself pressed, would be offering to produce something already visible.
+     */
+    it("still offers to hide the joystick during the delay, while it is still on screen", () => {
+      mirrorState.videoState = "live";
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      enterGameMode();
+      steerWithAKey();
+      summonChrome();
+
+      // Mid-delay: the rule has decided, the joystick has not gone yet.
+      expect(joystick()).toBeInTheDocument();
+      const toggle = screen.getByTestId("remote-input-joystick-visibility-toggle");
+      expect(toggle).toHaveTextContent("Hide joystick");
+      expect(toggle).toHaveAttribute("aria-pressed", "false");
+      expect(sheet()).toHaveAttribute("data-joystick", "visible");
+
+      settleControlSurface();
+      expect(joystick()).not.toBeInTheDocument();
+      expect(screen.getByTestId("remote-input-joystick-visibility-toggle")).toHaveTextContent("Show joystick");
+      expect(sheet()).toHaveAttribute("data-joystick", "hidden");
+    });
+
+    it("is not offered with the picture off, where there is nothing to give the space to", () => {
+      mirrorState.videoState = "off";
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      enterGameMode();
+      summonChrome();
+
+      expect(screen.queryByTestId("remote-input-joystick-visibility-toggle")).not.toBeInTheDocument();
+    });
+
+    it("starts the next Game Mode session with nothing asked for and no keys used", () => {
+      mirrorState.videoState = "live";
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      enterGameMode();
+      summonChrome();
+      fireEvent.click(screen.getByTestId("remote-input-joystick-visibility-toggle"));
+      expect(joystick()).not.toBeInTheDocument();
+
+      summonChrome();
+      fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
+      enterGameMode();
+      settleControlSurface();
+
+      expect(joystick()).toBeInTheDocument();
     });
   });
 

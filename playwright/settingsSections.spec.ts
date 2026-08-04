@@ -88,7 +88,7 @@ test.describe("Settings sections", () => {
     await page.getByTestId("settings-section-toggle-play-and-disk").click();
 
     await expect(page.getByTestId("settings-show-autofire")).toBeVisible();
-    await expect(page.getByTestId("settings-game-mode-controls")).toBeVisible();
+    await expect(page.getByTestId("settings-game-mode-joystick")).toBeVisible();
     await expect(page.getByTestId("settings-game-mode-on-launch")).toBeVisible();
   });
 

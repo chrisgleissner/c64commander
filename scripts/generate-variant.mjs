@@ -30,6 +30,7 @@ export const DEFAULT_IOS_VARIANT_XCCONFIG_PATH = path.join(REPO_ROOT, "ios/App/A
 export const ALLOWED_ENDPOINT_KEYS = ["device_host", "hvsc_base_url", "commoserve_base_url"];
 const ALLOWED_DEFAULT_DISPLAY_PROFILES = ["auto", "compact", "medium", "expanded"];
 const ALLOWED_JOYSTICK_KEY_LAYOUTS = ["diamond8", "classicT9", "custom"];
+const ALLOWED_GAME_MODE_JOYSTICK = ["auto", "visible", "hidden"];
 
 const VARIANT_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 
@@ -363,11 +364,20 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
       : "classicT9";
   const defaultGameModeOnLaunch =
     runtime.default_game_mode_on_launch !== undefined
-      ? requireBoolean(
-          runtime.default_game_mode_on_launch,
-          `variants.${variantId}.runtime.default_game_mode_on_launch`,
-        )
+      ? requireBoolean(runtime.default_game_mode_on_launch, `variants.${variantId}.runtime.default_game_mode_on_launch`)
       : false;
+  // Whether Game Mode draws the on-screen joystick, or gives its space to the live
+  // picture. The keypad edition has no touchscreen for that joystick, so there is
+  // nothing to lose and a screenful of picture to gain; everywhere else the app waits
+  // until it can see that the player is using physical keys.
+  const defaultGameModeJoystick =
+    runtime.default_game_mode_joystick !== undefined
+      ? requireOneOf(
+          runtime.default_game_mode_joystick,
+          ALLOWED_GAME_MODE_JOYSTICK,
+          `variants.${variantId}.runtime.default_game_mode_joystick`,
+        )
+      : "auto";
 
   const platform = {
     android: {
@@ -454,6 +464,7 @@ const normalizeVariant = (repoRoot, variantId, raw) => {
       defaultHideNavigationBar,
       defaultJoystickKeyLayout,
       defaultGameModeOnLaunch,
+      defaultGameModeJoystick,
       endpoints: Object.fromEntries(endpointKeys.map((key) => [key, runtimeEndpointsRaw[key].trim()])),
     },
   };

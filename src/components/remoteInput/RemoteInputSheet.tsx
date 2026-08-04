@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   Gamepad2,
@@ -28,7 +28,6 @@ import { useRemoteInputPhysicalKeys } from "@/hooks/useRemoteInputPhysicalKeys";
 import { useRemoteInputGameMode } from "@/hooks/useRemoteInputGameMode";
 import { useDeviceRotation } from "@/hooks/useDeviceRotation";
 import { useAutoHide } from "@/hooks/useAutoHide";
-import { getInputModality, subscribeInputModality } from "@/lib/input/inputModality";
 import {
   remoteInputSupportsJoystick,
   REMOTE_INPUT_AUTH_REQUIRED_HINT,
@@ -50,10 +49,11 @@ import {
   type DeviceRotation,
 } from "@/lib/remoteInput/joystickKeyBindings";
 import {
-  GAME_MODE_CONTROLS_CHANGE_EVENT,
-  loadGameModeControls,
-  resolveControlSurface,
-} from "@/lib/remoteInput/gameModeControlSurface";
+  GAME_MODE_JOYSTICK_CHANGE_EVENT,
+  loadGameModeJoystick,
+  resolveJoystickVisibility,
+  type JoystickVisibility,
+} from "@/lib/remoteInput/gameModeJoystick";
 import { startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { AUTOFIRE_VISIBILITY_CHANGE_EVENT, loadShowAutofireButton } from "@/lib/remoteInput/autofire";
 import { VirtualJoystick } from "@/components/remoteInput/VirtualJoystick";
@@ -87,8 +87,8 @@ const ROTATION_CHOICES: ReadonlyArray<{ label: string; value: DeviceRotation | "
  * The "Remote Input" sheet — a second-screen joystick and keyboard for the C64.
  * Thin shell over the tested pure mappings (`@/lib/remoteInput/*`) and the
  * coalesced transport (`useRemoteInputSession`). Controls scale with a persisted
- * size preference; Game Mode strips the sheet to the picture and whatever control
- * surface suits how the user is driving the app (spec §5.1).
+ * size preference; Game Mode strips the sheet to the picture, and keeps or drops the
+ * on-screen joystick according to how the game is being played (spec §5.1).
  */
 export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) => {
   const { tier, loading: tierLoading, resolved } = useRemoteInputCapabilityTier(open);
@@ -109,7 +109,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const [joystickBinding, setJoystickBinding] = useState(() =>
     bindingForLayout(loadJoystickLayout(), loadCustomBinding()),
   );
-  const [controlsSetting, setControlsSetting] = useState(loadGameModeControls);
+  const [joystickSetting, setJoystickSetting] = useState(loadGameModeJoystick);
   const scale = remoteInputControlScale(controlSize);
 
   // Content Explorer A/V mirror: pair the live screen with driving the machine. The Live View
@@ -150,25 +150,46 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const quickKeysOverlay = useAutoHide(GAME_MODE_CHROME_HIDE_MS);
   const chromeHidden = gameMode && !chrome.visible;
 
-  const modality = useSyncExternalStore(subscribeInputModality, getInputModality, getInputModality);
-  const controlSurface = resolveControlSurface({
-    setting: controlsSetting,
-    modality,
+  // The two facts `auto` and the toolbar contribute, both scoped to ONE Game Mode
+  // session. `keyDriven` says a physical key has steered the game since it began;
+  // `joystickRequest` is what the user asked for on the toolbar, or `null` if they
+  // have not asked. Neither survives leaving Game Mode — see the reset below.
+  const [keyDriven, setKeyDriven] = useState(false);
+  const [joystickRequest, setJoystickRequest] = useState<JoystickVisibility | null>(null);
+  const joystickVisibility = resolveJoystickVisibility({
+    setting: joystickSetting,
+    keyDriven,
+    requested: joystickRequest,
     videoLive: showMirrorScreen,
   });
 
-  // Showing is immediate, hiding is delayed: controls that vanish mid-tap would be
-  // worse than controls that linger for a moment after the first physical key.
-  const [inputControlsHidden, setInputControlsHidden] = useState(false);
   useEffect(() => {
-    if (!gameMode || controlSurface === "shown") {
-      setInputControlsHidden(false);
+    if (gameMode) return;
+    // A launch inherits neither: the last game's keys say nothing about how this one
+    // is about to be played, and an explicit ask was made about that game.
+    setKeyDriven(false);
+    setJoystickRequest(null);
+  }, [gameMode]);
+
+  // Showing is immediate. Hiding waits, unless the user asked for it: controls that
+  // vanish mid-tap would be worse than controls that linger for a moment after the
+  // first physical key, and that risk is only there when the app is GUESSING that
+  // the hand about to tap them has moved to the keypad.
+  const [joystickHidden, setJoystickHidden] = useState(false);
+  const hidingWasAskedFor = joystickRequest === "hidden" || joystickSetting === "hidden";
+  useEffect(() => {
+    if (!gameMode || joystickVisibility === "visible") {
+      setJoystickHidden(false);
       return;
     }
-    const timer = setTimeout(() => setInputControlsHidden(true), CONTROLS_HIDE_MS);
+    if (hidingWasAskedFor) {
+      setJoystickHidden(true);
+      return;
+    }
+    const timer = setTimeout(() => setJoystickHidden(true), CONTROLS_HIDE_MS);
     return () => clearTimeout(timer);
-  }, [gameMode, controlSurface]);
-  const showInputControls = !gameMode || !inputControlsHidden;
+  }, [gameMode, joystickVisibility, hidingWasAskedFor]);
+  const showInputControls = !gameMode || !joystickHidden;
 
   // Rehydrate the persisted preferences when the sheet opens.
   useEffect(() => {
@@ -176,16 +197,16 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     setControlSize(loadRemoteInputControlSize());
     setShowAutofire(loadShowAutofireButton());
     setJoystickBinding(bindingForLayout(loadJoystickLayout(), loadCustomBinding()));
-    setControlsSetting(loadGameModeControls());
+    setJoystickSetting(loadGameModeJoystick());
   }, [open]);
 
   // The sheet is mounted for the life of the page, so a Settings change made between two
   // Game Mode launches would otherwise not be read until the next open — and a user who has
-  // just turned the on-screen controls off would still see them.
+  // just asked to keep the on-screen joystick would still lose it.
   useEffect(() => {
-    const sync = () => setControlsSetting(loadGameModeControls());
-    window.addEventListener(GAME_MODE_CONTROLS_CHANGE_EVENT, sync);
-    return () => window.removeEventListener(GAME_MODE_CONTROLS_CHANGE_EVENT, sync);
+    const sync = () => setJoystickSetting(loadGameModeJoystick());
+    window.addEventListener(GAME_MODE_JOYSTICK_CHANGE_EVENT, sync);
+    return () => window.removeEventListener(GAME_MODE_JOYSTICK_CHANGE_EVENT, sync);
   }, []);
 
   // Hot-swap the autofire-button visibility if the Settings toggle changes while a session is live.
@@ -220,6 +241,9 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     binding: joystickBinding,
     rotation: deviceRotation,
     onHashKey: gameMode ? quickKeysOverlay.toggle : undefined,
+    // The one observation `auto` is allowed to act on: a key that reached the C64 as a
+    // joystick input, which nothing but a player driving the game does.
+    onJoystickKeyRelayed: () => setKeyDriven(true),
   });
 
   // Smart default: when the connected device's REST API has no machine:input
@@ -331,6 +355,48 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     </Button>
   );
 
+  /**
+   * The explicit answer to the question `auto` is otherwise guessing at.
+   *
+   * Offered only while there IS a picture, because that is the only time hiding the
+   * joystick means anything — with the mirror off the sheet would simply be empty. It
+   * is the route back for a player whose joystick the guess took away, and the route
+   * forward for one who wants the picture now; either way, pressing it settles the
+   * question for the rest of this Game Mode session.
+   *
+   * Named for the joystick rather than the picture so it reads the same way round as
+   * the Settings control, and so it cannot be mistaken for the floating **Controls**
+   * handle beside it, which brings back this toolbar rather than the joystick.
+   *
+   * It reads what is DRAWN, not what the rule decided. Hiding is deliberately delayed
+   * when the rule is guessing, so the two disagree for a couple of seconds after the
+   * first physical key — and a button that offered to "show" a joystick the user can
+   * still see, while reporting itself pressed, would be describing a state that is not
+   * on the screen.
+   */
+  const joystickDrawn = showInputControls;
+  const joystickVisibilityToggle = showMirrorScreen && (
+    <Button
+      size="sm"
+      variant="secondary"
+      data-testid="remote-input-joystick-visibility-toggle"
+      aria-pressed={!joystickDrawn}
+      onClick={() => setJoystickRequest(joystickDrawn ? "hidden" : "visible")}
+    >
+      {!joystickDrawn ? (
+        <>
+          <Gamepad2 className="mr-1.5 h-4 w-4" />
+          Show joystick
+        </>
+      ) : (
+        <>
+          <Maximize2 className="mr-1.5 h-4 w-4" />
+          Hide joystick
+        </>
+      )}
+    </Button>
+  );
+
   const showFooterActions = !gameMode;
 
   const quickKeysBar = (className?: string) => (
@@ -353,6 +419,11 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
       <AppSheetContent
         data-testid="remote-input-sheet"
         data-game-mode={gameMode ? "true" : "false"}
+        // Whether the on-screen joystick is actually DRAWN — not what the rule decided,
+        // which leads it by the hide delay. On the surface because it is the thing a
+        // hardware harness has to read to check the joystick went away when it should
+        // have and stayed when it should have, and a harness needs the screen's answer.
+        data-joystick={showInputControls ? "visible" : "hidden"}
         // What the transport is currently asked to hold. A direction stuck on the real C64 is
         // this feature's worst failure, so the answer is on the surface rather than only in a
         // log — and it is what lets a test assert the relayed direction rather than a repaint.
@@ -463,8 +534,14 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
             ) : null}
             {/* Game Mode's chrome carries the orientation control: it is what makes the
                 picture and the keys followable when the sensor cannot answer, and the
-                ordinary sheet has no room to spare for a row nobody there is using. */}
-            {gameMode ? <div className="flex flex-wrap items-center gap-2">{rotationOverride}</div> : null}
+                ordinary sheet has no room to spare for a row nobody there is using. The
+                joystick toggle rides beside it, where the way out of Game Mode is. */}
+            {gameMode ? (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                {rotationOverride}
+                {joystickVisibilityToggle}
+              </div>
+            ) : null}
             {mirrorEnabled ? (
               <div
                 className="flex flex-wrap items-center justify-between gap-2"
@@ -537,6 +614,10 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                 immersive={gameMode}
                 fillHeight={!showMirrorScreen}
                 releaseAllEpoch={session.releaseAllEpoch}
+                // Touching the on-screen joystick withdraws the only evidence `auto`
+                // had. Without this a single stray key press during a touch game
+                // takes the joystick away and the toolbar is the only way back.
+                onPointerInput={() => setKeyDriven(false)}
               />
             ) : null
           ) : (

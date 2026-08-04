@@ -101,17 +101,21 @@ export const unrotatePoint: (
 inside the band. `ORIENTATION_UNKNOWN` (-1) returns `previous`. `unrotateDelta` /
 `unrotatePoint` implement `R(θ)` exactly as spec §4.5 writes it — CSS convention, `+y` down.
 
-### 1.3 `src/lib/remoteInput/gameModeControlSurface.ts`
+### 1.3 `src/lib/remoteInput/gameModeJoystick.ts`
 
 ```ts
-export type ControlsSetting = "auto" | "always" | "never";
-export const resolveControlSurface: (input: {
-  setting: ControlsSetting; modality: InputModality; videoLive: boolean;
-}) => "shown" | "hidden";
+export type JoystickVisibility = "visible" | "hidden";
+export type GameModeJoystickSetting = "auto" | JoystickVisibility;
+export const resolveJoystickVisibility: (input: {
+  setting: GameModeJoystickSetting;
+  keyDriven: boolean; // a physical key has steered the game this session
+  requested: JoystickVisibility | null; // what the toolbar was asked for, or null
+  videoLive: boolean;
+}) => JoystickVisibility;
 ```
 
-The never-blank guard comes first: `videoLive === false` ⇒ `"shown"`, whatever else says
-(GM-6). Then `always`/`never`, then modality.
+The never-blank guard comes first: `videoLive === false` ⇒ `"visible"`, whatever else says
+(GM-6). Then the toolbar answer, then an explicit setting, then `keyDriven`.
 
 ### 1.4 Tests — `tests/unit/lib/remoteInput/`
 
@@ -119,7 +123,7 @@ The never-blank guard comes first: `videoLive === false` ⇒ `"shown"`, whatever
 | --- | --- |
 | `joystickKeyBindings.test.ts` | The §6.3 table asserted **cell by cell** for 0/90/180/270 (GM-5/GM-8); Classic T9 at rotation 0 resolving identically to the old `T9_JOYSTICK_MAP` (regression guard); diagonal rotation; fire invariance; reserved-action rejection; persistence round-trip; malformed stored binding rejected |
 | `deviceRotation.test.ts` | Sector boundaries; 10° past a boundary does **not** switch and 25° past does; `ORIENTATION_UNKNOWN`; `frameRotation` including the portrait-lock short-circuit; `unrotateDelta`/`unrotatePoint` against hand-computed values at all four angles |
-| `gameModeControlSurface.test.ts` | The full truth table of setting × modality × `videoLive`, never-blank guard first |
+| `gameModeJoystick.test.ts` | The full truth table of setting × `keyDriven` × `requested` × `videoLive`, never-blank guard first; a preference stored under the old `always`/`never` value names |
 
 **Gate:** `npx vitest run tests/unit/lib/remoteInput && npm run typecheck`
 
@@ -210,10 +214,11 @@ Run `npx vitest run tests/unit/components/remoteInput` — it must be green befo
 ### 4.2 Add
 
 - Resolve physical keys through `resolveJoystickInputs(action, binding, deviceRotation)`.
-- Call `setInputModality("key-navigation")` when a physical key relays (GM-6b).
+- Report a relay to the sheet via `onJoystickKeyRelayed` (GM-6a), and still set the
+  app-wide `setInputModality("key-navigation")` for the focus ring on the next screen.
 - Re-run `recomputePhysicalHeldSet` on **every** `deviceRotation` change (GM-9).
-- Render `VirtualJoystick` / `TypeKeyboard` per `resolveControlSurface`; hiding is delayed by
-  `CONTROLS_HIDE_MS`, showing is immediate.
+- Render `VirtualJoystick` / `TypeKeyboard` per `resolveJoystickVisibility`; hiding is
+  delayed by `CONTROLS_HIDE_MS` unless it was explicitly asked for, showing is immediate.
 - **Delete** the `remote-input-collapse-chrome` button and the `chromeCollapsed` toggle path;
   game mode always collapses the chrome. Keep `remote-input-restore-chrome`.
 - `#` toggles an overlay row = `QuickKeysBar` + `AvMirrorControls`
@@ -291,7 +296,7 @@ GM-18 condition asserting the sheet does **not** open.
    `variant.json`.
 4. `SettingsPage.tsx`: the four controls of spec §7 with the copy given there, testids
    `settings-joystick-key-layout`, `settings-joystick-bind-<slot>`,
-   `settings-game-mode-controls`, `settings-game-mode-on-launch`. Press-to-bind captures the
+   `settings-game-mode-joystick`, `settings-game-mode-on-launch`. Press-to-bind captures the
    next physical key into the focused slot and rejects reserved actions with the message
    naming their existing role.
 
@@ -327,7 +332,7 @@ gone, and three captures are added.
 | File | State |
 | --- | --- |
 | `home/remote-input/02-game-mode.png` | **Changes** — no Hide controls button |
-| `home/remote-input/07-game-mode-keys.png` | **New** — controls hidden (key modality) |
+| `home/remote-input/07-game-mode-keys.png` | **New** — controls hidden after a key steered the game |
 | `home/remote-input/08-game-mode-rotated.png` | **New** — rotation pinned to 90° |
 | `home/00-overview-light.png`, `home/01-overview-dark.png` | **Change** — the tile reorder |
 

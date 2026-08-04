@@ -1,0 +1,326 @@
+#!/usr/bin/env python3
+#
+# C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+# Copyright (C) 2026 Christian Gleissner
+# Licensed under the GNU General Public License v3.0 or later.
+#
+"""Grade a recording of one steady tone coming out of the phone's speaker.
+
+WHAT THIS IS FOR
+
+Two of the merge gate's stages play the same generated tune two different ways — once rendered by
+the Ultimate and carried by the mirror, once rendered by the on-device engine — and ask whether it
+came out of the speaker intact. The two paths share nothing after the tune is chosen, and they have
+sounded materially different before, so the comparison is only worth anything if both are measured
+with one instrument in one room.
+
+A steady tone is what makes that measurable. Real music cannot settle it: a listener cannot tell a
+stall from a rest, and neither can a detector, which is why the campaign's other graders all use a
+generated stimulus too. Here the tune holds one pitch, so three questions have arithmetic answers:
+
+  * **Is it there** — the fraction of the recording where the tone is present.
+  * **Is it continuous** — the longest stretch where it is not, which is what a dropout is.
+  * **Is it in tune** — the pitch error in cents. A resampler correcting drift too hard detunes the
+    music, and a listener hears that as the tune wandering in speed.
+
+TWO TRAPS THIS AVOIDS
+
+Presence is measured against the tone's OWN peak in this recording, never a shared threshold. The
+two playback paths do not reach the microphone equally — level is itself a finding — and a shared
+threshold simply buries the quieter one and reports it absent.
+
+Everything is band-limited to 300-6000 Hz. The room's noise here is almost all below 300 Hz, which
+a phone speaker barely reproduces, so a broadband reading makes the fan look like signal and can
+make a perfectly good recording look hopeless (AGENTS.md records an agent concluding exactly that).
+
+USAGE
+
+  steady_tone_grade.py FILE.wav --hz 550 [--min-present 0.90] [--max-gap-ms 120] [--json]
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import wave
+
+import numpy as np
+
+#: Long enough for a clean estimate at these pitches, short enough that a gap already plainly
+#: audible cannot hide inside one window.
+WINDOW_SECONDS = 0.05
+
+#: A window counts as holding the tone above this fraction of the tone's own peak across the run.
+PRESENT_FRACTION = 0.10
+
+#: ...and only if the tone also stands this far above the same window's out-of-band energy. The
+#: fraction alone is a ratio against a peak that might itself be noise.
+#:
+#: 6 dB was not enough, and the way it failed is worth keeping: with nothing playing at all, the
+#: loudest bin inside the search window around 550 Hz was room noise, it cleared a 6 dB margin often
+#: enough to look present in 45% of windows, and the run was reported as a quiet tone 11 cents sharp
+#: rather than as silence. A grader that can mistake a room for a tune is worse than no grader.
+SNR_MARGIN_DB = 12.0
+
+#: Below this the recording holds no tone at all, however loud the room is. Reported as its own
+#: verdict, because "nothing is playing" and "the tone is too quiet to grade" have different causes
+#: and different fixes, and conflating them sent one investigation after the wrong one.
+ABSENT_FRACTION = 0.20
+
+#: The verdict thresholds, in one place because BOTH `main` and the self-test read them. Duplicated,
+#: they drift: tightening a default in `main` would leave the self-test asserting the old number, and
+#: the test written to catch a regression would pass it through.
+DEFAULT_MIN_PRESENT = 0.90
+DEFAULT_MAX_GAP_MS = 120.0
+DEFAULT_MIN_PEAK_DBFS = -60.0
+DEFAULT_MAX_CENTS = 50.0
+
+BAND = (300.0, 6000.0)
+
+
+def read_wav(path: str) -> tuple[np.ndarray, int]:
+    with wave.open(path, "rb") as fh:
+        if fh.getsampwidth() != 2:
+            raise SystemExit(f"{path}: expected 16-bit PCM")
+        rate = fh.getframerate()
+        raw = fh.readframes(fh.getnframes())
+    samples = np.frombuffer(raw, dtype="<i2").astype(np.float64)
+    channels = 1
+    with wave.open(path, "rb") as fh:
+        channels = fh.getnchannels()
+    if channels > 1:
+        samples = samples.reshape(-1, channels).mean(axis=1)
+    return samples, rate
+
+
+def grade(path: str, hz: float) -> dict:
+    samples, rate = read_wav(path)
+    window = int(rate * WINDOW_SECONDS)
+    if len(samples) < window * 4:
+        raise SystemExit(f"{path}: too short to grade")
+    count = len(samples) // window
+
+    tone_mag = np.zeros(count)
+    noise_mag = np.zeros(count)
+    peak_hz = np.zeros(count)
+    for i in range(count):
+        chunk = samples[i * window : (i + 1) * window]
+        spectrum = np.abs(np.fft.rfft(chunk * np.hanning(len(chunk))))
+        freqs = np.fft.rfftfreq(len(chunk), 1.0 / rate)
+        in_band = (freqs >= BAND[0]) & (freqs <= BAND[1])
+        # A window either side of the nominal pitch, so a tone some cents off is still ITS tone
+        # rather than counted as absent. It has to be comfortably WIDER than `DEFAULT_MAX_CENTS`,
+        # or the pitch check can never fire: at +-3% the window was 51 cents against a 50-cent
+        # tolerance, so a tone detuned enough to fail sat outside the window and was read as a
+        # present, in-tune tone at the window's edge instead. +-6% is about 100 cents.
+        near = np.abs(freqs - hz) <= max(15.0, hz * 0.06)
+        tone_mag[i] = spectrum[near].max() if near.any() else 0.0
+        peak_hz[i] = freqs[near][spectrum[near].argmax()] if near.any() else 0.0
+        rest = in_band & ~near
+        noise_mag[i] = np.sqrt((spectrum[rest] ** 2).mean()) if rest.any() else 0.0
+
+    peak = tone_mag.max()
+    if peak <= 0:
+        raise SystemExit(f"{path}: nothing at {hz:g} Hz at all — was anything playing?")
+    floor = peak * PRESENT_FRACTION
+    snr_ok = tone_mag > noise_mag * (10 ** (SNR_MARGIN_DB / 20.0))
+    present = (tone_mag >= floor) & snr_ok
+
+    # The longest run of absent windows: one long hole is a dropout, scattered single windows are
+    # the edges of the recording and the note's own attack.
+    longest, run = 0, 0
+    for ok in present:
+        run = 0 if ok else run + 1
+        longest = max(longest, run)
+
+    # Pitch from the windows that actually held the tone, weighted by how loud each was, so a quiet
+    # window of mostly noise cannot drag the estimate.
+    weights = np.where(present, tone_mag, 0.0)
+    measured = float((peak_hz * weights).sum() / weights.sum()) if weights.sum() > 0 else 0.0
+    cents = 1200.0 * np.log2(measured / hz) if measured > 0 else float("nan")
+
+    return {
+        "file": path,
+        "expected_hz": hz,
+        "measured_hz": round(measured, 1),
+        "cents": round(float(cents), 1),
+        "present_fraction": round(float(present.mean()), 4),
+        "longest_gap_ms": round(longest * WINDOW_SECONDS * 1000.0, 1),
+        "seconds": round(len(samples) / rate, 2),
+        "peak_dbfs": round(20 * np.log10(peak / (32768.0 * window)) if peak > 0 else -999, 1),
+    }
+
+
+def verdict_for(
+    result: dict,
+    min_present: float = DEFAULT_MIN_PRESENT,
+    max_gap_ms: float = DEFAULT_MAX_GAP_MS,
+    min_peak_dbfs: float = DEFAULT_MIN_PEAK_DBFS,
+    max_cents: float = DEFAULT_MAX_CENTS,
+) -> str:
+    """The verdict for a graded result — the ONLY place the comparisons live.
+
+    Both `main` and the self-test call it, so a reordering, a changed comparison or a new branch
+    cannot appear in one and not the other. Sharing only the threshold numbers was not enough: the
+    logic could still drift, and then the test written to catch a regression would not see it.
+
+    Order matters. "Nothing is playing" is decided before "too quiet to grade", because a silent
+    room is quiet by definition and the two have different causes and different fixes.
+    """
+    if result["present_fraction"] < ABSENT_FRACTION:
+        return "NO TONE"
+    if result["peak_dbfs"] < min_peak_dbfs:
+        return "TOO QUIET TO GRADE"
+    if (
+        result["present_fraction"] < min_present
+        or result["longest_gap_ms"] > max_gap_ms
+        or (not np.isnan(result["cents"]) and abs(result["cents"]) > max_cents)
+    ):
+        return "DEFECTIVE"
+    return "clean"
+
+
+def faults_for(result: dict, hz: float, min_present: float, max_gap_ms: float,
+               min_peak_dbfs: float, max_cents: float) -> list[str]:
+    """What to tell the operator, for the verdict [verdict_for] reached. Wording only, no decisions."""
+    verdict = verdict_for(result, min_present, max_gap_ms, min_peak_dbfs, max_cents)
+    if verdict == "NO TONE":
+        return [
+            f"no {hz:g} Hz tone in the recording — it is present in only "
+            f"{result['present_fraction'] * 100:.1f}% of windows, which is what an empty room looks "
+            f"like. Check that something is actually playing before reading anything else here"
+        ]
+    if verdict == "TOO QUIET TO GRADE":
+        return [
+            f"the tone peaks at {result['peak_dbfs']} dBFS, below the {min_peak_dbfs} dBFS this "
+            f"grader can separate from the room — raise the phone's volume (within the ceiling) or "
+            f"move the microphone closer to the grille, then measure again"
+        ]
+    faults = []
+    if result["present_fraction"] < min_present:
+        faults.append(f"tone present in only {result['present_fraction'] * 100:.1f}% of the recording")
+    if result["longest_gap_ms"] > max_gap_ms:
+        faults.append(f"longest dropout {result['longest_gap_ms']:.0f} ms")
+    if not np.isnan(result["cents"]) and abs(result["cents"]) > max_cents:
+        faults.append(f"pitch off by {result['cents']:.0f} cents")
+    return faults
+
+
+def self_test() -> int:
+    """Feed the grader signals whose right answer is known, including the one it used to get wrong.
+
+    Kept in the tool rather than in a test suite because CI runs pytest only over `agents/`, and a
+    fixture nobody executes is not a fixture — the same reason `crossfade_probe.py` carries its own.
+    Run it after touching any of the grading thresholds:
+
+        python3 tools/hil/steady_tone_grade.py --self-test
+    """
+    import os
+    import tempfile
+
+    rate, hz, seconds = 48000, 550.0, 4.0
+    t = np.arange(int(rate * seconds)) / rate
+    rng = np.random.default_rng(7)
+    # A room, not white noise. The real recording that exposed the bug had its energy concentrated
+    # between 300 and 1100 Hz — desk, fan and the speaker's own bottom end — and this band is what makes
+    # the bin nearest 550 Hz comparable to the band's average and able to cross a small margin.
+    # White noise spreads evenly, never crosses even 6 dB, and would make this case pass either way.
+    white = rng.normal(0, 900, len(t))
+    spectrum = np.fft.rfft(white)
+    freqs = np.fft.rfftfreq(len(white), 1.0 / rate)
+    spectrum[(freqs < 300) | (freqs > 3000)] = 0
+    room = np.fft.irfft(spectrum, n=len(white))
+
+    cases = [
+        ("a clean tone", 8000 * np.sin(2 * np.pi * hz * t) + room, "clean"),
+        # THE REGRESSION. With a 6 dB signal-to-noise margin the loudest bin inside the search
+        # window around 550 Hz was room noise often enough to read as a tone present in nearly half
+        # the recording, 11 cents sharp — a silent room graded as a quiet, slightly detuned tune.
+        ("an empty room", room, "NO TONE"),
+        ("a tone too quiet to grade", 100 * np.sin(2 * np.pi * hz * t), "TOO QUIET TO GRADE"),
+        ("a tone well off pitch", 8000 * np.sin(2 * np.pi * (hz * 1.05) * t), "DEFECTIVE"),
+        # A tone that stops half way: present, but with a hole far longer than a dropout may be.
+        (
+            "a tone that stops half way",
+            np.concatenate([8000 * np.sin(2 * np.pi * hz * t[: len(t) // 2]), room[len(t) // 2 :]]),
+            "DEFECTIVE",
+        ),
+    ]
+
+    failures = 0
+    for name, signal, expected in cases:
+        handle, path = tempfile.mkstemp(suffix=".wav")
+        os.close(handle)
+        # Seeded before the try: a case whose grade() raises must be reported as its own failure and
+        # the remaining cases still run. Letting it unwind would abandon them and hand the operator a
+        # traceback instead of the per-case verdicts they are reading.
+        got, detail = "ERROR", ""
+        try:
+            with wave.open(path, "wb") as fh:
+                fh.setnchannels(1)
+                fh.setsampwidth(2)
+                fh.setframerate(rate)
+                fh.writeframes(np.clip(signal, -32768, 32767).astype("<i2").tobytes())
+            result = grade(path, hz)
+            got = verdict_for(result)
+            detail = (
+                f"present {result['present_fraction'] * 100:.1f}%, "
+                f"peak {result['peak_dbfs']} dBFS, gap {result['longest_gap_ms']:.0f} ms"
+            )
+        except BaseException as error:  # noqa: BLE001 - the point is to survive anything one case does
+            detail = f"{type(error).__name__}: {error}"
+        finally:
+            os.unlink(path)
+        ok = got == expected
+        failures += 0 if ok else 1
+        print(f"{'ok  ' if ok else 'FAIL'} {name}: {got}" + (f" (expected {expected})" if not ok else "") + f"   {detail}")
+    print(f"\n{len(cases) - failures}/{len(cases)} cases correct")
+    return 0 if failures == 0 else 1
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("file", nargs="?")
+    ap.add_argument("--hz", type=float)
+    ap.add_argument("--self-test", action="store_true", help="grade known signals and check the verdicts")
+    ap.add_argument("--min-present", type=float, default=DEFAULT_MIN_PRESENT)
+    ap.add_argument("--max-gap-ms", type=float, default=DEFAULT_MAX_GAP_MS)
+    ap.add_argument("--max-cents", type=float, default=DEFAULT_MAX_CENTS)
+    # Below this the tone is too close to the room to grade. A generated SID tone is far quieter
+    # than the barcode stimulus the clarity stage uses, and at a low phone volume it lands near the
+    # floor — where the presence test drifts in and out and reports a perfectly good pipeline as
+    # full of dropouts. Refusing to grade is the honest answer; claiming a defect is not.
+    ap.add_argument("--min-peak-dbfs", type=float, default=DEFAULT_MIN_PEAK_DBFS)
+    ap.add_argument("--json", action="store_true")
+    args = ap.parse_args()
+    if args.self_test:
+        return self_test()
+    if not args.file or args.hz is None:
+        ap.error("give a WAV file and --hz, or --self-test")
+
+    result = grade(args.file, args.hz)
+    thresholds = (args.min_present, args.max_gap_ms, args.min_peak_dbfs, args.max_cents)
+    result["verdict"] = verdict_for(result, *thresholds)
+    result["faults"] = faults_for(result, args.hz, *thresholds)
+    faults = result["faults"]
+
+    # A refusal to grade is not a defect report, and the two must not be confused by whatever runs
+    # this: 2 means the recording could not be graded, 1 means it was graded and found wanting.
+    if result["verdict"] in ("NO TONE", "TOO QUIET TO GRADE"):
+        print(json.dumps(result) if args.json else f"VERDICT     {result['verdict']}  ({faults[0]})")
+        return 2
+
+    if args.json:
+        print(json.dumps(result))
+    else:
+        print(f"file        {result['file']}  {result['seconds']}s")
+        print(f"tone        {result['measured_hz']} Hz vs {result['expected_hz']:g} Hz = {result['cents']:+.1f} cents")
+        print(f"present     {result['present_fraction'] * 100:.1f}% of windows, peak {result['peak_dbfs']} dBFS")
+        print(f"longest gap {result['longest_gap_ms']:.0f} ms")
+        print(f"VERDICT     {result['verdict']}" + (f"  ({'; '.join(faults)})" if faults else ""))
+    return 0 if not faults else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

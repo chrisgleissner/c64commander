@@ -40,6 +40,9 @@ const nodeTestGlobs = [
   "tests/unit/lib/disks/**",
   "tests/unit/lib/buildInfo.test.ts",
   "tests/unit/config/audioMixerOptions.test.ts",
+  // Runs a committed C64 binary in a 6502 interpreter; it reads the file off disk
+  // and needs no DOM.
+  "tests/unit/tools/**",
 ];
 
 export default defineConfig({

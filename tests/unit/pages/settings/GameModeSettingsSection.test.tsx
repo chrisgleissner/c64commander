@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { GameModeSettingsSection } from "@/pages/settings/GameModeSettingsSection";
 import { loadCustomBinding, loadJoystickLayout, saveJoystickLayout } from "@/lib/remoteInput/joystickKeyBindings";
-import { loadGameModeControls } from "@/lib/remoteInput/gameModeControlSurface";
+import { loadGameModeJoystick } from "@/lib/remoteInput/gameModeJoystick";
 import { loadGameModeOnLaunch } from "@/lib/remoteInput/gameModeLaunch";
 
 describe("GameModeSettingsSection", () => {
@@ -103,10 +103,10 @@ describe("GameModeSettingsSection", () => {
 
   it("starts from the stored preferences", () => {
     expect(loadJoystickLayout()).toBe("classicT9");
-    expect(loadGameModeControls()).toBe("auto");
+    expect(loadGameModeJoystick()).toBe("auto");
     render(<GameModeSettingsSection />);
     expect(screen.getByTestId("settings-joystick-key-layout")).toHaveTextContent("Classic T9");
-    expect(screen.getByTestId("settings-game-mode-controls")).toHaveTextContent("Auto");
+    expect(screen.getByTestId("settings-game-mode-joystick")).toHaveTextContent("Auto");
   });
 });
 
