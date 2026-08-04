@@ -367,16 +367,23 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
    * Named for the joystick rather than the picture so it reads the same way round as
    * the Settings control, and so it cannot be mistaken for the floating **Controls**
    * handle beside it, which brings back this toolbar rather than the joystick.
+   *
+   * It reads what is DRAWN, not what the rule decided. Hiding is deliberately delayed
+   * when the rule is guessing, so the two disagree for a couple of seconds after the
+   * first physical key — and a button that offered to "show" a joystick the user can
+   * still see, while reporting itself pressed, would be describing a state that is not
+   * on the screen.
    */
+  const joystickDrawn = showInputControls;
   const joystickVisibilityToggle = showMirrorScreen && (
     <Button
       size="sm"
       variant="secondary"
       data-testid="remote-input-joystick-visibility-toggle"
-      aria-pressed={joystickVisibility === "hidden"}
-      onClick={() => setJoystickRequest(joystickVisibility === "hidden" ? "visible" : "hidden")}
+      aria-pressed={!joystickDrawn}
+      onClick={() => setJoystickRequest(joystickDrawn ? "hidden" : "visible")}
     >
-      {joystickVisibility === "hidden" ? (
+      {!joystickDrawn ? (
         <>
           <Gamepad2 className="mr-1.5 h-4 w-4" />
           Show joystick
@@ -412,11 +419,11 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
       <AppSheetContent
         data-testid="remote-input-sheet"
         data-game-mode={gameMode ? "true" : "false"}
-        // Whether the on-screen joystick is drawn, and therefore whether the picture
-        // has the screen to itself. On the surface because it is the thing a hardware
-        // harness has to read to check it went away when it should have, and stayed
-        // when it should have.
-        data-joystick={joystickVisibility}
+        // Whether the on-screen joystick is actually DRAWN — not what the rule decided,
+        // which leads it by the hide delay. On the surface because it is the thing a
+        // hardware harness has to read to check the joystick went away when it should
+        // have and stayed when it should have, and a harness needs the screen's answer.
+        data-joystick={showInputControls ? "visible" : "hidden"}
         // What the transport is currently asked to hold. A direction stuck on the real C64 is
         // this feature's worst failure, so the answer is on the surface rather than only in a
         // log — and it is what lets a test assert the relayed direction rather than a repaint.

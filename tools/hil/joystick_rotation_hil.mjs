@@ -42,7 +42,7 @@
  *
  * USAGE
  *
- *   node tools/hil/joystick_rotation_hil.mjs [--host c64u] [--cdp-port 9333]
+ *   node tools/hil/joystick_rotation_hil.mjs [--host c64u] [--password pwd] [--cdp-port 9333]
  *                                            [--rotations 0,90,270]
  *                                            [--layouts diamond8,classicT9]
  *
@@ -71,7 +71,11 @@ const arg = (name, fallback) => {
   return index >= 0 && argv[index + 1] ? argv[index + 1] : fallback;
 };
 const HOST = arg("host", "c64u");
+const PASSWORD = arg("password", "");
 const CDP_PORT = arg("cdp-port", "9333");
+
+/** The Ultimate rejects every REST call with 401 when it has a password and the header is absent. */
+const authHeaders = PASSWORD ? { "X-Password": PASSWORD } : {};
 const ROTATIONS = arg("rotations", "0,90,270")
   .split(",")
   .map((value) => Number(value.trim()));
@@ -197,7 +201,7 @@ const js = async (expression) => {
 };
 
 const httpGetBytes = async (url) => {
-  const response = await fetch(url);
+  const response = await fetch(url, { headers: authHeaders });
   if (!response.ok) throw new Error(`${url} -> HTTP ${response.status}`);
   return new Uint8Array(await response.arrayBuffer());
 };
@@ -224,7 +228,7 @@ const runProbe = async () => {
   const prg = await readFile(PROBE_PRG);
   const response = await fetch(`http://${HOST}/v1/runners:run_prg`, {
     method: "POST",
-    headers: { "Content-Type": "application/octet-stream" },
+    headers: { "Content-Type": "application/octet-stream", ...authHeaders },
     body: prg,
   });
   if (!response.ok) throw new Error(`run_prg -> HTTP ${response.status}`);
@@ -457,7 +461,7 @@ const main = async () => {
     `joystick + rotation HIL — Ultimate ${HOST}, layouts ${LAYOUTS.join(", ")}, rotations ${ROTATIONS.join(", ")}`,
   );
 
-  const info = await (await fetch(`http://${HOST}/v1/info`)).json();
+  const info = await (await fetch(`http://${HOST}/v1/info`, { headers: authHeaders })).json();
   console.log(`  device: ${info.product} fw ${info.firmware_version} core ${info.core_version}`);
 
   let originalLayout = null;

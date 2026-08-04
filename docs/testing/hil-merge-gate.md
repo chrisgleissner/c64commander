@@ -9,6 +9,9 @@ different stimulus, against a memory of the last run — is not a gate.
 # Full run, in someone's room: sets the phone to volume 5, plays only while measuring.
 node tools/hil/merge_gate.mjs --host c64u --iface <this host's LAN ip> --json artifacts/hil-gate.json
 
+# A password-protected Ultimate. One flag covers the gate and every harness it starts.
+node tools/hil/merge_gate.mjs --host c64u --password pwd --iface <this host's LAN ip>
+
 # Everything that makes no sound, for iterating on a non-audio change.
 node tools/hil/merge_gate.mjs --quiet-check
 
@@ -73,6 +76,27 @@ This runs next to somebody. The rules are enforced by the runner, not left to ju
   can be argued down.
 - The volume is stepped with the hardware key events. `cmd media_session volume --set` reports
   success and leaves a muted stream where it was, which is how a run once played at 11 of 25.
+- **The rig is put back the way it was found** — the phone's own volume and its own Listen and
+  Watch, captured in `preflight` so `--only` and a mid-run failure restore them too. A mirror left
+  running keeps the Ultimate pushing two multicast streams into the room's Wi-Fi, which is exactly
+  the traffic the next measurement is trying to characterise.
+- A `machine:reset` that fails is reported rather than swallowed: it means the C64 is still making
+  a sound, and that the next audible stage is grading on top of it.
+
+## What the gate refuses to grade
+
+`av-clarity` reads its verdict out of `audio_e2e_probe.py`, and the dangerous failure there is a
+MISSING number being read as a good one — a probe that dies before its analysis still leaves the
+earlier metrics in the output. So the parser is an exported pure function, `gradeClarityOutput`,
+and it throws unless the probe printed its `VERDICT` line. It reads both `defective notes N of M`
+and the probe's own `defective notes none of M`; an absent line is neither and is refused.
+
+It is deliberately **not** keyed on the probe's exit code: the probe exits non-zero for its own
+strict clean/breaking-up verdict, which is a stricter bar than this gate's thresholds, so treating
+that as a crash would fail every run that was merely imperfect.
+
+`tests/unit/tools/mergeGateClarity.test.ts` covers those refusals. It is the part of the gate that
+can be checked without a rig, which is why it is worth checking.
 
 ## Reading a failure
 

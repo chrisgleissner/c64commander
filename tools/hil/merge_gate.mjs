@@ -98,6 +98,12 @@ const ONLY = arg("only", "")
 const GATE_VOLUME = Number(arg("volume", "5"));
 const MAX_VOLUME = 10;
 
+/** The Ultimate answers 401 to every call when it has a password and the header is absent. */
+const authHeaders = PASSWORD ? { "X-Password": PASSWORD } : {};
+
+/** Forwarded to every child that talks to the Ultimate, so one `--password` covers the whole run. */
+const passwordArgs = PASSWORD ? ["--password", PASSWORD] : [];
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const adb = (args) => execFileAsync("adb", args, { maxBuffer: 1 << 22 });
 
@@ -135,6 +141,19 @@ const js = async (expression) => {
  * it exists to catch. A fresh install starts with both off, so a gate that assumed the mirror was
  * already live graded silence and reported it as a parse failure.
  */
+/** Read Listen and Watch without changing them, so the run can put them back. */
+const readMirror = async () => {
+  const state = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
+q("tab-home")?.click();await wait(1800);
+const card=q("live-view-card"); if(!card) return JSON.stringify({error:"the Live View card is not on Home"});
+card.scrollIntoView({block:"center"});await wait(300);
+return JSON.stringify({audio:q("av-audio-toggle")?.getAttribute("aria-pressed")==="true",
+  video:q("av-video-toggle")?.getAttribute("aria-pressed")==="true"});})()`);
+  if (state.error) throw new Error(state.error);
+  return { audio: state.audio, video: state.video };
+};
+
 const setMirror = async ({ video, audio }) => {
   const state = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
 const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
@@ -158,11 +177,24 @@ return JSON.stringify({audio:q("av-audio-toggle")?.getAttribute("aria-pressed"),
   await sleep(3000);
 };
 
-/** Put the C64 back to a silent BASIC prompt, so nothing plays while nothing is measuring. */
+/**
+ * Put the C64 back to a silent BASIC prompt, so nothing plays while nothing is measuring.
+ *
+ * A failure here is reported rather than swallowed, and loudly: it means the machine is still
+ * making a sound in someone's room, and it means the next audible stage is grading a stimulus on
+ * top of whatever the last one left running. The run continues — a stage that cannot silence the
+ * C64 is not a reason to abandon the stages that do not need it — but the reason is on the record.
+ */
 const silenceC64 = async () => {
-  await fetch(`http://${HOST}/v1/machine:reset`, { method: "PUT", headers: { "X-Password": PASSWORD } }).catch(
-    () => {},
-  );
+  try {
+    const response = await fetch(`http://${HOST}/v1/machine:reset`, { method: "PUT", headers: authHeaders });
+    if (!response.ok) throw new Error(`machine:reset -> HTTP ${response.status}`);
+  } catch (error) {
+    console.error(
+      `  WARN could not silence the C64 — it may still be playing, and the next audible stage ` +
+        `is grading on top of it: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
+    );
+  }
   await sleep(2500);
 };
 
@@ -192,8 +224,41 @@ const setVolume = async (target) => {
   throw new Error(`could not set the media volume to ${target}`);
 };
 
+/**
+ * Read a verdict out of `audio_e2e_probe.py run`, or refuse to.
+ *
+ * Exported and pure so the refusal can be tested: this is the one place where a gate that
+ * measured nothing could quietly report success, and the failure mode is invisible on a good
+ * day. NOT keyed on the probe's exit code — it exits non-zero for its own strict "clean or
+ * breaking up" verdict, which is a stricter bar than this gate's thresholds. What has to be true
+ * is that its analysis ran to the end, and the VERDICT line is the last thing it prints.
+ */
+export const gradeClarityOutput = (text) => {
+  if (!/^VERDICT\s+\S/m.test(text)) {
+    throw new Error(`the probe did not finish its analysis: ${text.trim().split("\n").slice(-3).join(" | ")}`);
+  }
+  const read = (pattern, label) => {
+    const match = pattern.exec(text);
+    if (!match) throw new Error(`could not read ${label} from the output`);
+    return Number(match[1]);
+  };
+  // The probe prints "defective notes  N of M" or "defective notes  none of M". Both are read;
+  // ABSENT is neither, and must not be taken as a perfect run.
+  const verdict = /defective notes\s+(none|\d+) of/.exec(text);
+  if (!verdict) throw new Error("the probe printed no defect verdict");
+  return {
+    bursts: read(/bursts read\s+(\d+)/, "bursts read"),
+    sequenceErrors: read(/sequence errors (\d+)/, "sequence errors"),
+    dropouts: read(/DROPOUTS\s+([\d.]+)%/, "dropouts"),
+    defective: verdict[1] === "none" ? 0 : Number(verdict[1]),
+  };
+};
+
 const results = [];
 let audibleSeconds = 0;
+/** The rig as preflight found it, so the run can put it back however it ends. */
+let initialVolume = null;
+let initialMirror = null;
 
 /** A stage this gate is supposed to have and does not yet. Never counted as a pass. */
 const pending = (name, what) => {
@@ -233,7 +298,7 @@ const preflight = async () => {
   const attached = devices.split("\n").filter((l) => /\tdevice$/.test(l));
   if (attached.length === 0) throw new Error("no adb device attached");
 
-  const version = await fetch(`http://${HOST}/v1/version`, { headers: { "X-Password": PASSWORD } });
+  const version = await fetch(`http://${HOST}/v1/version`, { headers: authHeaders });
   if (!version.ok) throw new Error(`the Ultimate at ${HOST} answered HTTP ${version.status}`);
 
   const page = await js("(()=>JSON.stringify({route:location.pathname,hidden:document.hidden}))()");
@@ -246,7 +311,33 @@ const preflight = async () => {
       `the phone's speaker volume is ${volume.speaker} of 25; this gate will not run above ${MAX_VOLUME}`,
     );
   }
-  return `device ${attached.length}, route ${page.route}, speaker volume ${volume.speaker}`;
+  // Remembered here rather than at the first audible stage, because `--only` and a mid-run failure
+  // both mean that stage may never be reached — and the phone is then left wherever the gate put it.
+  initialVolume = volume.index;
+  initialMirror = await readMirror();
+  return (
+    `device ${attached.length}, route ${page.route}, speaker volume ${volume.speaker}, ` +
+    `mirror audio=${initialMirror.audio} video=${initialMirror.video}`
+  );
+};
+
+/**
+ * Put the phone back the way it was found: its own volume, and its own Listen and Watch.
+ *
+ * Both matter beyond tidiness. A phone left at the gate volume misleads the next person to sit
+ * next to it, and a mirror left running keeps the Ultimate pushing two multicast streams into the
+ * room's Wi-Fi — which is exactly the traffic the next measurement is trying to characterise.
+ */
+const restoreRig = async () => {
+  try {
+    if (initialVolume !== null) await setVolume(initialVolume);
+    if (initialMirror !== null) await setMirror(initialMirror);
+  } catch (error) {
+    console.error(
+      `  WARN could not put the rig back as it was found: ` +
+        `${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
+    );
+  }
 };
 
 const main = async () => {
@@ -256,7 +347,6 @@ const main = async () => {
     process.exit(2);
   }
 
-  let originalVolume = null;
   await stage("preflight", false, preflight);
   if (results.some((r) => r.name === "preflight" && r.status === "fail")) {
     console.error("\npreflight failed; nothing after it would mean anything");
@@ -264,12 +354,18 @@ const main = async () => {
   }
 
   await stage("input", false, async () => {
-    const hold = await run("node", [path.join("tools", "hil", "joystick_hold_hil.mjs"), "--host", HOST]);
+    const hold = await run("node", [
+      path.join("tools", "hil", "joystick_hold_hil.mjs"),
+      "--host",
+      HOST,
+      ...passwordArgs,
+    ]);
     if (!hold.ok) throw new Error(`held direction: ${hold.out.trim().split("\n").slice(-3).join(" | ")}`);
     const rotation = await run("node", [
       path.join("tools", "hil", "joystick_rotation_hil.mjs"),
       "--host",
       HOST,
+      ...passwordArgs,
       "--layouts",
       "classicT9",
       "--rotations",
@@ -308,14 +404,10 @@ const main = async () => {
       "--seconds",
       "20",
     ]);
-    const bursts = number(probe.out, /bursts read\s+(\d+)/, "bursts read");
-    const errors = number(probe.out, /sequence errors (\d+)/, "sequence errors");
-    const dropouts = number(probe.out, /DROPOUTS\s+([\d.]+)%/, "dropouts");
-    // The probe prints the "defective notes" line only when there ARE some, so a perfect run has
-    // no line to read. Absent means zero, not unreadable.
-    const defective = Number(/defective notes\s+(\d+) of/.exec(probe.out)?.[1] ?? "0");
+    const { bursts, sequenceErrors, dropouts, defective } = gradeClarityOutput(probe.out);
     if (bursts < 40) throw new Error(`only ${bursts} tones reached the microphone — is the phone Listening?`);
-    if (errors > 0) throw new Error(`${errors} tones arrived out of order: the ladder did not progress correctly`);
+    if (sequenceErrors > 0)
+      throw new Error(`${sequenceErrors} tones arrived out of order: the ladder did not progress correctly`);
     // A verdict, not a threshold pulled from the air: this is the level the pipeline reaches with
     // the picture off, so anything worse is the app or the link, not the stimulus.
     if (defective / bursts > 0.1) throw new Error(`${defective} of ${bursts} notes defective`);
@@ -352,7 +444,7 @@ const main = async () => {
   pending("sid-local", "the same tune rendered by the on-device engine, graded the same way");
   pending("crossfade", "the join between two tunes: seamless, gapped, hard cut or ragged");
 
-  if (originalVolume !== null) await setVolume(originalVolume);
+  await restoreRig();
 
   const failed = results.filter((r) => r.status === "fail");
   const notCovered = results.filter((r) => r.status === "pending");
@@ -378,7 +470,12 @@ const main = async () => {
   }
 };
 
-main().catch((error) => {
-  console.error(`fatal: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
-  process.exit(2);
-});
+/** Run only as a command. Importing this module (the parser test does) must not start a gate. */
+const isEntryPoint = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isEntryPoint) {
+  main().catch((error) => {
+    console.error(`fatal: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
+    process.exit(2);
+  });
+}

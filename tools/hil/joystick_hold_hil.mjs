@@ -41,7 +41,8 @@
  *
  * USAGE
  *
- *   node tools/hil/joystick_hold_hil.mjs [--host c64u] [--cdp-port 9333] [--hold-ms 2000]
+ *   node tools/hil/joystick_hold_hil.mjs [--host c64u] [--password pwd]
+ *                                        [--cdp-port 9333] [--hold-ms 2000]
  *
  * Requires: the app running and foregrounded on the attached device, `adb forward
  * tcp:<cdp-port>` already pointed at its WebView (see the `hil-attach` skill), and the
@@ -65,8 +66,12 @@ const arg = (name, fallback) => {
   return index >= 0 && argv[index + 1] ? argv[index + 1] : fallback;
 };
 const HOST = arg("host", "c64u");
+const PASSWORD = arg("password", "");
 const CDP_PORT = arg("cdp-port", "9333");
 const HOLD_MS = Number(arg("hold-ms", "2000"));
+
+/** The Ultimate rejects every REST call with 401 when it has a password and the header is absent. */
+const authHeaders = PASSWORD ? { "X-Password": PASSWORD } : {};
 
 /** Telemetry block published by the probe. Keep in step with joystick-probe.asm. */
 const TELEMETRY_BASE = 0xc000;
@@ -118,7 +123,7 @@ const chrome=async()=>{if(q("remote-input-joystick-visibility-toggle"))return;q(
 ${body}})()`;
 
 const httpGetBytes = async (url) => {
-  const response = await fetch(url);
+  const response = await fetch(url, { headers: authHeaders });
   if (!response.ok) throw new Error(`${url} -> HTTP ${response.status}`);
   return new Uint8Array(await response.arrayBuffer());
 };
@@ -135,7 +140,7 @@ const runProbe = async () => {
   const prg = await readFile(PROBE_PRG);
   const response = await fetch(`http://${HOST}/v1/runners:run_prg`, {
     method: "POST",
-    headers: { "Content-Type": "application/octet-stream" },
+    headers: { "Content-Type": "application/octet-stream", ...authHeaders },
     body: prg,
   });
   if (!response.ok) throw new Error(`run_prg -> HTTP ${response.status}`);

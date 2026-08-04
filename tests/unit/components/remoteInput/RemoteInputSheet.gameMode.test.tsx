@@ -323,6 +323,31 @@ describe("RemoteInputSheet — Game Mode", () => {
       expect(joystick()).toBeInTheDocument();
     });
 
+    /**
+     * The toggle has to describe the screen, not the rule. Hiding is delayed while the rule is
+     * guessing, so in that window the joystick is still there — and a button reading "Show
+     * joystick", reporting itself pressed, would be offering to produce something already visible.
+     */
+    it("still offers to hide the joystick during the delay, while it is still on screen", () => {
+      mirrorState.videoState = "live";
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      enterGameMode();
+      steerWithAKey();
+      summonChrome();
+
+      // Mid-delay: the rule has decided, the joystick has not gone yet.
+      expect(joystick()).toBeInTheDocument();
+      const toggle = screen.getByTestId("remote-input-joystick-visibility-toggle");
+      expect(toggle).toHaveTextContent("Hide joystick");
+      expect(toggle).toHaveAttribute("aria-pressed", "false");
+      expect(sheet()).toHaveAttribute("data-joystick", "visible");
+
+      settleControlSurface();
+      expect(joystick()).not.toBeInTheDocument();
+      expect(screen.getByTestId("remote-input-joystick-visibility-toggle")).toHaveTextContent("Show joystick");
+      expect(sheet()).toHaveAttribute("data-joystick", "hidden");
+    });
+
     it("is not offered with the picture off, where there is nothing to give the space to", () => {
       mirrorState.videoState = "off";
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
