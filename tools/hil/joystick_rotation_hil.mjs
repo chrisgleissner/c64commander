@@ -169,7 +169,7 @@ const LAYOUT_KEYS = {
   ],
 };
 
-const LAYOUT_LABEL = { classicT9: "Classic T9", diamond8: "Diamond (8-centred)" };
+const LAYOUT_LABEL = { classicT9: "Classic T9", diamond8: "Diamond (8-centred)", custom: "Custom" };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -238,7 +238,26 @@ const pressKey = async (keycode) => {
   await sleep(900);
 };
 
+/**
+ * Refuse to drive a page the browser has suspended.
+ *
+ * Chromium stops firing timers in a hidden page and Capacitor stops delivering plugin results
+ * there, so a phone that has locked itself turns every wait in this harness into a CDP timeout
+ * that looks exactly like an app hang. `adb shell svc power stayon usb` keeps the screen lit but
+ * does NOT dismiss the keyguard; `adb shell wm dismiss-keyguard` is the one that matters.
+ */
+const assertPageVisible = async () => {
+  const visibility = await js(`(()=>JSON.stringify({hidden:document.hidden,state:document.visibilityState}))()`);
+  if (visibility.hidden) {
+    throw new Error(
+      `the WebView is ${visibility.state}: Chromium suspends timers and Capacitor callbacks there. ` +
+        `Run "adb shell wm dismiss-keyguard" and try again.`,
+    );
+  }
+};
+
 const openGameMode = async () => {
+  await assertPageVisible();
   const state = await readSheet();
   if (!state.sheet || state.gm !== "true") {
     await js('(()=>{document.querySelector("[data-testid=home-machine-inline-openGameMode]")?.click();return 1})()');
@@ -463,7 +482,21 @@ const main = async () => {
   }
 
   // Put the listener's own layout back; this run only borrowed it.
-  if (originalLayout && LAYOUT_LABEL[originalLayout]) await selectLayout(originalLayout);
+  //
+  // Three cases, and skipping any of them leaves the handset on whichever layout ran last:
+  // a stored preset, a stored Custom binding (which the picker can select by name like the other
+  // two), and nothing stored at all — which is not the same as `classicT9`, because it means the
+  // variant default applies. Only that last case writes storage directly, and it does so by
+  // REMOVING the key; restoring the absence of a choice is housekeeping, not the thing under test.
+  if (originalLayout === null) {
+    await js('(()=>{localStorage.removeItem("c64u_remote_input_joystick_layout");return 1})()');
+  } else if (LAYOUT_LABEL[originalLayout]) {
+    await selectLayout(originalLayout);
+  } else {
+    console.log(
+      `  note: leaving the layout as "${LAYOUTS[LAYOUTS.length - 1]}" — "${originalLayout}" is not selectable`,
+    );
+  }
 
   console.log(`\n${rows.filter((row) => row.ok).length}/${rows.length} checks passed`);
   if (failures.length) {
@@ -473,6 +506,8 @@ const main = async () => {
 };
 
 main().catch((error) => {
-  console.error(`fatal: ${error.message}`);
+  // The stack matters here: a failure could be the rig (no device, no CDP forward, the Ultimate
+  // unreachable) or the app, and the message alone rarely says which.
+  console.error(`fatal: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
   process.exit(2);
 });
