@@ -81,21 +81,52 @@ The stages are ordered so that the first failure is the most likely cause. In pa
 link or the app — not in the stimulus, and not in the device. Both facts are in one run, which is
 the point of running them together.
 
-## Known result, for comparison
+## Known results, and one conclusion that did not survive
 
-Measured on this rig (Pixel 4 on Wi-Fi, C64 Ultimate fw 1.2.0, host on Ethernet), 2026-08-04:
+Measured on this rig (Pixel 4 on Wi-Fi, C64 Ultimate fw 1.2.0, host on Ethernet), 2026-08-04.
 
-| Measurement | Video off | Video on |
-| --- | --- | --- |
-| Sender loss, on the host's link | 0.00% | 0.00% |
-| Tone ladder, defective notes | 2 of 82 | 46 of 81 |
-| Worst pitch wobble within a note | 3.5 cents | 35 cents |
-| Adaptive jitter-buffer target, on the phone | 71 ms | 150 ms |
-| Wire → speaker latency | not measured separately | **335 ms** |
+A full run on the shipped build, with the gate setting Listen and Watch itself:
 
-The sender is clean either way; the phone's own arrival statistics show 767 lost packets and 1217
-gaps over 20 ms across the same session, with a worst gap of 396 ms. So the video multicast and the
-audio multicast contend on the Wi-Fi link, the audio loses, the phone's adaptive jitter buffer grows
-to cover the gaps, and that growth is most of the end-to-end latency. The app's Live View governor
-sheds video when audio starves, but it sheds it at the **receiver** — after the packets have already
-crossed the link — so it saves CPU and cannot relieve the contention that caused the loss.
+| Stage | Result |
+| --- | --- |
+| `preflight` | pass |
+| `input` | pass — held direction moved 10 cells; 20/20 rotation checks |
+| `wire` | pass — sender loss 0.00%, inter-arrival p99 4.18 ms |
+| `av-clarity` | pass — 82 tones, 3 defective, 0% dropout |
+| `av-latency` | pass — 527 ms wire → speaker, correlation 0.885 |
+
+**Latency varies a lot between runs**: 315 ms, 335 ms and 527 ms on the same rig within an hour.
+There is deliberately no threshold on it yet — three samples cannot support one. Collect more
+before adding a gate on this number, and do not read a single figure as a regression.
+
+### The failure that was not what it looked like
+
+The first runs of `av-clarity` graded 46 of 81 and then 11 of 82 tones defective, with the picture
+on, and the obvious explanation was there in the numbers: the phone's own arrival statistics showed
+767 lost packets and 1217 gaps over 20 ms against a sender measured as flawless, and the adaptive
+jitter-buffer target sat at 150 ms with the picture on against 71 ms without it. That reads as the
+video multicast starving the audio one on the Wi-Fi link, and the audio pipeline learning the
+link's burstiness the slow way — by concealing.
+
+It did not hold up. Rebuilding with a faster-converging cushion controller and then **A/B-ing it
+against the unmodified build in the same conditions** put both at 0–3 defective of 82, with the
+jitter target at its 30 ms minimum, zero underruns and one lost packet. The change was reverted:
+it fixed nothing that was measurably broken, and an unproven behaviour change to a carefully
+measured audio controller is worse than none.
+
+What had actually differed was the **state the app happened to be in when the stage ran**. The
+stage graded whatever Listen and Watch were left on by the previous stage — once, a stopped mirror,
+which it reported as a parse failure rather than as silence. `setMirror` now puts both feeds where
+the stage needs them from Home, and the grade has been reproducible since.
+
+So the degraded measurements were real, and their cause is **not identified**. What is ruled out:
+the sender (clean on Ethernet), the socket buffer (`/proc/net/snmp` `RcvbufErrors` did not move
+across a 30 s window with the picture on), and the cushion controller (A/B above). What is not
+ruled out: sustained-session degradation — the arrival counters are cumulative from stream start,
+and the session that produced 767 lost packets had been running for about an hour across
+backgrounding and screen-off, while a freshly started one shows one lost packet over comparable
+periods. Start there.
+
+One thing that was not a defect at all: a report of no sound from the phone. `STREAM_MUSIC` was
+muted on the device and the C64 was running the joystick probe, which is silent except for a blip
+on fire.

@@ -127,6 +127,37 @@ const js = async (expression) => {
   }
 };
 
+/**
+ * Put Listen and Watch where a stage needs them.
+ *
+ * The audible stages grade what comes out of the speaker, so they need Listen on — and the
+ * clarity stage needs Watch on too, because contention with the video multicast is the condition
+ * it exists to catch. A fresh install starts with both off, so a gate that assumed the mirror was
+ * already live graded silence and reported it as a parse failure.
+ */
+const setMirror = async ({ video, audio }) => {
+  const state = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
+q("remote-input-restore-chrome")?.click();await wait(300);
+q("remote-input-close")?.click();await wait(800);
+q("tab-home")?.click();await wait(2000);
+const card=q("live-view-card");
+if(!card) return JSON.stringify({error:"the Live View card is not on Home"});
+card.scrollIntoView({block:"center"});await wait(400);
+for(const [id,want] of [["av-audio-toggle",${audio}],["av-video-toggle",${video}]]){
+  const b=q(id); if(!b) return JSON.stringify({error:id+" is not on the card"});
+  if((b.getAttribute("aria-pressed")==="true")!==want){b.click();await wait(3000);}
+}
+return JSON.stringify({audio:q("av-audio-toggle")?.getAttribute("aria-pressed"),
+  video:q("av-video-toggle")?.getAttribute("aria-pressed")});})()`);
+  if (state.error) throw new Error(state.error);
+  if ((state.audio === "true") !== audio || (state.video === "true") !== video) {
+    throw new Error(`the mirror would not go to audio=${audio} video=${video} (got ${state.audio}/${state.video})`);
+  }
+  // The pipeline needs a moment to open its socket and start filling before anything is graded.
+  await sleep(3000);
+};
+
 /** Put the C64 back to a silent BASIC prompt, so nothing plays while nothing is measuring. */
 const silenceC64 = async () => {
   await fetch(`http://${HOST}/v1/machine:reset`, { method: "PUT", headers: { "X-Password": PASSWORD } }).catch(
@@ -263,6 +294,9 @@ const main = async () => {
 
   await stage("av-clarity", true, async () => {
     await setVolume(GATE_VOLUME);
+    // Both feeds: the failure this stage exists to catch is the audio losing to the video on the
+    // same Wi-Fi link, which a listen-only run cannot see.
+    await setMirror({ video: true, audio: true });
     audibleSeconds += 20;
     const probe = await run("python3", [
       path.join("tools", "hil", "audio_e2e_probe.py"),
@@ -277,7 +311,9 @@ const main = async () => {
     const bursts = number(probe.out, /bursts read\s+(\d+)/, "bursts read");
     const errors = number(probe.out, /sequence errors (\d+)/, "sequence errors");
     const dropouts = number(probe.out, /DROPOUTS\s+([\d.]+)%/, "dropouts");
-    const defective = number(probe.out, /defective notes\s+(\d+) of/, "defective notes");
+    // The probe prints the "defective notes" line only when there ARE some, so a perfect run has
+    // no line to read. Absent means zero, not unreadable.
+    const defective = Number(/defective notes\s+(\d+) of/.exec(probe.out)?.[1] ?? "0");
     if (bursts < 40) throw new Error(`only ${bursts} tones reached the microphone — is the phone Listening?`);
     if (errors > 0) throw new Error(`${errors} tones arrived out of order: the ladder did not progress correctly`);
     // A verdict, not a threshold pulled from the air: this is the level the pipeline reaches with
@@ -289,6 +325,7 @@ const main = async () => {
 
   await stage("av-latency", true, async () => {
     await setVolume(GATE_VOLUME);
+    await setMirror({ video: true, audio: true });
     audibleSeconds += 10;
     await run("python3", [
       path.join("tools", "hil", "audio_e2e_probe.py"),
