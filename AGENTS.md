@@ -617,8 +617,9 @@ from this rig.
 
 - Green CI is necessary and not sufficient for a change to input relay, Live View, audio, playback
   or the streaming pipeline.
-- The gate lists `sid-remote`, `sid-local` and `crossfade` as `pending`. A green run does **not**
-  clear them; the summary says so, and so must any completion report.
+- All eight stages are wired. The three playback stages need two generated tone tunes in the app's
+  playlist and a microphone close enough to the grille to grade them; they report
+  `TOO QUIET TO GRADE` rather than a pipeline defect when the level is not there. See the doc.
 - If no rig is attached, say that plainly in the PR and in the completion summary, and name the
   stages that were not run. Do not describe the work as verified.
 - `--quiet-check` runs everything that makes no sound, for iterating without disturbing anyone.

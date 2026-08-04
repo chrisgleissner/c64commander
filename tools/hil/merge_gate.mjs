@@ -104,6 +104,9 @@ const authHeaders = PASSWORD ? { "X-Password": PASSWORD } : {};
 /** Forwarded to every child that talks to the Ultimate, so one `--password` covers the whole run. */
 const passwordArgs = PASSWORD ? ["--password", PASSWORD] : [];
 
+const MIC_DEVICE = arg("device", "plughw:CARD=SF558,DEV=0");
+const TMP = arg("tmp", "/tmp");
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const adb = (args) => execFileAsync("adb", args, { maxBuffer: 1 << 22 });
 
@@ -254,6 +257,35 @@ export const gradeClarityOutput = (text) => {
   };
 };
 
+/**
+ * The two generated tunes the playback stages are graded against, and the pitch each holds.
+ *
+ * Real music cannot settle any of these questions — a listener cannot tell a stall from a rest,
+ * and neither can a detector — so the stimulus is two tunes that each hold one steady tone. The
+ * pitches are far apart and not an octave (an octave shares harmonics, and one tone is then
+ * mistaken for the other), and both are where a phone speaker actually works.
+ *
+ * They have to be on the Ultimate and in the app's playlist before the gate runs; see
+ * docs/testing/hil-merge-gate.md. The stages check and say so rather than grading whatever
+ * happens to be queued, because grading an unknown tune is how a green run means nothing.
+ */
+const TONE_TUNES = [
+  { title: "XF Low", hz: 550 },
+  { title: "XF High", hz: 1850 },
+];
+const TONE_SECONDS = 10;
+
+/**
+ * The playback stages run louder than the clarity stage, and still under the ceiling.
+ *
+ * A generated SID holding one tone is far quieter at the microphone than the barcode stimulus —
+ * measured at -73 dBFS against the barcode's comfortable margin at the same volume — and at that
+ * level the presence test drifts in and out and reports a healthy pipeline as full of dropouts.
+ * `MAX_VOLUME` is still an absolute refusal; this only spends the headroom below it.
+ */
+const TONE_VOLUME = Math.min(MAX_VOLUME, Number(arg("tone-volume", "10")));
+const CROSSFADE_SECONDS = 12;
+
 const results = [];
 let audibleSeconds = 0;
 /** The rig as preflight found it, so the run can put it back however it ends. */
@@ -291,6 +323,149 @@ const number = (text, pattern, label) => {
   const match = pattern.exec(text);
   if (!match) throw new Error(`could not read ${label} from the output`);
   return Number(match[1]);
+};
+
+/** Record the microphone for `seconds` into `path`, and fail loudly rather than silently. */
+const recordMic = async (path, seconds) => {
+  const result = await run("arecord", [
+    "-D",
+    MIC_DEVICE,
+    "-f",
+    "S16_LE",
+    "-r",
+    "48000",
+    "-c",
+    "1",
+    "-d",
+    String(seconds),
+    path,
+  ]);
+  if (!result.ok)
+    throw new Error(`the microphone would not record: ${result.out.trim().split("\n").slice(-2).join(" | ")}`);
+};
+
+/**
+ * Put the app on the Play tab with the two tone tunes queued, and say what is missing if they
+ * are not. Returns the playlist titles so a stage can index into them.
+ */
+const readPlaylist = async () => {
+  const state = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
+q("tab-play")?.click();await wait(2500);
+return JSON.stringify({titles:[...document.querySelectorAll('[data-testid="playlist-item"]')]
+  .map(e=>(e.innerText||"").split(String.fromCharCode(10))[0].trim()),
+  play:!!q("playlist-play"),next:!!q("playlist-next"),engine:!!q("playback-engine-toggle")});})()`);
+  const missing = TONE_TUNES.map((t) => t.title).filter((title) => !state.titles?.includes(title));
+  if (missing.length) {
+    throw new Error(
+      `the playlist does not hold ${missing.join(" and ")}. The playback stages grade a known tone, ` +
+        `not whatever happens to be queued — see docs/testing/hil-merge-gate.md for how to prepare them ` +
+        `(playlist now: ${(state.titles ?? []).join(", ") || "empty"})`,
+    );
+  }
+  if (!state.engine) throw new Error("the Listen-on control is not on the Play page");
+  return state.titles;
+};
+
+/**
+ * Play the first tone tune on one engine and grade what reaches the microphone.
+ *
+ * The engine is chosen through the shipped control rather than by writing storage, because "the
+ * same tune on the other path" is only a meaningful comparison if both paths were reached the way
+ * a user reaches them.
+ */
+const gradePlayback = async (engine, label) => {
+  const titles = await readPlaylist();
+  const index = titles.indexOf(TONE_TUNES[0].title);
+  const started = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
+const e=q("playback-engine-${engine}");
+if(!e) return JSON.stringify({error:"the ${label} engine option is not on the page"});
+e.click();await wait(1500);
+const items=document.querySelectorAll('[data-testid="playlist-item"]');
+const item=items[${index}]; if(!item) return JSON.stringify({error:"the tune left the playlist"});
+item.click();await wait(1200);
+q("playlist-play")?.click();await wait(4000);
+return JSON.stringify({engine:q("playback-engine-${engine}")?.getAttribute("aria-pressed"),
+  elapsed:q("playback-elapsed")?.innerText??null});})()`);
+  if (started.error) throw new Error(started.error);
+  if (started.engine !== "true") throw new Error(`the ${label} engine did not take`);
+
+  const wav = path.join(TMP, `sid-${engine}.wav`);
+  await recordMic(wav, TONE_SECONDS);
+  await js(`(()=>{document.querySelector('[data-testid="playlist-pause"]')?.click();return 1})()`);
+
+  const graded = await run("python3", [
+    path.join("tools", "hil", "steady_tone_grade.py"),
+    wav,
+    "--hz",
+    String(TONE_TUNES[0].hz),
+    "--json",
+  ]);
+  const report = JSON.parse((/\{.*\}/s.exec(graded.out) ?? ["{}"])[0]);
+  if (!report.verdict) throw new Error(`the grader printed no verdict: ${graded.out.trim().slice(-200)}`);
+  if (report.verdict === "TOO QUIET TO GRADE") {
+    throw new Error(`${label}: cannot be measured on this rig — ${report.faults.join("; ")}`);
+  }
+  if (report.verdict !== "clean") throw new Error(`${label}: ${report.faults.join("; ")}`);
+  return `${label}: tone present ${(report.present_fraction * 100).toFixed(1)}%, ${report.cents >= 0 ? "+" : ""}${report.cents} cents, longest gap ${report.longest_gap_ms} ms`;
+};
+
+/**
+ * Record one track change and grade the join.
+ *
+ * The recording has to span the change with both tunes audible either side of it, so the skip is
+ * fired from here while `arecord` is already running rather than before it.
+ */
+const gradeCrossfade = async () => {
+  const titles = await readPlaylist();
+  const index = titles.indexOf(TONE_TUNES[0].title);
+  const started = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
+q("playback-engine-local")?.click();await wait(1200);
+const items=document.querySelectorAll('[data-testid="playlist-item"]');
+const item=items[${index}]; if(!item) return JSON.stringify({error:"the tune left the playlist"});
+item.click();await wait(1200);
+q("playlist-play")?.click();await wait(4000);
+return JSON.stringify({elapsed:q("playback-elapsed")?.innerText??null});})()`);
+  if (started.error) throw new Error(started.error);
+
+  const wav = path.join(TMP, "crossfade.wav");
+  const recording = run("arecord", [
+    "-D",
+    MIC_DEVICE,
+    "-f",
+    "S16_LE",
+    "-r",
+    "48000",
+    "-c",
+    "1",
+    "-d",
+    String(CROSSFADE_SECONDS),
+    wav,
+  ]);
+  // Far enough in that the outgoing tune is established, far enough from the end that the incoming
+  // one is too — the grader needs both sides of the join.
+  await sleep((CROSSFADE_SECONDS * 1000) / 2);
+  await js(`(()=>{document.querySelector('[data-testid="playlist-next"]')?.click();return 1})()`);
+  const recorded = await recording;
+  if (!recorded.ok) throw new Error(`the microphone would not record: ${recorded.out.trim().slice(-160)}`);
+  await js(`(()=>{document.querySelector('[data-testid="playlist-pause"]')?.click();return 1})()`);
+
+  const graded = await run("python3", [
+    path.join("tools", "hil", "crossfade_probe.py"),
+    wav,
+    "--low-hz",
+    String(TONE_TUNES[0].hz),
+    "--high-hz",
+    String(TONE_TUNES[1].hz),
+    "--json",
+  ]);
+  const report = JSON.parse((/\{.*\}/s.exec(graded.out) ?? ["{}"])[0]);
+  const verdict = report.verdict ?? report.recordings?.[0]?.verdict;
+  if (!verdict) throw new Error(`the grader printed no verdict: ${graded.out.trim().slice(-240)}`);
+  if (!/SEAMLESS/i.test(verdict)) throw new Error(`the join graded "${verdict}"`);
+  return `join graded "${verdict}"`;
 };
 
 const preflight = async () => {
@@ -437,12 +612,31 @@ const main = async () => {
     return `${latency} ms wire -> speaker (correlation ${strength})`;
   });
 
-  // Declared, not yet wired. They are listed rather than omitted so a green run cannot be
-  // mistaken for full coverage, and so the summary names exactly what is still unguarded.
-  // docs/testing/hil-merge-gate.md says what each has to assert and which grader does it.
-  pending("sid-remote", "a SID played by the Ultimate, graded through the phone's speaker");
-  pending("sid-local", "the same tune rendered by the on-device engine, graded the same way");
-  pending("crossfade", "the join between two tunes: seamless, gapped, hard cut or ragged");
+  // The same tune, rendered two ways, graded by one instrument in one room. The two paths share
+  // nothing after the tune is chosen and have sounded materially different before, so they are run
+  // back to back rather than at different times.
+  await stage("sid-remote", true, async () => {
+    await setVolume(TONE_VOLUME);
+    await setMirror({ video: false, audio: true });
+    audibleSeconds += TONE_SECONDS;
+    return await gradePlayback("c64", "Remote");
+  });
+
+  await stage("sid-local", true, async () => {
+    await setVolume(TONE_VOLUME);
+    // The on-device engine does not need the mirror, and leaving it on would put the Ultimate's
+    // copy of the same tone into the room alongside it — one microphone cannot separate them.
+    await setMirror({ video: false, audio: false });
+    audibleSeconds += TONE_SECONDS;
+    return await gradePlayback("local", "Local");
+  });
+
+  await stage("crossfade", true, async () => {
+    await setVolume(TONE_VOLUME);
+    await setMirror({ video: false, audio: false });
+    audibleSeconds += CROSSFADE_SECONDS;
+    return await gradeCrossfade();
+  });
 
   await restoreRig();
 

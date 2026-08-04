@@ -41,25 +41,35 @@ stages that were therefore not run. Do not describe the work as verified.
 | `wire` | What the Ultimate **sends**, measured on the host's own link: sequence loss and inter-arrival jitter | Rules the network in or out before anything is blamed on the app — the most common wrong turn in this area |
 | `av-clarity` | The tone ladder as it leaves the phone's speaker, graded per note for length, pitch, dropouts and correct progression | Needs a microphone in a room and a real speaker |
 | `av-latency` | How long a sound takes to get from the Ultimate's wire to the air in front of the phone | Needs the multicast and the microphone captured against one clock |
-| `sid-remote` | A SID played by the Ultimate, graded through the phone's speaker | **Not yet wired** |
-| `sid-local` | The same tune rendered by the on-device engine, graded the same way | **Not yet wired** |
-| `crossfade` | The join between two tunes: seamless, gapped, hard cut or ragged | **Not yet wired** |
+| `sid-remote` | A known tune played by the Ultimate through the app's **Listen on → Remote** control, graded at the speaker for presence, continuity and pitch | The Ultimate renders it and the mirror carries it; only a microphone sees the end of that path |
+| `sid-local` | The same tune with **Listen on → Local**, graded by the same instrument in the same room | The two paths share nothing after the tune is chosen and have sounded materially different before |
+| `crossfade` | The join between the two tunes: seamless, gapped, hard cut or ragged | A moving piece of music cannot settle it, and neither can listening once |
 
-The last three are listed by the runner as `pending` rather than omitted, and the summary prints
-`NOT YET COVERED` for them. A green run does **not** clear them. Wiring them is tracked work, not
-an optional extra: `sid-remote` and `sid-local` reach the speaker through different code and have
-sounded materially different before, and a crossfade cannot be settled by listening once.
+### What the playback stages need on the rig
 
-What each of the three has to do when it is wired:
+They grade a **known** tone, not whatever happens to be queued — grading an unknown tune is how a
+green run comes to mean nothing. Two generated tunes must be on the Ultimate and in the app's
+playlist before the gate runs:
 
-- **`sid-remote`** — play a known SID on the Ultimate through the app's own Play flow, record the
-  speaker, and grade with `mic_playback_quality.py analyse --expect-hz`. The stimulus must be a
-  generated tune with a known pitch and cadence (`make_tone_ladder_sid.py`), not music: a listener
-  cannot tell a stall from a rest in real music, and neither can a detector.
-- **`sid-local`** — the same tune with the on-device engine selected, so the two paths are compared
-  under one microphone in one room. `local_vs_mirror_mic.py` already captures that pair.
-- **`crossfade`** — two generated tunes holding steady, well-separated tones, recorded across one
-  track change and graded by `crossfade_probe.py`, which already classifies the join.
+```bash
+node scripts/generate-test-sid.mjs --hz 550  --name "XF Low"  --out /tmp/xf-low.sid
+node scripts/generate-test-sid.mjs --hz 1850 --name "XF High" --out /tmp/xf-high.sid
+# put both on the Ultimate (they live at /MUSICIANS/T/Tone_Test/ on this rig) and add them to the
+# app's playlist, in that order
+```
+
+The pitches are far apart and deliberately not an octave — an octave shares harmonics, and one
+tone is then mistaken for the other — and both are where a phone speaker actually works. The
+stages check the playlist first and name what is missing rather than grading something else.
+
+**They also need enough level to grade.** A generated SID holding one tone is far quieter at the
+microphone than the barcode stimulus `av-clarity` uses: measured on this rig at **-73 dBFS at
+volume 5** and **-68 dBFS at volume 10**, against a `-60 dBFS` floor below which the presence test
+cannot be separated from the room. `steady_tone_grade.py` reports `TOO QUIET TO GRADE` in that
+case and the stage fails saying so — it does **not** report a pipeline defect, because at that
+level it cannot tell one from a quiet room. The remedy is physical: move the microphone closer to
+the grille (`AGENTS.md`'s 27 dB SNR figure is measured 4 mm from it). The stages run at
+`--tone-volume` (default 10), which is the ceiling, so there is no headroom left to spend.
 
 ## Audio discipline
 
@@ -118,6 +128,15 @@ A full run on the shipped build, with the gate setting Listen and Watch itself:
 | `wire` | pass — sender loss 0.00%, inter-arrival p99 4.18 ms |
 | `av-clarity` | pass — 82 tones, 3 defective, 0% dropout |
 | `av-latency` | pass — 527 ms wire → speaker, correlation 0.885 |
+| `sid-remote` | **cannot be measured** — tone at -73 dBFS, below the grading floor |
+| `sid-local` | **cannot be measured** — tone at -68 dBFS, below the grading floor |
+| `crossfade` | **cannot be measured** — the grader reports a tone never rose above digital silence |
+
+The three playback stages are wired and produce real verdicts; on this rig, with the microphone
+where it currently sits, the generated tones do not reach a level they can be graded at within the
+volume ceiling. The pitch is right in all three recordings (+9 to +11 cents at 550 Hz), so the
+tunes are playing and the paths are working — what is missing is signal-to-noise at the
+microphone, not audio at the speaker. Move the microphone to the grille and re-run.
 
 **Latency varies a lot between runs**: 315 ms, 335 ms and 527 ms on the same rig within an hour.
 There is deliberately no threshold on it yet — three samples cannot support one. Collect more
