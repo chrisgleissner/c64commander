@@ -1,0 +1,13 @@
+IBM Plex (Sans, Serif, Mono)
+Copyright 2017-2018 IBM Corporation
+SIL Open Font License, Version 1.1 — Reserved Font Name "Plex"
+https://github.com/IBM/plex
+
+DejaVu Sans (symbol fallback only)
+Fonts are (c) Bitstream (see below). DejaVu changes are in public domain.
+Bitstream Vera Fonts Copyright (c) 2003 by Bitstream, Inc. — permissive licence
+https://dejavu-fonts.github.io/
+
+The .woff2 files in this directory are SUBSETS produced by scripts/vendor-manual-fonts.mjs.
+They are embedded in docs/manual/**/*.pdf. Under the OFL, embedding a font in a
+document does not place the document under the OFL.

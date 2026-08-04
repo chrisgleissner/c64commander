@@ -26,14 +26,14 @@ describe("manual generator", () => {
     expect(c64uRemote).toContain("HVSC preparation");
     // HVSC ships on in the keypad edition too, so the manual states that rather than telling the
     // reader to go and switch on a library the app already has.
-    expect(c64uRemote).toContain("On by default. You can change it in Settings > Stable Features.");
+    expect(c64uRemote).toContain("On by default. You can turn it off in Settings → Stable Features.");
     expect(c64uRemote).not.toMatch(/lighting/i);
 
     expect(c64Commander).toContain("# C64 Commander Manual");
     expect(c64Commander).not.toContain("C64U Remote");
     expect(c64Commander).toContain("profiles/medium/04-app-ready.png");
     expect(c64Commander).toContain("HVSC preparation");
-    expect(c64Commander).toContain("On by default. You can change it in Settings > Stable Features.");
+    expect(c64Commander).toContain("On by default. You can turn it off in Settings → Stable Features.");
   });
 
   /**
@@ -74,21 +74,21 @@ describe("manual generator", () => {
     expect(c64uRemote).toContain("entries such as `c64u` and `192.168.1.64`");
     expect(c64uRemote).not.toContain("entries such as `c64u`, `u64`");
     expect(c64uRemote).toContain(
-      "| Device Safety | **Settings > Device Safety** | Leave it on Auto (recommended); Auto keeps a Commodore 64 Ultimate on Conservative until its firmware is known safe. See Device Safety Modes. |",
+      "| Device Safety | **Settings → Device Safety** | Leave it on Auto. Auto keeps a Commodore 64 Ultimate on Conservative until its firmware is known to be safe. See Device Safety Modes. |",
     );
     expect(c64uRemote).toContain("set **Auto save config** to **Yes**");
-    expect(c64uRemote).toContain("at **C= + RESTORE > User interface > Auto save config**");
-    expect(c64uRemote).toContain("the same setting appears in Config as **User interface > Auto save config**.");
+    expect(c64uRemote).toContain("at **C= + RESTORE → User interface → Auto save config**");
+    expect(c64uRemote).toContain("the same setting appears in Config as **User interface → Auto save config**.");
 
     expect(c64Commander).toContain(
-      "It works with the Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, and Ultimate-II+(L).",
+      "It works with the Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, and Ultimate-II.",
     );
     expect(c64Commander).toContain("Enter a hostname such as `c64u`, `u64`, or `u2`");
     expect(c64Commander).toContain(
-      "Leave it on Auto (recommended); Auto uses Conservative for a Commodore 64 Ultimate, and Balanced for an Ultimate 64-family device on firmware newer than 3.15. See Device Safety Modes.",
+      "Leave it on Auto. Auto uses Conservative for a Commodore 64 Ultimate, and Balanced for an Ultimate 64-family device on firmware newer than 3.15. See Device Safety Modes.",
     );
     expect(c64Commander).toContain(
-      "C64 Commander mirrors that menu in Config as **User interface > Auto save config**.",
+      "C64 Commander mirrors that menu in Config as **User interface → Auto save config**.",
     );
     expect(c64Commander).toContain(
       "On other supported devices, search Config for **Auto Save Config** if the menu naming differs.",
@@ -112,7 +112,7 @@ describe("manual generator", () => {
       // Sharing-a-report walkthrough and the ZIP privacy note.
       expect(manual).toContain("Share all");
       expect(manual).toContain("Share filtered");
-      expect(manual).toContain("It does not include your network password.");
+      expect(manual).toContain("Your network password is never in it.");
     }
   });
 
@@ -180,7 +180,7 @@ describe("manual generator", () => {
     }
 
     // C64 Commander is the broad edition: it also names the Ultimate 64 family
-    // (firmware 3.15) and explains the Ultimate-II+(L) CIA 1 hardware limit.
+    // (firmware 3.15) and explains the Ultimate-II CIA 1 hardware limit.
     expect(c64Commander).toContain(
       "or an Ultimate 64, Ultimate 64 Elite, or Ultimate 64 Elite II on firmware **3.15** or newer",
     );
