@@ -41,8 +41,22 @@ predict. One cell per new press is the same answer every time.
 64tass --cbm-prg -o tools/c64/joystick-probe.prg tools/c64/joystick-probe.asm
 
 # App foregrounded on the phone, CDP forwarded (see the hil-attach skill):
-node tools/hil/joystick_rotation_hil.mjs --rotations 0,90,270
+node tools/hil/joystick_rotation_hil.mjs --layouts diamond8,classicT9 --rotations 0,90,270
 ```
+
+Both shipped defaults are run, because they are different products' defaults and a change to one
+is not a change to the other: `c64u-remote` ships **Diamond (8-centred)** — the four keys around
+`8`, with `8` as fire — and `c64commander` ships **Classic T9**. The layout is chosen through
+Settings → Play and Disk → Joystick keys each time, not by writing storage, because the claim
+under test is that the assignment is configurable and the section is collapsed by default.
+
+The diamond is also the layout that puts a direction on `0`, which is the app's global Game Mode
+shortcut. That shortcut is supposed to go inert inside an open overlay so the key can steer
+instead — a rule that means nothing until something checks it against the machine.
+
+**The screen is the trap to watch.** A dozing or locked handset freezes the WebView's timers, so
+every `setTimeout` inside a page evaluation stops resolving and the run reports CDP timeouts that
+look like an app hang. `adb shell svc power stayon usb` before a long run.
 
 Rotation is set through the sheet's manual override rather than by turning the phone, because a
 test rig cannot turn a phone. The override is not a test seam — it is the shipped control for a
@@ -50,15 +64,15 @@ player lying down or a handset whose sensor cannot answer — and it sets the sa
 the sensor path sets. The sensor path's own quantiser is covered by `DeviceRotationPluginTest.kt`
 and `deviceRotation.test.ts`.
 
-### Verified on the Pixel 4, 2026-08-04 — 30/30 against the C64U (fw 1.2.0, core 1.4D)
+### Verified on the Pixel 4, 2026-08-04 — 60/60 against the C64U (fw 1.2.0, core 1.4D)
 
-Ten keys (T9 `2/4/6/8/5` and D-pad up/down/left/right/centre) at 0°, 90° and 270°. The run found
-one defect: **the D-pad centre key fired nothing**. Android delivers `KEYCODE_DPAD_CENTER` to the
-WebView as `key: "Enter"`, `code: ""`, `keyCode: 13` — a DOM `KeyboardEvent` carries the DOM key
-code, never the Android one — so the `keypad` profile's `{ code: "DpadCenter" }` and
-`{ keyCode: 23 }` bindings could not match and the press resolved to `enter`, which the `fire` slot
-was not bound to. Fixed by binding the D-pad's fire slot to both actions; the run went 27/30 → 30/30
-on the same hardware.
+Both layouts × three orientations × ten keys. The first run found one defect: **the D-pad centre
+key fired nothing**. Android delivers `KEYCODE_DPAD_CENTER` to the WebView as `key: "Enter"`,
+`code: ""`, `keyCode: 13` — a DOM `KeyboardEvent` carries the DOM key code, never the Android one —
+so the `keypad` profile's `{ code: "DpadCenter" }` and `{ keyCode: 23 }` bindings could not match
+and the press resolved to `enter`, which the `fire` slot was not bound to. Fixed by binding the
+D-pad's fire slot to both actions; the classicT9 run went 27/30 → 30/30 on the same hardware, and
+diamond8 passed 30/30.
 
 ### Two traps this rig has already paid for
 

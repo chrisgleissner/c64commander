@@ -42,6 +42,7 @@
  *
  *   node tools/hil/joystick_rotation_hil.mjs [--host c64u] [--cdp-port 9333]
  *                                            [--rotations 0,90,270]
+ *                                            [--layouts diamond8,classicT9]
  *
  * Requires: the app running and foregrounded on the attached device, `adb forward
  * tcp:<cdp-port>` already pointed at its WebView (see the `hil-attach` skill), and the
@@ -72,6 +73,9 @@ const CDP_PORT = arg("cdp-port", "9333");
 const ROTATIONS = arg("rotations", "0,90,270")
   .split(",")
   .map((value) => Number(value.trim()));
+const LAYOUTS = arg("layouts", "diamond8,classicT9")
+  .split(",")
+  .map((value) => value.trim());
 
 /** Telemetry block published by the probe. Keep in step with joystick-probe.asm. */
 const TELEMETRY_BASE = 0xc000;
@@ -118,26 +122,54 @@ const DELTA = {
   right: { col: 1, row: 0 },
 };
 
+/** Android keycodes for the number keys: KEYCODE_0 is 7, and the rest follow. */
+const DIGIT_KEYCODE = (digit) => 7 + digit;
+
 /**
- * The keys under test, with the slot each one drives in PORTRAIT.
+ * The keys under test per layout, with the slot each one drives in PORTRAIT.
  *
- * Both families are here because they reach `resolveJoystickInputs` by different routes:
- * the digits come from the stored layout, the D-pad from the always-on map added beside
- * it. A rotation applied to one and not the other is a defect a digits-only run cannot
- * see.
+ * The D-pad is appended to both, because the two families reach `resolveJoystickInputs` by
+ * different routes: the digits come from the stored layout, the D-pad from the always-on
+ * map added beside it. A rotation applied to one and not the other is a defect a
+ * digits-only run cannot see.
  */
-const KEYS = [
-  { label: "T9 2", keycode: 9, slot: "up", family: "t9" },
-  { label: "T9 8", keycode: 15, slot: "down", family: "t9" },
-  { label: "T9 4", keycode: 11, slot: "left", family: "t9" },
-  { label: "T9 6", keycode: 13, slot: "right", family: "t9" },
-  { label: "T9 5", keycode: 12, slot: "fire", family: "t9" },
-  { label: "D-pad up", keycode: 19, slot: "up", family: "dpad" },
-  { label: "D-pad down", keycode: 20, slot: "down", family: "dpad" },
-  { label: "D-pad left", keycode: 21, slot: "left", family: "dpad" },
-  { label: "D-pad right", keycode: 22, slot: "right", family: "dpad" },
-  { label: "D-pad centre", keycode: 23, slot: "fire", family: "dpad" },
+const DPAD_KEYS = [
+  { label: "D-pad up", keycode: 19, slot: "up" },
+  { label: "D-pad down", keycode: 20, slot: "down" },
+  { label: "D-pad left", keycode: 21, slot: "left" },
+  { label: "D-pad right", keycode: 22, slot: "right" },
+  { label: "D-pad centre", keycode: 23, slot: "fire" },
 ];
+
+/**
+ * Both shipped defaults are exercised, because they are different products' defaults and a
+ * change to one is not a change to the other: `c64u-remote` ships `diamond8`, `c64commander`
+ * ships `classicT9`.
+ *
+ * `diamond8` also puts a direction on `0`, which is the app's global Game Mode shortcut. That
+ * shortcut is supposed to be inert inside an open overlay so the key can steer instead — a
+ * rule that only means anything if something checks it against the machine.
+ */
+const LAYOUT_KEYS = {
+  classicT9: [
+    { label: "T9 2", keycode: DIGIT_KEYCODE(2), slot: "up" },
+    { label: "T9 8", keycode: DIGIT_KEYCODE(8), slot: "down" },
+    { label: "T9 4", keycode: DIGIT_KEYCODE(4), slot: "left" },
+    { label: "T9 6", keycode: DIGIT_KEYCODE(6), slot: "right" },
+    { label: "T9 5", keycode: DIGIT_KEYCODE(5), slot: "fire" },
+    ...DPAD_KEYS,
+  ],
+  diamond8: [
+    { label: "Diamond 5", keycode: DIGIT_KEYCODE(5), slot: "up" },
+    { label: "Diamond 0", keycode: DIGIT_KEYCODE(0), slot: "down" },
+    { label: "Diamond 7", keycode: DIGIT_KEYCODE(7), slot: "left" },
+    { label: "Diamond 9", keycode: DIGIT_KEYCODE(9), slot: "right" },
+    { label: "Diamond 8", keycode: DIGIT_KEYCODE(8), slot: "fire" },
+    ...DPAD_KEYS,
+  ],
+};
+
+const LAYOUT_LABEL = { classicT9: "Classic T9", diamond8: "Diamond (8-centred)" };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -221,6 +253,44 @@ const openGameMode = async () => {
 };
 
 /**
+ * Choose a joystick layout through the control the user has, not by writing storage.
+ *
+ * The claim under test is that the assignment is configurable, so the run has to go through
+ * Settings → Play and Disk → Joystick keys and pick the layout from the select. Writing
+ * `localStorage` directly would assert the binding tables and nothing about whether anybody
+ * can reach them — and the section is collapsed by default, which is exactly the sort of
+ * thing a storage-level test cannot see.
+ *
+ * Returns the layout that was in force beforehand, so the run can put it back.
+ */
+const selectLayout = async (layout) => {
+  const label = LAYOUT_LABEL[layout];
+  const before = await js(
+    inPage(`q("tab-settings")?.click();await wait(2500);
+if(!q("settings-joystick-key-layout")) { q("settings-section-toggle-play-and-disk")?.click(); await wait(2000); }
+const t=q("settings-joystick-key-layout");
+if(!t) return JSON.stringify({error:"the joystick layout control is not reachable in Settings"});
+return JSON.stringify({was:localStorage.getItem("c64u_remote_input_joystick_layout"),label:t.innerText});`),
+  );
+  if (before.error) throw new Error(before.error);
+
+  const after = await js(
+    inPage(`q("settings-joystick-key-layout").click();await wait(1200);
+const o=[...document.querySelectorAll('[role=option]')].find(e=>(e.textContent||"").trim()===${JSON.stringify(label)});
+if(!o) return JSON.stringify({error:"no option labelled ${label}"});
+o.click();await wait(1200);
+return JSON.stringify({label:q("settings-joystick-key-layout")?.innerText,
+  stored:localStorage.getItem("c64u_remote_input_joystick_layout")});`),
+  );
+  if (after.error) throw new Error(after.error);
+  if (after.stored !== layout) throw new Error(`choosing "${label}" stored "${after.stored}"`);
+
+  // Back to a page that hosts the sheet, and give it a moment to mount.
+  await js(inPage(`q("tab-home")?.click();await wait(2500);return "1";`));
+  return before.was;
+};
+
+/**
  * Bring back the toolbar the rotation override lives on, and read it.
  *
  * Game Mode hides that toolbar and the restored one puts itself away again after six
@@ -285,7 +355,7 @@ const waitForChromeToHide = async () => {
 const failures = [];
 const rows = [];
 
-const checkKey = async (rotation, key) => {
+const checkKey = async (layout, rotation, key) => {
   const expectedSlot = rotateSlot(key.slot, rotation);
   const before = await readTelemetry();
   await pressKey(key.keycode);
@@ -335,6 +405,7 @@ const checkKey = async (rotation, key) => {
 
   const ok = problems.length === 0;
   rows.push({
+    layout,
     rotation,
     key: key.label,
     portrait: key.slot,
@@ -343,43 +414,56 @@ const checkKey = async (rotation, key) => {
     ok,
     detail: problems.join("; "),
   });
-  if (!ok) failures.push(`${rotation}° ${key.label}: ${problems.join("; ")}`);
+  if (!ok) failures.push(`${layout} ${rotation}° ${key.label}: ${problems.join("; ")}`);
 };
 
 const main = async () => {
-  console.log(`joystick + rotation HIL — Ultimate ${HOST}, rotations ${ROTATIONS.join(", ")}`);
+  console.log(
+    `joystick + rotation HIL — Ultimate ${HOST}, layouts ${LAYOUTS.join(", ")}, rotations ${ROTATIONS.join(", ")}`,
+  );
 
   const info = await (await fetch(`http://${HOST}/v1/info`)).json();
   console.log(`  device: ${info.product} fw ${info.firmware_version} core ${info.core_version}`);
 
-  const sheet = await openGameMode();
-  console.log(`  sheet: game-mode=${sheet.gm}, rotation=${sheet.rotation}`);
+  let originalLayout = null;
 
-  const start = await runProbe();
-  console.log(`  probe: circle at ${start.col},${start.row}, colour ${start.colour}`);
+  for (const layout of LAYOUTS) {
+    const was = await selectLayout(layout);
+    originalLayout ??= was;
+    console.log(`\n=== ${LAYOUT_LABEL[layout]} ===`);
 
-  const screen = await readMemory(SCREEN_BASE, 8);
-  const banner = Array.from(screen)
-    .map((code) => (code === 0 ? "@" : String.fromCharCode(code + 64)))
-    .join("");
-  if (banner !== "JOYPROBE") throw new Error(`the screen does not show the probe's banner (read "${banner}")`);
-  console.log(`  screen banner: ${banner}`);
+    const sheet = await openGameMode();
+    console.log(`  sheet: game-mode=${sheet.gm}, rotation=${sheet.rotation}`);
 
-  for (const rotation of ROTATIONS) {
-    await pinRotation(rotation);
-    console.log(`\n  --- ${rotation}° ---`);
-    for (const key of KEYS) {
-      await checkKey(rotation, key);
-      const last = rows[rows.length - 1];
-      console.log(
-        `    ${last.ok ? "ok  " : "FAIL"} ${last.key.padEnd(13)} ${last.portrait.padEnd(6)}` +
-          ` -> ${last.expected.padEnd(6)} machine:${last.observed}${last.detail ? `  (${last.detail})` : ""}`,
-      );
+    const start = await runProbe();
+    console.log(`  probe: circle at ${start.col},${start.row}, colour ${start.colour}`);
+
+    const screen = await readMemory(SCREEN_BASE, 8);
+    const banner = Array.from(screen)
+      .map((code) => (code === 0 ? "@" : String.fromCharCode(code + 64)))
+      .join("");
+    if (banner !== "JOYPROBE") throw new Error(`the screen does not show the probe's banner (read "${banner}")`);
+
+    for (const rotation of ROTATIONS) {
+      await pinRotation(rotation);
+      console.log(`  --- ${rotation}° ---`);
+      for (const key of LAYOUT_KEYS[layout]) {
+        await checkKey(layout, rotation, key);
+        const last = rows[rows.length - 1];
+        console.log(
+          `    ${last.ok ? "ok  " : "FAIL"} ${last.key.padEnd(13)} ${last.portrait.padEnd(6)}` +
+            ` -> ${last.expected.padEnd(6)} machine:${last.observed}${last.detail ? `  (${last.detail})` : ""}`,
+        );
+      }
     }
+
+    // Leave the handset as it was found, or the next run starts pinned.
+    await js('(()=>{document.querySelector("[data-testid=remote-input-rotation-auto]")?.click();return 1})()');
+    await js(inPage(`q("remote-input-close")?.click();await wait(1000);return "1";`));
   }
 
-  // Leave the handset as it was found, or the next run starts pinned.
-  await js('(()=>{document.querySelector("[data-testid=remote-input-rotation-auto]")?.click();return 1})()');
+  // Put the listener's own layout back; this run only borrowed it.
+  if (originalLayout && LAYOUT_LABEL[originalLayout]) await selectLayout(originalLayout);
 
   console.log(`\n${rows.filter((row) => row.ok).length}/${rows.length} checks passed`);
   if (failures.length) {

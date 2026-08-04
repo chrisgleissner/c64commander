@@ -109,3 +109,49 @@ describe("GameModeSettingsSection", () => {
     expect(screen.getByTestId("settings-game-mode-controls")).toHaveTextContent("Auto");
   });
 });
+
+/**
+ * The layout picker is the control that makes the assignment configurable, and it is the one
+ * route by which a user reaches the 8-centred diamond on an edition that does not ship it as
+ * the default. Asserted through the select rather than through `saveJoystickLayout`, because
+ * writing storage proves nothing about whether anybody can reach it.
+ */
+describe("choosing between the shipped layouts", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  const chooseLayout = async (label: string) => {
+    fireEvent.click(screen.getByTestId("settings-joystick-key-layout"));
+    const option = await screen.findByRole("option", { name: label });
+    fireEvent.click(option);
+  };
+
+  it("offers both defaults and Custom, named the way the manual names them", () => {
+    render(<GameModeSettingsSection />);
+    fireEvent.click(screen.getByTestId("settings-joystick-key-layout"));
+    expect(screen.getByRole("option", { name: "Diamond (8-centred)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Classic T9" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Custom" })).toBeInTheDocument();
+  });
+
+  it("stores the 8-centred diamond when it is chosen", async () => {
+    render(<GameModeSettingsSection />);
+    await chooseLayout("Diamond (8-centred)");
+    expect(loadJoystickLayout()).toBe("diamond8");
+  });
+
+  it("switches back to Classic T9", async () => {
+    saveJoystickLayout("diamond8");
+    render(<GameModeSettingsSection />);
+    await chooseLayout("Classic T9");
+    expect(loadJoystickLayout()).toBe("classicT9");
+  });
+
+  it("says which keys each preset uses, so the choice can be made without trying it", () => {
+    render(<GameModeSettingsSection />);
+    const section = screen.getByTestId("settings-game-mode-section");
+    expect(section).toHaveTextContent("the four keys around 8, with 8 as fire");
+    expect(section).toHaveTextContent("2, 4, 6 and 8 with 5 as fire");
+  });
+});
