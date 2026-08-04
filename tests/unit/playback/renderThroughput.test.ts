@@ -15,6 +15,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   __resetRenderThroughput,
+  accurateEngineViable,
   recordRenderMeasurement,
   renderRatio,
   startupBufferMs,
@@ -98,5 +99,48 @@ describe("how much to buffer before a tune starts", () => {
     const initial = startupBufferSeconds();
     expect(initial).toBeGreaterThan(0.6);
     expect(initial).toBeLessThan(2);
+  });
+});
+
+/**
+ * Demotion is audible: SIDLite does not sound like reSIDfp. So it may only follow evidence, and one
+ * chunk is not evidence — the smoothing gives the first sample the whole estimate, so a launch or a
+ * config read landing on the same thread as one chunk was enough to change the timbre of every tune
+ * that followed.
+ */
+describe("whether the accurate renderer is still viable", () => {
+  beforeEach(() => {
+    __resetRenderThroughput();
+    localStorage.clear();
+  });
+
+  it("keeps the accurate renderer before anything has been measured", () => {
+    expect(accurateEngineViable()).toBe(true);
+  });
+
+  it("does not demote on one slow chunk", () => {
+    recordRenderMeasurement(0.5, 2000); // 0.25x — far below the viable ratio
+    expect(renderRatio()).toBeLessThan(1.15);
+    expect(accurateEngineViable()).toBe(true);
+  });
+
+  it("demotes once the slow reading has held for several measurements", () => {
+    for (let i = 0; i < 5; i += 1) recordRenderMeasurement(0.5, 2000);
+    expect(accurateEngineViable()).toBe(false);
+  });
+
+  it("keeps the accurate renderer when a transient is averaged away again", () => {
+    recordRenderMeasurement(0.5, 2000); // one bad chunk
+    for (let i = 0; i < 20; i += 1) recordRenderMeasurement(0.5, 100); // 5x, sustained
+    expect(renderRatio()).toBeGreaterThan(1.15);
+    expect(accurateEngineViable()).toBe(true);
+  });
+
+  it("trusts a slow ratio remembered from an earlier session outright", () => {
+    // Already the settled average of another session's samples, so it does not have to be
+    // re-earned: a device measured too slow yesterday must not get the accurate renderer back for
+    // the first five chunks of every launch from now on.
+    localStorage.setItem("c64c.local-sid.render-throughput", "0.8");
+    expect(accurateEngineViable()).toBe(false);
   });
 });

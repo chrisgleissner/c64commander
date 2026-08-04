@@ -835,7 +835,7 @@ physical relay ─┘   (the sheet feeds the modality as well as reading it)
 | GM-3 | Closing the sheet stops only the streams that launch started; exiting game mode without closing stops nothing. |
 | GM-4 | Turning Watch off inside game mode is remembered: the next Game Mode launch opens without a picture, with no Settings visit and no prompt. |
 | GM-5 | Watch and Listen are reachable from inside game mode in every configuration, including chrome hidden with no touchscreen (`#`). |
-| GM-6 | Game mode is never blank: with the video mirror off, the on-screen controls are shown whatever the modality and the setting say. |
+| GM-6 | Game mode is never blank by accident: with the video mirror off and the setting on **Auto**, the on-screen controls are shown whatever the modality says. The guard applies to `Auto` only, because only `Auto` guesses — a user who chose **Never show** has said they are driving with physical keys, and overriding that reads as the setting being broken. The sheet still has the floating **Controls** handle and `#`. |
 | GM-6a | With the setting on **Auto**, the on-screen controls are hidden while the modality is `key-navigation` and shown while it is `pointer`; **Always show** and **Never show** override both. |
 | GM-6b | A physical key relayed to the joystick sets the modality to `key-navigation`, so the controls hide during play on a keypad handset without the user asking. |
 | GM-7 | Physical keys resolve through the active binding permuted by `deviceRotation`, in game mode and in the ordinary joystick sheet. |
@@ -843,7 +843,7 @@ physical relay ─┘   (the sheet feeds the modality as well as reading it)
 | GM-9 | A rotation change re-derives the held set in one transport update; no input stays asserted under the old mapping. |
 | GM-10 | Rotation changes are published only after the hysteresis and dwell filters; a flat device never changes the mapping. |
 | GM-11 | The mirror is counter-rotated by `-frameRotation`; no other part of the app rotates. |
-| GM-12 | Pointer gestures on a rotated mirror pan and zoom along the axes the player sees. |
+| GM-12 | Pointer gestures **and the pan keys** on a rotated mirror pan and zoom along the axes the player sees. Both reach the same viewport, so both are mapped into the stage's own frame; a key path that skipped the mapping sent the same adjustment two different ways. |
 | GM-13 | In game mode the mirror uses the full width of the sheet body and all height not used by visible controls. |
 | GM-14 | With on-screen controls hidden, `#` reaches the quick keys and the Live View switches, `*` flips the view lock, the floating handle restores the chrome, and Back exits. |
 | GM-15 | Bindings are configurable by pressing a key; reserved actions are rejected with a message naming their existing role. |
@@ -883,9 +883,9 @@ physical relay ─┘   (the sheet feeds the modality as well as reading it)
   `RemoteInputSheet` intercepts the key without reporting it.
 - With controls hidden **and the picture live**, `VirtualJoystick` is absent and
   `av-mirror-immersive` is present; the restore handle brings the chrome back.
-- With controls hidden **and the video mirror off**, `VirtualJoystick` is present (GM-6) —
-  the guard against a blank sheet, and the test that fails if the hide rule is written
-  without the "while the picture is live" condition.
+- With controls hidden **and the video mirror off**, and the setting on **Auto**,
+  `VirtualJoystick` is present (GM-6) — the guard against a blank sheet, and the test that
+  fails if the hide rule is written without the "while the picture is live" condition.
 - Turning Watch off in game mode writes the preference, and a subsequent launch does not
   call `startVideo` (GM-4).
 - Rotation change while a key is held emits one held-set update, releasing the old input
@@ -1033,7 +1033,7 @@ built as designed, what deviated and why, and what the hardware run proved.
 | GM-9 | `RemoteInputSheet.gameMode.test.tsx` (verified load-bearing), `gameMode.spec.ts`, HIL "left before the turn, up after it, nothing stranded" |
 | GM-10 | `deviceRotation.test.ts` hysteresis and flat-device cases; `useDeviceRotation.test.ts` dwell; `DeviceRotationPluginTest.kt` for the native quantiser |
 | GM-11 | `AvMirrorImmersive.test.tsx`; `gameMode.spec.ts` "the picture turns with the handset while the app stays portrait" |
-| GM-12 | `AvMirrorImmersive.test.tsx` pan and pinch at 90° and 270°, asserting the `panBy`/`zoomBy` argument |
+| GM-12 | `AvMirrorImmersive.test.tsx` pan, pinch **and `panStep`** at 90° and 270°, asserting the `panBy`/`zoomBy` argument |
 | GM-13 | `AvMirrorImmersive.test.tsx` fill/aspect tests; `deviceRotation.test.ts` `fitStageSize` |
 | GM-14 | `RemoteInputSheet.gameMode.test.tsx`; HIL `#` on and off |
 | GM-15 | `GameModeSettingsSection.test.tsx` press-to-bind, reserved-action rejection, slot moves and clears |

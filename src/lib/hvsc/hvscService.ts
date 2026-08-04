@@ -26,6 +26,7 @@ import {
   loadHvscBrowseIndexSnapshot,
   saveHvscBrowseIndexSnapshot,
   verifyHvscBrowseIndexIntegrity,
+  type HvscBrowseIndexSnapshot,
 } from "./hvscBrowseIndexStore";
 import { beginHvscPerfScope, endHvscPerfScope, runWithHvscPerfScope } from "./hvscPerformance";
 import { nextCorrelationId } from "@/lib/tracing/traceIds";
@@ -279,6 +280,21 @@ export const ensureHvscMetadataHydration = async () => {
   return hvscMetadataHydrationPromise;
 };
 
+/**
+ * The browse snapshot whose integrity has already been checked.
+ *
+ * Held by reference rather than by a key: a different object is a different load or rebuild, which
+ * is exactly when the check is worth repeating, and reference equality costs nothing.
+ *
+ * The check stats twelve sampled songs over the Capacitor bridge and, when one is missing, DISCARDS
+ * the snapshot. Running that on every folder query meant twelve bridge round trips per keystroke of
+ * the folder filter, and — for a library where the sample does not resolve — throwing away a
+ * snapshot that costs 1.7 s of main-thread work to rebuild, over and over, while the page kept
+ * asking for folders. Once per snapshot catches the case it exists for (a snapshot describing a
+ * library that has gone) without the thrash.
+ */
+let verifiedBrowseSnapshot: HvscBrowseIndexSnapshot | null = null;
+
 const ensureHvscIndexReady = async () => {
   // Root and folder browsing only need the persisted browse snapshot. Avoid
   // eagerly loading the full media-index JSON on the first browse because that
@@ -297,10 +313,14 @@ const ensureHvscIndexReady = async () => {
   }
   if (!browseSnapshot) return;
 
+  if (verifiedBrowseSnapshot === browseSnapshot) return;
   const integrity = await verifyHvscBrowseIndexIntegrity(browseSnapshot);
   if (!integrity.isValid) {
+    verifiedBrowseSnapshot = null;
     hvscIndex.clearBrowseSnapshot();
+    return;
   }
+  verifiedBrowseSnapshot = browseSnapshot;
 };
 
 const pageRuntimeListing = (
@@ -478,16 +498,59 @@ export const getHvscFolderListing = async (path: string): Promise<HvscFolderList
  * its integrity check stat-probes virtual paths that do not exist as files, and a failed probe
  * destructively clears the snapshot.
  */
+/**
+ * Where the search has got to, readable live from the page.
+ *
+ * The diagnostics log is written through a scheduled persist, so while the main thread is busy —
+ * which is precisely the state worth inspecting — nothing reaches storage and the log says the code
+ * never ran. This is the same debug seam `__localEngineDebug` is: one plain object, updated at each
+ * stage boundary, that a HIL run can read at any moment without waiting for anything.
+ */
+const searchStage: { stage: string; query: string; sinceMs: number } = { stage: "idle", query: "", sinceMs: 0 };
+
+const markSearchStage = (stage: string, query: string) => {
+  searchStage.stage = stage;
+  searchStage.query = query;
+  searchStage.sinceMs = Date.now();
+};
+
+if (typeof globalThis !== "undefined") {
+  (globalThis as Record<string, unknown>).__hvscSearchStage = () => ({
+    ...searchStage,
+    heldForMs: searchStage.sinceMs ? Date.now() - searchStage.sinceMs : 0,
+  });
+}
+
 export const searchHvscSongs = async (options: {
   query: string;
   path?: string;
   offset?: number;
   limit?: number;
 }): Promise<ReturnType<typeof hvscIndex.searchSongs>> => {
+  // Timed by stage, because "the search is slow" has three completely different causes and only one
+  // of them is the search: waiting for the songlengths, materialising the browse index, and the scan
+  // itself. Two of the three are paid once per launch and the third is paid per keystroke, so a
+  // single total cannot tell anyone which one to go and fix.
+  const songlengthsAt = performance.now();
+  markSearchStage("songlengths", options.query);
   await ensureHvscSonglengthsReadyOnColdStart();
+  const snapshotAt = performance.now();
+  markSearchStage("browse-index", options.query);
   const snapshot = await hvscIndex.loadBrowseSnapshot();
-  if (!snapshot) return null;
-  return hvscIndex.searchSongs(options);
+  const scanAt = performance.now();
+  markSearchStage("scan", options.query);
+  const page = snapshot ? hvscIndex.searchSongs(options) : null;
+  markSearchStage("done", options.query);
+  addLog("info", "HVSC search timing", {
+    query: options.query,
+    songlengthsMs: Math.round(snapshotAt - songlengthsAt),
+    snapshotMs: Math.round(scanAt - snapshotAt),
+    scanMs: Math.round(performance.now() - scanAt),
+    totalMs: Math.round(performance.now() - songlengthsAt),
+    results: page?.songs.length ?? null,
+    matched: page?.totalSongs ?? null,
+  });
+  return page;
 };
 
 /**

@@ -10,6 +10,122 @@ physical rig), while the host-deterministic budget checks run in CI.
 - **`av_sync_hil.py`** — Live View A/V sync + input latency. See **A/V sync** below.
 - **`seek_latency_hil.py`** — what a backward seek costs the listener, measured at the speaker.
   See **Seek latency** below.
+- **`joystick_rotation_hil.mjs`** — physical keys → joystick, asserted on the C64's own screen at
+  three handset orientations. See **Physical keys and rotation** below. This one is the exception to
+  "no raw ADB product input": the thing under test IS Android's key pipeline, so the keys have to
+  enter the app the way a handset's keypad enters it.
+- **`hvsc_search_soak.mjs`** — "Find a tune" latency over many consecutive queries. See **HVSC
+  search** below.
+
+## THE trap: a hidden WebView
+
+**Read this before diagnosing any hang.** Chromium suspends timers in a hidden page, and Capacitor
+delivers plugin results by evaluating JavaScript in the WebView — so a phone that has locked itself
+produces, all at once:
+
+- debounces that never fire, so a search box sits on "Searching…" for ever;
+- `Filesystem.readFile` promises that never settle, which reads exactly like a bridge that cannot
+  carry a large file;
+- an in-app log that never reaches storage, so the diagnostics say the code never ran.
+
+`Runtime.evaluate` keeps working throughout, so the page looks responsive and every symptom points
+at the app. This cost the best part of a day and produced a confidently wrong root cause: a
+`Filesystem.readFile` measured as "never returns" was, with the page visible, 1,084 ms.
+
+```bash
+adb shell wm dismiss-keyguard     # the one that matters
+adb shell svc power stayon usb    # keeps the screen lit — does NOT dismiss the keyguard
+adb shell dumpsys window | grep -m1 isKeyguardShowing
+node scripts/bughunt-cdp.mjs eval '(()=>JSON.stringify({hidden:document.hidden}))()'
+```
+
+`hvsc_search_soak.mjs` refuses to report a hang without checking `document.hidden` first, and any
+new harness should do the same.
+
+## HVSC search
+
+`hvsc_search_soak.mjs` measures what the listener waits for: the time from a query landing in the
+box to rows being on screen, over many consecutive queries with a spread of result counts.
+
+```bash
+node tools/hil/hvsc_search_soak.mjs --iterations 100
+```
+
+Timed from the host on purpose — a page-side stopwatch stops ticking during exactly the stalls worth
+measuring, so it cannot include the fault. The CDP round trip is counted against the budget rather
+than excused from it.
+
+### Measured on the Pixel 4, 2026-08-04 — 100/100 against a real HVSC (61,157 songs, 13.2 MB index)
+
+From a cold app launch: **first query 497 ms**, then n=99 warm min 304 / p50 388 / p95 466 /
+max 495 ms. Budgets: 3,000 ms for the first query, 1,000 ms for every one after it.
+
+## Physical keys and rotation
+
+`joystick_rotation_hil.mjs` answers a question no unit test can: did the key the player pressed
+reach the machine as the direction they expected, after the handset was turned?
+
+`joystickKeyBindings.test.ts` proves the app computes the right joystick line for a key at a
+rotation. Everything past that pure function — the held-set merge, the relay's coalescing,
+`machine:input`, and the CIA — is out of its reach, and each of those has broken this feature
+before. So the assertion is made where the player would make it: on the screen.
+
+The C64 runs `tools/c64/joystick-probe.asm`, written for this and nothing else. A filled PETSCII
+circle moves one cell per joystick press; fire advances its colour and sounds a short blip on SID
+voice 1. State is published in plain RAM at `$C000` (position, colour, per-direction press counts,
+fire count, a magic marker and a frame counter), so a run reads it over
+`GET /v1/machine:readmem` without parsing the display — and then checks the display anyway, because
+that is what the player sees and the two must agree.
+
+Movement is **edge-triggered, one cell per press**. A held direction moves the circle a distance
+that depends on how long the key was down, which over a network relay is not a quantity a test can
+predict. One cell per new press is the same answer every time.
+
+```bash
+# The probe is committed pre-assembled; rebuild it with 64tass after editing the source:
+64tass --cbm-prg -o tools/c64/joystick-probe.prg tools/c64/joystick-probe.asm
+
+# App foregrounded on the phone, CDP forwarded (see the hil-attach skill):
+node tools/hil/joystick_rotation_hil.mjs --layouts diamond8,classicT9 --rotations 0,90,270
+```
+
+Both shipped defaults are run, because they are different products' defaults and a change to one
+is not a change to the other: `c64u-remote` ships **Diamond (8-centred)** — the four keys around
+`8`, with `8` as fire — and `c64commander` ships **Classic T9**. The layout is chosen through
+Settings → Play and Disk → Joystick keys each time, not by writing storage, because the claim
+under test is that the assignment is configurable and the section is collapsed by default.
+
+The diamond is also the layout that puts a direction on `0`, which is the app's global Game Mode
+shortcut. That shortcut is supposed to go inert inside an open overlay so the key can steer
+instead — a rule that means nothing until something checks it against the machine.
+
+**The screen is the trap to watch** — see **THE trap: a hidden WebView** above.
+
+Rotation is set through the sheet's manual override rather than by turning the phone, because a
+test rig cannot turn a phone. The override is not a test seam — it is the shipped control for a
+player lying down or a handset whose sensor cannot answer — and it sets the same `deviceRotation`
+the sensor path sets. The sensor path's own quantiser is covered by `DeviceRotationPluginTest.kt`
+and `deviceRotation.test.ts`.
+
+### Verified on the Pixel 4, 2026-08-04 — 60/60 against the C64U (fw 1.2.0, core 1.4D)
+
+Both layouts × three orientations × ten keys. The first run found one defect: **the D-pad centre
+key fired nothing**. Android delivers `KEYCODE_DPAD_CENTER` to the WebView as `key: "Enter"`,
+`code: ""`, `keyCode: 13` — a DOM `KeyboardEvent` carries the DOM key code, never the Android one —
+so the `keypad` profile's `{ code: "DpadCenter" }` and `{ keyCode: 23 }` bindings could not match
+and the press resolved to `enter`, which the `fire` slot was not bound to. Fixed by binding the
+D-pad's fire slot to both actions; the classicT9 run went 27/30 → 30/30 on the same hardware, and
+diamond8 passed 30/30.
+
+### Two traps this rig has already paid for
+
+- **`run_prg` types RUN into the keyboard matrix.** A key press shorts a matrix COLUMN to a row,
+  and the columns are `$DC00` — the same register the joystick is read from. `N` sits on column 4,
+  which is the fire bit, so every start produced one phantom fire. The probe discards its first
+  second and seeds its baseline from the mask left at the end of it.
+- **`jsr` clobbers the accumulator.** Shifting the edge mask along in `A` across the direction
+  handlers made one press arrive as up, down, left, right and fire together — a fault that looks
+  exactly like the app relaying garbage. Each bit is re-read from memory instead.
 
 ## Audio overlap + transport
 
@@ -23,15 +139,15 @@ python3 tools/hil/audio_overlap_hil.py --serial <ADB_SERIAL> --switch-devices
 
 ### Verified on the Pixel 4, 2026-07-27 — 13/13 against the C64U
 
-| Check | Result |
-| --- | --- |
-| A local tune plays | 1 app audio stream, −30.2 dBFS (11.8 dB over the room floor) |
-| Live View audio started **on top of** a local tune | 1 stream — the tune is stopped, never layered |
-| A local tune started **on top of** the mirror | 1 stream — the mirror is stopped |
-| After a WebView reload | 0 streams (the native AudioTrack no longer outlives the page) |
-| Pause on a Play page mounted mid-tune | enabled, and it stops the audio |
-| Play/Stop, Previous, Next | usable, labelled for the running tune |
-| Progress bar seekable | yes on the local route, absent on the C64 route |
+| Check                                              | Result                                                        |
+| -------------------------------------------------- | ------------------------------------------------------------- |
+| A local tune plays                                 | 1 app audio stream, −30.2 dBFS (11.8 dB over the room floor)  |
+| Live View audio started **on top of** a local tune | 1 stream — the tune is stopped, never layered                 |
+| A local tune started **on top of** the mirror      | 1 stream — the mirror is stopped                              |
+| After a WebView reload                             | 0 streams (the native AudioTrack no longer outlives the page) |
+| Pause on a Play page mounted mid-tune              | enabled, and it stops the audio                               |
+| Play/Stop, Previous, Next                          | usable, labelled for the running tune                         |
+| Progress bar seekable                              | yes on the local route, absent on the C64 route               |
 
 Audio **quality** was checked separately, because "no overlap" is not "sounds right": a 14 s capture
 of `Use_My_Fire.sid` scored **melSim 0.716** against a `sidplayfp` render of the same file pulled off

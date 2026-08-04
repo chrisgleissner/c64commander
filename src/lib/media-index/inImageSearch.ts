@@ -19,6 +19,7 @@
  * `container`); no disk gets children until it is re-scanned.
  */
 
+import { foldForSearch } from "@/lib/hvsc/hvscBrowseIndexStore";
 import type { MediaEntry, MediaIndexSnapshot, MediaType } from "./mediaIndex";
 import type { C64FileType, DiskDirectoryEntry, DiskImageType } from "@/lib/disks/diskImage";
 
@@ -42,6 +43,15 @@ export interface MediaEntryV2 {
   sizeBytes?: number | null;
   /** Present only on in-image CHILD entries. */
   container?: MediaEntryContainer;
+  /**
+   * Set on a DISK entry once its directory has been read, naming the version that was read.
+   *
+   * Freshness used to be inferred from a disk having children, which is the same answer as "this
+   * disk was scanned" for every disk except an empty one — and an empty one then has no record at
+   * all, so every scan read it again over the network for ever. Recording the scan rather than
+   * inferring it from its output makes "scanned and found nothing" a fact the index can hold.
+   */
+  scannedContents?: { diskSize: number; diskMtime: string };
 }
 
 export interface MediaIndexSnapshotV2 {
@@ -102,34 +112,55 @@ export const toChildEntry = (
 });
 
 /**
- * True when the index already holds children for this exact disk version
- * (path + size + mtime), so a re-scan can skip re-reading an unchanged disk.
+ * True when this exact disk version (path + size + mtime) has already been read, so a re-scan can
+ * skip it.
+ *
+ * Answered from the disk entry's own {@link MediaEntryV2.scannedContents} stamp where there is one,
+ * and from the presence of children otherwise — which is what an index written before the stamp
+ * existed carries. The stamp is what makes an EMPTY disk image skippable: it has no children to
+ * infer from, so without it every scan re-read it.
  */
 export const hasFreshChildren = (
   entries: MediaEntryV2[],
   diskPath: string,
   diskSize: number,
   diskMtime: string,
-): boolean =>
-  entries.some(
+): boolean => {
+  const stamped = entries.some(
+    (entry) =>
+      entry.path === diskPath &&
+      entry.scannedContents?.diskSize === diskSize &&
+      entry.scannedContents?.diskMtime === diskMtime,
+  );
+  if (stamped) return true;
+  return entries.some(
     (entry) =>
       isChildEntry(entry) &&
       entry.container.diskPath === diskPath &&
       entry.container.diskSize === diskSize &&
       entry.container.diskMtime === diskMtime,
   );
+};
 
 /**
  * Drop every existing child of `diskPath` (any version) and append the new
  * children — the supersede-on-rewrite rule. Non-child and other-disk rows are
  * untouched. Returns a new array.
+ *
+ * The disk's own entry is stamped with the version that was read, so {@link hasFreshChildren} can
+ * answer for a disk that legitimately contains no programs. Passing `scanned` is what records the
+ * scan; omitting it leaves the stamp alone, which is what a caller that is only editing children
+ * wants.
  */
 export const replaceChildren = (
   entries: MediaEntryV2[],
   diskPath: string,
   children: MediaEntryV2[],
+  scanned?: { diskSize: number; diskMtime: string },
 ): MediaEntryV2[] => {
-  const kept = entries.filter((entry) => !(isChildEntry(entry) && entry.container.diskPath === diskPath));
+  const kept = entries
+    .filter((entry) => !(isChildEntry(entry) && entry.container.diskPath === diskPath))
+    .map((entry) => (scanned && entry.path === diskPath ? { ...entry, scannedContents: { ...scanned } } : entry));
   return [...kept, ...children];
 };
 
@@ -147,20 +178,26 @@ export interface SearchOptions {
 }
 
 /**
- * Case-insensitive, multi-word AND search over entry names. With
+ * Case-insensitive, accent-insensitive, multi-word AND search over entry names. With
  * `searchInsideDisks` off, child (in-image) entries are excluded — today's
  * top-level-only behaviour. An empty query matches nothing.
+ *
+ * Accents are folded the same way {@link foldForSearch} folds them for HVSC and for the
+ * walk-the-source search, because the person typing does not know which index is answering.
+ * Searching "bohme" found Böhme in HVSC and in a folder on the card, and nothing at all in the
+ * media index — and this is the index holding European demo and game filenames, where the
+ * accents actually are.
  */
 export const searchMediaEntries = (
   entries: MediaEntryV2[],
   query: string,
   { searchInsideDisks }: SearchOptions,
 ): MediaEntryV2[] => {
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const terms = foldForSearch(query.toLowerCase()).split(/\s+/).filter(Boolean);
   if (terms.length === 0) return [];
   return entries.filter((entry) => {
     if (isChildEntry(entry) && !searchInsideDisks) return false;
-    const name = entry.name.toLowerCase();
+    const name = foldForSearch(entry.name.toLowerCase());
     return terms.every((term) => name.includes(term));
   });
 };

@@ -172,15 +172,28 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
         bumpIdle();
         reset();
       },
+      /**
+       * `dx`/`dy` are the direction the key points in PORTRAIT, which is how the key handler
+       * names them. Mapping them through the same rotation the drag path uses answers both
+       * questions the turned handset raises at once: the portrait-right key points down once
+       * the handset is turned 90° clockwise, and the picture the player is looking at is the
+       * stage's own upright frame — and `unrotateDelta` of the portrait direction is exactly
+       * that composition.
+       *
+       * Without it the drag path panned along the axis the player saw and the KEYS panned
+       * along the untouched one, so the same adjustment done two ways went two different
+       * directions — and only the drag had a test above 0°.
+       */
       panStep: (dx, dy) => {
         bumpIdle();
         const scale = viewportStateRef.current.scale;
-        panBy((dx * KEY_PAN_STEP) / scale, (dy * KEY_PAN_STEP) / scale);
+        const local = unrotateDelta(dx, dy, rotation);
+        panBy((local.x * KEY_PAN_STEP) / scale, (local.y * KEY_PAN_STEP) / scale);
       },
       toggleMode,
       getMode: () => modeRef.current,
     }),
-    [zoomBy, panBy, reset, toggleMode, bumpIdle],
+    [zoomBy, panBy, reset, toggleMode, bumpIdle, rotation],
   );
 
   // --- Touch gestures on the picture (always view-control, per §7.1) ---

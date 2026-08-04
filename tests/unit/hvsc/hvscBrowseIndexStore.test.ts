@@ -631,7 +631,13 @@ describe("hvscBrowseIndexStore", () => {
     );
   });
 
-  it("logs base64 decode failures for filesystem browse snapshots", async () => {
+  /**
+   * The decode itself now belongs to `hvscFilesystem.readDataFileText`, which is where every
+   * Data-directory read goes so the browse index can be fetched through the WebView's file server
+   * instead of the base64 bridge. What has to stay true here is the outcome: an undecodable payload
+   * yields no snapshot and is reported rather than swallowed.
+   */
+  it("reports a base64 decode failure and produces no snapshot", async () => {
     if (typeof localStorage !== "undefined") localStorage.clear();
     vi.stubGlobal("atob", () => {
       throw new Error("atob unavailable");
@@ -644,9 +650,9 @@ describe("hvscBrowseIndexStore", () => {
 
     expect(loaded).toBeNull();
     expect(addLog).toHaveBeenCalledWith(
-      "warn",
-      "Failed to decode HVSC snapshot base64 payload",
-      expect.objectContaining({ error: "atob unavailable" }),
+      "debug",
+      "HVSC filesystem: Failed to decode base64 text",
+      expect.objectContaining({ error: expect.anything() }),
     );
   });
 

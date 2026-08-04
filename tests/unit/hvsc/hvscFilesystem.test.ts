@@ -29,6 +29,7 @@ import {
   writeStilFile,
   readStilFile,
   resetStilStore,
+  readDataFileText,
 } from "@/lib/hvsc/hvscFilesystem";
 import { saveHvscState } from "@/lib/hvsc/hvscStateStore";
 import * as logging from "@/lib/logging";
@@ -75,9 +76,21 @@ const listDir = (path: string) => {
   }));
 };
 
+const capacitorState = vi.hoisted(() => ({ native: false }));
+
+vi.mock("@capacitor/core", () => ({
+  Capacitor: {
+    isNativePlatform: () => capacitorState.native,
+    convertFileSrc: (uri: string) => `http://localhost/_capacitor_file_${uri.replace("file://", "")}`,
+  },
+}));
+
 vi.mock("@capacitor/filesystem", () => ({
   Directory: { Data: "DATA" },
   Filesystem: {
+    getUri: vi.fn(async ({ path }: { path: string }) => ({
+      uri: `file:///data/user/0/uk.gleissner.c64commander/files/${normalizePath(path)}`,
+    })),
     mkdir: vi.fn(async ({ path }: { path: string }) => {
       ensureDir(path);
     }),
@@ -442,5 +455,64 @@ describe("STIL files", () => {
     await writeStilFile("shard-0.json", "{}");
     await resetStilStore();
     expect([...files.keys()].some((path) => path.startsWith("hvsc/stil/"))).toBe(false);
+  });
+});
+
+/**
+ * A real HVSC persists a 13.2 MB browse index. `Filesystem.readFile` hands a file back as one
+ * base64 string in one Capacitor message, and measured on a Pixel 4 against that exact file it did
+ * not return at all — so "Find a tune", which cannot answer until the index is resident, sat on
+ * "Searching…" indefinitely. The same file fetched through the WebView's own file server took
+ * 939 ms end to end including the parse.
+ */
+describe("readDataFileText", () => {
+  const setNative = (native: boolean) => {
+    capacitorState.native = native;
+  };
+
+  beforeEach(() => {
+    files.clear();
+    vi.unstubAllGlobals();
+    vi.mocked(Filesystem.readFile).mockClear();
+    setNative(false);
+  });
+
+  it("reads through the bridge where there is no file server", async () => {
+    await writeStilFile("plain.json", "hello");
+    expect(await readDataFileText("hvsc/stil/plain.json")).toBe("hello");
+  });
+
+  it("reads through the file server on a native platform, never through the bridge", async () => {
+    setNative(true);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, status: 200, text: async () => "streamed" })),
+    );
+
+    expect(await readDataFileText("hvsc/index/media-index-v2.json")).toBe("streamed");
+    // The whole point: a 13.2 MB file must never be pulled across the bridge as base64.
+    expect(Filesystem.readFile).not.toHaveBeenCalled();
+  });
+
+  it("answers null for a file the server does not have, the way absence is reported everywhere else", async () => {
+    setNative(true);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 404, text: async () => "" })),
+    );
+    expect(await readDataFileText("hvsc/index/missing.json")).toBeNull();
+  });
+
+  it("falls back to the bridge when the file server fails for any other reason", async () => {
+    await writeStilFile("fallback.json", "from the bridge");
+    setNative(true);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("connection refused");
+      }),
+    );
+    expect(await readDataFileText("hvsc/stil/fallback.json")).toBe("from the bridge");
+    expect(Filesystem.readFile).toHaveBeenCalled();
   });
 });

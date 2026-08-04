@@ -162,6 +162,22 @@ internal class AudioPipeline(
   @Volatile private var writeFrames: Long = 0
   @Volatile private var readFrames: Long = 0
 
+  /**
+   * Bumped by every [flush]. The player reads it before rendering a chunk and again before
+   * committing what that chunk consumed.
+   *
+   * `readFrames` is advanced by the player and reset by [flush], and `+=` on a volatile is a read,
+   * an add and a write rather than one atomic step — so a flush landing between the player's read
+   * and its write was simply overwritten, and the ring kept playing the second or two of audio the
+   * flush existed to throw away. A pause or a seek would carry on with the old position for as long
+   * as the ring was deep. Comparing the counter is what makes the player able to notice it has been
+   * overtaken, and to drop the chunk it had already converted rather than write it.
+   */
+  @Volatile private var flushSeq: Long = 0
+
+  /** The last [flushSeq] the player has acted on, so it can reset its own interpolator state once. */
+  private var seenFlushSeq: Long = 0
+
   @Volatile private var refusedBytes: Long = 0
   @Volatile private var discardedBytes: Long = 0
   @Volatile private var concealedFrames: Long = 0
@@ -277,6 +293,7 @@ internal class AudioPipeline(
   fun flush() {
     synchronized(producerLock) {
       readFrames = writeFrames
+      flushSeq += 1
     }
   }
 
@@ -631,7 +648,7 @@ internal class AudioPipeline(
           // Safety net. The converter should have prevented this; if it did not, playing the backlog
           // out would be permanent added latency, so drop it and say so.
           val excess = depth - targetFrames
-          readFrames += excess
+          synchronized(producerLock) { readFrames += excess }
           discardedBytes += excess * BYTES_PER_FRAME
           fraction = 0.0
           continue
@@ -654,6 +671,15 @@ internal class AudioPipeline(
    * absorbed continuously instead of accumulating until something has to be dropped or concealed.
    */
   private fun renderChunk(outFrames: Int) {
+    // Taken before anything is read out of the ring, and checked again before the result is
+    // committed. A flush that lands in between has thrown away the audio this chunk was built from,
+    // so the chunk is dropped rather than written — and the interpolator's sub-sample position is
+    // reset, because it describes a place in a ring that no longer holds what it did.
+    val flushAtStart = flushSeq
+    if (flushAtStart != seenFlushSeq) {
+      seenFlushSeq = flushAtStart
+      fraction = 0.0
+    }
     val depth = (writeFrames - readFrames).coerceAtLeast(0)
     adaptCushion(depth)
     // Slew-limited, never stepped. The correction IS a change of playback rate, so moving it abruptly
@@ -699,8 +725,23 @@ internal class AudioPipeline(
       pos += ratio
     }
     val consumed = pos.toInt()
-    readFrames += consumed.toLong()
-    fraction = pos - consumed
+    val committed =
+        synchronized(producerLock) {
+          if (flushSeq != flushAtStart) {
+            false
+          } else {
+            readFrames += consumed.toLong()
+            fraction = pos - consumed
+            true
+          }
+        }
+    // Written only after the position is committed, so a chunk built from audio a flush has since
+    // discarded never reaches the speaker. Outside the lock: this blocks on the AudioTrack, and the
+    // producer must never wait on that.
+    if (!committed) {
+      fraction = 0.0
+      return
+    }
     writeBlocking(outScratch, renderFrames * BYTES_PER_FRAME)
   }
 

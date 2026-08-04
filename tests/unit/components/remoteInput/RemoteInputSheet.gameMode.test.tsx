@@ -7,7 +7,7 @@
  */
 
 import { useState } from "react";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const tierState = { tier: "full" as "full" | "kernal-fallback", loading: false, resolved: true };
@@ -284,6 +284,80 @@ describe("RemoteInputSheet — Game Mode", () => {
 
       fireEvent.click(screen.getByTestId("remote-input-rotation-90"));
       expect(setHeldJoystickInputsMock).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * The two shipped defaults, driven the way a handset drives them.
+   *
+   * Events are built as ANDROID sends them, not as a desktop keyboard does: measured on a Pixel 4,
+   * the WebView delivers a keypad digit with an EMPTY `code` and the DOM key code, and the D-pad's
+   * centre as `Enter`/13 rather than anything named `DpadCenter`. Tests written with `code:
+   * "Numpad4"` exercise a shape the target hardware never produces, which is how a binding that
+   * could not match on device passed every unit test it had.
+   *
+   * `tools/hil/joystick_rotation_hil.mjs` asserts the same two tables against a real C64.
+   */
+  describe("GM-8: the shipped layouts, as a handset delivers them", () => {
+    const androidDigit = (digit: number) => ({ code: "", key: String(digit), keyCode: 48 + digit });
+    const ANDROID_DPAD_CENTRE = { code: "", key: "Enter", keyCode: 13 };
+
+    const openAt = (layout: string) => {
+      localStorage.setItem("c64u_remote_input_joystick_layout", layout);
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      enterGameMode();
+    };
+
+    const press = (event: Record<string, unknown>) => {
+      setHeldJoystickInputsMock.mockClear();
+      fireEvent.keyDown(sheet(), event);
+      const held = setHeldJoystickInputsMock.mock.lastCall?.[0] as ReadonlySet<string> | undefined;
+      fireEvent.keyUp(sheet(), event);
+      return [...(held ?? new Set())].sort();
+    };
+
+    it("steers the 8-centred diamond from the four keys around 8, with 8 as fire", () => {
+      openAt("diamond8");
+      expect(press(androidDigit(5))).toEqual(["up"]);
+      expect(press(androidDigit(0))).toEqual(["down"]);
+      expect(press(androidDigit(7))).toEqual(["left"]);
+      expect(press(androidDigit(9))).toEqual(["right"]);
+      expect(press(androidDigit(8))).toEqual(["fire"]);
+    });
+
+    it("steers Classic T9 from 2/4/6/8 with 5 as fire", () => {
+      openAt("classicT9");
+      expect(press(androidDigit(2))).toEqual(["up"]);
+      expect(press(androidDigit(8))).toEqual(["down"]);
+      expect(press(androidDigit(4))).toEqual(["left"]);
+      expect(press(androidDigit(6))).toEqual(["right"]);
+      expect(press(androidDigit(5))).toEqual(["fire"]);
+    });
+
+    it("gives 8 opposite meanings under the two layouts, which is the whole point of choosing", () => {
+      openAt("diamond8");
+      expect(press(androidDigit(8))).toEqual(["fire"]);
+      cleanup();
+      openAt("classicT9");
+      expect(press(androidDigit(8))).toEqual(["down"]);
+    });
+
+    it("fires from the D-pad centre in both layouts, however the WebView reports it", () => {
+      for (const layout of ["diamond8", "classicT9"]) {
+        openAt(layout);
+        expect(press(ANDROID_DPAD_CENTRE)).toEqual(["fire"]);
+        cleanup();
+      }
+    });
+
+    it("turns the diamond with the handset, so 0 steers right once it is held sideways", () => {
+      openAt("diamond8");
+      fireEvent.click(screen.getByTestId("remote-input-restore-chrome"));
+      fireEvent.click(screen.getByTestId("remote-input-rotation-270"));
+      // 0 is DOWN in portrait; turned anticlockwise it points right.
+      expect(press(androidDigit(0))).toEqual(["right"]);
+      expect(press(androidDigit(5))).toEqual(["left"]);
+      expect(press(androidDigit(8))).toEqual(["fire"]);
     });
   });
 

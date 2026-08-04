@@ -95,6 +95,32 @@ describe("StreamGovernor — audio warmup + video-only (HIL-hardened)", () => {
     expect(gov.update(healthy({ audioUnderruns: 1, audioActive: true }), t + 500).effectivePercent).toBe(80);
   });
 
+  /**
+   * The warmup guard has to be per audio START, not per session. The session is only reset when
+   * NEITHER feed is live, so turning Listen off and on again while the picture stays up used to
+   * leave the latch set from the first start — and the second start's buffer, filling from 0
+   * exactly as the first one did, read as starvation instead of warmup.
+   */
+  it("protects the second audio start as well, when the picture never stopped", () => {
+    const gov = new StreamGovernor("auto");
+    let t = 0;
+    // First start primes and the governor is at full rate.
+    gov.update(healthy({ audioActive: true }), (t += 250));
+    expect(gov.state.effectivePercent).toBe(100);
+
+    // Listen off. The picture stays live, so nothing resets the session.
+    for (let i = 0; i < 3; i++) gov.update(healthy({ audioBufferMs: 0, audioActive: false }), (t += 250));
+    expect(gov.state.effectivePercent).toBe(100);
+
+    // Listen on again: the buffer fills from 0 exactly as it did the first time.
+    for (let i = 0; i < 5; i++) gov.update(healthy({ audioBufferMs: 0, audioActive: true }), (t += 250));
+    expect(gov.state.effectivePercent).toBe(100);
+
+    // And once it primes, adaptation resumes as before.
+    gov.update(healthy({ audioActive: true }), (t += 250));
+    expect(gov.update(healthy({ audioUnderruns: 1, audioActive: true }), (t += 250)).effectivePercent).toBe(80);
+  });
+
   it("a video-only session (audioActive:false) ignores the audio buffer and holds full rate", () => {
     const gov = new StreamGovernor("auto");
     let t = 0;

@@ -113,6 +113,27 @@ describe("resolveJoystickInputs — the hardware D-pad addition", () => {
     expect(at("center", 90)).toEqual(["fire"]);
   });
 
+  /**
+   * Measured on a Pixel 4: Android hands `KEYCODE_DPAD_CENTER` to the WebView as
+   * `key: "Enter"`, `code: ""`, `keyCode: 13`. A DOM `KeyboardEvent` carries the DOM key code
+   * rather than the Android one, so the `keypad` profile's `{ code: "DpadCenter" }` and
+   * `{ keyCode: 23 }` bindings cannot match and the press resolves to `enter`. With `fire`
+   * bound to `center` alone, the D-pad's own fire button reached the C64 as nothing at all —
+   * confirmed against the machine by `tools/hil/joystick_rotation_hil.mjs`, which read the
+   * fire counter of `tools/c64/joystick-probe.asm` after each press.
+   */
+  it("fires from the D-pad centre however the WebView reports it", () => {
+    expect(at("enter", 0)).toEqual(["fire"]);
+    expect(at("center", 0)).toEqual(["fire"]);
+  });
+
+  it("keeps the D-pad centre orientation-invariant whichever action it arrives as", () => {
+    for (const rotation of [0, 90, 180, 270] as const) {
+      expect(at("enter", rotation)).toEqual(["fire"]);
+      expect(at("center", rotation)).toEqual(["fire"]);
+    }
+  });
+
   it("unions with the active binding when a key is bound in both", () => {
     const binding: JoystickKeyBinding = { left: "dpadUp" };
     expect(resolveJoystickInputs("dpadUp", binding, 0).sort()).toEqual(["left", "up"]);

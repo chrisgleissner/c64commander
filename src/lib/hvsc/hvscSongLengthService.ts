@@ -12,6 +12,7 @@ import {
   mergeSonglengthDurationsIntoBrowseIndex,
   saveHvscBrowseIndexSnapshot,
 } from "@/lib/hvsc/hvscBrowseIndexStore";
+import { readDataFileText } from "@/lib/hvsc/hvscFilesystem";
 import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
@@ -214,14 +215,18 @@ const discoverSonglengthFiles = async (force = false): Promise<SongLengthSourceF
       continue;
     }
     try {
-      const file = await Filesystem.readFile({
-        directory: Directory.Data,
-        path,
-      });
-      files.push({
-        path,
-        content: decodeBase64Text(file.data),
-      });
+      // Through the WebView's file server, not the base64 bridge: a real HVSC's Songlengths.md5 is
+      // 5.2 MB, the second largest read the app makes and the one every search waits behind. See
+      // `readDataFileText` for the measured difference between the two routes.
+      const content = await readDataFileText(path);
+      if (content === null) {
+        addLog("debug", "HVSC songlengths file disappeared before read", {
+          service: "hvsc-songlengths",
+          path,
+        });
+        continue;
+      }
+      files.push({ path, content });
     } catch (error) {
       if (isMissingPathError(error)) {
         addLog("debug", "HVSC songlengths file disappeared before read", {
