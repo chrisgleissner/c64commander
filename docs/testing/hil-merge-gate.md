@@ -62,14 +62,26 @@ The pitches are far apart and deliberately not an octave — an octave shares ha
 tone is then mistaken for the other — and both are where a phone speaker actually works. The
 stages check the playlist first and name what is missing rather than grading something else.
 
-**They also need enough level to grade.** A generated SID holding one tone is far quieter at the
-microphone than the barcode stimulus `av-clarity` uses: measured on this rig at **-73 dBFS at
-volume 5** and **-68 dBFS at volume 10**, against a `-60 dBFS` floor below which the presence test
-cannot be separated from the room. `steady_tone_grade.py` reports `TOO QUIET TO GRADE` in that
-case and the stage fails saying so — it does **not** report a pipeline defect, because at that
-level it cannot tell one from a quiet room. The remedy is physical: move the microphone closer to
-the grille (`AGENTS.md`'s 27 dB SNR figure is measured 4 mm from it). The stages run at
-`--tone-volume` (default 10), which is the ceiling, so there is no headroom left to spend.
+Generate them **loud**: `--waveform sawtooth --volume 15`. The generator defaults to a triangle at
+volume 4 of 15, which is the quietest and most harmonically bare thing a SID can produce, and at
+550 Hz that puts almost all of its energy at the bottom edge of the 300-6000 Hz band the graders
+work in. The stages also run at `--tone-volume` (default 10), which is the phone-volume ceiling.
+
+**`steady_tone_grade.py` refuses to grade what it cannot hear**, in two distinct ways, because the
+two have different causes and different fixes:
+
+- `NO TONE` — the pitch is present in under 20% of windows, which is what an empty room looks
+  like. Check that something is actually playing before reading anything else in the report.
+- `TOO QUIET TO GRADE` — the tone is there but under `-60 dBFS`, where the presence test cannot be
+  separated from the room. Move the microphone closer to the grille (`AGENTS.md`'s 27 dB SNR figure
+  is measured 4 mm from it).
+
+Both matter more than they look. An earlier version of this grader used a 6 dB signal-to-noise
+margin, and with nothing playing at all the loudest bin inside its search window around 550 Hz was
+room noise: it cleared that margin often enough to report the tone "present in 45% of windows, 11
+cents sharp". A silent room was graded as a quiet, slightly detuned tune, and that reading sent an
+investigation after the wrong thing. The margin is now 12 dB and the same recordings grade as
+`NO TONE` at 0.5% presence.
 
 ## Audio discipline
 
@@ -128,15 +140,24 @@ A full run on the shipped build, with the gate setting Listen and Watch itself:
 | `wire` | pass — sender loss 0.00%, inter-arrival p99 4.18 ms |
 | `av-clarity` | pass — 82 tones, 3 defective, 0% dropout |
 | `av-latency` | pass — 527 ms wire → speaker, correlation 0.885 |
-| `sid-remote` | **cannot be measured** — tone at -73 dBFS, below the grading floor |
-| `sid-local` | **cannot be measured** — tone at -68 dBFS, below the grading floor |
-| `crossfade` | **cannot be measured** — the grader reports a tone never rose above digital silence |
+| `sid-remote` | **`NO TONE`** — nothing was playing |
+| `sid-local` | **`NO TONE`** — nothing was playing |
+| `crossfade` | **inconclusive** — the grader reports a tone never rose above digital silence |
 
-The three playback stages are wired and produce real verdicts; on this rig, with the microphone
-where it currently sits, the generated tones do not reach a level they can be graded at within the
-volume ceiling. The pitch is right in all three recordings (+9 to +11 cents at 550 Hz), so the
-tunes are playing and the paths are working — what is missing is signal-to-noise at the
-microphone, not audio at the speaker. Move the microphone to the grille and re-run.
+The three playback stages are wired and produce real verdicts. On this rig they currently find no
+tone at all: a second-by-second spectrum of the recordings is flat room noise around -85 dB with
+its energy scattered between 300 and 1100 Hz, and nothing at 550 Hz. The app reports the tune as
+playing — the transport shows Pause, the track header reads the right title — while
+`playback-elapsed` stays at `0:00` and `dumpsys media.audio_flinger` shows **no active track**. The
+diagnostics log records `Playback request started` and then nothing at all: no launch, no error.
+
+**This is not attributed to the app.** The two tone tunes live in the app's own HVSC library, and
+they were replaced underneath it (`run-as ... cat > files/hvsc/library/...`) to make them louder,
+against index entries the app wrote days earlier. A playback path that will not play a file whose
+bytes changed beneath a cached index entry is a plausible consequence of that, and separating it
+from a product defect needs a clean library and a control tune this session did not have the room
+to set up. Start there: add an untouched tune from the same folder to the playlist and see whether
+it plays.
 
 **Latency varies a lot between runs**: 315 ms, 335 ms and 527 ms on the same rig within an hour.
 There is deliberately no threshold on it yet — three samples cannot support one. Collect more

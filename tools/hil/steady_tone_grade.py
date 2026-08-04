@@ -56,7 +56,17 @@ PRESENT_FRACTION = 0.10
 
 #: ...and only if the tone also stands this far above the same window's out-of-band energy. The
 #: fraction alone is a ratio against a peak that might itself be noise.
-SNR_MARGIN_DB = 6.0
+#:
+#: 6 dB was not enough, and the way it failed is worth keeping: with nothing playing at all, the
+#: loudest bin inside the search window around 550 Hz was room noise, it cleared a 6 dB margin often
+#: enough to look present in 45% of windows, and the run was reported as a quiet tone 11 cents sharp
+#: rather than as silence. A grader that can mistake a room for a tune is worse than no grader.
+SNR_MARGIN_DB = 12.0
+
+#: Below this the recording holds no tone at all, however loud the room is. Reported as its own
+#: verdict, because "nothing is playing" and "the tone is too quiet to grade" have different causes
+#: and different fixes, and conflating them sent one investigation after the wrong one.
+ABSENT_FRACTION = 0.20
 
 BAND = (300.0, 6000.0)
 
@@ -147,6 +157,15 @@ def main() -> int:
     args = ap.parse_args()
 
     result = grade(args.file, args.hz)
+    if result["present_fraction"] < ABSENT_FRACTION:
+        result["verdict"] = "NO TONE"
+        result["faults"] = [
+            f"no {args.hz:g} Hz tone in the recording — it is present in only "
+            f"{result['present_fraction'] * 100:.1f}% of windows, which is what an empty room looks "
+            f"like. Check that something is actually playing before reading anything else here"
+        ]
+        print(json.dumps(result) if args.json else f"VERDICT     {result['verdict']}  ({result['faults'][0]})")
+        return 2
     if result["peak_dbfs"] < args.min_peak_dbfs:
         result["verdict"] = "TOO QUIET TO GRADE"
         result["faults"] = [

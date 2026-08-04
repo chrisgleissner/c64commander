@@ -404,6 +404,9 @@ return JSON.stringify({engine:q("playback-engine-${engine}")?.getAttribute("aria
   ]);
   const report = JSON.parse((/\{.*\}/s.exec(graded.out) ?? ["{}"])[0]);
   if (!report.verdict) throw new Error(`the grader printed no verdict: ${graded.out.trim().slice(-200)}`);
+  if (report.verdict === "NO TONE") {
+    throw new Error(`${label}: nothing was playing — ${report.faults.join("; ")}`);
+  }
   if (report.verdict === "TOO QUIET TO GRADE") {
     throw new Error(`${label}: cannot be measured on this rig — ${report.faults.join("; ")}`);
   }
