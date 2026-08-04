@@ -43,6 +43,15 @@ export interface MediaEntryV2 {
   sizeBytes?: number | null;
   /** Present only on in-image CHILD entries. */
   container?: MediaEntryContainer;
+  /**
+   * Set on a DISK entry once its directory has been read, naming the version that was read.
+   *
+   * Freshness used to be inferred from a disk having children, which is the same answer as "this
+   * disk was scanned" for every disk except an empty one — and an empty one then has no record at
+   * all, so every scan read it again over the network for ever. Recording the scan rather than
+   * inferring it from its output makes "scanned and found nothing" a fact the index can hold.
+   */
+  scannedContents?: { diskSize: number; diskMtime: string };
 }
 
 export interface MediaIndexSnapshotV2 {
@@ -103,34 +112,55 @@ export const toChildEntry = (
 });
 
 /**
- * True when the index already holds children for this exact disk version
- * (path + size + mtime), so a re-scan can skip re-reading an unchanged disk.
+ * True when this exact disk version (path + size + mtime) has already been read, so a re-scan can
+ * skip it.
+ *
+ * Answered from the disk entry's own {@link MediaEntryV2.scannedContents} stamp where there is one,
+ * and from the presence of children otherwise — which is what an index written before the stamp
+ * existed carries. The stamp is what makes an EMPTY disk image skippable: it has no children to
+ * infer from, so without it every scan re-read it.
  */
 export const hasFreshChildren = (
   entries: MediaEntryV2[],
   diskPath: string,
   diskSize: number,
   diskMtime: string,
-): boolean =>
-  entries.some(
+): boolean => {
+  const stamped = entries.some(
+    (entry) =>
+      entry.path === diskPath &&
+      entry.scannedContents?.diskSize === diskSize &&
+      entry.scannedContents?.diskMtime === diskMtime,
+  );
+  if (stamped) return true;
+  return entries.some(
     (entry) =>
       isChildEntry(entry) &&
       entry.container.diskPath === diskPath &&
       entry.container.diskSize === diskSize &&
       entry.container.diskMtime === diskMtime,
   );
+};
 
 /**
  * Drop every existing child of `diskPath` (any version) and append the new
  * children — the supersede-on-rewrite rule. Non-child and other-disk rows are
  * untouched. Returns a new array.
+ *
+ * The disk's own entry is stamped with the version that was read, so {@link hasFreshChildren} can
+ * answer for a disk that legitimately contains no programs. Passing `scanned` is what records the
+ * scan; omitting it leaves the stamp alone, which is what a caller that is only editing children
+ * wants.
  */
 export const replaceChildren = (
   entries: MediaEntryV2[],
   diskPath: string,
   children: MediaEntryV2[],
+  scanned?: { diskSize: number; diskMtime: string },
 ): MediaEntryV2[] => {
-  const kept = entries.filter((entry) => !(isChildEntry(entry) && entry.container.diskPath === diskPath));
+  const kept = entries
+    .filter((entry) => !(isChildEntry(entry) && entry.container.diskPath === diskPath))
+    .map((entry) => (scanned && entry.path === diskPath ? { ...entry, scannedContents: { ...scanned } } : entry));
   return [...kept, ...children];
 };
 

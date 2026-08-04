@@ -116,6 +116,38 @@ describe("inImageSearch — cache freshness + supersede", () => {
   });
 });
 
+/**
+ * A disk image that holds no programs is still a disk that has been read. Inferring "scanned" from
+ * the presence of children makes that case indistinguishable from "never scanned", so every scan
+ * re-read every empty disk over the network.
+ */
+describe("inImageSearch — an empty disk image counts as scanned", () => {
+  const disk = { path: "/GAMES/EMPTY.D64", name: "Empty Disk", type: "disk" as const };
+  const version = { diskSize: 174848, diskMtime: "2026-08-04T00:00:00Z" };
+
+  it("is not fresh before it has been read", () => {
+    expect(hasFreshChildren([disk], disk.path, version.diskSize, version.diskMtime)).toBe(false);
+  });
+
+  it("is fresh once the scan is recorded, even though it produced no children", () => {
+    const next = replaceChildren([disk], disk.path, [], version);
+    expect(hasFreshChildren(next, disk.path, version.diskSize, version.diskMtime)).toBe(true);
+  });
+
+  it("stops being fresh when the disk is rewritten", () => {
+    const next = replaceChildren([disk], disk.path, [], version);
+    expect(hasFreshChildren(next, disk.path, version.diskSize, "2026-08-05T00:00:00Z")).toBe(false);
+    expect(hasFreshChildren(next, disk.path, 999, version.diskMtime)).toBe(false);
+  });
+
+  it("still answers from the children for an index written before the stamp existed", () => {
+    const legacy = [disk, child(disk.path, "GAME", 0)];
+    // The `child` helper stamps its container with these defaults; the point is that a row with no
+    // `scannedContents` still answers from its children.
+    expect(hasFreshChildren(legacy, disk.path, 174848, "2026-01-01")).toBe(true);
+  });
+});
+
 describe("inImageSearch — search", () => {
   const entries: MediaEntryV2[] = [
     { path: "/GAMES/COMPILATION.D64", name: "Compilation Disk", type: "disk" },
