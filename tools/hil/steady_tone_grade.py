@@ -141,10 +141,83 @@ def grade(path: str, hz: float) -> dict:
     }
 
 
+def self_test() -> int:
+    """Feed the grader signals whose right answer is known, including the one it used to get wrong.
+
+    Kept in the tool rather than in a test suite because CI runs pytest only over `agents/`, and a
+    fixture nobody executes is not a fixture — the same reason `crossfade_probe.py` carries its own.
+    Run it after touching any of the grading thresholds:
+
+        python3 tools/hil/steady_tone_grade.py --self-test
+    """
+    import os
+    import tempfile
+
+    rate, hz, seconds = 48000, 550.0, 4.0
+    t = np.arange(int(rate * seconds)) / rate
+    rng = np.random.default_rng(7)
+    # A room, not white noise. The real recording that exposed the bug had its energy concentrated
+    # between 300 and 1100 Hz — desk, fan and the speaker's own bottom end — and this band is what makes
+    # the bin nearest 550 Hz comparable to the band's average and able to cross a small margin.
+    # White noise spreads evenly, never crosses even 6 dB, and would make this case pass either way.
+    white = rng.normal(0, 900, len(t))
+    spectrum = np.fft.rfft(white)
+    freqs = np.fft.rfftfreq(len(white), 1.0 / rate)
+    spectrum[(freqs < 300) | (freqs > 3000)] = 0
+    room = np.fft.irfft(spectrum, n=len(white))
+
+    cases = [
+        ("a clean tone", 8000 * np.sin(2 * np.pi * hz * t) + room, "clean"),
+        # THE REGRESSION. With a 6 dB signal-to-noise margin the loudest bin inside the search
+        # window around 550 Hz was room noise often enough to read as a tone present in nearly half
+        # the recording, 11 cents sharp — a silent room graded as a quiet, slightly detuned tune.
+        ("an empty room", room, "NO TONE"),
+        ("a tone too quiet to grade", 100 * np.sin(2 * np.pi * hz * t), "TOO QUIET TO GRADE"),
+        # A tone that stops half way: present, but with a hole far longer than a dropout may be.
+        (
+            "a tone that stops half way",
+            np.concatenate([8000 * np.sin(2 * np.pi * hz * t[: len(t) // 2]), room[len(t) // 2 :]]),
+            "DEFECTIVE",
+        ),
+    ]
+
+    failures = 0
+    for name, signal, expected in cases:
+        handle, path = tempfile.mkstemp(suffix=".wav")
+        os.close(handle)
+        try:
+            with wave.open(path, "wb") as fh:
+                fh.setnchannels(1)
+                fh.setsampwidth(2)
+                fh.setframerate(rate)
+                fh.writeframes(np.clip(signal, -32768, 32767).astype("<i2").tobytes())
+            result = grade(path, hz)
+            if result["present_fraction"] < ABSENT_FRACTION:
+                got = "NO TONE"
+            elif result["peak_dbfs"] < -60.0:
+                got = "TOO QUIET TO GRADE"
+            elif result["present_fraction"] < 0.90 or result["longest_gap_ms"] > 120.0:
+                got = "DEFECTIVE"
+            else:
+                got = "clean"
+        finally:
+            os.unlink(path)
+        ok = got == expected
+        failures += 0 if ok else 1
+        print(
+            f"{'ok  ' if ok else 'FAIL'} {name}: {got}"
+            + (f" (expected {expected})" if not ok else "")
+            + f"   present {result['present_fraction'] * 100:.1f}%, peak {result['peak_dbfs']} dBFS"
+        )
+    print(f"\n{len(cases) - failures}/{len(cases)} cases correct")
+    return 0 if failures == 0 else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("file")
-    ap.add_argument("--hz", type=float, required=True)
+    ap.add_argument("file", nargs="?")
+    ap.add_argument("--hz", type=float)
+    ap.add_argument("--self-test", action="store_true", help="grade known signals and check the verdicts")
     ap.add_argument("--min-present", type=float, default=0.90)
     ap.add_argument("--max-gap-ms", type=float, default=120.0)
     ap.add_argument("--max-cents", type=float, default=50.0)
@@ -155,6 +228,10 @@ def main() -> int:
     ap.add_argument("--min-peak-dbfs", type=float, default=-60.0)
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
+    if args.self_test:
+        return self_test()
+    if not args.file or args.hz is None:
+        ap.error("give a WAV file and --hz, or --self-test")
 
     result = grade(args.file, args.hz)
     if result["present_fraction"] < ABSENT_FRACTION:

@@ -467,8 +467,15 @@ return JSON.stringify({elapsed:q("playback-elapsed")?.innerText??null});})()`);
     String(TONE_TUNES[1].hz),
     "--json",
   ]);
-  const report = JSON.parse((/\{.*\}/s.exec(graded.out) ?? ["{}"])[0]);
-  const verdict = report.verdict ?? report.recordings?.[0]?.verdict;
+  // `crossfade_probe.py --json` prints a top-level ARRAY, one entry per recording. Parsing from
+  // the first "{" to the last "}" happened to work for a single recording and would have silently
+  // mis-parsed the moment a second one was passed; and there is no `recordings` key to fall back
+  // on. Take the array and read the one entry that was asked for.
+  const first = graded.out.indexOf("[");
+  if (first < 0) throw new Error(`the grader printed no JSON: ${graded.out.trim().slice(-240)}`);
+  const parsed = JSON.parse(graded.out.slice(first));
+  const report = Array.isArray(parsed) ? parsed[0] : parsed;
+  const verdict = report?.verdict;
   if (!verdict) throw new Error(`the grader printed no verdict: ${graded.out.trim().slice(-240)}`);
   if (!/SEAMLESS/i.test(verdict)) throw new Error(`the join graded "${verdict}"`);
   return `join graded "${verdict}"`;
