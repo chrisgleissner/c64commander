@@ -182,7 +182,13 @@ describe("filesystemMediaIndex", () => {
       vi.unstubAllGlobals();
     });
 
-    it("returns original value when atob throws (decodeUtf8Base64 catch branch)", async () => {
+    /**
+     * The decode moved into `hvscFilesystem.readDataFileText`, which is the one reader every
+     * Data-directory read goes through so this file — 13.2 MB for a real HVSC — can be fetched from
+     * the WebView's file server instead of the base64 bridge. The outcome is what has to hold: an
+     * undecodable payload yields no snapshot rather than a half-read one.
+     */
+    it("yields no snapshot when the payload cannot be decoded", async () => {
       vi.stubGlobal("atob", () => {
         throw new Error("atob failed");
       });
@@ -191,15 +197,9 @@ describe("filesystemMediaIndex", () => {
 
       const { FilesystemMediaIndexStorage } = await import("@/lib/media-index/filesystemMediaIndex");
       const storage = new FilesystemMediaIndexStorage();
-      // catch returns raw value → safeParse fails → null
       const result = await storage.read();
 
       expect(result).toBeNull();
-      expect(addLog).toHaveBeenCalledWith(
-        "warn",
-        "Failed to decode media-index base64 payload",
-        expect.objectContaining({ error: "atob failed" }),
-      );
 
       vi.unstubAllGlobals();
     });

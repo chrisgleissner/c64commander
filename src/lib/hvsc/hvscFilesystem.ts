@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import type { HvscFolderListing, HvscSong } from "./hvscTypes";
@@ -49,6 +50,10 @@ const uint8ToBase64 = (data: Uint8Array) => {
 
 const decodeBase64Text = (raw: string) => {
   try {
+    // `base64ToUint8` needs `atob`, which a non-browser runtime does not have. Both modules whose
+    // reads now come through here carried their own Buffer fallback for exactly that, so it is kept
+    // rather than lost in the consolidation.
+    if (typeof atob !== "function") return Buffer.from(raw, "base64").toString("utf-8");
     const bytes = base64ToUint8(raw);
     return new TextDecoder().decode(bytes);
   } catch (error) {
@@ -56,6 +61,61 @@ const decodeBase64Text = (raw: string) => {
       error,
     });
     return raw;
+  }
+};
+
+/**
+ * Read a text file out of the Data directory without paying the bridge's base64 tax.
+ *
+ * `Filesystem.readFile` hands the whole file back as one base64 string in a single Capacitor
+ * message. That is fine for the small files here and is not fine for the browse index, which is
+ * 13.2 MB for a real HVSC. Measured on a Pixel 4 against exactly that file: `readFile` did not
+ * return at all — not slowly, at all — while the same file fetched through the WebView's own file
+ * server took 14 ms to respond and 241 ms to read. {@link MAX_BRIDGE_READ_BYTES} already says the
+ * bridge cannot carry a file this size; this is the route that can.
+ *
+ * `Capacitor.convertFileSrc` turns a `file://` URI into a `http://localhost/_capacitor_file_/…`
+ * URL served by the native WebView, so the bytes arrive as a normal HTTP body: streamed, decoded by
+ * the browser, never base64.
+ *
+ * A missing file answers `null`, which is how absence is reported everywhere else here. Anything
+ * else falls back to the bridge, so a platform without the file server (the web build, tests)
+ * behaves exactly as it did.
+ */
+export const readDataFileText = async (path: string): Promise<string | null> => {
+  const url = await localFileUrl(path);
+  if (url) {
+    try {
+      const response = await fetch(url);
+      if (response.status === 404) return null;
+      if (response.ok) return await response.text();
+      logFilesystemWarning("File-server read returned an error status; falling back to the bridge", {
+        path,
+        status: response.status,
+      });
+    } catch (error) {
+      logFilesystemWarning("File-server read failed; falling back to the bridge", { path, error });
+    }
+  }
+  const result = await Filesystem.readFile({ directory: Directory.Data, path });
+  return typeof result.data === "string" ? decodeBase64Text(result.data) : null;
+};
+
+/**
+ * The local HTTP URL the WebView serves this Data-directory file from, or null where there is no
+ * such server — which is every non-native platform, and is why the caller keeps a bridge fallback.
+ */
+const localFileUrl = async (path: string): Promise<string | null> => {
+  if (!Capacitor.isNativePlatform()) return null;
+  try {
+    const { uri } = await Filesystem.getUri({ directory: Directory.Data, path });
+    if (!uri) return null;
+    const url = Capacitor.convertFileSrc(uri);
+    // `convertFileSrc` returns its argument unchanged when it has nothing to convert it to.
+    return url && url !== uri ? url : null;
+  } catch (error) {
+    logFilesystemWarning("Could not resolve a file-server URL", { path, error });
+    return null;
   }
 };
 

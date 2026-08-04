@@ -12,6 +12,7 @@ import {
   mergeSonglengthDurationsIntoBrowseIndex,
   saveHvscBrowseIndexSnapshot,
 } from "@/lib/hvsc/hvscBrowseIndexStore";
+import { readDataFileText } from "@/lib/hvsc/hvscFilesystem";
 import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
@@ -214,14 +215,19 @@ const discoverSonglengthFiles = async (force = false): Promise<SongLengthSourceF
       continue;
     }
     try {
-      const file = await Filesystem.readFile({
-        directory: Directory.Data,
-        path,
-      });
-      files.push({
-        path,
-        content: decodeBase64Text(file.data),
-      });
+      // Through the WebView's file server, not the base64 bridge: a real HVSC's Songlengths.md5 is
+      // 5.2 MB, which is the same shape of read that never returned for the 13.2 MB browse index.
+      // Everything downstream of this is what "Find a tune" waits on, so a read that takes seconds —
+      // or does not finish — is a search that never answers. See `readDataFileText`.
+      const content = await readDataFileText(path);
+      if (content === null) {
+        addLog("debug", "HVSC songlengths file disappeared before read", {
+          service: "hvsc-songlengths",
+          path,
+        });
+        continue;
+      }
+      files.push({ path, content });
     } catch (error) {
       if (isMissingPathError(error)) {
         addLog("debug", "HVSC songlengths file disappeared before read", {

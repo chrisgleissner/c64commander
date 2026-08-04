@@ -8,6 +8,7 @@
 
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import { addLog } from "@/lib/logging";
+import { readDataFileText } from "@/lib/hvsc/hvscFilesystem";
 import type { MediaIndexSnapshot, MediaIndexStorage } from "./mediaIndex";
 
 const STORAGE_PATH = "hvsc/index/media-index-v2.json";
@@ -40,23 +41,6 @@ const encodeUtf8Base64 = (value: string) => {
   return Buffer.from(value, "utf-8").toString("base64");
 };
 
-const decodeUtf8Base64 = (value: string) => {
-  try {
-    if (typeof atob === "function") {
-      const binary = atob(value);
-      const bytes = new Uint8Array(binary.length);
-      for (let index = 0; index < binary.length; index += 1) {
-        bytes[index] = binary.charCodeAt(index);
-      }
-      return new TextDecoder().decode(bytes);
-    }
-    return Buffer.from(value, "base64").toString("utf-8");
-  } catch (error) {
-    addLog("warn", "Failed to decode media-index base64 payload", describeError(error));
-    return value;
-  }
-};
-
 const safeParse = (raw: string | null): MediaIndexSnapshot | null => {
   if (!raw) return null;
   try {
@@ -72,14 +56,17 @@ const safeParse = (raw: string | null): MediaIndexSnapshot | null => {
 };
 
 export class FilesystemMediaIndexStorage implements MediaIndexStorage {
+  /**
+   * Read through the WebView's file server rather than the Capacitor bridge.
+   *
+   * This is the same file the HVSC browse index is persisted to, and for a real HVSC it is 13.2 MB.
+   * `Filesystem.readFile` returns a file as one base64 string in one bridge message; measured on a
+   * Pixel 4 against this exact file it did not return at all. Everything that waits on the index —
+   * "Find a tune" most visibly — waited with it. See `readDataFileText`.
+   */
   async read(): Promise<MediaIndexSnapshot | null> {
     try {
-      const result = await Filesystem.readFile({
-        directory: Directory.Data,
-        path: STORAGE_PATH,
-      });
-      const decoded = typeof result.data === "string" ? decodeUtf8Base64(result.data) : null;
-      return safeParse(decoded);
+      return safeParse(await readDataFileText(STORAGE_PATH));
     } catch (error) {
       if (!isFileNotFoundError(error)) {
         addLog(

@@ -11,7 +11,7 @@ import type { MediaEntry } from "@/lib/media-index";
 import { addLog } from "@/lib/logging";
 import type { InMemorySongLengthSnapshot } from "@/lib/songlengths";
 import type { HvscSidMetadata, HvscTrackSubsong } from "./hvscTypes";
-import { resolveLibraryPath } from "./hvscFilesystem";
+import { readDataFileText, resolveLibraryPath } from "./hvscFilesystem";
 import { runWithHvscPerfScope } from "./hvscPerformance";
 
 // Treat file-not-found errors as expected absence (first launch, after a wipe)
@@ -252,23 +252,6 @@ const encodeUtf8Base64 = (value: string) => {
     return btoa(binary);
   }
   return Buffer.from(value, "utf-8").toString("base64");
-};
-
-const decodeUtf8Base64 = (value: string) => {
-  try {
-    if (typeof atob === "function") {
-      const binary = atob(value);
-      const bytes = new Uint8Array(binary.length);
-      for (let index = 0; index < binary.length; index += 1) {
-        bytes[index] = binary.charCodeAt(index);
-      }
-      return new TextDecoder().decode(bytes);
-    }
-    return Buffer.from(value, "base64").toString("utf-8");
-  } catch (error) {
-    addLog("warn", "Failed to decode HVSC snapshot base64 payload", describeError(error));
-    return value;
-  }
 };
 
 const hashPath = (value: string) =>
@@ -519,13 +502,17 @@ export const __parseMediaIndexSnapshotForTest = parseMediaIndexSnapshot;
  */
 const downgradeReported = { filesystem: false, localStorage: false };
 
+/**
+ * Both snapshots are read through {@link readDataFileText} rather than `Filesystem.readFile`.
+ *
+ * A real HVSC persists 13.2 MB here, and the bridge hands a file back as one base64 string in one
+ * message. Measured on a Pixel 4 against that exact file, `Filesystem.readFile` never returned —
+ * so "Find a tune", which cannot answer until this snapshot is resident, sat on "Searching…"
+ * indefinitely while folder browsing (which does not need it) stayed fast.
+ */
 const readFilesystemSnapshot = async () => {
   try {
-    const result = await Filesystem.readFile({
-      directory: Directory.Data,
-      path: STORAGE_PATH,
-    });
-    return parseSnapshot(typeof result.data === "string" ? decodeUtf8Base64(result.data) : null);
+    return parseSnapshot(await readDataFileText(STORAGE_PATH));
   } catch (error) {
     if (!isFileNotFoundError(error)) {
       addLog(
@@ -540,11 +527,25 @@ const readFilesystemSnapshot = async () => {
 
 const readFilesystemMediaIndexSnapshot = async () => {
   try {
-    const result = await Filesystem.readFile({
-      directory: Directory.Data,
-      path: MEDIA_INDEX_STORAGE_PATH,
+    const readAt = performance.now();
+    const text = await readDataFileText(MEDIA_INDEX_STORAGE_PATH);
+    const parseAt = performance.now();
+    addLog("info", "HVSC media index snapshot bytes read", {
+      storagePath: MEDIA_INDEX_STORAGE_PATH,
+      bytes: text?.length ?? 0,
+      readMs: Math.round(parseAt - readAt),
     });
-    return parseMediaIndexSnapshot(typeof result.data === "string" ? decodeUtf8Base64(result.data) : null);
+    const snapshot = parseMediaIndexSnapshot(text);
+    // The two halves are paid on completely different budgets — one is I/O, the other is main-thread
+    // CPU over sixty thousand songs — so a single figure cannot say which one to go and reduce.
+    addLog("info", "HVSC media index snapshot read", {
+      storagePath: MEDIA_INDEX_STORAGE_PATH,
+      bytes: text?.length ?? 0,
+      readMs: Math.round(parseAt - readAt),
+      buildMs: Math.round(performance.now() - parseAt),
+      songs: snapshot ? Object.keys(snapshot.songs).length : 0,
+    });
+    return snapshot;
   } catch (error) {
     if (!isFileNotFoundError(error)) {
       addLog(

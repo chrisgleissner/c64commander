@@ -484,10 +484,26 @@ export const searchHvscSongs = async (options: {
   offset?: number;
   limit?: number;
 }): Promise<ReturnType<typeof hvscIndex.searchSongs>> => {
+  // Timed by stage, because "the search is slow" has three completely different causes and only one
+  // of them is the search: waiting for the songlengths, materialising the browse index, and the scan
+  // itself. Two of the three are paid once per launch and the third is paid per keystroke, so a
+  // single total cannot tell anyone which one to go and fix.
+  const songlengthsAt = performance.now();
   await ensureHvscSonglengthsReadyOnColdStart();
+  const snapshotAt = performance.now();
   const snapshot = await hvscIndex.loadBrowseSnapshot();
-  if (!snapshot) return null;
-  return hvscIndex.searchSongs(options);
+  const scanAt = performance.now();
+  const page = snapshot ? hvscIndex.searchSongs(options) : null;
+  addLog("info", "HVSC search timing", {
+    query: options.query,
+    songlengthsMs: Math.round(snapshotAt - songlengthsAt),
+    snapshotMs: Math.round(scanAt - snapshotAt),
+    scanMs: Math.round(performance.now() - scanAt),
+    totalMs: Math.round(performance.now() - songlengthsAt),
+    results: page?.songs.length ?? null,
+    matched: page?.totalSongs ?? null,
+  });
+  return page;
 };
 
 /**
