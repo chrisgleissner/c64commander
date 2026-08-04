@@ -843,7 +843,7 @@ physical relay ─┘   (the sheet feeds the modality as well as reading it)
 | GM-9 | A rotation change re-derives the held set in one transport update; no input stays asserted under the old mapping. |
 | GM-10 | Rotation changes are published only after the hysteresis and dwell filters; a flat device never changes the mapping. |
 | GM-11 | The mirror is counter-rotated by `-frameRotation`; no other part of the app rotates. |
-| GM-12 | Pointer gestures on a rotated mirror pan and zoom along the axes the player sees. |
+| GM-12 | Pointer gestures **and the pan keys** on a rotated mirror pan and zoom along the axes the player sees. Both reach the same viewport, so both are mapped into the stage's own frame; a key path that skipped the mapping sent the same adjustment two different ways. |
 | GM-13 | In game mode the mirror uses the full width of the sheet body and all height not used by visible controls. |
 | GM-14 | With on-screen controls hidden, `#` reaches the quick keys and the Live View switches, `*` flips the view lock, the floating handle restores the chrome, and Back exits. |
 | GM-15 | Bindings are configurable by pressing a key; reserved actions are rejected with a message naming their existing role. |
@@ -1033,7 +1033,7 @@ built as designed, what deviated and why, and what the hardware run proved.
 | GM-9 | `RemoteInputSheet.gameMode.test.tsx` (verified load-bearing), `gameMode.spec.ts`, HIL "left before the turn, up after it, nothing stranded" |
 | GM-10 | `deviceRotation.test.ts` hysteresis and flat-device cases; `useDeviceRotation.test.ts` dwell; `DeviceRotationPluginTest.kt` for the native quantiser |
 | GM-11 | `AvMirrorImmersive.test.tsx`; `gameMode.spec.ts` "the picture turns with the handset while the app stays portrait" |
-| GM-12 | `AvMirrorImmersive.test.tsx` pan and pinch at 90° and 270°, asserting the `panBy`/`zoomBy` argument |
+| GM-12 | `AvMirrorImmersive.test.tsx` pan, pinch **and `panStep`** at 90° and 270°, asserting the `panBy`/`zoomBy` argument |
 | GM-13 | `AvMirrorImmersive.test.tsx` fill/aspect tests; `deviceRotation.test.ts` `fitStageSize` |
 | GM-14 | `RemoteInputSheet.gameMode.test.tsx`; HIL `#` on and off |
 | GM-15 | `GameModeSettingsSection.test.tsx` press-to-bind, reserved-action rejection, slot moves and clears |

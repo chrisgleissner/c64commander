@@ -237,6 +237,42 @@ describe("AvMirrorImmersive", () => {
       expect(dy).toBeGreaterThan(0);
     });
 
+    /**
+     * The keys reach the same viewport the drag does, so they have to agree about which way
+     * "right" points once the handset is turned. `panStep` is given the direction the key has in
+     * PORTRAIT, and the portrait-right key points DOWN once the handset is turned 90° clockwise —
+     * the same permutation the joystick applies to that key.
+     */
+    it("pans the keys along the axis the player sees at 90°", () => {
+      const ref = createRef<AvMirrorImmersiveHandle>();
+      render(<AvMirrorImmersive ref={ref} rotation={90} />);
+
+      act(() => ref.current!.panStep(1, 0));
+      const [dx, dy] = mirror.ops.panBy.mock.calls[0];
+      expect(dx).toBeCloseTo(0, 10);
+      expect(dy).toBeGreaterThan(0);
+    });
+
+    it("pans the keys the other way at 270°", () => {
+      const ref = createRef<AvMirrorImmersiveHandle>();
+      render(<AvMirrorImmersive ref={ref} rotation={270} />);
+
+      act(() => ref.current!.panStep(1, 0));
+      const [dx, dy] = mirror.ops.panBy.mock.calls[0];
+      expect(dx).toBeCloseTo(0, 10);
+      expect(dy).toBeLessThan(0);
+    });
+
+    it("leaves the keys alone at 0°, where every frame is the same frame", () => {
+      const ref = createRef<AvMirrorImmersiveHandle>();
+      render(<AvMirrorImmersive ref={ref} rotation={0} />);
+
+      act(() => ref.current!.panStep(1, 0));
+      const [dx, dy] = mirror.ops.panBy.mock.calls[0];
+      expect(dx).toBeGreaterThan(0);
+      expect(dy).toBeCloseTo(0, 10);
+    });
+
     it("keeps the pinch focal point in the picture's own frame at 90°", () => {
       render(<AvMirrorImmersive rotation={90} />);
       const stage = stubStage();
