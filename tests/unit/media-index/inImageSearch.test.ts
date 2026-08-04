@@ -147,4 +147,32 @@ describe("inImageSearch — search", () => {
   it("returns nothing for an empty query", () => {
     expect(searchMediaEntries(entries, "   ", { searchInsideDisks: true })).toHaveLength(0);
   });
+
+  /**
+   * The person typing does not know which index is answering. HVSC and the walk-the-source search
+   * both fold accents; this one did not, so "bohme" found Böhme everywhere except in the index that
+   * actually holds European demo and game filenames.
+   */
+  describe("accents", () => {
+    const accented: MediaEntryV2[] = [
+      { path: "/DEMOS/BOHME.PRG", name: "Böhme Intro", type: "prg" },
+      child("/GAMES/DISK.D64", "TRÄUME", 0),
+    ];
+
+    it("finds an accented name from an unaccented query", () => {
+      expect(searchMediaEntries(accented, "bohme", { searchInsideDisks: false }).map((e) => e.name)).toEqual([
+        "Böhme Intro",
+      ]);
+    });
+
+    it("finds it inside a disk image too", () => {
+      expect(searchMediaEntries(accented, "traume", { searchInsideDisks: true }).map((e) => e.name)).toEqual([
+        "TRÄUME",
+      ]);
+    });
+
+    it("still finds it when the query carries the accent", () => {
+      expect(searchMediaEntries(accented, "böhme", { searchInsideDisks: false })).toHaveLength(1);
+    });
+  });
 });

@@ -19,6 +19,7 @@
  * `container`); no disk gets children until it is re-scanned.
  */
 
+import { foldForSearch } from "@/lib/hvsc/hvscBrowseIndexStore";
 import type { MediaEntry, MediaIndexSnapshot, MediaType } from "./mediaIndex";
 import type { C64FileType, DiskDirectoryEntry, DiskImageType } from "@/lib/disks/diskImage";
 
@@ -147,20 +148,26 @@ export interface SearchOptions {
 }
 
 /**
- * Case-insensitive, multi-word AND search over entry names. With
+ * Case-insensitive, accent-insensitive, multi-word AND search over entry names. With
  * `searchInsideDisks` off, child (in-image) entries are excluded — today's
  * top-level-only behaviour. An empty query matches nothing.
+ *
+ * Accents are folded the same way {@link foldForSearch} folds them for HVSC and for the
+ * walk-the-source search, because the person typing does not know which index is answering.
+ * Searching "bohme" found Böhme in HVSC and in a folder on the card, and nothing at all in the
+ * media index — and this is the index holding European demo and game filenames, where the
+ * accents actually are.
  */
 export const searchMediaEntries = (
   entries: MediaEntryV2[],
   query: string,
   { searchInsideDisks }: SearchOptions,
 ): MediaEntryV2[] => {
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const terms = foldForSearch(query.toLowerCase()).split(/\s+/).filter(Boolean);
   if (terms.length === 0) return [];
   return entries.filter((entry) => {
     if (isChildEntry(entry) && !searchInsideDisks) return false;
-    const name = entry.name.toLowerCase();
+    const name = foldForSearch(entry.name.toLowerCase());
     return terms.every((term) => name.includes(term));
   });
 };
