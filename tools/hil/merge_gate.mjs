@@ -270,8 +270,8 @@ export const gradeClarityOutput = (text) => {
  * happens to be queued, because grading an unknown tune is how a green run means nothing.
  */
 const TONE_TUNES = [
-  { title: "XF Low", hz: 550 },
-  { title: "XF High", hz: 1850 },
+  { title: "Tone-Low", hz: 550 },
+  { title: "Tone-High", hz: 1850 },
 ];
 const TONE_SECONDS = 10;
 
@@ -390,6 +390,9 @@ return JSON.stringify({engine:q("playback-engine-${engine}")?.getAttribute("aria
   elapsed:q("playback-elapsed")?.innerText??null});})()`);
   if (started.error) throw new Error(started.error);
   if (started.engine !== "true") throw new Error(`the ${label} engine did not take`);
+  if (started.elapsed === "0:00") {
+    throw new Error(`${label}: the transport says playing but the clock has not moved off 0:00`);
+  }
 
   const wav = path.join(TMP, `sid-${engine}.wav`);
   await recordMic(wav, TONE_SECONDS);

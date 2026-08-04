@@ -140,56 +140,30 @@ A full run on the shipped build, with the gate setting Listen and Watch itself:
 | `wire` | pass — sender loss 0.00%, inter-arrival p99 4.18 ms |
 | `av-clarity` | pass — 82 tones, 3 defective, 0% dropout |
 | `av-latency` | pass — 527 ms wire → speaker, correlation 0.885 |
-| `sid-remote` | **`NO TONE`** — nothing was playing |
-| `sid-local` | **`NO TONE`** — nothing was playing |
-| `crossfade` | **inconclusive** — the grader reports a tone never rose above digital silence |
+| `sid-remote` | **fails in the harness** — the transport says playing, the clock stays at `0:00` |
+| `sid-local` | **fails in the harness** — same |
+| `crossfade` | **fails in the harness** — nothing to grade, so the join is inconclusive |
 
-The three playback stages are wired and produce real verdicts. On this rig they currently find no
-tone at all: a second-by-second spectrum of the recordings is flat room noise around -85 dB with
-its energy scattered between 300 and 1100 Hz, and nothing at 550 Hz. The app reports the tune as
-playing — the transport shows Pause, the track header reads the right title — while
-`playback-elapsed` stays at `0:00` and `dumpsys media.audio_flinger` shows **no active track**. The
-diagnostics log records `Playback request started` and then nothing at all: no launch, no error.
+The three playback stages are wired: they drive the app's own **Listen on** control, record the
+microphone, and grade with real graders. They do not pass yet, and the reason is located.
 
-**This is not attributed to the app.** The two tone tunes live in the app's own HVSC library, and
-they were replaced underneath it (`run-as ... cat > files/hvsc/library/...`) to make them louder,
-against index entries the app wrote days earlier. A playback path that will not play a file whose
-bytes changed beneath a cached index entry is a plausible consequence of that, and separating it
-from a product defect needs a clean library and a control tune this session did not have the room
-to set up. Start there: add an untouched tune from the same folder to the playlist and see whether
-it plays.
+**Local playback itself works.** Playing the untouched `Tone Low 550Hz` from the HVSC search sheet
+starts it properly — `playback-elapsed` advances and `dumpsys media.audio_flinger` shows an active
+track. The harness's other route does not: clicking a `playlist-item` and then `playlist-play`
+leaves the transport showing Pause with the clock frozen at `0:00`. Clicking a row most likely only
+selects it while `playlist-play` resumes the *current* track, so nothing is ever started. That is a
+harness bug to fix, not a product one, and it is the next thing to do here.
 
-**Latency varies a lot between runs**: 315 ms, 335 ms and 527 ms on the same rig within an hour.
-There is deliberately no threshold on it yet — three samples cannot support one. Collect more
-before adding a gate on this number, and do not read a single figure as a regression.
+The stages now refuse to record at all when the clock has not moved. Without that guard they spent
+ten seconds recording a silent room and then reported an audio verdict about it — which is how an
+earlier round of this investigation concluded the pipeline was broken when nothing had been playing.
 
-### The failure that was not what it looked like
-
-The first runs of `av-clarity` graded 46 of 81 and then 11 of 82 tones defective, with the picture
-on, and the obvious explanation was there in the numbers: the phone's own arrival statistics showed
-767 lost packets and 1217 gaps over 20 ms against a sender measured as flawless, and the adaptive
-jitter-buffer target sat at 150 ms with the picture on against 71 ms without it. That reads as the
-video multicast starving the audio one on the Wi-Fi link, and the audio pipeline learning the
-link's burstiness the slow way — by concealing.
-
-It did not hold up. Rebuilding with a faster-converging cushion controller and then **A/B-ing it
-against the unmodified build in the same conditions** put both at 0–3 defective of 82, with the
-jitter target at its 30 ms minimum, zero underruns and one lost packet. The change was reverted:
-it fixed nothing that was measurably broken, and an unproven behaviour change to a carefully
-measured audio controller is worse than none.
-
-What had actually differed was the **state the app happened to be in when the stage ran**. The
-stage graded whatever Listen and Watch were left on by the previous stage — once, a stopped mirror,
-which it reported as a parse failure rather than as silence. `setMirror` now puts both feeds where
-the stage needs them from Home, and the grade has been reproducible since.
-
-So the degraded measurements were real, and their cause is **not identified**. What is ruled out:
-the sender (clean on Ethernet), the socket buffer (`/proc/net/snmp` `RcvbufErrors` did not move
-across a 30 s window with the picture on), and the cushion controller (A/B above). What is not
-ruled out: sustained-session degradation — the arrival counters are cumulative from stream start,
-and the session that produced 767 lost packets had been running for about an hour across
-backgrounding and screen-off, while a freshly started one shows one lost packet over comparable
-periods. Start there.
+**A second self-inflicted wound worth not repeating.** The `XF Low` / `XF High` tunes in the
+playlist were replaced underneath the app's own HVSC library (`run-as ... cat > files/hvsc/...`) to
+make them louder, against index entries the app had written days earlier. They stopped playing
+entirely — request logged, no launch, no error — while untouched tunes in the same folder play
+fine. Do not edit files under `files/hvsc/library/` while the app holds an index of them; add a new
+tune through the app instead.
 
 One thing that was not a defect at all: a report of no sound from the phone. `STREAM_MUSIC` was
 muted on the device and the C64 was running the joystick probe, which is silent except for a blip
