@@ -137,8 +137,12 @@ Rules that have each cost real time on this repo:
   any live default read. Two editions can be installed side by side
   (`adb shell pm list packages | grep c64`); a stale or wrong-edition build will show you a
   fabricated failure (or a fabricated pass) that has nothing to do with the code under
-  review. Check `document.title` / the package's `lastUpdateTime` against the commit you're
-  reviewing before drawing any conclusion from it.
+  review. `document.title` distinguishes the edition, but not the commit — for that, read
+  the app's own version diagnostics (Settings → About → Git ID, `data-testid="build-info-git"`),
+  which is the full short SHA `scripts/resolve-build-version.mjs` baked into the build,
+  and check it against `git log` for the commit under review. An APK's `lastUpdateTime` is
+  an install timestamp, not a source revision — it can only tell you the build is old, never
+  which commit it is.
 - **Re-run a failing hardware check once before calling it a regression.** ADB key
   injection and Wi-Fi links both flake in ways that look exactly like a stuck input or a
   dropped frame. If a second run is clean, the first was rig noise — say so plainly rather
@@ -158,10 +162,14 @@ Rules that have each cost real time on this repo:
 ## 6. Run the gates before staging anything
 
 Use the `ship-gates` skill in full — typecheck (via `npm run typecheck`, never bare
-`tsc`), eslint, prettier, the full unit suite, and native tests where relevant. Then check
-coverage against the threshold this run was given (or the repo default, §"Input" above) on
-the files the criteria actually touch, not only the project aggregate — a project-wide
-number can hide a criteria-relevant file sitting well under the bar.
+`tsc`), eslint, prettier, the full unit suite, and native tests where relevant. Coverage has
+two separate bars, both mandatory, from `REVIEW.md` §"Verification expectations": **≥ 91%
+branch coverage globally and on changed lines (patch coverage), via the merged coverage
+report** (or the threshold this run was given, if higher — §"Input" above). Never infer
+either number from the project aggregate alone. In addition, check coverage scoped to the
+files the criteria actually touch — a global number passing the gate can still hide a
+criteria-relevant file sitting well under it, which is a real gap even when the two repo-wide
+numbers are fine.
 
 Strip local-build churn before staging (`THIRD_PARTY_NOTICES.md`, lockfiles — see
 `ship-gates` for the exact list on this repo) and add explicit paths only, never `-A`.
@@ -194,10 +202,18 @@ reinventing it:
    there is not necessarily a test failure; read the step list before assuming.
 3. If the change touches input/Live View/audio/playback, re-run the relevant
    `tools/hil/merge_gate.mjs` stage(s) after the fix, not only before it.
-4. Do not end the run on "remaining gap", "I did not push", or "I did not resolve
+4. If the change touched any production code, `AGENTS.md` Phase 5b is mandatory before the
+   PR can be called complete: build the latest APK, deploy it to the attached Pixel 4
+   (prefer serial prefix `9B0`; uninstall first if an older copy blocks the install), launch
+   it, and validate the touched behaviour there — not merely re-read a prior, possibly
+   stale, install. Record the result in the completion summary. A run that touched only
+   tests/docs, with the installed build already confirmed (§5) to be the reviewed commit,
+   has nothing new to deploy — say that explicitly rather than silently skipping the step.
+5. Do not end the run on "remaining gap", "I did not push", or "I did not resolve
    threads" — if any of those are still true, keep going.
-5. Stop only when: every comment has a reply and its thread is resolved, all CI checks are
-   green, the build succeeds, the relevant suites pass, coverage is at or above the target,
+6. Stop only when: every comment has a reply and its thread is resolved, all CI checks are
+   green, the build succeeds, the relevant suites pass, both coverage bars in §6 are met,
+   Phase 5b's on-device validation has run (or is explicitly not applicable, per point 4),
    and every commit is pushed.
 
 ---
