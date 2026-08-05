@@ -82,11 +82,14 @@ vi.mock("@/hooks/useRemoteInputSession", () => ({
   },
 }));
 
+vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
+
 import { RemoteInputSheet } from "@/components/remoteInput/RemoteInputSheet";
 import { requestGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { resetInputModality, setInputModality } from "@/lib/input/inputModality";
 import { saveGameModeJoystick } from "@/lib/remoteInput/gameModeJoystick";
 import { CONTROLS_HIDE_MS } from "@/components/streams/AvMirrorImmersive";
+import { addLog } from "@/lib/logging";
 
 const enterGameMode = () => fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
 const sheet = () => screen.getByTestId("remote-input-sheet");
@@ -119,10 +122,11 @@ describe("RemoteInputSheet — Game Mode", () => {
     tierState.resolved = true;
     mirrorState.videoState = "off";
     mirrorState.audioLive = false;
-    mirrorState.stopVideo.mockClear();
-    mirrorState.stopAudio.mockClear();
+    mirrorState.stopVideo.mockReset().mockImplementation(async () => {});
+    mirrorState.stopAudio.mockReset().mockImplementation(async () => {});
     setHeldJoystickInputsMock.mockClear();
     setOutputModeMock.mockClear();
+    vi.mocked(addLog).mockClear();
     vi.useFakeTimers();
   });
 
@@ -167,6 +171,26 @@ describe("RemoteInputSheet — Game Mode", () => {
 
       expect(mirrorState.stopVideo).not.toHaveBeenCalled();
       expect(mirrorState.stopAudio).not.toHaveBeenCalled();
+    });
+
+    it("logs a warning rather than throwing when a stream this launch started fails to stop", async () => {
+      mirrorState.stopVideo.mockRejectedValueOnce(new Error("device unreachable"));
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      act(() => requestGameMode({ startedVideo: true, startedAudio: true }));
+
+      fireEvent.click(screen.getByTestId("remote-input-restore-chrome"));
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Close" }));
+        await Promise.resolve();
+      });
+
+      expect(mirrorState.stopVideo).toHaveBeenCalledTimes(1);
+      expect(mirrorState.stopAudio).toHaveBeenCalledTimes(1);
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        expect.stringContaining("failed to stop the video stream"),
+        expect.objectContaining({ error: "device unreachable" }),
+      );
     });
 
     it("leaves the streams alone when game mode is exited without closing the sheet", () => {

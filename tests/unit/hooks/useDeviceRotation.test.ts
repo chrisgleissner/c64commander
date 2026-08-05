@@ -151,6 +151,22 @@ describe("useDeviceRotation", () => {
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 
+  it("cancels a pending dwell timer on unmount, rather than publishing into an unmounted hook", () => {
+    const { unmount, result } = renderHook(() => useDeviceRotation(true));
+
+    act(() => emit(90));
+    act(() => {
+      vi.advanceTimersByTime(ROTATION_DWELL_MS - 50);
+    });
+    unmount();
+
+    // Advancing past the dwell after unmount must not throw (a setState on an
+    // unmounted hook) and must not have published — there is nothing left to read it,
+    // but the timer itself has to be gone rather than merely irrelevant.
+    expect(() => act(() => vi.advanceTimersByTime(ROTATION_DWELL_MS))).not.toThrow();
+    expect(result.current.deviceRotation).toBe(0);
+  });
+
   it("seeds itself from the plugin's current value", async () => {
     readDeviceRotation.mockResolvedValueOnce(180);
     vi.useRealTimers();
