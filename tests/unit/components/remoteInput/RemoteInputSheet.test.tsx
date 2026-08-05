@@ -30,6 +30,7 @@ const releaseAllMock = vi.fn();
 let initialSessionOutputMode: "joystick" | "type" = "joystick";
 let initialSessionHeldJoystickInputs: ReadonlySet<string> = new Set();
 let initialSessionHeldKeyboardInputs: ReadonlySet<string> = new Set();
+let initialConnectionStatus: "idle" | "error" = "idle";
 
 vi.mock("@/hooks/useRemoteInputCapabilityTier", () => ({
   useRemoteInputCapabilityTier: () => tierState,
@@ -82,7 +83,7 @@ vi.mock("@/hooks/useRemoteInputSession", () => ({
       setAutofireEnabled: setAutofireEnabledMock,
       autofireRateHz: 10,
       setAutofireRateHz: vi.fn(),
-      connectionStatus: "idle",
+      connectionStatus: initialConnectionStatus,
       sendChar: sendCharMock,
       sendKeyboardInputs: sendKeyboardInputsMock,
       sendCursor: sendCursorMock,
@@ -112,6 +113,7 @@ describe("RemoteInputSheet", () => {
     initialSessionOutputMode = "joystick";
     initialSessionHeldJoystickInputs = new Set();
     initialSessionHeldKeyboardInputs = new Set();
+    initialConnectionStatus = "idle";
     vi.clearAllMocks();
   });
 
@@ -119,6 +121,14 @@ describe("RemoteInputSheet", () => {
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
     fireEvent.click(screen.getByTestId("remote-input-mode-type"));
     expect(setOutputModeMock).toHaveBeenCalledWith("type");
+  });
+
+  it("shows Reconnecting… on the connection indicator once the session reports an error", () => {
+    initialConnectionStatus = "error";
+    render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+    const indicator = screen.getByTestId("remote-input-connection-indicator");
+    expect(indicator).toHaveAttribute("data-status", "error");
+    expect(indicator).toHaveTextContent("Reconnecting");
   });
 
   it("disables Joystick mode and shows the unavailable hint on the kernal-fallback tier", () => {

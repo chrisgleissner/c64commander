@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { GameModeSettingsSection } from "@/pages/settings/GameModeSettingsSection";
 import { loadCustomBinding, loadJoystickLayout, saveJoystickLayout } from "@/lib/remoteInput/joystickKeyBindings";
-import { loadGameModeJoystick } from "@/lib/remoteInput/gameModeJoystick";
+import { loadGameModeJoystick, saveGameModeJoystick } from "@/lib/remoteInput/gameModeJoystick";
 import { loadGameModeOnLaunch } from "@/lib/remoteInput/gameModeLaunch";
 
 describe("GameModeSettingsSection", () => {
@@ -153,5 +153,52 @@ describe("choosing between the shipped layouts", () => {
     const section = screen.getByTestId("settings-game-mode-section");
     expect(section).toHaveTextContent("the four keys around 8, with 8 as fire");
     expect(section).toHaveTextContent("2, 4, 6 and 8 with 5 as fire");
+  });
+});
+
+/**
+ * AC-5: "Add a setting to hide all on-screen keyboard and joystick controls in Remote
+ * Input if set to Game mode." Asserted through the select, like the layout picker above —
+ * writing storage with `saveGameModeJoystick` proves the persistence layer works but
+ * nothing about whether the control that is supposed to reach it actually does.
+ */
+describe("choosing the on-screen joystick visibility setting", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  const chooseVisibility = async (label: string) => {
+    fireEvent.click(screen.getByTestId("settings-game-mode-joystick"));
+    const option = await screen.findByRole("option", { name: label });
+    fireEvent.click(option);
+  };
+
+  it("offers Auto, Visible and Hidden", () => {
+    render(<GameModeSettingsSection />);
+    fireEvent.click(screen.getByTestId("settings-game-mode-joystick"));
+    expect(screen.getByRole("option", { name: "Auto" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Visible" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Hidden" })).toBeInTheDocument();
+  });
+
+  it("stores Hidden when it is chosen — the c64u-remote default, reachable by every variant", async () => {
+    render(<GameModeSettingsSection />);
+    await chooseVisibility("Hidden");
+    expect(loadGameModeJoystick()).toBe("hidden");
+    expect(screen.getByTestId("settings-game-mode-joystick")).toHaveTextContent("Hidden");
+  });
+
+  it("switches back to Visible", async () => {
+    saveGameModeJoystick("hidden");
+    render(<GameModeSettingsSection />);
+    await chooseVisibility("Visible");
+    expect(loadGameModeJoystick()).toBe("visible");
+  });
+
+  it("returns to Auto", async () => {
+    saveGameModeJoystick("hidden");
+    render(<GameModeSettingsSection />);
+    await chooseVisibility("Auto");
+    expect(loadGameModeJoystick()).toBe("auto");
   });
 });

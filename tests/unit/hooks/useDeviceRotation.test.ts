@@ -151,6 +151,23 @@ describe("useDeviceRotation", () => {
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 
+  it("cancels a pending dwell timer on unmount, rather than leaving it to fire later", () => {
+    const { unmount } = renderHook(() => useDeviceRotation(true));
+
+    act(() => emit(90));
+    act(() => {
+      vi.advanceTimersByTime(ROTATION_DWELL_MS - 50);
+    });
+    // The dwell timer from `emit` is still pending — this is what discriminates the
+    // test: without the `clearTimeout` in the unmount cleanup, this count would still
+    // be 1 after `unmount()` below, because nothing would have cancelled it.
+    expect(vi.getTimerCount()).toBe(1);
+
+    unmount();
+
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("seeds itself from the plugin's current value", async () => {
     readDeviceRotation.mockResolvedValueOnce(180);
     vi.useRealTimers();
