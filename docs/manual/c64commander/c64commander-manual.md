@@ -892,7 +892,7 @@ Preferred locations are marked first.
 | Display profile, theme, orientation | **Settings → Appearance** | Screenshots in this manual use the medium profile. |
 | Settings transfer (export and import) | **Settings → Diagnostics** | App settings, feature switches and safety tuning. Saved devices and passwords stay behind. |
 | Notification style and duration | **Settings → Notifications** | Show everything, or errors alone. |
-| Device Safety | **Settings → Device Safety** | Leave it on Auto. Auto uses Conservative for a Commodore 64 Ultimate, and Balanced for an Ultimate 64-family device on firmware newer than 3.15. See Device Safety Modes. |
+| Device Safety | **Settings → Device Safety** | Leave it on Auto. It starts Conservative while it identifies the device and firmware, then chooses the appropriate profile. See Device Safety Modes. |
 | Diagnostics | **Header badge / `*`**, Settings → Diagnostics | Badge is preferred for fast access. |
 | Logs, traces, errors, health checks | **Diagnostics** | Use filters and Share for support. |
 | Built-in help | **Docs** | Good for quick reminders inside the app. |
@@ -942,7 +942,7 @@ Press Menu when the selected control has no menu of its own. The Quick Menu offe
 
 | Source | Used in | Meaning |
 | --- | --- | --- |
-| Local | Play, Disks | Files and folders available to the device running the app running the app. |
+| Local | Play, Disks | Files and folders available on the device running the app. |
 | C64U | Play, Disks | Files on the connected Ultimate-family device through FTP. |
 | HVSC | Play | On by default. You can turn it off in Settings → Stable Features. SID library browsing after preparation. |
 | CommoServe | Play, Disks | On by default. You can turn it off in Settings → Stable Features. Online archive search. |

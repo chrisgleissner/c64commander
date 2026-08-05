@@ -73,6 +73,7 @@ describe("manual generator", () => {
     expect(c64uRemote).not.toContain("Enter a hostname such as `c64u`, `u64`, or `u2`");
     expect(c64uRemote).toContain("entries such as `c64u` and `192.168.1.64`");
     expect(c64uRemote).not.toContain("entries such as `c64u`, `u64`");
+    expect(c64uRemote).toContain("Files and folders available on your phone.");
     expect(c64uRemote).toContain(
       "| Device Safety | **Settings → Device Safety** | Leave it on Auto. Auto keeps a Commodore 64 Ultimate on Conservative until its firmware is known to be safe. See Device Safety Modes. |",
     );
@@ -85,8 +86,10 @@ describe("manual generator", () => {
     );
     expect(c64Commander).toContain("Enter a hostname such as `c64u`, `u64`, or `u2`");
     expect(c64Commander).toContain(
-      "Leave it on Auto. Auto uses Conservative for a Commodore 64 Ultimate, and Balanced for an Ultimate 64-family device on firmware newer than 3.15. See Device Safety Modes.",
+      "Leave it on Auto. It starts Conservative while it identifies the device and firmware, then chooses the appropriate profile. See Device Safety Modes.",
     );
+    expect(c64Commander).toContain("Files and folders available on the device running the app.");
+    expect(c64Commander).not.toContain("running the app running the app");
     expect(c64Commander).toContain(
       "C64 Commander mirrors that menu in Config as **User interface → Auto save config**.",
     );

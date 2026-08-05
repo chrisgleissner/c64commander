@@ -638,7 +638,7 @@ const autoSafetyModeNote = (variant) =>
 const deviceSafetyGuidance = (variant) =>
   isC64uRemoteVariant(variant)
     ? "Leave it on Auto. Auto keeps a Commodore 64 Ultimate on Conservative until its firmware is known to be safe. See Device Safety Modes."
-    : "Leave it on Auto. Auto uses Conservative for a Commodore 64 Ultimate, and Balanced for an Ultimate 64-family device on firmware newer than 3.15. See Device Safety Modes.";
+    : "Leave it on Auto. It starts Conservative while it identifies the device and firmware, then chooses the appropriate profile. See Device Safety Modes.";
 
 const safeDeviceUseIntro = ({ appName, variant }) =>
   `${appName} uses normal REST, FTP, and Telnet requests, but ${targetDeviceShortName(
@@ -947,7 +947,13 @@ const featureRows = ({ features, variant }) => {
 
 const sourceRows = ({ features, variant }) => {
   const rows = [
-    ["Local", "Play, Disks", `Files and folders available to ${appDeviceSubject(variant)} running the app.`],
+    [
+      "Local",
+      "Play, Disks",
+      isC64uRemoteVariant(variant)
+        ? "Files and folders available on your phone."
+        : "Files and folders available on the device running the app.",
+    ],
     [
       "C64U",
       "Play, Disks",

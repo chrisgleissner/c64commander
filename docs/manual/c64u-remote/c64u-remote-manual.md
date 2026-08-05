@@ -973,7 +973,7 @@ Press Menu when the selected control has no menu of its own. The Quick Menu offe
 
 | Source | Used in | Meaning |
 | --- | --- | --- |
-| Local | Play, Disks | Files and folders available to your phone running the app. |
+| Local | Play, Disks | Files and folders available on your phone. |
 | C64U | Play, Disks | Files on the Commodore 64 Ultimate through FTP. |
 | HVSC | Play | On by default. You can turn it off in Settings → Stable Features. SID library browsing after preparation. |
 | CommoServe | Play, Disks | On by default. You can turn it off in Settings → Stable Features. Online archive search. |
