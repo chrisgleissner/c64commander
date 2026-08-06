@@ -4,6 +4,7 @@ import {
   analyzeGmsUsage,
   verifyApkNoGms,
   analyzeStartupInitializers,
+  declaresInitializer,
 } from "../../../scripts/verify-apk-no-gms.mjs";
 
 describe("analyzeGmsUsage", () => {
@@ -80,5 +81,23 @@ describe("startup initializers that reach Google services", () => {
 
   it("does not match a different class that merely shares a prefix", () => {
     expect(analyzeStartupInitializers(metaData("androidx.emoji2.text.EmojiCompatInitializerXyz")).ok).toBe(true);
+  });
+
+  describe("declaresInitializer", () => {
+    // The initializer table is meant to be extended by hand, and a nested class is
+    // written `Outer$Inner`. Matching by regex would treat that `$` as an end-of-input
+    // anchor, so the entry would never match a manifest that does declare it and the
+    // check would pass an APK it should reject.
+    it("matches a nested class name containing a regex metacharacter", () => {
+      expect(declaresInitializer(metaData("androidx.foo.Outer$Inner"), "androidx.foo.Outer$Inner")).toBe(true);
+    });
+
+    it("still refuses a longer class name that starts with the same characters", () => {
+      expect(declaresInitializer(metaData("androidx.foo.Outer$InnerXyz"), "androidx.foo.Outer$Inner")).toBe(false);
+    });
+
+    it("treats a dot in the name as a literal, not as a wildcard", () => {
+      expect(declaresInitializer(metaData("androidx_foo.Bar"), "androidx.foo.Bar")).toBe(false);
+    });
   });
 });

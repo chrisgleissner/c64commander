@@ -56,17 +56,24 @@ const GOOGLE_REACHING_INITIALIZERS = [
 ];
 
 /**
+ * True when `aapt2 dump xmltree` output declares an attribute whose value is exactly
+ * `name`. aapt2 renders the meta-data name as `A: android:name(0x01010003)="<value>"`.
+ *
+ * This is a substring match, not a regex match. `GOOGLE_REACHING_INITIALIZERS` is meant
+ * to be extended by hand, and a nested class is written `Outer$Inner`. In a regex `$` is
+ * an end-of-input anchor, so a pattern built from such a name would never match the
+ * manifest and the entry would be silently ignored. The quotes around the name are part
+ * of the needle, so a longer class name that starts with the same characters does not
+ * match.
+ */
+export const declaresInitializer = (xmltree, name) => xmltree.includes(`="${name}"`);
+
+/**
  * Finds Google-reaching startup initializers in `aapt2 dump xmltree` output for
  * AndroidManifest.xml. Pure so it can be tested without an APK.
  */
 export const analyzeStartupInitializers = (xmltree) => {
-  const found = [];
-  for (const initializer of GOOGLE_REACHING_INITIALIZERS) {
-    // aapt2 renders the meta-data name as A: android:name(0x01010003)="<value>".
-    if (new RegExp(`="${initializer.name.replace(/\./g, "\\.")}"`).test(xmltree)) {
-      found.push(initializer);
-    }
-  }
+  const found = GOOGLE_REACHING_INITIALIZERS.filter((initializer) => declaresInitializer(xmltree, initializer.name));
   return { initializers: found, ok: found.length === 0 };
 };
 
