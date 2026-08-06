@@ -8,12 +8,7 @@
 
 import { type DisplayProfileOverride, isDisplayProfileOverride } from "@/lib/displayProfiles";
 import { variant } from "@/generated/variant";
-import {
-  DEFAULT_TEXT_SCALE_ID,
-  applyTextScaleToDocument,
-  isTextScaleId,
-  type TextScaleId,
-} from "@/lib/textScale";
+import { DEFAULT_TEXT_SCALE_ID, applyTextScaleToDocument, isTextScaleId, type TextScaleId } from "@/lib/textScale";
 
 const LIST_PREVIEW_LIMIT_KEY = "c64u_list_preview_limit";
 const DISPLAY_PROFILE_OVERRIDE_KEY = "c64u_display_profile_override";

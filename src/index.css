@@ -10,6 +10,12 @@
   --display-profile-viewport-width: 100vw;
   --display-profile-viewport-height: 100dvh;
   --display-profile-root-font-size: 16px;
+  /* The user's text size setting, as a plain multiplier. Kept separate from
+     --display-profile-root-font-size because the display profile owns that variable and
+     rewrites it whenever the profile changes; a setting that wrote the same variable
+     would be silently overwritten on the next profile evaluation. Composing them in the
+     `html` rule below means each has exactly one owner. */
+  --text-scale: 1;
   --display-profile-page-max-width: 960px;
   --display-profile-reading-max-width: 960px;
   --display-profile-page-padding-x: 1rem;
@@ -72,7 +78,7 @@
 
 @layer base {
   html {
-    font-size: var(--display-profile-root-font-size);
+    font-size: calc(var(--display-profile-root-font-size) * var(--text-scale, 1));
   }
 
   :root {

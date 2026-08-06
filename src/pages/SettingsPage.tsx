@@ -1218,8 +1218,7 @@ export default function SettingsPage() {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Makes everything in the app larger. This is on top of your device&apos;s own text size setting, which
-                  the app already follows, so you only need this if you want the app larger than the rest of your
-                  phone.
+                  the app already follows, so you only need this if you want the app larger than the rest of your phone.
                 </p>
               </div>
 
@@ -1291,7 +1290,10 @@ export default function SettingsPage() {
                     </div>
                     <div className="flex items-start justify-between gap-3 min-w-0">
                       <div className="min-w-0">
-                        <Label htmlFor="full-screen-hide-navigation-bar" className="flex min-h-11 items-center font-medium">
+                        <Label
+                          htmlFor="full-screen-hide-navigation-bar"
+                          className="flex min-h-11 items-center font-medium"
+                        >
                           Hide navigation bar
                         </Label>
                         <p className="text-xs text-muted-foreground">Extend the app under the bottom navigation bar.</p>
@@ -2172,7 +2174,10 @@ export default function SettingsPage() {
                     <VicPaletteRow />
                     <div className="col-span-2 flex items-start justify-between gap-3 min-w-0">
                       <div className="min-w-0">
-                        <Label htmlFor="settings-stream-native-assembly" className="flex min-h-11 items-center font-medium">
+                        <Label
+                          htmlFor="settings-stream-native-assembly"
+                          className="flex min-h-11 items-center font-medium"
+                        >
                           Fast video (native assembly)
                         </Label>
                         <p className="text-xs text-muted-foreground">
@@ -2193,7 +2198,10 @@ export default function SettingsPage() {
                     </div>
                     <div className="col-span-2 flex items-start justify-between gap-3 min-w-0">
                       <div className="min-w-0">
-                        <Label htmlFor="settings-stream-input-priority" className="flex min-h-11 items-center font-medium">
+                        <Label
+                          htmlFor="settings-stream-input-priority"
+                          className="flex min-h-11 items-center font-medium"
+                        >
                           Input priority (instant joystick)
                         </Label>
                         <p className="text-xs text-muted-foreground">
@@ -2216,7 +2224,10 @@ export default function SettingsPage() {
                     </div>
                     <div className="col-span-2 flex items-start justify-between gap-3 min-w-0">
                       <div className="min-w-0">
-                        <Label htmlFor="settings-stream-native-audio" className="flex min-h-11 items-center font-medium">
+                        <Label
+                          htmlFor="settings-stream-native-audio"
+                          className="flex min-h-11 items-center font-medium"
+                        >
                           Low-latency audio (native)
                         </Label>
                         <p className="text-xs text-muted-foreground">

@@ -19,8 +19,11 @@
  *    they have to fight.
  * 2. **The app's own setting**, below. Some users only want larger text here, and on a
  *    device where the system setting is awkward to reach it is the only control they
- *    have. It is applied by scaling the root font size, which moves every `rem`-based
- *    size in the stylesheet, including the compact display profile's type steps.
+ *    have. It is applied as a multiplier on the root font size, which moves every
+ *    `rem`-based size in the stylesheet, including the compact profile's type steps.
+ *    It is a separate CSS variable from the profile's own root size on purpose: the
+ *    display profile rewrites that one whenever the profile changes, so a setting that
+ *    wrote it too would be overwritten without trace. The `html` rule multiplies them.
  *
  * Because the two are applied by different mechanisms - the platform zooms the whole
  * WebView, this changes the root size inside it - they multiply, and a user who has set
@@ -34,8 +37,7 @@
  * `style.fontSize` on the element: that keeps one owner of the root size instead of two
  * that could disagree.
  */
-export const BASE_ROOT_FONT_SIZE_PX = 16;
-export const ROOT_FONT_SIZE_VARIABLE = "--display-profile-root-font-size";
+export const TEXT_SCALE_VARIABLE = "--text-scale";
 
 export const TEXT_SCALE_OPTIONS = [
   { id: "default", label: "Default", scale: 1 },
@@ -59,17 +61,12 @@ export const resolveTextScale = (id: string | null | undefined): number =>
   TEXT_SCALE_OPTIONS.find((option) => option.id === id)?.scale ?? 1;
 
 /**
- * The root font size, in CSS pixels, for a given setting.
- *
- * Clamped rather than trusted: a value below the base would make text smaller than the
- * design intends, which is the one thing this feature must never do, and an unbounded
- * upper value would break every layout at once.
+ * The multiplier to apply, clamped rather than trusted: below 1 would make text smaller
+ * than the design intends, which is the one thing this feature must never do, and an
+ * unbounded upper value would break every layout at once.
  */
-export const resolveRootFontSizePx = (id: string | null | undefined): number => {
-  const scale = resolveTextScale(id);
-  const clamped = Math.min(1.5, Math.max(1, scale));
-  return Math.round(BASE_ROOT_FONT_SIZE_PX * clamped * 100) / 100;
-};
+export const resolveClampedTextScale = (id: string | null | undefined): number =>
+  Math.min(1.5, Math.max(1, resolveTextScale(id)));
 
 /**
  * Applies the setting to the document. Safe to call before the DOM exists (during SSR
@@ -78,6 +75,6 @@ export const resolveRootFontSizePx = (id: string | null | undefined): number => 
 export const applyTextScaleToDocument = (id: string | null | undefined): void => {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
-  root.style.setProperty(ROOT_FONT_SIZE_VARIABLE, `${resolveRootFontSizePx(id)}px`);
+  root.style.setProperty(TEXT_SCALE_VARIABLE, String(resolveClampedTextScale(id)));
   root.dataset.textScale = isTextScaleId(id) ? id : DEFAULT_TEXT_SCALE_ID;
 };

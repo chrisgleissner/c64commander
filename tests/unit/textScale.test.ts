@@ -8,13 +8,12 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  BASE_ROOT_FONT_SIZE_PX,
   DEFAULT_TEXT_SCALE_ID,
-  ROOT_FONT_SIZE_VARIABLE,
   TEXT_SCALE_OPTIONS,
+  TEXT_SCALE_VARIABLE,
   applyTextScaleToDocument,
   isTextScaleId,
-  resolveRootFontSizePx,
+  resolveClampedTextScale,
   resolveTextScale,
 } from "@/lib/textScale";
 
@@ -22,11 +21,11 @@ describe("text scale", () => {
   it("never makes text smaller than the design baseline", () => {
     // The whole point of the setting is to make text bigger. A stored value that
     // shrank it would defeat the accessibility reason it exists, so every option and
-    // every unrecognised input must resolve to at least the base size.
+    // every unrecognised input must resolve to at least 1.
     for (const option of TEXT_SCALE_OPTIONS) {
-      expect(resolveRootFontSizePx(option.id)).toBeGreaterThanOrEqual(BASE_ROOT_FONT_SIZE_PX);
+      expect(resolveClampedTextScale(option.id)).toBeGreaterThanOrEqual(1);
     }
-    expect(resolveRootFontSizePx("default")).toBe(BASE_ROOT_FONT_SIZE_PX);
+    expect(resolveClampedTextScale("default")).toBe(1);
   });
 
   it("falls back to the default for an unknown or corrupt stored value", () => {
@@ -35,20 +34,20 @@ describe("text scale", () => {
     expect(resolveTextScale("not-a-scale")).toBe(1);
     expect(resolveTextScale(null)).toBe(1);
     expect(resolveTextScale(undefined)).toBe(1);
-    expect(resolveRootFontSizePx("enormous")).toBe(BASE_ROOT_FONT_SIZE_PX);
+    expect(resolveClampedTextScale("enormous")).toBe(1);
   });
 
   it("caps how far the setting can go", () => {
     // An unbounded scale breaks every layout at once. The largest option is the cap.
     const largest = Math.max(...TEXT_SCALE_OPTIONS.map((option) => option.scale));
     expect(largest).toBeLessThanOrEqual(1.5);
-    expect(resolveRootFontSizePx("largest")).toBe(BASE_ROOT_FONT_SIZE_PX * 1.5);
+    expect(resolveClampedTextScale("largest")).toBe(1.5);
   });
 
   it("increases monotonically through the options", () => {
     // Options are presented in order, so each must actually be larger than the last -
     // otherwise picking "Larger" could make text smaller.
-    const sizes = TEXT_SCALE_OPTIONS.map((option) => resolveRootFontSizePx(option.id));
+    const sizes = TEXT_SCALE_OPTIONS.map((option) => resolveClampedTextScale(option.id));
     for (let index = 1; index < sizes.length; index += 1) {
       expect(sizes[index]).toBeGreaterThan(sizes[index - 1]);
     }
@@ -62,16 +61,19 @@ describe("text scale", () => {
     expect(isTextScaleId(2)).toBe(false);
   });
 
-  it("applies the setting through the existing root font size variable", () => {
-    // Set as a CSS variable rather than as an inline font-size, so the stylesheet keeps
-    // a single owner of the root size instead of two that could disagree.
+  it("applies the setting as its own variable, not the display profile's", () => {
+    // Deliberately NOT --display-profile-root-font-size: useDisplayProfile rewrites that
+    // one every time the profile is evaluated, so a setting written there would be
+    // silently overwritten and the control would appear to do nothing. Writing a
+    // separate multiplier that the `html` rule composes gives each variable one owner.
     applyTextScaleToDocument("larger");
     const root = document.documentElement;
-    expect(root.style.getPropertyValue(ROOT_FONT_SIZE_VARIABLE)).toBe(`${BASE_ROOT_FONT_SIZE_PX * 1.3}px`);
+    expect(root.style.getPropertyValue(TEXT_SCALE_VARIABLE)).toBe("1.3");
+    expect(root.style.getPropertyValue("--display-profile-root-font-size")).toBe("");
     expect(root.dataset.textScale).toBe("larger");
 
     applyTextScaleToDocument("rubbish");
-    expect(root.style.getPropertyValue(ROOT_FONT_SIZE_VARIABLE)).toBe(`${BASE_ROOT_FONT_SIZE_PX}px`);
+    expect(root.style.getPropertyValue(TEXT_SCALE_VARIABLE)).toBe("1");
     expect(root.dataset.textScale).toBe(DEFAULT_TEXT_SCALE_ID);
   });
 });

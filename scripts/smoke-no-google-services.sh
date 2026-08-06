@@ -27,7 +27,18 @@ mkdir -p "$OUT"
 
 echo "== waiting for the device"
 adb wait-for-device
-adb shell 'while [ "$(getprop sys.boot_completed)" != 1 ]; do sleep 2; done'
+# Bounded, per AGENTS.md: an unbounded wait on sys.boot_completed hangs until the runner
+# kills the job, which reports as a timeout with no indication of what it was waiting for.
+# scripts/smoke-android-emulator.sh bounds the same wait for the same reason.
+BOOT_TIMEOUT_SECS=180
+boot_deadline=$(( $(date +%s) + BOOT_TIMEOUT_SECS ))
+until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+  if [ "$(date +%s)" -ge "$boot_deadline" ]; then
+    echo "the emulator did not finish booting within ${BOOT_TIMEOUT_SECS}s" >&2
+    exit 1
+  fi
+  sleep 2
+done
 
 # The whole point of this job. If a Google image is ever wired in by mistake, the
 # run would still pass and silently stop testing what it claims to test.
@@ -45,7 +56,11 @@ adb shell getprop ro.build.version.sdk > "$OUT/device-sdk.txt" 2>/dev/null || tr
 grep -cE "^package:" <<<"$INSTALLED" > "$OUT/device-package-count.txt" 2>/dev/null || true
 
 echo "== installing $APK"
-adb install -r -g "$APK"
+# Bounded: adb install can hang on a wedged adbd or a busy package manager.
+if ! timeout 120 adb install -r -g "$APK"; then
+  echo "installing the APK failed or timed out" >&2
+  exit 1
+fi
 adb logcat -c || true
 
 echo "== launching and walking the app"
@@ -69,6 +84,22 @@ fi
 if grep -A1 -F "FATAL EXCEPTION" "$OUT/logcat.txt" | grep -qF "Process: $PKG,"; then
   echo "the app crashed:" >&2
   grep -A20 -F "FATAL EXCEPTION" "$OUT/logcat.txt" >&2
+  exit 1
+fi
+
+# A Java uncaught exception is only one of the ways this can die. A native crash writes a
+# libc tombstone rather than a FATAL EXCEPTION, and an ANR writes neither, so the check
+# above would pass through both. Both are worth failing on here: the whole point of this
+# job is that the app is healthy without Google services.
+if grep -qE "Fatal signal [0-9]+ .*>>> $PKG <<<" "$OUT/logcat.txt"; then
+  echo "the app crashed natively:" >&2
+  grep -B2 -A20 -E "Fatal signal [0-9]+ .*>>> $PKG <<<" "$OUT/logcat.txt" >&2
+  exit 1
+fi
+
+if grep -qF "ANR in $PKG" "$OUT/logcat.txt"; then
+  echo "the app stopped responding:" >&2
+  grep -A20 -F "ANR in $PKG" "$OUT/logcat.txt" >&2
   exit 1
 fi
 
