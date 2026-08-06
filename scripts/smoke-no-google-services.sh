@@ -61,6 +61,25 @@ if ! timeout 120 adb install -r -g "$APK"; then
   echo "installing the APK failed or timed out" >&2
   exit 1
 fi
+
+# Turn the on-screen keyboard off before the walk.
+#
+# This image ships the AOSP keyboard, and the first time it opens it asks for the
+# contacts permission in a system dialog that sits above the app and swallows every
+# tap. That happened here: with no device host configured the app shows its device
+# picker, whose host field takes focus, the keyboard opens, and the permission
+# dialog then blocked the rest of the walk. The google_apis images every other
+# emulator job uses ship Gboard, which does not ask, so no other job sees this.
+#
+# The walk only taps and asserts - it types nothing - so no keyboard is needed.
+# Failure to disable one is not fatal: the walk itself is the gate, and it will
+# report the real problem if a keyboard does get in the way.
+echo "== disabling the on-screen keyboard"
+for ime in $(adb shell ime list -s 2>/dev/null | tr -d '\r'); do
+  echo "disabling IME $ime"
+  adb shell ime disable "$ime" || true
+done
+
 adb logcat -c || true
 
 echo "== launching and walking the app"

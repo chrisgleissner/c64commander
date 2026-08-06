@@ -57,24 +57,52 @@ tags:
     timeout: ${TIMEOUT}
 - assertVisible: "Play Files"
 - takeScreenshot: play-tab
-- tapOn:
-    id: "tab-settings"
-- extendedWaitUntil:
-    visible: "Settings"
-    timeout: ${SHORT_TIMEOUT}
+# Settings, Config and Home are retried the same way as Play, and for the same reason:
+# the device picker re-arms itself while a background scan keeps finding nothing, so it
+# can cover the tab bar again between one tab and the next. Without the retry a single
+# late dialog fails the whole walk on a tap that would have worked a second later.
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          text: "Not now"
+          optional: true
+      - waitForAnimationToEnd
+      - tapOn:
+          id: "tab-settings"
+          optional: true
+      - extendedWaitUntil:
+          visible: "Settings"
+          timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Settings"
 - takeScreenshot: settings-tab
-- tapOn:
-    id: "tab-config"
-- extendedWaitUntil:
-    visible: "Config"
-    timeout: ${SHORT_TIMEOUT}
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          text: "Not now"
+          optional: true
+      - waitForAnimationToEnd
+      - tapOn:
+          id: "tab-config"
+          optional: true
+      - extendedWaitUntil:
+          visible: "Config"
+          timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Config"
 - takeScreenshot: config-tab
-- tapOn:
-    id: "tab-home"
-- extendedWaitUntil:
-    visible: "Home"
-    timeout: ${SHORT_TIMEOUT}
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          text: "Not now"
+          optional: true
+      - waitForAnimationToEnd
+      - tapOn:
+          id: "tab-home"
+          optional: true
+      - extendedWaitUntil:
+          visible: "Home"
+          timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Home"
 - takeScreenshot: home-tab

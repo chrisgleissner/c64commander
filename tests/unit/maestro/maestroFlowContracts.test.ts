@@ -300,19 +300,42 @@ describe("Maestro flow contracts", () => {
     expect(commonNavigation).not.toContain('point: "25%,95%"');
   });
 
-  // The startup device discovery dialog is modal and its subnet scan runs for minutes on
-  // a network with no device, so it can appear after Home has already rendered and after
-  // the dismissals in launch-and-wait have run. The dismissal therefore has to be inside
-  // the retry that taps the Play tab, so a late dialog is cleared and the tap retried.
-  it("dismisses a late startup device discovery dialog inside the Play tab retry", () => {
-    const commonNavigation = readFileSync(
-      path.resolve(process.cwd(), ".maestro/subflows/common-navigation.yaml"),
-      "utf8",
-    );
+  // The startup device discovery dialog is modal and re-arms itself while a background
+  // scan keeps finding nothing, so it can cover the tab bar again between one tab and the
+  // next - after Home has rendered and after the dismissals in launch-and-wait have run.
+  // Each tab tap therefore has to sit in a retry that dismisses the dialog first, so a
+  // late dialog is cleared and the tap retried instead of failing the walk.
+  it("retries every tab tap behind a device discovery dismissal", () => {
+    const flow = readYaml(path.resolve(process.cwd(), ".maestro/subflows/common-navigation.yaml"));
+    const steps = Array.isArray(flow) ? (flow.flat() as JsonValue[]) : [];
 
-    const dismissals = commonNavigation.split('text: "Not now"').length - 1;
-    expect(dismissals).toBe(2);
-    expect(commonNavigation.lastIndexOf('text: "Not now"')).toBeLessThan(commonNavigation.indexOf('id: "tab-play"'));
+    const tabIds = ["tab-play", "tab-settings", "tab-config", "tab-home"];
+    const guarded = new Set<string>();
+
+    for (const step of steps) {
+      if (!step || typeof step !== "object" || Array.isArray(step)) continue;
+      const retry = (step as Record<string, JsonValue>).retry;
+      if (!retry || typeof retry !== "object" || Array.isArray(retry)) continue;
+      const commands = (retry as Record<string, JsonValue>).commands;
+      if (!Array.isArray(commands)) continue;
+
+      const tapTargets = commands.map((command) => {
+        if (!command || typeof command !== "object" || Array.isArray(command)) return null;
+        const tapOn = (command as Record<string, JsonValue>).tapOn;
+        if (!tapOn || typeof tapOn !== "object" || Array.isArray(tapOn)) return null;
+        return tapOn as Record<string, JsonValue>;
+      });
+
+      const dismissalIndex = tapTargets.findIndex((target) => target?.text === "Not now" && target?.optional === true);
+      if (dismissalIndex < 0) continue;
+
+      tapTargets.forEach((target, index) => {
+        if (index <= dismissalIndex) return;
+        if (typeof target?.id === "string" && tabIds.includes(target.id)) guarded.add(target.id);
+      });
+    }
+
+    expect([...guarded].sort()).toEqual([...tabIds].sort());
   });
 
   it("keeps local binary playback picker navigation independent of DocumentsUI toolbar ids", () => {
