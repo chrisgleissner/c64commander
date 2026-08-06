@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Resources that only ever get looked up by name at runtime, so the AGP resource
+  shrinker (shrinkResources true on the release build type) cannot see a reference
+  to them and strips them.
+
+  @xml/config is Capacitor's Cordova compatibility config. Capacitor's Bridge.create()
+  runs org.apache.cordova.ConfigXmlParser, which resolves it with
+  Resources.getIdentifier("config", "xml", ...) rather than R.xml.config. In a release
+  build the resource was therefore removed, the lookup returned 0, and every launch
+  logged "E ConfigXmlParser: res/xml/config.xml is missing!". Debug builds do not
+  shrink resources, so the failure only ever appeared in shipped builds.
+
+  The parse currently supplies Cordova preferences and plugin entries, and this app
+  declares neither, so nothing observable changed. Keeping the resource restores the
+  behaviour the debug build has, and means a preference added later takes effect in
+  release builds instead of being silently dropped.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@xml/config" />
