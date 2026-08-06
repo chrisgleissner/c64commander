@@ -300,6 +300,21 @@ describe("Maestro flow contracts", () => {
     expect(commonNavigation).not.toContain('point: "25%,95%"');
   });
 
+  // The startup device discovery dialog is modal and its subnet scan runs for minutes on
+  // a network with no device, so it can appear after Home has already rendered and after
+  // the dismissals in launch-and-wait have run. The dismissal therefore has to be inside
+  // the retry that taps the Play tab, so a late dialog is cleared and the tap retried.
+  it("dismisses a late startup device discovery dialog inside the Play tab retry", () => {
+    const commonNavigation = readFileSync(
+      path.resolve(process.cwd(), ".maestro/subflows/common-navigation.yaml"),
+      "utf8",
+    );
+
+    const dismissals = commonNavigation.split('text: "Not now"').length - 1;
+    expect(dismissals).toBe(2);
+    expect(commonNavigation.lastIndexOf('text: "Not now"')).toBeLessThan(commonNavigation.indexOf('id: "tab-play"'));
+  });
+
   it("keeps local binary playback picker navigation independent of DocumentsUI toolbar ids", () => {
     const rawSource = readFileSync(path.resolve(process.cwd(), ".maestro/local-binary-playback-proof.yaml"), "utf8");
 

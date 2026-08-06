@@ -21,6 +21,15 @@ tags:
       - tapOn:
           text: "Continue in Demo Mode"
           optional: true
+      # Startup device discovery. On a run where no device host has been configured -
+      # a fresh install with no smoke-mode config file - the app scans the subnet and
+      # shows DeviceDiscoveryInterstitial. That dialog is modal, so until it is
+      # dismissed every tap on the tab bar is swallowed by its backdrop. Runs that
+      # configure a host beforehand never see it, and the tap is optional, so it costs
+      # them a warning and nothing else.
+      - tapOn:
+          text: "Not now"
+          optional: true
       - tapOn:
           text: "Retry connection"
           optional: true

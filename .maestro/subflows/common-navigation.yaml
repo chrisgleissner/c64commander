@@ -16,6 +16,9 @@ tags:
           text: "Continue in Demo Mode"
           optional: true
       - tapOn:
+          text: "Not now"
+          optional: true
+      - tapOn:
           text: "Got it"
           optional: true
       - tapOn:
@@ -32,6 +35,16 @@ tags:
 - retry:
     maxRetries: 3
     commands:
+      # Dismissed again here, not only in launch-and-wait. The subnet scan behind
+      # DeviceDiscoveryInterstitial runs for minutes on a network with no device, so the
+      # dialog can appear after "Home" is already on screen and after the dismissals
+      # above have run. Repeating it inside this retry is what lets a late dialog be
+      # cleared and the tab tap retried, rather than all three attempts tapping into a
+      # modal backdrop.
+      - tapOn:
+          text: "Not now"
+          optional: true
+      - waitForAnimationToEnd
       - tapOn:
           id: "tab-play"
           optional: true
