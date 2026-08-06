@@ -62,23 +62,33 @@ if ! timeout 120 adb install -r -g "$APK"; then
   exit 1
 fi
 
-# Turn the on-screen keyboard off before the walk.
+# Take the on-screen keyboard out of the picture before the walk.
 #
-# This image ships the AOSP keyboard, and the first time it opens it asks for the
-# contacts permission in a system dialog that sits above the app and swallows every
-# tap. That happened here: with no device host configured the app shows its device
-# picker, whose host field takes focus, the keyboard opens, and the permission
-# dialog then blocked the rest of the walk. The google_apis images every other
-# emulator job uses ship Gboard, which does not ask, so no other job sees this.
+# With no device host configured the app shows its device picker on launch, and the
+# picker's host field takes focus, which opens the keyboard. Two things then go
+# wrong, and both stop the walk. The keyboard itself covers the bottom of the
+# screen, including the tab bar the walk taps. And this image ships the AOSP
+# keyboard, which asks for the contacts permission the first time it opens, in a
+# system dialog that sits above everything and swallows every tap. The google_apis
+# images every other emulator job uses ship Gboard, which does not ask, so no other
+# job sees either problem.
 #
-# The walk only taps and asserts - it types nothing - so no keyboard is needed.
-# Failure to disable one is not fatal: the walk itself is the gate, and it will
-# report the real problem if a keyboard does get in the way.
-echo "== disabling the on-screen keyboard"
+# `ime disable` is not enough on its own: the framework keeps at least one input
+# method enabled and re-enables the default as soon as the last one is disabled.
+# The package is disabled instead, which leaves the device with no input method at
+# all. The walk only taps and asserts - it types nothing - so that costs it
+# nothing.
+#
+# Not fatal if it does not work: the walk itself is the gate, and it reports the
+# real problem if a keyboard does get in the way.
+echo "== taking the on-screen keyboard out of the picture"
 for ime in $(adb shell ime list -s 2>/dev/null | tr -d '\r'); do
-  echo "disabling IME $ime"
+  ime_package="${ime%%/*}"
+  echo "disabling input method $ime (package $ime_package)"
   adb shell ime disable "$ime" || true
+  adb shell pm disable-user --user 0 "$ime_package" || true
 done
+echo "input methods still enabled: $(adb shell ime list -s 2>/dev/null | tr -d '\r' | tr '\n' ' ')"
 
 adb logcat -c || true
 
