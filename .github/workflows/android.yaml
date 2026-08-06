@@ -1495,6 +1495,83 @@ jobs:
             exit 1
           fi
 
+  # Every other emulator job here runs a google_apis system image, so none of them
+  # would catch the app growing a dependency on Google Play Services — through a
+  # library, a Gradle transitive, or a plugin that quietly expects GMS. The app is
+  # meant to run on de-Googled handsets, so that dependency must not exist, and this
+  # job is the thing that would notice.
+  #
+  # It runs an AOSP image, which has no Google apps or services on it at all, at API
+  # 33 rather than the 34 the other jobs use, so the app is also exercised one level
+  # below the usual target. It reuses the debug APK packaging already built and
+  # .maestro/smoke-launch.yaml, so it adds a configuration to test, not a test to
+  # maintain.
+  android-no-google-services:
+    name: Android | No Google Play Services
+    runs-on: ubuntu-latest
+    needs: [android-packaging]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Download the debug APK
+        uses: actions/download-artifact@v4
+        with:
+          name: c64commander-debug-apk
+          path: apk
+
+      - name: Cache Maestro CLI
+        id: maestro-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.maestro
+          key: maestro-cli-${{ runner.os }}-v1
+
+      - name: Install Maestro CLI
+        if: steps.maestro-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          MAESTRO_VERSION="cli-2.2.0"
+          MAESTRO_SHA256="6de501d2e8adf2d60f4b6b3174dc4b5e393f2f2617245d350a659627dccb0922"
+          tmpdir="$(mktemp -d)"
+          trap 'rm -rf "$tmpdir"' EXIT
+          curl -fsSL "https://github.com/mobile-dev-inc/Maestro/releases/download/${MAESTRO_VERSION}/maestro.zip" -o "$tmpdir/maestro.zip"
+          echo "${MAESTRO_SHA256}  $tmpdir/maestro.zip" | sha256sum -c -
+          mkdir -p "$HOME/.maestro/bin"
+          unzip -q "$tmpdir/maestro.zip" -d "$HOME/.maestro"
+          chmod +x "$HOME/.maestro/maestro/bin/maestro"
+          ln -sf "$HOME/.maestro/maestro/bin/maestro" "$HOME/.maestro/bin/maestro"
+
+      - name: Export Maestro CLI path
+        run: echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Launch and walk the app on an AOSP image
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: default
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: bash scripts/smoke-no-google-services.sh "$(ls ${{ github.workspace }}/apk/*.apk | head -1)" "${{ github.workspace }}/test-results/no-google-services"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: no-google-services-evidence
+          path: test-results/no-google-services/**
+          retention-days: 7
+          if-no-files-found: warn
+
   android-packaging:
     name: Android | Packaging (${{ matrix.variant }})
     runs-on: ubuntu-latest
@@ -1706,7 +1783,7 @@ jobs:
     name: Release | Create prerelease
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') && contains(github.ref_name, '-rc')
-    needs: [variant-selection, web-coverage-merge, android-tests, android-packaging]
+    needs: [variant-selection, web-coverage-merge, android-tests, android-packaging, android-no-google-services]
     permissions:
       contents: write
 
@@ -1733,7 +1810,7 @@ jobs:
     name: Release | Attach Android artifacts
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [variant-selection, web-coverage-merge, android-tests, android-packaging]
+    needs: [variant-selection, web-coverage-merge, android-tests, android-packaging, android-no-google-services]
     strategy:
       fail-fast: false
       matrix:
