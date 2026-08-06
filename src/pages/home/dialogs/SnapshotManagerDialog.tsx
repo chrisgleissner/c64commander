@@ -82,9 +82,21 @@ function SnapshotRow({
   onUpdateLabel: (id: string, label: string) => void;
 }) {
   const { profile } = useDisplayProfile();
+  const compact = profile === "compact";
   const typeConfig = SNAPSHOT_TYPE_LIST.find((c) => c.type === snapshot.snapshotType);
   const typeLabel = isReuSnapshotEntry(snapshot) ? "REU Snapshot" : (typeConfig?.label ?? snapshot.snapshotType);
   const ranges = snapshot.metadata.display_ranges.join(", ");
+  // The memory-range line is the most expensive line in the row on the smallest
+  // supported screen. There the range string is too long for the text column and wraps
+  // to two lines, which costs about 46px - roughly a quarter of the row - and pushes the
+  // row taller than the list area that is left once the on-screen keyboard is up.
+  //
+  // For every built-in snapshot type the range only restates what the type label above
+  // it already says: a Basic snapshot is always the BASIC program area, a Screen
+  // snapshot is always the screen and colour RAM. A custom snapshot is the exception,
+  // because the ranges the user picked are the only thing that says what was saved, so
+  // that line stays - capped at a single truncated line rather than allowed to wrap.
+  const showRanges = !compact || snapshot.snapshotType === "custom";
   const label = snapshot.metadata.label;
   const createdAt = snapshot.metadata.created_at;
   const contentName = snapshot.metadata.content_name ?? snapshot.filename;
@@ -127,7 +139,11 @@ function SnapshotRow({
     >
       <div className="flex-1 min-w-0 space-y-1">
         <div className="text-sm font-semibold leading-tight">{typeLabel}</div>
-        <div className="text-xs text-muted-foreground">{ranges}</div>
+        {showRanges ? (
+          <div className={compact ? "truncate text-xs text-muted-foreground" : "text-xs text-muted-foreground"}>
+            {ranges}
+          </div>
+        ) : null}
         <div className="truncate text-xs text-muted-foreground">{contentName}</div>
         {!isEditingLabel ? (
           <button

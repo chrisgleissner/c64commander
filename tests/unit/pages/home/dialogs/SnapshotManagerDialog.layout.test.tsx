@@ -112,6 +112,62 @@ describe("SnapshotManagerDialog", () => {
     expect(description.className).not.toContain("hidden");
   });
 
+  it("drops the memory-range line on the smallest screen except where the ranges are the user's own", () => {
+    localStorage.clear();
+    setViewportWidth(360);
+
+    const customSnapshot: SnapshotStorageEntry = {
+      ...snapshot,
+      id: "snapshot-custom",
+      filename: "snapshot-custom.c64snap",
+      snapshotType: "custom",
+      metadata: {
+        ...snapshot.metadata,
+        snapshot_type: "custom",
+        display_ranges: ["$C000-$CFFF"],
+      },
+    };
+
+    const { unmount } = render(
+      <DisplayProfileProvider>
+        <SnapshotManagerDialog
+          open
+          onOpenChange={vi.fn()}
+          snapshots={[snapshot, customSnapshot]}
+          onRestore={vi.fn()}
+          onDelete={vi.fn()}
+          onUpdateLabel={vi.fn()}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    // The program snapshot's ranges restate its type label, and at this width they wrap
+    // to a second line that makes the row taller than the list area left when the
+    // on-screen keyboard is up. The custom snapshot's ranges are the only thing that
+    // says what it holds, so that line survives - on one truncated line.
+    expect(screen.queryByText("$0000-$00FF, $0200-$FFFF")).toBeNull();
+    expect(screen.getByText("$C000-$CFFF").className).toContain("truncate");
+
+    unmount();
+    setViewportWidth(800);
+
+    render(
+      <DisplayProfileProvider>
+        <SnapshotManagerDialog
+          open
+          onOpenChange={vi.fn()}
+          snapshots={[snapshot, customSnapshot]}
+          onRestore={vi.fn()}
+          onDelete={vi.fn()}
+          onUpdateLabel={vi.fn()}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByText("$0000-$00FF, $0200-$FFFF")).toBeTruthy();
+    expect(screen.getByText("$C000-$CFFF").className).not.toContain("truncate");
+  });
+
   it("distinguishes empty libraries from empty filter results", () => {
     localStorage.clear();
     setViewportWidth(360);
