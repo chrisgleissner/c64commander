@@ -654,7 +654,7 @@ button:focus-visible,
      off the right edge. 0.9rem is 14.4px, which clears the 14px readability floor and
      brings the row to about 284px against the 304px available, so it fits with room to
      spare rather than by a few pixels. */
-  :root[data-display-profile="compact"] .tab-item > span {
+  :root[data-display-profile="compact"] .tab-item-label {
     font-size: 0.9rem;
     line-height: 1.15;
   }
@@ -895,7 +895,7 @@ button:focus-visible,
      do fit; they only needed to be told not to break. px-0.5 rather than px-1.5 keeps
      the widest ("Settings", 61px) inside its tab once the 44px minimum width is
      applied to the narrow ones. */
-  .tab-item > span {
+  .tab-item-label {
     @apply whitespace-nowrap;
   }
 

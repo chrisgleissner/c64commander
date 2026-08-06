@@ -72,20 +72,6 @@ const MIN_TARGET_PX = 44;
 type TextViolation = { text: string; fontPx: number; selector: string };
 type TargetViolation = { label: string; width: number; height: number; selector: string };
 
-const describeElement = () => `
-  (element) => {
-    const parts = [element.tagName.toLowerCase()];
-    const testId = element.getAttribute('data-testid');
-    if (testId) parts.push('[data-testid=' + testId + ']');
-    else if (element.id) parts.push('#' + element.id);
-    else if (element.className && typeof element.className === 'string') {
-      const cls = element.className.trim().split(/\\s+/).slice(0, 3).join('.');
-      if (cls) parts.push('.' + cls);
-    }
-    return parts.join('');
-  }
-`;
-
 const collectTextViolations = (page: Page, floor: number) =>
   page.evaluate((minPx) => {
     const describe = (element: Element) => {
@@ -311,7 +297,3 @@ test.describe("Small screen ergonomics", () => {
     ).toEqual([]);
   });
 });
-
-// Referenced so the helper above is not flagged as unused if the probe form is
-// reinstated during debugging.
-void describeElement;

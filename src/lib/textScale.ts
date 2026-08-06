@@ -50,23 +50,27 @@ export type TextScaleId = (typeof TEXT_SCALE_OPTIONS)[number]["id"];
 
 export const DEFAULT_TEXT_SCALE_ID: TextScaleId = "default";
 
+/** The largest the app will render, whatever a stored value asks for. */
+export const MAX_TEXT_SCALE = 1.5;
+
 export const isTextScaleId = (value: unknown): value is TextScaleId =>
   typeof value === "string" && TEXT_SCALE_OPTIONS.some((option) => option.id === value);
 
 /**
- * The multiplier for a stored id, falling back to 1 for anything unrecognised so a
- * corrupt or future-dated preference cannot leave the app with unreadable text.
+ * The multiplier for a stored id.
+ *
+ * Anything unrecognised falls back to 1, so a corrupt entry or one written by a later
+ * release cannot leave the app with unreadable text. The result is then clamped: below 1
+ * would make text smaller than the design intends, which is the one thing this feature
+ * must never do, and an unbounded value would break every layout at once. The clamp
+ * cannot bite for any option in the table today - it is there so that adding one out of
+ * range degrades to a sane size rather than shipping it, and the table is separately
+ * asserted to stay within range.
  */
-export const resolveTextScale = (id: string | null | undefined): number =>
-  TEXT_SCALE_OPTIONS.find((option) => option.id === id)?.scale ?? 1;
-
-/**
- * The multiplier to apply, clamped rather than trusted: below 1 would make text smaller
- * than the design intends, which is the one thing this feature must never do, and an
- * unbounded upper value would break every layout at once.
- */
-export const resolveClampedTextScale = (id: string | null | undefined): number =>
-  Math.min(1.5, Math.max(1, resolveTextScale(id)));
+export const resolveTextScale = (id: string | null | undefined): number => {
+  const scale = TEXT_SCALE_OPTIONS.find((option) => option.id === id)?.scale ?? 1;
+  return Math.min(MAX_TEXT_SCALE, Math.max(1, scale));
+};
 
 /**
  * Applies the setting to the document. Safe to call before the DOM exists (during SSR
@@ -75,6 +79,6 @@ export const resolveClampedTextScale = (id: string | null | undefined): number =
 export const applyTextScaleToDocument = (id: string | null | undefined): void => {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
-  root.style.setProperty(TEXT_SCALE_VARIABLE, String(resolveClampedTextScale(id)));
+  root.style.setProperty(TEXT_SCALE_VARIABLE, String(resolveTextScale(id)));
   root.dataset.textScale = isTextScaleId(id) ? id : DEFAULT_TEXT_SCALE_ID;
 };

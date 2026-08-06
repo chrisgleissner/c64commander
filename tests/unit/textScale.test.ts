@@ -13,7 +13,7 @@ import {
   TEXT_SCALE_VARIABLE,
   applyTextScaleToDocument,
   isTextScaleId,
-  resolveClampedTextScale,
+  MAX_TEXT_SCALE,
   resolveTextScale,
 } from "@/lib/textScale";
 
@@ -23,9 +23,9 @@ describe("text scale", () => {
     // shrank it would defeat the accessibility reason it exists, so every option and
     // every unrecognised input must resolve to at least 1.
     for (const option of TEXT_SCALE_OPTIONS) {
-      expect(resolveClampedTextScale(option.id)).toBeGreaterThanOrEqual(1);
+      expect(resolveTextScale(option.id)).toBeGreaterThanOrEqual(1);
     }
-    expect(resolveClampedTextScale("default")).toBe(1);
+    expect(resolveTextScale("default")).toBe(1);
   });
 
   it("falls back to the default for an unknown or corrupt stored value", () => {
@@ -34,20 +34,20 @@ describe("text scale", () => {
     expect(resolveTextScale("not-a-scale")).toBe(1);
     expect(resolveTextScale(null)).toBe(1);
     expect(resolveTextScale(undefined)).toBe(1);
-    expect(resolveClampedTextScale("enormous")).toBe(1);
+    expect(resolveTextScale("enormous")).toBe(1);
   });
 
   it("caps how far the setting can go", () => {
     // An unbounded scale breaks every layout at once. The largest option is the cap.
     const largest = Math.max(...TEXT_SCALE_OPTIONS.map((option) => option.scale));
-    expect(largest).toBeLessThanOrEqual(1.5);
-    expect(resolveClampedTextScale("largest")).toBe(1.5);
+    expect(largest).toBeLessThanOrEqual(MAX_TEXT_SCALE);
+    expect(resolveTextScale("largest")).toBe(MAX_TEXT_SCALE);
   });
 
   it("increases monotonically through the options", () => {
     // Options are presented in order, so each must actually be larger than the last -
     // otherwise picking "Larger" could make text smaller.
-    const sizes = TEXT_SCALE_OPTIONS.map((option) => resolveClampedTextScale(option.id));
+    const sizes = TEXT_SCALE_OPTIONS.map((option) => resolveTextScale(option.id));
     for (let index = 1; index < sizes.length; index += 1) {
       expect(sizes[index]).toBeGreaterThan(sizes[index - 1]);
     }

@@ -6,11 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { test, expect, type Locator, type Page } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import { disableTraceAssertions } from "./traceUtils";
 import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
+import { KEY_SELECTED_ATTRIBUTE as SELECTED, enableKeypad, ringFocus } from "./focusRing";
 import { TAB_ROUTES } from "../src/lib/navigation/tabRoutes";
 
 /**
@@ -30,42 +31,6 @@ import { TAB_ROUTES } from "../src/lib/navigation/tabRoutes";
  * a control the ring can select but never scroll on screen is not reachable in any way
  * that matters.
  */
-
-const KEYPAD_FLAG_KEY = "c64u_feature_flag:keypad_input_enabled";
-const SELECTED = "data-key-selected";
-
-// The stored value is "1", not "true" - the same encoding keypadInput.spec.ts uses.
-// Writing "true" leaves the flag off, and the focus ring then never arms, which shows
-// up as "no element is selected" rather than as anything to do with the flag.
-const enableKeypad = (page: Page) =>
-  page.addInitScript((key) => {
-    localStorage.setItem(key, "1");
-  }, KEYPAD_FLAG_KEY);
-
-/**
- * Steps the focus ring until `target` carries the highlight, bounded.
- *
- * Mirrors the walk in keypadInput.spec.ts: ArrowDown moves along the ring at the
- * current level, and Enter goes one level in - into a card that contains the target,
- * or into a closed Settings chapter whose controls are not rendered until it opens.
- */
-const ringFocus = async (page: Page, target: Locator, maxSteps = 80): Promise<boolean> => {
-  for (let step = 0; step < maxSteps; step += 1) {
-    if ((await target.getAttribute(SELECTED)) === "true") return true;
-
-    const handle = await target.elementHandle({ timeout: 250 }).catch(() => null);
-    const goIn = await page.evaluate((node) => {
-      const selected = document.querySelector('[data-key-selected="true"]');
-      if (!selected) return false;
-      if (node instanceof Element && selected !== node && selected.contains(node)) return true;
-      return selected.matches("[data-section-label]") && selected.getAttribute("data-open") === "false";
-    }, handle);
-    await handle?.dispose();
-
-    await page.keyboard.press(goIn ? "Enter" : "ArrowDown");
-  }
-  return (await target.getAttribute(SELECTED)) === "true";
-};
 
 /** True when the element is inside the visible viewport, not merely in the DOM. */
 const isOnScreen = (target: Locator) =>
