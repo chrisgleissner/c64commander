@@ -166,7 +166,7 @@ export function SidCard({
             size="sm"
             onClick={onPowerToggle}
             disabled={!isConnected || powerPending}
-            className={cn("h-6 px-2 text-xs", getOnOffButtonClass(power))}
+            className={cn("px-3 text-xs", getOnOffButtonClass(power), "min-h-11 min-w-11")}
             data-testid={`home-sid-toggle-${testIdSuffix}`}
           >
             {power ? "ON" : "OFF"}
@@ -176,7 +176,7 @@ export function SidCard({
             variant="outline"
             size="sm"
             disabled={true}
-            className={cn("h-6 px-2 text-xs", getOnOffButtonClass(power))}
+            className={cn("px-3 text-xs", getOnOffButtonClass(power), "min-h-11 min-w-11")}
             data-testid={`home-sid-toggle-${testIdSuffix}`}
           >
             {power ? "ON" : "OFF"}

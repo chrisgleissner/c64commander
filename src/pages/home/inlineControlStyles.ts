@@ -12,9 +12,9 @@
  * border, background and chevron are removed for that reason, and that look is
  * deliberate.
  *
- * This constant carries appearance only. It deliberately does NOT set the target
- * size, because the two callers need different layouts and the size must be decided
- * where the row is composed:
+ * It carries the 44px WCAG 2.5.5 target size as well as the look, because every caller
+ * needs it: sized to their own text these controls came out as small as 17x17 CSS
+ * pixels. Layout is still decided where the row is composed:
  *
  * - `SummaryConfigControlRow` makes the whole row the target, so it appends
  *   `min-h-11 w-full justify-between` AFTER this string. Class order matters: `cn`
@@ -27,4 +27,4 @@
  * files, so a change to the look had to be made in three places to stay consistent.
  */
 export const INLINE_SUMMARY_CONTROL_CLASS =
-  "h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden";
+  "h-auto min-h-11 w-auto min-w-11 border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden";

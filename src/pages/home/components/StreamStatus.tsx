@@ -79,7 +79,7 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
               >
                 <button
                   type="button"
-                  className="min-w-0 flex-1 text-left flex items-center gap-2"
+                  className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left"
                   onClick={() => handleStreamEditOpen(entry.key)}
                   disabled={locked}
                   data-testid={`home-stream-edit-toggle-${entry.key}`}

@@ -425,7 +425,9 @@
   width: 100%;
   margin: 0;
   text-align: center;
-  font-size: clamp(0.82rem, 0.52rem + 0.78vw, 1rem);
+  /* Floor raised to 0.9rem (14.4px): the lower bound of this clamp put the first
+     text a user ever sees below the readability floor on narrow screens. */
+  font-size: clamp(0.9rem, 0.52rem + 0.78vw, 1rem);
   line-height: 1.45;
   color: rgb(255 255 255 / 0.88);
 }
@@ -435,8 +437,11 @@
   transform: translateY(-2vh);
 }
 
+/* Compact scales type UP everywhere else; this rule used to be the one place that
+   scaled it down, shrinking the launch screen's only explanatory text to 13px on the
+   smallest screen. It now matches the profile's intent. */
 :root[data-display-profile="compact"] .startup-launch-sequence__description {
-  font-size: 0.82rem;
+  font-size: 1rem;
 }
 
 .progress-indeterminate {

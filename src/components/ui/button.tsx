@@ -14,7 +14,13 @@ import { cn } from "@/lib/utils";
 import { handlePointerButtonClick } from "@/lib/ui/buttonInteraction";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-flash disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  // `min-h-11 min-w-11` is the 44px WCAG 2.5.5 target size, applied on the base rather
+  // than only in the size variants. The variants already meet it, but call sites
+  // routinely override the height with an `h-8` or `h-6` to make a dense row fit, and a
+  // min-height is a different CSS property so it survives that override and still wins
+  // over the smaller height. That makes the floor hold everywhere by construction
+  // instead of depending on every call site remembering it.
+  "inline-flex min-h-11 min-w-11 items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-flash disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {

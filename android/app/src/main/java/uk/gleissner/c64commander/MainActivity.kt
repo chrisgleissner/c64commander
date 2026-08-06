@@ -140,6 +140,7 @@ open class MainActivity : BridgeActivity() {
     registerPlugin(StreamUdpPlugin::class.java)
     registerPlugin(TelnetSocketPlugin::class.java)
     super.onCreate(savedInstanceState)
+    applySystemFontScale()
     installLanCookieBypassIfNeeded()
     WindowCompat.setDecorFitsSystemWindows(window, false)
     window.statusBarColor = Color.TRANSPARENT
@@ -267,4 +268,33 @@ open class MainActivity : BridgeActivity() {
 
     CookieHandler.setDefault(C64LanCookieBypassHandler(currentHandler))
   }
+
+  /**
+   * Honours the device's own font size setting.
+   *
+   * A WebView does not follow the system font scale on its own, so an app that ignores
+   * it renders at one fixed size no matter what the user has chosen for every other app
+   * on the device. `textZoom` is a percentage, so a 1.3x system setting becomes 130 and
+   * every rendered size scales with it, including sizes written in px.
+   *
+   * The app's own text size setting is applied separately, inside the page, by scaling
+   * the root font size. The two multiply, which is intended: a user who has enlarged
+   * text system-wide and again in the app gets both.
+   *
+   * Clamped because the platform allows very large accessibility scales, and beyond
+   * about 2x the layout stops being usable on a small screen; the floor keeps a
+   * shrunken system setting from making this app smaller than it was designed to be.
+   */
+  private fun applySystemFontScale() {
+    try {
+      val scale = resources.configuration.fontScale
+      if (!scale.isFinite() || scale <= 0f) return
+      val clamped = scale.coerceIn(1.0f, 2.0f)
+      bridge?.webView?.settings?.textZoom = Math.round(clamped * 100)
+    } catch (error: Throwable) {
+      // Never let a display preference stop the app starting.
+      AppLogger.warn(this, "MainActivity", "Could not apply the system font scale", "display", error)
+    }
+  }
+
 }

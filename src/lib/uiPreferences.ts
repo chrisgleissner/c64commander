@@ -8,9 +8,16 @@
 
 import { type DisplayProfileOverride, isDisplayProfileOverride } from "@/lib/displayProfiles";
 import { variant } from "@/generated/variant";
+import {
+  DEFAULT_TEXT_SCALE_ID,
+  applyTextScaleToDocument,
+  isTextScaleId,
+  type TextScaleId,
+} from "@/lib/textScale";
 
 const LIST_PREVIEW_LIMIT_KEY = "c64u_list_preview_limit";
 const DISPLAY_PROFILE_OVERRIDE_KEY = "c64u_display_profile_override";
+const TEXT_SCALE_KEY = "c64u_text_scale";
 
 export const DEFAULT_LIST_PREVIEW_LIMIT = 50;
 export const MIN_LIST_PREVIEW_LIMIT = 1;
@@ -58,4 +65,24 @@ export const setDisplayProfileOverride = (value: DisplayProfileOverride) => {
       detail: { displayProfileOverride: value },
     }),
   );
+};
+
+/**
+ * The app's own text size setting. It multiplies with the operating system's font
+ * size, which Android applies to the WebView separately - see `@/lib/textScale`.
+ */
+export const getTextScaleId = (): TextScaleId => {
+  if (typeof localStorage === "undefined") return DEFAULT_TEXT_SCALE_ID;
+  const raw = localStorage.getItem(TEXT_SCALE_KEY);
+  return isTextScaleId(raw) ? raw : DEFAULT_TEXT_SCALE_ID;
+};
+
+export const setTextScaleId = (value: TextScaleId) => {
+  if (typeof localStorage !== "undefined") localStorage.setItem(TEXT_SCALE_KEY, value);
+  applyTextScaleToDocument(value);
+};
+
+/** Applies the stored setting. Called once during start-up. */
+export const applyStoredTextScale = () => {
+  applyTextScaleToDocument(getTextScaleId());
 };

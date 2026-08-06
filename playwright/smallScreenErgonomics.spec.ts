@@ -158,12 +158,29 @@ const collectTargetViolations = (page: Page, floor: number) =>
       // Hidden inputs and the like.
       if (element.tagName === "INPUT" && (element as HTMLInputElement).type === "hidden") continue;
 
-      if (rect.width >= minPx && rect.height >= minPx) continue;
+      // Measure the effective target, not just the control. A small checkbox inside a
+      // label is pressed by pressing anywhere on the label - that is the browser's own
+      // behaviour, and it is the area the user actually aims at - so the label's box is
+      // what decides whether the target is big enough.
+      let effective = rect;
+      // A label that wraps the control, or one bound to it by `for`, is activated by
+      // pressing it and so counts as part of the target either way.
+      const wrapping = element.closest("label");
+      const bound = element.id ? document.querySelector(`label[for="${CSS.escape(element.id)}"]`) : null;
+      for (const candidate of [wrapping, bound]) {
+        if (!candidate) continue;
+        const candidateRect = candidate.getBoundingClientRect();
+        if (candidateRect.width >= effective.width && candidateRect.height >= effective.height) {
+          effective = candidateRect;
+        }
+      }
+
+      if (effective.width >= minPx && effective.height >= minPx) continue;
 
       results.push({
         label: (element.textContent ?? element.getAttribute("aria-label") ?? "").trim().slice(0, 40),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
+        width: Math.round(effective.width),
+        height: Math.round(effective.height),
         selector: describe(element),
       });
     }

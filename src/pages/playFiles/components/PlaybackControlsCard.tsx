@@ -760,7 +760,7 @@ export const PlaybackControlsCard = ({
             shortens the card from the bottom. */}
         {stationActive ? null : (
           <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-xs">
+            <label className="flex min-h-11 items-center gap-2 text-xs">
               <Checkbox
                 checked={shuffleEnabled}
                 onCheckedChange={(value) => onShuffleChange(Boolean(value))}
@@ -771,7 +771,7 @@ export const PlaybackControlsCard = ({
                 <Shuffle className="h-3.5 w-3.5" /> Shuffle
               </span>
             </label>
-            <label className="flex items-center gap-2 text-xs">
+            <label className="flex min-h-11 items-center gap-2 text-xs">
               <Checkbox
                 checked={repeatEnabled}
                 onCheckedChange={(value) => onRepeatChange(Boolean(value))}
