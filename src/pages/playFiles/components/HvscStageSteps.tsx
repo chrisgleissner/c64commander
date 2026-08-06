@@ -68,7 +68,7 @@ export const HvscStageSteps = ({
               />
               <span
                 className={cn(
-                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-semibold transition-colors",
+                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-[11px] font-semibold transition-colors",
                   step.status === "done" && "border-primary bg-primary text-primary-foreground",
                   step.status === "active" && "border-primary bg-background text-primary",
                   step.status === "pending" && "border-border bg-background text-muted-foreground",
@@ -97,7 +97,7 @@ export const HvscStageSteps = ({
             </div>
             <span
               className={cn(
-                "text-center text-[10px] leading-tight",
+                "text-center text-[11px] leading-tight",
                 step.status === "pending" ? "text-muted-foreground" : "text-foreground",
                 step.status === "active" && "font-medium",
               )}

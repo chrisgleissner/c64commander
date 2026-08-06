@@ -677,7 +677,7 @@ export const PlaybackControlsCard = ({
                       />
                       <span
                         aria-hidden
-                        className="absolute -top-5 left-0 -translate-x-1/2 whitespace-nowrap rounded bg-primary px-1 text-[10px] font-medium leading-4 tabular-nums text-primary-foreground"
+                        className="absolute -top-5 left-0 -translate-x-1/2 whitespace-nowrap rounded bg-primary px-1 text-[11px] font-medium leading-4 tabular-nums text-primary-foreground"
                         data-testid="playback-awaited-timestamp"
                       >
                         {pendingSeek.targetLabel}

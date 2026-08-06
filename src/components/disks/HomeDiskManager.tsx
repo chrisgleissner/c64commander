@@ -2612,7 +2612,7 @@ export const HomeDiskManager = () => {
                       <span className={cn(option.color.text, "max-w-[180px] break-words whitespace-normal")}>
                         {option.name}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">({option.count})</span>
+                      <span className="text-[11px] text-muted-foreground">({option.count})</span>
                     </Button>
                   ))}
                 </div>

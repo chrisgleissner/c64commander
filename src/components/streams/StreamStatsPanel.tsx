@@ -46,7 +46,7 @@ const fmtDuration = (durationMs: number): string => {
 function Sparkline({ values, testid, ariaLabel }: { values: number[]; testid: string; ariaLabel: string }) {
   if (values.length < 2) {
     return (
-      <div className="h-6 text-[10px] text-muted-foreground" data-testid={testid}>
+      <div className="h-6 text-[11px] text-muted-foreground" data-testid={testid}>
         collecting…
       </div>
     );
@@ -71,7 +71,7 @@ function Sparkline({ values, testid, ariaLabel }: { values: number[]; testid: st
 function Stat({ label, value, testid, tone }: { label: string; value: string; testid: string; tone?: "warn" }) {
   return (
     <div className="rounded-md bg-muted/50 px-2 py-1.5 text-center">
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
       <div
         className={cn("text-sm font-semibold tabular-nums", tone === "warn" && "text-destructive")}
         data-testid={`stream-stats-${testid}`}
@@ -171,7 +171,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
         ))}
         {governor.overridden && (
           <span
-            className="ml-1 rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-medium text-destructive"
+            className="ml-1 rounded bg-destructive/15 px-1.5 py-0.5 text-[11px] font-medium text-destructive"
             data-testid="stream-stats-override"
             title={governor.reason}
           >
@@ -202,7 +202,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
         <div className="space-y-3" data-testid="stream-stats-details">
           {/* History window selector (§12.2) */}
           <div className="flex items-center gap-1.5" data-testid="stream-stats-window">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">History</span>
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">History</span>
             {WINDOWS.map((w) => (
               <Button
                 key={w.label}
@@ -221,11 +221,11 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
           {/* History charts (§12.3) */}
           <div className="grid grid-cols-2 gap-3">
             <div className="text-muted-foreground">
-              <div className="mb-1 text-[10px] uppercase tracking-wide">Presented FPS</div>
+              <div className="mb-1 text-[11px] uppercase tracking-wide">Presented FPS</div>
               <Sparkline values={fpsSeries} testid="stream-stats-spark-fps" ariaLabel="Presented FPS over the window" />
             </div>
             <div className="text-muted-foreground">
-              <div className="mb-1 text-[10px] uppercase tracking-wide">Audio buffer min (ms)</div>
+              <div className="mb-1 text-[11px] uppercase tracking-wide">Audio buffer min (ms)</div>
               <Sparkline
                 values={bufferSeries}
                 testid="stream-stats-spark-buffer"
@@ -233,7 +233,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
               />
             </div>
             <div className="text-muted-foreground">
-              <div className="mb-1 text-[10px] uppercase tracking-wide">Loss (pkts+frames/s)</div>
+              <div className="mb-1 text-[11px] uppercase tracking-wide">Loss (pkts+frames/s)</div>
               <Sparkline
                 values={lossSeries}
                 testid="stream-stats-spark-loss"
@@ -241,7 +241,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
               />
             </div>
             <div className="text-muted-foreground">
-              <div className="mb-1 text-[10px] uppercase tracking-wide">Concealed audio/s</div>
+              <div className="mb-1 text-[11px] uppercase tracking-wide">Concealed audio/s</div>
               <Sparkline
                 values={concealSeries}
                 testid="stream-stats-spark-conceal"
@@ -249,7 +249,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
               />
             </div>
             <div className="col-span-2 text-muted-foreground">
-              <div className="mb-1 text-[10px] uppercase tracking-wide">Effective video rate (%)</div>
+              <div className="mb-1 text-[11px] uppercase tracking-wide">Effective video rate (%)</div>
               <Sparkline
                 values={rateSeries}
                 testid="stream-stats-spark-rate"

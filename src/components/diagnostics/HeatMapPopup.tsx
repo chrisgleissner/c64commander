@@ -227,7 +227,7 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
             {legendSteps.map((step) => (
               <div
                 key={step}
-                className="flex h-7 items-center justify-center rounded-md border text-[10px] font-semibold"
+                className="flex h-7 items-center justify-center rounded-md border text-[11px] font-semibold"
                 style={heatCellStyle(step)}
               >
                 {Math.round(step * 100)}
@@ -255,7 +255,7 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
                       style={{ writingMode: "vertical-lr", textOrientation: "mixed", transform: "rotate(180deg)" }}
                       title={col}
                     >
-                      <span className="block max-h-[8rem] overflow-hidden text-[10px] tracking-[0.08em]">{col}</span>
+                      <span className="block max-h-[8rem] overflow-hidden text-[11px] tracking-[0.08em]">{col}</span>
                     </th>
                   ))}
                 </tr>

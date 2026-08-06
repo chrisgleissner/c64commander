@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { INLINE_SUMMARY_CONTROL_CLASS } from "./inlineControlStyles";
 
 export interface SidCardProps {
   name: string;
@@ -78,8 +79,7 @@ export interface SidCardProps {
   testIdSuffix: string;
 }
 
-const inlineSelectTriggerClass =
-  "h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden";
+const inlineSelectTriggerClass = INLINE_SUMMARY_CONTROL_CLASS;
 
 export function SidCard({
   name,
@@ -260,7 +260,7 @@ export function SidCard({
           <span
             className={cn(
               "font-medium text-muted-foreground shrink-0 whitespace-nowrap",
-              profile === "compact" ? "text-xs w-8" : "text-[10px] w-6",
+              profile === "compact" ? "text-xs w-8" : "text-[11px] w-6",
             )}
           >
             Vol
@@ -287,7 +287,7 @@ export function SidCard({
           <span
             className={cn(
               "font-medium text-muted-foreground shrink-0 whitespace-nowrap",
-              profile === "compact" ? "text-xs w-8" : "text-[10px] w-6",
+              profile === "compact" ? "text-xs w-8" : "text-[11px] w-6",
             )}
           >
             Pan

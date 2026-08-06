@@ -261,7 +261,7 @@ function PickerHealthStatusBadge({
         aria-hidden="true"
       >
         <span className="inline-flex min-w-0 max-w-full items-center overflow-hidden whitespace-nowrap leading-none">
-          <span className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-foreground">
+          <span className="truncate text-[11px] font-semibold uppercase tracking-[0.12em] text-foreground">
             {badgeText.leadingLabel}
           </span>
           <span className="shrink-0 whitespace-pre" aria-hidden="true">
@@ -282,7 +282,7 @@ function PickerHealthStatusBadge({
               <span className="shrink-0 whitespace-pre" aria-hidden="true">
                 {" "}
               </span>
-              <span className={cn("shrink-0 text-[10px] font-semibold leading-none", glyphColor)}>
+              <span className={cn("shrink-0 text-[11px] font-semibold leading-none", glyphColor)}>
                 {badgeText.countLabel}
               </span>
             </>
@@ -292,7 +292,7 @@ function PickerHealthStatusBadge({
               <span className="shrink-0 whitespace-pre" aria-hidden="true">
                 {" "}
               </span>
-              <span className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-foreground">
+              <span className="truncate text-[11px] font-semibold uppercase tracking-[0.12em] text-foreground">
                 {badgeText.trailingLabel}
               </span>
             </>

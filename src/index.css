@@ -850,8 +850,18 @@ button:focus-visible,
     pointer-events: auto;
   }
 
+  /* Tabs size to their label, so the shortest one ("Play") ends up the narrowest
+     button in the bar. At 12px labels that left it 42px wide, under the 44px minimum
+     target size, which `smallScreenErgonomics.spec.ts` enforces — a target that small
+     is awkward to hit and gives the keypad focus ring very little to draw around.
+     `min-w-11` is 44px.
+
+     The horizontal padding pays for it. At px-2.5 the six labels came to roughly
+     318px, which only just fit a 320px viewport and left nothing for a minimum width;
+     px-1.5 brings that to about 284px, so every tab can reach 44px and the bar still
+     fits the smallest screen without truncating "Settings". */
   .tab-item {
-    @apply flex flex-col items-center gap-0.5 px-2.5 py-0.5
+    @apply flex min-w-11 flex-col items-center gap-0.5 px-1.5 py-0.5
            text-muted-foreground transition-colors;
   }
 

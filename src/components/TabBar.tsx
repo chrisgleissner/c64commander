@@ -84,7 +84,14 @@ function TabBarButton({
         />
       )}
       <Icon className="h-[1.375rem] w-[1.375rem]" />
-      <span className="text-[9px] font-medium leading-none">{tab.label}</span>
+      {/* 12px, not the 9px this used to be. These six labels are the app's primary
+          navigation, and 9px is about 1.4mm tall on a small phone panel - below what a
+          sighted adult with ordinary age-related long sight can read at arm's length
+          without effort. 12px is the smallest step in the type scale and the floor
+          enforced by smallScreenErgonomics.spec.ts. The tab's horizontal padding is
+          reduced to pay for the extra width so the six labels still fit across a
+          320px viewport without truncation. */}
+      <span className="text-xs font-medium leading-none">{tab.label}</span>
     </button>
   );
 }

@@ -101,7 +101,7 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
                 <div className="flex items-center gap-1">
                   {liveViewControlled ? (
                     <span
-                      className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary"
+                      className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary"
                       data-testid={`home-stream-liveview-badge-${entry.key}`}
                     >
                       Live View

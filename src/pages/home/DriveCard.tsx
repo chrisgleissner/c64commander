@@ -17,6 +17,7 @@ import {
   getDiagnosticsColorClassForDisplaySeverity,
   type DiagnosticsDisplaySeverity,
 } from "@/lib/diagnostics/diagnosticsSeverity";
+import { INLINE_SUMMARY_CONTROL_CLASS } from "./inlineControlStyles";
 
 export interface DriveCardProps {
   name: string;
@@ -63,8 +64,7 @@ export interface DriveCardProps {
   focusOrder?: number;
 }
 
-const inlineSelectTriggerClass =
-  "h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden";
+const inlineSelectTriggerClass = INLINE_SUMMARY_CONTROL_CLASS;
 
 export function DriveCard({
   name,
@@ -121,7 +121,7 @@ export function DriveCard({
           size="sm"
           onClick={onToggle}
           disabled={!isConnected || togglePending}
-          className={cn("h-6 px-2 text-xs", getOnOffButtonClass(enabled))}
+          className={cn("px-3 text-xs", getOnOffButtonClass(enabled), "min-h-11 min-w-11")}
           data-testid={`home-drive-toggle-${testIdSuffix}`}
         >
           {enabled ? "ON" : "OFF"}
@@ -136,7 +136,7 @@ export function DriveCard({
             type="button"
             onClick={onMountedPathClick || onPathClick}
             disabled={!isConnected || pathPending}
-            className="font-medium text-foreground truncate hover:underline text-left flex-1"
+            className="min-h-11 flex-1 truncate text-left font-medium text-foreground hover:underline"
             data-testid={`home-drive-mounted-${testIdSuffix}`}
           >
             {(mountedPath ?? pathValue) || "Select..."}
@@ -149,7 +149,10 @@ export function DriveCard({
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground whitespace-nowrap">Bus ID</span>
           <Select value={busIdValue} onValueChange={onBusIdChange} disabled={!isConnected || busIdPending}>
-            <SelectTrigger className={inlineSelectTriggerClass} data-testid={`home-drive-bus-${testIdSuffix}`}>
+            <SelectTrigger
+              className={cn(inlineSelectTriggerClass, "min-h-11 flex-1 justify-start")}
+              data-testid={`home-drive-bus-${testIdSuffix}`}
+            >
               <SelectValue placeholder={busIdValue} />
             </SelectTrigger>
             <SelectContent>
@@ -166,7 +169,10 @@ export function DriveCard({
             <>
               <span className="text-muted-foreground whitespace-nowrap">Type</span>
               <Select value={typeValue} onValueChange={onTypeChange} disabled={!isConnected || typePending}>
-                <SelectTrigger className={inlineSelectTriggerClass} data-testid={`home-drive-type-${testIdSuffix}`}>
+                <SelectTrigger
+                  className={cn(inlineSelectTriggerClass, "min-h-11 flex-1 justify-start")}
+                  data-testid={`home-drive-type-${testIdSuffix}`}
+                >
                   <SelectValue placeholder={typeValue} />
                 </SelectTrigger>
                 <SelectContent>
@@ -190,7 +196,7 @@ export function DriveCard({
           onClick={onStatusClick}
           disabled={!onStatusClick}
           className={cn(
-            "truncate text-left font-medium",
+            "min-h-11 flex-1 truncate text-left font-medium",
             onStatusClick ? "underline-offset-2 hover:underline" : "cursor-default",
             getDiagnosticsColorClassForDisplaySeverity(statusSeverity),
           )}
