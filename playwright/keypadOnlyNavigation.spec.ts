@@ -25,7 +25,7 @@ import { TAB_ROUTES } from "../src/lib/navigation/tabRoutes";
  *
  * These tests therefore never call click() or tap(). The only input is key presses.
  *
- * They run at the `tiny` viewport because the two constraints interact: the smaller
+ * They run at the `compact` viewport because the two constraints interact: the smaller
  * the screen, the more the ring has to scroll to bring the next control into view, and
  * a control the ring can select but never scroll on screen is not reachable in any way
  * that matters.
@@ -34,9 +34,12 @@ import { TAB_ROUTES } from "../src/lib/navigation/tabRoutes";
 const KEYPAD_FLAG_KEY = "c64u_feature_flag:keypad_input_enabled";
 const SELECTED = "data-key-selected";
 
+// The stored value is "1", not "true" - the same encoding keypadInput.spec.ts uses.
+// Writing "true" leaves the flag off, and the focus ring then never arms, which shows
+// up as "no element is selected" rather than as anything to do with the flag.
 const enableKeypad = (page: Page) =>
   page.addInitScript((key) => {
-    localStorage.setItem(key, "true");
+    localStorage.setItem(key, "1");
   }, KEYPAD_FLAG_KEY);
 
 /**
@@ -89,7 +92,7 @@ test.describe("Keypad-only navigation on the smallest screen", () => {
     await page.addInitScript(() => {
       localStorage.setItem("c64u_display_profile_override", "compact");
     });
-    await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.tiny.viewport);
+    await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
   });
 
   test.afterEach(async () => {

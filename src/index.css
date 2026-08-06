@@ -642,6 +642,17 @@ button:focus-visible,
     line-height: 1.35rem;
   }
 
+  /* Tab labels on the smallest screen.
+     The compact profile renders text-xs at 16px, at which the six labels plus the 44px
+     minimum tab width come to more than the bar can hold at 320px and "Docs" is clipped
+     off the right edge. 0.9rem is 14.4px, which clears the 14px readability floor and
+     brings the row to about 284px against the 304px available, so it fits with room to
+     spare rather than by a few pixels. */
+  :root[data-display-profile="compact"] .tab-item > span {
+    font-size: 0.9rem;
+    line-height: 1.15;
+  }
+
   :root[data-display-profile="compact"] :where([class~="text-sm"]) {
     font-size: 1.125rem;
     line-height: 1.55rem;
@@ -866,8 +877,20 @@ button:focus-visible,
      px-1.5 brings that to about 284px, so every tab can reach 44px and the bar still
      fits the smallest screen without truncating "Settings". */
   .tab-item {
-    @apply flex min-w-11 flex-col items-center gap-0.5 px-1.5 py-0.5
+    @apply flex min-w-11 shrink-0 flex-col items-center gap-0.5 px-0.5 py-0.5
            text-muted-foreground transition-colors;
+  }
+
+  /* The label stays on one line.
+     Without this the six labels wrapped on a 320px screen - "Ho/me", "Settin/gs" -
+     because a global `min-width: 0` on flex children lets each tab shrink below its
+     own text. Measured at the 16px the compact profile renders these at, the six
+     labels come to 265px against the 304px the bar has after its own padding, so they
+     do fit; they only needed to be told not to break. px-0.5 rather than px-1.5 keeps
+     the widest ("Settings", 61px) inside its tab once the 44px minimum width is
+     applied to the narrow ones. */
+  .tab-item > span {
+    @apply whitespace-nowrap;
   }
 
   .tab-item.active {

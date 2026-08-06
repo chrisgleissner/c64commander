@@ -2979,11 +2979,15 @@ export default function SettingsPage() {
 
                 <div className="space-y-2">
                   <Label className="text-sm">Allow circuit override</Label>
-                  <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 p-2">
+                  {/* A label, so the whole row toggles the checkbox rather than only the
+                      16px box, and so the control has an accessible name at all. */}
+                  <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-md border border-border/70 p-2">
                     <span className="text-xs text-muted-foreground">
                       User-triggered actions can bypass circuit breaker.
                     </span>
                     <Checkbox
+                      aria-label="Allow circuit override"
+                      data-testid="settings-allow-circuit-override"
                       checked={allowCircuitOverride}
                       onCheckedChange={(checked) => {
                         const enabled = checked === true;
@@ -2992,7 +2996,7 @@ export default function SettingsPage() {
                         refreshDeviceSafetyState();
                       }}
                     />
-                  </div>
+                  </label>
                 </div>
               </div>
             </div>
@@ -3086,7 +3090,7 @@ export default function SettingsPage() {
               href={settingsDocumentationLink.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm text-primary hover:underline"
+              className="flex min-h-11 items-center gap-2 text-sm text-primary hover:underline"
               data-testid={settingsDocumentationLink.testId}
             >
               <ExternalLink className="h-4 w-4" />
@@ -3095,7 +3099,7 @@ export default function SettingsPage() {
 
             <button
               type="button"
-              className="flex items-center gap-2 text-sm text-primary hover:underline"
+              className="flex min-h-11 items-center gap-2 text-sm text-primary hover:underline"
               onClick={() => navigate("/settings/open-source-licenses")}
             >
               <FileText className="h-4 w-4" />

@@ -16,7 +16,7 @@ import { TAB_ROUTES } from "../src/lib/navigation/tabRoutes";
 /**
  * Readability and reach on the smallest screen the app supports.
  *
- * The `tiny` viewport is 320x426 CSS pixels. Because CSS pixels are
+ * The `compact` viewport is 320x426 CSS pixels. Because CSS pixels are
  * density-independent, text there is the same *physical* size as it is on a large
  * phone - a 3.25in panel does not shrink glyphs. What it does is take away room:
  * this viewport has under half the vertical space of the others, which is exactly
@@ -141,6 +141,11 @@ const collectTargetViolations = (page: Page, floor: number) =>
       const testId = element.getAttribute("data-testid");
       if (testId) parts.push(`[data-testid=${testId}]`);
       else if (element.id) parts.push(`#${element.id}`);
+      else if (typeof element.className === "string" && element.className.trim()) {
+        parts.push(`.${element.className.trim().split(/\s+/).slice(0, 4).join(".")}`);
+      }
+      const role = element.getAttribute("role");
+      if (role) parts.push(`[role=${role}]`);
       return parts.join("");
     };
 
@@ -194,6 +199,34 @@ const expectNoHorizontalOverflow = async (page: Page) => {
   }));
   expect(overflow.doc, "Document overflows horizontally").toBeLessThanOrEqual(1);
   expect(overflow.body, "Body overflows horizontally").toBeLessThanOrEqual(1);
+
+  // The document measure alone is not enough. A `position: fixed` element sized to the
+  // viewport does not extend the document's scrollWidth, so its contents can run off
+  // the right edge and be clipped with both numbers above still reading zero. That is
+  // exactly how the tab bar came to have "Docs" cut in half with every check passing.
+  // This looks for any visible element whose own content is wider than the box drawn
+  // for it, which catches the clipped case as well as the overflowing one.
+  const clipped = await page.evaluate(() => {
+    const offenders: Array<{ selector: string; scrollWidth: number; clientWidth: number }> = [];
+    for (const element of Array.from(document.querySelectorAll<HTMLElement>("nav, header, footer, main"))) {
+      const style = window.getComputedStyle(element);
+      if (style.display === "none" || style.visibility === "hidden") continue;
+      if (element.scrollWidth - element.clientWidth > 1) {
+        const testId = element.getAttribute("data-testid");
+        offenders.push({
+          selector: `${element.tagName.toLowerCase()}${testId ? `[data-testid=${testId}]` : `.${element.className.split(/\s+/)[0]}`}`,
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+        });
+      }
+    }
+    return offenders;
+  });
+  expect(
+    clipped,
+    `App chrome is wider than the space it has, so its contents are clipped:\n` +
+      clipped.map((c) => `  ${c.selector}: content ${c.scrollWidth}px in ${c.clientWidth}px`).join("\n"),
+  ).toEqual([]);
 };
 
 const settle = async (page: Page) => {
@@ -217,7 +250,7 @@ test.describe("Small screen ergonomics", () => {
     await page.addInitScript(() => {
       localStorage.setItem("c64u_display_profile_override", "compact");
     });
-    await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.tiny.viewport);
+    await page.setViewportSize(DISPLAY_PROFILE_VIEWPORTS.compact.viewport);
   });
 
   test.afterEach(async () => {

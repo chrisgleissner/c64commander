@@ -383,8 +383,9 @@ eye test.
 - **Never step type down to make something fit.** The answer to "it does not fit" is
   reflow, scroll, or fewer things — never smaller text.
 - The smallest supported screen is **320x426 CSS pixels**, which resolves to the
-  `compact` display profile. Measure there: it is the `tiny` entry in
-  `playwright/displayProfileViewports.ts`.
+  `compact` display profile. Measure there: it is the `compact` entry in
+  `playwright/displayProfileViewports.ts`, and it is the size the docs screenshots
+  for that profile are captured at.
 
 ## Build, test, and screenshot decision rules
 
