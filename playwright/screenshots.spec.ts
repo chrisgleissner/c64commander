@@ -31,6 +31,7 @@ import {
 import { disableTraceAssertions } from "./traceUtils";
 import {
   DISPLAY_PROFILE_VIEWPORT_SEQUENCE,
+  MANUAL_PROFILE_SEQUENCE,
   DISPLAY_PROFILE_VIEWPORTS,
   type DisplayProfileViewportId,
 } from "./displayProfileViewports";
@@ -2027,28 +2028,38 @@ test.describe("App screenshots", () => {
 
       // Refresh joystick + game-mode shots so the header reads "Remote Input".
       //
-      // Taken at the compact profile because the manuals embed them, and every manual
-      // illustrates the app at the smallest screen it supports. The three keyboard shots
-      // above are the exception: they exist to show how the profiles differ, so each one
-      // keeps the profile it demonstrates.
-      try {
-        await applyDisplayProfileViewport(page, "compact");
-        await page.getByTestId("remote-input-mode-joystick").click();
-        await expect(page.getByTestId("remote-input-virtual-joystick")).toBeVisible();
-        await captureScreenshot(page, testInfo, "home/remote-input/01-joystick.png", { locator: sheet });
-        console.log("[remote-input] captured 01-joystick.png");
+      // Captured once per manual profile: each manual illustrates the app at one size, and
+      // the two manuals do not use the same one. The three keyboard shots above are the
+      // exception - they exist to show how the profiles differ, so each keeps the profile
+      // it demonstrates.
+      for (const profileId of MANUAL_PROFILE_SEQUENCE) {
+        try {
+          await applyDisplayProfileViewport(page, profileId);
+          await page.getByTestId("remote-input-mode-joystick").click();
+          await expect(page.getByTestId("remote-input-virtual-joystick")).toBeVisible();
+          await captureScreenshot(
+            page,
+            testInfo,
+            profileScreenshotPath("home/remote-input", profileId, "01-joystick.png"),
+            { locator: sheet },
+          );
 
-        // Game Mode collapses the chrome in one action; the floating handle brings it
-        // back, which is the state the manual describes and screenshots.
-        await page.getByTestId("remote-input-immersive-toggle").click();
-        await page.getByTestId("remote-input-restore-chrome").click();
-        await captureScreenshot(page, testInfo, "home/remote-input/02-game-mode.png", { locator: sheet });
-        console.log("[remote-input] captured 02-game-mode.png");
+          // Game Mode collapses the chrome in one action; the floating handle brings it
+          // back, which is the state the manual describes and screenshots.
+          await page.getByTestId("remote-input-immersive-toggle").click();
+          await page.getByTestId("remote-input-restore-chrome").click();
+          await captureScreenshot(
+            page,
+            testInfo,
+            profileScreenshotPath("home/remote-input", profileId, "02-game-mode.png"),
+            { locator: sheet },
+          );
 
-        await page.getByTestId("remote-input-immersive-toggle").click();
-      } catch (error) {
-        if (error instanceof CaptureBudgetError) throw error;
-        console.warn("[remote-input] joystick/game-mode capture failed:", error);
+          await page.getByTestId("remote-input-immersive-toggle").click();
+        } catch (error) {
+          if (error instanceof CaptureBudgetError) throw error;
+          console.warn(`[remote-input] joystick/game-mode capture failed at ${profileId}:`, error);
+        }
       }
     },
   );
@@ -2612,7 +2623,16 @@ test.describe("App screenshots", () => {
       await liveView.getByTestId("av-video-toggle").click();
       // Wait until decoded frames are flowing (the fps badge only shows once they are).
       await expect(liveView.getByTestId("av-mirror-fps")).toBeVisible({ timeout: 8000 });
-      await captureScreenshot(page, testInfo, "home/content-explorer/01-live-view.png", { locator: liveView });
+      // One rendition per manual profile; each manual embeds only its own.
+      for (const profileId of MANUAL_PROFILE_SEQUENCE) {
+        await applyDisplayProfileViewport(page, profileId);
+        await captureScreenshot(
+          page,
+          testInfo,
+          profileScreenshotPath("home/content-explorer", profileId, "01-live-view.png"),
+          { locator: liveView },
+        );
+      }
 
       // Expanded inline preview.
       await liveView.getByTestId("live-view-expand").click();
@@ -2634,7 +2654,16 @@ test.describe("App screenshots", () => {
         await immersiveMirror.getByTestId("av-immersive-zoom-in").click();
         await immersiveMirror.getByTestId("av-immersive-zoom-in").click();
         await expect(immersiveMirror.getByTestId("av-mirror-minimap")).toBeVisible({ timeout: 4000 });
-        await captureScreenshot(page, testInfo, "home/remote-input/06-av-mirror-immersive.png", { locator: sheet });
+        // One rendition per manual profile; each manual embeds only its own.
+        for (const profileId of MANUAL_PROFILE_SEQUENCE) {
+          await applyDisplayProfileViewport(page, profileId);
+          await captureScreenshot(
+            page,
+            testInfo,
+            profileScreenshotPath("home/remote-input", profileId, "06-av-mirror-immersive.png"),
+            { locator: sheet },
+          );
+        }
         await immersiveMirror.getByTestId("av-immersive-fit").click();
 
         // Game Mode, driven by key: the on-screen controls step aside so the picture has
@@ -2646,7 +2675,16 @@ test.describe("App screenshots", () => {
         await sheet.press("2");
         await expect(page.getByTestId("remote-input-virtual-joystick")).toHaveCount(0, { timeout: 8000 });
         await expect(page.getByTestId("remote-input-restore-chrome")).toBeVisible({ timeout: 10000 });
-        await captureScreenshot(page, testInfo, "home/remote-input/07-game-mode-keys.png", { locator: sheet });
+        // One rendition per manual profile; each manual embeds only its own.
+        for (const profileId of MANUAL_PROFILE_SEQUENCE) {
+          await applyDisplayProfileViewport(page, profileId);
+          await captureScreenshot(
+            page,
+            testInfo,
+            profileScreenshotPath("home/remote-input", profileId, "07-game-mode-keys.png"),
+            { locator: sheet },
+          );
+        }
 
         // The same state with the handset turned a quarter clockwise. The app stays
         // portrait and counter-rotates only the picture, so the capture is turned back by
@@ -2657,10 +2695,16 @@ test.describe("App screenshots", () => {
         await sheet.press("2");
         await expect(page.getByTestId("remote-input-virtual-joystick")).toHaveCount(0, { timeout: 8000 });
         await expect(page.getByTestId("remote-input-restore-chrome")).toBeVisible({ timeout: 10000 });
-        await captureScreenshot(page, testInfo, "home/remote-input/08-game-mode-rotated.png", {
-          locator: sheet,
-          rotateDegrees: 90,
-        });
+        // One rendition per manual profile; each manual embeds only its own.
+        for (const profileId of MANUAL_PROFILE_SEQUENCE) {
+          await applyDisplayProfileViewport(page, profileId);
+          await captureScreenshot(
+            page,
+            testInfo,
+            profileScreenshotPath("home/remote-input", profileId, "08-game-mode-rotated.png"),
+            { locator: sheet, rotateDegrees: 90 },
+          );
+        }
       }
     },
   );
@@ -2857,7 +2901,13 @@ test.describe("App screenshots", () => {
       // grid to be populated. This used to wait for a per-tile track count, which
       // the tiles no longer print.
       await expect(sheet.getByTestId("sid-radio-style-0")).toBeEnabled();
-      await captureScreenshot(page, testInfo, "play/sid-radio/02-stations.png", { locator: sheet });
+      // One rendition per manual profile; each manual embeds only its own.
+      for (const profileId of MANUAL_PROFILE_SEQUENCE) {
+        await applyDisplayProfileViewport(page, profileId);
+        await captureScreenshot(page, testInfo, profileScreenshotPath("play/sid-radio", profileId, "02-stations.png"), {
+          locator: sheet,
+        });
+      }
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("sid-radio-launcher-sheet")).toHaveCount(0);
 
@@ -2875,7 +2925,16 @@ test.describe("App screenshots", () => {
       await searchSheet.getByTestId("hvsc-search-input").fill("commando");
       // Either results or the "nothing found" line settles the sheet; both are stable to capture.
       await expect(searchSheet.getByTestId("hvsc-search-results")).toBeVisible();
-      await captureScreenshot(page, testInfo, "play/sid-radio/04-find-a-tune.png", { locator: searchSheet });
+      // One rendition per manual profile; each manual embeds only its own.
+      for (const profileId of MANUAL_PROFILE_SEQUENCE) {
+        await applyDisplayProfileViewport(page, profileId);
+        await captureScreenshot(
+          page,
+          testInfo,
+          profileScreenshotPath("play/sid-radio", profileId, "04-find-a-tune.png"),
+          { locator: searchSheet },
+        );
+      }
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("hvsc-search-sheet")).toHaveCount(0);
 
@@ -2959,7 +3018,11 @@ test.describe("App screenshots", () => {
       // the scroll a reader with that screen makes to see the same thing; what it costs is the
       // "Listen on" chooser and the station line above it, which have their own pictures.
       await scrollTestIdToTopOfScroller(page, "playback-current-track");
-      await captureScreenshot(page, testInfo, "play/sid-radio/01-controls.png");
+      // One rendition per manual profile; each manual embeds only its own.
+      for (const profileId of MANUAL_PROFILE_SEQUENCE) {
+        await applyDisplayProfileViewport(page, profileId);
+        await captureScreenshot(page, testInfo, profileScreenshotPath("play/sid-radio", profileId, "01-controls.png"));
+      }
 
       // The tunes inside the file, reached from "Tune 1 of 19" on the credits line. The seeded tune
       // holds nineteen, which is what makes the list worth having.
@@ -2971,7 +3034,16 @@ test.describe("App screenshots", () => {
       await expect(tuneSheet).toBeVisible();
       // Wait for the names and lengths, which are looked up after the numbered rows are drawn.
       await expect(tuneSheet.getByTestId("tune-list-row").first()).toContainText("Devil's Gallop");
-      await captureScreenshot(page, testInfo, "play/sid-radio/07-tunes-in-this-file.png", { locator: tuneSheet });
+      // One rendition per manual profile; each manual embeds only its own.
+      for (const profileId of MANUAL_PROFILE_SEQUENCE) {
+        await applyDisplayProfileViewport(page, profileId);
+        await captureScreenshot(
+          page,
+          testInfo,
+          profileScreenshotPath("play/sid-radio", profileId, "07-tunes-in-this-file.png"),
+          { locator: tuneSheet },
+        );
+      }
       await page.keyboard.press("Escape");
       await expect(tuneSheet).toBeHidden();
 
@@ -3150,9 +3222,16 @@ test.describe("App screenshots", () => {
       await expect(scope).toBeVisible();
       await readyDialog.getByTestId("add-items-scope-source").click();
       await expect(readyDialog.getByTestId("add-items-scope-source")).toHaveAttribute("aria-pressed", "true");
-      await captureScreenshot(page, testInfo, "play/import/09-hvsc-search-scope.png", {
-        skipFuzzyHeadRestore: true,
-      });
+      // One rendition per manual profile; each manual embeds only its own.
+      for (const profileId of MANUAL_PROFILE_SEQUENCE) {
+        await applyDisplayProfileViewport(page, profileId);
+        await captureScreenshot(
+          page,
+          testInfo,
+          profileScreenshotPath("play/import", profileId, "09-hvsc-search-scope.png"),
+          { skipFuzzyHeadRestore: true },
+        );
+      }
     },
   );
 

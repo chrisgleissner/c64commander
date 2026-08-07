@@ -1072,13 +1072,21 @@ export const renderManualMarkdown = ({ variant, features }) => {
   const appName = variant.displayName;
   const title = `${appName} Manual`;
   const subtitle = manualSubtitle(variant);
-  // Every manual illustrates the app at the compact display profile - the smallest
-  // screen the app supports. A reader on a larger screen sees more of each page than
-  // the picture shows, which is never confusing; a reader on the smallest screen
-  // looking at a picture taken on a larger one cannot find the controls it shows.
-  // The only images exempt are the ones that exist to demonstrate how the profiles
-  // differ from one another, and no manual embeds one of those.
-  const profile = "compact";
+  // Each manual illustrates the app at one display profile, and the two manuals do not
+  // use the same one: a reader should see the app at the size their own device renders
+  // it, not at someone else's. The C64U Remote edition ships on a 320x426 screen and is
+  // illustrated at `compact`; the C64 Commander edition is illustrated at `medium`, an
+  // ordinary phone.
+  //
+  // This was briefly hardcoded to "compact" for both, on the reasoning that a reader on a
+  // larger screen simply sees more than the picture shows. That is true of the layout but
+  // not of the controls: several labels are shortened at compact - "Game" for "Game Mode",
+  // "RSTOP" for "RUN/STOP" - so the compact pictures name buttons that a medium-profile
+  // reader cannot find.
+  //
+  // The only images exempt are the ones that exist to demonstrate how the profiles differ.
+  // assertSingleDisplayProfile enforces this when the manual is written.
+  const profile = variant.id === "c64u-remote" ? "compact" : "medium";
   const sourceLabels = ["Local", "C64U"];
   if (includeFeature(features, "hvsc_enabled")) sourceLabels.push("HVSC");
   if (includeFeature(features, "commoserve_enabled")) sourceLabels.push("CommoServe");
@@ -1379,7 +1387,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "To search rather than browse, type in the box at the top and choose **Everywhere**. **This folder** narrows what is on screen; **Everywhere** searches the whole source, which for HVSC means the whole archive — some sixty thousand files — by title or composer. Sources that have to be read folder by folder — a folder on your device, or the card in your C64 — offer a **Scan** button instead of searching as you type, because that search has to walk the whole source rather than consult an index.",
     "",
-    "![Searching the whole of HVSC rather than one folder](../../img/app/play/import/09-hvsc-search-scope.png)",
+    image(
+      "Searching the whole of HVSC rather than one folder",
+      profile,
+      "play/import/profiles/{profile}/09-hvsc-search-scope.png",
+    ),
     "",
     "Preferred path: Add a folder first, then filter the playlist to choose what to play next.",
     "",
@@ -1489,7 +1501,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `Your C64 will play any of it, and so will your ${appDeviceName(variant)} for most tunes. This section covers playing that music yourself. The next one, **SID Radio**, covers letting the app choose it for you.`,
     "",
-    "![The Now Playing card: the tune, what the file says about it, and the transport](../../img/app/play/sid-radio/01-controls.png)",
+    image(
+      "The Now Playing card: the tune, what the file says about it, and the transport",
+      profile,
+      "play/sid-radio/profiles/{profile}/01-controls.png",
+    ),
     "",
     "#### Where the music plays",
     "",
@@ -1527,7 +1543,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The High Voltage SID Collection holds around sixty thousand files and close to ninety thousand tunes, which is far too many to browse. SID Radio plays it like a radio station: pick a mood, or a tune you already like, and the app keeps finding more music of the same kind. There is no playlist to build, and nothing is downloaded as you listen — once the collection is on your device, the app already knows which tunes resemble one another.",
     "",
-    "![Choosing a station: a mood, your own taste, or anything at all](../../img/app/play/sid-radio/02-stations.png)",
+    image(
+      "Choosing a station: a mood, your own taste, or anything at all",
+      profile,
+      "play/sid-radio/profiles/{profile}/02-stations.png",
+    ),
     "",
     "#### Starting a station",
     "",
@@ -1565,7 +1585,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Tap a result and it plays immediately. Your station keeps its place and carries on when the tune ends. To hear more music like the one you found, tap the radio icon beside it — it is there for any tune the collection can start a station from. With nothing typed, the sheet lists what you have heard recently, which is how you find your way back to something that has already played.",
     "",
-    "![Finding one tune by name, anywhere in the collection](../../img/app/play/sid-radio/04-find-a-tune.png)",
+    image(
+      "Finding one tune by name, anywhere in the collection",
+      profile,
+      "play/sid-radio/profiles/{profile}/04-find-a-tune.png",
+    ),
     "",
     "#### More than one tune per file",
     "",
@@ -1575,7 +1599,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "To go straight to one tune, tap that **1/19**. It lists every tune in the file with its number, its name where there is one, and its length; tap one to play it. Lengths vary a lot — a five-minute piece and a one-second jingle in the same file is normal — so it is worth checking before you choose.",
     "",
-    "![Every tune in one SID file, with its name and length](../../img/app/play/sid-radio/07-tunes-in-this-file.png)",
+    image(
+      "Every tune in one SID file, with its name and length",
+      profile,
+      "play/sid-radio/profiles/{profile}/07-tunes-in-this-file.png",
+    ),
     "",
     "#### What the tune is, and who wrote it",
     "",
@@ -1613,7 +1641,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
               ]
             : []),
           "",
-          image("Live View on Home", profile, "home/content-explorer/01-live-view.png"),
+          image("Live View on Home", profile, "home/content-explorer/profiles/{profile}/01-live-view.png"),
           "",
           ...(includeFeature(features, "video_mirror_enabled")
             ? [
@@ -1623,7 +1651,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "Move around it however suits you. On a touchscreen, **pinch** to zoom, **drag** to slide the picture about, and **double-tap** to jump straight in on a spot — a second double-tap fits the whole screen back on. A small map in the corner shows which part you are looking at; drag its rectangle to leap somewhere else in an instant. Switch on **Follow** and the view drifts along on its own to wherever the action is — a lovely way to keep the cursor in sight as you type.",
                 "",
-                image("The immersive screen in Remote Input", profile, "home/remote-input/06-av-mirror-immersive.png"),
+                image(
+                  "The immersive screen in Remote Input",
+                  profile,
+                  "home/remote-input/profiles/{profile}/06-av-mirror-immersive.png",
+                ),
                 "",
                 "#### Driving the C64, or adjusting the view",
                 "",
@@ -1703,7 +1735,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "Each place opens its own copy of the controller, so a key you are holding in one never leaks into the other.",
           "",
-          image("Remote Input joystick mode", profile, "home/remote-input/01-joystick.png"),
+          image("Remote Input joystick mode", profile, "home/remote-input/profiles/{profile}/01-joystick.png"),
           "",
           "At the top of the sheet you choose between two modes, **Joystick** and **Keys**.",
           "",
@@ -1720,13 +1752,17 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "**Game Mode** is the app set up for playing: the picture and the sound as you last left them, everything else out of the way, and whichever controls suit how you are driving. It takes one action — the **Game Mode** tile on Home, the **Game Mode** button on Play, or the `0` key from anywhere — and leaves you playing with nothing else to press. Starting a program, a cartridge or a disk can open it for you as well; **Settings → Play and Disk → Enter Game Mode when a game starts** decides.",
           "",
-          image("Game Mode", profile, "home/remote-input/02-game-mode.png"),
+          image("Game Mode", profile, "home/remote-input/profiles/{profile}/02-game-mode.png"),
           "",
           isC64uRemoteVariant(variant)
             ? "The picture takes the whole screen: this handset steers with its number keys, so there is no on-screen joystick worth the space. Press **Show joystick** on the Game Mode toolbar to bring one up for the game you are playing, or set **Settings → Play and Disk → On-screen joystick in Game mode** to **Visible** to keep it for good."
             : "The on-screen joystick stays where it is until you pick up the keys. Play with the touchscreen and it is there; steer the game with a physical key and it steps aside so the picture has the whole screen, and touching it brings it straight back. Nothing else moves it — opening Game Mode with the `0` key does not count as playing on the keys. To decide yourself, press **Hide joystick** or **Show joystick** on the Game Mode toolbar for the game you are playing, or set **Settings → Play and Disk → On-screen joystick in Game mode** to **Visible** or **Hidden** instead of **Auto**.",
           "",
-          image("Game Mode, played on the physical keys", profile, "home/remote-input/07-game-mode-keys.png"),
+          image(
+            "Game Mode, played on the physical keys",
+            profile,
+            "home/remote-input/profiles/{profile}/07-game-mode-keys.png",
+          ),
           "",
           "With the controls out of the way, three keys still reach everything. `#` brings RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again. `*`, or the menu key, changes between driving the C64 and adjusting the view. **Back** leaves. The floating **cog** button at the top of the picture brings the whole toolbar back, and **Show joystick** on that toolbar brings the on-screen joystick back.",
           "",
@@ -1762,7 +1798,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
                   ],
                 ),
                 "",
-                image("Game Mode with the picture turned", profile, "home/remote-input/08-game-mode-rotated.png"),
+                image(
+                  "Game Mode with the picture turned",
+                  profile,
+                  "home/remote-input/profiles/{profile}/08-game-mode-rotated.png",
+                ),
                 "",
                 "Lying down, or somewhere the sensor cannot tell? The **Orientation** control in Game Mode's toolbar pins it — **Auto**, **0°**, **90°** or **270°** — for as long as the sheet is open. It is deliberately not remembered: an orientation pinned for one game should not still apply to the next one weeks later.",
                 "",
@@ -2750,13 +2790,57 @@ export const buildManualContexts = async () => {
   return contexts.sort((a, b) => a.variant.id.localeCompare(b.variant.id));
 };
 
+/**
+ * Every app screenshot a manual embeds must come from that manual's own display profile.
+ *
+ * The C64U Remote manual is illustrated at `compact`, the C64 Commander manual at `medium`.
+ * The generator already chooses between them, but an image path written without a
+ * `{profile}` placeholder silently resolves to a single shared rendition, so one of the two
+ * manuals ends up showing the other one's screen size. That is what happened to eleven
+ * images: both manuals embedded the same compact captures.
+ *
+ * Checked here rather than by eye, because the failure is invisible in the Markdown - the
+ * path simply lacks a directory - and only shows up as a differently proportioned picture.
+ */
+const ALLOWED_WITHOUT_PROFILE = [
+  // A photograph of the hardware, not a screen capture.
+  /\/img\/setup\//,
+  // Already profile-specific by filename: these exist to show how the profiles differ, so
+  // each one deliberately keeps the profile it demonstrates.
+  /home\/remote-input\/03-keyboard-compact\.png$/,
+  /home\/remote-input\/04-keyboard-medium\.png$/,
+];
+
+const assertSingleDisplayProfile = (markdown, expectedProfile, manualName) => {
+  const violations = [];
+  for (const [, image] of markdown.matchAll(/\]\(([^)]*\.png)\)/g)) {
+    if (ALLOWED_WITHOUT_PROFILE.some((allowed) => allowed.test(image))) continue;
+    const match = image.match(/\/profiles\/([^/]+)\//);
+    if (!match) violations.push(`${image} has no display profile in its path`);
+    else if (match[1] !== expectedProfile)
+      violations.push(`${image} is a ${match[1]} capture, but this manual uses ${expectedProfile}`);
+  }
+  if (violations.length > 0) {
+    throw new Error(
+      `${manualName} embeds ${violations.length} screenshot(s) from outside its ${expectedProfile} profile:\n` +
+        violations.map((line) => `  - ${line}`).join("\n"),
+    );
+  }
+};
+
 export const buildManuals = async () => {
   const contexts = await buildManualContexts();
   const outputs = [];
 
   for (const context of contexts) {
     await mkdir(context.manualDir, { recursive: true });
-    await writeFile(context.markdownFile, renderManualMarkdown(context), "utf8");
+    const markdown = renderManualMarkdown(context);
+    assertSingleDisplayProfile(
+      markdown,
+      context.variant.id === "c64u-remote" ? "compact" : "medium",
+      context.variant.id,
+    );
+    await writeFile(context.markdownFile, markdown, "utf8");
     await renderPdf(context);
     await writeFile(path.join(context.manualDir, ".last-build"), `Generated ${new Date().toISOString()}\n`, "utf8");
     outputs.push({
