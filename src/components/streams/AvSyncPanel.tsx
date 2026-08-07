@@ -65,7 +65,10 @@ function CollapsibleSection({
         onClick={() => setExpanded((value) => !value)}
         data-testid={`${testid}-toggle`}
       >
-        <span className="flex items-center gap-2">
+        {/* Wraps: on a 320px screen "Tone & colour ladder" takes almost the whole row
+            and left the summary beside it a 74px column, in which "not measured" was
+            set as "measure" / "d". On a second line the summary is whole. */}
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
           {icon}
           <span className="text-sm font-medium">{title}</span>
           {summary}

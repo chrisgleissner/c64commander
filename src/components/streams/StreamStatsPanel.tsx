@@ -10,6 +10,7 @@ import { useState } from "react";
 import { Activity, ChevronDown, ChevronUp, Download, Gauge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useStreamStats } from "@/hooks/useStreamStats";
 import { addLog } from "@/lib/logging";
 import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
@@ -102,6 +103,14 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
   const { stats, requestedMode, setFrameRateMode, history, exportDiagnostics } = useStreamStats(session);
   const [expanded, setExpanded] = useState(false);
   const [windowSec, setWindowSec] = useState(60);
+  const { profile } = useDisplayProfile();
+  // On a 320px screen the panel has about 250px of content width. Four columns give
+  // each stat 55px, which is not enough for a single word: "Underruns" needs 99px and
+  // was cut off at the right-hand edge of the card, and "100%" under Rate needs 56px
+  // and had nowhere to break. Halving the column count on the smallest screen gives
+  // every label and value room to be read whole.
+  const compact = profile === "compact";
+  const statColumns = (wide: string, narrow: string) => (compact ? narrow : wide);
 
   const { governor, live, summary } = stats;
   const buckets: TelemetryBucket[] = history(windowSec);
@@ -154,7 +163,9 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
       </div>
 
       {/* Frame-rate mode selector (§11.1) */}
-      <div className="flex items-center gap-1.5" data-testid="stream-stats-mode">
+      {/* Wraps for the same reason as the History row below: the four buttons plus the
+          auto-reduced badge are wider than a 320px screen when the governor steps in. */}
+      <div className="flex flex-wrap items-center gap-1.5" data-testid="stream-stats-mode">
         <Gauge className="h-4 w-4 text-muted-foreground" aria-hidden />
         {MODES.map((m) => (
           <Button
@@ -181,7 +192,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
       </div>
 
       {/* Compact live summary */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className={cn("grid gap-2", statColumns("grid-cols-4", "grid-cols-2"))}>
         <Stat label="FPS" value={num(live.fps)} testid="fps" />
         <Stat label="Rate" value={pct(governor.effectivePercent)} testid="rate" />
         <Stat
@@ -201,8 +212,11 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
       {expanded && (
         <div className="space-y-3" data-testid="stream-stats-details">
           {/* History window selector (§12.2) */}
-          <div className="flex items-center gap-1.5" data-testid="stream-stats-window">
-            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">History</span>
+          {/* Wraps: the label and four window buttons are wider than a 320px screen,
+              and squeezing them cut "Session" off inside its button and set "History"
+              as "His" / "tory". */}
+          <div className="flex flex-wrap items-center gap-1.5" data-testid="stream-stats-window">
+            <span className="shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">History</span>
             {WINDOWS.map((w) => (
               <Button
                 key={w.label}
@@ -219,7 +233,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
           </div>
 
           {/* History charts (§12.3) */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className={cn("grid gap-3", statColumns("grid-cols-2", "grid-cols-1"))}>
             <div className="text-muted-foreground">
               <div className="mb-1 text-[11px] uppercase tracking-wide">Presented FPS</div>
               <Sparkline values={fpsSeries} testid="stream-stats-spark-fps" ariaLabel="Presented FPS over the window" />
@@ -248,7 +262,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
                 ariaLabel="Concealed audio packets per second"
               />
             </div>
-            <div className="col-span-2 text-muted-foreground">
+            <div className={cn("text-muted-foreground", compact ? "col-span-1" : "col-span-2")}>
               <div className="mb-1 text-[11px] uppercase tracking-wide">Effective video rate (%)</div>
               <Sparkline
                 values={rateSeries}
@@ -261,7 +275,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
           {/* Latency / residence — honestly labelled LOCAL pipeline residence */}
           <section data-testid="stream-stats-latency">
             <div className="mb-1 text-[11px] font-medium">Local pipeline residence</div>
-            <div className="grid grid-cols-4 gap-2">
+            <div className={cn("grid gap-2", statColumns("grid-cols-4", "grid-cols-2"))}>
               <Stat label="Now" value={ms(live.renderResidenceMs)} testid="residence-now" />
               <Stat label="p95" value={ms(summary.residence.p95)} testid="residence-p95" />
               <Stat label="p99" value={ms(summary.residence.p99)} testid="residence-p99" />
@@ -272,7 +286,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
           {/* Video presentation-slot accounting (§9.1) */}
           <section data-testid="stream-stats-video">
             <div className="mb-1 text-[11px] font-medium">Video ({live.standard})</div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className={cn("grid gap-2", statColumns("grid-cols-3", "grid-cols-2"))}>
               <Stat label="Presented" value={num(live.presented)} testid="presented" />
               <Stat label="Partial" value={num(live.partialConcealed)} testid="partial" />
               <Stat label="Repeated" value={num(live.repeatedFrames)} testid="repeated" />
@@ -285,7 +299,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
           {/* Audio */}
           <section data-testid="stream-stats-audio">
             <div className="mb-1 text-[11px] font-medium">Audio</div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className={cn("grid gap-2", statColumns("grid-cols-3", "grid-cols-2"))}>
               <Stat label="Concealed" value={num(live.audioConcealed)} testid="concealed" />
               <Stat label="Dropped pkts" value={num(live.droppedPackets)} testid="dropped-packets" />
               <Stat label="Buf min" value={ms(summary.audioBufferMsMin)} testid="audio-buffer-min" />

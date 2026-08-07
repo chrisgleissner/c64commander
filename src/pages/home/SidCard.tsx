@@ -224,8 +224,13 @@ export function SidCard({
         </div>
       </div>
 
-      {/* Row 3: Shaping Controls */}
-      <div className="grid grid-cols-3 gap-2 text-xs">
+      {/* Row 3: Shaping Controls.
+          Three columns share about 250px on the smallest screen, which leaves each
+          label around 80px. "Resistor" alone needs 65px at the size the compact
+          profile renders it, so the label ran over its neighbour and the value beside
+          it was cut to four characters. One column per control gives each label and
+          its value the width they need, the same way row 4 already does. */}
+      <div className={cn("grid gap-2 text-xs", profile === "compact" ? "grid-cols-1" : "grid-cols-3")}>
         {shapingControls.map((control, index) => (
           <div key={index} className="flex items-center gap-2">
             <span className="text-muted-foreground whitespace-nowrap">{control.label}</span>

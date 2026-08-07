@@ -9,11 +9,14 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useC64Connection } from "@/hooks/useC64Connection";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { getBuildInfo } from "@/lib/buildInfo";
+import { cn } from "@/lib/utils";
 
 export function SystemInfo() {
   const [expanded, setExpanded] = useState(false);
   const { status } = useC64Connection();
+  const { profile } = useDisplayProfile();
   const buildInfo = getBuildInfo();
   const disconnected = !status.isConnected;
   const deviceValue = disconnected
@@ -47,7 +50,15 @@ export function SystemInfo() {
         </span>
       </div>
       {expanded && (
-        <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        // One column on the smallest screen: two columns leave about 108px each, and
+        // the build timestamp beside its label squeezed "Build" down to 20px, where it
+        // was set one letter to a line.
+        <div
+          className={cn(
+            "mt-1 grid gap-x-4 gap-y-1 text-xs text-muted-foreground",
+            profile === "compact" ? "grid-cols-1" : "grid-cols-2",
+          )}
+        >
           <div className="flex items-center gap-1">
             <span>Git</span>
             <span className="font-semibold text-foreground" data-testid="home-system-git">
