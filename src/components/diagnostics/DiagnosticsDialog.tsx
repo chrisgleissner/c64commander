@@ -562,7 +562,7 @@ const EvidenceRow = ({
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-foreground">{entry.title}</p>
             {entry.detail ? <p className="truncate text-xs text-muted-foreground">{entry.detail}</p> : null}
-            <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <span>{entry.type}</span>
               {entry.contributor ? <span>· {entry.contributor}</span> : null}
               <span>· {formatDiagnosticsTimestamp(entry.timestamp)}</span>
@@ -682,7 +682,7 @@ const FilterEditorSurface = ({
           <div className="space-y-3">
             {showDeviceFilter ? (
               <section className="space-y-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Device</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Device</p>
                 <div className="flex flex-wrap gap-1.5">
                   <FilterToggleChip
                     label="All devices"
@@ -708,7 +708,7 @@ const FilterEditorSurface = ({
             ) : null}
 
             <section className="space-y-1.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Activity types</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Activity types</p>
               <div className="flex flex-wrap gap-1.5">
                 {EVIDENCE_ORDER.map((type) => (
                   <FilterToggleChip
@@ -722,7 +722,7 @@ const FilterEditorSurface = ({
             </section>
 
             <section className="space-y-1.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Contributor</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Contributor</p>
               <div className="flex flex-wrap gap-1.5">
                 {(["All", "App", "REST", "FTP", "TELNET"] as const).map((option) => (
                   <FilterToggleChip
@@ -739,7 +739,7 @@ const FilterEditorSurface = ({
             </section>
 
             <section className="space-y-1.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Severity</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Severity</p>
               <div className="flex flex-wrap gap-1.5">
                 {(["All", "Errors", "Warnings", "Info"] as const).map((option) => (
                   <FilterToggleChip
@@ -756,7 +756,7 @@ const FilterEditorSurface = ({
             </section>
 
             <section className="space-y-1.5 border-t border-border/70 pt-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Quick filters</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Quick filters</p>
               <div className="flex flex-wrap gap-1.5">
                 <Button
                   type="button"
@@ -1469,7 +1469,7 @@ export function DiagnosticsDialog({
 
   const overflowPanelContent = (
     <>
-      <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Views</p>
+      <p className="px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Views</p>
       <button
         type="button"
         className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
@@ -1814,7 +1814,7 @@ export function DiagnosticsDialog({
               <p className="mb-1 text-xs font-semibold text-foreground" data-testid="evidence-heading">
                 Activity
               </p>
-              <p className="mb-2 text-[10px] text-muted-foreground" data-testid="activity-kinds-line">
+              <p className="mb-2 text-[11px] text-muted-foreground" data-testid="activity-kinds-line">
                 Problems, actions, logs, and traces across App, REST, FTP, and Telnet
               </p>
               <div

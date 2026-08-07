@@ -155,7 +155,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
         <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
           {STAT_FIELDS.map((field) => (
             <div key={field.key} className="rounded-md bg-muted/50 px-2 py-1.5 text-center">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{field.label}</div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{field.label}</div>
               <div className="text-sm font-semibold tabular-nums" data-testid={`av-sync-stat-${field.testid}`}>
                 {fmtMs(stats[field.key] as number | null)}
               </div>
@@ -210,12 +210,12 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
             ] as const
           ).map((field) => (
             <div key={field.testid} className="rounded-md bg-muted/50 px-2 py-1.5 text-center">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{field.label}</div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{field.label}</div>
               <div className="text-sm font-semibold tabular-nums" data-testid={`av-sync-lat-${field.testid}`}>
                 {fmtLatency(field.last)}
               </div>
               <div
-                className="text-[9px] tabular-nums text-muted-foreground"
+                className="text-[11px] tabular-nums text-muted-foreground"
                 data-testid={`av-sync-lat-${field.testid}-p99`}
               >
                 p99 {fmtLatency(field.p99)}
@@ -319,11 +319,11 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
                 ] as const
               ).map((field) => (
                 <div key={field.testid} className="rounded-md bg-muted/50 px-2 py-1.5 text-center">
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{field.label}</div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{field.label}</div>
                   <div className="text-sm font-semibold tabular-nums" data-testid={`av-tone-ladder-${field.testid}`}>
                     {field.value}
                   </div>
-                  <div className="text-[9px] tabular-nums text-muted-foreground">{field.sub}</div>
+                  <div className="text-[11px] tabular-nums text-muted-foreground">{field.sub}</div>
                 </div>
               ))}
             </div>
@@ -345,7 +345,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
               data-testid="av-tone-ladder-notes"
             >
               <table className="w-full text-[11px] tabular-nums">
-                <thead className="sticky top-0 bg-muted/80 text-[9px] uppercase tracking-wide text-muted-foreground">
+                <thead className="sticky top-0 bg-muted/80 text-[11px] uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-2 py-1 text-left font-medium">Note</th>
                     <th className="px-2 py-1 text-left font-medium">Colour</th>

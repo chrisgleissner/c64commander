@@ -64,6 +64,29 @@ describe("AndroidManifest parity (full vs no-background)", () => {
     }
   });
 
+  it("both manifests disable the emoji2 startup initializer", () => {
+    // androidx.emoji2's EmojiCompatInitializer is merged in transitively by
+    // androidx.appcompat and resolves its font through the Google Play Services
+    // downloadable-font content provider. That makes the app process a content-provider
+    // client of Play Services: ActivityManager kills the app when the Play Services
+    // process dies, and the app is meant to run on devices that have no Play Services at
+    // all. All text is rendered by the WebView, so EmojiCompat affects nothing visible.
+    //
+    // StartupInitializerTest asserts the same thing against the manifest the Android
+    // Gradle plugin actually merges. This check is the fast one, and it names the file to
+    // edit when it fails.
+    for (const xml of [full, reduced]) {
+      expect(xml).toContain('xmlns:tools="http://schemas.android.com/tools"');
+      expect(xml).toContain('android:name="androidx.startup.InitializationProvider"');
+      expect(xml).toContain(
+        '<meta-data android:name="androidx.emoji2.text.EmojiCompatInitializer" tools:node="remove" />',
+      );
+      // Without tools:node="merge" the whole provider would be replaced rather than
+      // amended, taking the other androidx initializers with it.
+      expect(xml).toContain('tools:node="merge"');
+    }
+  });
+
   it("differs from the full manifest ONLY by the background-execution bits (no drift)", () => {
     // After removing comments and the allowed-omitted lines, the shared content
     // (application attributes, activity, provider, INTERNET) must be identical.

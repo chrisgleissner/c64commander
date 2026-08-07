@@ -200,6 +200,8 @@ import { useConnectionState } from "@/hooks/useConnectionState";
 import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
 import { useNavigate } from "react-router-dom";
 import { DISPLAY_PROFILE_OVERRIDE_LABELS, DISPLAY_PROFILE_OVERRIDE_SEQUENCE } from "@/lib/displayProfiles";
+import { TEXT_SCALE_OPTIONS } from "@/lib/textScale";
+import { getTextScaleId, setTextScaleId } from "@/lib/uiPreferences";
 import { useDisplayProfile, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
 import { PageContainer, PageStack } from "@/components/layout/PageContainer";
 import { buildDefaultArchiveClientConfig, validateArchiveHost, resolveArchiveClientConfig } from "@/lib/archive/config";
@@ -269,6 +271,7 @@ export default function SettingsPage() {
   const { profile } = useDisplayProfile();
   const navigate = useNavigate();
   const { status, baseUrl, runtimeBaseUrl, deviceHost, updateConfig, refetch } = useC64Connection();
+  const [textScaleId, setTextScaleIdState] = useState(getTextScaleId);
   const savedDevices = useSavedDevices();
   const switchSavedDevice = useSavedDeviceSwitching();
   const connectionSnapshot = useConnectionState();
@@ -1192,6 +1195,34 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-2 rounded-lg border border-border/70 p-3">
+                <Label className="text-sm font-medium">Text size</Label>
+                <div className="grid grid-cols-2 gap-2" data-testid="settings-text-size">
+                  {TEXT_SCALE_OPTIONS.map((option) => {
+                    const isActive = textScaleId === option.id;
+                    return (
+                      <Button
+                        key={option.id}
+                        type="button"
+                        variant={isActive ? "default" : "outline"}
+                        className="h-auto min-h-11 justify-start whitespace-normal px-3 py-2 text-left"
+                        onClick={() => {
+                          setTextScaleId(option.id);
+                          setTextScaleIdState(option.id);
+                        }}
+                        data-testid={`settings-text-size-${option.id}`}
+                      >
+                        {option.label}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Makes everything in the app larger. This is on top of your device&apos;s own text size setting, which
+                  the app already follows, so you only need this if you want the app larger than the rest of your phone.
+                </p>
+              </div>
+
+              <div className="space-y-2 rounded-lg border border-border/70 p-3">
                 <Label className="text-sm font-medium">Display profile</Label>
                 <div className="grid grid-cols-2 gap-2" data-testid="settings-display-profile-override">
                   {displayProfileOptions.map((option) => {
@@ -1243,7 +1274,7 @@ export default function SettingsPage() {
                     <Label className="text-sm font-medium">Full screen</Label>
                     <div className="flex items-start justify-between gap-3 min-w-0">
                       <div className="min-w-0">
-                        <Label htmlFor="full-screen-hide-status-bar" className="font-medium">
+                        <Label htmlFor="full-screen-hide-status-bar" className="flex min-h-11 items-center font-medium">
                           Hide status bar
                         </Label>
                         <p className="text-xs text-muted-foreground">
@@ -1259,7 +1290,10 @@ export default function SettingsPage() {
                     </div>
                     <div className="flex items-start justify-between gap-3 min-w-0">
                       <div className="min-w-0">
-                        <Label htmlFor="full-screen-hide-navigation-bar" className="font-medium">
+                        <Label
+                          htmlFor="full-screen-hide-navigation-bar"
+                          className="flex min-h-11 items-center font-medium"
+                        >
                           Hide navigation bar
                         </Label>
                         <p className="text-xs text-muted-foreground">Extend the app under the bottom navigation bar.</p>
@@ -1472,7 +1506,7 @@ export default function SettingsPage() {
                 <div className="space-y-4 rounded-lg border border-border/70 p-3">
                   <div className="flex items-start justify-between gap-3 min-w-0">
                     <div className="space-y-1 min-w-0">
-                      <Label htmlFor="demo-mode-enabled" className="font-medium">
+                      <Label htmlFor="demo-mode-enabled" className="flex min-h-11 items-center font-medium">
                         Automatic Demo Mode
                       </Label>
                       <p className="text-xs text-muted-foreground">
@@ -1771,7 +1805,7 @@ export default function SettingsPage() {
 
                 <div className="flex items-start justify-between gap-3 min-w-0">
                   <div className="space-y-1 min-w-0">
-                    <Label htmlFor="debug-logging" className="font-medium">
+                    <Label htmlFor="debug-logging" className="flex min-h-11 items-center font-medium">
                       Enable Debug Logging
                     </Label>
                     <p className="text-xs text-muted-foreground">
@@ -1898,7 +1932,7 @@ export default function SettingsPage() {
 
                 <div className="flex items-start justify-between gap-3 min-w-0">
                   <div className="min-w-0">
-                    <Label htmlFor="settings-friendly-sid-names" className="font-medium">
+                    <Label htmlFor="settings-friendly-sid-names" className="flex min-h-11 items-center font-medium">
                       Friendly SID names
                     </Label>
                     <p className="text-xs text-muted-foreground">
@@ -1949,7 +1983,7 @@ export default function SettingsPage() {
                 {flags.in_image_search_enabled && (
                   <div className="flex items-start justify-between gap-3 min-w-0">
                     <div className="min-w-0">
-                      <Label htmlFor="settings-search-inside-disks" className="font-medium">
+                      <Label htmlFor="settings-search-inside-disks" className="flex min-h-11 items-center font-medium">
                         Search inside disk images
                       </Label>
                       <p className="text-xs text-muted-foreground">
@@ -1974,7 +2008,7 @@ export default function SettingsPage() {
                   <div className="space-y-3 rounded-md border border-border p-3" data-testid="settings-launch-safety">
                     <div className="flex items-start justify-between gap-3 min-w-0">
                       <div className="min-w-0">
-                        <Label htmlFor="settings-boot-menu-answer" className="font-medium">
+                        <Label htmlFor="settings-boot-menu-answer" className="flex min-h-11 items-center font-medium">
                           Answer cartridge boot menu after reset
                         </Label>
                         <p className="text-xs text-muted-foreground">
@@ -2140,7 +2174,10 @@ export default function SettingsPage() {
                     <VicPaletteRow />
                     <div className="col-span-2 flex items-start justify-between gap-3 min-w-0">
                       <div className="min-w-0">
-                        <Label htmlFor="settings-stream-native-assembly" className="font-medium">
+                        <Label
+                          htmlFor="settings-stream-native-assembly"
+                          className="flex min-h-11 items-center font-medium"
+                        >
                           Fast video (native assembly)
                         </Label>
                         <p className="text-xs text-muted-foreground">
@@ -2161,7 +2198,10 @@ export default function SettingsPage() {
                     </div>
                     <div className="col-span-2 flex items-start justify-between gap-3 min-w-0">
                       <div className="min-w-0">
-                        <Label htmlFor="settings-stream-input-priority" className="font-medium">
+                        <Label
+                          htmlFor="settings-stream-input-priority"
+                          className="flex min-h-11 items-center font-medium"
+                        >
                           Input priority (instant joystick)
                         </Label>
                         <p className="text-xs text-muted-foreground">
@@ -2184,7 +2224,10 @@ export default function SettingsPage() {
                     </div>
                     <div className="col-span-2 flex items-start justify-between gap-3 min-w-0">
                       <div className="min-w-0">
-                        <Label htmlFor="settings-stream-native-audio" className="font-medium">
+                        <Label
+                          htmlFor="settings-stream-native-audio"
+                          className="flex min-h-11 items-center font-medium"
+                        >
                           Low-latency audio (native)
                         </Label>
                         <p className="text-xs text-muted-foreground">
@@ -2211,7 +2254,7 @@ export default function SettingsPage() {
 
                 <div className="flex items-start justify-between gap-3 min-w-0">
                   <div className="min-w-0">
-                    <Label htmlFor="settings-show-autofire" className="font-medium">
+                    <Label htmlFor="settings-show-autofire" className="flex min-h-11 items-center font-medium">
                       Show Autofire button
                     </Label>
                     <p className="text-xs text-muted-foreground">
@@ -2269,12 +2312,18 @@ export default function SettingsPage() {
             >
               <div className="space-y-3">
                 {group.features.map((feature) => (
-                  <div key={feature.id} className="flex items-start justify-between gap-3 min-w-0">
+                  // The whole row toggles the flag, not just the checkbox. A bare 16px
+                  // box is well under the 44px target size and is fussy to hit; wrapping
+                  // the row in a label uses the browser's own behaviour so the title and
+                  // description are part of the target. The title is a span rather than a
+                  // Label because a label may not nest inside another label.
+                  <label
+                    key={feature.id}
+                    className="flex min-h-11 cursor-pointer items-start justify-between gap-3 min-w-0"
+                  >
                     <div className="space-y-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Label htmlFor={`feature-flag-${feature.id}`} className="font-medium">
-                          {feature.definition.title}
-                        </Label>
+                        <span className="font-medium">{feature.definition.title}</span>
                         {isDeveloperModeEnabled && feature.definition.developer_only ? (
                           <span className="rounded-full border border-border/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                             Developer only
@@ -2298,7 +2347,7 @@ export default function SettingsPage() {
                       }}
                       data-testid={`feature-flag-${feature.id}`}
                     />
-                  </div>
+                  </label>
                 ))}
               </div>
             </SettingsSection>
@@ -2514,7 +2563,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="startup-discovery-window" className="font-medium">
+                <Label htmlFor="startup-discovery-window" className="flex min-h-11 items-center font-medium">
                   Startup Discovery Window (seconds)
                 </Label>
                 <Input
@@ -2534,7 +2583,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="background-rediscovery-interval" className="font-medium">
+                <Label htmlFor="background-rediscovery-interval" className="flex min-h-11 items-center font-medium">
                   Background Rediscovery Interval (seconds)
                 </Label>
                 <Input
@@ -2554,7 +2603,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="probe-timeout" className="font-medium">
+                <Label htmlFor="probe-timeout" className="flex min-h-11 items-center font-medium">
                   Discovery Probe Timeout (seconds)
                 </Label>
                 <Input
@@ -2941,11 +2990,15 @@ export default function SettingsPage() {
 
                 <div className="space-y-2">
                   <Label className="text-sm">Allow circuit override</Label>
-                  <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 p-2">
+                  {/* A label, so the whole row toggles the checkbox rather than only the
+                      16px box, and so the control has an accessible name at all. */}
+                  <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-md border border-border/70 p-2">
                     <span className="text-xs text-muted-foreground">
                       User-triggered actions can bypass circuit breaker.
                     </span>
                     <Checkbox
+                      aria-label="Allow circuit override"
+                      data-testid="settings-allow-circuit-override"
                       checked={allowCircuitOverride}
                       onCheckedChange={(checked) => {
                         const enabled = checked === true;
@@ -2954,7 +3007,7 @@ export default function SettingsPage() {
                         refreshDeviceSafetyState();
                       }}
                     />
-                  </div>
+                  </label>
                 </div>
               </div>
             </div>
@@ -3048,7 +3101,7 @@ export default function SettingsPage() {
               href={settingsDocumentationLink.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm text-primary hover:underline"
+              className="flex min-h-11 items-center gap-2 text-sm text-primary hover:underline"
               data-testid={settingsDocumentationLink.testId}
             >
               <ExternalLink className="h-4 w-4" />
@@ -3057,7 +3110,7 @@ export default function SettingsPage() {
 
             <button
               type="button"
-              className="flex items-center gap-2 text-sm text-primary hover:underline"
+              className="flex min-h-11 items-center gap-2 text-sm text-primary hover:underline"
               onClick={() => navigate("/settings/open-source-licenses")}
             >
               <FileText className="h-4 w-4" />

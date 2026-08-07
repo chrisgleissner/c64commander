@@ -10,6 +10,12 @@
   --display-profile-viewport-width: 100vw;
   --display-profile-viewport-height: 100dvh;
   --display-profile-root-font-size: 16px;
+  /* The user's text size setting, as a plain multiplier. Kept separate from
+     --display-profile-root-font-size because the display profile owns that variable and
+     rewrites it whenever the profile changes; a setting that wrote the same variable
+     would be silently overwritten on the next profile evaluation. Composing them in the
+     `html` rule below means each has exactly one owner. */
+  --text-scale: 1;
   --display-profile-page-max-width: 960px;
   --display-profile-reading-max-width: 960px;
   --display-profile-page-padding-x: 1rem;
@@ -72,7 +78,7 @@
 
 @layer base {
   html {
-    font-size: var(--display-profile-root-font-size);
+    font-size: calc(var(--display-profile-root-font-size) * var(--text-scale, 1));
   }
 
   :root {
@@ -425,7 +431,9 @@
   width: 100%;
   margin: 0;
   text-align: center;
-  font-size: clamp(0.82rem, 0.52rem + 0.78vw, 1rem);
+  /* Floor raised to 0.9rem (14.4px): the lower bound of this clamp put the first
+     text a user ever sees below the readability floor on narrow screens. */
+  font-size: clamp(0.9rem, 0.52rem + 0.78vw, 1rem);
   line-height: 1.45;
   color: rgb(255 255 255 / 0.88);
 }
@@ -435,8 +443,11 @@
   transform: translateY(-2vh);
 }
 
+/* Compact scales type UP everywhere else; this rule used to be the one place that
+   scaled it down, shrinking the launch screen's only explanatory text to 13px on the
+   smallest screen. It now matches the profile's intent. */
 :root[data-display-profile="compact"] .startup-launch-sequence__description {
-  font-size: 0.82rem;
+  font-size: 1rem;
 }
 
 .progress-indeterminate {
@@ -635,6 +646,17 @@ button:focus-visible,
   :root[data-display-profile="compact"] :where([class~="text-xs"]) {
     font-size: 1rem;
     line-height: 1.35rem;
+  }
+
+  /* Tab labels on the smallest screen.
+     The compact profile renders text-xs at 16px, at which the six labels plus the 44px
+     minimum tab width come to more than the bar can hold at 320px and "Docs" is clipped
+     off the right edge. 0.9rem is 14.4px, which clears the 14px readability floor and
+     brings the row to about 284px against the 304px available, so it fits with room to
+     spare rather than by a few pixels. */
+  :root[data-display-profile="compact"] .tab-item-label {
+    font-size: 0.9rem;
+    line-height: 1.15;
   }
 
   :root[data-display-profile="compact"] :where([class~="text-sm"]) {
@@ -850,9 +872,31 @@ button:focus-visible,
     pointer-events: auto;
   }
 
+  /* Tabs size to their label, so the shortest one ("Play") ends up the narrowest
+     button in the bar. At 12px labels that left it 42px wide, under the 44px minimum
+     target size, which `smallScreenErgonomics.spec.ts` enforces — a target that small
+     is awkward to hit and gives the keypad focus ring very little to draw around.
+     `min-w-11` is 44px.
+
+     The horizontal padding pays for it. At px-2.5 the six labels came to roughly
+     318px, which only just fit a 320px viewport and left nothing for a minimum width;
+     px-1.5 brings that to about 284px, so every tab can reach 44px and the bar still
+     fits the smallest screen without truncating "Settings". */
   .tab-item {
-    @apply flex flex-col items-center gap-0.5 px-2.5 py-0.5
+    @apply flex min-w-11 shrink-0 flex-col items-center gap-0.5 px-0.5 py-0.5
            text-muted-foreground transition-colors;
+  }
+
+  /* The label stays on one line.
+     Without this the six labels wrapped on a 320px screen - "Ho/me", "Settin/gs" -
+     because a global `min-width: 0` on flex children lets each tab shrink below its
+     own text. Measured at the 16px the compact profile renders these at, the six
+     labels come to 265px against the 304px the bar has after its own padding, so they
+     do fit; they only needed to be told not to break. px-0.5 rather than px-1.5 keeps
+     the widest ("Settings", 61px) inside its tab once the 44px minimum width is
+     applied to the narrow ones. */
+  .tab-item-label {
+    @apply whitespace-nowrap;
   }
 
   .tab-item.active {

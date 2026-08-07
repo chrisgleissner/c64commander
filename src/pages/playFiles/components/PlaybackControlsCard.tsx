@@ -677,7 +677,7 @@ export const PlaybackControlsCard = ({
                       />
                       <span
                         aria-hidden
-                        className="absolute -top-5 left-0 -translate-x-1/2 whitespace-nowrap rounded bg-primary px-1 text-[10px] font-medium leading-4 tabular-nums text-primary-foreground"
+                        className="absolute -top-5 left-0 -translate-x-1/2 whitespace-nowrap rounded bg-primary px-1 text-[11px] font-medium leading-4 tabular-nums text-primary-foreground"
                         data-testid="playback-awaited-timestamp"
                       >
                         {pendingSeek.targetLabel}
@@ -760,7 +760,7 @@ export const PlaybackControlsCard = ({
             shortens the card from the bottom. */}
         {stationActive ? null : (
           <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-xs">
+            <label className="flex min-h-11 items-center gap-2 text-xs">
               <Checkbox
                 checked={shuffleEnabled}
                 onCheckedChange={(value) => onShuffleChange(Boolean(value))}
@@ -771,7 +771,7 @@ export const PlaybackControlsCard = ({
                 <Shuffle className="h-3.5 w-3.5" /> Shuffle
               </span>
             </label>
-            <label className="flex items-center gap-2 text-xs">
+            <label className="flex min-h-11 items-center gap-2 text-xs">
               <Checkbox
                 checked={repeatEnabled}
                 onCheckedChange={(value) => onRepeatChange(Boolean(value))}

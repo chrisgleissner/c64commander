@@ -84,7 +84,17 @@ function TabBarButton({
         />
       )}
       <Icon className="h-[1.375rem] w-[1.375rem]" />
-      <span className="text-[9px] font-medium leading-none">{tab.label}</span>
+      {/* On the type scale, not the 9px literal this used to be. These six labels are
+          the app's primary navigation, and 9px is about 1.4mm tall on a small phone
+          panel - below what a sighted adult with ordinary age-related long sight reads
+          at arm's length without effort.
+
+          `text-xs` is 12px here and 16px on the compact profile, but the compact
+          profile then overrides this label specifically to 14.4px: at 16px the six
+          labels plus the 44px minimum tab width no longer fit a 320px screen and "Docs"
+          was clipped off the right edge. 14.4px still clears the 14px floor that
+          smallScreenErgonomics.spec.ts enforces. See `.tab-item-label` in index.css. */}
+      <span className="tab-item-label text-xs font-medium leading-none">{tab.label}</span>
     </button>
   );
 }

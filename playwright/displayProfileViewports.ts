@@ -4,8 +4,18 @@ export const DISPLAY_PROFILE_VIEWPORTS = {
     override: "compact",
     expectedProfile: "compact",
   },
+  // The smallest screen the app supports, and the size to measure and illustrate it
+  // at. A 480x640 hardware panel on a ~3.25in display works out near 246 ppi, which
+  // Android buckets as hdpi and hands the WebView at a device pixel ratio of 1.5 - so
+  // the page gets 320x426 CSS pixels, not 480x640. The `small` entry below is 480x640
+  // in CSS pixels, which is a physically much larger screen.
+  //
+  // Height is what makes this the demanding case: every other entry here is at least
+  // 640 CSS pixels tall, so nothing else exercises a viewport where the fixed app bar
+  // and tab bar take this large a share and the scrollable area left over is under
+  // half what the other profiles get.
   compact: {
-    viewport: { width: 360, height: 640 },
+    viewport: { width: 320, height: 426 },
     override: "compact",
     expectedProfile: "compact",
   },

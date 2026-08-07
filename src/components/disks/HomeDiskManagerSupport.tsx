@@ -35,9 +35,13 @@ export const DRIVE_DEFAULT_TYPE = "1541";
 export const SOFT_IEC_DEFAULT_PATH_ITEM = "Default Path";
 export const SOFT_IEC_DEFAULT_PATH_FALLBACK = "/USB0/";
 export const SOFT_IEC_BUS_ID_DEFAULTS = Array.from({ length: 23 }, (_, index) => index + 8);
-export const ROW1_CONTROL_CLASS = "h-9 w-14 rounded-md px-0 text-xs font-semibold";
+// h-11/w-11 is the 44px WCAG 2.5.5 target size. These were h-9 w-14, which is under
+// it vertically and awkward both to hit and to see the focus ring around on a small
+// screen.
+export const ROW1_CONTROL_CLASS = "h-11 min-w-11 w-14 rounded-md px-0 text-xs font-semibold";
+// Was h-7 (28px), under the 44px target size.
 export const INLINE_META_SELECT_CLASS =
-  "h-7 border-transparent bg-transparent px-1.5 text-xs shadow-none focus:ring-1 focus:ring-ring data-[state=open]:border-border data-[state=open]:bg-background";
+  "h-11 min-w-11 border-transparent bg-transparent px-1.5 text-xs shadow-none focus:ring-1 focus:ring-ring data-[state=open]:border-border data-[state=open]:bg-background";
 export const SOFT_IEC_CONTROL = {
   class: "SOFT_IEC_DRIVE" as DriveDeviceClass,
   category: "SoftIEC Drive Settings",

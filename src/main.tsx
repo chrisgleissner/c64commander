@@ -16,6 +16,7 @@ import { registerDiagnosticsTestBridge } from "./lib/diagnostics/diagnosticsTest
 import { registerRemoteInputLatencyBridge } from "./lib/remoteInput/inputLatency";
 import { markStartupBootstrapComplete } from "./lib/startup/startupMilestones";
 import { initializeRuntimeMotionMode } from "./lib/startup/runtimeMotionBudget";
+import { applyStoredTextScale } from "./lib/uiPreferences";
 import { registerServiceWorker } from "./lib/startup/serviceWorkerRegistration";
 import { silenceLeftoverNativeAudio } from "./lib/streams/silenceLeftoverNativeAudio";
 import { addErrorLog } from "./lib/logging";
@@ -89,6 +90,9 @@ const startDeferredStartupBootstrap = () => {
 };
 
 initializeRuntimeMotionMode();
+// Before the first paint, so text is the size the user asked for from the outset
+// rather than reflowing once the app has rendered at the default.
+applyStoredTextScale();
 // The mirror's audio is a NATIVE AudioTrack, so it outlives this WebView. A
 // reload leaves it playing while the fresh JavaScript believes nothing is —
 // and the next local tune then starts underneath it.

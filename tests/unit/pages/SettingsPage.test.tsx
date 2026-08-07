@@ -60,6 +60,7 @@ const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
 const FTP_PORT_STORAGE_KEY = "c64u_ftp_port";
 const TELNET_PORT_STORAGE_KEY = "c64u_telnet_port";
 const DISPLAY_PROFILE_OVERRIDE_KEY = "c64u_display_profile_override";
+const TEXT_SCALE_KEY = "c64u_text_scale";
 const HVSC_UPDATE_CHECK_INTERVAL_DAYS_KEY = "c64u_hvsc_update_check_interval_days";
 
 vi.mock("framer-motion", () => ({
@@ -1662,6 +1663,23 @@ describe("SettingsPage", () => {
     const buttons = within(sectionBody("appearance")).getAllByRole("button");
     const themeLabels = buttons.slice(0, 3).map((button) => button.textContent?.trim() ?? "");
     expect(themeLabels).toEqual(["Auto", "Light", "Dark"]);
+  });
+
+  it("persists the chosen text size and applies it to the document", () => {
+    renderSettingsPage();
+
+    const card = screen.getByTestId("settings-text-size");
+    expect(within(card).getByTestId("settings-text-size-default")).toHaveClass("bg-primary");
+
+    fireEvent.click(within(card).getByTestId("settings-text-size-larger"));
+
+    // Written, so the size survives a restart.
+    expect(localStorage.getItem(TEXT_SCALE_KEY)).toBe("larger");
+    // Applied, so it takes effect on the spot rather than at the next launch.
+    expect(document.documentElement.style.getPropertyValue("--text-scale")).toBe("1.3");
+    // Reflected back, so the highlighted option is the one actually in force.
+    expect(within(card).getByTestId("settings-text-size-larger")).toHaveClass("bg-primary");
+    expect(within(card).getByTestId("settings-text-size-default")).not.toHaveClass("bg-primary");
   });
 
   it("persists display profile overrides and reports the auto compact resolution", () => {

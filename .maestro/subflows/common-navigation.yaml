@@ -16,6 +16,9 @@ tags:
           text: "Continue in Demo Mode"
           optional: true
       - tapOn:
+          text: "Not now"
+          optional: true
+      - tapOn:
           text: "Got it"
           optional: true
       - tapOn:
@@ -25,13 +28,38 @@ tags:
           text: "Close app"
           optional: true
       - waitForAnimationToEnd
+      # This wait names the tab bar's own label, which cannot distinguish a rendered
+      # page from a crashed one - the tab bar renders outside the page. The
+      # assertNotVisible below is what covers that, and it is why every navigation in
+      # this file carries one.
+      #
+      # Page-content anchors were tried throughout this file and only "Play Files"
+      # survived. Two things defeat them. Maestro matches a selector against an
+      # element's whole text, and the browser merges inline spans into their containing
+      # row, so "Firmware" is only ever part of "App <version> Device <host> Firmware
+      # <version>". And the configuration menu's entries depend on the firmware the
+      # device reports, so "Memory & ROMs" is not there in demo mode.
+      #
+      # The assertNotVisible checks are what make this file able to tell a rendered page
+      # from a crashed one, and they do not depend on either of those things.
       - extendedWaitUntil:
           visible:
             text: "Home"
           timeout: ${TIMEOUT}
+      - assertNotVisible: "Something went wrong"
 - retry:
     maxRetries: 3
     commands:
+      # Dismissed again here, not only in launch-and-wait. The subnet scan behind
+      # DeviceDiscoveryInterstitial runs for minutes on a network with no device, so the
+      # dialog can appear after "Home" is already on screen and after the dismissals
+      # above have run. Repeating it inside this retry is what lets a late dialog be
+      # cleared and the tab tap retried, rather than all three attempts tapping into a
+      # modal backdrop.
+      - tapOn:
+          text: "Not now"
+          optional: true
+      - waitForAnimationToEnd
       - tapOn:
           id: "tab-play"
           optional: true
@@ -43,25 +71,69 @@ tags:
     visible: "Play Files"
     timeout: ${TIMEOUT}
 - assertVisible: "Play Files"
+- assertNotVisible: "Something went wrong"
 - takeScreenshot: play-tab
-- tapOn:
-    id: "tab-settings"
-- extendedWaitUntil:
-    visible: "Settings"
-    timeout: ${SHORT_TIMEOUT}
+# Settings, Config and Home are retried the same way as Play, and for the same reason:
+# the device picker re-arms itself while a background scan keeps finding nothing, so it
+# can cover the tab bar again between one tab and the next. Without the retry a single
+# late dialog fails the whole walk on a tap that would have worked a second later.
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          text: "Not now"
+          optional: true
+      - waitForAnimationToEnd
+      - tapOn:
+          id: "tab-settings"
+          optional: true
+      # Matched on the tab, not on page content, for the reason set out at the top of
+      # this file: page-content anchors were tried here and only "Play Files" survived.
+      # The assertNotVisible below is the check that can tell a rendered page from a
+      # crashed one.
+      - extendedWaitUntil:
+          visible: "Settings"
+          timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Settings"
+- assertNotVisible: "Something went wrong"
 - takeScreenshot: settings-tab
-- tapOn:
-    id: "tab-config"
-- extendedWaitUntil:
-    visible: "Config"
-    timeout: ${SHORT_TIMEOUT}
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          text: "Not now"
+          optional: true
+      - waitForAnimationToEnd
+      - tapOn:
+          id: "tab-config"
+          optional: true
+      # Matched on the tab, not on page content, for the reason set out at the top of
+      # this file: page-content anchors were tried here and only "Play Files" survived.
+      # The assertNotVisible below is the check that can tell a rendered page from a
+      # crashed one.
+      - extendedWaitUntil:
+          visible: "Config"
+          timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Config"
+- assertNotVisible: "Something went wrong"
 - takeScreenshot: config-tab
-- tapOn:
-    id: "tab-home"
-- extendedWaitUntil:
-    visible: "Home"
-    timeout: ${SHORT_TIMEOUT}
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          text: "Not now"
+          optional: true
+      - waitForAnimationToEnd
+      - tapOn:
+          id: "tab-home"
+          optional: true
+      # Matched on the tab, not on page content, for the reason set out at the top of
+      # this file: page-content anchors were tried here and only "Play Files" survived.
+      # The assertNotVisible below is the check that can tell a rendered page from a
+      # crashed one.
+      - extendedWaitUntil:
+          visible: "Home"
+          timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Home"
+- assertNotVisible: "Something went wrong"
 - takeScreenshot: home-tab

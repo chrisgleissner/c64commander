@@ -59,7 +59,9 @@ type ToggleRowProps = {
 const ToggleRow = ({ id, testId, label, description, checked, onChange }: ToggleRowProps) => (
   <div className="flex items-start justify-between gap-3 rounded-lg border border-border/70 p-3 min-w-0">
     <div className="min-w-0">
-      <Label htmlFor={id} className="font-medium">
+      {/* min-h-11 gives the label the 44px target size. Pressing it toggles the
+          checkbox, so the label is what the user aims at, not the small box. */}
+      <Label htmlFor={id} className="flex min-h-11 items-center font-medium">
         {label}
       </Label>
       <p className="text-xs text-muted-foreground">{description}</p>

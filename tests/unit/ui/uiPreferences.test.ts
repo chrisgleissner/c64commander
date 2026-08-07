@@ -8,15 +8,23 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
+  applyStoredTextScale,
   clampListPreviewLimit,
   DEFAULT_LIST_PREVIEW_LIMIT,
   getDisplayProfileOverride,
   getListPreviewLimit,
+  getTextScaleId,
   MAX_LIST_PREVIEW_LIMIT,
   MIN_LIST_PREVIEW_LIMIT,
   setDisplayProfileOverride,
   setListPreviewLimit,
+  setTextScaleId,
 } from "@/lib/uiPreferences";
+import { DEFAULT_TEXT_SCALE_ID, TEXT_SCALE_VARIABLE } from "@/lib/textScale";
+
+const TEXT_SCALE_KEY = "c64u_text_scale";
+
+const readTextScaleVariable = () => document.documentElement.style.getPropertyValue(TEXT_SCALE_VARIABLE);
 
 describe("uiPreferences", () => {
   it("clamps list preview limits to bounds", () => {
@@ -100,6 +108,72 @@ describe("uiPreferences", () => {
     });
 
     expect(() => setDisplayProfileOverride("compact")).not.toThrow();
+
+    if (original) {
+      Object.defineProperty(globalThis, "localStorage", original);
+    }
+  });
+
+  it("stores the chosen text size and applies it to the document in the same call", () => {
+    // The Settings control calls this and nothing else, so if the write and the apply
+    // were not both done here the setting would either take effect only after a
+    // restart or be lost on the next one.
+    localStorage.clear();
+    document.documentElement.style.removeProperty(TEXT_SCALE_VARIABLE);
+
+    setTextScaleId("larger");
+
+    expect(localStorage.getItem(TEXT_SCALE_KEY)).toBe("larger");
+    expect(getTextScaleId()).toBe("larger");
+    expect(readTextScaleVariable()).toBe("1.3");
+  });
+
+  it("applies the stored text size at start-up", () => {
+    // applyStoredTextScale runs once from the app entry point. A stored value that was
+    // never applied would leave the app at the default size on every launch, which is
+    // the failure the setting exists to prevent.
+    localStorage.setItem(TEXT_SCALE_KEY, "largest");
+    document.documentElement.style.removeProperty(TEXT_SCALE_VARIABLE);
+
+    applyStoredTextScale();
+
+    expect(readTextScaleVariable()).toBe("1.5");
+    expect(document.documentElement.dataset.textScale).toBe("largest");
+  });
+
+  it("falls back to the default text size for a corrupt stored value", () => {
+    // Storage survives downgrades and is user-writable, so an id this release does not
+    // know must not resolve to an unreadable size.
+    localStorage.setItem(TEXT_SCALE_KEY, "gigantic");
+    expect(getTextScaleId()).toBe(DEFAULT_TEXT_SCALE_ID);
+  });
+
+  it("getTextScaleId returns the default when localStorage is unavailable", () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      value: undefined,
+      configurable: true,
+    });
+
+    expect(getTextScaleId()).toBe(DEFAULT_TEXT_SCALE_ID);
+
+    if (original) {
+      Object.defineProperty(globalThis, "localStorage", original);
+    }
+  });
+
+  it("setTextScaleId still applies the size when localStorage is unavailable", () => {
+    // Nothing can be persisted, but the user asked for larger text now: the request
+    // must still take effect for this session rather than being dropped.
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      value: undefined,
+      configurable: true,
+    });
+    document.documentElement.style.removeProperty(TEXT_SCALE_VARIABLE);
+
+    expect(() => setTextScaleId("large")).not.toThrow();
+    expect(readTextScaleVariable()).toBe("1.15");
 
     if (original) {
       Object.defineProperty(globalThis, "localStorage", original);

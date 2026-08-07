@@ -21,6 +21,15 @@ tags:
       - tapOn:
           text: "Continue in Demo Mode"
           optional: true
+      # Startup device discovery. On a run where no device host has been configured -
+      # a fresh install with no smoke-mode config file - the app scans the subnet and
+      # shows DeviceDiscoveryInterstitial. That dialog is modal, so until it is
+      # dismissed every tap on the tab bar is swallowed by its backdrop. Runs that
+      # configure a host beforehand never see it, and the tap is optional, so it costs
+      # them a warning and nothing else.
+      - tapOn:
+          text: "Not now"
+          optional: true
       - tapOn:
           text: "Retry connection"
           optional: true
@@ -70,3 +79,45 @@ tags:
           text: "OK"
           optional: true
       - waitForAnimationToEnd
+
+# The app shell being up is not the same as the page under it having rendered. "Home"
+# above is the tab bar's own label, which is rendered outside the page and stays on
+# screen even when the page beneath it has been replaced by the error boundary - a
+# release walkthrough once captured a crashed Home page while every assertion passed.
+# Both App.tsx and PageErrorBoundary.tsx render this exact title, so one check covers a
+# whole-app crash and a single-page crash. It is cheap and cannot fail unless something
+# actually threw, which is why it lives here rather than in each of the flows that
+# reuse this subflow.
+- assertNotVisible: "Something went wrong"
+# The positive half. On its own the check above is negative-only: a page that rendered
+# nothing at all would satisfy it, and around thirty flows use this subflow without ever
+# running common-navigation, so for those it would be the only thing standing between a
+# blank page and a pass.
+#
+# Matched on a button Home renders, after two other approaches were tried and failed
+# against this WebView:
+#
+#   "Firmware"          - not its own element. It exists only inside the row
+#                         "App <version> Device <host> Firmware <version>", and Maestro
+#                         matches a selector against an element's whole text.
+#   id home-header-title - the WebView does not expose that testid. Interactive elements
+#                         do surface theirs, which is why tapping tab ids works, but the
+#                         page title is a plain h1 and does not.
+#
+# "Reboot" is the label of a quick-action button, which Home renders unconditionally - it
+# is disabled while disconnected, not absent - and a button's label is its accessible
+# name, so it is an element's whole text.
+#
+# Wrapped in a retry that dismisses the device picker first. The picker re-arms on its
+# own - the background rediscovery timer re-probes every few seconds and a probe that
+# times out puts the app back to offline and reopens it - and while it is open the page
+# behind is inert, so a perfectly present "Reboot" does not count as visible. A run
+# failed exactly that way with Reboot plainly on screen behind the dialog.
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          text: "Not now"
+          optional: true
+      - waitForAnimationToEnd
+      - assertVisible: "Reboot"

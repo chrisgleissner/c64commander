@@ -2106,7 +2106,7 @@ export const HomeDiskManager = () => {
                             focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 20)}
                             variant="ghost"
                             size="sm"
-                            className="h-7 w-7 p-0"
+                            className="h-11 w-11 p-0"
                             onClick={() => void handleRotate(key, -1)}
                             disabled={!status.isConnected || configPending || mountPending}
                             aria-label={`${driveLabel} previous disk`}
@@ -2118,7 +2118,7 @@ export const HomeDiskManager = () => {
                             focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 30)}
                             variant="ghost"
                             size="sm"
-                            className="h-7 w-7 p-0"
+                            className="h-11 w-11 p-0"
                             onClick={() => void handleRotate(key, 1)}
                             disabled={!status.isConnected || configPending || mountPending}
                             aria-label={`${driveLabel} next disk`}
@@ -2134,7 +2134,7 @@ export const HomeDiskManager = () => {
                         focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 40)}
                         variant="outline"
                         size="sm"
-                        className="h-8 w-8 p-0"
+                        className="h-11 w-11 p-0"
                         onClick={() => void handleResetDrive(key, driveLabel, key)}
                         disabled={!status.isConnected || resetPending || configPending}
                         aria-label={`Reset ${driveLabel}`}
@@ -2147,7 +2147,7 @@ export const HomeDiskManager = () => {
                         focusOrder={driveFocusOrder(DRIVE_KEYS.indexOf(key), 50)}
                         variant="default"
                         size="sm"
-                        className="h-8 px-3 text-xs"
+                        className="h-11 px-3 text-xs"
                         onClick={() => void handleToggleDrivePower(key, driveLabel, powerTarget, key)}
                         disabled={!status.isConnected || !hasPowerState || powerPending || configPending}
                         data-testid={`drive-power-toggle-${key}`}
@@ -2273,7 +2273,7 @@ export const HomeDiskManager = () => {
                   focusOrder={320}
                   variant="ghost"
                   size="sm"
-                  className="h-7 min-w-0 max-w-full justify-start px-1.5 text-xs font-medium"
+                  className="h-11 min-w-0 max-w-full justify-start px-1.5 text-xs font-medium"
                   onClick={() => setSoftIecDirectoryBrowserOpen(true)}
                   disabled={!status.isConnected || softIecConfigPending}
                   data-testid="drive-default-path-select-soft-iec"
@@ -2298,7 +2298,7 @@ export const HomeDiskManager = () => {
                     focusOrder={340}
                     variant="outline"
                     size="sm"
-                    className="h-8 w-8 p-0"
+                    className="h-11 w-11 p-0"
                     onClick={() => void handleResetDrive(softIecEndpointKey, "Soft IEC Drive", "softiec")}
                     disabled={!status.isConnected || softIecResetPending || softIecConfigPending}
                     aria-label="Reset Soft IEC Drive"
@@ -2311,7 +2311,7 @@ export const HomeDiskManager = () => {
                     focusOrder={350}
                     variant="default"
                     size="sm"
-                    className="h-8 px-3 text-xs"
+                    className="h-11 px-3 text-xs"
                     onClick={() =>
                       void handleToggleDrivePower(softIecEndpointKey, "Soft IEC Drive", softIecPowerTarget, "softiec")
                     }
@@ -2612,7 +2612,7 @@ export const HomeDiskManager = () => {
                       <span className={cn(option.color.text, "max-w-[180px] break-words whitespace-normal")}>
                         {option.name}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">({option.count})</span>
+                      <span className="text-[11px] text-muted-foreground">({option.count})</span>
                     </Button>
                   ))}
                 </div>

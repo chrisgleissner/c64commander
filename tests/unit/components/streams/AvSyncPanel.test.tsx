@@ -6,10 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AvSyncPanel } from "@/components/streams/AvSyncPanel";
 import type { AvSyncStats } from "@/lib/streams/avSync";
+import type { ToneLadderNote, ToneLadderResult } from "@/lib/streams/toneLadder";
 
 const emptyLatency = {
   count: 0,
@@ -64,8 +65,59 @@ vi.mock("@/hooks/useAvSync", () => ({
   }),
 }));
 
+const ladder = vi.hoisted(() => ({
+  run: vi.fn(),
+  reset: vi.fn(),
+  state: {
+    running: false,
+    error: null as string | null,
+    result: null as ToneLadderResult | null,
+  },
+}));
+
+vi.mock("@/hooks/useToneLadderTest", () => ({
+  useToneLadderTest: () => ({
+    running: ladder.state.running,
+    result: ladder.state.result,
+    error: ladder.state.error,
+    run: ladder.run,
+    reset: ladder.reset,
+  }),
+}));
+
+const note = (overrides: Partial<ToneLadderNote> = {}): ToneLadderNote => ({
+  slot: 0,
+  expected: "C-4",
+  expectedHz: 261.6,
+  detectedHz: 261.6,
+  cents: 0,
+  colour: 6,
+  colourName: "blue",
+  seconds: 0.5,
+  expectedSeconds: 0.5,
+  lengthErrorMs: 0,
+  ok: true,
+  ...overrides,
+});
+
+const ladderResult = (overrides: Partial<ToneLadderResult> = {}): ToneLadderResult => ({
+  notes: [note(), note({ slot: 1, expected: "D-4", detectedHz: 293.7, cents: 0 })],
+  notesInTune: 2,
+  inTunePct: 100,
+  medianCentsError: 0,
+  centsSpread: 0,
+  medianLengthErrorMs: 0,
+  lengthSpreadMs: 0,
+  shortNotes: 0,
+  longNotes: 0,
+  silence: { measured: 2, floorDbfs: -78, peakDbfs: -70, passed: true },
+  av: { samples: 4, medianOffsetMs: 12, spreadMs: 3, driftPpm: null, verdict: "undetectable" },
+  ...overrides,
+});
+
 const expandSync = () => fireEvent.click(screen.getByTestId("av-sync-toggle"));
 const expandLatency = () => fireEvent.click(screen.getByTestId("av-sync-lat-toggle"));
+const expandLadder = () => fireEvent.click(screen.getByTestId("av-tone-ladder-toggle"));
 
 describe("AvSyncPanel", () => {
   beforeEach(() => {
@@ -81,6 +133,9 @@ describe("AvSyncPanel", () => {
       runningTest: false,
       testError: null,
     };
+    ladder.run.mockReset();
+    ladder.reset.mockReset();
+    ladder.state = { running: false, error: null, result: null };
   });
 
   it("shows both test sections, each collapsed by default", () => {
@@ -174,5 +229,76 @@ describe("AvSyncPanel", () => {
     expect(screen.getByTestId("av-sync-run")).toBeDisabled();
     expect(screen.getByTestId("av-sync-run")).toHaveTextContent("Starting…");
     expect(screen.getByTestId("av-sync-error")).toHaveTextContent("device offline");
+  });
+
+  it("shows nothing to reset until the tone ladder has produced a result", () => {
+    render(<AvSyncPanel />);
+    expandLadder();
+    expect(screen.getByTestId("av-tone-ladder-summary")).toHaveTextContent("not measured");
+    expect(screen.getByTestId("av-tone-ladder-reset")).toBeDisabled();
+    expect(screen.queryByTestId("av-tone-ladder-notes")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("av-tone-ladder-run"));
+    expect(ladder.run).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a measured tone ladder note by note", () => {
+    ladder.state.result = ladderResult();
+    render(<AvSyncPanel />);
+    expandLadder();
+
+    expect(screen.getByTestId("av-tone-ladder-summary")).toHaveTextContent("100% in tune");
+    expect(screen.getByTestId("av-tone-ladder-in-tune")).toHaveTextContent("100%");
+    expect(screen.getByTestId("av-tone-ladder-cents")).toHaveTextContent("0c");
+    expect(screen.getByTestId("av-tone-ladder-av-offset")).toHaveTextContent("+12ms");
+    expect(screen.getByTestId("av-tone-ladder-silence")).toHaveTextContent("-78dB");
+
+    // One row per note, so a fault confined to part of the scale stays visible instead
+    // of being averaged into the summary.
+    const notes = screen.getByTestId("av-tone-ladder-notes");
+    expect(within(notes).getAllByRole("row")).toHaveLength(3); // header + two notes
+    expect(within(notes).getByText("C-4")).toBeInTheDocument();
+    expect(within(notes).getByText("D-4")).toBeInTheDocument();
+
+    // Nothing was short or long, so there is no warning to show.
+    expect(screen.queryByTestId("av-tone-ladder-length-warning")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("av-tone-ladder-reset"));
+    expect(ladder.reset).toHaveBeenCalledTimes(1);
+  });
+
+  it("says a value was not measured instead of reporting it as zero", () => {
+    // With video off there is no A/V offset and no silence floor. Printing "+0ms" and
+    // "0dB" would read as a perfect result rather than as a missing one, so both must
+    // fall back to a dash.
+    ladder.state.result = ladderResult({
+      inTunePct: 50,
+      notesInTune: 1,
+      notes: [note(), note({ slot: 1, expected: "D-4", cents: 80, ok: false, colour: null, colourName: null })],
+      shortNotes: 1,
+      longNotes: 2,
+      av: { samples: 0, medianOffsetMs: 0, spreadMs: 0, driftPpm: null, verdict: "not measured" },
+      silence: { measured: 0, floorDbfs: null, peakDbfs: null, passed: false },
+    });
+    render(<AvSyncPanel />);
+    expandLadder();
+
+    expect(screen.getByTestId("av-tone-ladder-av-offset")).toHaveTextContent("—");
+    expect(screen.getByTestId("av-tone-ladder-av-offset")).not.toHaveTextContent("0ms");
+    expect(screen.getByTestId("av-tone-ladder-silence")).toHaveTextContent("—");
+    expect(screen.getByText("no video")).toBeInTheDocument();
+    expect(screen.getByText("not found")).toBeInTheDocument();
+
+    // Short and long notes are different faults, so both counts are named.
+    const warning = screen.getByTestId("av-tone-ladder-length-warning");
+    expect(warning).toHaveTextContent("1 note(s) cut short");
+    expect(warning).toHaveTextContent("2 note(s) ran long");
+  });
+
+  it("surfaces a tone ladder failure in place of the instructions", () => {
+    ladder.state.error = "no audio received";
+    render(<AvSyncPanel />);
+    expandLadder();
+    expect(screen.getByTestId("av-tone-ladder-error")).toHaveTextContent("no audio received");
   });
 });

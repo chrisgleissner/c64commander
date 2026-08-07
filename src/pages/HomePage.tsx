@@ -125,6 +125,7 @@ import {
 } from "@/lib/deviceControl/deviceControl";
 import { deriveDeviceCapabilities, detectStreamingFromConfig } from "@/lib/deviceCapabilities";
 import { STREAM_ITEMS } from "@/lib/config/homeStreams";
+import { INLINE_SUMMARY_CONTROL_CLASS } from "@/pages/home/inlineControlStyles";
 
 // HARD18-012b: the Ultimate's entire network stack is down for the whole
 // boot duration after a real power cycle - long enough that, unsuppressed,
@@ -785,8 +786,7 @@ function HomePageContent() {
     : null;
   const ramDumpFolderLabel = ramDumpFolder?.rootName ?? ramDumpFolderDisplayPath ?? "...";
 
-  const inlineSelectTriggerClass =
-    "h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden";
+  const inlineSelectTriggerClass = INLINE_SUMMARY_CONTROL_CLASS;
   const unavailableLabel = "Not available";
 
   const u64Category = u64SettingsCategory as Record<string, unknown> | undefined;

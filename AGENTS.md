@@ -342,6 +342,51 @@ longer gap is "an outage we should not invent audio for" turned notes the C64 he
 78 ms and 132 ms — the timeline compressed. Wi-Fi loses multicast in clumps, so twenty-packet gaps
 are ordinary here. Fill them, fading toward silence past ~30 ms so a long gap cannot become a drone.
 
+## Reach and readability are requirements, not polish
+
+Two constraints apply to every UI change. Neither is a preference and neither is
+negotiable against fitting more on screen.
+
+### Touch and non-touch devices are equally supported
+
+The app runs on hardware with a touchscreen and on hardware driven entirely by
+physical keys — a T9 keypad and a directional pad, where touch may be absent,
+secondary, or awkward. **Both are first-class.** A control that can only be reached by
+tapping does not exist for half the users.
+
+So, for anything you add or change:
+
+- It must be reachable and operable using the focus ring alone — arrow keys to move,
+  OK to activate — with no pointer involved.
+- When the ring selects it, it must be **scrolled into view**. A selection the user
+  cannot see is not navigable, and short screens make this easy to get wrong.
+- Anything focusable or tappable must be at least **44x44 CSS pixels**. That is the
+  WCAG 2.5.5 target size, and it is as much about the focus ring having something
+  visible to draw around as it is about fingers.
+- Do not solve a layout problem by shrinking a hit box.
+
+`playwright/keypadOnlyNavigation.spec.ts` enforces the walk without ever calling
+`click()` or `tap()`. `playwright/smallScreenErgonomics.spec.ts` enforces the size.
+
+### The smallest text on screen must still be comfortable to read
+
+Assume the reader is a sighted adult of around sixty with ordinary eyesight, holding
+the device at a normal distance. At that age reduced near focus is universal and
+contrast sensitivity is measurably lower. The app should be enjoyable to use, not an
+eye test.
+
+- **14 CSS pixels is a hard floor for any rendered text**, and **16 for body text** —
+  anything the user reads rather than glances at.
+- These are floors, not targets. A CSS pixel is density-independent, so 14px is about
+  2.2mm tall on any phone and its x-height subtends roughly 11 arcminutes at a normal
+  viewing distance, against the 16 to 18 that comfortable sustained reading wants.
+- **Never step type down to make something fit.** The answer to "it does not fit" is
+  reflow, scroll, or fewer things — never smaller text.
+- The smallest supported screen is **320x426 CSS pixels**, which resolves to the
+  `compact` display profile. Measure there: it is the `compact` entry in
+  `playwright/displayProfileViewports.ts`, and it is the size the docs screenshots
+  for that profile are captured at.
+
 ## Build, test, and screenshot decision rules
 
 This section exists to make agent behavior explicit.
@@ -374,6 +419,19 @@ Regenerate screenshots only when visible documented UI changed.
 ### When screenshots must not be regenerated
 
 Do not regenerate screenshots when the visible documented UI is unchanged, even if internal code changed.
+
+### Pruning a whole-corpus regeneration
+
+`npm run screenshots` already reverts captures that are byte-identical to their
+committed version. That does not help after a regeneration on a different machine:
+anti-aliasing and font hinting shift a few pixels by a shade, so nearly every file
+differs in bytes while looking the same, and the diff becomes unreviewable.
+
+Run `npm run screenshots:prune-drift` after such a regeneration. It compares pixels
+rather than bytes and reverts anything below a perceptual threshold, leaving only the
+captures a human should actually look at. It keeps anything new, deleted, differently
+sized, or genuinely different, and takes `--baseline <ref>`, `--threshold` and
+`--dry-run`.
 
 ### Minimal screenshot rule
 

@@ -32,6 +32,7 @@ import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import type { TelnetActionId } from "@/lib/telnet/telnetTypes";
 import type { TelnetActionSupport } from "@/lib/telnet/telnetCapabilityDiscovery";
+import { INLINE_SUMMARY_CONTROL_CLASS } from "@/pages/home/inlineControlStyles";
 
 const buildPrinterTelnetActions = (enabled: boolean) => {
   return enabled
@@ -158,8 +159,7 @@ export function PrinterManager({
     buildPrinterControl("IBM table 2", "International 1"),
   ];
 
-  const inlineSelectTriggerClass =
-    "h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden";
+  const inlineSelectTriggerClass = INLINE_SUMMARY_CONTROL_CLASS;
 
   const handleEnabledToggle = trace(async function handleEnabledToggle(
     label: string,
@@ -203,7 +203,7 @@ export function PrinterManager({
               onClick={() => void handleEnabledToggle("Printer", PRINTER_CONTROL_SPEC, printerEnabled)}
               disabled={!isConnected || printerEnabledPending}
               data-testid="home-printer-toggle"
-              className={cn("h-6 px-2 text-xs", getOnOffButtonClass(printerEnabled))}
+              className={cn("px-3 text-xs", getOnOffButtonClass(printerEnabled), "min-h-11 min-w-11")}
             >
               {printerEnabled ? "ON" : "OFF"}
             </Button>
@@ -290,7 +290,7 @@ export function PrinterManager({
                     key={action.actionId}
                     variant="outline"
                     size="sm"
-                    className="h-6 px-2 text-xs"
+                    className="min-h-11 min-w-11 px-3 text-xs"
                     data-testid={action.testId}
                     disabled={!isConnected || machineTaskBusy || telnetBusy || action.support.status !== "supported"}
                     title={action.support.status === "supported" ? undefined : (action.support.reason ?? undefined)}
