@@ -33,7 +33,13 @@ const sharedServers = {
     type: "stdio",
     command: "npx",
     args: ["-y", "c64bridge@latest"],
-    env: {},
+    // -minimized starts the managed VICE window iconified. Without it, VICE_ARGS is unset
+    // and VICE_VISIBLE defaults to true, so every managed launch opens a desktop window
+    // and takes focus. The window still exists and can be restored, and Binary Monitor
+    // traffic, screen reads, frame capture and keyboard input are unaffected — which is
+    // why this is preferred here over the headless Xvfb mode (VICE_VISIBLE=false) that
+    // c64bridge reserves for CI and display-less sessions.
+    env: { VICE_ARGS: "-minimized" },
   },
   c64scope: {
     type: "stdio",
