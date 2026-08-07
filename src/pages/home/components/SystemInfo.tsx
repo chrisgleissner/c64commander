@@ -53,6 +53,12 @@ export function SystemInfo() {
         // One column on the smallest screen: two columns leave about 108px each, and
         // the build timestamp beside its label squeezed "Build" down to 20px, where it
         // was set one letter to a line.
+        //
+        // One column was still not enough. CI measured "Build" needing 43px on a 42px
+        // line and breaking after "Buil", because the flex row shrinks the label to fit
+        // the timestamp beside it. The labels are shrink-0 so they keep their own width,
+        // and the values truncate instead - a shortened build timestamp is still
+        // recognisable, a label broken mid-word is not.
         <div
           className={cn(
             "mt-1 grid gap-x-4 gap-y-1 text-xs text-muted-foreground",
@@ -60,32 +66,32 @@ export function SystemInfo() {
           )}
         >
           <div className="flex items-center gap-1">
-            <span>Git</span>
-            <span className="font-semibold text-foreground" data-testid="home-system-git">
+            <span className="shrink-0 whitespace-nowrap">Git</span>
+            <span className="min-w-0 truncate font-semibold text-foreground" data-testid="home-system-git">
               {buildInfo.gitShaShort || "Not available"}
             </span>
           </div>
           <div className="flex items-center gap-1">
-            <span>Build</span>
-            <span className="font-semibold text-foreground" data-testid="home-system-build-time">
+            <span className="shrink-0 whitespace-nowrap">Build</span>
+            <span className="min-w-0 truncate font-semibold text-foreground" data-testid="home-system-build-time">
               {buildInfo.buildTimeUtc}
             </span>
           </div>
           <div className="flex items-center gap-1">
-            <span>FPGA</span>
-            <span className="font-semibold text-foreground" data-testid="home-system-fpga">
+            <span className="shrink-0 whitespace-nowrap">FPGA</span>
+            <span className="min-w-0 truncate font-semibold text-foreground" data-testid="home-system-fpga">
               {disconnected ? "Not available" : status.deviceInfo?.fpga_version || "Not available"}
             </span>
           </div>
           <div className="flex items-center gap-1">
-            <span>Core</span>
-            <span className="font-semibold text-foreground" data-testid="home-system-core">
+            <span className="shrink-0 whitespace-nowrap">Core</span>
+            <span className="min-w-0 truncate font-semibold text-foreground" data-testid="home-system-core">
               {disconnected ? "Not available" : status.deviceInfo?.core_version || "Not available"}
             </span>
           </div>
           <div className="flex items-center gap-1">
-            <span>Core ID</span>
-            <span className="font-semibold text-foreground" data-testid="home-system-core-id">
+            <span className="shrink-0 whitespace-nowrap">Core ID</span>
+            <span className="min-w-0 truncate font-semibold text-foreground" data-testid="home-system-core-id">
               {disconnected ? "Not available" : status.deviceInfo?.unique_id || "Not available"}
             </span>
           </div>
