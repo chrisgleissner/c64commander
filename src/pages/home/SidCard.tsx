@@ -187,14 +187,17 @@ export function SidCard({
       {/* Row 2: Identity and Address */}
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground whitespace-nowrap">{identityLabel}</span>
+          {/* shrink-0: the label cannot wrap, so a flex row that shrinks it clips the text.
+              CI measured "Address" needing 68px in a 66px box on all four sockets. Let the
+              Select absorb the shrink instead; it truncates cleanly, a bare label does not. */}
+          <span className="shrink-0 text-muted-foreground whitespace-nowrap">{identityLabel}</span>
           {isIdentityReadOnly ? (
             <span className="font-medium text-muted-foreground" data-testid={`home-sid-type-${testIdSuffix}`}>
               {identityValue}
             </span>
           ) : (
             <Select value={identityValue} onValueChange={onIdentityChange} disabled={!isConnected || identityPending}>
-              <SelectTrigger className={inlineSelectTriggerClass} data-testid={`home-sid-type-${testIdSuffix}`}>
+              <SelectTrigger className={cn(inlineSelectTriggerClass, "min-w-0")} data-testid={`home-sid-type-${testIdSuffix}`}>
                 <SelectValue placeholder={identityValue} />
               </SelectTrigger>
               <SelectContent>
@@ -208,9 +211,9 @@ export function SidCard({
           )}
         </div>
         <div className="flex items-center gap-2 justify-end">
-          <span className="text-muted-foreground whitespace-nowrap">Address</span>
+          <span className="shrink-0 text-muted-foreground whitespace-nowrap">Address</span>
           <Select value={addressValue} onValueChange={onAddressChange} disabled={!isConnected || addressPending}>
-            <SelectTrigger className={inlineSelectTriggerClass} data-testid={`home-sid-address-${testIdSuffix}`}>
+            <SelectTrigger className={cn(inlineSelectTriggerClass, "min-w-0")} data-testid={`home-sid-address-${testIdSuffix}`}>
               <SelectValue placeholder={addressValue} />
             </SelectTrigger>
             <SelectContent>
