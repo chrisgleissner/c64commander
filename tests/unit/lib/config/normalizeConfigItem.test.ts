@@ -76,6 +76,21 @@ describe("normalizeConfigItem", () => {
     });
   });
 
+  it("coerces numeric options and presets to strings", () => {
+    // A device may report enum choices as JSON numbers. The declared type is string[],
+    // and consumers call string methods on the entries - the SID mixer's
+    // normalizeOptionToken calls .trim() - so the coercion has to happen here rather
+    // than at each consumer. Without it a numeric choice throws during render.
+    expect(normalizeConfigItem({ options: [0, 20, 40] })).toMatchObject({
+      options: ["0", "20", "40"],
+    });
+    expect(normalizeConfigItem({ values: [0, 1] })).toMatchObject({ options: ["0", "1"] });
+    expect(normalizeConfigItem({ choices: [8, 9] })).toMatchObject({ options: ["8", "9"] });
+    expect(normalizeConfigItem({ details: { presets: [0, 1] } })).toMatchObject({
+      details: { presets: ["0", "1"] },
+    });
+  });
+
   it("returns undefined details if no relevant fields", () => {
     expect(normalizeConfigItem({ value: "v" })).toEqual({
       value: "v",

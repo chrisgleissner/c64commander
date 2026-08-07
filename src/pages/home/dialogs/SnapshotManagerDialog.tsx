@@ -95,7 +95,8 @@ function SnapshotRow({
   // it already says: a Basic snapshot is always the BASIC program area, a Screen
   // snapshot is always the screen and colour RAM. A custom snapshot is the exception,
   // because the ranges the user picked are the only thing that says what was saved, so
-  // that line stays - capped at a single truncated line rather than allowed to wrap.
+  // that line stays, capped at two lines. See the note on the element itself for why the
+  // cap is two lines and not one.
   const showRanges = !compact || snapshot.snapshotType === "custom";
   const label = snapshot.metadata.label;
   const createdAt = snapshot.metadata.created_at;
