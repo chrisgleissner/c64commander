@@ -64,7 +64,10 @@ describe("TuneDetails", () => {
 
   it("keeps the hit target at the project's floor even though the label is small text", () => {
     render(<TuneDetails tuneLine="BGM1" note={null} />);
-    // 40 px, per the hit-target rule in docs/ux-guidelines.md.
-    expect(screen.getByTestId("tune-details-toggle").className).toContain("min-h-10");
+    // 44 px: the general tap-target floor in AGENTS.md, enforced by
+    // smallScreenErgonomics.spec.ts (MIN_TARGET_PX). The 40 px figure in
+    // docs/ux-guidelines.md is scoped to CloseControl, the interstitial dismissal glyph,
+    // and does not apply to an ordinary disclosure button.
+    expect(screen.getByTestId("tune-details-toggle").className).toContain("min-h-11");
   });
 });

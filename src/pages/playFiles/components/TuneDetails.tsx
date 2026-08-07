@@ -68,7 +68,7 @@ export const TuneDetails = ({ tuneLine, note, className }: TuneDetailsProps) => 
         // `data-testid`. Same reasoning as the collapsible headers in Settings and Docs.
         id="tune-details-toggle"
         data-testid="tune-details-toggle"
-        className="flex min-h-10 w-full items-center justify-between gap-2 text-left text-xs font-medium text-muted-foreground"
+        className="flex min-h-11 w-full items-center justify-between gap-2 text-left text-xs font-medium text-muted-foreground"
         aria-expanded={expanded}
         aria-controls="tune-details-body"
         onClick={() => setExpanded((value) => !value)}
