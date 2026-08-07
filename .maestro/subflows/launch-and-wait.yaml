@@ -94,9 +94,17 @@ tags:
 # running common-navigation, so for those it would be the only thing standing between a
 # blank page and a pass.
 #
-# Asserted by testid rather than by text. Home's own text cannot be matched - "Home" is
-# the tab bar's label, and the page's other candidates live inside larger elements, which
-# is what made an assertion on "Firmware" fail while Firmware was on screen. This is the
-# h1 the page renders as its title, so it is present exactly when the page rendered.
-- assertVisible:
-    id: "home-header-title"
+# Matched on a button Home renders, after two other approaches were tried and failed
+# against this WebView:
+#
+#   "Firmware"          - not its own element. It exists only inside the row
+#                         "App <version> Device <host> Firmware <version>", and Maestro
+#                         matches a selector against an element's whole text.
+#   id home-header-title - the WebView does not expose that testid. Interactive elements
+#                         do surface theirs, which is why tapping tab ids works, but the
+#                         page title is a plain h1 and does not.
+#
+# "Reboot" is the label of a quick-action button, which Home renders unconditionally - it
+# is disabled while disconnected, not absent - and a button's label is its accessible
+# name, so it is an element's whole text.
+- assertVisible: "Reboot"
