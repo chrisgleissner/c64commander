@@ -97,9 +97,25 @@ export const PlaybackConfigOverrideEditor = ({ item, onChangeOverrides }: Playba
     selectedOverride?.value ?? selectedItem?.value ?? "",
   );
 
+  // `selectedItem` and `selectedOverride` are `useMemo` results, so they take a
+  // fresh identity every time the config read they derive from returns a new
+  // object - and it does that even when no value the user can see has changed.
+  // Two paths reach this component: the `c64-category` query key includes the
+  // connection routing epoch, so re-applying the connection starts a new query
+  // whose first response is a new object; and `categoryItems` rebuilds every
+  // entry through `normalizeConfigItem` whenever any other item in the same
+  // category changes. Seeding the value field from those objects therefore
+  // discarded whatever the user had typed while the read was in flight. Seed it
+  // from the selection and the two values instead, so the field is re-seeded
+  // when the user picks a different item, when the stored override for that item
+  // changes, or when the device value for that item actually changes - and not
+  // on a refetch that returns the same values under new references.
+  const selectedItemValue = selectedItem?.value;
+  const selectedOverrideValue = selectedOverride?.value;
+
   useEffect(() => {
-    setPendingValue(selectedOverride?.value ?? selectedItem?.value ?? "");
-  }, [selectedItem, selectedOverride]);
+    setPendingValue(selectedOverrideValue ?? selectedItemValue ?? "");
+  }, [selectedCategory, selectedItemName, selectedItemValue, selectedOverrideValue]);
 
   const handleSaveOverride = () => {
     if (!selectedCategory || !selectedItemName) return;
