@@ -294,6 +294,32 @@ describe("useC64Connection", () => {
     await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["c64-info"] }));
   });
 
+  // A routing change aborts every read already in flight, and the device info
+  // read is not retried. When the routing is re-applied against the same target
+  // the base URL does not change, so only the routing epoch in the query key
+  // makes React Query start a fresh read; without it the aborted read stood
+  // until the next health-check poll a full minute later. Demo mode re-applies
+  // the same mock routing twice on the way in, which is how the Home System info
+  // card ended up empty for about a minute.
+  it("re-reads device info when the routing is re-applied against the same target", async () => {
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+
+    await waitFor(() => expect(result.current.status.isConnected).toBe(true));
+    await waitFor(() => expect(mockApi.getInfo).toHaveBeenCalled());
+    mockApi.getInfo.mockClear();
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("c64u-connection-change", {
+          detail: { baseUrl: "http://c64u", password: "", deviceHost: "c64u" },
+        }),
+      );
+    });
+
+    await waitFor(() => expect(mockApi.getInfo).toHaveBeenCalled());
+  });
+
   it("fetches categories", async () => {
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Categories(), { wrapper });

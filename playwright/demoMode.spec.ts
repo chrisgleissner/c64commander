@@ -24,6 +24,11 @@ import { saveCoverageFromPage } from "./withCoverage";
 
 const CURRENT_DEVICE_HOST_KEY = `${variant.id}:device_host`;
 
+// Held-back /v1/info response time for the demo-mode device-identity regression
+// test below. Long enough that the read is still in flight when demo mode
+// re-applies the API routing, well inside the read's own 3 s timeout.
+const DEMO_INFO_RESPONSE_DELAY_MS = 1200;
+
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   try {
     await attachStepScreenshot(page, testInfo, label);
@@ -383,6 +388,75 @@ test.describe("Automatic Demo Mode", () => {
     await expect(indicator).toHaveAttribute("data-connection-state", "REAL_CONNECTED", { timeout: 5000 });
     expect(seenPasswords).toContain("new-password");
     await snap(page, testInfo, "settings-rediscovery-password");
+  });
+
+  // Regression: the Home System info card used to show "Not available" for every
+  // device field for about a minute after demo mode started. Entering demo mode
+  // re-applies the runtime API routing, and a routing change aborts in-flight
+  // reads; the aborted c64-info read was never re-armed, so the first successful
+  // read was the 60-second health-check poll. The demo-mode identity therefore
+  // has to be asserted with a timeout well below that poll interval.
+  test("demo mode populates the device fields without waiting for a health-check poll", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    allowWarnings(testInfo, "Expected probe failures during offline discovery.");
+    server = await createMockC64Server({});
+
+    await page.addInitScript(
+      ({ demoBaseUrl }: { demoBaseUrl: string }) => {
+        const unreachableBaseUrl = "http://127.0.0.1:65534";
+        (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
+        (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = unreachableBaseUrl;
+        (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = [
+          unreachableBaseUrl,
+          demoBaseUrl,
+        ];
+        localStorage.clear();
+        sessionStorage.clear();
+        localStorage.setItem("c64u_startup_discovery_window_ms", "600");
+        localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+        localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
+        localStorage.setItem("c64u_background_rediscovery_interval_ms", "5000");
+        localStorage.setItem("c64u_device_host", "127.0.0.1:65534");
+        delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
+      },
+      { demoBaseUrl: server.baseUrl },
+    );
+
+    // A loopback mock answers /v1/info in about a millisecond, which is fast
+    // enough that the read usually finished before the routing was re-applied.
+    // Real hardware on a wireless link never answers that fast, so hold the
+    // response back long enough that the read is still in flight when the
+    // second discovery run re-enters demo mode. That is the state the defect
+    // needs, and without the delay this test only fails intermittently.
+    await page.route(`${server.baseUrl}/v1/info*`, async (route: Route) => {
+      await new Promise((resolve) => setTimeout(resolve, DEMO_INFO_RESPONSE_DELAY_MS));
+      await route.continue();
+    });
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+
+    const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
+    await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE", { timeout: 15000 });
+
+    const dialog = page.getByRole("dialog", { name: "Demo Mode" });
+    if (await dialog.isVisible().catch(() => false)) {
+      await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
+      await expect(dialog).toBeHidden();
+    }
+
+    const notPopulated = /Not available|Not connected/;
+    await expect(page.getByTestId("home-system-device")).not.toHaveText(notPopulated, { timeout: 20000 });
+    await expect(page.getByTestId("home-system-firmware")).not.toHaveText(notPopulated, { timeout: 20000 });
+
+    // FPGA, Core and Core ID only render once the card is expanded.
+    await page.getByTestId("home-system-info").click();
+    await expect(page.getByTestId("home-system-fpga")).not.toHaveText(notPopulated, { timeout: 20000 });
+    await expect(page.getByTestId("home-system-core")).not.toHaveText(notPopulated, { timeout: 20000 });
+    await expect(page.getByTestId("home-system-core-id")).not.toHaveText(notPopulated, { timeout: 20000 });
+
+    await snap(page, testInfo, "demo-system-info-populated");
   });
 
   test("demo mode does not overwrite stored base URL", async ({ page }: { page: Page }, testInfo: TestInfo) => {

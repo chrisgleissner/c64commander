@@ -148,16 +148,45 @@ export function useC64Connection() {
     };
   }, [baseUrl, password, deviceHost]);
 
+  // Applying a routing change bumps the API request generation, which aborts
+  // every read already in flight ("superseded by routing change"). This query
+  // sets `retry: false`, so an aborted read is never retried. Keying it on the
+  // base URL alone was not enough to recover, for two reasons. The routing is
+  // often re-applied against the SAME base URL, which leaves the key unchanged,
+  // and an invalidation cannot restart a first-load fetch either: React Query
+  // only cancels and restarts an in-flight fetch for a query that already holds
+  // data, so an invalidation issued while the doomed read is still running just
+  // returns that read's promise. Nothing re-armed the read, and the next attempt
+  // was the refetchInterval tick a full HEALTH_CHECK_INTERVAL_MS later.
+  //
+  // Demo mode hit that on every start. Entering demo mode re-applies the runtime
+  // routing; ConnectionController reads that as a settings change and starts a
+  // second discovery run, which fails and re-enters demo mode, applying the same
+  // mock routing again and aborting the read the first transition had started.
+  // The Home System info card then showed "Not available" for every device field
+  // until the 60-second poll. The real-device path survived the same abort
+  // because its discovery probe stores the identity in the connection snapshot,
+  // which `effectiveDeviceInfo` below falls back to; demo mode has no snapshot
+  // identity to fall back on.
+  //
+  // Including the routing epoch in the key gives this read the same self-healing
+  // the config reads below already have: each routing change produces a fresh
+  // query that fetches on mount, so the read always runs against the settled
+  // routing instead of staying stuck on the aborted one. The epoch is appended,
+  // not prepended, so prefix-based invalidation on ["c64-info"] still matches.
+  const routingEpoch = useConnectionRoutingEpoch();
+  const infoQueryKey = useMemo(() => ["c64-info", baseUrl, routingEpoch] as const, [baseUrl, routingEpoch]);
+
   const {
     data: deviceInfo,
     error,
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ["c64-info", baseUrl],
+    queryKey: infoQueryKey,
     queryFn: async ({ signal }) => {
       if (isDiagnosticsOverlaySuppressionArmed()) {
-        const cached = queryClient.getQueryData<DeviceInfo>(["c64-info", baseUrl]);
+        const cached = queryClient.getQueryData<DeviceInfo>(infoQueryKey);
         if (cached) {
           return cached;
         }
@@ -178,7 +207,7 @@ export function useC64Connection() {
       // HEALTH_CHECK_INTERVAL_MS old, so a sub-second-stale snapshot is preferred
       // to a redundant connection that can churn the fragile firmware.
       if (!shouldRunScheduledHealthCheck()) {
-        const cached = queryClient.getQueryData<DeviceInfo>(["c64-info", baseUrl]);
+        const cached = queryClient.getQueryData<DeviceInfo>(infoQueryKey);
         if (cached) {
           return cached;
         }
