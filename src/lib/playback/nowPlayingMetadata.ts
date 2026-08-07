@@ -84,14 +84,6 @@ const clean = (value: string | null | undefined): string | null => {
 };
 
 /**
- * Which field a segment came from.
- *
- * Two are named, because two of them are somewhere to go rather than something to read. The author
- * is a person, and "more by this person" is a real question. "Tune 3 of 19" says the file holds
- * eighteen others and gives no way to reach them. Everything else is a fact about the file and is
- * rendered as text.
- */
-/**
  * Which of the two metadata lines a segment belongs on.
  *
  * `credits` is who made it and when: the author and the HVSC `released` value, which is a
@@ -104,6 +96,14 @@ export type NowPlayingMetadataRow = "credits" | "facts";
 
 export type NowPlayingMetadataSegment = {
   text: string;
+  /**
+   * Which field a segment came from.
+   *
+   * Two are named, because two of them are somewhere to go rather than something to read. The
+   * author is a person, and "more by this person" is a real question. The tune position says the
+   * file holds others and gives no way to reach them. Everything else is a fact about the file
+   * and is rendered as text.
+   */
   kind: "author" | "tunes" | "detail";
   row: NowPlayingMetadataRow;
 };
