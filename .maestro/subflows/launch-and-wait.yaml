@@ -107,4 +107,17 @@ tags:
 # "Reboot" is the label of a quick-action button, which Home renders unconditionally - it
 # is disabled while disconnected, not absent - and a button's label is its accessible
 # name, so it is an element's whole text.
-- assertVisible: "Reboot"
+#
+# Wrapped in a retry that dismisses the device picker first. The picker re-arms on its
+# own - the background rediscovery timer re-probes every few seconds and a probe that
+# times out puts the app back to offline and reopens it - and while it is open the page
+# behind is inert, so a perfectly present "Reboot" does not count as visible. A run
+# failed exactly that way with Reboot plainly on screen behind the dialog.
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          text: "Not now"
+          optional: true
+      - waitForAnimationToEnd
+      - assertVisible: "Reboot"
