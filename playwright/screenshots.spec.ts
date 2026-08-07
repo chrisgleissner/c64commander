@@ -2929,10 +2929,12 @@ test.describe("App screenshots", () => {
       // catch the transport before the session restore has landed.
       await expect(getActiveMain(page).getByTestId("playback-current-title")).toContainText(FEATURED_SID.title);
 
-      // The credits under the title — composer, year, publisher, chip, television
-      // standard — are parsed from the tune's own header, so wait for them rather
-      // than photographing a card that is still only showing a length.
+      // The two metadata lines under the title are parsed from the tune's own header, so wait
+      // for both rather than photographing a card that is still assembling. Credits carries the
+      // composer and the released value; facts carries the chip, the television standard, the
+      // tune position and the length.
       await expect(getActiveMain(page).getByTestId("playback-current-credits")).toContainText("Rob Hubbard");
+      await expect(getActiveMain(page).getByTestId("playback-current-facts")).toContainText(/\d+:\d{2}/);
 
       // And wait for STIL, which arrives separately: the header line above is parsed from the file,
       // this one is looked up. Photographing between the two would show a card mid-assembly.

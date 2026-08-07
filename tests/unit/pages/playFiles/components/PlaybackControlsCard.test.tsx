@@ -25,9 +25,15 @@ import {
  * The metadata line, as the card now takes it: labelled parts rather than a finished string, so the
  * composer can be a control and the rest text. The first is always the composer.
  */
-const metadataParts = (author: string, ...details: string[]): NowPlayingMetadataSegment[] => [
-  { text: author, kind: "author" },
-  ...details.map((text): NowPlayingMetadataSegment => ({ text, kind: "detail" })),
+/**
+ * Mirrors the real builder's shape: author and released make the credits line, everything
+ * after them makes the facts line. The card prints the two as separate rows and puts the
+ * ranking actions at the right of the facts one.
+ */
+const metadataParts = (author: string, released?: string, ...facts: string[]): NowPlayingMetadataSegment[] => [
+  { text: author, kind: "author", row: "credits" },
+  ...(released ? [{ text: released, kind: "detail", row: "credits" } as NowPlayingMetadataSegment] : []),
+  ...facts.map((text): NowPlayingMetadataSegment => ({ text, kind: "detail", row: "facts" })),
 ];
 
 const buildProps = (overrides: Partial<PlaybackControlsCardProps> = {}): PlaybackControlsCardProps => ({
@@ -121,33 +127,38 @@ describe("PlaybackControlsCard", () => {
     expect(titleRow.textContent).toBe("Bossa in Do");
     expect(within(titleRow).queryByTestId("ranking-slot")).toBeNull();
     expect(screen.queryByTestId("sid-chip-badge-2")).toBeNull();
-    // The length and which-tune-of-how-many are on the line below now, not beside the title.
-    expect(screen.getByTestId("playback-current-credits")).toHaveTextContent("2:07");
+    // The length and which-tune-of-how-many are on the facts line now, not beside the title.
+    expect(screen.getByTestId("playback-current-facts")).toHaveTextContent("2:07");
   });
 
-  it("puts the ranking actions on their own row above the title, right-aligned", () => {
-    // The ♥ and the ✕ are two 44 px buttons. Beside the title they took a fixed 96 px off a row
-    // that is 288 px wide inside the card's padding on the smallest supported screen, so the title
-    // was cut short by them on every tune with a name of any length. They have a row of their own
-    // now, which leaves the title the full width and still keeps the pair where muscle memory
-    // expects it: hard against the right edge, above the title rather than beside it.
+  it("puts the ranking actions at the right of the facts line, not on a row of their own", () => {
+    // The heart and the cross are two 44 px buttons. Beside the title they cut a 288 px row
+    // short on every tune with a name of any length, so they were moved to a row above it -
+    // which then spent a whole row on two buttons. They now sit at the right of the facts
+    // line, which is short enough to share: "6581 · PAL · 2:07" leaves room beside it.
     render(
       <PlaybackControlsCard
         {...buildProps({
           hasCurrentItem: true,
           currentItemLabel: "Bossa in Do",
+          currentItemMetadataParts: metadataParts("Jeroen Tel", "1988", "6581", "PAL", "2:07"),
           rankingControls: <button data-testid="ranking-slot">rank</button>,
         })}
       />,
     );
 
     const rankingRow = screen.getByTestId("playback-ranking-row");
+    const facts = screen.getByTestId("playback-current-facts");
     const titleRow = screen.getByTestId("playback-current-title").parentElement as HTMLElement;
 
     expect(within(rankingRow).getByTestId("ranking-slot")).toBeInTheDocument();
-    expect(rankingRow.className).toContain("justify-end");
-    // Above, not below: `compareDocumentPosition` reports FOLLOWING (4) for a node that comes later.
-    expect(rankingRow.compareDocumentPosition(titleRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Beside the facts, sharing one row: same parent, and the facts come first.
+    expect(rankingRow.parentElement).toBe(facts.parentElement);
+    expect(facts.compareDocumentPosition(rankingRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Below the title, which keeps the full width to itself.
+    expect(titleRow.compareDocumentPosition(rankingRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // shrink-0 so the actions keep their targets whatever the facts line does.
+    expect(rankingRow.className).toContain("shrink-0");
   });
 
   it("keeps a long title on one line and does not lose any of it", () => {
@@ -355,16 +366,20 @@ describe("PlaybackControlsCard", () => {
         {...buildProps({
           hasCurrentItem: true,
           currentItemLabel: "Commando",
-          currentItemMetadataParts: metadataParts("Rob Hubbard", "1985 Elite", "6581", "PAL", "Tune 2 of 3", "3:12"),
+          currentItemMetadataParts: metadataParts("Rob Hubbard", "1985 Elite", "6581", "PAL", "2/3", "3:12"),
         })}
       />,
     );
 
     const credits = screen.getByTestId("playback-current-credits");
+    const facts = screen.getByTestId("playback-current-facts");
+    // Who made it and when on the first line; what the file is on the second.
     expect(credits).toHaveTextContent("Rob Hubbard");
     expect(credits).toHaveTextContent("1985 Elite");
-    expect(credits).toHaveTextContent("Tune 2 of 3");
-    expect(credits.textContent).not.toContain("Subsong");
+    expect(facts).toHaveTextContent("2/3");
+    expect(facts).toHaveTextContent("3:12");
+    expect(facts.textContent).not.toContain("Subsong");
+    expect(facts.textContent).not.toContain("Tune 2 of 3");
     // Readable: a step below the title rather than the smallest type on the page. The title is
     // text-base, so credits are text-sm — the same primary/secondary pairing used elsewhere.
     expect(credits.className).toContain("text-sm");
@@ -602,10 +617,12 @@ describe("PlaybackControlsCard STIL and composer", () => {
 
     fireEvent.click(screen.getByTestId("playback-current-composer"));
     expect(onComposerSelected).toHaveBeenCalledWith("Rob Hubbard");
-    // The line still reads as one line: everything else is text, not a second control.
+    // Each line still reads as a line: the composer is the only control among them.
     const credits = screen.getByTestId("playback-current-credits");
+    const facts = screen.getByTestId("playback-current-facts");
     expect(within(credits).getAllByRole("button")).toHaveLength(1);
-    expect(credits).toHaveTextContent("Rob Hubbard · 1985 Elite · 6581 · PAL · 3:12");
+    expect(credits).toHaveTextContent("Rob Hubbard · 1985 Elite");
+    expect(facts).toHaveTextContent("6581 · PAL · 3:12");
   });
 
   it("leaves the composer inert where there is nowhere to go", () => {

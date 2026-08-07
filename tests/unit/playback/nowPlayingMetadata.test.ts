@@ -9,9 +9,20 @@
 import { describe, expect, it } from "vitest";
 import {
   buildNowPlayingMetadata,
+  buildNowPlayingMetadataParts,
   buildStilTuneLine,
   type NowPlayingMetadataInput,
 } from "@/lib/playback/nowPlayingMetadata";
+
+const base: NowPlayingMetadataInput = {
+  author: "Rob Hubbard",
+  released: "1985 Elite",
+  sidModels: ["mos6581"],
+  clock: "pal",
+  tuneNumber: 1,
+  tuneCount: 1,
+  lengthLabel: "3:12",
+};
 
 const build = (overrides: Partial<NowPlayingMetadataInput> = {}) =>
   buildNowPlayingMetadata({
@@ -27,7 +38,7 @@ const build = (overrides: Partial<NowPlayingMetadataInput> = {}) =>
 
 describe("the line under the now-playing title", () => {
   it("puts the fields in the order the page specifies, with the length last", () => {
-    expect(build({ tuneNumber: 2, tuneCount: 5 })).toBe("Rob Hubbard · 1985 Elite · 6581 · PAL · Tune 2 of 5 · 3:12");
+    expect(build({ tuneNumber: 2, tuneCount: 5 })).toBe("Rob Hubbard · 1985 Elite · 6581 · PAL · 2/5 · 3:12");
   });
 
   it("names one SID model per chip, so a 2SID says which two it uses", () => {
@@ -48,13 +59,26 @@ describe("the line under the now-playing title", () => {
     expect(build({ clock: null })).not.toContain("NTSC");
   });
 
-  it("calls the pieces inside a file tunes, and only when there is more than one", () => {
-    // "Subsong" is format jargon; a listener is choosing between tunes.
-    expect(build({ tuneNumber: 3, tuneCount: 7 })).toContain("Tune 3 of 7");
+  it("gives the tune position as a fraction, and only when there is more than one", () => {
+    // "3/7", not "Tune 3 of 7": the facts line is read as a row of short values, and the long
+    // form spent most of a 320px line restating what the position already says. "Subsong" is
+    // format jargon and never appears either way.
+    expect(build({ tuneNumber: 3, tuneCount: 7 })).toContain("3/7");
     expect(build({ tuneNumber: 3, tuneCount: 7 })).not.toContain("Subsong");
-    // A single-tune file says nothing: "Tune 1 of 1" is a line of noise on the great majority of SIDs.
-    expect(build({ tuneNumber: 1, tuneCount: 1 })).not.toContain("Tune");
-    expect(build({ tuneNumber: 1, tuneCount: null })).not.toContain("Tune");
+    expect(build({ tuneNumber: 3, tuneCount: 7 })).not.toContain("Tune 3 of 7");
+    // A single-tune file says nothing: "1/1" is a line of noise on the great majority of SIDs.
+    expect(build({ tuneNumber: 1, tuneCount: 1 })).not.toContain("1/1");
+    expect(build({ tuneNumber: 1, tuneCount: null })).not.toMatch(/\d+\/\d+/);
+  });
+
+  it("splits the fields into a credits row and a facts row", () => {
+    // The card prints these as two lines so the dislike and favourite actions can sit at the
+    // right of the second one instead of taking a row of their own.
+    const parts = buildNowPlayingMetadataParts({ ...base, tuneNumber: 2, tuneCount: 5 });
+    const row = (name: string) => parts.filter((part) => part.row === name).map((part) => part.text);
+
+    expect(row("credits")).toEqual(["Rob Hubbard", "1985 Elite"]);
+    expect(row("facts")).toEqual(["6581", "PAL", "2/5", "3:12"]);
   });
 
   it("drops a missing field together with its separator, so the line never shows a hole", () => {

@@ -68,17 +68,23 @@ export const TuneDetails = ({ tuneLine, note, className }: TuneDetailsProps) => 
         // `data-testid`. Same reasoning as the collapsible headers in Settings and Docs.
         id="tune-details-toggle"
         data-testid="tune-details-toggle"
-        className="flex min-h-11 w-full items-center justify-between gap-2 text-left text-xs font-medium text-muted-foreground"
+        // The chevron leads the label rather than sitting at the far right of a full-width
+        // row. The favourite action is now at the right of the facts line directly above
+        // this control, and a right-hand chevron put a second 44px target immediately under
+        // it - a thumb aiming for the heart and falling short would open this instead. The
+        // button is also only as wide as its own content, so no part of its target sits
+        // beneath the heart at all.
+        className="flex min-h-11 w-fit items-center gap-2 pr-2 text-left text-xs font-medium text-muted-foreground"
         aria-expanded={expanded}
         aria-controls="tune-details-body"
         onClick={() => setExpanded((value) => !value)}
       >
-        <span>About this tune</span>
         {expanded ? (
           <ChevronUp className="h-4 w-4 shrink-0" aria-hidden />
         ) : (
           <ChevronDown className="h-4 w-4 shrink-0" aria-hidden />
         )}
+        <span>About this tune</span>
       </button>
       {expanded ? (
         <div id="tune-details-body" data-testid="tune-details-body">

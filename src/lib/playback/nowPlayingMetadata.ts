@@ -84,16 +84,28 @@ const clean = (value: string | null | undefined): string | null => {
 };
 
 /**
- * Which field a segment came from.
+ * Which of the two metadata lines a segment belongs on.
  *
- * Two are named, because two of them are somewhere to go rather than something to read. The author
- * is a person, and "more by this person" is a real question. "Tune 3 of 19" says the file holds
- * eighteen others and gives no way to reach them. Everything else is a fact about the file and is
- * rendered as text.
+ * `credits` is who made it and when: the author and the HVSC `released` value, which is a
+ * single field holding both year and publisher and is never split. `facts` is what the file
+ * is: chip, video standard, which tune of how many, how long. The split exists so the
+ * narrow screen can put the dislike and favourite actions at the right of the facts line
+ * instead of spending a row of their own on them.
  */
+export type NowPlayingMetadataRow = "credits" | "facts";
+
 export type NowPlayingMetadataSegment = {
   text: string;
+  /**
+   * Which field a segment came from.
+   *
+   * Two are named, because two of them are somewhere to go rather than something to read. The
+   * author is a person, and "more by this person" is a real question. The tune position says the
+   * file holds others and gives no way to reach them. Everything else is a fact about the file
+   * and is rendered as text.
+   */
   kind: "author" | "tunes" | "detail";
+  row: NowPlayingMetadataRow;
 };
 
 /**
@@ -108,13 +120,17 @@ export const buildNowPlayingMetadataSegments = (input: NowPlayingMetadataInput):
 /** The same segments, each labelled with where it came from. */
 export const buildNowPlayingMetadataParts = (input: NowPlayingMetadataInput): NowPlayingMetadataSegment[] => {
   const segments: NowPlayingMetadataSegment[] = [];
-  const push = (text: string, kind: NowPlayingMetadataSegment["kind"] = "detail") => segments.push({ text, kind });
+  const push = (text: string, row: NowPlayingMetadataRow, kind: NowPlayingMetadataSegment["kind"] = "detail") =>
+    segments.push({ text, kind, row });
 
   const author = clean(input.author);
-  if (author) push(author, "author");
+  if (author) push(author, "credits", "author");
 
+  // One field, printed whole. HVSC stores "1985 Gremlin Graphics" as a single released
+  // value, and splitting the year from the publisher would invent a distinction the
+  // archive does not make and would sometimes be wrong about which half is which.
   const released = clean(input.released);
-  if (released) push(released);
+  if (released) push(released, "credits");
 
   // An unnamed chip is dropped rather than shown as a gap or guessed at. In practice this costs
   // nothing on multi-chip tunes: addressing a second chip needs a version 3 header, and every header
@@ -122,20 +138,20 @@ export const buildNowPlayingMetadataParts = (input: NowPlayingMetadataInput): No
   const models = input.sidModels
     .map((model) => (model ? SID_MODEL_LABELS[model] : null))
     .filter((label): label is string => Boolean(label));
-  if (models.length) push(models.join(SID_MODEL_SEPARATOR));
+  if (models.length) push(models.join(SID_MODEL_SEPARATOR), "facts");
 
   const clock = input.clock ? CLOCK_LABELS[input.clock] : null;
-  if (clock) push(clock);
+  if (clock) push(clock, "facts");
 
-  // "Tune", never "subsong": the pieces inside a SID file are what a listener is choosing between,
-  // and calling them subsongs only ever meant something to the people who wrote the format.
-  // Suppressed on a single-tune file, where "Tune 1 of 1" says nothing.
+  // "1/19" rather than "Tune 1 of 19". The facts line is read as a row of short values and
+  // the long form spent most of the line restating what the position already says.
+  // Suppressed on a single-tune file, where "1/1" says nothing.
   if (input.tuneNumber && input.tuneCount && input.tuneCount > 1) {
-    push(`Tune ${input.tuneNumber} of ${input.tuneCount}`, "tunes");
+    push(`${input.tuneNumber}/${input.tuneCount}`, "facts", "tunes");
   }
 
   const length = clean(input.lengthLabel);
-  if (length) push(length);
+  if (length) push(length, "facts");
 
   return segments;
 };
