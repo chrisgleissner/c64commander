@@ -928,7 +928,7 @@ const featureRows = ({ features, variant }) => {
     [
       "Display profile, theme, text size, orientation",
       "**Settings → Appearance**",
-      `Screenshots in this manual use the ${variant.id === "c64u-remote" ? "compact" : "medium"} profile.`,
+      "Screenshots in this manual use the compact profile, the smallest screen the app supports.",
     ],
     [
       "Settings transfer (export and import)",
@@ -1072,7 +1072,13 @@ export const renderManualMarkdown = ({ variant, features }) => {
   const appName = variant.displayName;
   const title = `${appName} Manual`;
   const subtitle = manualSubtitle(variant);
-  const profile = variant.id === "c64u-remote" ? "compact" : "medium";
+  // Every manual illustrates the app at the compact display profile - the smallest
+  // screen the app supports. A reader on a larger screen sees more of each page than
+  // the picture shows, which is never confusing; a reader on the smallest screen
+  // looking at a picture taken on a larger one cannot find the controls it shows.
+  // The only images exempt are the ones that exist to demonstrate how the profiles
+  // differ from one another, and no manual embeds one of those.
+  const profile = "compact";
   const sourceLabels = ["Local", "C64U"];
   if (includeFeature(features, "hvsc_enabled")) sourceLabels.push("HVSC");
   if (includeFeature(features, "commoserve_enabled")) sourceLabels.push("CommoServe");

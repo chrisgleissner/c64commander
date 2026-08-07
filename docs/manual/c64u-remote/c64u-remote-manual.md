@@ -910,7 +910,7 @@ Preferred locations are marked first.
 | SID Radio | **Play → SID Radio** | Endless stations of similar tunes. Settings → SID Radio tunes it. |
 | CommoServe | **Play → Add items**, Disks → Add disks, Settings → Online Archive | On by default. You can turn it off in Settings → Stable Features. |
 | Background playback scheduling | **Play**, Android app permissions | On by default. You can turn it off in Settings → Experimental Features. |
-| Display profile, theme, text size, orientation | **Settings → Appearance** | Screenshots in this manual use the compact profile. |
+| Display profile, theme, text size, orientation | **Settings → Appearance** | Screenshots in this manual use the compact profile, the smallest screen the app supports. |
 | Settings transfer (export and import) | **Settings → Diagnostics** | App settings, feature switches and safety tuning. Saved devices and passwords stay behind. |
 | Notification style and duration | **Settings → Notifications** | Show everything, or errors alone. |
 | Device Safety | **Settings → Device Safety** | Leave it on Auto. Auto keeps a Commodore 64 Ultimate on Conservative until its firmware is known to be safe. See Device Safety Modes. |
