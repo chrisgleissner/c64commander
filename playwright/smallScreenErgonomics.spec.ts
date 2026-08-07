@@ -29,6 +29,12 @@ import { TAB_ROUTES } from "../src/lib/navigation/tabRoutes";
  *
  * The floors below are deliberately modest and are about legibility, not comfort:
  * they are a lower bound that should never be crossed, not a target to design to.
+ *
+ * This spec measures the type size, which is the cause. It cannot see the consequence
+ * of enlarging the type, which is that the same words in the same box stop fitting it.
+ * `smallScreenLayoutIntegrity.spec.ts` measures that, and the two are meant to be read
+ * and changed together: this one stops type being shrunk to make something fit, and
+ * that one stops type being enlarged without being given room.
  */
 
 /**

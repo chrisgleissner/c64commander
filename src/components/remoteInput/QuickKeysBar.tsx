@@ -126,9 +126,9 @@ const QuickKeyButtonImpl = ({
     // default control size RUN/STOP needs 85px and RETURN 76px, and the button base
     // sets nowrap, so both were cut off inside their own key. Narrower padding gets
     // RETURN and the f-keys in; RUN/STOP breaks at its slash onto two lines, which is
-    // how the real keycap is printed anyway, and the key grows to hold them.
-    // h-auto so a wrapped label makes the key taller instead of being cut off; the
-    // inline minHeight keeps the single-line keys at their usual size.
+    // how the real keycap is printed anyway. h-auto lets a key with a wrapped label
+    // grow rather than cut the second line off, and the inline minHeight keeps the
+    // single-line keys at their usual size.
     className={cn(
       "h-auto min-w-0 flex-1 overflow-hidden whitespace-normal px-0.5 py-1 leading-tight",
       tone ? toneButtonClass(tone, latched) : undefined,
