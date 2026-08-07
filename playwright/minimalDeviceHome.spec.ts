@@ -10,7 +10,8 @@ import { test, expect } from "@playwright/test";
 import type { Page, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
-import { attachStepScreenshot, finalizeEvidence } from "./testArtifacts";
+import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
+import { saveCoverageFromPage } from "./withCoverage";
 
 /*
  * A device is only obliged to answer the documented REST surface. It may answer
@@ -80,15 +81,22 @@ const routeMinimalDevice = async (page: Page, seenPaths: string[]) => {
 test.describe("Home against a device that answers only the minimum REST surface", () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeEach(async ({ page }: { page: Page }) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    // Required before anything else: the suite enables trace assertions in CI, and
+    // testArtifacts throws "Trace assertions enabled but strict UI monitoring was not
+    // started" for a spec that skips this. The spec passed locally without it because
+    // that flag is off by default.
+    await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server();
     await seedUiMocks(page, server.baseUrl, { clearStorageBeforeSeeding: true });
   });
 
   test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
-      await finalizeEvidence(page, testInfo);
+      await saveCoverageFromPage(page, testInfo.title);
+      await assertNoUiIssues(page, testInfo);
     } finally {
+      await finalizeEvidence(page, testInfo);
       await server.close();
     }
   });
