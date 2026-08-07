@@ -25,6 +25,21 @@ describe("smoke-no-google-services.sh", () => {
     );
   });
 
+  // This image defaults to the three-button navigation bar, which is drawn over the strip
+  // of screen the app puts its own tab bar in, so a tap on a tab goes to the system rather
+  // than the app. Every other emulator job runs a google_apis image, which defaults to
+  // gesture navigation, so no other job hits it. Whether a real handset on three-button
+  // navigation has the same problem is a separate open question; this only keeps the job
+  // measuring whether the app runs without Google services.
+  it("switches the emulator to gesture navigation before walking the app", () => {
+    const script = readFileSync(scriptPath, "utf8");
+
+    expect(script).toContain("adb shell cmd overlay enable-exclusive com.android.internal.systemui.navbar.gestural");
+    expect(
+      script.indexOf("adb shell cmd overlay enable-exclusive com.android.internal.systemui.navbar.gestural"),
+    ).toBeLessThan(script.indexOf("maestro --no-ansi test"));
+  });
+
   // Every wait here has to be bounded, per AGENTS.md: an unbounded one hangs until the
   // runner kills the job, which reports as a timeout naming nothing.
   it("bounds the boot wait and the install", () => {

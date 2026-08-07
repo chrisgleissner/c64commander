@@ -90,6 +90,28 @@ for ime in $(adb shell ime list -s 2>/dev/null | tr -d '\r'); do
 done
 echo "input methods still enabled: $(adb shell ime list -s 2>/dev/null | tr -d '\r' | tr '\n' ' ')"
 
+# Put the device on gesture navigation, as every other emulator job here already is.
+#
+# This image defaults to the three-button navigation bar (logcat:
+# "NavigationModeController: getCurrentInteractionMode: mode=0"), and that bar is drawn
+# over the bottom strip of the screen where the app puts its own tab bar. The evidence
+# from the run before this one shows the back, home and recents buttons sitting on top of
+# the Home / Play / Disks / Config / Settings / Docs labels, and Maestro reporting the tap
+# on the Play tab as completed while the app stayed on Home: the element was found, and
+# the tap went to coordinates the system owns. The google_apis image the android-maestro
+# job uses defaults to gesture navigation, which is why the same walk passes there.
+#
+# This is a workaround, not an answer. Whether the app's tab bar is genuinely out of
+# reach on a real handset set to three-button navigation is still open - see the
+# #170 entry in docs/agentic/CTA_LEDGER.md, which records the same overlap on the
+# hardware rig. Changing the navigation mode here keeps this job measuring the one thing
+# it exists to measure, which is whether the app runs without Google services. It does
+# not establish that the overlap is only an emulator artefact.
+#
+# Non-fatal: the overlay is absent on some images, and the walk is the gate.
+echo "== switching to gesture navigation"
+adb shell cmd overlay enable-exclusive com.android.internal.systemui.navbar.gestural || true
+
 adb logcat -c || true
 
 echo "== launching and walking the app"
