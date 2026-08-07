@@ -7,7 +7,12 @@
       "args": ["--from", "git+https://github.com/hyperb1iss/droidmind", "droidmind", "--transport", "stdio"],
       "env": {}
     },
-    "c64bridge": { "type": "stdio", "command": "npx", "args": ["-y", "c64bridge@latest"], "env": {} },
+    "c64bridge": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "c64bridge@latest"],
+      "env": { "VICE_ARGS": "-minimized" }
+    },
     "c64scope": { "type": "stdio", "command": "node", "args": ["c64scope/scripts/start.mjs"], "env": {} }
   }
 }
