@@ -926,7 +926,7 @@ const featureRows = ({ features, variant }) => {
 
   rows.push(
     [
-      "Display profile, theme, orientation",
+      "Display profile, theme, text size, orientation",
       "**Settings → Appearance**",
       `Screenshots in this manual use the ${variant.id === "c64u-remote" ? "compact" : "medium"} profile.`,
     ],
@@ -1272,7 +1272,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "**Connection** also holds your saved devices: their name, host, HTTP, FTP and Telnet ports, and network password. Saving checks that the web service answers before the device is kept; FTP and Telnet are stored as given and are tested by a health check.",
     "",
-    "**Appearance** is local to the app and never touches your C64. It sets the theme, the display profile, how dense the interface feels, whether the app runs full screen, and whether it follows the phone's rotation or stays in portrait or landscape.",
+    "**Appearance** is local to the app and never touches your C64. It sets the theme, the text size, the display profile, whether the app runs full screen, and whether it follows the phone's rotation or stays in portrait or landscape.",
+    "",
+    "**Text size** enlarges every part of the app, in four steps from **Default** to **Largest**. Reach for it when the app is harder to read than you would like; the display profile beside it changes the layout rather than the type.",
     "",
     `**Diagnostics** opens the diagnostics panel, switches debug logging on, and — this is where it lives, despite the name — carries **Settings transfer**. That exports your app settings, feature switches and device-safety tuning to a file you can import onto another ${appDeviceName(
       variant,
@@ -1804,7 +1806,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Open a playlist row's menu and choose **Review playback config**. If a `.cfg` file sits beside the program, shares its name, or lives in the same folder, the app has already found it and lists it as a candidate with how confident it is. Take one, or attach a file of your own from this device or from your C64.",
     "",
-    "The status line says where things stand: **No config**, **Candidates found**, **Config resolved**, **Config edited**, or **Config declined**. **Edit overrides** changes individual settings on top of the file, **Re-discover** looks again after you have moved files about, and **No config** tells the app to stop offering.",
+    "The status line says where things stand: **No config**, **Candidates found**, **Config resolved**, **Config edited**, or **Config declined**. **Edit values** changes individual settings on top of the file, **Re-discover** looks again after you have moved files about, and **No config** tells the app to stop offering.",
     "",
     "### Drives and Disk Images",
     "",
@@ -1818,7 +1820,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
       variant,
     )} mounts in place. A **Local** disk is copied across first, and whatever a program writes to it returns to your own file when you eject, so high scores and saved games survive. A disk from the online archive has no file of yours to return to: its changes last only while the app is running, and ejecting it offers you **Save a local copy**.`,
     "",
-    'There are two ways to start a disk once it is mounted, and **Settings → Play and Disk → Disk load mode** chooses between them. **Classic KERNAL load** does what you would do at the keyboard: `LOAD"*",8,1` and `RUN`. **DMA** lifts the first program off the disk and writes it straight into memory, which is far quicker. A few loaders object to arriving that way, so if a disk that used to start no longer does, try the classic route.',
+    'There are two ways to start a disk once it is mounted, and **Settings → Play and Disk → Disk first-PRG load** chooses between them. **Classic KERNAL load** does what you would do at the keyboard: `LOAD"*",8,1` and `RUN`. **DMA** lifts the first program off the disk and writes it straight into memory, which is far quicker. A few loaders object to arriving that way, so if a disk that used to start no longer does, try the classic route.',
     "",
     "For a title that spans several disks, keep the related images in one **group**. Adding a folder does this for you, from the file names or from the folder itself; move any stragglers by hand. A group puts **rotate** controls on the drive card, so when a program asks for the next disk you swap without going near the collection. The **Soft IEC** drive is the other way in: point it at a folder on the device and your C64 reads the loose files inside it directly, which suits a large collection that was never packed into disk images.",
     "",
@@ -1855,7 +1857,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "Some machines have a freezer cartridge configured, of the Action Replay or Retro Replay kind. On those, starting a program directly can land you in the cartridge's own menu instead, which looks exactly like the app misbehaving. Launch Safety heads that off: around a direct **Run** or **Load** it *parks* the cartridge, then puts it back. It never writes to the device's saved settings, so a power cycle always restores the cartridge, and where no cartridge is configured it does nothing at all. **Mount & Load** resets the machine in any case and is left alone. All of this happens by itself; there is nothing to press.",
                 "",
-                "One further option sits in **Settings → Play and Disk**: **Answer cartridge boot menu after reset**. It starts off, and helps in one narrow case — a cartridge that puts up a boot menu when the machine resets, which would otherwise swallow the LOAD that Mount & Load types. Turn it on to choose the **menu key** (F1 to F8, RETURN, or SPACE; F7 to start with) and a **boot settle** time between 1 and 8 seconds (2.8 to start with). The app then presses that key after the reset to clear the menu. Leave it off unless you have such a cartridge.",
+                "One further option sits in **Settings → Play and Disk**: **Answer cartridge boot menu after reset**. It starts off, and helps in one narrow case — a cartridge that puts up a boot menu when the machine resets, which would otherwise swallow the LOAD that Mount & Load types. Turn it on to choose the **menu key** (F1 to F8, RETURN, or SPACE; F7 to start with) and a **boot settle** time, given in milliseconds, between 1000 and 8000 (2800 to start with). The app then presses that key after the reset to clear the menu. Leave it off unless you have such a cartridge.",
                 "",
                 availabilityNote(features.launch_safety_enabled),
                 "",
