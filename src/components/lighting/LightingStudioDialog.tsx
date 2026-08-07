@@ -872,6 +872,22 @@ export function LightingStudioDialog() {
     return result;
   }, []);
 
+  // The compose draft mirrors what the device is currently showing, so it is
+  // re-seeded whenever the device-derived base state changes.
+  React.useEffect(() => {
+    if (!studioOpen) return;
+    setDraft(buildDraftFromCurrent(draftBaseState));
+  }, [draftBaseState, studioOpen]);
+
+  // The text fields and the profile selection are seeded from the persisted
+  // studio state only. `draftBaseState` is deliberately NOT a dependency here:
+  // opening the studio widens the lighting config query from the summary item
+  // set to the full category item set, so a second read lands a moment after
+  // the dialog is already on screen and hands back fresh capability and
+  // device-state objects even when no value changed. Re-seeding on that read
+  // discarded whatever the user had typed in the meantime - most visibly the
+  // manual latitude and longitude, which reverted to the stored coordinates
+  // and left the "Use manual coordinates" button disabled.
   React.useEffect(() => {
     if (!studioOpen) return;
     setSelectedProfileId(studioState.activeProfileId);
@@ -882,9 +898,7 @@ export function LightingStudioDialog() {
     setSelectedCity(studioState.automation.circadian.locationPreference.city ?? "");
     setManualLatitude(studioState.automation.circadian.locationPreference.manualCoordinates?.lat?.toString() ?? "");
     setManualLongitude(studioState.automation.circadian.locationPreference.manualCoordinates?.lon?.toString() ?? "");
-    setDraft(buildDraftFromCurrent(draftBaseState));
   }, [
-    draftBaseState,
     studioOpen,
     studioState.activeProfileId,
     studioState.automation.circadian.locationPreference.city,
