@@ -394,7 +394,7 @@ A **SID** — short for **Sound Interface Device** — is the sound chip in ever
 
 Your C64 will play any of it, and so will your phone or tablet for most tunes. This section covers playing that music yourself. The next one, **SID Radio**, covers letting the app choose it for you.
 
-![The Now Playing card, with the transport, the progress bar and the volume control](../../img/app/play/sid-radio/01-controls.png)
+![The Now Playing card: the tune, what the file says about it, and the transport](../../img/app/play/sid-radio/01-controls.png)
 
 #### Where the music plays
 
@@ -448,7 +448,7 @@ You can also start from whatever is already playing. Tap **More like this** and 
 
 #### Telling it what you like
 
-While a tune plays, a heart and a cross appear beside its title. Tap the **heart** to add it to your **Liked Tunes** list. Tap the **cross** to skip it: the station moves on immediately and avoids similar tunes. Both are optional; the station plays happily if you only listen.
+While a tune plays, a heart and a cross appear just above its title, at the right-hand edge of the card. Tap the **heart** to add it to your **Liked Tunes** list. Tap the **cross** to skip it: the station moves on immediately and avoids similar tunes. Both are optional; the station plays happily if you only listen.
 
 Your choices stay on your phone or tablet. They are attached to the music itself rather than to a file name, so they survive an update to the collection even if the tune has moved. **Liked Tunes** is an ordinary playable list: play it, shuffle it, or take a tune off it again. To start over, **Settings → SID Radio → Clear my rankings** removes every heart and cross at once.
 
@@ -486,11 +486,11 @@ To go straight to one tune, tap **Tune 1 of 19**. That lists every tune in the f
 
 The line under the title comes from the SID file itself: the composer, the year and publisher, the chip it asks for, whether it was written for **PAL** or **NTSC**, which tune of the file is playing, and its length. Anything the file does not record is left out rather than guessed at.
 
-Two things a SID file cannot record have been documented separately by the archive's editors, and the app shows both where they exist.
+Two things a SID file cannot record have been documented separately by the archive's editors. Both sit under **About this tune**, below the line described above. Tap it to open them and tap it again to fold them away; it starts folded so that the transport and the progress bar are still on screen on a small phone. It appears only for tunes the archive describes, which is about a third of them.
 
-The first is whether a tune is an arrangement, and of whose music. Much C64 music is a cover — of pop records, film scores or arcade originals — and the name in the file is whoever wrote the C64 version. Rob Hubbard's *Commando* is an example: he did write the C64 version, but the music is Tamayo Kawamoto's, from the arcade game. Where the archive records this, a second line appears: **BGM1 · music by Tamayo Kawamoto**.
+The first is whether a tune is an arrangement, and of whose music. Much C64 music is a cover — of pop records, film scores or arcade originals — and the name in the file is whoever wrote the C64 version. Rob Hubbard's *Commando* is an example: he did write the C64 version, but the music is Tamayo Kawamoto's, from the arcade game. Where the archive records this, opening **About this tune** shows it: **BGM1 · music by Tamayo Kawamoto**.
 
-The second is what the individual tunes inside a file are called, so a list of nineteen numbered rows becomes a title screen, a high-score jingle and a game-over sting. Any note the editors left about a tune is shown as well. Short notes appear in full; longer ones are trimmed and marked **Show more**, and tapping the note shows the rest.
+The second is what the individual tunes inside a file are called, so a list of nineteen numbered rows becomes a title screen, a high-score jingle and a game-over sting. Any note the editors left about a tune is shown underneath. Short notes appear in full; longer ones are trimmed and marked **Show more**, and tapping the note shows the rest.
 
 Tapping the composer's name opens the search with that name filled in.
 

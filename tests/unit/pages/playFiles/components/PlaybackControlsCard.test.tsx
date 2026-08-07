@@ -104,7 +104,7 @@ describe("PlaybackControlsCard", () => {
   // count and says which chips they are, so a badge repeating the count would be the same fact twice
   // on the one line that was specified to carry the title and the ranking actions and nothing else.
   // The badge is untouched on the playlist rows and in Liked Tunes, where there is no metadata line.
-  it("carries the title and the ranking actions on the title row, and nothing else", () => {
+  it("gives the title a row to itself, with nothing beside it", () => {
     render(
       <PlaybackControlsCard
         {...buildProps({
@@ -117,18 +117,42 @@ describe("PlaybackControlsCard", () => {
     );
 
     const titleRow = screen.getByTestId("playback-current-title").parentElement as HTMLElement;
-    expect(titleRow.childElementCount).toBe(2);
-    expect(within(titleRow).getByTestId("ranking-slot")).toBeInTheDocument();
-    expect(titleRow.textContent).toBe("Bossa in Dorank");
+    expect(titleRow.childElementCount).toBe(1);
+    expect(titleRow.textContent).toBe("Bossa in Do");
+    expect(within(titleRow).queryByTestId("ranking-slot")).toBeNull();
     expect(screen.queryByTestId("sid-chip-badge-2")).toBeNull();
     // The length and which-tune-of-how-many are on the line below now, not beside the title.
     expect(screen.getByTestId("playback-current-credits")).toHaveTextContent("2:07");
   });
 
-  it("holds the ranking actions in the same place however long the title is", () => {
-    // Muscle memory: the ♥ and the ✕ must not move between tunes. Two things do that — the row never
-    // wraps, and the action track never shrinks — so a title long enough to overflow is truncated
-    // inside its own box instead of pushing them anywhere.
+  it("puts the ranking actions on their own row above the title, right-aligned", () => {
+    // The ♥ and the ✕ are two 44 px buttons. Beside the title they took a fixed 96 px off a row
+    // that is 288 px wide inside the card's padding on the smallest supported screen, so the title
+    // was cut short by them on every tune with a name of any length. They have a row of their own
+    // now, which leaves the title the full width and still keeps the pair where muscle memory
+    // expects it: hard against the right edge, above the title rather than beside it.
+    render(
+      <PlaybackControlsCard
+        {...buildProps({
+          hasCurrentItem: true,
+          currentItemLabel: "Bossa in Do",
+          rankingControls: <button data-testid="ranking-slot">rank</button>,
+        })}
+      />,
+    );
+
+    const rankingRow = screen.getByTestId("playback-ranking-row");
+    const titleRow = screen.getByTestId("playback-current-title").parentElement as HTMLElement;
+
+    expect(within(rankingRow).getByTestId("ranking-slot")).toBeInTheDocument();
+    expect(rankingRow.className).toContain("justify-end");
+    // Above, not below: `compareDocumentPosition` reports FOLLOWING (4) for a node that comes later.
+    expect(rankingRow.compareDocumentPosition(titleRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("keeps a long title on one line and does not lose any of it", () => {
+    // The card must be exactly as tall for a forty-character HVSC name as for a short one, so the
+    // title is clipped rather than wrapped. Clipping must not lose the name.
     const longTitle = "Sanxion Loader Tune Extended Remix With A Very Long Name Indeed";
     render(
       <PlaybackControlsCard
@@ -142,18 +166,14 @@ describe("PlaybackControlsCard", () => {
 
     const title = screen.getByTestId("playback-current-title");
     const titleRow = title.parentElement as HTMLElement;
-    const actions = within(titleRow).getByTestId("ranking-slot").parentElement as HTMLElement;
 
+    expect(titleRow.className).toContain("w-full");
     expect(titleRow.className).toContain("flex-nowrap");
-    expect(titleRow.className).not.toContain("flex-wrap");
-    expect(actions.className).toContain("shrink-0");
-    // The title yields the space instead: it may shrink below its content width and is clipped there.
     expect(title.className).toContain("min-w-0");
     expect(title.className).toContain("flex-1");
     expect(title.className).toContain("truncate");
-    // Truncating must not lose the name. `truncate` is text-overflow, so the whole string is still
-    // in the document — which is what a screen reader reads — and the tooltip carries it for a
-    // pointer.
+    // `truncate` is text-overflow, so the whole string is still in the document — which is what a
+    // screen reader reads — and the tooltip carries it for a pointer.
     expect(title).toHaveTextContent(longTitle);
     expect(title).toHaveAttribute("title", longTitle);
   });
@@ -613,9 +633,47 @@ describe("PlaybackControlsCard STIL and composer", () => {
         })}
       />,
     );
+    // Folded away by default; the header line stays on the card either way.
+    expect(screen.queryByTestId("playback-current-stil")).toBeNull();
+    expect(screen.getByTestId("playback-current-credits")).toHaveTextContent("Rob Hubbard");
+
+    fireEvent.click(screen.getByTestId("tune-details-toggle"));
     // The header credits Rob Hubbard, who arranged it; STIL credits the person who wrote it.
     expect(screen.getByTestId("playback-current-stil")).toHaveTextContent("BGM1 · music by Tamayo Kawamoto");
+  });
+
+  it("keeps the STIL block folded away until it is asked for", () => {
+    // The smallest supported screen is 320 x 426 CSS px, and a tune with a full STIL entry spent
+    // five lines of the card on it. Collapsed, the whole block costs one labelled row.
+    render(
+      <PlaybackControlsCard
+        {...buildProps({
+          hasCurrentItem: true,
+          currentItemLabel: "Commando",
+          currentItemMetadataParts: metadataParts("Rob Hubbard", "1985 Elite", "6581", "PAL", "3:12"),
+          stil: {
+            title: "The Devil's Gallop",
+            originalArtist: "Charles Williams",
+            note: "Heavily inspired by the song Devil's Gallop.",
+          },
+        })}
+      />,
+    );
+
+    // Core stays: the title and the header line, which carry both of the block's controls.
+    expect(screen.getByTestId("playback-current-title")).toHaveTextContent("Commando");
     expect(screen.getByTestId("playback-current-credits")).toHaveTextContent("Rob Hubbard");
+
+    const toggle = screen.getByTestId("tune-details-toggle");
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("tune-details-body")).toBeNull();
+    expect(screen.queryByTestId("playback-current-stil")).toBeNull();
+    expect(screen.queryByTestId("tune-notes")).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("playback-current-stil")).toHaveTextContent("The Devil's Gallop");
+    expect(screen.getByTestId("tune-notes-text")).toHaveTextContent("Devil's Gallop");
   });
 
   it("adds nothing for the majority of the archive, which STIL does not describe", () => {
@@ -629,6 +687,8 @@ describe("PlaybackControlsCard STIL and composer", () => {
         })}
       />,
     );
+    expect(screen.queryByTestId("tune-details")).toBeNull();
+    expect(screen.queryByTestId("tune-details-toggle")).toBeNull();
     expect(screen.queryByTestId("playback-current-stil")).toBeNull();
     expect(screen.queryByTestId("tune-notes")).toBeNull();
   });

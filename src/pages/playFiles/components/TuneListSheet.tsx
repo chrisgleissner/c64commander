@@ -82,8 +82,14 @@ export const TuneListSheet = ({
                     <span className="min-w-0 flex-1 leading-tight">
                       <span className="block truncate text-sm font-medium">
                         {/* The number always leads: it is the only thing every tune has, and it is
-                            what the credits line and the playlist rows both use. */}
-                        Tune {tune.songNr}
+                            what the credits line and the playlist rows both use.
+
+                            The number alone, not "Tune 12". The sheet is titled "Tunes in this
+                            file", so the word was repeated on every row and said nothing the header
+                            had not; on the smallest supported screen it took about five characters
+                            of width off the tune's name, which is the part that is actually worth
+                            reading. */}
+                        {tune.songNr}
                         {tune.title ? <span className="font-normal"> · {tune.title}</span> : null}
                       </span>
                     </span>
