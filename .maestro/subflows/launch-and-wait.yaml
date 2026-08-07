@@ -89,3 +89,14 @@ tags:
 # actually threw, which is why it lives here rather than in each of the flows that
 # reuse this subflow.
 - assertNotVisible: "Something went wrong"
+# The positive half. On its own the check above is negative-only: a page that rendered
+# nothing at all would satisfy it, and around thirty flows use this subflow without ever
+# running common-navigation, so for those it would be the only thing standing between a
+# blank page and a pass.
+#
+# Asserted by testid rather than by text. Home's own text cannot be matched - "Home" is
+# the tab bar's label, and the page's other candidates live inside larger elements, which
+# is what made an assertion on "Firmware" fail while Firmware was on screen. This is the
+# h1 the page renders as its title, so it is present exactly when the page rendered.
+- assertVisible:
+    id: "home-header-title"

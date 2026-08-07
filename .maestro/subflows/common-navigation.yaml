@@ -87,6 +87,10 @@ tags:
       - tapOn:
           id: "tab-settings"
           optional: true
+      # Matched on the tab, not on page content, for the reason set out at the top of
+      # this file: page-content anchors were tried here and only "Play Files" survived.
+      # The assertNotVisible below is the check that can tell a rendered page from a
+      # crashed one.
       - extendedWaitUntil:
           visible: "Settings"
           timeout: ${SHORT_TIMEOUT}
@@ -103,6 +107,10 @@ tags:
       - tapOn:
           id: "tab-config"
           optional: true
+      # Matched on the tab, not on page content, for the reason set out at the top of
+      # this file: page-content anchors were tried here and only "Play Files" survived.
+      # The assertNotVisible below is the check that can tell a rendered page from a
+      # crashed one.
       - extendedWaitUntil:
           visible: "Config"
           timeout: ${SHORT_TIMEOUT}
@@ -119,6 +127,10 @@ tags:
       - tapOn:
           id: "tab-home"
           optional: true
+      # Matched on the tab, not on page content, for the reason set out at the top of
+      # this file: page-content anchors were tried here and only "Play Files" survived.
+      # The assertNotVisible below is the check that can tell a rendered page from a
+      # crashed one.
       - extendedWaitUntil:
           visible: "Home"
           timeout: ${SHORT_TIMEOUT}
