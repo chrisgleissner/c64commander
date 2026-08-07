@@ -35,6 +35,7 @@ import {
   type DisplayProfileViewportId,
 } from "./displayProfileViewports";
 import { getScreenshotFraming, type ScreenshotFramingSurface } from "./screenshotFraming";
+import { describeCaptureBudgetViolation, findCaptureBudgetViolation, toCssPixels } from "./screenshotViewportBudget";
 import { registerScreenshotSections, sanitizeSegment } from "./screenshotCatalog";
 import { planHomeScreenshotSlices, selectCanonicalHomeScreenshotSlices } from "./homeScreenshotLayout";
 import { shouldSkipFuzzyScreenshotPrune } from "../scripts/screenshotPrunePolicy.js";
@@ -804,41 +805,9 @@ const waitForStableRender = async (page: Page) => {
   await page.evaluate(() => new Promise(requestAnimationFrame));
 };
 
-/**
- * Compact width with room to photograph a whole bottom sheet or card.
- *
- * The manuals illustrate the app at the compact display profile, and the profile is
- * chosen by width, so these captures render exactly the layout a compact screen gets.
- * Height is a separate matter. A compact screen is 426 CSS px tall, and a sheet or card
- * taller than that has to be photographed by `locator.screenshot()`, which stitches an
- * over-tall element by scrolling the page. This app scrolls inside `main` rather than on
- * the page, so a stitched capture comes back as mostly flat page background with the tab
- * bar bleeding through it. Giving the capture 680 px of height keeps the subject in one
- * piece. The three keyboard captures in "capture remote-input screenshots" have used the
- * same width/height split since they were written.
- */
-const COMPACT_SHEET_VIEWPORT = { width: 320, height: 680 };
-
-/**
- * Compact width with room for a full-page card, which is taller again.
- *
- * Two captures need this. The Live View card measures about 900 CSS px at the compact
- * width, because its controls stack instead of sitting in a row and the statistics panel
- * below them wraps; 680 px leaves it to the stitching described above, which fills the
- * lower third of the capture with page background. The playback card is taller still, and
- * its caption in the manuals names controls that sit about 790 CSS px down it. The
- * scrollable area is the viewport less the app bar and the tab bar, so both need roughly
- * 1060 px of viewport.
- */
-const COMPACT_CARD_VIEWPORT = { width: 320, height: 1080 };
-
-const applyDisplayProfileViewport = async (
-  page: Page,
-  profileId: DisplayProfileViewportId,
-  options: { viewport?: { width: number; height: number } } = {},
-) => {
+const applyDisplayProfileViewport = async (page: Page, profileId: DisplayProfileViewportId) => {
   const profile = DISPLAY_PROFILE_VIEWPORTS[profileId];
-  await page.setViewportSize(options.viewport ?? profile.viewport);
+  await page.setViewportSize(profile.viewport);
   const applyOverride = async () => {
     await page.evaluate((override) => {
       localStorage.setItem("c64u_display_profile_override", override);
@@ -960,33 +929,99 @@ const setHvscScreenshotMode = async (page: Page, mode: "download-pending" | "rea
  * state. The entries carry hydrated titles and authors because that is what the search is for: HVSC
  * files tunes by composer, and finding one by name is the thing browsing cannot do.
  */
+type SeededHvscTune = {
+  path: string;
+  title: string;
+  author: string;
+  released: string;
+  /**
+   * One length per tune in the file, in seconds, in the order the file numbers them.
+   *
+   * Taken verbatim from `DOCUMENTS/Songlengths.md5`, which is where the archive records them and
+   * which is keyed by the MD5 of the SID file. This is the only source of a per-tune length: the
+   * file's own header says how many tunes it holds and nothing about how long any of them run.
+   */
+  durations: number[];
+};
+
+/**
+ * Five real files from the archive, with their real titles, credits and lengths.
+ *
+ * Every value here was read off the archive itself — the title, author and release line from each
+ * file's SID header, the lengths from `DOCUMENTS/Songlengths.md5`. Nothing is invented, because a
+ * screenshot of a list of lengths is a claim about what the app shows and an invented number makes
+ * that claim false. Two entries that used to be here, `Daglish_Ben/Commando_Remix.sid` and
+ * `DEMOS/A-F/Commando_Tribute.sid`, are not files the archive holds; they have been replaced with
+ * two remixes that are.
+ *
+ * Monty on the Run is the file the SID Radio captures play, and its nineteen lengths are why the
+ * tune list can show one against every row. They are also a good illustration of what a SID file is:
+ * a five-fifty main theme, a two-forty-four second piece, and seventeen jingles of a second or two.
+ */
+const SEEDED_HVSC_TUNES: SeededHvscTune[] = [
+  {
+    path: "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
+    title: "Commando",
+    author: "Rob Hubbard",
+    released: "1985 Elite",
+    durations: [
+      235.594, 61.288, 6, 1.124, 0.645, 0.964, 4.435, 1.882, 3.518, 5.592, 3.5, 1.922, 2.879, 0.804, 1.124, 2.7, 2.281,
+      1.503, 0.824,
+    ],
+  },
+  {
+    path: "/MUSICIANS/H/Hubbard_Rob/Monty_on_the_Run.sid",
+    title: "Monty on the Run",
+    author: "Rob Hubbard",
+    released: "1985 Gremlin Graphics",
+    durations: [350, 12, 164, 1, 2, 1, 4, 2, 2, 10, 1, 1, 2, 1, 1, 2, 1, 1, 1],
+  },
+  {
+    path: "/MUSICIANS/S/Swallow/Commando_Remix.sid",
+    title: "Commando Remix",
+    author: "Fredrik Ternell (Swallow)",
+    released: "1990 Censor Design",
+    durations: [236],
+  },
+  {
+    path: "/MUSICIANS/G/Galway_Martin/Wizball.sid",
+    title: "Wizball",
+    author: "Martin Galway",
+    released: "1987 Ocean",
+    durations: [6, 100, 3, 215, 181, 6, 136, 6, 67],
+  },
+  {
+    path: "/MUSICIANS/L/LMan/Commando_Remake.sid",
+    title: "Commando Remake",
+    author: "Markus Klein (LMan)",
+    released: "1991 LMan",
+    durations: [200],
+  },
+];
+
 const seedHvscBrowseIndex = async (page: Page) => {
-  const tunes = [
-    ["/MUSICIANS/H/Hubbard_Rob/Commando.sid", "Commando", "Rob Hubbard", "1985 Elite"],
-    ["/MUSICIANS/H/Hubbard_Rob/Monty_on_the_Run.sid", "Monty on the Run", "Rob Hubbard", "1985 Gremlin"],
-    ["/MUSICIANS/D/Daglish_Ben/Commando_Remix.sid", "Commando (remix)", "Ben Daglish", "1986 Elite"],
-    ["/MUSICIANS/G/Galway_Martin/Wizball.sid", "Wizball", "Martin Galway", "1987 Ocean"],
-    ["/DEMOS/A-F/Commando_Tribute.sid", "Commando Tribute", "Jeroen Tel", "1990 Maniacs of Noise"],
-  ];
-  await page.addInitScript((rows: string[][]) => {
+  await page.addInitScript((rows: SeededHvscTune[]) => {
     localStorage.setItem(
       "c64u_media_index:v1",
       JSON.stringify({
         version: 2,
         updatedAt: new Date().toISOString(),
-        entries: rows.map(([path, title, author, released]) => ({
-          path,
-          name: path.split("/").pop(),
+        entries: rows.map((row) => ({
+          path: row.path,
+          name: row.path.split("/").pop(),
           type: "sid",
-          durationSeconds: 221,
-          title,
-          author,
-          released,
+          durationSeconds: row.durations[0],
+          title: row.title,
+          author: row.author,
+          released: row.released,
+          // Only written for files that hold more than one tune, which is the shape the persisted
+          // index uses: a single-tune file is described by `durationSeconds` alone.
+          ...(row.durations.length > 1 ? { durations: row.durations } : {}),
           hydrated: true,
         })),
       }),
     );
-  }, tunes);
+  }, SEEDED_HVSC_TUNES);
 };
 
 /**
@@ -1091,6 +1126,81 @@ const FEATURED_SID = {
   elapsedMs: 7050,
 } as const;
 
+/**
+ * Photograph the part of `locator` that is actually on screen.
+ *
+ * `locator.screenshot()` will photograph an element taller than the viewport, and it does it by
+ * scrolling the page and stitching the strips together. The picture that comes back is of a screen
+ * that does not exist: `01-controls.png` was 727 CSS pixels tall on a device whose scrollable area
+ * is under 300. Clipping to the viewport instead gives what a user with that device in their hand
+ * would see, which is the only thing a screenshot is allowed to claim.
+ *
+ * The element is scrolled into view first, so a card below the fold is still photographed rather
+ * than missed; where the part that matters is further down the card, the caller scrolls to it and
+ * this clips around wherever it ends up.
+ */
+const captureVisiblePartOfElement = async (page: Page, locator: Locator): Promise<Buffer> => {
+  const shotOptions = { animations: "disabled", caret: "hide" } as const;
+  await locator.scrollIntoViewIfNeeded().catch(() => undefined);
+  const viewport = page.viewportSize();
+  const box = await locator.boundingBox();
+  if (!viewport || !box) return locator.screenshot(shotOptions);
+
+  // Already inside the viewport: hand it to Playwright unchanged. Clipping such an element would
+  // round its fractional bounds and rewrite a couple of dozen otherwise unchanged files by two or
+  // three pixels, which buries the captures that did change.
+  const fitsOnScreen =
+    box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height;
+  if (fitsOnScreen) return locator.screenshot(shotOptions);
+
+  const left = Math.max(0, box.x);
+  const top = Math.max(0, box.y);
+  const right = Math.min(viewport.width, box.x + box.width);
+  const bottom = Math.min(viewport.height, box.y + box.height);
+  const width = right - left;
+  const height = bottom - top;
+  // Entirely off screen after the scroll (a sheet mid-animation, say). Fall back rather than throw
+  // on a zero-sized clip; the budget assertion below still holds the result to the viewport.
+  if (width <= 0 || height <= 0) return locator.screenshot(shotOptions);
+
+  return page.screenshot({ ...shotOptions, clip: { x: left, y: top, width, height } });
+};
+
+/**
+ * Thrown when a capture would show more than the device it was taken on.
+ *
+ * Given a class of its own so the two capture loops that deliberately swallow failures — they retry
+ * around a display-profile attribute that is slow to settle — can let this one through. A silently
+ * swallowed budget failure would leave the previous, over-tall image in place and report success.
+ */
+class CaptureBudgetError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CaptureBudgetError";
+  }
+}
+
+/**
+ * Refuse a capture that shows more than the device it was taken on.
+ *
+ * Checked on the raw buffer, before any rotation or border is applied, because those change the
+ * dimensions for reasons that have nothing to do with what the device displayed.
+ */
+const assertCaptureFitsDevice = async (page: Page, relativePath: string, buffer: Buffer) => {
+  const metadata = await sharp(buffer).metadata();
+  const deviceScaleFactor = await page.evaluate(() => window.devicePixelRatio);
+  const imageCssSize = toCssPixels(
+    { width: metadata.width ?? 0, height: metadata.height ?? 0 },
+    deviceScaleFactor || 1,
+  );
+  const violation = findCaptureBudgetViolation({
+    relativePath,
+    imageCssSize,
+    viewport: page.viewportSize(),
+  });
+  if (violation) throw new CaptureBudgetError(describeCaptureBudgetViolation(violation));
+};
+
 const captureScreenshot = async (
   page: Page,
   testInfo: TestInfo,
@@ -1115,12 +1225,13 @@ const captureScreenshot = async (
   await waitForStableRender(page);
   await waitForOverlaysToClear(page);
   let screenshotBuffer = options?.locator
-    ? await options.locator.screenshot({ animations: "disabled", caret: "hide" })
+    ? await captureVisiblePartOfElement(page, options.locator)
     : await page.screenshot({
         animations: "disabled",
         caret: "hide",
         fullPage: options?.fullPage ?? false,
       });
+  await assertCaptureFitsDevice(page, relativePath, screenshotBuffer);
   if (options?.rotateDegrees) {
     screenshotBuffer = await sharp(screenshotBuffer).rotate(options.rotateDegrees).png().toBuffer();
   }
@@ -1220,6 +1331,32 @@ const getAppBarOffset = async (page: Page) =>
     const parsed = Number.parseFloat(raw);
     return Number.isFinite(parsed) ? parsed : 0;
   });
+
+/**
+ * Bring the element with `testId` to the top of whatever is actually scrolling.
+ *
+ * For a card too tall for the screen, this is what decides which part of it a capture shows. It has
+ * to move the inner scroller and nothing else: this app scrolls inside `main` rather than on the
+ * page, and `Element.scrollIntoView` moves every scrollable ancestor including the document, which
+ * takes the fixed app bar off the top of the capture and leaves a band of page background above the
+ * tab bar. Playwright's `scrollIntoViewIfNeeded` is no use here either — the element is already on
+ * screen, so it does nothing, and the point is to move it anyway.
+ */
+const scrollTestIdToTopOfScroller = async (page: Page, testId: string) => {
+  await page.evaluate((id) => {
+    const element = document.querySelector<HTMLElement>(`[data-slot-active="true"] [data-testid="${id}"]`);
+    if (!element) return;
+    let scroller = element.parentElement;
+    while (scroller) {
+      const overflowY = getComputedStyle(scroller).overflowY;
+      const scrolls = (overflowY === "auto" || overflowY === "scroll") && scroller.scrollHeight > scroller.clientHeight;
+      if (scrolls) break;
+      scroller = scroller.parentElement;
+    }
+    if (!scroller) return;
+    scroller.scrollTop += element.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+  }, testId);
+};
 
 const scrollHeadingIntoView = async (page: Page, locator: ReturnType<Page["locator"]>, extraOffset = 12) => {
   await locator.scrollIntoViewIfNeeded();
@@ -1860,35 +1997,31 @@ test.describe("App screenshots", () => {
       await page.getByTestId("remote-input-mode-type").click();
       await expect(keyboard).toBeVisible();
 
-      const setProfile = async (width: number, height: number, override: "compact" | "medium" | "expanded") => {
-        await page.setViewportSize({ width, height });
-        await page.evaluate((o) => {
-          localStorage.setItem("c64u_display_profile_override", o);
-          window.dispatchEvent(
-            new CustomEvent("c64u-ui-preferences-changed", { detail: { displayProfileOverride: o } }),
-          );
-        }, override);
-      };
-
-      const typeShots: Array<{
-        w: number;
-        h: number;
-        profile: "compact" | "medium" | "expanded";
-        file: string;
-      }> = [
-        { w: 332, h: 680, profile: "compact", file: "home/remote-input/03-keyboard-compact.png" },
-        { w: 400, h: 780, profile: "medium", file: "home/remote-input/04-keyboard-medium.png" },
-        { w: 900, h: 820, profile: "expanded", file: "home/remote-input/05-keyboard-expanded.png" },
+      // The three pictures below exist to show how the keyboard differs between display profiles,
+      // so each is taken at the profile's own screen size rather than at a size chosen to make the
+      // keyboard fit. The compact one used to be 332x680: 680 CSS px is not a height any compact
+      // device has, and the picture showed about 250 px of keyboard that its reader's screen could
+      // never display at once.
+      const typeShots: Array<{ profile: DisplayProfileViewportId; file: string }> = [
+        { profile: "compact", file: "home/remote-input/03-keyboard-compact.png" },
+        { profile: "medium", file: "home/remote-input/04-keyboard-medium.png" },
+        { profile: "expanded", file: "home/remote-input/05-keyboard-expanded.png" },
       ];
       for (const shot of typeShots) {
+        const expectedProfile = DISPLAY_PROFILE_VIEWPORTS[shot.profile].expectedProfile;
         try {
-          await setProfile(shot.w, shot.h, shot.profile);
-          await expect(keyboard).toHaveAttribute("data-profile", shot.profile, { timeout: 10000 });
+          await applyDisplayProfileViewport(page, shot.profile);
+          await expect(keyboard).toHaveAttribute("data-profile", expectedProfile, { timeout: 10000 });
+          // The keyboard is the subject, and on the shorter profiles it sits below the sheet's own
+          // header. Scrolling it to the top of the sheet is what puts it inside the viewport the
+          // capture is clipped to.
+          await keyboard.scrollIntoViewIfNeeded();
           await captureScreenshot(page, testInfo, shot.file, { locator: sheet });
           console.log(`[remote-input] captured ${shot.file}`);
         } catch (error) {
+          if (error instanceof CaptureBudgetError) throw error;
           const actual = await keyboard.getAttribute("data-profile").catch(() => "unknown");
-          console.warn(`[remote-input] FAILED ${shot.file} (wanted ${shot.profile}, got ${actual}):`, error);
+          console.warn(`[remote-input] FAILED ${shot.file} (wanted ${expectedProfile}, got ${actual}):`, error);
         }
       }
 
@@ -1899,7 +2032,7 @@ test.describe("App screenshots", () => {
       // above are the exception: they exist to show how the profiles differ, so each one
       // keeps the profile it demonstrates.
       try {
-        await setProfile(COMPACT_SHEET_VIEWPORT.width, COMPACT_SHEET_VIEWPORT.height, "compact");
+        await applyDisplayProfileViewport(page, "compact");
         await page.getByTestId("remote-input-mode-joystick").click();
         await expect(page.getByTestId("remote-input-virtual-joystick")).toBeVisible();
         await captureScreenshot(page, testInfo, "home/remote-input/01-joystick.png", { locator: sheet });
@@ -1914,6 +2047,7 @@ test.describe("App screenshots", () => {
 
         await page.getByTestId("remote-input-immersive-toggle").click();
       } catch (error) {
+        if (error instanceof CaptureBudgetError) throw error;
         console.warn("[remote-input] joystick/game-mode capture failed:", error);
       }
     },
@@ -2468,10 +2602,9 @@ test.describe("App screenshots", () => {
       await page.goto("/");
       await waitForConnected(page);
       // Every picture this test takes is embedded in the manuals, and the manuals
-      // illustrate the app at the compact profile - the smallest screen it supports.
-      // The two Live View card captures need the taller viewport; the Remote Input sheets
-      // further down drop back to the sheet height, which is what they fit in.
-      await applyDisplayProfileViewport(page, "compact", { viewport: COMPACT_CARD_VIEWPORT });
+      // illustrate the app at the compact profile — the smallest screen it supports. That
+      // screen is 320x426 CSS px, and every capture below is bounded by it.
+      await applyDisplayProfileViewport(page, "compact");
 
       const liveView = getActiveMain(page).getByTestId("live-view-card");
       await expect(liveView).toBeVisible();
@@ -2487,9 +2620,9 @@ test.describe("App screenshots", () => {
       await captureScreenshot(page, testInfo, "home/content-explorer/02-live-view-expanded.png", { locator: liveView });
 
       // Remote Input immersive mirror: the zoomable screen with the view-lock controls.
-      // A sheet never grows past the viewport, so the shorter compact viewport is enough
-      // for the three captures below and keeps them a readable shape in the manual.
-      await applyDisplayProfileViewport(page, "compact", { viewport: COMPACT_SHEET_VIEWPORT });
+      // A sheet is bounded by the viewport, so the three captures below show the whole
+      // sheet a compact screen would show.
+      await applyDisplayProfileViewport(page, "compact");
       await getActiveMain(page).getByTestId("home-machine-inline-openRemoteInput").click();
       const sheet = page.getByTestId("remote-input-sheet");
       await expect(sheet).toBeVisible();
@@ -2706,10 +2839,11 @@ test.describe("App screenshots", () => {
       await waitForConnected(page);
       // Four of this test's pictures are embedded in the manuals (the transport, the
       // station launcher, the search sheet and the tune list), and the manuals
-      // illustrate the app at the compact profile - the smallest screen it supports.
-      // The override is written to localStorage, so it survives the `page.goto` calls
-      // further down. The one capture taken back at medium is called out where it happens.
-      await applyDisplayProfileViewport(page, "compact", { viewport: COMPACT_SHEET_VIEWPORT });
+      // illustrate the app at the compact profile — the smallest screen it supports, at
+      // 320x426 CSS px. The override is written to localStorage, so it survives the
+      // `page.goto` calls further down. The one capture taken back at medium is called
+      // out where it happens.
+      await applyDisplayProfileViewport(page, "compact");
       await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
 
       // Open the stations launcher (song / style / taste seeds).
@@ -2776,11 +2910,8 @@ test.describe("App screenshots", () => {
       await expect(section).toBeVisible();
       await section.scrollIntoViewIfNeeded();
       await captureScreenshot(page, testInfo, "settings/sid-radio.png");
-      // Back to compact, and to the taller of the two compact viewports. The caption on
-      // this picture in the manuals names the transport, the progress bar and the volume
-      // control, and at the compact width those three sit about 790 CSS px down the card,
-      // so the shorter compact viewport would cut the capture off above two of them.
-      await applyDisplayProfileViewport(page, "compact", { viewport: COMPACT_CARD_VIEWPORT });
+      // Back to compact for the playback card.
+      await applyDisplayProfileViewport(page, "compact");
 
       // The playback card, taken last and with the clock stopped.
       //
@@ -2805,13 +2936,27 @@ test.describe("App screenshots", () => {
 
       // And wait for STIL, which arrives separately: the header line above is parsed from the file,
       // this one is looked up. Photographing between the two would show a card mid-assembly.
-      await expect(getActiveMain(page).getByTestId("playback-current-stil")).toContainText("Charles Williams");
+      //
+      // What is waited on is the disclosure the STIL block now sits behind, because that block is
+      // folded away by default — it costs five lines on a card that has to fit a 320x426 screen.
+      // The control appears only once STIL has answered, so it is the same signal as before.
+      await expect(getActiveMain(page).getByTestId("tune-details-toggle")).toBeVisible();
 
       // Stop the clock now that the tune is up, so the elapsed time, the remaining
       // time and the progress bar cannot move between here and the shutter. See
       // FEATURED_SID for why this happens after connecting rather than before.
       await page.clock.setFixedTime(Date.now());
-      await page.evaluate(() => window.scrollTo(0, 0));
+
+      // Scrolled to the tune rather than photographed from the top of the page.
+      //
+      // On a 320x426 screen the scrollable area is about 314 CSS px once the app bar and the tab
+      // bar are taken off, and the card is taller than that, so something has to be off screen. The
+      // manuals caption this picture as the Now Playing card with the transport, the progress bar
+      // and the volume control, so what has to be in it is the block from the tune's own details
+      // down to the volume row. Putting the top of that block at the top of the scrollable area is
+      // the scroll a reader with that screen makes to see the same thing; what it costs is the
+      // "Listen on" chooser and the station line above it, which have their own pictures.
+      await scrollTestIdToTopOfScroller(page, "playback-current-track");
       await captureScreenshot(page, testInfo, "play/sid-radio/01-controls.png");
 
       // The tunes inside the file, reached from "Tune 1 of 19" on the credits line. The seeded tune
@@ -2819,7 +2964,7 @@ test.describe("App screenshots", () => {
       const tunesLink = getActiveMain(page).getByTestId("playback-current-tunes");
       await expect(tunesLink).toBeVisible();
       await tunesLink.click();
-      await applyDisplayProfileViewport(page, "compact", { viewport: COMPACT_SHEET_VIEWPORT });
+      await applyDisplayProfileViewport(page, "compact");
       const tuneSheet = page.getByTestId("tune-list-sheet");
       await expect(tuneSheet).toBeVisible();
       // Wait for the names and lengths, which are looked up after the numbered rows are drawn.
@@ -2998,7 +3143,7 @@ test.describe("App screenshots", () => {
       // picture in this test that the manuals embed, and the manuals illustrate the app at
       // the smallest screen it supports. The other three are README pictures and stay at
       // the medium profile the whole file is captured at.
-      await applyDisplayProfileViewport(page, "compact", { viewport: COMPACT_SHEET_VIEWPORT });
+      await applyDisplayProfileViewport(page, "compact");
       const scope = readyDialog.getByTestId("add-items-search-scope");
       await expect(scope).toBeVisible();
       await readyDialog.getByTestId("add-items-scope-source").click();

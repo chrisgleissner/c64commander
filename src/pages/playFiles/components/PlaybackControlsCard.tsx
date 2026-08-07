@@ -32,7 +32,7 @@ import {
   NOW_PLAYING_METADATA_SEPARATOR,
   type NowPlayingMetadataSegment,
 } from "@/lib/playback/nowPlayingMetadata";
-import { TuneNotes } from "./TuneNotes";
+import { TuneDetails } from "./TuneDetails";
 
 export type PlaybackControlsCardProps = {
   hasCurrentItem: boolean;
@@ -397,23 +397,39 @@ export const PlaybackControlsCard = ({
       <div className="w-full text-xs text-muted-foreground" data-testid="playback-current-track">
         {hasCurrentItem ? (
           <>
-            {/* The title on the left, the ranking actions on the right, and nothing else on the row.
-                Everything the tune says about itself has moved to the line below, because anything
-                sharing this row moves the actions: the length alone is three characters on one tune
-                and five on the next.
+            {/* The ranking actions get a row of their own, above the title and right-aligned.
 
-                `flex-nowrap` and a non-shrinking action track are what actually pin them. The title
-                takes whatever is left and is truncated to one line rather than wrapped, so the card
-                is exactly as tall for a forty-character HVSC name as for a short one and nothing
-                below it — the actions, the metadata, the transport — moves between tunes. Nothing is
-                lost by that: truncation here is `text-overflow`, so the whole name is still in the
-                document and is what a screen reader reads and what a pointer sees as the tooltip.
+                They used to share the title's row. Two 44 px buttons plus their gap take 96 px, and
+                on the smallest supported screen the card is 288 px wide inside its padding, so the
+                title was left with under two thirds of the row and was cut short by them. A song
+                title is the one thing on this card that must be readable in full, and it cannot be
+                that while something else is sitting on the same line taking a fixed third of it.
 
-                The title also starts at the left edge of the card, level with the metadata line under
-                it. There used to be a small file-origin glyph in front of it, which indented it by
-                its own width and left the two lines misaligned; where a tune came from is already
-                shown against every row of the playlist. */}
-            <div className="flex flex-nowrap items-center gap-2">
+                Right-aligned because the pair keeps the position it had, and because ♥ still shares
+                its right edge with Next two rows below — the seat an overshooting thumb lands on,
+                which is why ♥ rather than ✕ occupies it (see `NowPlayingRanking`).
+
+                The card is still exactly as tall for a long HVSC name as for a short one: the row
+                above is a fixed height whether or not a name is long, and the title itself stays on
+                one line. */}
+            {rankingControls ? (
+              <div className="flex justify-end" data-testid="playback-ranking-row">
+                {rankingControls}
+              </div>
+            ) : null}
+            {/* The title now has the full width of the card to itself.
+
+                It is still truncated rather than wrapped, so the card is exactly as tall for a
+                forty-character HVSC name as for a short one and nothing below it — the metadata, the
+                transport — moves between tunes. Truncation here is `text-overflow`, so the whole name
+                is still in the document and is what a screen reader reads and what a pointer sees as
+                the tooltip.
+
+                The title starts at the left edge of the card, level with the metadata line under it.
+                There used to be a small file-origin glyph in front of it, which indented it by its
+                own width and left the two lines misaligned; where a tune came from is already shown
+                against every row of the playlist. */}
+            <div className="flex w-full flex-nowrap items-center">
               <span
                 className="min-w-0 flex-1 truncate text-base font-semibold text-foreground"
                 data-testid="playback-current-title"
@@ -421,7 +437,6 @@ export const PlaybackControlsCard = ({
               >
                 {currentItemLabel}
               </span>
-              {rankingControls ? <span className="shrink-0">{rankingControls}</span> : null}
             </div>
             {/* Composer, year, chips, video standard, which tune, and how long — in that order, with
                 anything the header does not carry left out along with its separator. See
@@ -465,23 +480,19 @@ export const PlaybackControlsCard = ({
                 ))}
               </p>
             ) : null}
-            {/* What this tune is, from STIL — above the header line because it is the more specific
-                answer to "what am I listening to". A file called `Commando` playing tune 1 of 19 is
-                told here that the tune is "BGM1" and that the music is Tamayo Kawamoto's, which the
-                header cannot say: its author field names Rob Hubbard, who arranged it.
+            {/* What STIL says about this tune, folded away by default.
 
-                One line, and only the parts STIL actually has. Both absent for most of the archive,
-                in which case nothing renders and the card is unchanged. */}
-            {/* Smaller than the header line above it, not larger. Measured on the device this line
-                runs to two or three lines on a tune like Commando, whose STIL title carries the
-                source of the music as well as its name; at `text-sm` it outweighed the composer and
-                pushed the transport down the card. At `text-xs` it reads as the annotation it is. */}
-            {stilTuneLine ? (
-              <p className="mt-0.5 text-xs leading-snug text-foreground/80" data-testid="playback-current-stil">
-                {stilTuneLine}
-              </p>
-            ) : null}
-            {stil?.note ? <TuneNotes note={stil.note} /> : null}
+                STIL is the archive's editorial record rather than the file's own header: what this
+                particular tune is called, who wrote the music being arranged, and a note about it. A
+                file called `Commando` playing tune 1 of 19 is told there that the tune is "BGM1" and
+                that the music is Tamayo Kawamoto's, which the header cannot say — its author field
+                names Rob Hubbard, who arranged it.
+
+                All of it is worth reading and none of it is needed to identify the tune or to work
+                the transport, so it is the part of the card that gives way on a small screen. See
+                `TuneDetails` for the measurement. Nothing renders at all for the majority of the
+                archive, which STIL does not cover. */}
+            <TuneDetails tuneLine={stilTuneLine} note={stil?.note ?? null} />
           </>
         ) : (
           "Select a playlist item to start"

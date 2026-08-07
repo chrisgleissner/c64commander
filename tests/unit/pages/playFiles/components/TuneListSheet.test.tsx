@@ -45,11 +45,9 @@ describe("TuneListSheet", () => {
   it("lists every tune in the file, numbered", async () => {
     renderSheet();
     await waitFor(() => expect(screen.getAllByTestId("tune-list-row")).toHaveLength(3));
-    expect(screen.getAllByTestId("tune-list-row").map((row) => row.textContent)).toEqual([
-      "Tune 1",
-      "Tune 2",
-      "Tune 3",
-    ]);
+    // The number alone. The sheet header already says these are the tunes in this file, so the
+    // word "Tune" on every row repeated it and cost width the tune's name needs.
+    expect(screen.getAllByTestId("tune-list-row").map((row) => row.textContent)).toEqual(["1", "2", "3"]);
   });
 
   it("names and times the tunes the archive knows about", async () => {
@@ -59,12 +57,12 @@ describe("TuneListSheet", () => {
     await waitFor(() => expect(screen.getAllByTestId("tune-list-row")[0]).toHaveTextContent("BGM1"));
 
     const rows = screen.getAllByTestId("tune-list-row");
-    expect(rows[0]).toHaveTextContent("Tune 1 · BGM1");
+    expect(rows[0]).toHaveTextContent("1 · BGM1");
     expect(rows[0]).toHaveTextContent("5:50");
     // STIL names a minority of tunes; an unnamed one is still a row worth having.
-    expect(rows[1]).toHaveTextContent("Tune 2");
+    expect(rows[1]).toHaveTextContent("2");
     expect(rows[1]).not.toHaveTextContent("·");
-    expect(rows[2]).toHaveTextContent("Tune 3 · Level Complete");
+    expect(rows[2]).toHaveTextContent("3 · Level Complete");
   });
 
   it("leaves an unknown length blank rather than showing the default", async () => {
@@ -115,10 +113,13 @@ describe("TuneListSheet terminology", () => {
   it("calls them tunes, never subsongs", async () => {
     // "Subsong" is format jargon; a listener is choosing between tunes. This assertion moved here
     // from the playback settings panel, whose plain tune list this sheet replaced.
+    //
+    // The word is said once, in the sheet's own header, and the rows carry the number alone.
     getHvscSubsongTitles.mockResolvedValue(["BGM1", "", ""]);
     renderSheet();
     await waitFor(() => expect(screen.getAllByTestId("tune-list-row")).toHaveLength(3));
     expect(screen.queryByText(/subsong/i)).toBeNull();
-    expect(screen.getAllByTestId("tune-list-row")[0]).toHaveTextContent(/^Tune 1/);
+    expect(screen.getByText("Tunes in this file")).toBeInTheDocument();
+    expect(screen.getAllByTestId("tune-list-row")[0]).toHaveTextContent(/^1 · BGM1/);
   });
 });
