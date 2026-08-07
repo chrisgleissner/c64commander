@@ -28,13 +28,19 @@ tags:
           text: "Close app"
           optional: true
       - waitForAnimationToEnd
-      # Waits on the Home page's own content, not on "Home". "Home" is the tab bar's
-      # label, is rendered outside the page, and stays on screen however the page
-      # itself fared - so a wait on it cannot tell a rendered page from a crashed one.
-      # "Firmware" is a row of the System info card, the first thing Home renders.
+      # This wait names the tab bar's own label, which cannot distinguish a rendered
+      # page from a crashed one - the tab bar renders outside the page. The
+      # assertNotVisible below is what covers that, and it is why every navigation in
+      # this file carries one.
+      #
+      # A page-content anchor was tried here and does not work: Maestro matches whole
+      # accessibility nodes, and Chrome merges inline spans into their containing row,
+      # so "Firmware" is only ever part of the node "App <version> Device <host>
+      # Firmware <version>" and never matches on its own. Anchors have to be elements
+      # that form their own node, which is why "Play Files" below does work.
       - extendedWaitUntil:
           visible:
-            text: "Firmware"
+            text: "Home"
           timeout: ${TIMEOUT}
       - assertNotVisible: "Something went wrong"
 - retry:
@@ -78,9 +84,9 @@ tags:
           id: "tab-settings"
           optional: true
       - extendedWaitUntil:
-          visible: "Appearance"
+          visible: "Settings"
           timeout: ${SHORT_TIMEOUT}
-- assertVisible: "Appearance"
+- assertVisible: "Settings"
 - assertNotVisible: "Something went wrong"
 - takeScreenshot: settings-tab
 - retry:
@@ -110,8 +116,8 @@ tags:
           id: "tab-home"
           optional: true
       - extendedWaitUntil:
-          visible: "Firmware"
+          visible: "Home"
           timeout: ${SHORT_TIMEOUT}
-- assertVisible: "Firmware"
+- assertVisible: "Home"
 - assertNotVisible: "Something went wrong"
 - takeScreenshot: home-tab
