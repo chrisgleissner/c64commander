@@ -79,3 +79,13 @@ tags:
           text: "OK"
           optional: true
       - waitForAnimationToEnd
+
+# The app shell being up is not the same as the page under it having rendered. "Home"
+# above is the tab bar's own label, which is rendered outside the page and stays on
+# screen even when the page beneath it has been replaced by the error boundary - a
+# release walkthrough once captured a crashed Home page while every assertion passed.
+# Both App.tsx and PageErrorBoundary.tsx render this exact title, so one check covers a
+# whole-app crash and a single-page crash. It is cheap and cannot fail unless something
+# actually threw, which is why it lives here rather than in each of the flows that
+# reuse this subflow.
+- assertNotVisible: "Something went wrong"
