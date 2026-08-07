@@ -385,7 +385,10 @@ const buildConnectionLabel = (deviceLabel: string, productCode: string) => {
 };
 
 const FilterChip = ({ label }: { label: string }) => (
-  <span className="rounded-full border border-border/70 bg-background px-2 py-0.5 text-[11px] font-medium leading-4">
+  // shrink-0: without it the chips are flex items that can be squeezed below the width
+  // of their own text, which on the smallest screen left "Problems" in a 29px box and
+  // drew it over the chip beside it.
+  <span className="shrink-0 rounded-full border border-border/70 bg-background px-2 py-0.5 text-[11px] font-medium leading-4">
     {label}
   </span>
 );
@@ -562,10 +565,14 @@ const EvidenceRow = ({
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-foreground">{entry.title}</p>
             {entry.detail ? <p className="truncate text-xs text-muted-foreground">{entry.detail}</p> : null}
+            {/* The type is a fixed vocabulary word and must stay whole: flex was shrinking
+                it to the width of the row, and "Actions" was being broken into "Action" and
+                "s" on two lines. The contributor is the part that can afford to be cut
+                short. */}
             <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span>{entry.type}</span>
-              {entry.contributor ? <span>· {entry.contributor}</span> : null}
-              <span>· {formatDiagnosticsTimestamp(entry.timestamp)}</span>
+              <span className="shrink-0 whitespace-nowrap">{entry.type}</span>
+              {entry.contributor ? <span className="min-w-0 truncate">· {entry.contributor}</span> : null}
+              <span className="shrink-0 whitespace-nowrap">· {formatDiagnosticsTimestamp(entry.timestamp)}</span>
               {showDeviceLabel && entry.deviceLabel ? <span>· {entry.deviceLabel}</span> : null}
             </div>
           </div>
@@ -1780,8 +1787,13 @@ export function DiagnosticsDialog({
             </section>
 
             {/* Phase 3: Unified filter bar */}
+            {/* Wraps to a second line rather than clipping. On a 320px screen the
+                summary text and the funnel button leave under 60px for the active
+                filter chips, which is not enough for one of them; `rounded-2xl` is
+                indistinguishable from `rounded-full` at the one-line height this has
+                on every other screen, and stays a sane shape when it does wrap. */}
             <div
-              className="mt-3 flex items-center gap-1.5 overflow-hidden rounded-full border border-border/70 bg-card px-2.5 py-1.5 text-xs"
+              className="mt-3 flex flex-wrap items-center gap-1.5 rounded-2xl border border-border/70 bg-card px-2.5 py-1.5 text-xs"
               data-testid="filters-collapsed-bar"
             >
               <span className="shrink-0 font-semibold text-foreground">Filters</span>
@@ -1789,19 +1801,17 @@ export function DiagnosticsDialog({
               <span className="shrink-0 text-muted-foreground" data-testid="filters-result-count">
                 {visibleCount} of {totalCount}
               </span>
-              <div className="min-w-0 flex-1 overflow-hidden whitespace-nowrap">
-                <div className="flex items-center gap-1 overflow-hidden">
-                  {filterBarChips.map((chip) => (
-                    <FilterChip key={chip} label={chip} />
-                  ))}
-                  {overflowChipCount > 0 ? <FilterChip label={`+${overflowChipCount}`} /> : null}
-                </div>
+              <div className="flex flex-wrap items-center gap-1">
+                {filterBarChips.map((chip) => (
+                  <FilterChip key={chip} label={chip} />
+                ))}
+                {overflowChipCount > 0 ? <FilterChip label={`+${overflowChipCount}`} /> : null}
               </div>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0"
+                className="ml-auto h-6 w-6 shrink-0 p-0"
                 onClick={() => setFiltersOpen(true)}
                 data-testid="open-filters-editor"
               >

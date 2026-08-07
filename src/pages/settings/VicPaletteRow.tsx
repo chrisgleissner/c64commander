@@ -8,7 +8,9 @@
 
 import { useState } from "react";
 
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   VIC_PALETTES,
@@ -45,12 +47,18 @@ const INDEX_NAMES = [
  * everything. It updates as soon as a palette is picked, and the picture follows immediately.
  */
 export function VicPaletteRow() {
+  const { profile } = useDisplayProfile();
+  const isCompact = profile === "compact";
   const [paletteId, setPaletteId] = useState<string>(() => activeVicPalette().id);
   const palette = vicPaletteById(paletteId);
 
   return (
     <div className="col-span-2 min-w-0" data-testid="settings-vic-palette-row">
-      <div className="flex items-start justify-between gap-3 min-w-0">
+      {/* The description shares this row with a fixed w-40 Select. At 320px that left it
+          an 84px column, narrow enough that "machine's" (87px) was split after the
+          apostrophe. On the smallest screen the Select drops below the text instead, so
+          the paragraph gets the full width. */}
+      <div className={cn("flex gap-3 min-w-0", isCompact ? "flex-col items-stretch" : "items-start justify-between")}>
         <div className="min-w-0">
           <Label htmlFor="settings-vic-palette" className="font-medium">
             Screen colours
@@ -68,7 +76,11 @@ export function VicPaletteRow() {
             setActiveVicPalette(next);
           }}
         >
-          <SelectTrigger id="settings-vic-palette" data-testid="settings-vic-palette" className="w-40 shrink-0">
+          <SelectTrigger
+            id="settings-vic-palette"
+            data-testid="settings-vic-palette"
+            className={cn(isCompact ? "w-full" : "w-40 shrink-0")}
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

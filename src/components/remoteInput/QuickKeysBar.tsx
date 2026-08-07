@@ -84,7 +84,7 @@ type QuickKeyButtonProps = {
   hint?: string;
   latched?: boolean;
   hasHoldGesture: boolean;
-  keyStyle: { height: number; fontSize: number };
+  keyStyle: { minHeight: number; fontSize: number };
   iconPx: number;
   onHoldPress?: () => void;
   onHoldRelease?: () => void;
@@ -122,7 +122,22 @@ const QuickKeyButtonImpl = ({
     size="sm"
     variant="secondary"
     style={keyStyle}
-    className={cn("min-w-0 flex-1 overflow-hidden px-1", tone ? toneButtonClass(tone, latched) : undefined)}
+    // Four keys share the row, so on a 320px screen each has about 74px. At the
+    // default control size RUN/STOP needs 85px and RETURN 76px, and the button base
+    // sets nowrap, so both were cut off inside their own key. Narrower padding gets
+    // RETURN and the f-keys in; RUN/STOP breaks at its slash onto two lines, which is
+    // how the real keycap is printed anyway. h-auto lets a key with a wrapped label
+    // grow rather than cut the second line off, and the inline minHeight keeps the
+    // single-line keys at their usual size.
+    className={cn(
+      // break-normal alongside whitespace-normal: the label may wrap, but only where a
+      // break belongs. RUN/STOP still folds at the slash the way the real keycap is
+      // printed, while RETURN stays whole - it measured 70px in a 70px line and was
+      // being broken into "RETUR" and "N". src/index.css sets word-break: break-word
+      // on button, which is what permitted the mid-word break.
+      "h-auto min-w-0 flex-1 overflow-hidden whitespace-normal break-normal px-0.5 py-1 leading-tight",
+      tone ? toneButtonClass(tone, latched) : undefined,
+    )}
     data-testid={testId}
     aria-pressed={hasHoldGesture ? latched : undefined}
     disabled={disabled}
@@ -177,8 +192,10 @@ export const QuickKeysBar = ({
   // the memoized QuickKeyButton below, so a new object identity here would
   // defeat its memo bail on every keystroke even though the values never
   // change between ordinary re-renders (scale is fixed per session).
+  // minHeight rather than height: the keycap labels wrap (see QuickKeyButtonImpl), and
+  // a fixed height would cut the second line off instead of letting the key grow.
   const keyStyle = useMemo(
-    () => ({ height: Math.round(40 * safeScale), fontSize: Math.round(13 * safeScale) }),
+    () => ({ minHeight: Math.round(40 * safeScale), fontSize: Math.round(13 * safeScale) }),
     [safeScale],
   );
   const iconPx = Math.round(18 * safeScale);

@@ -11,6 +11,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
+import { cn } from "@/lib/utils";
 import { getC64API } from "@/lib/c64api";
 import { addLog } from "@/lib/logging";
 import { fetchSystemRomsFromDevice, type RomFetchOutcome } from "@/lib/roms/romFetchService";
@@ -36,6 +38,12 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
   const [busy, setBusy] = useState(false);
   const [outcomes, setOutcomes] = useState<RomFetchOutcome[] | null>(null);
   const [autoRead, setAutoRead] = useState<boolean>(() => loadLocalEngineAutoRoms());
+  const { profile } = useDisplayProfile();
+  // "Read from C64" is set nowrap and does not shrink, so on the smallest screen it
+  // took about 160px of the 232px available and left the description beside it a
+  // 61px column, in which most words were broken in half. Stacking the button under
+  // the text there gives the description the full width.
+  const stacked = profile === "compact";
 
   const complete = summaries.length === 2;
 
@@ -62,7 +70,7 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
 
   return (
     <div className="space-y-2 rounded-lg border border-border/70 p-3 min-w-0" data-testid="settings-local-engine-roms">
-      <div className="flex items-start justify-between gap-3 min-w-0">
+      <div className={cn("flex gap-3 min-w-0", stacked ? "flex-col items-stretch" : "items-start justify-between")}>
         <div className="min-w-0">
           <Label className="text-sm font-medium">C64 ROMs for on-device playback</Label>
           <p className="text-xs text-muted-foreground">

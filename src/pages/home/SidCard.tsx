@@ -187,14 +187,17 @@ export function SidCard({
       {/* Row 2: Identity and Address */}
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground whitespace-nowrap">{identityLabel}</span>
+          {/* shrink-0: the label cannot wrap, so a flex row that shrinks it clips the text.
+              CI measured "Address" needing 68px in a 66px box on all four sockets. Let the
+              Select absorb the shrink instead; it truncates cleanly, a bare label does not. */}
+          <span className="shrink-0 text-muted-foreground whitespace-nowrap">{identityLabel}</span>
           {isIdentityReadOnly ? (
             <span className="font-medium text-muted-foreground" data-testid={`home-sid-type-${testIdSuffix}`}>
               {identityValue}
             </span>
           ) : (
             <Select value={identityValue} onValueChange={onIdentityChange} disabled={!isConnected || identityPending}>
-              <SelectTrigger className={inlineSelectTriggerClass} data-testid={`home-sid-type-${testIdSuffix}`}>
+              <SelectTrigger className={cn(inlineSelectTriggerClass, "min-w-0")} data-testid={`home-sid-type-${testIdSuffix}`}>
                 <SelectValue placeholder={identityValue} />
               </SelectTrigger>
               <SelectContent>
@@ -208,9 +211,9 @@ export function SidCard({
           )}
         </div>
         <div className="flex items-center gap-2 justify-end">
-          <span className="text-muted-foreground whitespace-nowrap">Address</span>
+          <span className="shrink-0 text-muted-foreground whitespace-nowrap">Address</span>
           <Select value={addressValue} onValueChange={onAddressChange} disabled={!isConnected || addressPending}>
-            <SelectTrigger className={inlineSelectTriggerClass} data-testid={`home-sid-address-${testIdSuffix}`}>
+            <SelectTrigger className={cn(inlineSelectTriggerClass, "min-w-0")} data-testid={`home-sid-address-${testIdSuffix}`}>
               <SelectValue placeholder={addressValue} />
             </SelectTrigger>
             <SelectContent>
@@ -224,8 +227,13 @@ export function SidCard({
         </div>
       </div>
 
-      {/* Row 3: Shaping Controls */}
-      <div className="grid grid-cols-3 gap-2 text-xs">
+      {/* Row 3: Shaping Controls.
+          Three columns share about 250px on the smallest screen, which leaves each
+          label around 80px. "Resistor" alone needs 65px at the size the compact
+          profile renders it, so the label ran over its neighbour and the value beside
+          it was cut to four characters. One column per control gives each label and
+          its value the width they need, the same way row 4 already does. */}
+      <div className={cn("grid gap-2 text-xs", profile === "compact" ? "grid-cols-1" : "grid-cols-3")}>
         {shapingControls.map((control, index) => (
           <div key={index} className="flex items-center gap-2">
             <span className="text-muted-foreground whitespace-nowrap">{control.label}</span>

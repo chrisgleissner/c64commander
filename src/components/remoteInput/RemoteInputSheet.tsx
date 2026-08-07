@@ -571,7 +571,11 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               {exitGameModeToggle}
             </div>
             {session.outputMode === "joystick" ? (
-              <div className="flex items-center justify-between gap-2">
+              // flex-wrap, like the two rows below it: on a 320px screen the stepper
+              // and the Game mode button together are wider than the row, and without
+              // wrapping the stepper was squeezed until "Size" was set one or two
+              // letters to a line.
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 {sizeStepper}
                 {enterGameModeToggle}
               </div>

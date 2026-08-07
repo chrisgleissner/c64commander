@@ -114,6 +114,13 @@ export type SelectableActionListProps = {
 const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "_");
 
 const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: string }) => {
+  const { profile } = useDisplayProfile();
+  // On a 320px screen the row's three controls - the selection circle, the actions
+  // kebab and the play button - take about 150px of the 256px available, all of it at
+  // the 44px target size, and the name was left a 96px ribbon in which most words of
+  // an ordinary tune title were broken in half. The name therefore gets a line of its
+  // own there, with the controls on the line below it.
+  const stackTitle = profile === "compact";
   if (item.variant === "header") {
     const headerTestId = rowTestId ? `${rowTestId}-header` : undefined;
     return (
@@ -137,7 +144,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
   return (
     <div
       className={cn(
-        "flex items-center gap-2 rounded-md px-1 py-[0.44rem] min-w-0 max-w-full",
+        "flex flex-wrap items-center gap-2 rounded-md px-1 py-[0.44rem] min-w-0 max-w-full",
         item.isDimmed
           ? "opacity-40"
           : isPlaying
@@ -223,7 +230,9 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
           </DropdownMenu>
         )}
       </div>
-      <div className="flex flex-1 items-center gap-2 min-w-0 max-w-full">
+      <div
+        className={cn("flex items-center gap-2 min-w-0 max-w-full", stackTitle ? "order-first basis-full" : "flex-1")}
+      >
         {item.icon ? <div className="shrink-0">{item.icon}</div> : null}
         <div className="min-w-0 w-full">
           <button
@@ -264,7 +273,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
           ) : null}
         </div>
       </div>
-      <div className="flex flex-col gap-1 shrink-0">
+      <div className={cn("flex flex-col gap-1 shrink-0", stackTitle && "ml-auto")}>
         <Button
           variant={isPlaying ? "secondary" : "ghost"}
           size="icon"

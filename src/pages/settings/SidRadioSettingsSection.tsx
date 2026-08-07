@@ -188,7 +188,10 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
               still sounds good; most listeners will not hear the difference, so it is a fine choice on a slower device
               or to save battery. Takes effect on the next track.
             </p>
-            <div className="flex gap-2">
+            {/* Wraps rather than shrinks: both labels are set nowrap, so on the
+                smallest screen the two buttons squeezed each other and each label was
+                cut off inside its own button. On a second line they are both whole. */}
+            <div className="flex flex-wrap gap-2">
               {(
                 [
                   ["residfp", "Accurate (reSIDfp)"],

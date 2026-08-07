@@ -100,13 +100,17 @@ export const ActionExpandedContent = ({ summary, deviceLabel = null }: Props) =>
     <div className="space-y-3 text-xs">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         {displayDeviceLabel ? <span>device: {displayDeviceLabel}</span> : null}
+        {/* break-words, not break-all: break-all splits at whatever character the line
+            happens to end on, so an ordinary word such as a device name came out as
+            "test-devic" / "e-mock" on a line with room to spare. break-words only splits
+            a token that cannot fit a line by itself, which is what these long ids need. */}
         {summary.device?.savedDeviceId ? (
-          <span className="break-all">saved device id: {summary.device.savedDeviceId}</span>
+          <span className="break-words">saved device id: {summary.device.savedDeviceId}</span>
         ) : null}
-        {verifiedDeviceLabel ? <span className="break-all">verified device: {verifiedDeviceLabel}</span> : null}
+        {verifiedDeviceLabel ? <span className="break-words">verified device: {verifiedDeviceLabel}</span> : null}
         <span>origin: {formatActionSummaryOrigin(summary.origin, summary.originalOrigin)}</span>
         <span>outcome: {summary.outcome}</span>
-        <span className="break-all">correlation: {summary.correlationId}</span>
+        <span className="break-words">correlation: {summary.correlationId}</span>
         {summary.trigger ? (
           <span data-testid={`action-trigger-${summary.correlationId}`}>
             trigger: {formatTriggerDisplay(summary.trigger)}
@@ -134,7 +138,7 @@ export const ActionExpandedContent = ({ summary, deviceLabel = null }: Props) =>
               data-testid={`action-rest-effect-${summary.correlationId}-${index}`}
               className="rounded-md border border-border/70 p-2"
             >
-              <p className="font-medium break-all">
+              <p className="font-medium break-words">
                 {effect.method} {formatRestRequestTarget(effect)}
               </p>
               <p className="text-muted-foreground">
