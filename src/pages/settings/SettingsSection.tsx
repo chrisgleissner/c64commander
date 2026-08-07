@@ -98,11 +98,8 @@ export const SettingsSection = ({
         type="button"
         onClick={toggle}
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-        // An HTML id as well as the testid. Automation that drives this app from outside
-        // the browser - the accessibility tree rather than the DOM - can only address an
-        // element by its resource-id, which Chrome fills from the HTML id and not from
-        // data-testid. Without this, a flow has to find these headers by their summary
-        // text, which then breaks on any copy edit. TabBar sets both for the same reason.
+        // The accessibility tree exposes the HTML id, not data-testid, so this is what
+        // makes the header addressable from outside the browser.
         id={`settings-section-toggle-${id}`}
         data-testid={`settings-section-toggle-${id}`}
         aria-expanded={open}

@@ -392,8 +392,6 @@ function DocSectionCard({ section }: { section: DocSection }) {
         className="w-full flex items-center justify-between p-4 text-left"
         aria-expanded={isOpen}
         aria-controls={contentId}
-        // See the note in SettingsSection: an HTML id is what makes this addressable
-        // from outside the browser, so a flow need not match on the card's title.
         id={`docs-toggle-${section.id}`}
         data-testid={`docs-toggle-${section.id}`}
       >
