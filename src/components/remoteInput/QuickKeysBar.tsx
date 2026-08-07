@@ -130,7 +130,12 @@ const QuickKeyButtonImpl = ({
     // grow rather than cut the second line off, and the inline minHeight keeps the
     // single-line keys at their usual size.
     className={cn(
-      "h-auto min-w-0 flex-1 overflow-hidden whitespace-normal px-0.5 py-1 leading-tight",
+      // break-normal alongside whitespace-normal: the label may wrap, but only where a
+      // break belongs. RUN/STOP still folds at the slash the way the real keycap is
+      // printed, while RETURN stays whole - it measured 70px in a 70px line and was
+      // being broken into "RETUR" and "N". src/index.css sets word-break: break-word
+      // on button, which is what permitted the mid-word break.
+      "h-auto min-w-0 flex-1 overflow-hidden whitespace-normal break-normal px-0.5 py-1 leading-tight",
       tone ? toneButtonClass(tone, latched) : undefined,
     )}
     data-testid={testId}
