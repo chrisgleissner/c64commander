@@ -269,10 +269,10 @@ test.describe("Playlist controls and advanced features", () => {
     // There is one control for choosing a tune, and it is the label that states which one is
     // playing. The plain list that used to sit in the playback settings has gone: it offered the
     // same choice from below the fold, without the names or the lengths, and having two buttons
-    // both reading "Tune 1 of 3" made neither of them addressable by name.
+    // both reading the same tune position made neither of them addressable by name.
     const trigger = page.getByTestId("playback-current-tunes");
     await expect(trigger).toBeVisible();
-    await expect(trigger).toHaveText(/Tune 1 of 3/);
+    await expect(trigger).toHaveText(/1\/3/);
     await snap(page, testInfo, "song-selector-visible");
     await trigger.click();
     const sheet = page.getByTestId("tune-list-sheet");

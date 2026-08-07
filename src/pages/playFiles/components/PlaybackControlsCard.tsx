@@ -351,6 +351,53 @@ export const PlaybackControlsCard = ({
   stationIndicator,
   stationActive = false,
 }: PlaybackControlsCardProps) => {
+  const creditsParts = currentItemMetadataParts.filter((part) => part.row === "credits");
+  const factsParts = currentItemMetadataParts.filter((part) => part.row === "facts");
+
+  /**
+   * One metadata segment, with its separator attached to its own end.
+   *
+   * The separator belongs to the segment before it so that a line break falls after the
+   * "·" rather than before it. Rendering it in front of the following segment looks the
+   * same while everything fits and strands a "·" at the start of the next line as soon as
+   * it does not, which on a 320px screen is often.
+   */
+  const renderMetadataPart = (part: NowPlayingMetadataSegment, index: number, hasNext: boolean) => {
+    const body =
+      part.kind === "author" && onComposerSelected ? (
+        <button
+          type="button"
+          className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+          onClick={() => onComposerSelected(part.text)}
+          data-testid="playback-current-composer"
+          title={`Find more by ${part.text}`}
+        >
+          {part.text}
+        </button>
+      ) : part.kind === "tunes" && onTunesSelected ? (
+        <button
+          type="button"
+          className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+          onClick={onTunesSelected}
+          data-testid="playback-current-tunes"
+          title="Choose a tune from this file"
+        >
+          {part.text}
+        </button>
+      ) : (
+        part.text
+      );
+    return (
+      <span key={`${part.kind}-${index}`}>
+        <span className="whitespace-nowrap">
+          {body}
+          {hasNext ? NOW_PLAYING_METADATA_SEPARATOR.trimEnd() : null}
+        </span>
+        {hasNext ? " " : null}
+      </span>
+    );
+  };
+
   const stilTuneLine = buildStilTuneLine({
     title: stil?.title ?? null,
     originalArtist: stil?.originalArtist ?? null,
@@ -397,26 +444,6 @@ export const PlaybackControlsCard = ({
       <div className="w-full text-xs text-muted-foreground" data-testid="playback-current-track">
         {hasCurrentItem ? (
           <>
-            {/* The ranking actions get a row of their own, above the title and right-aligned.
-
-                They used to share the title's row. Two 44 px buttons plus their gap take 96 px, and
-                on the smallest supported screen the card is 288 px wide inside its padding, so the
-                title was left with under two thirds of the row and was cut short by them. A song
-                title is the one thing on this card that must be readable in full, and it cannot be
-                that while something else is sitting on the same line taking a fixed third of it.
-
-                Right-aligned because the pair keeps the position it had, and because ♥ still shares
-                its right edge with Next two rows below — the seat an overshooting thumb lands on,
-                which is why ♥ rather than ✕ occupies it (see `NowPlayingRanking`).
-
-                The card is still exactly as tall for a long HVSC name as for a short one: the row
-                above is a fixed height whether or not a name is long, and the title itself stays on
-                one line. */}
-            {rankingControls ? (
-              <div className="flex justify-end" data-testid="playback-ranking-row">
-                {rankingControls}
-              </div>
-            ) : null}
             {/* The title now has the full width of the card to itself.
 
                 It is still truncated rather than wrapped, so the card is exactly as tall for a
@@ -438,47 +465,36 @@ export const PlaybackControlsCard = ({
                 {currentItemLabel}
               </span>
             </div>
-            {/* Composer, year, chips, video standard, which tune, and how long — in that order, with
-                anything the header does not carry left out along with its separator. See
-                `buildNowPlayingMetadata`. */}
-            {currentItemMetadataParts.length ? (
-              <p className="mt-0.5 text-sm leading-snug text-muted-foreground" data-testid="playback-current-credits">
-                {currentItemMetadataParts.map((part, index) => (
-                  <span key={`${part.kind}-${index}`}>
-                    {index > 0 ? NOW_PLAYING_METADATA_SEPARATOR : null}
-                    {/* The composer is the one thing on this line that is a person rather than a
-                        fact about the file, and "more by this person" is the commonest thing to
-                        want next. It has been printed here inertly all along; now it opens the
-                        search that was already there, pre-filled with the name.
+            {/* Two metadata lines, and the actions sit on the second one rather than on a row of
+                their own.
 
-                        Underlined rather than coloured, so the line still reads as one line and
-                        does not gain a second accent colour competing with the transport. */}
-                    {part.kind === "author" && onComposerSelected ? (
-                      <button
-                        type="button"
-                        className="underline decoration-dotted underline-offset-2 hover:text-foreground"
-                        onClick={() => onComposerSelected(part.text)}
-                        data-testid="playback-current-composer"
-                        title={`Find more by ${part.text}`}
-                      >
-                        {part.text}
-                      </button>
-                    ) : part.kind === "tunes" && onTunesSelected ? (
-                      <button
-                        type="button"
-                        className="underline decoration-dotted underline-offset-2 hover:text-foreground"
-                        onClick={onTunesSelected}
-                        data-testid="playback-current-tunes"
-                        title="Choose a tune from this file"
-                      >
-                        {part.text}
-                      </button>
-                    ) : (
-                      part.text
-                    )}
-                  </span>
-                ))}
+                Credits first - the author and the HVSC `released` value, which is one field
+                holding both year and publisher and is printed whole. Then the facts: chip, video
+                standard, which tune of how many, and how long. On a 320px screen that is the
+                difference between three rows and two, and the row the actions used to occupy was
+                otherwise empty.
+
+                Each segment carries its own trailing separator inside a nowrap span, so a wrap
+                happens after the separator rather than before it. Putting the separator in front
+                of the following segment reads the same on one line but leaves a stranded "·" at
+                the start of the next one as soon as the line is too narrow. */}
+            {creditsParts.length ? (
+              <p className="mt-0.5 text-sm leading-snug text-muted-foreground" data-testid="playback-current-credits">
+                {creditsParts.map((part, index) => renderMetadataPart(part, index, index < creditsParts.length - 1))}
               </p>
+            ) : null}
+            {factsParts.length || rankingControls ? (
+              <div className="mt-0.5 flex items-start justify-between gap-2">
+                <p className="min-w-0 text-sm leading-snug text-muted-foreground" data-testid="playback-current-facts">
+                  {factsParts.map((part, index) => renderMetadataPart(part, index, index < factsParts.length - 1))}
+                </p>
+                {/* shrink-0 so the actions keep their 44px targets whatever the facts line does. */}
+                {rankingControls ? (
+                  <div className="flex shrink-0 items-center" data-testid="playback-ranking-row">
+                    {rankingControls}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
             {/* What STIL says about this tune, folded away by default.
 
