@@ -1782,7 +1782,7 @@ export default function SettingsPage() {
             <SettingsSection
               id="diagnostics"
               title="Diagnostics"
-              summary="Logs, debug logging, diagnostics report"
+              summary="Logs, debug logging, diagnostics report, settings transfer"
               icon={FileText}
             >
               <div className="space-y-4">
@@ -3061,7 +3061,10 @@ export default function SettingsPage() {
           </SettingsSection>
 
           {/* Last. About */}
-          <SettingsSection id="about" title="About" summary="Version, licences, settings transfer" icon={Info}>
+          {/* The summary lists what this section holds and nothing else. It used to end in
+              "settings transfer", but Export settings and Import settings are in Diagnostics,
+              so anyone who opened About looking for them found only version rows and links. */}
+          <SettingsSection id="about" title="About" summary="Version, licences, documentation" icon={Info}>
             {/* The developer-mode gesture: repeated taps on the version block. It lives on the
                 block rather than on the card, so it cannot fight the section's own toggle. */}
             <div
