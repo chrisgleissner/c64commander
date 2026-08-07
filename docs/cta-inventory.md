@@ -588,7 +588,10 @@ ordinary focus-ring CTAs in both output modes.
   `remote-input-immersive-toggle` — R✅ I✅ — ENTERING starts the remembered
   Watch/Listen feeds and collapses ALL remaining chrome in one action (there is no
   separate Hide-controls step); leaving restores it. Auto-exits if the tier
-  downgrades mid-session
+  downgrades mid-session. One testid, two placements: the way IN sits on the
+  size-stepper row and reads "Game mode" ("Game" on the compact display profile);
+  the way OUT rides the Game mode heading row (`remote-input-game-mode-title`),
+  right-aligned, reads "Exit", and carries the accessible name "Exit game mode"
 - Orientation override (inside Game mode) — buttons —
   `remote-input-rotation-override` (group), `remote-input-rotation-{auto,0,90,270}`
   — R✅ I✅ _(pins the picture rotation and the key permutation for this session;
@@ -618,11 +621,14 @@ ordinary focus-ring CTAs in both output modes.
   controls when a video stream is on; the maximised zoom/pan surface for
   keypad-driven devices — 06-av-mirror-ux §7)_
   - Mode banner — status chip — `av-mirror-mode-chip` — not interactive (the
-    glanceable "Driving C64" vs "Adjusting view" view-lock signal)
+    glanceable view-lock signal; reads "C64" while driving the machine and "View"
+    while adjusting it, with the full "Driving C64" / "Adjusting view" as its
+    accessible name. Shares one status row along the top of the picture with the
+    video standard and frame rate, so the row reads e.g. `C64 … PAL 50 fps`)
   - Zoom out / Zoom in / Fit — buttons — `av-immersive-zoom-out`,
     `av-immersive-zoom-in`, `av-immersive-fit` — R✅ I✅
   - Follow activity — toggle button — `av-immersive-follow` — R✅ I✅ (off by default)
-  - Adjust / Done view-lock — toggle button — `av-immersive-mode-toggle` — R✅ I✅
+  - Fit / Done view-lock — toggle button — `av-immersive-mode-toggle` — R✅ I✅
     — flips physical-key ownership between relaying to the C64 and adjusting the
     view; also reachable via the `*`/Menu physical key and auto-reverts after idle
   - Minimap — draggable viewport rectangle — `av-mirror-minimap` /
@@ -719,7 +725,10 @@ available on this device", with no REST/firmware jargon]`
   shared primary-blue "shift" colour. SPACE and SHIFT
   each appear as two distinct keys (`remote-input-key-space` /
   `remote-input-key-space-bottom`, `remote-input-key-shift-left` /
-  `remote-input-key-shift-right`). — buttons —
+  `remote-input-key-shift-right`). On the compact display profile RUN/STOP is
+  printed `RSTOP` (and, on the Keys tab, RESTORE is printed `RSTR`), because at
+  320 CSS px the full names are wider than the keys that carry them; both keep
+  their full accessible names on every profile. — buttons —
   `remote-input-key-{run-stop,ctrl,space,return,f1,f2,f3,f4,f5,f6,f7,f8,cursor-up,cursor-down,cursor-left,cursor-right,commodore,shift-left,space-bottom,shift-right}`
   — R✅ I✅ (hidden in Game mode and Type mode). The modifier keys (RUN/STOP,
   CTRL, C=, both SHIFTs) have no kernal-buffer equivalent so are `[disabled off
@@ -735,7 +744,7 @@ the full machine:input tier]`; SPACE/RETURN/f-keys/cursors also work on the
   Android Back — releases all held inputs
 - **Joystick Game mode only**: Release All is intentionally hidden (no-look
   play); dismissal is via the sheet header X or the `remote-input-immersive-toggle`
-  "Exit game mode" control, both of which release all held inputs. Both live in the
+  "Exit" control, both of which release all held inputs. Both live in the
   chrome, which Game Mode collapses — the floating `remote-input-restore-chrome`
   handle (touch) or the Back key (any input) is the way out
 

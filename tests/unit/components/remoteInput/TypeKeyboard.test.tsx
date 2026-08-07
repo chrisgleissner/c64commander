@@ -6,11 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TypeKeyboard, type TypeKeyboardProps, type TypeKeyboardTier } from "@/components/remoteInput/TypeKeyboard";
+import { DisplayProfileProvider, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
 import { EMPTY_HELD_KEYBOARD_INPUTS } from "@/lib/remoteInput/keyboardHeldSet";
+import type { DisplayProfile } from "@/lib/displayProfiles";
 import type { HeldKeyboardInputs } from "@/lib/remoteInput/keyboardHeldSet";
 import type { KeyboardProfile } from "@/lib/remoteInput/keyboardProfile";
 
@@ -48,6 +50,26 @@ const renderKeyboard = (profile: KeyboardProfile, tier: TypeKeyboardTier = "full
   render(<TypeKeyboardHarness {...handlers} tier={tier} profile={profile} />);
   return handlers as ReturnType<typeof makeHandlers>;
 };
+
+/**
+ * The keyboard at a chosen KEYBOARD profile (how much room the grid has) and a chosen
+ * DISPLAY profile (how narrow the screen is). The two are independent, and only the
+ * second decides whether a key name is printed short.
+ */
+const ProfilePin = ({ profile, children }: { profile: DisplayProfile; children: React.ReactNode }) => {
+  const { setOverride } = useDisplayProfilePreference();
+  useEffect(() => setOverride(profile), [profile, setOverride]);
+  return <>{children}</>;
+};
+
+const renderKeyboardOnDisplay = (keyboardProfile: KeyboardProfile, displayProfile: DisplayProfile) =>
+  render(
+    <DisplayProfileProvider>
+      <ProfilePin profile={displayProfile}>
+        <TypeKeyboardHarness {...makeHandlers()} tier="full" profile={keyboardProfile} />
+      </ProfilePin>
+    </DisplayProfileProvider>,
+  );
 
 const renderKeyboardWithSnapshots = (profile: KeyboardProfile, tier: TypeKeyboardTier = "full") => {
   const handlers: Pick<TypeKeyboardProps, "onChar" | "onKey" | "onCursor" | "onSpecialKey"> = makeHandlers();
@@ -162,6 +184,24 @@ describe("TypeKeyboard", () => {
         expect(screen.getByTestId("remote-input-keyboard-system").children.length).toBe(2);
       },
     );
+
+    // Two independent questions. The keyboard profile says how much room the grid has;
+    // the display profile says how narrow the screen is. RESTORE is the longest name in
+    // its row, and on the 320px-wide display profile it is wider than its key — so the
+    // face is shortened there whatever the keyboard profile, and left alone elsewhere.
+    it("prints RESTORE short on the compact display profile only, keeping its accessible name", () => {
+      renderKeyboardOnDisplay("compact", "compact");
+      const narrow = screen.getByTestId("remote-input-key-restore");
+      expect(narrow).toHaveTextContent("RSTR");
+      expect(narrow.textContent).not.toContain("RESTORE");
+      expect(narrow).toHaveAttribute("aria-label", "Restore");
+
+      cleanup();
+      renderKeyboardOnDisplay("compact", "medium");
+      const wide = screen.getByTestId("remote-input-key-restore");
+      expect(wide).toHaveTextContent("RESTORE");
+      expect(wide).toHaveAttribute("aria-label", "Restore");
+    });
 
     it("renders a SHIFT | SPACE | RETURN bottom row (SPACE/RETURN/SHIFT appear twice)", () => {
       renderKeyboard("compact");

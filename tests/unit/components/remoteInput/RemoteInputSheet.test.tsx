@@ -791,7 +791,7 @@ describe("RemoteInputSheet", () => {
       fireEvent.keyDown(sheet, { code: "ArrowRight", key: "ArrowRight" });
       fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
-      // Reopen and touch-hold RIGHT via the analog stick - a genuinely new
+      // Reopen and touch-hold RIGHT via the Stick control - a genuinely new
       // hold, unrelated to the stale physical-key bookkeeping from before
       // the close.
       const zone = screen.getByTestId("remote-input-stick-zone");

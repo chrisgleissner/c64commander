@@ -339,19 +339,49 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     </div>
   );
 
-  const gameModeToggle = joystickAvailable && session.outputMode === "joystick" && (
+  // "Game mode" is the widest control on the row that also carries the size stepper,
+  // and on the 320px-wide compact profile the two no longer share a line. The shorter
+  // face is compact-only; the wider profiles keep the full name.
+  const gameModeLabel = isCompactDisplay ? "Game" : "Game mode";
+
+  const gameModeAvailable = joystickAvailable && session.outputMode === "joystick";
+
+  /**
+   * The way INTO Game Mode. The way out is {@link exitGameModeToggle}, which rides the
+   * header row instead — the two never render together, and they share one testid so
+   * "the Game Mode toggle" stays a single control to a test or a hardware harness.
+   */
+  const enterGameModeToggle = gameModeAvailable && !immersive && (
     <Button
       size="sm"
-      variant={immersive ? "default" : "secondary"}
+      variant="secondary"
       data-testid="remote-input-immersive-toggle"
-      aria-pressed={immersive}
-      onClick={() => {
-        if (immersive) exitGameMode();
-        else void startGameMode();
-      }}
+      aria-pressed={false}
+      onClick={() => void startGameMode()}
     >
-      {immersive ? <Minimize2 className="mr-1.5 h-4 w-4" /> : <Maximize2 className="mr-1.5 h-4 w-4" />}
-      {immersive ? "Exit game mode" : "Game mode"}
+      <Maximize2 className="mr-1.5 h-4 w-4" />
+      {gameModeLabel}
+    </Button>
+  );
+
+  /**
+   * The way OUT of Game Mode, on the header row beside the "Game mode" heading rather
+   * than on the row below it — where it used to sit, spending a whole line of a screen
+   * that has few to spare. The face is just "Exit"; the accessible name stays the full
+   * "Exit game mode", and the ordinary Button sizing keeps it at the 44px target size.
+   */
+  const exitGameModeToggle = gameModeAvailable && immersive && (
+    <Button
+      size="sm"
+      variant="default"
+      className="shrink-0"
+      data-testid="remote-input-immersive-toggle"
+      aria-pressed
+      aria-label="Exit game mode"
+      onClick={() => exitGameMode()}
+    >
+      <Minimize2 className="mr-1.5 h-4 w-4" />
+      Exit
     </Button>
   );
 
@@ -489,7 +519,12 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
           >
             <div className="flex items-center justify-between gap-2">
               {gameMode ? (
-                <span className="text-sm font-semibold text-muted-foreground">Game mode</span>
+                <span
+                  className="text-sm font-semibold text-muted-foreground"
+                  data-testid="remote-input-game-mode-title"
+                >
+                  {gameModeLabel}
+                </span>
               ) : (
                 <div className="flex min-w-0 items-center gap-2" data-testid="remote-input-output-mode-toggle">
                   <Button
@@ -525,11 +560,14 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                   Release All
                 </Button>
               ) : null}
+              {/* The way out of Game Mode, right-aligned beside the heading. Release All
+                  is deliberately absent in Game Mode, so this row has the space. */}
+              {exitGameModeToggle}
             </div>
             {session.outputMode === "joystick" ? (
               <div className="flex items-center justify-between gap-2">
                 {sizeStepper}
-                {gameModeToggle}
+                {enterGameModeToggle}
               </div>
             ) : null}
             {/* Game Mode's chrome carries the orientation control: it is what makes the

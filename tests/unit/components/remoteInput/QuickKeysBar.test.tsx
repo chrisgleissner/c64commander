@@ -6,10 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QuickKeysBar, type QuickKeysBarProps } from "@/components/remoteInput/QuickKeysBar";
+import { DisplayProfileProvider, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
+import type { DisplayProfile } from "@/lib/displayProfiles";
 import { EMPTY_HELD_KEYBOARD_INPUTS } from "@/lib/remoteInput/keyboardHeldSet";
 import type { HeldKeyboardInputs } from "@/lib/remoteInput/keyboardHeldSet";
 
@@ -63,6 +65,20 @@ const FULL_ONLY_TEST_IDS = [
   "remote-input-key-shift-left",
   "remote-input-key-shift-right",
 ];
+
+/** Renders the bar at a chosen display profile, the way the app's own provider resolves it. */
+const ProfilePin = ({ profile, children }: { profile: DisplayProfile; children: React.ReactNode }) => {
+  const { setOverride } = useDisplayProfilePreference();
+  useEffect(() => setOverride(profile), [profile, setOverride]);
+  return <>{children}</>;
+};
+
+const renderAtProfile = (profile: DisplayProfile, element: React.ReactElement) =>
+  render(
+    <DisplayProfileProvider>
+      <ProfilePin profile={profile}>{element}</ProfilePin>
+    </DisplayProfileProvider>,
+  );
 
 const makeHandlers = () => ({
   onChar: vi.fn(),
@@ -289,6 +305,23 @@ describe("QuickKeysBar", () => {
     const returnKey = screen.getByTestId("remote-input-key-return");
     expect(runStop.compareDocumentPosition(returnKey) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(runStop.nextElementSibling).not.toBe(returnKey);
+  });
+
+  // On the 320px-wide compact profile "RUN/STOP" is wider than the key it names, and
+  // the row it leads holds four keys. The printed face shortens there and nowhere else;
+  // the accessible name stays the full key name on every profile.
+  it("prints RUN/STOP short on the compact profile only, and keeps its accessible name", () => {
+    renderAtProfile("compact", <QuickKeysBarHarness {...makeHandlers()} tier="full" />);
+    const compactRunStop = screen.getByTestId("remote-input-key-run-stop");
+    expect(compactRunStop).toHaveTextContent("RSTOP");
+    expect(compactRunStop.textContent).not.toContain("RUN/STOP");
+    expect(compactRunStop).toHaveAttribute("aria-label", "Run Stop");
+
+    cleanup();
+    renderAtProfile("medium", <QuickKeysBarHarness {...makeHandlers()} tier="full" />);
+    const mediumRunStop = screen.getByTestId("remote-input-key-run-stop");
+    expect(mediumRunStop).toHaveTextContent("RUN/STOP");
+    expect(mediumRunStop).toHaveAttribute("aria-label", "Run Stop");
   });
 
   it("colours both SHIFT keys with the shared primary shift treatment", () => {

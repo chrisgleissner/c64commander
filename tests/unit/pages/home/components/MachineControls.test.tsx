@@ -1,7 +1,10 @@
+import { useEffect } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MachineControls } from "@/pages/home/components/MachineControls";
 import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
+import { DisplayProfileProvider, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
+import type { DisplayProfile } from "@/lib/displayProfiles";
 
 const appListenerState = vi.hoisted(() => ({
   backButtonListener: null as null | (() => void),
@@ -77,6 +80,20 @@ const defaultProps = {
   onAction: vi.fn().mockImplementation((fn: () => Promise<void>) => fn()),
 };
 
+/** Renders the tiles at a chosen display profile, the way the app's own provider resolves it. */
+const ProfilePin = ({ profile }: { profile: DisplayProfile }) => {
+  const { setOverride } = useDisplayProfilePreference();
+  useEffect(() => setOverride(profile), [profile, setOverride]);
+  return <MachineControls {...defaultProps} gameModeVisible onGameMode={vi.fn()} />;
+};
+
+const renderAtProfile = (profile: DisplayProfile) =>
+  render(
+    <DisplayProfileProvider>
+      <ProfilePin profile={profile} />
+    </DisplayProfileProvider>,
+  );
+
 describe("MachineControls", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -135,6 +152,20 @@ describe("MachineControls", () => {
     const firstDestructive = labels.findIndex((label) => destructive.includes(label ?? ""));
     const lastSafe = labels.reduce((last, label, index) => (destructive.includes(label ?? "") ? last : index), -1);
     expect(firstDestructive).toBeGreaterThan(lastSafe);
+  });
+
+  // Quick Actions is two columns wide on the compact profile (320 CSS px across), so each
+  // tile has roughly 150px for its label. The tile keeps its position and its handler; only
+  // the printed label shortens, and only there.
+  it("shortens the Game Mode tile to Game on the compact profile, and only there", () => {
+    const compact = renderAtProfile("compact");
+    const compactTile = screen.getByTestId("home-machine-inline-openGameMode");
+    expect(compactTile).toHaveTextContent("Game");
+    expect(compactTile.textContent).not.toContain("Game Mode");
+    compact.unmount();
+
+    renderAtProfile("medium");
+    expect(screen.getByTestId("home-machine-inline-openGameMode")).toHaveTextContent("Game Mode");
   });
 
   it("renders experimental RAM actions only when requested", () => {

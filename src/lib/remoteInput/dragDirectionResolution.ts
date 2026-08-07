@@ -16,7 +16,7 @@ export const DRAG_DEAD_ZONE_FRACTION = 0.25;
  * into the 0-2 joystick directions it currently represents (8-way: an axis
  * fires once its component passes a ~20-degree threshold), given a reference
  * radius that scales the dead zone. Shared by every drag-based joystick
- * control (the Analog stick's fixed-radius knob and the Swipe pad's
+ * control (the Stick control's fixed-radius knob and the Swipe pad's
  * unbounded surface) so both follow the exact same direction model.
  */
 export const resolveDragDirections = (dx: number, dy: number, radius: number): JoystickInputName[] => {

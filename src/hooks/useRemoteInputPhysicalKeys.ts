@@ -118,7 +118,7 @@ export const useRemoteInputPhysicalKeys = ({
       const mirrorHandle = mirrorRef.current;
       if (!mirrorHandle || !action) return false;
       // A/V mirror view-lock (06-av-mirror-ux §7.1): the `*`/menu key ALWAYS flips
-      // between Driving C64 and Adjusting view (never ambiguous); while Adjusting,
+      // between driving the C64 and adjusting the view (never ambiguous); while adjusting,
       // physical keys pan/zoom the mirror instead of relaying to the C64.
       if (action === "star" || action === "openMenu") {
         event.preventDefault();

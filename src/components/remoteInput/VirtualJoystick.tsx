@@ -64,7 +64,7 @@ export type VirtualJoystickProps = {
 type MovementStyle = "stick" | "dpad" | "swipe";
 
 const MOVEMENT_STYLES: ReadonlyArray<{ id: MovementStyle; label: string; icon: typeof Gamepad2 }> = [
-  { id: "stick", label: "Analog", icon: Gamepad2 },
+  { id: "stick", label: "Stick", icon: Gamepad2 },
   { id: "dpad", label: "D-Pad", icon: Hand },
   { id: "swipe", label: "Swipe", icon: MoveDiagonal },
 ];
