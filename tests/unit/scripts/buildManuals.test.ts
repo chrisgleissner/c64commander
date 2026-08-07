@@ -31,35 +31,30 @@ describe("manual generator", () => {
 
     expect(c64Commander).toContain("# C64 Commander Manual");
     expect(c64Commander).not.toContain("C64U Remote");
-    expect(c64Commander).toContain("profiles/compact/04-app-ready.png");
+    // C64 Commander is illustrated at medium, C64U Remote at compact.
+    expect(c64Commander).toContain("profiles/medium/04-app-ready.png");
     expect(c64Commander).toContain("HVSC preparation");
     expect(c64Commander).toContain("On by default. You can turn it off in Settings → Stable Features.");
   });
 
-  /**
-   * Both manuals illustrate the app at the compact display profile, the smallest screen
-   * the app supports. A reader on a larger screen sees more of a page than the picture
-   * shows; a reader on the smallest screen looking at a picture taken on a larger one
-   * cannot find the controls it shows.
-   *
-   * The screenshot corpus holds a copy of each profile-scoped picture per profile, so
-   * this is a per-manual choice that a future edit could silently change back. The guard
-   * is the absence of every other profile directory rather than the presence of the
-   * compact one, because a single stray non-compact reference is the failure to catch.
-   */
-  it("embeds only compact-profile screenshots in every manual", async () => {
+  it("embeds screenshots from its own display profile only, one profile per manual", async () => {
     const contexts = await contextByVariant();
+    const expectedProfile: Record<string, string> = { "c64u-remote": "compact", c64commander: "medium" };
 
-    for (const context of Object.values(contexts)) {
+    for (const [variantId, context] of Object.entries(contexts)) {
       const manual = renderManualMarkdown(context);
       const profileReferences = [...manual.matchAll(/\/profiles\/([a-z]+)\//g)].map((match) => match[1]);
+      const expected = expectedProfile[variantId];
 
+      expect(expected, `no expected profile recorded for ${variantId}`).toBeDefined();
       expect(profileReferences.length).toBeGreaterThan(0);
-      expect([...new Set(profileReferences)]).toEqual(["compact"]);
+      expect([...new Set(profileReferences)]).toEqual([expected]);
       // The keyboard picture is chosen by profile through its own helper rather than a
       // path placeholder, so it needs asserting separately.
-      expect(manual).toContain("home/remote-input/03-keyboard-compact.png");
-      expect(manual).not.toContain("home/remote-input/04-keyboard-medium.png");
+      const keyboardShot = expected === "compact" ? "03-keyboard-compact.png" : "04-keyboard-medium.png";
+      const otherShot = expected === "compact" ? "04-keyboard-medium.png" : "03-keyboard-compact.png";
+      expect(manual).toContain(`home/remote-input/${keyboardShot}`);
+      expect(manual).not.toContain(`home/remote-input/${otherShot}`);
       expect(manual).not.toContain("home/remote-input/05-keyboard-expanded.png");
     }
   });
