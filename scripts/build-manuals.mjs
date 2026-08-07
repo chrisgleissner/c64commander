@@ -1728,7 +1728,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           image("Game Mode, played on the physical keys", profile, "home/remote-input/07-game-mode-keys.png"),
           "",
-          "With the controls out of the way, three keys still reach everything. `#` brings RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again. `*`, or the menu key, changes between driving the C64 and adjusting the view. **Back** leaves. The floating **Controls** handle at the top brings the whole toolbar back, and **Show joystick** on that toolbar brings the on-screen joystick back.",
+          "With the controls out of the way, three keys still reach everything. `#` brings RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again. `*`, or the menu key, changes between driving the C64 and adjusting the view. **Back** leaves. The floating **cog** button at the top of the picture brings the whole toolbar back, and **Show joystick** on that toolbar brings the on-screen joystick back.",
           "",
           "Playing on a television? Turn **Watch** off once and Game Mode will keep opening without the picture — the controls take the space instead, so it is never blank.",
           "",

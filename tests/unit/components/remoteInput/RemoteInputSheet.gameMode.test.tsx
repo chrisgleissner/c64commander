@@ -167,6 +167,23 @@ describe("RemoteInputSheet — Game Mode", () => {
       expect(screen.getByTestId("remote-input-restore-chrome")).toBeInTheDocument();
     });
 
+    /**
+     * The handle sits over the picture, so it is drawn as a cog alone rather than a cog
+     * with the word "Controls" beside it. Two things have to survive losing the text: the
+     * accessible name, which is now the only way anything but a sighted user identifies
+     * the button, and the 44px tap target, which the text used to provide.
+     */
+    it("shows the restore handle as an icon that still names itself and meets the tap target", () => {
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      act(() => requestGameMode({ startedVideo: false, startedAudio: false }));
+
+      const handle = screen.getByTestId("remote-input-restore-chrome");
+      expect(handle).toHaveAccessibleName("Show controls");
+      expect(handle.textContent).toBe("");
+      expect(handle.className).toContain("min-h-11");
+      expect(handle.className).toContain("min-w-11");
+    });
+
     it("stops only the streams the launch started when the sheet closes", () => {
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
       act(() => requestGameMode({ startedVideo: true, startedAudio: false }));

@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ChevronDown,
+  Settings2,
   Gamepad2,
   Keyboard as KeyboardIcon,
   Maximize2,
@@ -475,16 +475,22 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
         {/* Game Mode hides the header, the pinned toolbar and the mirror controls so only the
             live screen and whatever control surface applies remain. A single always-visible
             floating handle brings it all back — "pull the controls down" over the picture. */}
+        {/* The handle sits over the picture, where every pixel is the game. A cog says
+            "settings for this screen" in the width of an icon; the word "Controls" beside
+            it cost about 60px of a 320px-wide screen for a label the icon already
+            carries. The accessible name is unchanged, so the focus ring and any screen
+            reader still announce "Show controls", and min-h-11/min-w-11 keeps the target
+            at the 44px floor now that the text no longer sets the size. */}
         {chromeHidden ? (
           <button
             type="button"
             data-testid="remote-input-restore-chrome"
             aria-label="Show controls"
+            title="Show controls"
             onClick={chrome.show}
-            className="absolute left-1/2 top-1 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/55 px-3 py-1 text-xs font-medium text-white/90 shadow backdrop-blur transition-colors hover:bg-black/70"
+            className="absolute left-1/2 top-1 z-30 flex min-h-11 min-w-11 -translate-x-1/2 items-center justify-center rounded-full bg-black/55 text-white/90 shadow backdrop-blur transition-colors hover:bg-black/70"
           >
-            <ChevronDown className="h-4 w-4" />
-            Controls
+            <Settings2 className="h-5 w-5" />
           </button>
         ) : null}
         {chromeHidden ? null : (
