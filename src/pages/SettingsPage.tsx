@@ -269,6 +269,7 @@ const describeSwitchFailure = (
 
 export default function SettingsPage() {
   const { profile } = useDisplayProfile();
+  const isCompactProfile = profile === "compact";
   const navigate = useNavigate();
   const { status, baseUrl, runtimeBaseUrl, deviceHost, updateConfig, refetch } = useC64Connection();
   const [textScaleId, setTextScaleIdState] = useState(getTextScaleId);
@@ -1185,7 +1186,14 @@ export default function SettingsPage() {
                         { title: option.label },
                         "ThemeOption",
                       )}
-                      className="h-auto flex-col gap-2 whitespace-normal rounded-lg p-4"
+                      // p-4 leaves each of the three columns about 47px of content at 320px,
+                      // and "Light" needs 48, so it was set as "Ligh"/"t". The smallest screen
+                      // gets p-2, which returns roughly 16px per column; break-normal keeps a
+                      // word whole even if a future label is longer still.
+                      className={cn(
+                        "h-auto flex-col gap-2 whitespace-normal break-normal rounded-lg",
+                        isCompactProfile ? "p-2" : "p-4",
+                      )}
                     >
                       <Icon className={`h-6 w-6 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
                       <span className={`text-sm ${isActive ? "font-medium" : ""}`}>{option.label}</span>

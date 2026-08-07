@@ -565,10 +565,13 @@ const EvidenceRow = ({
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-foreground">{entry.title}</p>
             {entry.detail ? <p className="truncate text-xs text-muted-foreground">{entry.detail}</p> : null}
+            {/* The type is a fixed vocabulary word and must stay whole: flex was shrinking
+                it to the width of the row and "Actions" was set as "Action"/"s". The
+                contributor is the part that can afford to be cut short. */}
             <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span>{entry.type}</span>
-              {entry.contributor ? <span>· {entry.contributor}</span> : null}
-              <span>· {formatDiagnosticsTimestamp(entry.timestamp)}</span>
+              <span className="shrink-0 whitespace-nowrap">{entry.type}</span>
+              {entry.contributor ? <span className="min-w-0 truncate">· {entry.contributor}</span> : null}
+              <span className="shrink-0 whitespace-nowrap">· {formatDiagnosticsTimestamp(entry.timestamp)}</span>
               {showDeviceLabel && entry.deviceLabel ? <span>· {entry.deviceLabel}</span> : null}
             </div>
           </div>
