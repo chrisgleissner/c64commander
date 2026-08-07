@@ -76,4 +76,23 @@ describe("text scale", () => {
     expect(root.style.getPropertyValue(TEXT_SCALE_VARIABLE)).toBe("1");
     expect(root.dataset.textScale).toBe(DEFAULT_TEXT_SCALE_ID);
   });
+
+  it("does nothing, rather than throwing, when there is no document", () => {
+    // The module documents itself as safe to call before the DOM exists. Nothing in the
+    // app reaches it that way today - the entry point runs in a browser - so this pins
+    // the documented contract for any future caller that runs earlier.
+    const root = document.documentElement;
+    applyTextScaleToDocument("large");
+    const before = root.style.getPropertyValue(TEXT_SCALE_VARIABLE);
+
+    const original = Object.getOwnPropertyDescriptor(globalThis, "document");
+    Object.defineProperty(globalThis, "document", { value: undefined, configurable: true });
+    try {
+      expect(() => applyTextScaleToDocument("largest")).not.toThrow();
+    } finally {
+      if (original) Object.defineProperty(globalThis, "document", original);
+    }
+
+    expect(root.style.getPropertyValue(TEXT_SCALE_VARIABLE)).toBe(before);
+  });
 });
