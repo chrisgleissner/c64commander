@@ -804,9 +804,41 @@ const waitForStableRender = async (page: Page) => {
   await page.evaluate(() => new Promise(requestAnimationFrame));
 };
 
-const applyDisplayProfileViewport = async (page: Page, profileId: DisplayProfileViewportId) => {
+/**
+ * Compact width with room to photograph a whole bottom sheet or card.
+ *
+ * The manuals illustrate the app at the compact display profile, and the profile is
+ * chosen by width, so these captures render exactly the layout a compact screen gets.
+ * Height is a separate matter. A compact screen is 426 CSS px tall, and a sheet or card
+ * taller than that has to be photographed by `locator.screenshot()`, which stitches an
+ * over-tall element by scrolling the page. This app scrolls inside `main` rather than on
+ * the page, so a stitched capture comes back as mostly flat page background with the tab
+ * bar bleeding through it. Giving the capture 680 px of height keeps the subject in one
+ * piece. The three keyboard captures in "capture remote-input screenshots" have used the
+ * same width/height split since they were written.
+ */
+const COMPACT_SHEET_VIEWPORT = { width: 320, height: 680 };
+
+/**
+ * Compact width with room for a full-page card, which is taller again.
+ *
+ * Two captures need this. The Live View card measures about 900 CSS px at the compact
+ * width, because its controls stack instead of sitting in a row and the statistics panel
+ * below them wraps; 680 px leaves it to the stitching described above, which fills the
+ * lower third of the capture with page background. The playback card is taller still, and
+ * its caption in the manuals names controls that sit about 790 CSS px down it. The
+ * scrollable area is the viewport less the app bar and the tab bar, so both need roughly
+ * 1060 px of viewport.
+ */
+const COMPACT_CARD_VIEWPORT = { width: 320, height: 1080 };
+
+const applyDisplayProfileViewport = async (
+  page: Page,
+  profileId: DisplayProfileViewportId,
+  options: { viewport?: { width: number; height: number } } = {},
+) => {
   const profile = DISPLAY_PROFILE_VIEWPORTS[profileId];
-  await page.setViewportSize(profile.viewport);
+  await page.setViewportSize(options.viewport ?? profile.viewport);
   const applyOverride = async () => {
     await page.evaluate((override) => {
       localStorage.setItem("c64u_display_profile_override", override);
@@ -1861,8 +1893,13 @@ test.describe("App screenshots", () => {
       }
 
       // Refresh joystick + game-mode shots so the header reads "Remote Input".
+      //
+      // Taken at the compact profile because the manuals embed them, and every manual
+      // illustrates the app at the smallest screen it supports. The three keyboard shots
+      // above are the exception: they exist to show how the profiles differ, so each one
+      // keeps the profile it demonstrates.
       try {
-        await setProfile(393, 760, "medium");
+        await setProfile(COMPACT_SHEET_VIEWPORT.width, COMPACT_SHEET_VIEWPORT.height, "compact");
         await page.getByTestId("remote-input-mode-joystick").click();
         await expect(page.getByTestId("remote-input-virtual-joystick")).toBeVisible();
         await captureScreenshot(page, testInfo, "home/remote-input/01-joystick.png", { locator: sheet });
@@ -2430,6 +2467,11 @@ test.describe("App screenshots", () => {
 
       await page.goto("/");
       await waitForConnected(page);
+      // Every picture this test takes is embedded in the manuals, and the manuals
+      // illustrate the app at the compact profile - the smallest screen it supports.
+      // The two Live View card captures need the taller viewport; the Remote Input sheets
+      // further down drop back to the sheet height, which is what they fit in.
+      await applyDisplayProfileViewport(page, "compact", { viewport: COMPACT_CARD_VIEWPORT });
 
       const liveView = getActiveMain(page).getByTestId("live-view-card");
       await expect(liveView).toBeVisible();
@@ -2445,6 +2487,9 @@ test.describe("App screenshots", () => {
       await captureScreenshot(page, testInfo, "home/content-explorer/02-live-view-expanded.png", { locator: liveView });
 
       // Remote Input immersive mirror: the zoomable screen with the view-lock controls.
+      // A sheet never grows past the viewport, so the shorter compact viewport is enough
+      // for the three captures below and keeps them a readable shape in the manual.
+      await applyDisplayProfileViewport(page, "compact", { viewport: COMPACT_SHEET_VIEWPORT });
       await getActiveMain(page).getByTestId("home-machine-inline-openRemoteInput").click();
       const sheet = page.getByTestId("remote-input-sheet");
       await expect(sheet).toBeVisible();
@@ -2659,6 +2704,12 @@ test.describe("App screenshots", () => {
       await installListPreviewLimit(page, 3);
       await page.goto("/play");
       await waitForConnected(page);
+      // Four of this test's pictures are embedded in the manuals (the transport, the
+      // station launcher, the search sheet and the tune list), and the manuals
+      // illustrate the app at the compact profile - the smallest screen it supports.
+      // The override is written to localStorage, so it survives the `page.goto` calls
+      // further down. The one capture taken back at medium is called out where it happens.
+      await applyDisplayProfileViewport(page, "compact", { viewport: COMPACT_SHEET_VIEWPORT });
       await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
 
       // Open the stations launcher (song / style / taste seeds).
@@ -2712,11 +2763,24 @@ test.describe("App screenshots", () => {
       // background: the committed file was 993x6391 with roughly 4200 px of flat
       // blue above and below about 2000 px of actual content. Every other settings
       // capture is a viewport shot for this reason, and this one now matches.
+      //
+      // This one capture goes back to the medium profile. It is a README picture rather
+      // than a manual one, and a viewport shot of an over-tall section shows only as much
+      // of that section as the viewport is tall: at compact that is 426 CSS px against
+      // 727, so a compact capture would lose roughly two fifths of the controls it exists
+      // to show. The compact profile is restored immediately afterwards for the remaining
+      // manual captures.
       await page.goto("/settings");
+      await applyDisplayProfileViewport(page, "medium");
       const section = page.getByTestId("settings-sid-radio");
       await expect(section).toBeVisible();
       await section.scrollIntoViewIfNeeded();
       await captureScreenshot(page, testInfo, "settings/sid-radio.png");
+      // Back to compact, and to the taller of the two compact viewports. The caption on
+      // this picture in the manuals names the transport, the progress bar and the volume
+      // control, and at the compact width those three sit about 790 CSS px down the card,
+      // so the shorter compact viewport would cut the capture off above two of them.
+      await applyDisplayProfileViewport(page, "compact", { viewport: COMPACT_CARD_VIEWPORT });
 
       // The playback card, taken last and with the clock stopped.
       //
@@ -2755,6 +2819,7 @@ test.describe("App screenshots", () => {
       const tunesLink = getActiveMain(page).getByTestId("playback-current-tunes");
       await expect(tunesLink).toBeVisible();
       await tunesLink.click();
+      await applyDisplayProfileViewport(page, "compact", { viewport: COMPACT_SHEET_VIEWPORT });
       const tuneSheet = page.getByTestId("tune-list-sheet");
       await expect(tuneSheet).toBeVisible();
       // Wait for the names and lengths, which are looked up after the numbered rows are drawn.
@@ -2928,6 +2993,12 @@ test.describe("App screenshots", () => {
       // How far the search reaches. HVSC files sixty thousand tunes by composer, so a filter that
       // only ever sees the folder on screen can find nothing you did not already know the location
       // of; the scope control is what makes the same text search the whole archive.
+      //
+      // Taken at the compact profile, unlike the three captures above it. This is the one
+      // picture in this test that the manuals embed, and the manuals illustrate the app at
+      // the smallest screen it supports. The other three are README pictures and stay at
+      // the medium profile the whole file is captured at.
+      await applyDisplayProfileViewport(page, "compact", { viewport: COMPACT_SHEET_VIEWPORT });
       const scope = readyDialog.getByTestId("add-items-search-scope");
       await expect(scope).toBeVisible();
       await readyDialog.getByTestId("add-items-scope-source").click();
