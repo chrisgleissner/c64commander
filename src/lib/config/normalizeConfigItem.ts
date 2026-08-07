@@ -30,8 +30,14 @@ export const normalizeConfigItem = (config: unknown): NormalizedConfigItem => {
   const optionsCandidate = cfg.options ?? cfg.values ?? cfg.choices;
   const details = cfg.details as Record<string, unknown> | undefined;
   const presetsCandidate = details?.presets ?? cfg.presets ?? cfg.values ?? cfg.choices;
-  const options = Array.isArray(optionsCandidate) ? (optionsCandidate as string[]) : undefined;
-  const presets = Array.isArray(presetsCandidate) ? (presetsCandidate as string[]) : undefined;
+  // A device is free to report enum choices as JSON numbers (`"options":[0,20,40]`)
+  // rather than strings. Casting such an array straight to `string[]` used to hand
+  // every consumer a `number` where the declared type promises a `string`, and the
+  // first consumer to call a string method on an entry threw — for example the SID
+  // mixer's `resolveOptionIndex`, whose `normalizeOptionToken(option)` calls
+  // `option.trim()`. Coerce here so the declared type holds at runtime.
+  const options = Array.isArray(optionsCandidate) ? optionsCandidate.map((option) => String(option)) : undefined;
+  const presets = Array.isArray(presetsCandidate) ? presetsCandidate.map((preset) => String(preset)) : undefined;
 
   const min = (details?.min ?? cfg.min ?? cfg.minimum) as number | undefined;
   const max = (details?.max ?? cfg.max ?? cfg.maximum) as number | undefined;

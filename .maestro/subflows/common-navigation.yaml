@@ -28,10 +28,15 @@ tags:
           text: "Close app"
           optional: true
       - waitForAnimationToEnd
+      # Waits on the Home page's own content, not on "Home". "Home" is the tab bar's
+      # label, is rendered outside the page, and stays on screen however the page
+      # itself fared - so a wait on it cannot tell a rendered page from a crashed one.
+      # "Firmware" is a row of the System info card, the first thing Home renders.
       - extendedWaitUntil:
           visible:
-            text: "Home"
+            text: "Firmware"
           timeout: ${TIMEOUT}
+      - assertNotVisible: "Something went wrong"
 - retry:
     maxRetries: 3
     commands:
@@ -56,6 +61,7 @@ tags:
     visible: "Play Files"
     timeout: ${TIMEOUT}
 - assertVisible: "Play Files"
+- assertNotVisible: "Something went wrong"
 - takeScreenshot: play-tab
 # Settings, Config and Home are retried the same way as Play, and for the same reason:
 # the device picker re-arms itself while a background scan keeps finding nothing, so it
@@ -72,9 +78,10 @@ tags:
           id: "tab-settings"
           optional: true
       - extendedWaitUntil:
-          visible: "Settings"
+          visible: "Appearance"
           timeout: ${SHORT_TIMEOUT}
-- assertVisible: "Settings"
+- assertVisible: "Appearance"
+- assertNotVisible: "Something went wrong"
 - takeScreenshot: settings-tab
 - retry:
     maxRetries: 3
@@ -87,9 +94,10 @@ tags:
           id: "tab-config"
           optional: true
       - extendedWaitUntil:
-          visible: "Config"
+          visible: "Memory & ROMs"
           timeout: ${SHORT_TIMEOUT}
-- assertVisible: "Config"
+- assertVisible: "Memory & ROMs"
+- assertNotVisible: "Something went wrong"
 - takeScreenshot: config-tab
 - retry:
     maxRetries: 3
@@ -102,7 +110,8 @@ tags:
           id: "tab-home"
           optional: true
       - extendedWaitUntil:
-          visible: "Home"
+          visible: "Firmware"
           timeout: ${SHORT_TIMEOUT}
-- assertVisible: "Home"
+- assertVisible: "Firmware"
+- assertNotVisible: "Something went wrong"
 - takeScreenshot: home-tab
