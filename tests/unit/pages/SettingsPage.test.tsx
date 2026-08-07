@@ -1603,6 +1603,30 @@ describe("SettingsPage", () => {
       expect(screen.getByTestId("settings-section-device-safety")).toHaveTextContent(/network timing/i);
     });
 
+    // The summaries are the only wayfinding on this page: every section but Connection
+    // starts closed, so a reader looking for a control picks a section by its summary and
+    // opens it. A summary that names a control the section does not hold sends them to the
+    // wrong place and gives them no way to tell.
+    //
+    // About's summary used to end in "settings transfer" while Export settings and Import
+    // settings were, and still are, in Diagnostics. This asserts the general rule rather
+    // than that one wording: whichever section's summary offers settings transfer has to be
+    // the section the buttons are in.
+    it("offers settings transfer from the section that actually holds it", () => {
+      renderSettingsPage();
+
+      // The section wrapper only. Its own toggle carries the summary text as well, and
+      // matching both would count one section twice.
+      const sections = screen
+        .queryAllByTestId(/^settings-section-(?!toggle-)[a-z-]+$/)
+        .filter((section) => /settings transfer/i.test(section.textContent ?? ""));
+
+      expect(sections).toHaveLength(1);
+      const [offering] = sections;
+      expect(within(offering).getByRole("button", { name: /export settings/i })).toBeInTheDocument();
+      expect(within(offering).getByRole("button", { name: /import settings/i })).toBeInTheDocument();
+    });
+
     it("keeps a section open across visits once it has been opened", () => {
       const first = render(
         <RouterProvider
