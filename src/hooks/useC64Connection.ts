@@ -206,6 +206,11 @@ export function useC64Connection() {
       // refetches, but that is intentional and safe: the cached info is at most
       // HEALTH_CHECK_INTERVAL_MS old, so a sub-second-stale snapshot is preferred
       // to a redundant connection that can churn the fragile firmware.
+      //
+      // The cache lookup is per-epoch, because the key now carries the routing
+      // epoch. A routing change therefore starts with no cached value and this
+      // guard cannot return one, which is what makes the read run against the
+      // settled routing rather than coalescing onto the previous routing's data.
       if (!shouldRunScheduledHealthCheck()) {
         const cached = queryClient.getQueryData<DeviceInfo>(infoQueryKey);
         if (cached) {

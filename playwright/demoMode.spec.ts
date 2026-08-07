@@ -404,7 +404,7 @@ test.describe("Automatic Demo Mode", () => {
     server = await createMockC64Server({});
 
     await page.addInitScript(
-      ({ demoBaseUrl }: { demoBaseUrl: string }) => {
+      ({ demoBaseUrl, currentDeviceHostKey }: { demoBaseUrl: string; currentDeviceHostKey: string }) => {
         const unreachableBaseUrl = "http://127.0.0.1:65534";
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
         (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = unreachableBaseUrl;
@@ -418,10 +418,10 @@ test.describe("Automatic Demo Mode", () => {
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
         localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
         localStorage.setItem("c64u_background_rediscovery_interval_ms", "5000");
-        localStorage.setItem("c64u_device_host", "127.0.0.1:65534");
+        localStorage.setItem(currentDeviceHostKey, "127.0.0.1:65534");
         delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
       },
-      { demoBaseUrl: server.baseUrl },
+      { demoBaseUrl: server.baseUrl, currentDeviceHostKey: CURRENT_DEVICE_HOST_KEY },
     );
 
     // A loopback mock answers /v1/info in about a millisecond, which is fast
@@ -432,7 +432,10 @@ test.describe("Automatic Demo Mode", () => {
     // needs, and without the delay this test only fails intermittently.
     await page.route(`${server.baseUrl}/v1/info*`, async (route: Route) => {
       await new Promise((resolve) => setTimeout(resolve, DEMO_INFO_RESPONSE_DELAY_MS));
-      await route.continue();
+      // The delay can outlive the test, and continuing a route on a closed page
+      // throws. That would fail the test during teardown, reporting a problem that
+      // is not the one under test.
+      await route.continue().catch(() => {});
     });
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -440,8 +443,16 @@ test.describe("Automatic Demo Mode", () => {
     const indicator = page.locator('[data-panel-position="1"]').getByTestId("unified-health-badge");
     await expect(indicator).toHaveAttribute("data-connection-state", "DEMO_ACTIVE", { timeout: 15000 });
 
+    // Waited for rather than probed. `isVisible()` is a point-in-time read, and the
+    // dialog is portal-rendered, so a probe can return false while it is still being
+    // mounted - which would skip the dismissal and leave it covering the card this
+    // test then asserts on.
     const dialog = page.getByRole("dialog", { name: "Demo Mode" });
-    if (await dialog.isVisible().catch(() => false)) {
+    const dismissed = await dialog
+      .waitFor({ state: "visible", timeout: 5000 })
+      .then(() => true)
+      .catch(() => false);
+    if (dismissed) {
       await dialog.getByRole("button", { name: "Continue in Demo Mode" }).click();
       await expect(dialog).toBeHidden();
     }
