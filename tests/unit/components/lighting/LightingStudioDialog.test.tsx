@@ -192,6 +192,39 @@ describe("LightingStudioDialog", () => {
     });
   });
 
+  it("keeps typed text when device lighting state arrives after the studio opened", () => {
+    const hookValue = buildHookValue();
+    mocks.useLightingStudio.mockReturnValue(hookValue);
+    const { rerender } = renderDialog();
+
+    fireEvent.change(screen.getByTestId("lighting-manual-latitude"), { target: { value: "35.6" } });
+    fireEvent.change(screen.getByTestId("lighting-manual-longitude"), { target: { value: "139.6" } });
+    fireEvent.change(screen.getByTestId("lighting-profile-save-name"), { target: { value: "Night Ride" } });
+    fireEvent.change(screen.getByTestId("lighting-city-search"), { target: { value: "tok" } });
+
+    // Opening the studio widens the lighting config query from the summary item
+    // set to the full category item set, so a second read lands a moment after
+    // the dialog is already on screen. That read hands back fresh capability
+    // and device-state objects even when no value changed, and the dialog must
+    // not treat that as a reason to re-seed the fields the user is typing into.
+    mocks.useLightingStudio.mockReturnValue({
+      ...buildHookValue(),
+      capabilities: { ...hookValue.capabilities },
+      rawDeviceState: { ...hookValue.rawDeviceState },
+    });
+    rerender(
+      <DisplayProfileProvider>
+        <LightingStudioDialog />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("lighting-manual-latitude")).toHaveValue(35.6);
+    expect(screen.getByTestId("lighting-manual-longitude")).toHaveValue(139.6);
+    expect(screen.getByTestId("lighting-apply-manual-coordinates")).toBeEnabled();
+    expect(screen.getByTestId("lighting-profile-save-name")).toHaveValue("Night Ride");
+    expect(screen.getByTestId("lighting-city-search")).toHaveValue("tok");
+  });
+
   it("wires preview, city fallback, and location refresh controls through the hook callbacks", () => {
     const hookValue = buildHookValue();
     mocks.useLightingStudio.mockReturnValue(hookValue);
