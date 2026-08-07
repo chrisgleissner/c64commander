@@ -21,8 +21,15 @@ type UserInterfaceSummaryCardProps = {
   category: string;
   config: Record<string, unknown> | undefined;
   isActive: boolean;
-  /** False while the category read is still in flight. Defaults to true for callers that do not track it. */
-  hasLoaded?: boolean;
+  /**
+   * False while the category read is still in flight.
+   *
+   * Required rather than defaulting to true: a default would let a new caller forget it and
+   * silently reintroduce the defect this exists to fix, which is the one thing the prop is
+   * for. Pass `isFetched` from the query, not `isSuccess` - `useC64ConfigItems` supplies
+   * placeholderData from the persisted snapshot, and isSuccess is already true then.
+   */
+  hasLoaded: boolean;
   optionDomains?: DeviceConfigOptionDomains;
   selectTriggerClassName: string;
   testIdPrefix: string;
@@ -32,7 +39,7 @@ export function UserInterfaceSummaryCard({
   category,
   config,
   isActive,
-  hasLoaded = true,
+  hasLoaded,
   optionDomains = {},
   selectTriggerClassName,
   testIdPrefix,

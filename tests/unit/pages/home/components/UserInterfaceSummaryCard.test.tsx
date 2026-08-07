@@ -63,13 +63,13 @@ const defaultProps = {
 
 describe("UserInterfaceSummaryCard", () => {
   it("renders the card with summary testid", () => {
-    render(<UserInterfaceSummaryCard {...defaultProps} />);
+    render(<UserInterfaceSummaryCard {...defaultProps} hasLoaded />);
     expect(screen.getByTestId("ui-card-summary")).toBeInTheDocument();
     expect(screen.getByText("User Interface")).toBeInTheDocument();
   });
 
   it("renders overlay, wasd-cursors, and color-scheme rows", () => {
-    render(<UserInterfaceSummaryCard {...defaultProps} />);
+    render(<UserInterfaceSummaryCard {...defaultProps} hasLoaded />);
     expect(screen.getByTestId("ui-card-overlay")).toBeInTheDocument();
     expect(screen.getByTestId("ui-card-wasd-cursors")).toBeInTheDocument();
     expect(screen.getByTestId("ui-card-color-scheme")).toBeInTheDocument();
@@ -79,7 +79,7 @@ describe("UserInterfaceSummaryCard", () => {
     resolveConfigValueSpy.mockImplementation(
       (_p: unknown, _c: string, _i: string, fallback: string | number) => fallback,
     );
-    render(<UserInterfaceSummaryCard {...defaultProps} isActive={false} />);
+    render(<UserInterfaceSummaryCard {...defaultProps} isActive={false} hasLoaded />);
     expect(screen.getAllByText("Not available").length).toBeGreaterThan(0);
   });
 
@@ -105,12 +105,15 @@ describe("UserInterfaceSummaryCard", () => {
     );
     render(<UserInterfaceSummaryCard {...defaultProps} isActive hasLoaded config={undefined} />);
 
-    // A completed read that returned nothing is the case the words are true for.
+    // A completed read that returned nothing is the case the words are true for, so assert the
+    // words rather than only the absence of the pending marker - otherwise this would still
+    // pass if the card rendered nothing at all.
+    expect(screen.getAllByText("Not available").length).toBeGreaterThan(0);
     expect(screen.queryByText("…")).toBeNull();
   });
 
   it("calls updateConfigValue with correct args when overlay changes", () => {
-    render(<UserInterfaceSummaryCard {...defaultProps} />);
+    render(<UserInterfaceSummaryCard {...defaultProps} hasLoaded />);
     // The overlay row uses SummaryConfigControlRow with 2 toggle options → checkbox
     // But with no config provided, we only have the fallback value so options would be empty
     // SummaryConfigControlRow renders checkbox when options.length===2
@@ -127,7 +130,7 @@ describe("UserInterfaceSummaryCard", () => {
   });
 
   it("calls updateConfigValue for navigation style change", () => {
-    render(<UserInterfaceSummaryCard {...defaultProps} />);
+    render(<UserInterfaceSummaryCard {...defaultProps} hasLoaded />);
     const changeBtns = screen.getAllByText("Change");
     fireEvent.click(changeBtns[1]);
     expect(updateConfigValueSpy).toHaveBeenCalledWith(
@@ -140,7 +143,7 @@ describe("UserInterfaceSummaryCard", () => {
   });
 
   it("calls updateConfigValue for color scheme change", () => {
-    render(<UserInterfaceSummaryCard {...defaultProps} />);
+    render(<UserInterfaceSummaryCard {...defaultProps} hasLoaded />);
     const changeBtns = screen.getAllByText("Change");
     fireEvent.click(changeBtns[2]);
     expect(updateConfigValueSpy).toHaveBeenCalledWith(
@@ -153,7 +156,7 @@ describe("UserInterfaceSummaryCard", () => {
   });
 
   it("renders without errors when configWritePending has a pending key", () => {
-    render(<UserInterfaceSummaryCard {...defaultProps} />);
+    render(<UserInterfaceSummaryCard {...defaultProps} hasLoaded />);
     expect(screen.getByTestId("ui-card-summary")).toBeInTheDocument();
   });
 });

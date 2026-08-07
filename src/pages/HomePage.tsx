@@ -159,19 +159,19 @@ function HomePageContent() {
     isActive || status.isConnecting,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
-  const { data: ledStripCategory, isSuccess: ledStripLoaded } = useC64ConfigItems(
+  const { data: ledStripCategory, isFetched: ledStripLoaded } = useC64ConfigItems(
     "LED Strip Settings",
     [...LED_STRIP_HOME_ITEMS],
     isActive || status.isConnecting,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
-  const { data: userInterfaceCategory, isSuccess: userInterfaceLoaded } = useC64ConfigItems(
+  const { data: userInterfaceCategory, isFetched: userInterfaceLoaded } = useC64ConfigItems(
     "User Interface Settings",
     [...USER_INTERFACE_HOME_ITEMS],
     isActive || status.isConnecting,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
-  const { data: keyboardLightingCategory, isSuccess: keyboardLightingLoaded } = useC64ConfigItems(
+  const { data: keyboardLightingCategory, isFetched: keyboardLightingLoaded } = useC64ConfigItems(
     "Keyboard Lighting",
     [...KEYBOARD_LIGHTING_HOME_ITEMS],
     (isActive || status.isConnecting) && keyboardLightingRequested,

@@ -92,6 +92,8 @@ vi.mock("@/components/ui/slider", () => ({
 
 const defaultProps = {
   category: "LED Strip",
+  // The read has completed in these tests; the pending state has its own test below.
+  hasLoaded: true,
   config: {
     items: {
       "LedStrip Mode": "Fixed Color",
@@ -364,6 +366,19 @@ describe("LightingSummaryCard", () => {
     // the fix.
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
     expect(screen.getByTestId("led-strip-color-slider")).toHaveAttribute("data-value", "[5]");
+  });
+
+  /**
+   * Brightness is the one numeric field on this card, and it took a different path from the
+   * enums: it read `intensitySupported` directly rather than going through the shared
+   * label helper, so a read in flight printed a number - "0" - as though the device had
+   * answered. It needs the same three states as everything else.
+   */
+  it("waits on brightness too rather than printing a number before the read lands", () => {
+    render(<LightingSummaryCard {...defaultProps} hasLoaded={false} />);
+
+    expect(screen.queryByText("Not available")).toBeNull();
+    expect(screen.getAllByText("…").length).toBeGreaterThan(0);
   });
 
   it("shows intensity value from resolved config", () => {

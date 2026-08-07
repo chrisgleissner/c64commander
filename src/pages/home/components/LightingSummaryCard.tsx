@@ -22,6 +22,7 @@ import {
   readItemDetails,
   readItemOptions,
   readItemValue,
+  CONFIG_PENDING_LABEL,
   CONFIG_UNAVAILABLE_LABEL,
   resolveConfigDisplayValue,
 } from "../utils/HomeConfigUtils";
@@ -63,8 +64,15 @@ type LightingSummaryCardProps = {
   category: string;
   config: Record<string, unknown> | undefined;
   isActive: boolean;
-  /** False while the category read is still in flight. Defaults to true for callers that do not track it. */
-  hasLoaded?: boolean;
+  /**
+   * False while the category read is still in flight.
+   *
+   * Required rather than defaulting to true: a default would let a new caller forget it and
+   * silently reintroduce the defect this exists to fix, which is the one thing the prop is
+   * for. Pass `isFetched` from the query, not `isSuccess` - `useC64ConfigItems` supplies
+   * placeholderData from the persisted snapshot, and isSuccess is already true then.
+   */
+  hasLoaded: boolean;
   onManualLightingChange?: () => void;
   operationPrefix: string;
   sectionLabel: string;
@@ -77,7 +85,7 @@ export function LightingSummaryCard({
   category,
   config,
   isActive,
-  hasLoaded = true,
+  hasLoaded,
   onManualLightingChange,
   operationPrefix,
   sectionLabel,
@@ -440,7 +448,16 @@ export function LightingSummaryCard({
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted-foreground">Brightness</span>
           <span className="text-xs font-semibold text-foreground" data-testid={`${testIdPrefix}-intensity-value`}>
-            {intensitySupported ? Math.round(intensitySlider.displayValue) : unavailableLabel}
+            {/* The one numeric field on this card, and it needs the same three states as the
+                rest: a number once read, "…" while the read is outstanding, and the
+                unavailable label only when a completed read did not return it. */}
+            {!isActive
+              ? unavailableLabel
+              : !hasLoaded
+                ? CONFIG_PENDING_LABEL
+                : intensitySupported
+                  ? Math.round(intensitySlider.displayValue)
+                  : unavailableLabel}
           </span>
         </div>
 
