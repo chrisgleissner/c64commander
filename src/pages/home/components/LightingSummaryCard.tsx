@@ -22,6 +22,8 @@ import {
   readItemDetails,
   readItemOptions,
   readItemValue,
+  CONFIG_UNAVAILABLE_LABEL,
+  resolveConfigDisplayValue,
 } from "../utils/HomeConfigUtils";
 import {
   clampToRange,
@@ -61,6 +63,8 @@ type LightingSummaryCardProps = {
   category: string;
   config: Record<string, unknown> | undefined;
   isActive: boolean;
+  /** False while the category read is still in flight. Defaults to true for callers that do not track it. */
+  hasLoaded?: boolean;
   onManualLightingChange?: () => void;
   operationPrefix: string;
   sectionLabel: string;
@@ -73,6 +77,7 @@ export function LightingSummaryCard({
   category,
   config,
   isActive,
+  hasLoaded = true,
   onManualLightingChange,
   operationPrefix,
   sectionLabel,
@@ -82,7 +87,13 @@ export function LightingSummaryCard({
 }: LightingSummaryCardProps) {
   const { configWritePending, resolveConfigValue, updateConfigValue } = useSharedConfigActions();
   const { write: interactiveWrite } = useInteractiveConfigWrite({ category });
-  const unavailableLabel = "Not available";
+  const unavailableLabel = CONFIG_UNAVAILABLE_LABEL;
+  // While the category read is outstanding every item looks unsupported, because
+  // isItemSupported is `readItemValue(...) !== undefined` and that is false for a value
+  // that simply has not arrived. Print "…" until the read completes, and only then let a
+  // missing item mean the device does not have it.
+  const labelFor = (supported: boolean, value: string) =>
+    resolveConfigDisplayValue({ isActive, hasLoaded, value: supported ? value : unavailableLabel });
 
   const readOptions = (itemName: string) => readItemOptions(config, category, itemName).map((value) => String(value));
   const isItemSupported = (itemName: string) => readItemValue(config, category, itemName) !== undefined;
@@ -118,12 +129,12 @@ export function LightingSummaryCard({
   const tintSupported = isItemSupported("Color tint");
   const intensitySupported = isItemSupported("Strip Intensity");
 
-  const modeValue = modeSupported ? resolveValue("LedStrip Mode", "Off") : unavailableLabel;
-  const autoSidModeValue = autoSidModeSupported ? resolveValue("LedStrip Auto SID Mode", "Disabled") : unavailableLabel;
-  const patternValue = patternSupported ? resolveValue("LedStrip Pattern", unavailableLabel) : unavailableLabel;
-  const fixedColorValue = fixedColorSupported ? resolveValue("Fixed Color", unavailableLabel) : unavailableLabel;
-  const sidSelectValue = sidSelectSupported ? resolveValue("LedStrip SID Select", unavailableLabel) : unavailableLabel;
-  const tintValue = tintSupported ? resolveValue("Color tint", "Pure") : unavailableLabel;
+  const modeValue = labelFor(modeSupported, resolveValue("LedStrip Mode", "Off"));
+  const autoSidModeValue = labelFor(autoSidModeSupported, resolveValue("LedStrip Auto SID Mode", "Disabled"));
+  const patternValue = labelFor(patternSupported, resolveValue("LedStrip Pattern", unavailableLabel));
+  const fixedColorValue = labelFor(fixedColorSupported, resolveValue("Fixed Color", unavailableLabel));
+  const sidSelectValue = labelFor(sidSelectSupported, resolveValue("LedStrip SID Select", unavailableLabel));
+  const tintValue = labelFor(tintSupported, resolveValue("Color tint", "Pure"));
   const intensityValue = intensitySupported ? resolveValue("Strip Intensity", "0") : "0";
 
   const intensityDetails = readItemDetails(config, category, "Strip Intensity");

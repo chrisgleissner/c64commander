@@ -83,6 +83,32 @@ describe("UserInterfaceSummaryCard", () => {
     expect(screen.getAllByText("Not available").length).toBeGreaterThan(0);
   });
 
+  /**
+   * "Not available" is a statement about the device: it does not have this item. While the
+   * category read is still in flight the card knows nothing yet, and saying the same words
+   * tells the reader a feature is missing when it is merely late. Measured on the 0.9.6
+   * walkthrough, eight Home cards said it at once and all eight filled in seconds later.
+   */
+  it("waits rather than calling a value unavailable before its read has finished", () => {
+    resolveConfigValueSpy.mockImplementation(
+      (_p: unknown, _c: string, _i: string, fallback: string | number) => fallback,
+    );
+    render(<UserInterfaceSummaryCard {...defaultProps} isActive hasLoaded={false} />);
+
+    expect(screen.queryByText("Not available")).toBeNull();
+    expect(screen.getAllByText("…").length).toBeGreaterThan(0);
+  });
+
+  it("still says unavailable once the read has finished and the item is absent", () => {
+    resolveConfigValueSpy.mockImplementation(
+      (_p: unknown, _c: string, _i: string, fallback: string | number) => fallback,
+    );
+    render(<UserInterfaceSummaryCard {...defaultProps} isActive hasLoaded config={undefined} />);
+
+    // A completed read that returned nothing is the case the words are true for.
+    expect(screen.queryByText("…")).toBeNull();
+  });
+
   it("calls updateConfigValue with correct args when overlay changes", () => {
     render(<UserInterfaceSummaryCard {...defaultProps} />);
     // The overlay row uses SummaryConfigControlRow with 2 toggle options → checkbox

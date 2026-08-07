@@ -7,7 +7,12 @@
  */
 
 import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
-import { buildConfigKey, readItemOptions } from "../utils/HomeConfigUtils";
+import {
+  buildConfigKey,
+  readItemOptions,
+  CONFIG_UNAVAILABLE_LABEL,
+  resolveConfigDisplayValue,
+} from "../utils/HomeConfigUtils";
 import { resolveHomeConfigOptions } from "../constants";
 import { buildOptionDomainKey, type DeviceConfigOptionDomains } from "../hooks/useDeviceConfigOptionDomains";
 import { SummaryConfigCard, SummaryConfigControlRow } from "./SummaryConfigCard";
@@ -16,6 +21,8 @@ type UserInterfaceSummaryCardProps = {
   category: string;
   config: Record<string, unknown> | undefined;
   isActive: boolean;
+  /** False while the category read is still in flight. Defaults to true for callers that do not track it. */
+  hasLoaded?: boolean;
   optionDomains?: DeviceConfigOptionDomains;
   selectTriggerClassName: string;
   testIdPrefix: string;
@@ -25,12 +32,13 @@ export function UserInterfaceSummaryCard({
   category,
   config,
   isActive,
+  hasLoaded = true,
   optionDomains = {},
   selectTriggerClassName,
   testIdPrefix,
 }: UserInterfaceSummaryCardProps) {
   const { configWritePending, resolveConfigValue, updateConfigValue } = useSharedConfigActions();
-  const unavailableLabel = "Not available";
+  const unavailableLabel = CONFIG_UNAVAILABLE_LABEL;
 
   const interfaceTypeOptions = readItemOptions(config, category, "Interface Type").map((value) => String(value));
   const navigationStyleOptions = readItemOptions(config, category, "Navigation Style").map((value) => String(value));
@@ -40,25 +48,29 @@ export function UserInterfaceSummaryCard({
   const navigationStyleValue = String(resolveConfigValue(config, category, "Navigation Style", unavailableLabel));
   const colorSchemeValue = String(resolveConfigValue(config, category, "Color Scheme", unavailableLabel));
 
+  // An outstanding read shows "…" rather than claiming the device does not have the item.
+  // Resolved before the option lists below, because each list seeds itself with the current
+  // value to guarantee the value is selectable - and seeding it with the raw value put
+  // "Not available" back into the dropdown while the read was still in flight.
+  const displayedInterfaceTypeValue = resolveConfigDisplayValue({ isActive, hasLoaded, value: interfaceTypeValue });
+  const displayedNavigationStyleValue = resolveConfigDisplayValue({ isActive, hasLoaded, value: navigationStyleValue });
+  const displayedColorSchemeValue = resolveConfigDisplayValue({ isActive, hasLoaded, value: colorSchemeValue });
+
   const effectiveInterfaceTypeOptions = resolveHomeConfigOptions(
     interfaceTypeOptions,
     optionDomains[buildOptionDomainKey(category, "Interface Type")]?.options,
-    interfaceTypeValue,
+    displayedInterfaceTypeValue,
   );
   const effectiveNavigationStyleOptions = resolveHomeConfigOptions(
     navigationStyleOptions,
     optionDomains[buildOptionDomainKey(category, "Navigation Style")]?.options,
-    navigationStyleValue,
+    displayedNavigationStyleValue,
   );
   const effectiveColorSchemeOptions = resolveHomeConfigOptions(
     colorSchemeOptions,
     optionDomains[buildOptionDomainKey(category, "Color Scheme")]?.options,
-    colorSchemeValue,
+    displayedColorSchemeValue,
   );
-
-  const displayedInterfaceTypeValue = isActive ? interfaceTypeValue : unavailableLabel;
-  const displayedNavigationStyleValue = isActive ? navigationStyleValue : unavailableLabel;
-  const displayedColorSchemeValue = isActive ? colorSchemeValue : unavailableLabel;
 
   const displayedColorSchemeOptions = isActive ? effectiveColorSchemeOptions : [unavailableLabel];
 

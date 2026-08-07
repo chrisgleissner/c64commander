@@ -159,19 +159,19 @@ function HomePageContent() {
     isActive || status.isConnecting,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
-  const { data: ledStripCategory } = useC64ConfigItems(
+  const { data: ledStripCategory, isSuccess: ledStripLoaded } = useC64ConfigItems(
     "LED Strip Settings",
     [...LED_STRIP_HOME_ITEMS],
     isActive || status.isConnecting,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
-  const { data: userInterfaceCategory } = useC64ConfigItems(
+  const { data: userInterfaceCategory, isSuccess: userInterfaceLoaded } = useC64ConfigItems(
     "User Interface Settings",
     [...USER_INTERFACE_HOME_ITEMS],
     isActive || status.isConnecting,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
-  const { data: keyboardLightingCategory } = useC64ConfigItems(
+  const { data: keyboardLightingCategory, isSuccess: keyboardLightingLoaded } = useC64ConfigItems(
     "Keyboard Lighting",
     [...KEYBOARD_LIGHTING_HOME_ITEMS],
     (isActive || status.isConnecting) && keyboardLightingRequested,
@@ -1615,6 +1615,7 @@ function HomePageContent() {
                   category="User Interface Settings"
                   config={userInterfaceConfig}
                   isActive={isActive}
+                  hasLoaded={userInterfaceLoaded}
                   optionDomains={optionDomains}
                   selectTriggerClassName={inlineSelectTriggerClass}
                   testIdPrefix="home-user-interface"
@@ -1681,6 +1682,7 @@ function HomePageContent() {
                   category="LED Strip Settings"
                   config={ledStripConfig}
                   isActive={isActive}
+                  hasLoaded={ledStripLoaded}
                   onManualLightingChange={markManualLightingChange}
                   operationPrefix="HOME_LED"
                   sectionLabel="Case Light"
@@ -1693,6 +1695,7 @@ function HomePageContent() {
                     category="Keyboard Lighting"
                     config={keyboardLightingConfig}
                     isActive={isActive}
+                    hasLoaded={keyboardLightingLoaded}
                     onManualLightingChange={markManualLightingChange}
                     operationPrefix="HOME_KEYBOARD_LIGHTING"
                     sectionLabel="Keyboard Light"
