@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -85,11 +85,27 @@ vi.mock("@/hooks/useRemoteInputSession", () => ({
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
 import { RemoteInputSheet } from "@/components/remoteInput/RemoteInputSheet";
+import { DisplayProfileProvider, useDisplayProfilePreference } from "@/hooks/useDisplayProfile";
+import type { DisplayProfile } from "@/lib/displayProfiles";
 import { requestGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { resetInputModality, setInputModality } from "@/lib/input/inputModality";
 import { saveGameModeJoystick } from "@/lib/remoteInput/gameModeJoystick";
 import { CONTROLS_HIDE_MS } from "@/components/streams/AvMirrorImmersive";
 import { addLog } from "@/lib/logging";
+
+/** Renders the sheet at a chosen display profile, the way the app's own provider resolves it. */
+const ProfilePin = ({ profile }: { profile: DisplayProfile }) => {
+  const { setOverride } = useDisplayProfilePreference();
+  useEffect(() => setOverride(profile), [profile, setOverride]);
+  return <RemoteInputSheet open onOpenChange={vi.fn()} />;
+};
+
+const renderSheetAtProfile = (profile: DisplayProfile) =>
+  render(
+    <DisplayProfileProvider>
+      <ProfilePin profile={profile} />
+    </DisplayProfileProvider>,
+  );
 
 const enterGameMode = () => fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
 const sheet = () => screen.getByTestId("remote-input-sheet");
@@ -565,6 +581,67 @@ describe("RemoteInputSheet — Game Mode", () => {
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
       fireEvent.keyDown(sheet(), { code: "Pound", key: "#" });
       expect(screen.queryByTestId("remote-input-quick-keys-toggle")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("the way out of Game Mode", () => {
+    /**
+     * It used to sit on the row below the heading, which cost a whole line on a screen
+     * with few to spare. It now rides the heading row itself, right-aligned, and its face
+     * is just "Exit" — the full "Exit game mode" stays as the accessible name.
+     */
+    it("rides the heading row, reads Exit, and is still named Exit game mode", () => {
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      enterGameMode();
+      summonChrome();
+
+      const heading = screen.getByTestId("remote-input-game-mode-title");
+      const exit = screen.getByTestId("remote-input-immersive-toggle");
+      expect(exit).toHaveTextContent("Exit");
+      expect(exit.textContent).not.toContain("game mode");
+      expect(exit).toHaveAttribute("aria-label", "Exit game mode");
+      expect(exit).toHaveAttribute("aria-pressed", "true");
+      expect(exit.parentElement).toBe(heading.parentElement);
+    });
+
+    it("still leaves Game Mode when pressed", () => {
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      enterGameMode();
+      summonChrome();
+
+      fireEvent.click(screen.getByTestId("remote-input-immersive-toggle"));
+
+      expect(sheet()).toHaveAttribute("data-game-mode", "false");
+      expect(screen.getByTestId("remote-input-output-mode-toggle")).toBeInTheDocument();
+      // Back to the way IN, on the row below the mode toggle rather than the heading row.
+      const enter = screen.getByTestId("remote-input-immersive-toggle");
+      expect(enter).toHaveTextContent("Game mode");
+      expect(enter).toHaveAttribute("aria-pressed", "false");
+    });
+  });
+
+  describe("the compact display profile", () => {
+    // 320 CSS px across. "Game mode" shares its row with the size stepper, and the two do
+    // not fit; the shorter face is compact-only.
+    it("calls it Game, on the way in and on the heading", () => {
+      renderSheetAtProfile("compact");
+      const enter = screen.getByTestId("remote-input-immersive-toggle");
+      expect(enter).toHaveTextContent("Game");
+      expect(enter.textContent).not.toContain("Game mode");
+
+      enterGameMode();
+      summonChrome();
+      expect(screen.getByTestId("remote-input-game-mode-title")).toHaveTextContent("Game");
+      expect(screen.getByTestId("remote-input-game-mode-title").textContent).not.toContain("mode");
+    });
+
+    it("keeps the full name on a standard display", () => {
+      renderSheetAtProfile("medium");
+      expect(screen.getByTestId("remote-input-immersive-toggle")).toHaveTextContent("Game mode");
+
+      enterGameMode();
+      summonChrome();
+      expect(screen.getByTestId("remote-input-game-mode-title")).toHaveTextContent("Game mode");
     });
   });
 

@@ -67,6 +67,24 @@ describe("VirtualJoystick", () => {
       />,
     );
 
+  // The three movement styles are named after what the control is, not after how it
+  // reads a drag: "Analog" described the signal rather than the thing under the thumb,
+  // and was the widest of the three on a row that has to fit all three.
+  it("names the drag control Stick, and that button is the one that draws the stick", () => {
+    renderStick();
+
+    const stick = screen.getByTestId("remote-input-movement-style-stick");
+    expect(stick).toHaveTextContent("Stick");
+    expect(screen.getByTestId("remote-input-movement-style-toggle").textContent).not.toContain("Analog");
+
+    // The label belongs to the control that produces the stick zone: leave it, come back
+    // to it, and the stick zone is what returns.
+    fireEvent.click(screen.getByTestId("remote-input-movement-style-dpad"));
+    expect(screen.queryByTestId("remote-input-stick-zone")).toBeNull();
+    fireEvent.click(stick);
+    expect(screen.getByTestId("remote-input-stick-zone")).toBeInTheDocument();
+  });
+
   it("reserves the game-mode action zone at least as tall as its controls (screen never hidden by CTAs)", () => {
     // The Live View picture is a flex sibling ABOVE the joystick; the absolute controls must never
     // overflow up over it. The action zone's min-height must cover the controls and grow with size.

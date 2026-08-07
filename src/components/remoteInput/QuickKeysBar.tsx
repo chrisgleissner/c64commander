@@ -14,7 +14,9 @@ import { vibrateTap } from "@/lib/remoteInput/haptics";
 import { toneButtonClass } from "@/lib/remoteInput/keyTone";
 import type { KeyTone } from "@/lib/remoteInput/keyboardLayout";
 import { specialKeyToKeyboardInputEvent } from "@/lib/remoteInput/specialKeyMapping";
+import { keyFaceForDisplayProfile } from "@/lib/remoteInput/narrowKeyLabels";
 import { KeyHoldButton } from "@/components/remoteInput/KeyHoldButton";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useKeyboardHoldDispatch } from "@/hooks/useKeyboardHoldDispatch";
 import type { HeldKeyboardInputs } from "@/lib/remoteInput/keyboardHeldSet";
 import type { KeyboardInputName } from "@/lib/c64api";
@@ -165,6 +167,11 @@ export const QuickKeysBar = ({
   scale = 1,
   className,
 }: QuickKeysBarProps) => {
+  // RUN/STOP is the widest name on a four-across row, and on the 320px-wide
+  // compact profile it no longer fits the key it names. Only the printed face
+  // shortens; the button keeps "Run Stop" as its accessible name everywhere.
+  const { profile } = useDisplayProfile();
+  const runStopFace = keyFaceForDisplayProfile("RUN/STOP", profile);
   const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
   // Memoized (not a fresh object every render): passed straight through to
   // the memoized QuickKeyButton below, so a new object identity here would
@@ -383,7 +390,8 @@ export const QuickKeysBar = ({
       <div className="flex gap-1.5">
         {holdableKeyBtn({
           testId: "remote-input-key-run-stop",
-          label: "RUN/STOP",
+          label: runStopFace,
+          ariaLabel: "Run Stop",
           tone: "caution",
           callbacks: holdableCallbacks.runStop,
           fallbackOnPress: () => tapSpecial("run_stop"),

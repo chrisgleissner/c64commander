@@ -25,8 +25,10 @@ import {
   type StickyModifier,
 } from "@/lib/remoteInput/keyboardLayout";
 import { toneButtonClass } from "@/lib/remoteInput/keyTone";
+import { keyFaceForDisplayProfile } from "@/lib/remoteInput/narrowKeyLabels";
 import { charToKeyboardInputEvents } from "@/lib/remoteInput/keyboardCharMapping";
 import { specialKeyToKeyboardInputEvent } from "@/lib/remoteInput/specialKeyMapping";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useKeyboardHoldDispatch } from "@/hooks/useKeyboardHoldDispatch";
 import type { HeldKeyboardInputs } from "@/lib/remoteInput/keyboardHeldSet";
 import type { KeyboardInputName } from "@/lib/c64api";
@@ -302,6 +304,12 @@ export const TypeKeyboard = ({
   className,
 }: TypeKeyboardProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // The app-wide display profile, which is a different question from the keyboard
+  // profile below: the keyboard profile answers "how much room does this grid
+  // have", while this answers "how narrow is the screen". Only the second one
+  // decides whether a key name has to be printed short. Read here because every
+  // hook has to run before the auth-required early return further down.
+  const { profile: displayProfile } = useDisplayProfile();
   const [measured, setMeasured] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   // Kernal-fallback tier only (no held-set relay exists below full tier): the
   // original one-shot latch, applied to the next ordinary key then cleared.
@@ -553,10 +561,15 @@ export const TypeKeyboard = ({
       ? (modifier !== undefined && holdDispatch.isModifierActive(modifier)) || (isShiftLock && holdDispatch.shiftLocked)
       : (modifier !== undefined && activeModifiers.has(modifier)) || (isShiftLock && shiftLocked);
     const disabled = keyUnavailable(def);
-    // Only the expanded profile packs keys tightly enough to need the short cap
-    // (RESTORE -> "REST."); compact and medium both have room for the full word,
-    // so they render `label` as-is.
-    const label = profile === "expanded" && def.compactLabel ? def.compactLabel : def.label;
+    // Two independent abbreviations, applied in order. `compactLabel` is the
+    // expanded KEYBOARD profile's short cap, used where that layout packs keys
+    // tightly. `keyFaceForDisplayProfile` then shortens the few names that do not
+    // fit their key on the compact DISPLAY profile (320 CSS px wide). Each key's
+    // `ariaLabel` is unaffected, so the accessible name stays the full key name.
+    const label = keyFaceForDisplayProfile(
+      profile === "expanded" && def.compactLabel ? def.compactLabel : def.label,
+      displayProfile,
+    );
     // Shifted legend printed ABOVE the main label (smaller, fainter) like a real
     // C64 keycap. Hidden on compact, and never shown on pictographic keys.
     const showSecondary =

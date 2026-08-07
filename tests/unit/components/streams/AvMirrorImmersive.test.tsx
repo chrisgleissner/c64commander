@@ -11,8 +11,11 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AvMirrorImmersive, type AvMirrorImmersiveHandle } from "@/components/streams/AvMirrorImmersive";
 
+/** Only the fields this component reads; `fps`/`standard` drive the frame-rate readout. */
+type MirrorVideoState = { videoLive: boolean; video: { state: string; fps?: number; standard?: string } };
+
 const mirror = vi.hoisted(() => ({
-  video: { videoLive: true, video: { state: "live" } },
+  video: { videoLive: true, video: { state: "live" } } as MirrorVideoState,
   viewport: { scale: 2, cx: 0.5, cy: 0.5 },
   ops: {
     zoomBy: vi.fn(),
@@ -53,11 +56,29 @@ describe("AvMirrorImmersive", () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it("shows the Driving-C64 mode chip and the control cluster while live", () => {
+  // The chip has to fit a status row that also carries the video standard and frame
+  // rate on a 320px-wide screen, so its face is one word. The sentence a screen reader
+  // needs is the accessible name, which is asserted separately here — a text-content
+  // assertion alone would pass whether or not the visible face was shortened.
+  it("shows the driving mode chip and the control cluster while live", () => {
     render(<AvMirrorImmersive />);
     expect(screen.getByTestId("av-mirror-immersive")).toHaveAttribute("data-mode", "drive");
-    expect(screen.getByTestId("av-mirror-mode-chip")).toHaveTextContent("Driving C64");
+    const chip = screen.getByTestId("av-mirror-mode-chip");
+    expect(chip).toHaveTextContent("C64");
+    expect(chip.textContent).not.toContain("Driving");
+    expect(chip).toHaveAttribute("aria-label", "Driving C64");
     expect(screen.getByTestId("av-mirror-immersive-controls")).toBeInTheDocument();
+  });
+
+  it("keeps the mode chip and the frame-rate readout on one status row", () => {
+    mirror.video = { videoLive: true, video: { state: "live", fps: 50, standard: "PAL" } };
+    render(<AvMirrorImmersive />);
+    const chip = screen.getByTestId("av-mirror-mode-chip");
+    const fps = screen.getByTestId("av-mirror-immersive-fps");
+    expect(fps).toHaveTextContent("PAL 50 fps");
+    // Same parent, in reading order: the row reads "C64 … PAL 50 fps".
+    expect(chip.parentElement).toBe(fps.parentElement);
+    expect(chip.compareDocumentPosition(fps) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("shows a 'Not watching' overlay and no controls when video is off", () => {
@@ -90,9 +111,15 @@ describe("AvMirrorImmersive", () => {
     fireEvent.click(follow);
     expect(screen.getByTestId("av-immersive-follow")).toHaveAttribute("aria-pressed", "true");
 
-    fireEvent.click(screen.getByTestId("av-immersive-mode-toggle"));
+    const modeToggle = screen.getByTestId("av-immersive-mode-toggle");
+    expect(modeToggle).toHaveTextContent("Fit");
+    fireEvent.click(modeToggle);
     expect(screen.getByTestId("av-mirror-immersive")).toHaveAttribute("data-mode", "adjust");
-    expect(screen.getByTestId("av-mirror-mode-chip")).toHaveTextContent("Adjusting view");
+    const chip = screen.getByTestId("av-mirror-mode-chip");
+    expect(chip).toHaveTextContent("View");
+    expect(chip.textContent).not.toContain("Adjusting");
+    expect(chip).toHaveAttribute("aria-label", "Adjusting view");
+    expect(screen.getByTestId("av-immersive-mode-toggle")).toHaveTextContent("Done");
   });
 
   it("exposes an imperative handle for physical-key control", () => {

@@ -73,10 +73,10 @@ const haptic = () => {
  * The maximised, controllable screen mirror for Remote Input game mode. Native-res
  * decode is GPU-scaled, so zoom is fixed-cost. The one hard rule (06-av-mirror-ux
  * §7.1): physical input is NEVER ambiguous — a colour-coded view-lock mode
- * (blue = Driving C64, amber = Adjusting view) makes the current role unmistakable,
- * flippable by an on-screen button, a physical key (via the ref), and it
- * auto-reverts to Drive after idle. Touch on the picture always adjusts; the
- * joystick / keyboard controls always relay.
+ * (blue "C64" = driving the machine, amber "View" = adjusting the view) makes the
+ * current role unmistakable. It is flippable by an on-screen button and by a physical
+ * key (via the ref), and it auto-reverts to Drive after idle. Touch on the picture
+ * always adjusts; the joystick / keyboard controls always relay.
  *
  * Only the picture turns with the handset. The zoom cluster, the minimap and the
  * mode chip stay anchored to the app frame — they are app chrome, and a player
@@ -310,18 +310,36 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
         className={fill ? "absolute inset-0" : "relative w-full"}
         style={fill ? undefined : { aspectRatio: quarterTurned ? "272 / 384" : "384 / 272" }}
       >
-        {/* Mode banner — the glanceable, unmistakable "who owns input" signal. */}
-        <div className="pointer-events-none absolute left-2 top-2 z-10">
+        {/* The status row along the top of the picture: which input mode is in effect on
+            the left, the video standard and frame rate on the right. One row rather than
+            two independently anchored badges, so on a 320px-wide screen the two read as a
+            single line of status and cannot collide.
+
+            The mode item is the glanceable "who owns input" signal. Its face is one word —
+            "C64" or "View" — because the row has to fit beside the frame-rate readout; the
+            full sentence stays as the accessible name, and the colour and the icon carry
+            the same distinction visually. */}
+        <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex items-start justify-between gap-2">
           <span
             className={cn(
               "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-white shadow",
               adjust ? "bg-amber-500" : "bg-primary",
             )}
+            role="status"
+            aria-label={adjust ? "Adjusting view" : "Driving C64"}
             data-testid="av-mirror-mode-chip"
           >
             {adjust ? <ScanEye className="h-3 w-3" /> : <Gamepad2 className="h-3 w-3" />}
-            {adjust ? "Adjusting view" : "Driving C64"}
+            {adjust ? "View" : "C64"}
           </span>
+          {videoLive && video.fps > 0 && (
+            <span
+              className="rounded bg-black/60 px-1.5 py-0.5 text-xs leading-tight text-white/80"
+              data-testid="av-mirror-immersive-fps"
+            >
+              {video.standard ?? "PAL"} {video.fps} fps
+            </span>
+          )}
         </div>
 
         <div
@@ -358,15 +376,6 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
               : "Not watching"}
         </div>
       )}
-      {videoLive && video.fps > 0 && (
-        <span
-          className="absolute right-2 top-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-xs leading-tight text-white/80"
-          data-testid="av-mirror-immersive-fps"
-        >
-          {video.standard ?? "PAL"} {video.fps} fps
-        </span>
-      )}
-
       {/* Minimap — only meaningful once zoomed in. */}
       {videoLive && viewport.scale > 1.05 && (
         <div className="absolute bottom-2 left-2 z-10">
@@ -426,10 +435,11 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
             variant={adjust ? "default" : "secondary"}
             className="h-8"
             aria-pressed={adjust}
+            aria-label={adjust ? "Done adjusting the view" : "Fit and pan the view"}
             onClick={toggleMode}
             data-testid="av-immersive-mode-toggle"
           >
-            {adjust ? "Done" : "Adjust"}
+            {adjust ? "Done" : "Fit"}
           </Button>
         </div>
       )}

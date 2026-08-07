@@ -31,6 +31,7 @@ import {
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
 import { useC64ConfigItems, useC64Connection, useC64UpdateConfigBatch } from "@/hooks/useC64Connection";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
 import { useLocalSources } from "@/hooks/useLocalSources";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
@@ -326,6 +327,7 @@ export default function PlayFilesPage() {
     showAddItemsOverlay,
   } = useAddItemsOverlayState({ browserOpen, addItemsProgressStatus: addItemsProgress.status });
   const { limit: listPreviewLimit } = useListPreviewLimit();
+  const { profile: displayProfile } = useDisplayProfile();
   const isAndroid = getPlatform() === "android" && isNativePlatform();
   const trace = useActionTrace("PlayFilesPage");
 
@@ -1931,9 +1933,13 @@ export default function PlayFilesPage() {
   const isSongPlaying = Boolean(currentItem && isSongCategory(currentItem.category) && (isPlaying || isPaused));
 
   const gameModeLeadsTransportRow = Boolean(currentItem && !isSongCategory(currentItem.category));
+  // The transport row wraps rather than scrolls, and on the compact profile (320 CSS px
+  // across) the full name pushes this button onto a line of its own. Compact-only; the
+  // wider profiles keep "Game Mode".
+  const playGameModeLabel = displayProfile === "compact" ? "Game" : "Game Mode";
   const playGameModeButton = (
     <Button variant="outline" size="sm" data-testid="play-open-game-mode" onClick={() => void startGameMode()}>
-      <Gamepad2 className="mr-1.5 h-4 w-4" /> Game Mode
+      <Gamepad2 className="mr-1.5 h-4 w-4" /> {playGameModeLabel}
     </Button>
   );
   const playRemoteInputButton = (

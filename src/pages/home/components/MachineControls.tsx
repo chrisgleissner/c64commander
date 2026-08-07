@@ -24,6 +24,7 @@ import {
 import { SectionHeader } from "@/components/SectionHeader";
 import { QuickActionCard } from "@/components/QuickActionCard";
 import { ProfileActionGrid } from "@/components/layout/PageContainer";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { publishMachineInterrupt } from "@/lib/deviceInteraction/machineInterrupt";
 import {
   MachineActionConfirmationDialog,
@@ -113,6 +114,11 @@ export function MachineControls({
   telnetBusy = false,
   footer,
 }: MachineControlsProps) {
+  // Quick Actions drop to two columns on the compact profile (320 CSS px across), which
+  // leaves each tile about 150px wide — narrower than "Game Mode" wants. The shorter
+  // face is compact-only; every wider profile keeps the full feature name.
+  const { profile } = useDisplayProfile();
+  const gameModeLabel = profile === "compact" ? "Game" : "Game Mode";
   const effectiveBusy = machineTaskBusy || telnetBusy;
   const [pendingDestructiveAction, setPendingDestructiveAction] = useState<PendingDestructiveAction | null>(null);
   const machineGuardsRef = useRef({ isConnected: status.isConnected, effectiveBusy: false, powerCycleDisabled: true });
@@ -209,7 +215,7 @@ export function MachineControls({
             {gameModeVisible ? (
               <QuickActionCard
                 icon={Gamepad2}
-                label="Game Mode"
+                label={gameModeLabel}
                 dataTestId="home-machine-inline-openGameMode"
                 focusId="home-machine-openGameMode"
                 focusOrder={100}

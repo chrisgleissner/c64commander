@@ -27,7 +27,7 @@ const AXIS_DIRECTIONS: ReadonlyArray<JoystickInputName> = ["up", "down", "left",
 /**
  * A large, forgiving free-drag surface: drag anywhere in it and the joystick
  * follows the drawn path continuously (the same live 8-way resolution as the
- * Analog stick, just without a fixed knob/dead-zone visual), releasing the
+ * Stick control, just without a fixed knob/dead-zone visual), releasing the
  * instant the finger lifts. Unlike the stick it has no bounded origin — the
  * drag starts wherever the finger lands — so it suits fast, sweeping menu and
  * gameplay movement without hunting for a knob.
