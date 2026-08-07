@@ -33,11 +33,15 @@ tags:
       # assertNotVisible below is what covers that, and it is why every navigation in
       # this file carries one.
       #
-      # A page-content anchor was tried here and does not work: Maestro matches whole
-      # accessibility nodes, and Chrome merges inline spans into their containing row,
-      # so "Firmware" is only ever part of the node "App <version> Device <host>
-      # Firmware <version>" and never matches on its own. Anchors have to be elements
-      # that form their own node, which is why "Play Files" below does work.
+      # Page-content anchors were tried throughout this file and only "Play Files"
+      # survived. Two things defeat them. Maestro matches a selector against an
+      # element's whole text, and the browser merges inline spans into their containing
+      # row, so "Firmware" is only ever part of "App <version> Device <host> Firmware
+      # <version>". And the configuration menu's entries depend on the firmware the
+      # device reports, so "Memory & ROMs" is not there in demo mode.
+      #
+      # The assertNotVisible checks are what make this file able to tell a rendered page
+      # from a crashed one, and they do not depend on either of those things.
       - extendedWaitUntil:
           visible:
             text: "Home"
@@ -100,9 +104,9 @@ tags:
           id: "tab-config"
           optional: true
       - extendedWaitUntil:
-          visible: "Memory & ROMs"
+          visible: "Config"
           timeout: ${SHORT_TIMEOUT}
-- assertVisible: "Memory & ROMs"
+- assertVisible: "Config"
 - assertNotVisible: "Something went wrong"
 - takeScreenshot: config-tab
 - retry:
