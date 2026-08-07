@@ -144,9 +144,11 @@ describe("SnapshotManagerDialog", () => {
     // The program snapshot's ranges restate its type label, and at this width they wrap
     // to a second line that makes the row taller than the list area left when the
     // on-screen keyboard is up. The custom snapshot's ranges are the only thing that
-    // says what it holds, so that line survives - on one truncated line.
+    // says what it holds, so that line survives - and wraps to at most two lines rather
+    // than truncating, because a single truncated line can hide a whole range and there
+    // is nothing else on the row that says what would be restored.
     expect(screen.queryByText("$0000-$00FF, $0200-$FFFF")).toBeNull();
-    expect(screen.getByText("$C000-$CFFF").className).toContain("truncate");
+    expect(screen.getByText("$C000-$CFFF").className).toContain("line-clamp-2");
 
     unmount();
     setViewportWidth(800);
@@ -165,7 +167,7 @@ describe("SnapshotManagerDialog", () => {
     );
 
     expect(screen.getByText("$0000-$00FF, $0200-$FFFF")).toBeTruthy();
-    expect(screen.getByText("$C000-$CFFF").className).not.toContain("truncate");
+    expect(screen.getByText("$C000-$CFFF").className).not.toContain("line-clamp-2");
   });
 
   it("distinguishes empty libraries from empty filter results", () => {

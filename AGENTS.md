@@ -420,6 +420,19 @@ Regenerate screenshots only when visible documented UI changed.
 
 Do not regenerate screenshots when the visible documented UI is unchanged, even if internal code changed.
 
+### Pruning a whole-corpus regeneration
+
+`npm run screenshots` already reverts captures that are byte-identical to their
+committed version. That does not help after a regeneration on a different machine:
+anti-aliasing and font hinting shift a few pixels by a shade, so nearly every file
+differs in bytes while looking the same, and the diff becomes unreviewable.
+
+Run `npm run screenshots:prune-drift` after such a regeneration. It compares pixels
+rather than bytes and reverts anything below a perceptual threshold, leaving only the
+captures a human should actually look at. It keeps anything new, deleted, differently
+sized, or genuinely different, and takes `--baseline <ref>`, `--threshold` and
+`--dry-run`.
+
 ### Minimal screenshot rule
 
 If a task changes only one page or one documented state, update only the corresponding screenshot files or folders under `docs/img/`.

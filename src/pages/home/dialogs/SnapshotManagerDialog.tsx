@@ -140,7 +140,13 @@ function SnapshotRow({
       <div className="flex-1 min-w-0 space-y-1">
         <div className="text-sm font-semibold leading-tight">{typeLabel}</div>
         {showRanges ? (
-          <div className={compact ? "truncate text-xs text-muted-foreground" : "text-xs text-muted-foreground"}>
+          // A custom snapshot's ranges are the only description of what it holds, so on
+          // the compact profile they wrap to a second line rather than truncate: a single
+          // truncated line can hide a whole range, and there is nothing else on the row
+          // that says what would be restored. Two lines is the cap, which is what the
+          // built-in types cost before they stopped showing this line at all, so the row
+          // still fits the list area with the keyboard up.
+          <div className={compact ? "line-clamp-2 text-xs text-muted-foreground" : "text-xs text-muted-foreground"}>
             {ranges}
           </div>
         ) : null}
