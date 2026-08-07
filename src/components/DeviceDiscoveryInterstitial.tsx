@@ -497,7 +497,12 @@ export function DeviceDiscoveryInterstitial() {
             </div>
             {!manualPasswordTarget ? (
               <div className="flex justify-end">
-                <Button type="submit" disabled={manualBusy} data-testid="startup-manual-device-connect">
+                <Button
+                  type="submit"
+                  disabled={manualBusy}
+                  id="startup-manual-device-connect"
+                  data-testid="startup-manual-device-connect"
+                >
                   <Wifi className={manualBusy ? "h-4 w-4 animate-pulse" : "h-4 w-4"} />
                   {manualBusy ? "Checking" : "Connect"}
                 </Button>

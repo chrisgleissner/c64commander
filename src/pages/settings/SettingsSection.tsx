@@ -98,6 +98,9 @@ export const SettingsSection = ({
         type="button"
         onClick={toggle}
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        // The accessibility tree exposes the HTML id, not data-testid, so this is what
+        // makes the header addressable from outside the browser.
+        id={`settings-section-toggle-${id}`}
         data-testid={`settings-section-toggle-${id}`}
         aria-expanded={open}
         aria-controls={`settings-section-body-${id}`}
