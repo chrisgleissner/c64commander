@@ -2612,9 +2612,11 @@ test.describe("App screenshots", () => {
 
       await page.goto("/");
       await waitForConnected(page);
-      // Every picture this test takes is embedded in the manuals, and the manuals
-      // illustrate the app at the compact profile — the smallest screen it supports. That
-      // screen is 320x426 CSS px, and every capture below is bounded by it.
+      // Every picture this test takes is embedded in the manuals, and each manual is
+      // illustrated at one profile: compact (320x426 CSS px) for C64U Remote, medium
+      // (393x727) for C64 Commander. The captures below that the manuals embed are
+      // therefore taken once per profile, each bounded by its own screen. This first
+      // viewport is the starting point; the loops set their own.
       await applyDisplayProfileViewport(page, "compact");
 
       const liveView = getActiveMain(page).getByTestId("live-view-card");
@@ -2640,8 +2642,10 @@ test.describe("App screenshots", () => {
       await captureScreenshot(page, testInfo, "home/content-explorer/02-live-view-expanded.png", { locator: liveView });
 
       // Remote Input immersive mirror: the zoomable screen with the view-lock controls.
-      // A sheet is bounded by the viewport, so the three captures below show the whole
-      // sheet a compact screen would show.
+      // A sheet is bounded by the viewport, so each capture below shows the whole sheet
+      // that profile's screen would show. The three pictures are taken at both manual
+      // profiles, so there are six: the compact ones show what a 320x426 screen fits, the
+      // medium ones what a 393x727 screen fits.
       await applyDisplayProfileViewport(page, "compact");
       await getActiveMain(page).getByTestId("home-machine-inline-openRemoteInput").click();
       const sheet = page.getByTestId("remote-input-sheet");
@@ -2882,11 +2886,10 @@ test.describe("App screenshots", () => {
       await page.goto("/play");
       await waitForConnected(page);
       // Four of this test's pictures are embedded in the manuals (the transport, the
-      // station launcher, the search sheet and the tune list), and the manuals
-      // illustrate the app at the compact profile — the smallest screen it supports, at
-      // 320x426 CSS px. The override is written to localStorage, so it survives the
-      // `page.goto` calls further down. The one capture taken back at medium is called
-      // out where it happens.
+      // station launcher, the search sheet and the tune list). Each manual is illustrated
+      // at one profile - compact (320x426 CSS px) for C64U Remote, medium (393x727) for
+      // C64 Commander - so those four are captured once per profile. The override is
+      // written to localStorage, so it survives the `page.goto` calls further down.
       await applyDisplayProfileViewport(page, "compact");
       await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
 
@@ -3213,10 +3216,10 @@ test.describe("App screenshots", () => {
       // only ever sees the folder on screen can find nothing you did not already know the location
       // of; the scope control is what makes the same text search the whole archive.
       //
-      // Taken at the compact profile, unlike the three captures above it. This is the one
-      // picture in this test that the manuals embed, and the manuals illustrate the app at
-      // the smallest screen it supports. The other three are README pictures and stay at
-      // the medium profile the whole file is captured at.
+      // This is the one picture in this test that the manuals embed, so it is captured
+      // once per manual profile: compact for C64U Remote, medium for C64 Commander. The
+      // other three are README pictures and stay at the medium profile the whole file is
+      // captured at.
       await applyDisplayProfileViewport(page, "compact");
       const scope = readyDialog.getByTestId("add-items-search-scope");
       await expect(scope).toBeVisible();
