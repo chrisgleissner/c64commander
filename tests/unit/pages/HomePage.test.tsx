@@ -532,44 +532,47 @@ vi.mock("@/hooks/useC64Connection", () => ({
     refetch: vi.fn().mockImplementation(() => queryClientMockRef.current.fetchQuery()),
   }),
   useC64ConfigItem: () => ({ data: undefined, isLoading: false }),
+  // isFetched is what the Home summary cards use to tell "the device does not have this"
+  // from "the read has not come back yet". A disabled query has not fetched; every mocked
+  // payload here stands for a completed read.
   useC64ConfigItems: (category: string, _items?: string[], enabled = true) => {
     if (!enabled) {
-      return { data: undefined };
+      return { data: undefined, isFetched: false };
     }
     if (category === "SID Sockets Configuration") {
-      return { data: sidSocketsPayloadRef.current };
+      return { data: sidSocketsPayloadRef.current, isFetched: true };
     }
     if (category === "SID Addressing") {
-      return { data: sidAddressingPayloadRef.current };
+      return { data: sidAddressingPayloadRef.current, isFetched: true };
     }
     if (category === "Audio Mixer") {
-      return { data: audioMixerPayloadRef.current };
+      return { data: audioMixerPayloadRef.current, isFetched: true };
     }
     if (category === "Data Streams") {
-      return { data: streamPayloadRef.current };
+      return { data: streamPayloadRef.current, isFetched: true };
     }
     if (category === "Drive A Settings") {
-      return { data: driveASettingsPayloadRef.current };
+      return { data: driveASettingsPayloadRef.current, isFetched: true };
     }
     if (category === "Drive B Settings") {
-      return { data: driveBSettingsPayloadRef.current };
+      return { data: driveBSettingsPayloadRef.current, isFetched: true };
     }
     if (category === "U64 Specific Settings") {
-      return { data: u64SettingsPayloadRef.current };
+      return { data: u64SettingsPayloadRef.current, isFetched: true };
     }
     if (category === "C64 and Cartridge Settings") {
-      return { data: c64CartridgePayloadRef.current };
+      return { data: c64CartridgePayloadRef.current, isFetched: true };
     }
     if (category === "LED Strip Settings") {
-      return { data: ledStripPayloadRef.current };
+      return { data: ledStripPayloadRef.current, isFetched: true };
     }
     if (category === "User Interface Settings") {
-      return { data: userInterfacePayloadRef.current };
+      return { data: userInterfacePayloadRef.current, isFetched: true };
     }
     if (category === "Keyboard Lighting") {
-      return { data: keyboardLightingPayloadRef.current };
+      return { data: keyboardLightingPayloadRef.current, isFetched: true };
     }
-    return { data: null };
+    return { data: null, isFetched: true };
   },
   useC64MachineControl: () => machineControlPayloadRef.current,
 }));
