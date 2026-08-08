@@ -197,7 +197,10 @@ export function SidCard({
             </span>
           ) : (
             <Select value={identityValue} onValueChange={onIdentityChange} disabled={!isConnected || identityPending}>
-              <SelectTrigger className={cn(inlineSelectTriggerClass, "min-w-0")} data-testid={`home-sid-type-${testIdSuffix}`}>
+              <SelectTrigger
+                className={cn(inlineSelectTriggerClass, "min-w-0")}
+                data-testid={`home-sid-type-${testIdSuffix}`}
+              >
                 <SelectValue placeholder={identityValue} />
               </SelectTrigger>
               <SelectContent>
@@ -213,7 +216,10 @@ export function SidCard({
         <div className="flex items-center gap-2 justify-end">
           <span className="shrink-0 text-muted-foreground whitespace-nowrap">Address</span>
           <Select value={addressValue} onValueChange={onAddressChange} disabled={!isConnected || addressPending}>
-            <SelectTrigger className={cn(inlineSelectTriggerClass, "min-w-0")} data-testid={`home-sid-address-${testIdSuffix}`}>
+            <SelectTrigger
+              className={cn(inlineSelectTriggerClass, "min-w-0")}
+              data-testid={`home-sid-address-${testIdSuffix}`}
+            >
               <SelectValue placeholder={addressValue} />
             </SelectTrigger>
             <SelectContent>

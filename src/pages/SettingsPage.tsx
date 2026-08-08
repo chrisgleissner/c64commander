@@ -1977,8 +1977,12 @@ export default function SettingsPage() {
                       <SelectValue placeholder="Select load mode" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="kernal">Classic KERNAL load (LOAD"*",8,1)</SelectItem>
-                      <SelectItem value="dma">DMA (Direct Memory Access)</SelectItem>
+                      {/* The option names the mode; the paragraph below gives the command it
+                          issues and what DMA does. Spelling `LOAD"*",8,1` out here made the
+                          option 363px wide, which runs past a 320px screen in the list and
+                          in the trigger once it is chosen. */}
+                      <SelectItem value="kernal">Classic KERNAL load</SelectItem>
+                      <SelectItem value="dma">DMA</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">

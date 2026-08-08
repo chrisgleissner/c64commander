@@ -97,7 +97,7 @@ import {
 import { buildOptionDomainKey, useDeviceConfigOptionDomains } from "./home/hooks/useDeviceConfigOptionDomains";
 
 import { normalizeOptionToken } from "./home/utils/uiLogic";
-import { buildConfigKey, readItemOptions } from "./home/utils/HomeConfigUtils";
+import { buildConfigKey, readItemOptions, resolveConfigDisplayValue } from "./home/utils/HomeConfigUtils";
 
 import { SectionHeader } from "@/components/SectionHeader";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
@@ -147,13 +147,13 @@ function HomePageContent() {
   const isActive = status.isConnected;
   const [keyboardLightingRequested, setKeyboardLightingRequested] = useState(true);
 
-  const { data: u64SettingsCategory } = useC64ConfigItems(
+  const { data: u64SettingsCategory, isFetched: u64SettingsLoaded } = useC64ConfigItems(
     "U64 Specific Settings",
     [...U64_HOME_ITEMS],
     isActive || status.isConnecting,
     HOME_SUMMARY_QUERY_OPTIONS,
   );
-  const { data: c64CartridgeCategory } = useC64ConfigItems(
+  const { data: c64CartridgeCategory, isFetched: c64CartridgeLoaded } = useC64ConfigItems(
     "C64 and Cartridge Settings",
     [...C64_CARTRIDGE_HOME_ITEMS],
     isActive || status.isConnecting,
@@ -1075,19 +1075,28 @@ function HomePageContent() {
     userPortPowerValue,
   );
 
-  const displayedVideoModeValue = isActive ? videoModeValue : unavailableLabel;
-  const displayedAnalogVideoValue = isActive ? analogVideoValue : unavailableLabel;
-  const displayedHdmiResolutionValue = isActive ? hdmiResolutionValue : unavailableLabel;
-  const displayedDigitalVideoValue = isActive ? digitalVideoValue : unavailableLabel;
-  const displayedJoystickSwapValue = isActive ? joystickSwapValue : unavailableLabel;
-  const displayedSerialBusModeValue = isActive ? serialBusModeValue : unavailableLabel;
-  const displayedCartridgePreferenceValue = isActive ? cartridgePreferenceValue : unavailableLabel;
-  const displayedTurboControlValue = isActive ? turboControlValue : unavailableLabel;
-  const displayedBadlineTimingValue = isActive ? badlineTimingValue : unavailableLabel;
-  const displayedSuperCpuDetectValue = isActive ? superCpuDetectValue : unavailableLabel;
-  const displayedRamExpansionValue = isActive ? ramExpansionValue : unavailableLabel;
-  const displayedReuSizeValue = isActive ? reuSizeValue : unavailableLabel;
-  const displayedUserPortPowerValue = isActive ? userPortPowerValue : unavailableLabel;
+  // The inline rows need the same three states the summary cards got: a value once the
+  // read lands, "…" while it is outstanding, and "Not available" only when a completed
+  // read did not carry the item. Without this the walkthrough recording shows a Home page
+  // of "Not available" rows for the seconds before the two category reads return, which
+  // reads as a device that has nothing rather than one that has not answered yet.
+  const u64Label = (value: string) => resolveConfigDisplayValue({ isActive, hasLoaded: u64SettingsLoaded, value });
+  const cartridgeLabel = (value: string) =>
+    resolveConfigDisplayValue({ isActive, hasLoaded: c64CartridgeLoaded, value });
+
+  const displayedVideoModeValue = u64Label(videoModeValue);
+  const displayedAnalogVideoValue = u64Label(analogVideoValue);
+  const displayedHdmiResolutionValue = u64Label(hdmiResolutionValue);
+  const displayedDigitalVideoValue = u64Label(digitalVideoValue);
+  const displayedJoystickSwapValue = u64Label(joystickSwapValue);
+  const displayedSerialBusModeValue = u64Label(serialBusModeValue);
+  const displayedCartridgePreferenceValue = cartridgeLabel(cartridgePreferenceValue);
+  const displayedTurboControlValue = u64Label(turboControlValue);
+  const displayedBadlineTimingValue = u64Label(badlineTimingValue);
+  const displayedSuperCpuDetectValue = u64Label(superCpuDetectValue);
+  const displayedRamExpansionValue = cartridgeLabel(ramExpansionValue);
+  const displayedReuSizeValue = cartridgeLabel(reuSizeValue);
+  const displayedUserPortPowerValue = u64Label(userPortPowerValue);
   const displayedVideoModeOptions = isActive ? effectiveVideoModeOptions : [unavailableLabel];
   const displayedAnalogVideoOptions = isActive ? effectiveAnalogVideoOptions : [unavailableLabel];
   const displayedHdmiResolutionOptions = isActive ? effectiveHdmiResolutionOptions : [unavailableLabel];
