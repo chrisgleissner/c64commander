@@ -2811,7 +2811,7 @@ const ALLOWED_WITHOUT_PROFILE = [
   /home\/remote-input\/04-keyboard-medium\.png$/,
 ];
 
-const assertSingleDisplayProfile = (markdown, expectedProfile, manualName) => {
+export const assertSingleDisplayProfile = (markdown, expectedProfile, manualName) => {
   const violations = [];
   for (const [, image] of markdown.matchAll(/\]\(([^)]*\.png)\)/g)) {
     if (ALLOWED_WITHOUT_PROFILE.some((allowed) => allowed.test(image))) continue;

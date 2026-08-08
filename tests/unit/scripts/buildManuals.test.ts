@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import path from "node:path";
-import { buildManualContexts, inlineImageSources, renderManualMarkdown } from "../../../scripts/build-manuals.mjs";
+import {
+  assertSingleDisplayProfile,
+  buildManualContexts,
+  inlineImageSources,
+  renderManualMarkdown,
+} from "../../../scripts/build-manuals.mjs";
 
 const contextByVariant = async () => {
   const contexts = await buildManualContexts();
@@ -71,6 +76,52 @@ describe("manual generator", () => {
    * four-digit numbers are left alone because the manuals are full of legitimate ones -
    * $0801, the 1541/1571/1581 drives, the 6581/8580 SIDs, 1982.
    */
+  /**
+   * The guard that keeps the rule true. It is what fails the build when a manual embeds a
+   * screenshot from the wrong profile, so it needs testing on the states it exists to
+   * catch rather than only on the corpus that currently passes.
+   */
+  describe("the single-profile guard", () => {
+    it("accepts a manual whose screenshots all come from its own profile", () => {
+      const markdown =
+        "![a](../../img/app/home/profiles/compact/01-overview.png)\n![b](../../img/app/play/profiles/compact/01-overview.png)";
+      expect(() => assertSingleDisplayProfile(markdown, "compact", "c64u-remote")).not.toThrow();
+    });
+
+    it("rejects a screenshot captured at another profile", () => {
+      const markdown = "![a](../../img/app/home/profiles/medium/01-overview.png)";
+      expect(() => assertSingleDisplayProfile(markdown, "compact", "c64u-remote")).toThrow(
+        /is a medium capture, but this manual uses compact/,
+      );
+    });
+
+    it("rejects a screenshot with no profile in its path at all", () => {
+      const markdown = "![a](../../img/app/play/sid-radio/01-controls.png)";
+      expect(() => assertSingleDisplayProfile(markdown, "medium", "c64commander")).toThrow(
+        /has no display profile in its path/,
+      );
+    });
+
+    it("allows the two images that are deliberately not profile-specific", () => {
+      // The hardware photograph, and the keyboard capture that exists to show what a
+      // profile looks like. Both would otherwise trip the rule on every build.
+      const markdown = [
+        "![setup](../../img/setup/enable_services.png)",
+        "![keys](../../img/app/home/remote-input/03-keyboard-compact.png)",
+        "![keys](../../img/app/home/remote-input/04-keyboard-medium.png)",
+      ].join("\n");
+      expect(() => assertSingleDisplayProfile(markdown, "compact", "c64u-remote")).not.toThrow();
+    });
+
+    it("names every offender rather than only the first", () => {
+      const markdown = [
+        "![a](../../img/app/home/profiles/medium/01-overview.png)",
+        "![b](../../img/app/play/sid-radio/01-controls.png)",
+      ].join("\n");
+      expect(() => assertSingleDisplayProfile(markdown, "compact", "c64u-remote")).toThrow(/2 screenshot/);
+    });
+  });
+
   it("names no device model in either manual", async () => {
     const contexts = await contextByVariant();
     const modelShape = /\b[A-Z][A-Za-z]+[ -]?[0-9]{4}\b/;
