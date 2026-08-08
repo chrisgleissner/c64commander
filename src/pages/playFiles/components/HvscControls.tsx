@@ -129,11 +129,30 @@ export const HvscControls = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          <Button id="hvsc-download" variant="default" size="sm" onClick={onInstall} disabled={!canDownload}>
-            Download HVSC
+          {/* "Download" and "Ingest", not "Download HVSC" and "Ingest HVSC". The heading two
+              lines above says HVSC and nothing else in this block does anything else, so the
+              repeat bought nothing and cost the width: on a 320px screen "Download HVSC" ran
+              past the edge of its button. The accessible names keep the noun, because a
+              screen reader reaching the button by name has no heading for context. */}
+          <Button
+            id="hvsc-download"
+            variant="default"
+            size="sm"
+            onClick={onInstall}
+            disabled={!canDownload}
+            aria-label="Download HVSC"
+          >
+            Download
           </Button>
-          <Button id="hvsc-ingest" variant="outline" size="sm" onClick={onIngest} disabled={!canIngest}>
-            Ingest HVSC
+          <Button
+            id="hvsc-ingest"
+            variant="outline"
+            size="sm"
+            onClick={onIngest}
+            disabled={!canIngest}
+            aria-label="Ingest HVSC"
+          >
+            Ingest
           </Button>
           {isRunning ? (
             <Button variant="outline" size="sm" onClick={onCancel} data-testid="hvsc-stop">
