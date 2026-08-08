@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import path from "node:path";
-import { buildManualContexts, inlineImageSources, renderManualMarkdown } from "../../../scripts/build-manuals.mjs";
+import {
+  assertSingleDisplayProfile,
+  buildManualContexts,
+  inlineImageSources,
+  renderManualMarkdown,
+} from "../../../scripts/build-manuals.mjs";
 
 const contextByVariant = async () => {
   const contexts = await buildManualContexts();
@@ -31,35 +36,30 @@ describe("manual generator", () => {
 
     expect(c64Commander).toContain("# C64 Commander Manual");
     expect(c64Commander).not.toContain("C64U Remote");
-    expect(c64Commander).toContain("profiles/compact/04-app-ready.png");
+    // C64 Commander is illustrated at medium, C64U Remote at compact.
+    expect(c64Commander).toContain("profiles/medium/04-app-ready.png");
     expect(c64Commander).toContain("HVSC preparation");
     expect(c64Commander).toContain("On by default. You can turn it off in Settings → Stable Features.");
   });
 
-  /**
-   * Both manuals illustrate the app at the compact display profile, the smallest screen
-   * the app supports. A reader on a larger screen sees more of a page than the picture
-   * shows; a reader on the smallest screen looking at a picture taken on a larger one
-   * cannot find the controls it shows.
-   *
-   * The screenshot corpus holds a copy of each profile-scoped picture per profile, so
-   * this is a per-manual choice that a future edit could silently change back. The guard
-   * is the absence of every other profile directory rather than the presence of the
-   * compact one, because a single stray non-compact reference is the failure to catch.
-   */
-  it("embeds only compact-profile screenshots in every manual", async () => {
+  it("embeds screenshots from its own display profile only, one profile per manual", async () => {
     const contexts = await contextByVariant();
+    const expectedProfile: Record<string, string> = { "c64u-remote": "compact", c64commander: "medium" };
 
-    for (const context of Object.values(contexts)) {
+    for (const [variantId, context] of Object.entries(contexts)) {
       const manual = renderManualMarkdown(context);
       const profileReferences = [...manual.matchAll(/\/profiles\/([a-z]+)\//g)].map((match) => match[1]);
+      const expected = expectedProfile[variantId];
 
+      expect(expected, `no expected profile recorded for ${variantId}`).toBeDefined();
       expect(profileReferences.length).toBeGreaterThan(0);
-      expect([...new Set(profileReferences)]).toEqual(["compact"]);
+      expect([...new Set(profileReferences)]).toEqual([expected]);
       // The keyboard picture is chosen by profile through its own helper rather than a
       // path placeholder, so it needs asserting separately.
-      expect(manual).toContain("home/remote-input/03-keyboard-compact.png");
-      expect(manual).not.toContain("home/remote-input/04-keyboard-medium.png");
+      const keyboardShot = expected === "compact" ? "03-keyboard-compact.png" : "04-keyboard-medium.png";
+      const otherShot = expected === "compact" ? "04-keyboard-medium.png" : "03-keyboard-compact.png";
+      expect(manual).toContain(`home/remote-input/${keyboardShot}`);
+      expect(manual).not.toContain(`home/remote-input/${otherShot}`);
       expect(manual).not.toContain("home/remote-input/05-keyboard-expanded.png");
     }
   });
@@ -76,6 +76,52 @@ describe("manual generator", () => {
    * four-digit numbers are left alone because the manuals are full of legitimate ones -
    * $0801, the 1541/1571/1581 drives, the 6581/8580 SIDs, 1982.
    */
+  /**
+   * The guard that keeps the rule true. It is what fails the build when a manual embeds a
+   * screenshot from the wrong profile, so it needs testing on the states it exists to
+   * catch rather than only on the corpus that currently passes.
+   */
+  describe("the single-profile guard", () => {
+    it("accepts a manual whose screenshots all come from its own profile", () => {
+      const markdown =
+        "![a](../../img/app/home/profiles/compact/01-overview.png)\n![b](../../img/app/play/profiles/compact/01-overview.png)";
+      expect(() => assertSingleDisplayProfile(markdown, "compact", "c64u-remote")).not.toThrow();
+    });
+
+    it("rejects a screenshot captured at another profile", () => {
+      const markdown = "![a](../../img/app/home/profiles/medium/01-overview.png)";
+      expect(() => assertSingleDisplayProfile(markdown, "compact", "c64u-remote")).toThrow(
+        /is a medium capture, but this manual uses compact/,
+      );
+    });
+
+    it("rejects a screenshot with no profile in its path at all", () => {
+      const markdown = "![a](../../img/app/play/sid-radio/01-controls.png)";
+      expect(() => assertSingleDisplayProfile(markdown, "medium", "c64commander")).toThrow(
+        /has no display profile in its path/,
+      );
+    });
+
+    it("allows the two images that are deliberately not profile-specific", () => {
+      // The hardware photograph, and the keyboard capture that exists to show what a
+      // profile looks like. Both would otherwise trip the rule on every build.
+      const markdown = [
+        "![setup](../../img/setup/enable_services.png)",
+        "![keys](../../img/app/home/remote-input/03-keyboard-compact.png)",
+        "![keys](../../img/app/home/remote-input/04-keyboard-medium.png)",
+      ].join("\n");
+      expect(() => assertSingleDisplayProfile(markdown, "compact", "c64u-remote")).not.toThrow();
+    });
+
+    it("names every offender rather than only the first", () => {
+      const markdown = [
+        "![a](../../img/app/home/profiles/medium/01-overview.png)",
+        "![b](../../img/app/play/sid-radio/01-controls.png)",
+      ].join("\n");
+      expect(() => assertSingleDisplayProfile(markdown, "compact", "c64u-remote")).toThrow(/2 screenshot/);
+    });
+  });
+
   it("names no device model in either manual", async () => {
     const contexts = await contextByVariant();
     const modelShape = /\b[A-Z][A-Za-z]+[ -]?[0-9]{4}\b/;

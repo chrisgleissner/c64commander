@@ -284,7 +284,7 @@ Preferred path: Play. Use C64U source for files already on the target device; us
 
 To search rather than browse, type in the box at the top and choose **Everywhere**. **This folder** narrows what is on screen; **Everywhere** searches the whole source, which for HVSC means the whole archive — some sixty thousand files — by title or composer. Sources that have to be read folder by folder — a folder on your device, or the card in your C64 — offer a **Scan** button instead of searching as you type, because that search has to walk the whole source rather than consult an index.
 
-![Searching the whole of HVSC rather than one folder](../../img/app/play/import/09-hvsc-search-scope.png)
+![Searching the whole of HVSC rather than one folder](../../img/app/play/import/profiles/compact/09-hvsc-search-scope.png)
 
 Preferred path: Add a folder first, then filter the playlist to choose what to play next.
 
@@ -300,7 +300,7 @@ Preferred path: filter before removing. A filter changes only what you can see.
 ### Choose a Tune Inside a SID
 
 1. Add one or more SID files to Play and start one.
-2. On the Now Playing card, tap the **Tune 1 of 19** line to list every tune in the file, with its name and its length.
+2. On the Now Playing card, tap the tune position — **1/19** — to list every tune in the file, with its name and its length.
 3. Tap a tune to play it, or use **Play all 19 tunes** to add the whole file to the playlist in order.
 
 Preferred path: choose tunes from the Now Playing card. The playlist rows have no tune chooser.
@@ -392,7 +392,7 @@ A **SID** — short for **Sound Interface Device** — is the sound chip in ever
 
 Your C64 will play any of it, and so will your phone for most tunes. This section covers playing that music yourself. The next one, **SID Radio**, covers letting the app choose it for you.
 
-![The Now Playing card: the tune, what the file says about it, and the transport](../../img/app/play/sid-radio/01-controls.png)
+![The Now Playing card: the tune, what the file says about it, and the transport](../../img/app/play/sid-radio/profiles/compact/01-controls.png)
 
 #### Where the music plays
 
@@ -430,7 +430,7 @@ A C64 can have more than one SID chip. **Home → SID / Audio mixer** gives you 
 
 The High Voltage SID Collection holds around sixty thousand files and close to ninety thousand tunes, which is far too many to browse. SID Radio plays it like a radio station: pick a mood, or a tune you already like, and the app keeps finding more music of the same kind. There is no playlist to build, and nothing is downloaded as you listen — once the collection is on your device, the app already knows which tunes resemble one another.
 
-![Choosing a station: a mood, your own taste, or anything at all](../../img/app/play/sid-radio/02-stations.png)
+![Choosing a station: a mood, your own taste, or anything at all](../../img/app/play/sid-radio/profiles/compact/02-stations.png)
 
 #### Starting a station
 
@@ -468,17 +468,17 @@ Any part of a word will do, in any case, and accents are ignored: "oorni" finds 
 
 Tap a result and it plays immediately. Your station keeps its place and carries on when the tune ends. To hear more music like the one you found, tap the radio icon beside it — it is there for any tune the collection can start a station from. With nothing typed, the sheet lists what you have heard recently, which is how you find your way back to something that has already played.
 
-![Finding one tune by name, anywhere in the collection](../../img/app/play/sid-radio/04-find-a-tune.png)
+![Finding one tune by name, anywhere in the collection](../../img/app/play/sid-radio/profiles/compact/04-find-a-tune.png)
 
 #### More than one tune per file
 
-Many SID files hold several tunes — a title screen, a high-score jingle, a loading tune, sometimes twenty more. The line under the title shows this: **Tune 1 of 19**.
+Many SID files hold several tunes — a title screen, a high-score jingle, a loading tune, sometimes twenty more. The second line under the title shows which one is playing and how many there are: **1/19**.
 
 Tap **Play all 19 tunes** to add them all to your playlist in order, each with its own length and name. They then behave like any other tracks. The button disappears once you have added them.
 
-To go straight to one tune, tap **Tune 1 of 19**. That lists every tune in the file with its number, its name where there is one, and its length; tap one to play it. Lengths vary a lot — a five-minute piece and a one-second jingle in the same file is normal — so it is worth checking before you choose.
+To go straight to one tune, tap that **1/19**. It lists every tune in the file with its number, its name where there is one, and its length; tap one to play it. Lengths vary a lot — a five-minute piece and a one-second jingle in the same file is normal — so it is worth checking before you choose.
 
-![Every tune in one SID file, with its name and length](../../img/app/play/sid-radio/07-tunes-in-this-file.png)
+![Every tune in one SID file, with its name and length](../../img/app/play/sid-radio/profiles/compact/07-tunes-in-this-file.png)
 
 #### What the tune is, and who wrote it
 
@@ -505,7 +505,7 @@ It is one shared session. Start it in a single place and it keeps playing wherev
 - **Listen** turns the sound on. It asks for almost no room — a lit button and a small live dot — so it is perfect for keeping half an ear on a game or a SID tune while you get on with something else. Wander to another page and a matching dot appears in the top bar to remind you it is still playing; a tap on it stops everything at once.
 - **Watch** turns the picture on. A small preview of the C64 screen appears just beneath the switches; tap the chevron beside it to grow that preview in place.
 
-![Live View on Home](../../img/app/home/content-explorer/01-live-view.png)
+![Live View on Home](../../img/app/home/content-explorer/profiles/compact/01-live-view.png)
 
 #### The immersive screen
 
@@ -513,7 +513,7 @@ Open **Remote Input** while **Watch** is on and the picture sits above the joyst
 
 Move around it however suits you. On a touchscreen, **pinch** to zoom, **drag** to slide the picture about, and **double-tap** to jump straight in on a spot — a second double-tap fits the whole screen back on. A small map in the corner shows which part you are looking at; drag its rectangle to leap somewhere else in an instant. Switch on **Follow** and the view drifts along on its own to wherever the action is — a lovely way to keep the cursor in sight as you type.
 
-![The immersive screen in Remote Input](../../img/app/home/remote-input/06-av-mirror-immersive.png)
+![The immersive screen in Remote Input](../../img/app/home/remote-input/profiles/compact/06-av-mirror-immersive.png)
 
 #### Driving the C64, or adjusting the view
 
@@ -583,7 +583,7 @@ Open it from either of two places:
 
 Each place opens its own copy of the controller, so a key you are holding in one never leaks into the other.
 
-![Remote Input joystick mode](../../img/app/home/remote-input/01-joystick.png)
+![Remote Input joystick mode](../../img/app/home/remote-input/profiles/compact/01-joystick.png)
 
 At the top of the sheet you choose between two modes, **Joystick** and **Keys**.
 
@@ -600,13 +600,13 @@ A quick-keys bar beside the joystick keeps the keys you reach for mid-game one t
 
 **Game Mode** is the app set up for playing: the picture and the sound as you last left them, everything else out of the way, and whichever controls suit how you are driving. It takes one action — the **Game Mode** tile on Home, the **Game Mode** button on Play, or the `0` key from anywhere — and leaves you playing with nothing else to press. Starting a program, a cartridge or a disk can open it for you as well; **Settings → Play and Disk → Enter Game Mode when a game starts** decides.
 
-![Game Mode](../../img/app/home/remote-input/02-game-mode.png)
+![Game Mode](../../img/app/home/remote-input/profiles/compact/02-game-mode.png)
 
 The picture takes the whole screen: this handset steers with its number keys, so there is no on-screen joystick worth the space. Press **Show joystick** on the Game Mode toolbar to bring one up for the game you are playing, or set **Settings → Play and Disk → On-screen joystick in Game mode** to **Visible** to keep it for good.
 
-![Game Mode, played on the physical keys](../../img/app/home/remote-input/07-game-mode-keys.png)
+![Game Mode, played on the physical keys](../../img/app/home/remote-input/profiles/compact/07-game-mode-keys.png)
 
-With the controls out of the way, three keys still reach everything. `#` brings RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again. `*`, or the menu key, changes between driving the C64 and adjusting the view. **Back** leaves. The floating **Controls** handle at the top brings the whole toolbar back, and **Show joystick** on that toolbar brings the on-screen joystick back.
+With the controls out of the way, three keys still reach everything. `#` brings RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again. `*`, or the menu key, changes between driving the C64 and adjusting the view. **Back** leaves. The floating **cog** button at the top of the picture brings the whole toolbar back, and **Show joystick** on that toolbar brings the on-screen joystick back.
 
 Playing on a television? Turn **Watch** off once and Game Mode will keep opening without the picture — the controls take the space instead, so it is never blank.
 
@@ -630,7 +630,7 @@ The mapping turns with your phone. Hold it like a gamepad and the keys follow, s
 | Turned right | 7 | 0 | 5 | 9 | 8 |
 | Turned left | 9 | 5 | 0 | 7 | 8 |
 
-![Game Mode with the picture turned](../../img/app/home/remote-input/08-game-mode-rotated.png)
+![Game Mode with the picture turned](../../img/app/home/remote-input/profiles/compact/08-game-mode-rotated.png)
 
 Lying down, or somewhere the sensor cannot tell? The **Orientation** control in Game Mode's toolbar pins it — **Auto**, **0°**, **90°** or **270°** — for as long as the sheet is open. It is deliberately not remembered: an orientation pinned for one game should not still apply to the next one weeks later.
 

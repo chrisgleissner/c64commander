@@ -131,8 +131,8 @@ Joystick controls in standard and Game mode:
 
 <table>
   <tr>
-    <td><img src="docs/img/app/home/remote-input/01-joystick.png" alt="Remote Input Joystick tab with a large adjustable stick and fire button" width="360"/></td>
-    <td><img src="docs/img/app/home/remote-input/02-game-mode.png" alt="Remote Input Game mode with an edge-anchored stick and fire button" width="360"/></td>
+    <td><img src="docs/img/app/home/remote-input/profiles/medium/01-joystick.png" alt="Remote Input Joystick tab with a large adjustable stick and fire button" width="360"/></td>
+    <td><img src="docs/img/app/home/remote-input/profiles/medium/02-game-mode.png" alt="Remote Input Game mode with an edge-anchored stick and fire button" width="360"/></td>
     <td width="360"></td>
   </tr>
 </table>
@@ -155,14 +155,14 @@ Stream audio and video from the running machine. Use **Listen** for audio only, 
 
 <table>
   <tr>
-    <td><img src="docs/img/app/home/content-explorer/01-live-view.png" alt="Live View on Home: Listen and Watch toggles with a small live preview" width="300"/></td>
+    <td><img src="docs/img/app/home/content-explorer/profiles/medium/01-live-view.png" alt="Live View on Home: Listen and Watch toggles with a small live preview" width="300"/></td>
     <td><img src="docs/img/app/home/content-explorer/02-live-view-expanded.png" alt="Live View expanded to a larger inline preview of the C64 screen" width="300"/></td>
   </tr>
 </table>
 
 In **Remote Input**, Live View provides a full-width screen with zoom, pan, a minimap, and automatic tracking. A view lock switches physical controls between the C64 and the screen view. Game mode keeps the screen visible above the controls.
 
-<img src="docs/img/app/home/remote-input/06-av-mirror-immersive.png" alt="Remote Input immersive mirror: the C64 screen with a Driving-C64 view-lock chip and zoom/pan controls" width="300"/>
+<img src="docs/img/app/home/remote-input/profiles/medium/06-av-mirror-immersive.png" alt="Remote Input immersive mirror: the C64 screen with a Driving-C64 view-lock chip and zoom/pan controls" width="300"/>
 
 Live View prioritises continuous audio and can reduce the video frame rate when needed. The optional **Stats** panel shows frame rate, buffering, packet loss, and CPU use.
 
@@ -190,8 +190,8 @@ For SID music on the go, the built-in player runs entirely on your phone and req
 
 <table>
   <tr>
-    <td><img src="docs/img/app/play/sid-radio/01-controls.png" alt="SID Radio and Liked Tunes controls with the heart/cross ranking on the playback card" width="360"/></td>
-    <td><img src="docs/img/app/play/sid-radio/02-stations.png" alt="SID Radio station launcher: song, mood (nine style tiles) and taste seeds" width="360"/></td>
+    <td><img src="docs/img/app/play/sid-radio/profiles/medium/01-controls.png" alt="SID Radio and Liked Tunes controls with the heart/cross ranking on the playback card" width="360"/></td>
+    <td><img src="docs/img/app/play/sid-radio/profiles/medium/02-stations.png" alt="SID Radio station launcher: song, mood (nine style tiles) and taste seeds" width="360"/></td>
     <td><img src="docs/img/app/settings/sid-radio.png" alt="SID Radio settings: enable stations, ranking, and the experimental on-device playback engine, with the similarity corpus status" width="360"/></td>
   </tr>
 </table>

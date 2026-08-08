@@ -34,3 +34,16 @@ export const DISPLAY_PROFILE_VIEWPORTS = {
 export type DisplayProfileViewportId = keyof typeof DISPLAY_PROFILE_VIEWPORTS;
 
 export const DISPLAY_PROFILE_VIEWPORT_SEQUENCE = Object.keys(DISPLAY_PROFILE_VIEWPORTS) as DisplayProfileViewportId[];
+
+/**
+ * The profiles the manuals are illustrated at: one each.
+ *
+ * The C64U Remote manual uses `compact`, the smallest screen the app supports and the one
+ * that edition's hardware has. The C64 Commander manual uses `medium`, an ordinary phone.
+ * `scripts/build-manuals.mjs` picks between them per variant and fails the build if a
+ * manual embeds a screenshot from the other one.
+ *
+ * `small` and `expanded` are deliberately absent: nothing in either manual is illustrated
+ * at those sizes, and capturing them would double the work for images no manual embeds.
+ */
+export const MANUAL_PROFILE_SEQUENCE = ["compact", "medium"] as const satisfies readonly DisplayProfileViewportId[];
