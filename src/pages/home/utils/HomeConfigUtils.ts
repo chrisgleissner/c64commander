@@ -114,3 +114,41 @@ export const formatPrinterOptionLabel = (value: string) => {
   if (normalized === "International 2") return "Intl 2";
   return normalized;
 };
+
+/**
+ * What a summary card prints when it has no value to print.
+ *
+ * Two different situations used to produce the same words. A card whose category the
+ * device does not expose says "Not available", which is true. A card whose read is still
+ * in flight also said "Not available", which is not: the value is coming. Measured on the
+ * 0.9.6 walkthrough, eight cards on Home said it at once while the reads were outstanding,
+ * and all eight filled in a few seconds later.
+ *
+ * `isItemSupported` cannot tell them apart on its own - `readItemValue(...) !== undefined`
+ * is false either way - so the card has to be told whether its read has completed.
+ */
+export const CONFIG_UNAVAILABLE_LABEL = "Not available";
+
+/** Shown while the read is outstanding. An ellipsis, not a word, so it reads as "waiting". */
+export const CONFIG_PENDING_LABEL = "…";
+
+/**
+ * Pick the label for a value the card may or may not have yet.
+ *
+ * `disconnected` wins: with no device there is nothing to wait for. Otherwise an
+ * outstanding read shows the pending label, and only a completed read that returned
+ * nothing says the item is unavailable.
+ */
+export const resolveConfigDisplayValue = ({
+  isActive,
+  hasLoaded,
+  value,
+}: {
+  isActive: boolean;
+  hasLoaded: boolean;
+  value: string;
+}): string => {
+  if (!isActive) return CONFIG_UNAVAILABLE_LABEL;
+  if (!hasLoaded) return CONFIG_PENDING_LABEL;
+  return value;
+};
