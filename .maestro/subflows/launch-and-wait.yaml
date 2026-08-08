@@ -129,3 +129,19 @@ tags:
           optional: true
       - waitForAnimationToEnd
       - assertVisible: ".*Firmware.*"
+
+# The system-information row is the first thing Home renders, so reaching it says the page
+# has started rather than finished. The anchor this replaced - a quick action further down
+# the page - was slower to appear and had been standing in for a readiness wait that was
+# never written down: three iOS flows that had passed for months began failing on their
+# own next assertion the moment the anchor moved up the page, on a screen where the change
+# was not even needed. Waiting for the quick actions restores it explicitly.
+#
+# Optional, and that is the point: on the 320x426 screen this application is built for the
+# quick actions are below the fold, so this waits for them where they are on screen and
+# costs nothing where they are not.
+- extendedWaitUntil:
+    visible: "Reboot"
+    timeout: 20000
+    optional: true
+- waitForAnimationToEnd
