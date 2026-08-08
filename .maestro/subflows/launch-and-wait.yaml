@@ -104,15 +104,23 @@ tags:
 #                         do surface theirs, which is why tapping tab ids works, but the
 #                         page title is a plain h1 and does not.
 #
-# "Reboot" is the label of a quick-action button, which Home renders unconditionally - it
-# is disabled while disconnected, not absent - and a button's label is its accessible
-# name, so it is an element's whole text.
+# The system-information row, which is the first thing Home draws under the app bar and
+# renders whether or not a device is connected. It reads "App <version> Device <host>
+# Firmware <version>" as one node, so it is matched with `.*` around the part named here;
+# Maestro compares a selector against an element's whole text.
+#
+# This used to assert "Reboot", a quick-action button further down the page. That works
+# on a tall screen and fails on the one this app is built for: at 480x640, which is
+# 320x426 CSS pixels, the quick actions are below the fold and Maestro only sees what is
+# on screen. The run that first used the real panel size failed on it three times with
+# nothing wrong with the app. An anchor for "the page rendered" has to be one that is on
+# screen at the smallest supported size.
 #
 # Wrapped in a retry that dismisses the device picker first. The picker re-arms on its
 # own - the background rediscovery timer re-probes every few seconds and a probe that
 # times out puts the app back to offline and reopens it - and while it is open the page
-# behind is inert, so a perfectly present "Reboot" does not count as visible. A run
-# failed exactly that way with Reboot plainly on screen behind the dialog.
+# behind is inert, so a present element does not count as visible. A run failed exactly
+# that way with the anchor plainly on screen behind the dialog.
 - retry:
     maxRetries: 3
     commands:
@@ -120,4 +128,4 @@ tags:
           text: "Not now"
           optional: true
       - waitForAnimationToEnd
-      - assertVisible: "Reboot"
+      - assertVisible: ".*Firmware.*"

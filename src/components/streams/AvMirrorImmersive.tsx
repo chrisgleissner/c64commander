@@ -15,7 +15,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Crosshair, Gamepad2, Maximize, Minus, Plus, ScanEye } from "lucide-react";
+import { Crosshair, Joystick, Maximize, Minus, Plus, ScanEye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAvMirror, useAvMirrorCanvas } from "@/hooks/useAvMirror";
@@ -329,7 +329,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
             aria-label={adjust ? "Adjusting view" : "Driving C64"}
             data-testid="av-mirror-mode-chip"
           >
-            {adjust ? <ScanEye className="h-3 w-3" /> : <Gamepad2 className="h-3 w-3" />}
+            {adjust ? <ScanEye className="h-3 w-3" /> : <Joystick className="h-3 w-3" />}
             {adjust ? "View" : "C64"}
           </span>
           {videoLive && video.fps > 0 && (

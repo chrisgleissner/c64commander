@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useRef, useState } from "react";
-import { AlertTriangle, Gamepad2, Hand, MoveDiagonal } from "lucide-react";
+import { AlertTriangle, Joystick, Hand, MoveDiagonal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
@@ -63,8 +63,8 @@ export type VirtualJoystickProps = {
 
 type MovementStyle = "stick" | "dpad" | "swipe";
 
-const MOVEMENT_STYLES: ReadonlyArray<{ id: MovementStyle; label: string; icon: typeof Gamepad2 }> = [
-  { id: "stick", label: "Stick", icon: Gamepad2 },
+const MOVEMENT_STYLES: ReadonlyArray<{ id: MovementStyle; label: string; icon: typeof Joystick }> = [
+  { id: "stick", label: "Stick", icon: Joystick },
   { id: "dpad", label: "D-Pad", icon: Hand },
   { id: "swipe", label: "Swipe", icon: MoveDiagonal },
 ];

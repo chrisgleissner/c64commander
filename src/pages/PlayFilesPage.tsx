@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Gamepad2, Heart, Keyboard, ListMusic, Search } from "lucide-react";
+import { Joystick, Heart, Keyboard, ListMusic, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RemoteInputSheet } from "@/components/remoteInput/RemoteInputSheet";
 import { PlaybackConfigSheet } from "@/pages/playFiles/components/PlaybackConfigSheet";
@@ -1939,7 +1939,7 @@ export default function PlayFilesPage() {
   const playGameModeLabel = displayProfile === "compact" ? "Game" : "Game Mode";
   const playGameModeButton = (
     <Button variant="outline" size="sm" data-testid="play-open-game-mode" onClick={() => void startGameMode()}>
-      <Gamepad2 className="mr-1.5 h-4 w-4" /> {playGameModeLabel}
+      <Joystick className="mr-1.5 h-4 w-4" /> {playGameModeLabel}
     </Button>
   );
   const playRemoteInputButton = (

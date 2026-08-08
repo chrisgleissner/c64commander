@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Settings2,
-  Gamepad2,
+  Joystick,
   Keyboard as KeyboardIcon,
   Maximize2,
   Minimize2,
@@ -415,7 +415,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
     >
       {!joystickDrawn ? (
         <>
-          <Gamepad2 className="mr-1.5 h-4 w-4" />
+          <Joystick className="mr-1.5 h-4 w-4" />
           Show joystick
         </>
       ) : (
@@ -541,7 +541,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                     title={!joystickAvailable ? joystickUnavailableHint : undefined}
                     onClick={() => handleOutputModeChange("joystick")}
                   >
-                    {isCompactDisplay ? null : <Gamepad2 className="mr-1.5 h-4 w-4" />}
+                    {isCompactDisplay ? null : <Joystick className="mr-1.5 h-4 w-4" />}
                     Joystick
                   </Button>
                   <Button

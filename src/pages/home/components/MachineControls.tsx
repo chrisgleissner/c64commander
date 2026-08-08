@@ -18,7 +18,7 @@ import {
   Play,
   Download,
   RefreshCw,
-  Gamepad2,
+  Joystick,
   LucideIcon,
 } from "lucide-react";
 import { SectionHeader } from "@/components/SectionHeader";
@@ -214,7 +214,7 @@ export function MachineControls({
                 cost a keypad user a ring level to descend into. */}
             {gameModeVisible ? (
               <QuickActionCard
-                icon={Gamepad2}
+                icon={Joystick}
                 label={gameModeLabel}
                 dataTestId="home-machine-inline-openGameMode"
                 focusId="home-machine-openGameMode"
