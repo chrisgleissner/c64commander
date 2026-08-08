@@ -2,7 +2,7 @@
 
 Play SID music, run games and demos, mount disks, and control a Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, or Ultimate-II from one app.
 
-![C64 Commander launch screen](../../img/app/launch/profiles/compact/04-app-ready.png)
+![C64 Commander launch screen](../../img/app/launch/profiles/medium/04-app-ready.png)
 
 ## Table of Contents
 
@@ -85,7 +85,7 @@ The badge at the top right says how the current device is: healthy, degraded, un
 
 Home groups the day-to-day controls.
 
-![Home overview](../../img/app/home/profiles/compact/01-overview.png)
+![Home overview](../../img/app/home/profiles/medium/01-overview.png)
 
 Start at the top. The system strip confirms which app build, device, and firmware you are using. Below it, Quick Actions run from the ones you reach for most to the ones you reach for rarely: Game Mode, Menu, Pause/Resume, Remote Input, the RAM snapshot actions, and then, in their own band, the ones that interrupt whatever the machine is doing — Reset, Reboot, and Power Off where the device supports it. Nothing that stops your C64 sits next to something that does not.
 
@@ -105,21 +105,21 @@ The lower cards cover drives, the printer, the SID mixer, streams, and the **Con
 
 Play is for building a playlist and running it.
 
-![Play overview](../../img/app/play/profiles/compact/01-overview.png)
+![Play overview](../../img/app/play/profiles/medium/01-overview.png)
 
 Choose **Add items** — it reads **Add more items** once there is something in the list — and then choose a source.
 
-![Add items source chooser](../../img/app/play/import/profiles/compact/01-import-interstitial.png)
+![Add items source chooser](../../img/app/play/import/profiles/medium/01-import-interstitial.png)
 
 The picker stays inside the source you chose, so **Up** never escapes into somewhere else by accident. Tick files or folders and confirm. **Include subfolders** decides whether a ticked folder means that folder alone or everything beneath it, which is the difference between adding twelve files and adding twelve thousand.
 
 One useful shortcut: if the only thing you have ticked is a single program, cartridge or disk, the confirm button reads **Play** instead of **Add to playlist**, and the machine starts it there and then.
 
-![C64U file picker](../../img/app/play/import/profiles/compact/02-c64u-file-picker.png)
+![C64U file picker](../../img/app/play/import/profiles/medium/02-c64u-file-picker.png)
 
 Play handles SID and MOD music, PRG programs, CRT cartridges, and disk images. A SID file can hold several separate pieces of music, which this guide calls tunes. Where the length of a tune is known, the app shows it and moves on at the right moment instead of guessing.
 
-![Playlist view all](../../img/app/play/profiles/compact/02-view-all.png)
+![Playlist view all](../../img/app/play/profiles/medium/02-view-all.png)
 
 A playlist can stay tiny — one song — or become the queue for a whole evening.
 
@@ -145,11 +145,11 @@ Play is the quick way to start a disk and see what it does. Disks is the place t
 
 Disks is where the drives and your disk images live.
 
-![Disks overview](../../img/app/disks/profiles/compact/01-overview.png)
+![Disks overview](../../img/app/disks/profiles/medium/01-overview.png)
 
 The page has three drive cards — **Drive A**, **Drive B**, and a **Soft IEC** drive that reads loose files straight from a folder rather than from a disk image. Each card turns its drive on or off, sets its bus ID and type, mounts and ejects, and resets. Below them, **Add disks** builds a collection from the sources you have.
 
-![Disk collection view](../../img/app/disks/profiles/compact/02-view-all.png)
+![Disk collection view](../../img/app/disks/profiles/medium/02-view-all.png)
 
 Add a single image, a folder of them, or a result from the online archive. Adding a folder also groups what it finds: disks whose names share a prefix, or that share a folder, are put in one group for you, so a multi-disk title usually arrives ready to rotate through.
 
@@ -165,7 +165,7 @@ Come to Disks whenever more than one image is involved. The collection, its filt
 
 Config is the complete configuration tree.
 
-![Config overview](../../img/app/config/profiles/compact/01-overview.png)
+![Config overview](../../img/app/config/profiles/medium/01-overview.png)
 
 Search for a category, open it, and edit the rows directly. Each item gets the control that suits it — a slider, a select, a checkbox, a text field, or a masked field for a password.
 
@@ -181,7 +181,7 @@ Config edits the live device, not a draft. Use it for the precise and the uncomm
 
 Settings controls app behaviour and saved connection details.
 
-![Settings overview](../../img/app/settings/profiles/compact/01-overview.png)
+![Settings overview](../../img/app/settings/profiles/medium/01-overview.png)
 
 Settings is a list of chapters rather than one long page of controls. Each heading says in one line what its chapter decides, so you can find the right one without reading the others. **Connection** is open on your first visit; the rest start closed, and whatever you leave open is still open next time.
 
@@ -205,7 +205,7 @@ Feature switches appear only where a feature is safe for anyone to change. A fea
 
 Docs is the built-in help page — the short version of this manual, always with you.
 
-![Docs overview](../../img/app/docs/profiles/compact/01-overview.png)
+![Docs overview](../../img/app/docs/profiles/medium/01-overview.png)
 
 It covers setup, Home, Play, Disks, Config, Settings, Diagnostics and disk swapping, and ends with links to the official device manuals and reference material.
 
@@ -213,7 +213,7 @@ It covers setup, Home, Play, Disks, Config, Settings, Diagnostics and disk swapp
 
 Diagnostics shows the health of the connection, what the app has been doing, and anything that has failed.
 
-![Diagnostics overview](../../img/app/diagnostics/profiles/compact/01-overview.png)
+![Diagnostics overview](../../img/app/diagnostics/profiles/medium/01-overview.png)
 
 Open it when a control does nothing, playback will not start, a file transfer stalls, or the badge stops looking healthy. Inside are the health check, four kinds of activity — Problems, Actions, Logs and Traces — filters, latency and heat-map views, Share, and Clear.
 
@@ -227,13 +227,13 @@ For a closer look, see [Reading Diagnostics](#reading-diagnostics) and [Sharing 
 
 Device Switcher is for homes with more than one saved Ultimate-family device.
 
-![Device switcher](../../img/app/diagnostics/switch-device/profiles/compact/01-picker.png)
+![Device switcher](../../img/app/diagnostics/switch-device/profiles/medium/01-picker.png)
 
 Open it from the badge long-press, `#`, or Quick Menu. Expand a row for more detail.
 
 See [Switching Between Devices](#switching-between-devices) in the In Depth chapter for the full story.
 
-![Device switcher expanded](../../img/app/diagnostics/switch-device/profiles/compact/02-picker-expanded.png)
+![Device switcher expanded](../../img/app/diagnostics/switch-device/profiles/medium/02-picker-expanded.png)
 
 ## Everyday Flows
 
@@ -286,7 +286,7 @@ Preferred path: Play. Use C64U source for files already on the target device; us
 
 To search rather than browse, type in the box at the top and choose **Everywhere**. **This folder** narrows what is on screen; **Everywhere** searches the whole source, which for HVSC means the whole archive — some sixty thousand files — by title or composer. Sources that have to be read folder by folder — a folder on your device, or the card in your C64 — offer a **Scan** button instead of searching as you type, because that search has to walk the whole source rather than consult an index.
 
-![Searching the whole of HVSC rather than one folder](../../img/app/play/import/09-hvsc-search-scope.png)
+![Searching the whole of HVSC rather than one folder](../../img/app/play/import/profiles/medium/09-hvsc-search-scope.png)
 
 Preferred path: Add a folder first, then filter the playlist to choose what to play next.
 
@@ -302,7 +302,7 @@ Preferred path: filter before removing. A filter changes only what you can see.
 ### Choose a Tune Inside a SID
 
 1. Add one or more SID files to Play and start one.
-2. On the Now Playing card, tap the **Tune 1 of 19** line to list every tune in the file, with its name and its length.
+2. On the Now Playing card, tap the tune position — **1/19** — to list every tune in the file, with its name and its length.
 3. Tap a tune to play it, or use **Play all 19 tunes** to add the whole file to the playlist in order.
 
 Preferred path: choose tunes from the Now Playing card. The playlist rows have no tune chooser.
@@ -394,7 +394,7 @@ A **SID** — short for **Sound Interface Device** — is the sound chip in ever
 
 Your C64 will play any of it, and so will your phone or tablet for most tunes. This section covers playing that music yourself. The next one, **SID Radio**, covers letting the app choose it for you.
 
-![The Now Playing card: the tune, what the file says about it, and the transport](../../img/app/play/sid-radio/01-controls.png)
+![The Now Playing card: the tune, what the file says about it, and the transport](../../img/app/play/sid-radio/profiles/medium/01-controls.png)
 
 #### Where the music plays
 
@@ -432,7 +432,7 @@ A C64 can have more than one SID chip. **Home → SID / Audio mixer** gives you 
 
 The High Voltage SID Collection holds around sixty thousand files and close to ninety thousand tunes, which is far too many to browse. SID Radio plays it like a radio station: pick a mood, or a tune you already like, and the app keeps finding more music of the same kind. There is no playlist to build, and nothing is downloaded as you listen — once the collection is on your device, the app already knows which tunes resemble one another.
 
-![Choosing a station: a mood, your own taste, or anything at all](../../img/app/play/sid-radio/02-stations.png)
+![Choosing a station: a mood, your own taste, or anything at all](../../img/app/play/sid-radio/profiles/medium/02-stations.png)
 
 #### Starting a station
 
@@ -470,17 +470,17 @@ Any part of a word will do, in any case, and accents are ignored: "oorni" finds 
 
 Tap a result and it plays immediately. Your station keeps its place and carries on when the tune ends. To hear more music like the one you found, tap the radio icon beside it — it is there for any tune the collection can start a station from. With nothing typed, the sheet lists what you have heard recently, which is how you find your way back to something that has already played.
 
-![Finding one tune by name, anywhere in the collection](../../img/app/play/sid-radio/04-find-a-tune.png)
+![Finding one tune by name, anywhere in the collection](../../img/app/play/sid-radio/profiles/medium/04-find-a-tune.png)
 
 #### More than one tune per file
 
-Many SID files hold several tunes — a title screen, a high-score jingle, a loading tune, sometimes twenty more. The line under the title shows this: **Tune 1 of 19**.
+Many SID files hold several tunes — a title screen, a high-score jingle, a loading tune, sometimes twenty more. The second line under the title shows which one is playing and how many there are: **1/19**.
 
 Tap **Play all 19 tunes** to add them all to your playlist in order, each with its own length and name. They then behave like any other tracks. The button disappears once you have added them.
 
-To go straight to one tune, tap **Tune 1 of 19**. That lists every tune in the file with its number, its name where there is one, and its length; tap one to play it. Lengths vary a lot — a five-minute piece and a one-second jingle in the same file is normal — so it is worth checking before you choose.
+To go straight to one tune, tap that **1/19**. It lists every tune in the file with its number, its name where there is one, and its length; tap one to play it. Lengths vary a lot — a five-minute piece and a one-second jingle in the same file is normal — so it is worth checking before you choose.
 
-![Every tune in one SID file, with its name and length](../../img/app/play/sid-radio/07-tunes-in-this-file.png)
+![Every tune in one SID file, with its name and length](../../img/app/play/sid-radio/profiles/medium/07-tunes-in-this-file.png)
 
 #### What the tune is, and who wrote it
 
@@ -507,7 +507,7 @@ It is one shared session. Start it in a single place and it keeps playing wherev
 - **Listen** turns the sound on. It asks for almost no room — a lit button and a small live dot — so it is perfect for keeping half an ear on a game or a SID tune while you get on with something else. Wander to another page and a matching dot appears in the top bar to remind you it is still playing; a tap on it stops everything at once.
 - **Watch** turns the picture on. A small preview of the C64 screen appears just beneath the switches; tap the chevron beside it to grow that preview in place.
 
-![Live View on Home](../../img/app/home/content-explorer/01-live-view.png)
+![Live View on Home](../../img/app/home/content-explorer/profiles/medium/01-live-view.png)
 
 #### The immersive screen
 
@@ -515,7 +515,7 @@ Open **Remote Input** while **Watch** is on and the picture sits above the joyst
 
 Move around it however suits you. On a touchscreen, **pinch** to zoom, **drag** to slide the picture about, and **double-tap** to jump straight in on a spot — a second double-tap fits the whole screen back on. A small map in the corner shows which part you are looking at; drag its rectangle to leap somewhere else in an instant. Switch on **Follow** and the view drifts along on its own to wherever the action is — a lovely way to keep the cursor in sight as you type.
 
-![The immersive screen in Remote Input](../../img/app/home/remote-input/06-av-mirror-immersive.png)
+![The immersive screen in Remote Input](../../img/app/home/remote-input/profiles/medium/06-av-mirror-immersive.png)
 
 #### Driving the C64, or adjusting the view
 
@@ -585,7 +585,7 @@ Open it from either of two places:
 
 Each place opens its own copy of the controller, so a key you are holding in one never leaks into the other.
 
-![Remote Input joystick mode](../../img/app/home/remote-input/01-joystick.png)
+![Remote Input joystick mode](../../img/app/home/remote-input/profiles/medium/01-joystick.png)
 
 At the top of the sheet you choose between two modes, **Joystick** and **Keys**.
 
@@ -602,13 +602,13 @@ A quick-keys bar beside the joystick keeps the keys you reach for mid-game one t
 
 **Game Mode** is the app set up for playing: the picture and the sound as you last left them, everything else out of the way, and whichever controls suit how you are driving. It takes one action — the **Game Mode** tile on Home, the **Game Mode** button on Play, or the `0` key from anywhere — and leaves you playing with nothing else to press. Starting a program, a cartridge or a disk can open it for you as well; **Settings → Play and Disk → Enter Game Mode when a game starts** decides.
 
-![Game Mode](../../img/app/home/remote-input/02-game-mode.png)
+![Game Mode](../../img/app/home/remote-input/profiles/medium/02-game-mode.png)
 
 The on-screen joystick stays where it is until you pick up the keys. Play with the touchscreen and it is there; steer the game with a physical key and it steps aside so the picture has the whole screen, and touching it brings it straight back. Nothing else moves it — opening Game Mode with the `0` key does not count as playing on the keys. To decide yourself, press **Hide joystick** or **Show joystick** on the Game Mode toolbar for the game you are playing, or set **Settings → Play and Disk → On-screen joystick in Game mode** to **Visible** or **Hidden** instead of **Auto**.
 
-![Game Mode, played on the physical keys](../../img/app/home/remote-input/07-game-mode-keys.png)
+![Game Mode, played on the physical keys](../../img/app/home/remote-input/profiles/medium/07-game-mode-keys.png)
 
-With the controls out of the way, three keys still reach everything. `#` brings RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again. `*`, or the menu key, changes between driving the C64 and adjusting the view. **Back** leaves. The floating **Controls** handle at the top brings the whole toolbar back, and **Show joystick** on that toolbar brings the on-screen joystick back.
+With the controls out of the way, three keys still reach everything. `#` brings RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again. `*`, or the menu key, changes between driving the C64 and adjusting the view. **Back** leaves. The floating **cog** button at the top of the picture brings the whole toolbar back, and **Show joystick** on that toolbar brings the on-screen joystick back.
 
 Playing on a television? Turn **Watch** off once and Game Mode will keep opening without the picture — the controls take the space instead, so it is never blank.
 
@@ -620,7 +620,7 @@ Leave with **Exit**, at the top of the Game Mode toolbar, or your device's Back 
 
 **Keys** shows a full Commodore 64 keyboard, including the SHIFT, CTRL, and C= modifiers, SHIFT LOCK, the function keys f1 to f8, and RESTORE. Tap a modifier once to arm it for the next key, or hold it down to chord.
 
-![Remote Input keyboard mode](../../img/app/home/remote-input/03-keyboard-compact.png)
+![Remote Input keyboard mode](../../img/app/home/remote-input/04-keyboard-medium.png)
 
 Full Joystick relay uses the device's `machine:input` REST endpoint. It needs recent firmware: a Commodore 64 Ultimate on firmware **1.2.0** or newer, or an Ultimate 64, Ultimate 64 Elite, or Ultimate 64 Elite II on firmware **3.15** or newer. The Ultimate-II cannot relay a joystick at all: as a cartridge it cannot change the state of the C64's CIA 1 input chip, so it has no `machine:input` support. On the Ultimate-II, and on any device running older firmware, the app automatically falls back to **Keys** only. That fallback types by placing characters into the C64's KERNAL keyboard buffer. It is ideal for BASIC, where you can type commands, `LOAD`, and `RUN`, but most games read the keyboard and joystick hardware directly and will not respond to it. RUN/STOP and RESTORE are also unavailable in the fallback. If the device is password-protected, enter its password in Settings first, because both Joystick and Keys need it.
 
