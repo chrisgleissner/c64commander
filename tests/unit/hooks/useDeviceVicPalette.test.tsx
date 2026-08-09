@@ -111,6 +111,22 @@ describe("useDeviceVicPalette", () => {
     );
   });
 
+  it("reads palette configuration returned without an items wrapper", async () => {
+    mocks.configItem.mockReturnValue({
+      data: {
+        [PALETTE_CATEGORY]: {
+          [PALETTE_ITEM]: { value: "/Usb0/direct.vpl" },
+        },
+      },
+    });
+    mocks.readFtpFile.mockResolvedValue({ data: btoa(deviceVpl("Direct configuration")) });
+
+    renderHook(() => useDeviceVicPalette(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(activeVicPalette().description).toBe("Direct configuration"));
+    expect(mocks.readFtpFile).toHaveBeenCalledWith(expect.objectContaining({ path: "/Usb0/direct.vpl" }));
+  });
+
   it("refreshes the same configured VPL after returning from a manual palette", async () => {
     mocks.readFtpFile.mockResolvedValueOnce({ data: btoa(deviceVpl("Original device VPL")) });
     mocks.readFtpFile.mockResolvedValueOnce({ data: btoa(deviceVpl("Refreshed device VPL", "ab cd ef")) });

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_STREAM_AUDIO_ROUTE,
   loadStreamAudioRoute,
@@ -75,6 +75,10 @@ describe("appSettings", () => {
     localStorage.clear();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("loads defaults when local storage is empty", () => {
     expect(loadDebugLoggingEnabled()).toBe(false);
     expect(loadConfigWriteIntervalMs()).toBe(DEFAULT_CONFIG_WRITE_INTERVAL_MS);
@@ -93,6 +97,12 @@ describe("appSettings", () => {
     expect(DEFAULT_PLAYBACK_ENGINE).toBe("c64"); // spec §12.5: C64 by default (local is opt-in)
     expect(loadLocalEngineEnabled()).toBe(DEFAULT_LOCAL_ENGINE_ENABLED);
     expect(DEFAULT_LOCAL_ENGINE_ENABLED).toBe(true); // GA: the on-device engine choice is offered
+    expect(loadVicPaletteId()).toBe("device");
+  });
+
+  it("uses device palette when storage is unavailable during server rendering", () => {
+    vi.stubGlobal("localStorage", undefined);
+
     expect(loadVicPaletteId()).toBe("device");
   });
 

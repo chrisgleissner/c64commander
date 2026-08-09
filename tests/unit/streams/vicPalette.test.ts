@@ -18,6 +18,7 @@ import {
   activeVicPaletteLut,
   paletteEntryHex,
   setActiveVicPalette,
+  setActiveVicPaletteDefinition,
   subscribeVicPalette,
   vicPaletteById,
 } from "@/lib/streams/vicPalette";
@@ -127,6 +128,24 @@ describe("selecting a palette", () => {
 
     expect(activeVicPalette().id).toBe("monochrome");
     expect(activeVicPaletteLut()).toBe(lut);
+  });
+
+  it("does not rebuild or notify when the device returns the palette already in use", () => {
+    const palette = {
+      id: "device:/Usb0/current.vpl",
+      name: "Current device palette",
+      description: "Current",
+      rgb: U64_FIRMWARE_DEFAULT_VIC_PALETTE.rgb.map((entry) => [...entry]),
+    };
+    setActiveVicPaletteDefinition(palette);
+    const listener = vi.fn();
+    subscribeVicPalette(listener);
+    const lut = activeVicPaletteLut();
+
+    setActiveVicPaletteDefinition({ ...palette, rgb: palette.rgb.map((entry) => [...entry]) });
+
+    expect(activeVicPaletteLut()).toBe(lut);
+    expect(listener).not.toHaveBeenCalled();
   });
 
   it("does nothing at all when the same palette is picked again", () => {
