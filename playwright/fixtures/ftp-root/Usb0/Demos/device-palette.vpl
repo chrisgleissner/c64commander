@@ -1,0 +1,18 @@
+# NAME: U64 test palette
+# DESC: Test palette supplied by the configured U64 VPL
+00 00 00
+f0 f0 f0
+12 34 56
+78 9a bc
+21 43 65
+87 a9 cb
+13 57 9b
+24 68 ac
+35 79 bd
+46 8a ce
+57 9b df
+68 ac e0
+79 bd f1
+8a ce 02
+9b df 13
+ac e0 24

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { Label } from "@/components/ui/label";
@@ -14,11 +14,14 @@ import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   VIC_PALETTES,
+  DEVICE_VIC_PALETTE_ID,
   activeVicPalette,
   paletteEntryHex,
   setActiveVicPalette,
-  vicPaletteById,
+  subscribeVicPalette,
 } from "@/lib/streams/vicPalette";
+import { loadVicPaletteId } from "@/lib/config/appSettings";
+import { subscribeVicPalettePreference } from "@/lib/streams/vicPalettePreference";
 
 /** The VIC-II colour names, in hardware index order — what each swatch actually is. */
 const INDEX_NAMES = [
@@ -49,8 +52,8 @@ const INDEX_NAMES = [
 export function VicPaletteRow() {
   const { profile } = useDisplayProfile();
   const isCompact = profile === "compact";
-  const [paletteId, setPaletteId] = useState<string>(() => activeVicPalette().id);
-  const palette = vicPaletteById(paletteId);
+  const paletteId = useSyncExternalStore(subscribeVicPalettePreference, loadVicPaletteId, loadVicPaletteId);
+  const palette = useSyncExternalStore(subscribeVicPalette, activeVicPalette, activeVicPalette);
 
   return (
     <div className="col-span-2 min-w-0" data-testid="settings-vic-palette-row">
@@ -63,27 +66,28 @@ export function VicPaletteRow() {
           <Label htmlFor="settings-vic-palette" className="font-medium">
             Screen colours
           </Label>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             The C64 sends colour <em>numbers</em>, not colours, so this picks the shades the app paints them with. It
             changes only how Live View looks on this device — never what the C64 is doing, and never what anyone else
-            sees. <strong>Default</strong> matches the machine&apos;s own palette.
+            sees. <strong>Device palette</strong> is the default: it reads the VPL selected on this C64U/U64 and falls
+            back to <strong>Default</strong> if there is none or it cannot be read.
           </p>
         </div>
         <Select
           value={paletteId}
           onValueChange={(next) => {
-            setPaletteId(next);
             setActiveVicPalette(next);
           }}
         >
           <SelectTrigger
             id="settings-vic-palette"
             data-testid="settings-vic-palette"
-            className={cn(isCompact ? "w-full" : "w-40 shrink-0")}
+            className={cn(isCompact ? "w-full" : "w-52 shrink-0")}
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value={DEVICE_VIC_PALETTE_ID}>Device palette (automatic)</SelectItem>
             {VIC_PALETTES.map((entry) => (
               <SelectItem key={entry.id} value={entry.id}>
                 {entry.name}
@@ -108,7 +112,7 @@ export function VicPaletteRow() {
         ))}
       </div>
       {palette.description ? (
-        <p className="mt-1 text-[11px] text-muted-foreground" data-testid="settings-vic-palette-description">
+        <p className="mt-1 text-sm text-muted-foreground" data-testid="settings-vic-palette-description">
           {palette.description}
         </p>
       ) : null}

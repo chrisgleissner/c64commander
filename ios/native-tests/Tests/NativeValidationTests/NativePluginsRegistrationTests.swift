@@ -19,4 +19,21 @@ final class NativePluginsRegistrationTests: XCTestCase {
         XCTAssertEqual(registeredPlugins, NativePluginRegistration.expectedPluginClassNames)
         XCTAssertEqual(Set(registeredPlugins).count, registeredPlugins.count)
     }
+
+    func testSceneDelegateRegistersPluginsAgainstItsStoryboardBridge() throws {
+        let testsFileUrl = URL(fileURLWithPath: #filePath)
+        let packageRoot = testsFileUrl
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let sceneDelegateUrl = packageRoot
+            .deletingLastPathComponent()
+            .appendingPathComponent("App/App/SceneDelegate.swift")
+
+        let sceneDelegateSource = try String(contentsOf: sceneDelegateUrl, encoding: .utf8)
+
+        XCTAssertTrue(sceneDelegateSource.contains("window?.rootViewController as? CAPBridgeViewController"))
+        XCTAssertTrue(sceneDelegateSource.contains("registerNativePluginsIfNeeded(for: bridgeViewController)"))
+        XCTAssertFalse(sceneDelegateSource.contains("window = UIWindow(windowScene:"))
+    }
 }

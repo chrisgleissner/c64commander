@@ -1012,8 +1012,8 @@ export const APP_SETTINGS_KEYS = {
  * the default instead of painting from an empty table.
  */
 export const loadVicPaletteId = (): string => {
-  if (typeof localStorage === "undefined") return "default";
-  return localStorage.getItem(VIC_PALETTE_KEY) ?? "default";
+  if (typeof localStorage === "undefined") return "device";
+  return localStorage.getItem(VIC_PALETTE_KEY) ?? "device";
 };
 
 export const saveVicPaletteId = (id: string) => {

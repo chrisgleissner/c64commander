@@ -11,6 +11,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { useDeviceVicPalette } from "@/hooks/useDeviceVicPalette";
 import { registerQueryClient } from "@/lib/query/queryClientRegistry";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import React, { Suspense, lazy, useEffect, useMemo } from "react";
@@ -143,6 +144,11 @@ const RouteRefresher = () => {
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [client, location.pathname]);
 
+  return null;
+};
+
+const DeviceVicPaletteDriver = () => {
+  useDeviceVicPalette();
   return null;
 };
 
@@ -292,6 +298,7 @@ const AppRoutes = () => {
             <GlobalButtonInteractionModel />
             <GlobalNavigationBlocker />
             <RouteRefresher />
+            <DeviceVicPaletteDriver />
             <AvMirrorGovernorDriver />
             <LocalSidModelDriver />
             <DebugStartupLogger />

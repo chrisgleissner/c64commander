@@ -15,7 +15,7 @@ public enum NativePluginRegistration {
     ]
 
     public static func registeredPluginClassNames(appDelegateSource: String) -> [String] {
-        guard let signatureRange = appDelegateSource.range(of: "private func registerNativePluginsIfNeeded()") else {
+        guard let signatureRange = appDelegateSource.range(of: "func registerNativePluginsIfNeeded(for bridgeViewController:") else {
             return []
         }
 

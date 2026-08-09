@@ -544,7 +544,7 @@ The sound plays through a **fast, low-latency path**, so what you hear follows y
 
 One number sits beside them: the **audio network buffer**, 60 milliseconds to begin with. It is how much sound the app holds in hand against a network that delivers in fits and starts. Lower it for the shortest possible delay, raise it if the sound breaks up.
 
-Your C64 sends colour *numbers* rather than colours, so the app decides what shade to paint each one. **Settings → Play and Disk → Screen colours** offers nine palettes, with all sixteen colours shown before you choose: **Default** matches the machine's own palette, and the rest are alternatives — warmer, cooler, monochrome, and so on. It changes only how Live View looks on your device; the C64 carries on exactly as before, and it costs the picture nothing.
+Your C64 sends colour *numbers* rather than colours, so the app decides what shade to paint each one. **Settings → Play and Disk → Screen colours** starts with **Device palette (automatic)**: it reads the VPL selected on the Commodore 64 Ultimate and uses the same colours as its output. If no VPL is configured, or the file cannot be read over FTP, it safely uses **Default** instead. You can choose Default or any of the eight bundled alternatives — warmer, cooler, monochrome, and so on — at any time. All sixteen colours are shown before you choose. It changes only how Live View looks on your device; the C64 carries on exactly as before, and it costs the picture nothing.
 
 The **picture** is the demanding part, so you get a say in how much of it to draw. Open **Stats** — it appears under Live View while it is playing — and choose a **Video frame rate**:
 

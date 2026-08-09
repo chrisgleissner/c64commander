@@ -570,9 +570,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     private weak var nativePluginsBridge: (any CAPBridgeProtocol)?
     private var startupObserversRegistered = false
 
-    private func registerNativePluginsIfNeeded() {
-        guard let bridgeViewController = window?.rootViewController as? CAPBridgeViewController,
-              let bridge = bridgeViewController.bridge else {
+    func registerNativePluginsIfNeeded(for bridgeViewController: CAPBridgeViewController) {
+        guard let bridge = bridgeViewController.bridge else {
             return
         }
 
@@ -592,6 +591,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         bridge.registerPluginInstance(TelnetSocketPlugin())
         bridge.registerPluginInstance(HvscIngestionPlugin())
         nativePluginsBridge = bridge
+    }
+
+    private func registerNativePluginsIfNeeded() {
+        guard let bridgeViewController = window?.rootViewController as? CAPBridgeViewController else {
+            return
+        }
+        registerNativePluginsIfNeeded(for: bridgeViewController)
     }
 
     private func registerStartupObserversIfNeeded() {
@@ -668,4 +674,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+
+    func application(_ application: UIApplication,
+                     configurationForConnecting connectingSceneSession: UISceneSession,
+                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+
+        let config = UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+        config.delegateClass = SceneDelegate.self
+        return config
+    }
 }
