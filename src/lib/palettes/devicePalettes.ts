@@ -77,8 +77,23 @@ export const devicePaletteId = (filename: string): string => `${DEVICE_PALETTE_I
 export const devicePaletteIdFilename = (id: string): string =>
   id.startsWith(DEVICE_PALETTE_ID_PREFIX) ? id.slice(DEVICE_PALETTE_ID_PREFIX.length) : "";
 
+/**
+ * The last path segment of a device-reported value, and nothing else.
+ *
+ * `Palette Definition` is meant to hold a bare file name, and the firmware only ever writes one.
+ * This does not trust that. Keeping just the final segment means a value like `../../etc/passwd`
+ * or `/flash/config/x` cannot address anything outside the palette directory, so a malformed or
+ * hostile response cannot turn a palette read into a probe of the rest of the device's storage.
+ * Taking the segment is stronger than stripping `..` sequences, which is easy to write in a way
+ * that a doubled-up input walks straight through.
+ */
+const paletteFileSegment = (filename: string): string => {
+  const segment = filename.split(/[\\/]/).pop() ?? "";
+  return segment === "." || segment === ".." ? "" : segment;
+};
+
 export const devicePaletteFilePath = (filename: string): string =>
-  `${DEVICE_PALETTE_DIRECTORY}/${filename.replace(/^\/+/, "")}`;
+  `${DEVICE_PALETTE_DIRECTORY}/${paletteFileSegment(filename)}`;
 
 export const devicePaletteFileName = (palette: VicPalette): string => `${palette.id}.vpl`;
 
@@ -177,13 +192,26 @@ export const readDevicePalette = async (filename: string, timeoutMs = 3_000): Pr
   return parseVpl(fromBase64(result.data), devicePaletteId(filename));
 };
 
+/**
+ * Whether the palette directory is there, deciding only whether to create it first.
+ *
+ * A failure here is NOT proof the directory is absent — FTP being down, or refusing the listing,
+ * looks the same from the outside. Answering `false` is still the right move, because the create
+ * that follows either succeeds or fails with the real reason, and the caller reports that. What
+ * would be wrong is discarding the reason: when the create then fails too, this log line is the
+ * only record of what actually went wrong first.
+ */
 const directoryExists = async (
   connection: Awaited<ReturnType<typeof resolveFtpConnectionOptions>>,
 ): Promise<boolean> => {
   try {
     await listFtpDirectory({ ...connection, path: DEVICE_PALETTE_DIRECTORY });
     return true;
-  } catch {
+  } catch (error) {
+    addLog("info", "Could not list the C64's palette folder; will try to create it", {
+      path: DEVICE_PALETTE_DIRECTORY,
+      message: (error as Error).message,
+    });
     return false;
   }
 };

@@ -82,6 +82,22 @@ describe("devicePalettes", () => {
       expect(devicePaletteFilePath("/mine.vpl")).toBe(`${DEVICE_PALETTE_DIRECTORY}/mine.vpl`);
     });
 
+    it.each([
+      ["a parent-directory escape", "../../etc/passwd", "passwd"],
+      ["a doubled escape that a naive strip would let through", "....//x.vpl", "x.vpl"],
+      ["an absolute path", "/flash/config/x.vpl", "x.vpl"],
+      ["a backslash path", "..\\..\\x.vpl", "x.vpl"],
+    ])("keeps %s inside the palette folder", (_label, value, expected) => {
+      // `Palette Definition` is meant to hold a bare file name and the firmware only writes one,
+      // but a malformed or hostile response must not be able to address anything outside
+      // /flash/data — an FTP error reply would otherwise report whether a path exists.
+      expect(devicePaletteFilePath(value)).toBe(`${DEVICE_PALETTE_DIRECTORY}/${expected}`);
+    });
+
+    it.each([".", ".."])("resolves %j to no file at all", (value) => {
+      expect(devicePaletteFilePath(value)).toBe(`${DEVICE_PALETTE_DIRECTORY}/`);
+    });
+
     it("names a built-in palette's file after its id", () => {
       expect(devicePaletteFileName(byId("neonblast"))).toBe("neonblast.vpl");
     });
@@ -203,6 +219,20 @@ describe("devicePalettes", () => {
       expect(mocks.makeFtpDirectory).toHaveBeenCalledWith(expect.objectContaining({ path: DEVICE_PALETTE_DIRECTORY }));
       expect(mocks.makeFtpDirectory.mock.invocationCallOrder[0]).toBeLessThan(
         mocks.writeFtpFile.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it("records why the folder could not be listed, rather than swallowing it", async () => {
+      // A listing failure is not proof the folder is absent: FTP being down looks identical. The
+      // create that follows reports the real reason, but only if the first reason was not discarded.
+      mocks.listFtpDirectory.mockRejectedValue(new Error("FTP connection refused"));
+
+      await installPaletteOnDevice(byId("night"));
+
+      expect(mocks.addLog).toHaveBeenCalledWith(
+        "info",
+        "Could not list the C64's palette folder; will try to create it",
+        expect.objectContaining({ message: "FTP connection refused" }),
       );
     });
 
