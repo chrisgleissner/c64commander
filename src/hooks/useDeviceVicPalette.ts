@@ -16,7 +16,7 @@ import { addLog } from "@/lib/logging";
 import { useC64ConfigItem, useConnectionRoutingEpoch } from "@/hooks/useC64Connection";
 import {
   DEVICE_VIC_PALETTE_ID,
-  REFERENCE_VIC_PALETTE,
+  U64_FIRMWARE_DEFAULT_VIC_PALETTE,
   setActiveVicPalette,
   setActiveVicPaletteDefinition,
 } from "@/lib/streams/vicPalette";
@@ -81,7 +81,7 @@ export const useDeviceVicPalette = (): void => {
       setActiveVicPaletteDefinition(devicePalette.data);
       return;
     }
-    setActiveVicPaletteDefinition(REFERENCE_VIC_PALETTE);
+    setActiveVicPaletteDefinition(U64_FIRMWARE_DEFAULT_VIC_PALETTE);
   }, [automatic, devicePalette.data, paletteId]);
 
   useEffect(() => {

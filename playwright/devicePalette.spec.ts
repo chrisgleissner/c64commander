@@ -90,6 +90,29 @@ test.describe("device VIC palette", () => {
     expect(ftpReads).toBe(0);
   });
 
+  test("falls back to the firmware default without FTP when its palette setting cannot be determined", async ({
+    page,
+  }, testInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    await start(page, "/Usb0/Demos/device-palette.vpl");
+    let ftpReads = 0;
+    await page.route("**/v1/ftp/read", async (route) => {
+      ftpReads += 1;
+      await route.continue();
+    });
+    await page.route("**/v1/configs/U64%20Specific%20Settings/Palette%20Definition", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({}),
+      });
+    });
+    await page.goto("/settings");
+
+    await expect(page.getByTestId("settings-vic-palette-description")).toContainText("C64 Ultimate Default Palette");
+    await expect(page.getByTestId("settings-vic-palette-swatch-2")).toHaveAttribute("style", /rgb\(141, 47, 52\)/);
+    expect(ftpReads).toBe(0);
+  });
+
   test("falls back to Default when the configured VPL cannot be retrieved", async ({ page }, testInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     await start(page, "/Usb0/Demos/missing-palette.vpl");
