@@ -29,6 +29,7 @@ import { buildPaletteLUT } from "@/lib/streams/vicDecode";
 const byId = new Map(VIC_PALETTES.map((palette) => [palette.id, palette]));
 
 export const REFERENCE_VIC_PALETTE = byId.get(DEFAULT_VIC_PALETTE_ID)!;
+export const DEVICE_VIC_PALETTE_ID = "device";
 
 export const vicPaletteById = (id: string): VicPalette => byId.get(id) ?? REFERENCE_VIC_PALETTE;
 
@@ -68,12 +69,25 @@ export const activeVicPaletteLut = (): Uint32Array => {
 export const setActiveVicPalette = (id: string): void => {
   const current = ensureActive();
   const next = vicPaletteById(id);
+  saveVicPaletteId(id);
   // Rebuilding on every call would be harmless for correctness but would churn the table the decode
   // loop is holding, so a no-op selection stays a no-op.
   if (next.id === current.id) return;
   active = next;
   activeLut = buildPaletteLUT(undefined, next.rgb);
-  saveVicPaletteId(next.id);
+  for (const listener of listeners) listener();
+};
+
+export const setActiveVicPaletteDefinition = (palette: VicPalette): void => {
+  const current = ensureActive();
+  if (
+    current.id === palette.id &&
+    current.rgb.every((entry, index) => entry.every((value, channel) => value === palette.rgb[index]![channel]))
+  ) {
+    return;
+  }
+  active = palette;
+  activeLut = buildPaletteLUT(undefined, palette.rgb);
   for (const listener of listeners) listener();
 };
 

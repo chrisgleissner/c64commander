@@ -197,6 +197,8 @@ vi.mock("@/lib/config/appSettings", () => ({
   },
   loadDebugLoggingEnabled: mocks.loadDebugLoggingEnabled,
   loadEnableSwipeNavigation: mocks.loadEnableSwipeNavigation,
+  loadVicPaletteId: vi.fn(() => "default"),
+  saveVicPaletteId: vi.fn(),
   // Read by the app-root LocalSidModelDriver, which learns the connected machine's SID chip.
   loadLocalSidModelFromDevice: vi.fn(() => true),
 }));

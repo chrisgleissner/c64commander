@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { VIC_PALETTES } from "@/generated/vicPalettes";
 import {
+  DEVICE_VIC_PALETTE_ID,
   __resetVicPalette,
   REFERENCE_VIC_PALETTE,
   activeVicPalette,
@@ -84,6 +85,16 @@ describe("selecting a palette", () => {
     __resetVicPalette();
 
     expect(activeVicPalette().id).toBe("night");
+  });
+
+  it("starts in automatic device mode while rendering Default until a VPL is available", () => {
+    expect(localStorage.getItem("c64u_vic_palette")).toBeNull();
+    expect(activeVicPalette().id).toBe("default");
+
+    setActiveVicPalette(DEVICE_VIC_PALETTE_ID);
+
+    expect(localStorage.getItem("c64u_vic_palette")).toBe(DEVICE_VIC_PALETTE_ID);
+    expect(activeVicPalette().id).toBe("default");
   });
 
   it("does nothing at all when the same palette is picked again", () => {
