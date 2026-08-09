@@ -13,6 +13,7 @@ import {
   FtpClient,
   type FtpEntry,
   type FtpListOptions,
+  type FtpMakeDirectoryOptions,
   type FtpPingOptions,
   type FtpReadOptions,
   type FtpRecursiveFailure,
@@ -529,6 +530,105 @@ export const writeFtpFile = async (
       traceContext: resolveNativeTraceContext(action),
     };
     return executeFtpWrite(action, optionsWithTrace, options.path, intent);
+  });
+};
+
+const executeFtpMakeDirectory = async (
+  action: TraceActionContext,
+  ftpOptions: FtpMakeDirectoryOptions,
+  path: string,
+  intent: InteractionIntent,
+): Promise<{ created: boolean }> => {
+  incrementFtpInFlight();
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const requestPayload = { ...ftpOptions, path };
+  try {
+    const response = await withFtpInteraction(
+      {
+        action,
+        operation: "mkdir",
+        path,
+        intent,
+        host: ftpOptions.host,
+        port: ftpOptions.port,
+      },
+      async () => await FtpClient.makeDirectory(withDefaultConnectTimeout({ ...ftpOptions, path })),
+    );
+    recordFtpOperation(action, {
+      operation: "mkdir",
+      command: "MKD",
+      hostname: ftpOptions.host,
+      port: ftpOptions.port,
+      path,
+      durationMs: Math.max(
+        0,
+        Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+      ),
+      result: "success",
+      requestPayload,
+      responsePayload: response,
+      responsePayloadPreview: buildPayloadPreviewFromJson(response),
+      error: null,
+    });
+    return response;
+  } catch (error) {
+    const err = error as Error;
+    addErrorLog(
+      "FTP directory creation failed",
+      buildErrorLogDetails(err, {
+        host: ftpOptions.host,
+        path,
+      }),
+    );
+    recordFtpOperation(action, {
+      operation: "mkdir",
+      command: "MKD",
+      hostname: ftpOptions.host,
+      port: ftpOptions.port,
+      path,
+      durationMs: Math.max(
+        0,
+        Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt),
+      ),
+      result: "failure",
+      requestPayload,
+      error: err,
+    });
+    recordTraceError(action, err);
+    throw error;
+  } finally {
+    decrementFtpInFlight();
+  }
+};
+
+/**
+ * Creates one directory on the device, treating "it already exists" as success.
+ *
+ * Needed because the Ultimate does not ship `/flash/data` — it appears only once a palette has been
+ * applied from the device's own file browser — and an `STOR` into a directory that is not there
+ * fails rather than creating it.
+ */
+export const makeFtpDirectory = async (
+  options: FtpMakeDirectoryOptions & { __c64uIntent?: InteractionIntent },
+): Promise<{ created: boolean }> => {
+  const { __c64uIntent, ...ftpOptions } = options;
+  const intent = __c64uIntent ?? "user";
+
+  const activeAction = getActiveAction();
+  if (activeAction) {
+    const optionsWithTrace = {
+      ...ftpOptions,
+      traceContext: resolveNativeTraceContext(activeAction),
+    };
+    return executeFtpMakeDirectory(activeAction, optionsWithTrace, options.path, intent);
+  }
+
+  return runWithImplicitAction("ftp.mkdir", async (action) => {
+    const optionsWithTrace = {
+      ...ftpOptions,
+      traceContext: resolveNativeTraceContext(action),
+    };
+    return executeFtpMakeDirectory(action, optionsWithTrace, options.path, intent);
   });
 };
 

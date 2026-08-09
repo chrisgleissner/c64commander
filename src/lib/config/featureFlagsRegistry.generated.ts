@@ -138,8 +138,8 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     visible_to_user: false,
     developer_only: true,
     group: "experimental",
-    title: "REU Snapshots",
-    description: "Enable Save REU and Restore REU Snapshot functionality on Home. Depends on the Telnet interface.",
+    title: "REU snapshots",
+    description: "Enable Save REU and Restore REU snapshot functionality on Home. Depends on the Telnet interface.",
   },
   {
     id: "home_telnet_config_actions_enabled",
@@ -237,7 +237,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     visible_to_user: true,
     developer_only: false,
     group: "experimental",
-    title: "A/V Sync tests",
+    title: "A/V sync tests",
     description: "Show the A/V Sync and Tap latency measurement tools inside Live View on Home (audio↔video offset, and press→see/hear round-trip latency). On by default. Requires Live View.",
   },
   {

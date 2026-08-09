@@ -113,12 +113,12 @@ describe("hvscIngestionRuntimeSupport", () => {
 
     applyCancelledIngestionState(undefined, emitProgress, "HVSC.7z");
 
-    expect(updateHvscStateMock).toHaveBeenCalledWith({ ingestionState: "idle", ingestionError: "Cancelled" });
+    expect(updateHvscStateMock).toHaveBeenCalledWith({ ingestionState: "idle", ingestionError: "Canceled" });
     expect(saveHvscStatusSummaryMock).toHaveBeenCalledWith(
       expect.objectContaining({
         download: expect.objectContaining({
           status: "idle",
-          errorMessage: "Cancelled",
+          errorMessage: "Canceled",
           archiveName: "HVSC.7z",
           lastStage: "cancelled",
           recoveryHint: expect.stringContaining("Retry the HVSC install or ingest"),
@@ -127,7 +127,7 @@ describe("hvscIngestionRuntimeSupport", () => {
       }),
     );
     expect(emitProgress).toHaveBeenCalledWith(
-      expect.objectContaining({ stage: "cancelled", archiveName: "HVSC.7z", errorCause: "Cancelled" }),
+      expect.objectContaining({ stage: "cancelled", archiveName: "HVSC.7z", errorCause: "Canceled" }),
     );
   });
 

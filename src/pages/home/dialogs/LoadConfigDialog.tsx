@@ -38,7 +38,7 @@ export function LoadConfigDialog({ open, onOpenChange, configs, onLoad, applying
     <AppSheet open={open} onOpenChange={onOpenChange}>
       <AppSheetContent className="overflow-hidden p-0" data-testid="load-config-sheet">
         <AppSheetHeader>
-          <AppSheetTitle>Load from App</AppSheetTitle>
+          <AppSheetTitle>Load from app</AppSheetTitle>
           <AppSheetDescription>Select a saved configuration to apply to the C64U.</AppSheetDescription>
         </AppSheetHeader>
         <AppSheetBody className="px-4 py-4 sm:px-6">

@@ -227,7 +227,7 @@ describe("Maestro flow contracts", () => {
     for (const rawSource of [smokeHvsc, smokeHvscLowRam]) {
       expect(rawSource).toContain("id: feature-flag-hvsc_enabled");
       expect(rawSource).toContain("checked: false");
-      expect(rawSource).toContain('visible: "Play Files"');
+      expect(rawSource).toContain('visible: "Play files"');
       expect(rawSource).toContain("id: hvsc-download");
       expect(rawSource).toContain("timeout: ${LONG_TIMEOUT}");
     }

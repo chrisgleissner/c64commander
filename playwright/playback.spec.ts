@@ -297,7 +297,7 @@ test.describe("Playback file browser", () => {
   test("play page is available from tab bar", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto("/play");
-    await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
     await snap(page, testInfo, "play-page-loaded");
   });
 
@@ -480,7 +480,7 @@ test.describe("Playback file browser", () => {
     await page.getByRole("button", { name: "Disks", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Disks", level: 1 })).toBeVisible();
     await page.getByRole("button", { name: "Play", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
 
     await expect(page.getByTestId("playlist-play")).toHaveAttribute("aria-label", "Stop");
     await expect.poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0).toBeGreaterThan(firstElapsed);
@@ -1430,7 +1430,7 @@ test.describe("Playback file browser", () => {
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
 
     await page.getByTestId("tab-play").click();
-    await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
     // Wait for session restore to complete: track-1 must still be current before auto-advance fires.
     // The component remounts on navigation; restore is async (IndexedDB). Without this gate the
     // poll can start before isPlaying/guard are set, so resume signals never trigger advance.
@@ -1607,7 +1607,7 @@ test.describe("Playback file browser", () => {
     await page.getByRole("button", { name: "Disks", exact: true }).click();
     await expect(page.locator("header").getByRole("heading", { name: "Disks" })).toBeVisible();
     await page.getByRole("button", { name: "Play", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
     const playlistListAfter = page.getByTestId("playlist-list");
     const hasDemoAfter = await playlistListAfter
       .getByText("demo.sid", { exact: false })
@@ -1683,7 +1683,7 @@ test.describe("Playback file browser", () => {
     await darkThemeButton.click();
 
     await page.getByRole("button", { name: "Play", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
     const playlistListAfter = page.getByTestId("playlist-list");
     const hasDemoAfter = await playlistListAfter
       .getByText("demo.sid", { exact: false })
@@ -1807,7 +1807,7 @@ test.describe("Playback file browser", () => {
     await page.getByRole("button", { name: "Disks", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Disks", level: 1 })).toBeVisible();
     await page.getByRole("button", { name: "Play", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
 
     // On its FIRST paint, not after a restore settles.
     await expect(page.getByTestId("playlist-pause")).toBeEnabled();

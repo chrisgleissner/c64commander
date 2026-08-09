@@ -6,7 +6,7 @@ This document enumerates the exact file/line ranges that participate in the loca
 
 ```mermaid
 flowchart TD
-  A[Play Files page<br/>User taps "Add more items"] --> B[ItemSelectionDialog opens]
+  A[Play files page<br/>User taps "Add more items"] --> B[ItemSelectionDialog opens]
   B --> C[User taps "Add folder"]
   C --> D[ItemSelectionDialog.handleAddLocalSource]
   D --> E[useLocalSources.addSourceFromPicker]

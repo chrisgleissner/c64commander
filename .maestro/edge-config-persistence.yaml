@@ -45,7 +45,7 @@ env:
 - tapOn:
     id: "tab-play"
 - extendedWaitUntil:
-    visible: "Play Files"
+    visible: "Play files"
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
 - swipe:
@@ -72,7 +72,7 @@ env:
 - tapOn:
     id: "tab-play"
 - extendedWaitUntil:
-    visible: "Play Files"
+    visible: "Play files"
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
 - swipe:

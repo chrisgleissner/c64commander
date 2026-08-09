@@ -76,7 +76,7 @@ export const TAB_CANARY_STEPS: readonly KeypadCanaryStep[] = [
     kind: "tab-shortcut",
     keyName: "2",
     keyCode: KEYCODES.KEY_2,
-    expectedText: ["Play Files", "Select a playlist item to start", "Playlist"],
+    expectedText: ["Play files", "Select a playlist item to start", "Playlist"],
   },
   {
     id: "digit-3-disks",
@@ -122,7 +122,7 @@ export const SHORTCUT_CANARY_STEPS: readonly KeypadCanaryStep[] = [
     kind: "overlay-shortcut",
     keyName: "Pound",
     keyCode: KEYCODES.POUND,
-    expectedText: ["Switch Device"],
+    expectedText: ["Switch device"],
     cleanupKeyCode: KEYCODES.BACK,
   },
 ];
@@ -140,7 +140,7 @@ export const DPAD_CANARY_STEPS: readonly KeypadCanaryStep[] = [
     kind: "keypad-activation",
     keyName: "D-pad Center",
     keyCode: KEYCODES.DPAD_CENTER,
-    expectedText: ["Play Files", "Playlist"],
+    expectedText: ["Play files", "Playlist"],
   },
 ];
 

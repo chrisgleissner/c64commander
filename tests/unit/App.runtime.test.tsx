@@ -222,7 +222,7 @@ vi.mock("@/pages/DocsPage", () => ({
   },
 }));
 vi.mock("@/pages/NotFound", () => ({ default: () => <div>Not Found</div> }));
-vi.mock("@/pages/PlayFilesPage", () => ({ default: () => <div>Play Files Page</div> }));
+vi.mock("@/pages/PlayFilesPage", () => ({ default: () => <div>Play files Page</div> }));
 vi.mock("@/pages/DisksPage", () => ({ default: () => <div>Disks Page</div> }));
 vi.mock("@/pages/CoverageProbePage", () => ({ default: () => <div>Coverage Probe Page</div> }));
 vi.mock("@/pages/DeviceSwitchLabPage", () => ({ default: () => <div>Device Switch Lab Page</div> }));
@@ -423,7 +423,7 @@ describe("App runtime wiring", () => {
     window.history.pushState({}, "", "/play");
     render(<App />);
 
-    expect(await screen.findByText("Play Files Page")).toBeInTheDocument();
+    expect(await screen.findByText("Play files Page")).toBeInTheDocument();
     expect(await screen.findByTestId("swipe-slot-play")).toHaveAttribute("data-slot-active", "true");
 
     await act(async () => {
@@ -473,7 +473,7 @@ describe("App runtime wiring", () => {
 
     fireEvent.transitionEnd(runway, { target: runway });
 
-    expect(await screen.findByText("Play Files Page")).toBeInTheDocument();
+    expect(await screen.findByText("Play files Page")).toBeInTheDocument();
     expect(screen.getByTestId("swipe-slot-play")).toHaveAttribute("data-slot-active", "true");
   });
 

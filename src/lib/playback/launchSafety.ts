@@ -108,7 +108,10 @@ export const withCartridgeParked = async <T>(api: C64API, run: () => Promise<T>)
   if (!shouldPark) return run();
 
   try {
-    await withTimeout(api.setConfigValue(CART_CATEGORY, CART_ITEM, ""), CART_WRITE_TIMEOUT_MS);
+    await withTimeout(
+      api.setConfigValue(CART_CATEGORY, CART_ITEM, "", { __c64uTransientConfigWrite: true }),
+      CART_WRITE_TIMEOUT_MS,
+    );
     addLog("info", "Launch Safety: parked cartridge for direct launch", { previous: current });
   } catch (error) {
     // If we couldn't park, run anyway — parking is a best-effort safety net, not a gate.
@@ -122,7 +125,10 @@ export const withCartridgeParked = async <T>(api: C64API, run: () => Promise<T>)
     return await run();
   } finally {
     try {
-      await withTimeout(api.setConfigValue(CART_CATEGORY, CART_ITEM, current), CART_WRITE_TIMEOUT_MS);
+      await withTimeout(
+        api.setConfigValue(CART_CATEGORY, CART_ITEM, current, { __c64uTransientConfigWrite: true }),
+        CART_WRITE_TIMEOUT_MS,
+      );
       addLog("info", "Launch Safety: restored cartridge value", { restored: current });
     } catch (error) {
       addLog("error", "Launch Safety: failed to restore cartridge value after launch", {

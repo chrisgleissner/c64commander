@@ -57,7 +57,7 @@ test.describe("Home quick actions RAM folder display", () => {
     await expect(page.getByTestId("home-drive-summary")).toHaveCount(0);
 
     const trigger = page.getByTestId("ram-dump-folder-trigger");
-    await expect(page.getByTestId("home-ram-folder-row")).toContainText("RAM Folder:");
+    await expect(page.getByTestId("home-ram-folder-row")).toContainText("RAM folder:");
     await expect(trigger).toHaveText("c64");
 
     await page.evaluate(() => {

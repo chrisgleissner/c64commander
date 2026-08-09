@@ -160,7 +160,7 @@ const tourHome = async (page: Page) => {
 
   await smoothScrollToBottom(page, 2800);
   const saveAppButton = page.getByTestId("home-config-save-app");
-  await openAndCloseDialog(page, saveAppButton, "Save to App");
+  await openAndCloseDialog(page, saveAppButton, "Save to app");
 
   await smoothScrollToBottom(page, 2000);
   await page.waitForTimeout(1000);
@@ -185,7 +185,7 @@ const tourDisks = async (page: Page) => {
 
 const tourPlay = async (page: Page) => {
   await page.goto("/play");
-  await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
   await pauseAtTop(page);
 
   await smoothScrollToLocator(page, page.getByTestId("play-section-playback"), 2200);

@@ -63,7 +63,7 @@ export function DecisionStateView({ onBack, onRepair, repairRunning, actionSumma
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
         <div className="space-y-0.5">
-          <h3 className="text-sm font-semibold text-foreground">Decision State</h3>
+          <h3 className="text-sm font-semibold text-foreground">Decision state</h3>
           <p className="text-xs text-muted-foreground">Internal reconciliation and uncertainty signals.</p>
         </div>
         <Button
@@ -76,7 +76,7 @@ export function DecisionStateView({ onBack, onRepair, repairRunning, actionSumma
           data-testid="decision-state-repair"
         >
           <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${repairRunning ? "animate-spin" : ""}`} aria-hidden="true" />
-          {repairRunning ? "Repairing" : "Resync / Repair"}
+          {repairRunning ? "Repairing" : "Resync / repair"}
         </Button>
       </div>
 
@@ -121,7 +121,7 @@ export function DecisionStateView({ onBack, onRepair, repairRunning, actionSumma
       </section>
 
       <section className="space-y-2 rounded border border-border/70 p-2" data-testid="decision-state-health-check">
-        <p className="text-xs font-semibold text-foreground">Health Check</p>
+        <p className="text-xs font-semibold text-foreground">Health check</p>
         <MetricRow label="Run state" value={healthCheckState.runState} />
         <MetricRow label="Run ID" value={healthCheckState.currentRunId ?? "-"} />
         <MetricRow

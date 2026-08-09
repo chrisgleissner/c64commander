@@ -151,7 +151,14 @@ describe("manual generator", () => {
     expect(c64uRemote).toContain(
       "| Device Safety | **Settings → Device Safety** | Leave it on Auto. Auto keeps a Commodore 64 Ultimate on Conservative until its firmware is known to be safe. See Device Safety Modes. |",
     );
-    expect(c64uRemote).toContain("set **Auto save config** to **Yes**");
+    // The manual used to tell people that setting the machine's `Auto save config` to Yes would make
+    // their app changes stick. It never did: the firmware reads that setting only when you leave its
+    // on-screen setup menu, so nothing done over REST is covered by it. The manual now says what the
+    // setting actually governs, and points at the app's own one for the app's changes.
+    expect(c64uRemote).not.toContain("set **Auto save config** to **Yes**");
+    expect(c64uRemote).toContain("The machine's own **Auto save config** does not cover this.");
+    expect(c64uRemote).toContain("has no effect on changes made from the app");
+    expect(c64uRemote).toContain("**Keep device settings after a restart** in **Settings → Device Safety**");
     expect(c64uRemote).toContain("at **C= + RESTORE → User interface → Auto save config**");
     expect(c64uRemote).toContain("the same setting appears in Config as **User interface → Auto save config**.");
 
@@ -170,7 +177,8 @@ describe("manual generator", () => {
     expect(c64Commander).toContain(
       "On other supported devices, search Config for **Auto Save Config** if the menu naming differs.",
     );
-    expect(c64Commander).toContain("Use **Save to flash** when **Auto save config** is **Ask** or **No**");
+    expect(c64Commander).not.toContain("Use **Save to flash** when **Auto save config** is **Ask** or **No**");
+    expect(c64Commander).toContain("**Keep device settings after a restart** in **Settings → Device Safety**");
   });
 
   it("documents the In Depth chapter in both variants", async () => {

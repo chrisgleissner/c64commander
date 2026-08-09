@@ -631,7 +631,7 @@ export function UnifiedHealthBadge({ className }: Props) {
       <AppSheet open={pickerOpen} onOpenChange={handlePickerOpenChange}>
         <AppSheetContent className="overflow-hidden p-0 sm:w-[min(100vw-2rem,42rem)]" data-testid="switch-device-sheet">
           <AppSheetHeader>
-            <AppSheetTitle>Switch Device</AppSheetTitle>
+            <AppSheetTitle>Switch device</AppSheetTitle>
             <AppSheetDescription>
               Choose a saved device. Checks refresh automatically every 10s while open.
             </AppSheetDescription>

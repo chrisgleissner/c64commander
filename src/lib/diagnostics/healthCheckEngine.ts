@@ -770,6 +770,7 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
           __c64uIntent: runtime.intent,
           __c64uForceProbe: runtime.forceProbe,
           __c64uSuppressCircuitContribution: true,
+          __c64uTransientConfigWrite: true,
         });
         tempValueApplied = true;
         await waitMs(CONFIG_PULSE_DELAY_MS, signal);
@@ -801,6 +802,7 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
                 __c64uBypassCache: true,
                 __c64uForceProbe: runtime.forceProbe,
                 __c64uSuppressCircuitContribution: true,
+                __c64uTransientConfigWrite: true,
               });
               const preRevertValue = parseConfigNumericValue(
                 extractConfigItemData(preRevertResp, target.category, target.item),
@@ -841,6 +843,7 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
                 __c64uIntent: runtime.intent,
                 __c64uForceProbe: runtime.forceProbe,
                 __c64uSuppressCircuitContribution: true,
+                __c64uTransientConfigWrite: true,
               });
             } catch (error) {
               revertErrorMessage = error instanceof Error ? error.message : String(error ?? "Unknown revert failure");
@@ -1936,7 +1939,7 @@ export const recoverStaleHealthCheckRun = (reason = "Health check run exceeded i
   return cancelActiveRun("TIMEOUT", reason);
 };
 
-export const cancelHealthCheck = (reason = "Cancelled by user"): boolean => cancelActiveRun("CANCELLED", reason);
+export const cancelHealthCheck = (reason = "Canceled by user"): boolean => cancelActiveRun("CANCELLED", reason);
 
 export const runHealthCheck = async (
   onProbeProgress?: (partial: Partial<Record<HealthCheckProbeType, HealthCheckProbeRecord>>) => void,

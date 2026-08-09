@@ -15,6 +15,7 @@ import type {
   FtpReadOptions,
   FtpReadProgressEvent,
   FtpWriteOptions,
+  FtpMakeDirectoryOptions,
   FtpPingOptions,
 } from "./ftpClient";
 import { getFtpBridgeUrl } from "@/lib/ftp/ftpConfig";
@@ -147,6 +148,13 @@ export class FtpClientWeb implements FtpClientPlugin {
     }
 
     return { sizeBytes: payload.sizeBytes };
+  }
+
+  async makeDirectory(options: FtpMakeDirectoryOptions): Promise<{ created: boolean }> {
+    const payload = await this.postJson<{ created?: boolean } | null>("mkdir", options);
+    // A bridge that answers without the field still did the work; the flag only distinguishes
+    // "I made it" from "it was already there", and no caller changes course on that.
+    return { created: payload?.created === true };
   }
 
   async pingFtp(options: FtpPingOptions): Promise<{ ok: boolean }> {

@@ -58,7 +58,7 @@ export function SaveConfigDialog({ open, onOpenChange, existingNames, onSave, is
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Save to App</DialogTitle>
+          <DialogTitle>Save to app</DialogTitle>
           <DialogDescription>Store the current C64U configuration in this app.</DialogDescription>
         </DialogHeader>
         <Input placeholder="Config name" value={name} onChange={(e) => setName(e.target.value)} />

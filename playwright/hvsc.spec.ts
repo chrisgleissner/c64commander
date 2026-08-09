@@ -362,10 +362,10 @@ test.describe("HVSC Play page", () => {
               if (!cancelToken) return;
               if (cancelTokens.get(cancelToken)?.cancelled) {
                 state.ingestionState = "idle";
-                state.ingestionError = "Cancelled";
+                state.ingestionError = "Canceled";
                 emitStage("error", "HVSC update cancelled", {
                   errorType: "Error",
-                  errorCause: "Cancelled",
+                  errorCause: "Canceled",
                 });
                 throw new Error("HVSC update cancelled");
               }
@@ -539,10 +539,10 @@ test.describe("HVSC Play page", () => {
               if (!cancelToken) return;
               if (cancelTokens.get(cancelToken)?.cancelled) {
                 state.ingestionState = "idle";
-                state.ingestionError = "Cancelled";
+                state.ingestionError = "Canceled";
                 emitStage("error", "HVSC update cancelled", {
                   errorType: "Error",
-                  errorCause: "Cancelled",
+                  errorCause: "Canceled",
                 });
                 throw new Error("HVSC update cancelled");
               }
@@ -613,7 +613,7 @@ test.describe("HVSC Play page", () => {
               cancelTokens.get(cancelToken)!.cancelled = true;
             }
             state.ingestionState = "idle";
-            state.ingestionError = "Cancelled";
+            state.ingestionError = "Canceled";
           },
           getHvscFolderListing: async ({ path }: { path: string }) => {
             const normalized = path || "/";
@@ -773,7 +773,7 @@ test.describe("HVSC Play page", () => {
     await page.getByTestId("hvsc-stop").click();
     await expect(page.getByTestId("hvsc-stop")).toBeHidden();
     await expect(page.getByTestId("hvsc-controls")).toContainText("Status: Download failed");
-    await expect(page.getByTestId("hvsc-controls")).toContainText("Cancelled");
+    await expect(page.getByTestId("hvsc-controls")).toContainText("Canceled");
     await expect(page.getByRole("button", { name: "Reset HVSC" })).toBeVisible();
     await snap(page, testInfo, "cancelled");
   });

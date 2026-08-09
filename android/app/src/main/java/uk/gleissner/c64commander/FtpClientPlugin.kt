@@ -684,6 +684,86 @@ class FtpClientPlugin : Plugin() {
   }
 
   @PluginMethod
+  fun makeDirectory(call: PluginCall) {
+    val host = call.getString("host")
+    if (host.isNullOrBlank()) {
+      call.reject("host is required")
+      return
+    }
+    val path = call.getString("path")
+    if (path.isNullOrBlank()) {
+      call.reject("path is required")
+      return
+    }
+    val port = call.getInt("port") ?: 21
+    val username = call.getString("username") ?: "user"
+    val password = call.getString("password") ?: ""
+    val timeoutMs = resolveTransferTimeoutMs(call)
+    val connectTimeoutMs = resolveConnectTimeoutMs(call)
+
+    runTask(
+            Runnable {
+              val client = ftpClientFactory()
+              try {
+                applyPreConnectTimeouts(client, connectTimeoutMs)
+                client.connect(host, port)
+                applyConnectedTimeouts(client, timeoutMs)
+                val loggedIn = client.login(username, password)
+                if (!loggedIn) {
+                  call.reject("FTP login failed")
+                  return@Runnable
+                }
+                client.enterLocalPassiveMode()
+
+                if (client.makeDirectory(path)) {
+                  call.resolve(JSObject().apply { put("created", true) })
+                  return@Runnable
+                }
+
+                // A failed MKD is not necessarily an error: the usual cause is
+                // that the directory is already there, which is exactly the
+                // state the caller wants before it uploads into it. Capture the
+                // server's reply BEFORE the probe (the probe overwrites it),
+                // then ask the server to change into the path. A successful CWD
+                // proves the path is a directory, so report it as pre-existing;
+                // anything else (permission denied, an existing FILE at that
+                // path) is a genuine failure and rejects with the server's own
+                // reply.
+                val mkdReply = client.replyString?.trim().orEmpty()
+                if (client.changeWorkingDirectory(path)) {
+                  call.resolve(JSObject().apply { put("created", false) })
+                  return@Runnable
+                }
+                call.reject(mkdReply.ifBlank { "FTP make directory failed" })
+              } catch (error: Exception) {
+                val message = buildFailureMessage("makeDirectory", error, connectTimeoutMs, timeoutMs)
+                AppLogger.error(
+                        pluginContextOrNull(),
+                        logTag,
+                        "FTP makeDirectory failed",
+                        "FtpClientPlugin",
+                        error,
+                        traceFields(call),
+                )
+                call.reject(message, error)
+              } finally {
+                try {
+                  if (client.isConnected) client.disconnect()
+                } catch (error: Exception) {
+                  AppLogger.warn(
+                          pluginContextOrNull(),
+                          logTag,
+                          "Failed to disconnect FTP client",
+                          "FtpClientPlugin",
+                          error
+                  )
+                }
+              }
+            }
+    )
+  }
+
+  @PluginMethod
   fun pingFtp(call: PluginCall) {
     val host = call.getString("host")
     if (host.isNullOrBlank()) {

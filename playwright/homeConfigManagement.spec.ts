@@ -26,7 +26,7 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
 };
 
 const openSaveDialog = async (page: Page) => {
-  // Click the "Save to App" QuickActionCard (label="Save", description="To App")
+  // Click the "Save to App" QuickActionCard (label="Save", description="To app")
   const button = page.getByTestId("home-config-save-app");
   await button.scrollIntoViewIfNeeded();
   await button.click();
@@ -34,8 +34,8 @@ const openSaveDialog = async (page: Page) => {
 };
 
 const openLoadDialog = async (page: Page) => {
-  // Click the "Load from App" QuickActionCard (label="Load", description="From App")
-  // There are two "Load" cards, we want the second one (first is "From flash", second is "From App")
+  // Click the "Load from App" QuickActionCard (label="Load", description="From app")
+  // There are two "Load" cards, we want the second one (first is "From flash", second is "From app")
   const button = page.getByTestId("home-config-load-app");
   await button.scrollIntoViewIfNeeded();
   await button.click();
@@ -43,7 +43,7 @@ const openLoadDialog = async (page: Page) => {
 };
 
 const openManageDialog = async (page: Page) => {
-  // Click the "Manage" QuickActionCard (label="Manage", description="App Configs")
+  // Click the "Manage" QuickActionCard (label="Manage", description="App configs")
   // Need to wait for it to be enabled (requires appConfigs.length > 0)
   const button = page.getByTestId("home-config-manage-app");
   await button.waitFor({ state: "visible", timeout: 5000 });

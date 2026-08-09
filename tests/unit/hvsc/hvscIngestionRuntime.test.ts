@@ -336,7 +336,7 @@ describe("hvscIngestionRuntime", () => {
     await cancelHvscInstall("idle-token");
 
     expect(updateHvscState).not.toHaveBeenCalledWith(
-      expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }),
+      expect.objectContaining({ ingestionState: "idle", ingestionError: "Canceled" }),
     );
     expect(addLog).toHaveBeenCalledWith(
       "info",
@@ -1191,7 +1191,7 @@ describe("hvscIngestionRuntime", () => {
       ),
     ).toBe(false);
     expect(statePatches).toContainEqual(
-      expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }),
+      expect.objectContaining({ ingestionState: "idle", ingestionError: "Canceled" }),
     );
   });
 
@@ -1219,7 +1219,7 @@ describe("hvscIngestionRuntime", () => {
       ),
     ).toBe(false);
     expect(statePatches).toContainEqual(
-      expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }),
+      expect.objectContaining({ ingestionState: "idle", ingestionError: "Canceled" }),
     );
   });
 
@@ -1228,7 +1228,7 @@ describe("hvscIngestionRuntime", () => {
     // onEntry - once extraction finished, the deletion loop (up to thousands
     // of round-trips on a large update), directory promotion, songlengths
     // reload, and finalize all ran unconditionally to completion even after
-    // a cancel request, so "Cancelled" in the UI coexisted with an ingest
+    // a cancel request, so "Canceled" in the UI coexisted with an ingest
     // still mutating the library.
     vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
       baselineVersion: 5,
@@ -1259,7 +1259,7 @@ describe("hvscIngestionRuntime", () => {
     const statePatches = vi.mocked(updateHvscState).mock.calls.map(([patch]) => patch as Record<string, unknown>);
     expect(statePatches.some((patch) => patch.ingestionState === "ready")).toBe(false);
     expect(statePatches).toContainEqual(
-      expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }),
+      expect.objectContaining({ ingestionState: "idle", ingestionError: "Canceled" }),
     );
   });
 
@@ -1711,7 +1711,7 @@ describe("ingestion shared helpers (P0-E)", () => {
   it("applyIngestionSuccess refuses to overwrite a cancelled state (HARD9-084)", () => {
     // A cancel that lands after the last cooperative check but before this
     // call (deletion loop, directory promotion, songlengths reload, finalize)
-    // must not flip "Cancelled" back to "ready".
+    // must not flip "Canceled" back to "ready".
     const cancelTokens = new Map([["cancel-me", { cancelled: true }]]);
 
     expect(() =>
@@ -1730,7 +1730,7 @@ describe("ingestion shared helpers (P0-E)", () => {
 
     expect(vi.mocked(updateHvscState)).not.toHaveBeenCalledWith(expect.objectContaining({ ingestionState: "ready" }));
     expect(vi.mocked(updateHvscState)).toHaveBeenCalledWith(
-      expect.objectContaining({ ingestionState: "idle", ingestionError: "Cancelled" }),
+      expect.objectContaining({ ingestionState: "idle", ingestionError: "Canceled" }),
     );
   });
 

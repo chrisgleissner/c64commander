@@ -992,7 +992,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
       setHvscStage(null);
       setHvscActionLabel(null);
       setHvscCurrentFile(null);
-      setHvscErrorMessage("Cancelled");
+      setHvscErrorMessage("Canceled");
       updateHvscSummary((prev) => ({
         ...prev,
         download:
@@ -1006,7 +1006,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
                 totalBytes: null,
                 sizeBytes: null,
                 errorCategory: null,
-                errorMessage: "Cancelled",
+                errorMessage: "Canceled",
               }
             : prev.download,
         extraction:
@@ -1019,7 +1019,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
                 filesExtracted: null,
                 totalFiles: null,
                 errorCategory: null,
-                errorMessage: "Cancelled",
+                errorMessage: "Canceled",
               }
             : prev.extraction,
         lastUpdatedAt: stoppedAt,
@@ -1033,7 +1033,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
         });
       }
       setHvscActiveToken(null);
-      toast({ title: "HVSC update cancelled" });
+      toast({ title: "HVSC update canceled" });
     } catch (error) {
       reportUserError({
         operation: "HVSC_CANCEL",

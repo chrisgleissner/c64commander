@@ -51,10 +51,19 @@ import {
 const PALETTE_CATEGORY = "U64 Specific Settings";
 const PALETTE_ITEM = "Palette Definition";
 
-const deviceConfig = (path: string) => ({
+/**
+ * `Palette Definition` holds a bare FILENAME, never a path.
+ *
+ * The firmware stores only the truncated file name (`FileTypePalette::executeFlash`) and lists the
+ * contents of `/flash/data` as the permitted values (`U64Config::list_palettes`); a real c64u
+ * reports e.g. `"mine.vpl"`. The fixtures below therefore use file names, and the assertions pin
+ * the `/Flash/data` prefix the hook has to put back in front of them — reading the raw value as an
+ * FTP path fails on every real device and silently falls back to the built-in palette.
+ */
+const deviceConfig = (filename: string) => ({
   [PALETTE_CATEGORY]: {
     items: {
-      [PALETTE_ITEM]: { value: path },
+      [PALETTE_ITEM]: { value: filename },
     },
   },
 });
@@ -93,7 +102,7 @@ describe("useDeviceVicPalette", () => {
     __resetVicPalette();
     mocks.connectionEpoch.mockReturnValue(0);
     mocks.appVisible.mockReturnValue(true);
-    mocks.configItem.mockReturnValue({ data: deviceConfig("/Usb0/device.vpl") });
+    mocks.configItem.mockReturnValue({ data: deviceConfig("device.vpl") });
     mocks.resolveFtpConnectionOptions.mockResolvedValue({ host: "u64" });
     mocks.readFtpFile.mockResolvedValue({ data: btoa(deviceVpl("From the configured device VPL")) });
   });
@@ -107,7 +116,7 @@ describe("useDeviceVicPalette", () => {
 
     await waitFor(() => expect(activeVicPalette().description).toBe("From the configured device VPL"));
     expect(mocks.readFtpFile).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "/Usb0/device.vpl", timeoutMs: 3_000, __c64uIntent: "background" }),
+      expect.objectContaining({ path: "/Flash/data/device.vpl", timeoutMs: 3_000, __c64uIntent: "background" }),
     );
   });
 
@@ -115,7 +124,7 @@ describe("useDeviceVicPalette", () => {
     mocks.configItem.mockReturnValue({
       data: {
         [PALETTE_CATEGORY]: {
-          [PALETTE_ITEM]: { value: "/Usb0/direct.vpl" },
+          [PALETTE_ITEM]: { value: "direct.vpl" },
         },
       },
     });
@@ -124,7 +133,7 @@ describe("useDeviceVicPalette", () => {
     renderHook(() => useDeviceVicPalette(), { wrapper: createWrapper() });
 
     await waitFor(() => expect(activeVicPalette().description).toBe("Direct configuration"));
-    expect(mocks.readFtpFile).toHaveBeenCalledWith(expect.objectContaining({ path: "/Usb0/direct.vpl" }));
+    expect(mocks.readFtpFile).toHaveBeenCalledWith(expect.objectContaining({ path: "/Flash/data/direct.vpl" }));
   });
 
   it("refreshes the same configured VPL after returning from a manual palette", async () => {
@@ -153,6 +162,52 @@ describe("useDeviceVicPalette", () => {
     await waitFor(() => expect(mocks.readFtpFile).toHaveBeenCalledTimes(2));
   });
 
+  describe("a palette pinned from the machine", () => {
+    /**
+     * Storage only holds an id. For a palette that came off the machine there is nothing behind
+     * that id in the built-in table, so it has to be read again on every cold start — otherwise the
+     * app paints Default while the UI still shows the device palette as the chosen one.
+     */
+    it("re-reads its file on a cold start, so the choice survives closing the app", async () => {
+      localStorage.setItem("c64u_vic_palette", "device:mine.vpl");
+      mocks.readFtpFile.mockResolvedValue({ data: btoa(deviceVpl("Pinned from the machine")) });
+
+      renderHook(() => useDeviceVicPalette(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(activeVicPalette().description).toBe("Pinned from the machine"));
+      expect(mocks.readFtpFile).toHaveBeenCalledWith(expect.objectContaining({ path: "/Flash/data/mine.vpl" }));
+    });
+
+    it("does not ask the machine which palette IT is set to", async () => {
+      localStorage.setItem("c64u_vic_palette", "device:mine.vpl");
+      mocks.readFtpFile.mockResolvedValue({ data: btoa(deviceVpl("Pinned from the machine")) });
+
+      renderHook(() => useDeviceVicPalette(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(activeVicPalette().description).toBe("Pinned from the machine"));
+      // The pinned choice is the user's, not the machine's; following it would overwrite theirs.
+      expect(mocks.configItem).toHaveBeenCalledWith(expect.anything(), expect.anything(), false, expect.anything());
+    });
+
+    it("falls back to the built-in palette when its file has since been deleted", async () => {
+      localStorage.setItem("c64u_vic_palette", "device:gone.vpl");
+      mocks.readFtpFile.mockRejectedValue(new Error("FTP request failed"));
+
+      renderHook(() => useDeviceVicPalette(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(activeVicPalette().description).toBe("C64 Ultimate Default Palette"));
+    });
+
+    it("leaves a built-in palette alone, without touching FTP", async () => {
+      localStorage.setItem("c64u_vic_palette", "monochrome");
+
+      renderHook(() => useDeviceVicPalette(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(activeVicPalette().id).toBe("monochrome"));
+      expect(mocks.readFtpFile).not.toHaveBeenCalled();
+    });
+  });
+
   it("uses the firmware fallback and records why the device configuration is unavailable", async () => {
     mocks.configItem.mockReturnValue({ error: new Error("configuration request failed") });
     renderHook(() => useDeviceVicPalette(), { wrapper: createWrapper() });
@@ -172,7 +227,7 @@ describe("useDeviceVicPalette", () => {
 
     await waitFor(() =>
       expect(mocks.addLog).toHaveBeenCalledWith("warn", "Device palette unavailable; using Default", {
-        path: "/Usb0/device.vpl",
+        filename: "device.vpl",
         message: "FTP request failed",
       }),
     );

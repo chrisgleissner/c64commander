@@ -263,7 +263,7 @@ export function SavedDeviceEditorFields({
             data-testid={`${idPrefix}-http-field`}
           >
             <Label htmlFor={`${idPrefix}-http`} className="text-xs text-muted-foreground">
-              HTTP Port
+              HTTP port
             </Label>
             <Input
               ref={httpFocus.inputRef}
@@ -283,7 +283,7 @@ export function SavedDeviceEditorFields({
             data-testid={`${idPrefix}-ftp-field`}
           >
             <Label htmlFor={`${idPrefix}-ftp`} className="text-xs text-muted-foreground">
-              FTP Port
+              FTP port
             </Label>
             <Input
               ref={ftpFocus.inputRef}
@@ -303,7 +303,7 @@ export function SavedDeviceEditorFields({
             data-testid={`${idPrefix}-telnet-field`}
           >
             <Label htmlFor={`${idPrefix}-telnet`} className="text-xs text-muted-foreground">
-              Telnet Port
+              Telnet port
             </Label>
             <Input
               ref={telnetFocus.inputRef}

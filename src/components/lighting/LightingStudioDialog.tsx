@@ -1263,7 +1263,7 @@ export function LightingStudioDialog() {
                   <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
                     <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
                       <div>
-                        <p className="font-medium">Connection Sentinel</p>
+                        <p className="font-medium">Connection sentinel</p>
                         <p className="text-sm text-muted-foreground">Map link state to looks.</p>
                       </div>
                       <Switch
@@ -1365,7 +1365,7 @@ export function LightingStudioDialog() {
                   <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
                     <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
                       <div>
-                        <p className="font-medium">Source Identity Map</p>
+                        <p className="font-medium">Source identity map</p>
                         <p className="text-sm text-muted-foreground">Reflect the active source on Play and Disks.</p>
                       </div>
                       <Switch
@@ -1422,7 +1422,7 @@ export function LightingStudioDialog() {
                   <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
                     <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
                       <div>
-                        <p className="font-medium">Circadian Palette</p>
+                        <p className="font-medium">Circadian palette</p>
                         <p className="text-sm text-muted-foreground">
                           Offline sun phases from device, manual, or city location.
                         </p>

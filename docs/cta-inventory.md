@@ -43,7 +43,7 @@ fallback, and the legacy Android key code).
 | D-pad **OK / Center** | `DPAD_CENTER` 23     | `center`          | **"OK goes in":** descend into the focused group, or activate the focused leaf. On a Select: opens the dropdown.                         |
 | **Back / Clear**      | `BACK` 4             | `back`            | **"Back goes out":** dismiss overlay → leave field → ascend group → finally route back. (Capacitor may intercept hardware Back; see §6.) |
 | **Call / Send**       | `CALL` 5             | `activate`        | Primary activate of the focused leaf.                                                                                                    |
-| **Menu**              | `MENU` 82            | `openMenu`        | Right soft-key "Menu": focused item's context menu, else the **Quick Menu** (jump-to-page / Game Mode / Diagnostics / Switch Device).    |
+| **Menu**              | `MENU` 82            | `openMenu`        | Right soft-key "Menu": focused item's context menu, else the **Quick Menu** (jump-to-page / Game Mode / Diagnostics / Switch device).    |
 | **Left soft key**     | `SOFTLEFT` 1         | `softLeft`        | Follows the Back chain (Back/Exit/Close/Done).                                                                                           |
 | **Right soft key**    | `SOFTRIGHT` 2        | `softRight`       | Opens current item/scope menu.                                                                                                           |
 | **1–9**               | `KEYCODE_1..9` 8–16  | `digit1`–`digit9` | In a text field: T9 entry. Outside a field: **jump to tab 1–6** (Home/Play/Disks/Config/Settings/Docs); 7–9 unbound at app level.        |
@@ -109,8 +109,8 @@ persistent status badge that appear on every page).
 
 | Page     | Route       |                        CTAs | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | -------- | ----------- | --------------------------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home     | `/`         |                    113 (+4) | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. `+1` **Game Mode** tile behind `remote_input_enabled`, first in the Quick Actions grid (§3.2.1 order: safe first, destructive last). `+1` Remote Input tile behind `remote_input_enabled` (stable, enabled and user-visible by default in C64 Commander; disabled and hidden in C64U Remote per `variants/feature-flags/c64u-remote.yaml`). `+2` Content Explorer **Live View** card (`live-view-card`) beneath the quick actions — one Audio toggle (`av-audio-toggle`, `audio_mirror_enabled`) and one Video toggle (`av-video-toggle`, `video_mirror_enabled`) sharing the single app-wide A/V mirror session; both user-visible and non-developer, off by default until the phone stream receiver ships. Mounted only when the device advertises streaming (code-verified — see note below). |
-| Settings | `/settings` |                    86 (+12) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. Includes the 3 SID chip controls in the SID Radio group (one switch plus a two-button chip choice, §4.5), which are shown whenever on-device playback is on. The Crossfade group gained a fifth length (4 s), taking the page from 80 to 81. `+5` the Text size choice (four buttons) and the Allow-circuit-override checkbox, which gained a `data-testid` when its row became the target, taking it to 86. `+6` Content Explorer **Play and Disk** controls: Search inside disk images (`in_image_search_enabled`), Answer cartridge boot menu (`launch_safety_enabled`, default on) plus its Menu key select and Boot settle input, and Video/Audio stream port inputs (shown when `audio_mirror_enabled` or `video_mirror_enabled`) (code-verified — see note below). `+4` the Game Mode block in **Remote Input**: `settings-joystick-key-layout`, `settings-game-mode-joystick`, `settings-game-mode-on-launch`, and (for a Custom layout) the nine press-to-bind slots `settings-joystick-bind-<slot>` with their `settings-joystick-clear-<slot>` companions.                                                                                                |
+| Home     | `/`         |                    114 (+4) | Dashboard: machine actions, quick config, LED, drives, printer, SID mixer, streams, config snapshots. **Screen colors** (`home-video-screen-colors`) was added as the first row of the Quick Config → Video card, taking the page from 113 to 114; it is unconditional and works while disconnected, and the controls of the sheet it opens are an overlay scope counted separately (§4.1). `+1` **Game Mode** tile behind `remote_input_enabled`, first in the Quick Actions grid (§3.2.1 order: safe first, destructive last). `+1` Remote Input tile behind `remote_input_enabled` (stable, enabled and user-visible by default in C64 Commander; disabled and hidden in C64U Remote per `variants/feature-flags/c64u-remote.yaml`). `+2` Content Explorer **Live View** card (`live-view-card`) beneath the quick actions — one Audio toggle (`av-audio-toggle`, `audio_mirror_enabled`) and one Video toggle (`av-video-toggle`, `video_mirror_enabled`) sharing the single app-wide A/V mirror session; both user-visible and non-developer, off by default until the phone stream receiver ships. Mounted only when the device advertises streaming (code-verified — see note below). |
+| Settings | `/settings` |                    87 (+12) | Connection, devices, display (+2 native Android full-screen toggles), feature flags, network/cache, notifications, dev-mode, build info. Includes the 3 SID chip controls in the SID Radio group (one switch plus a two-button chip choice, §4.5), which are shown whenever on-device playback is on. The Crossfade group gained a fifth length (4 s), taking the page from 80 to 81. `+5` the Text size choice (four buttons) and the Allow-circuit-override checkbox, which gained a `data-testid` when its row became the target, taking it to 86. `+6` Content Explorer **Play and Disk** controls: Search inside disk images (`in_image_search_enabled`), Answer cartridge boot menu (`launch_safety_enabled`, default on) plus its Menu key select and Boot settle input, and Video/Audio stream port inputs (shown when `audio_mirror_enabled` or `video_mirror_enabled`) (code-verified — see note below). `+4` the Game Mode block in **Remote Input**: `settings-joystick-key-layout`, `settings-game-mode-joystick`, `settings-game-mode-on-launch`, and (for a Custom layout) the nine press-to-bind slots `settings-joystick-bind-<slot>` with their `settings-joystick-clear-<slot>` companions. The **Keep device settings after a restart** checkbox (`settings-persist-config-to-flash`) in Device safety is unconditional and takes the page from 86 to 87. The Screen colors select (`settings-vic-palette`) was removed from the Live View streaming block and its controls now live on Home (§4.1); it sat among the mirror-gated stream controls that the `(+N)` tallies above never counted, so its removal changes no number here.                                                                                                |
 | Play     | `/play`     | 31 (+2, +20 SID Radio, +16) | Transport, volume, playback flags, playlist, type filters, HVSC. Include subfolders moved off this page into the Add items sheet (32 → 31). `+2` the **Game Mode** and Remote Input buttons, shown only while playing, behind `remote_input_enabled`, last in the sheet-actions row. `+20` the seekable progress bar, the **Listen on** group and the **SID Radio** controls, behind `c64u_sid_radio_enabled` / `c64u_local_engine_enabled`. `+16` **Find a tune** (open, search box, per-row play and seed-a-station), the composer and the tune position on the metadata lines, the tune-notes reveal, **Play all N tunes**, and the six sleep-timer choices. The playback settings' own tune list was removed when the credits-line one arrived, so the net count is unchanged by it.       |
 | Config   | `/config`   |                          30 | Search + 22 config-category accordions (each expands to config-item rows).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Disks    | `/disks`    |                     28 (+1) | Drive A/B/Soft-IEC controls, disk library. `+1` Content Explorer **New disk** button (`new_disk_enabled`); the per-disk **Open (Disk Explorer)…** overflow action (`disk_explorer_enabled`) and the New-disk / Disk-contents dialogs it opens are documented in §4.3/§5 (code-verified — see note below).                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -168,7 +168,7 @@ not-connected / empty / single-device).
   - Save REU memory — button — `home-machine-inline-saveReuMemory` — R✅ I✅ _(flag `home_telnet_reu_snapshot_enabled`)_
   - Save RAM — button — `home-save-ram` — R✅ I✅ _(flag `ram_snapshots_enabled`)_
   - **Save RAM dialog** (`save-ram-dialog`, opened by `home-save-ram`)
-    - CPU + RAM Snapshot — button — `save-ram-type-cpu` — R✅ I✅ _(conditional on CPU-snapshot capability; `save-ram-type-list` scope)_
+    - CPU + RAM snapshot — button — `save-ram-type-cpu` — R✅ I✅ _(conditional on CPU-snapshot capability; `save-ram-type-list` scope)_
     - Program / BASIC / Screen / REU region presets — buttons — `save-ram-type-{program,basic,screen,reu}` — R✅ I✅
     - Custom ranges toggle — button — `save-ram-type-custom` — R✅ I✅ _(reveals `save-ram-custom-form` scope)_
     - Custom range start/end — text/number — `save-ram-custom-{start,end}-{i}` — R✅ I✅
@@ -195,6 +195,13 @@ not-connected / empty / single-device).
   - Cartridge Preference — select — `home-cartridge-preference` — R✅ I✅
   - User Port Power — checkbox — `home-user-port-power` — R✅ I✅
 - **Quick Config → Video** (`home-video-summary`)
+  - Screen colors — button — `home-video-screen-colors` — R✅ I✅ — first in the card, because it is the one row here people actually change; opens the **Screen colors sheet** (below) _(needs no device connection: the app's own palette is a local rendering choice, so the row stays usable while the rest of the card is disabled. The 16-swatch strip beneath it, `home-video-screen-colors-preview`, is display-only)_
+  - **Screen colors sheet** (`screen-colors-*`, opened by `home-video-screen-colors`)
+    - Show on: Local / Remote / Both — button ×3 — `screen-colors-local` / `screen-colors-remote` / `screen-colors-both` — R✅ I✅ _(group `screen-colors-target`; the same shape as the Play page's **Listen on**. Local paints this device's Live View only, Remote changes what the C64 itself draws, Both does each; `screen-colors-target-hint` states which, display-only)_
+    - Follow the C64 — button — `screen-colors-follow-device` — R✅ I✅ _(Live View paints whatever palette the machine is set to, so the phone and the television match)_
+    - Per-palette choice — button ×N — `screen-colors-palette-<id>` — R✅ I✅ `[the row being applied is disabled while its upload is in flight]` — the nine bundled VICE palettes (`cool`, `default`, `inverted`, `monochrome`, `muted`, `neonblast`, `night`, `vibrant`, `warm`), plus one row per `.vpl` already installed on the connected machine (`screen-colors-device-palettes`), read from the device's own preset list
+    - Close — button — `screen-colors-close` — R✅ I✅
+    - _The two halves are different things. The app's palette is **render-only**: the video stream carries 4-bit colour indices, so it cannot change what the device sent. Applying to the C64 uploads a `.vpl` into `/flash/data` and writes the `U64 Specific Settings` / `Palette Definition` config item, which changes the machine's own output on HDMI and analog, so the television changes too. Whether that survives a power cycle depends on **Keep device settings after a restart** in Settings (§4.5); `screen-colors-install-note` says so on the Remote and Both targets._
   - Video Mode — select — `home-video-mode` — R✅ I✅
   - HDMI Resolution — select — `home-video-hdmi-resolution` — R✅ I✅
   - HDMI Scan Lines — checkbox — `home-video-scanlines` — R✅ I✅
@@ -245,10 +252,10 @@ not-connected / empty / single-device).
 - **Config actions** (`data-section-label="Config"`)
   - Save/Load (flash) — button — R✅ I✅
   - Reset to default — button (danger) — R✅ I✅
-  - Save to App — button — `home-config-save-app` — R✅ I✅
-  - Load from App — button — `home-config-load-app` — R✅ I✅ `[disabled: no app configs]`
+  - Save to app — button — `home-config-save-app` — R✅ I✅
+  - Load from app — button — `home-config-load-app` — R✅ I✅ `[disabled: no app configs]`
   - Revert Changes — button — `home-config-revert-changes` — R✅ I✅
-  - Manage App Configs — button — `home-config-manage-app` — R✅ I✅ `[disabled: no app configs]`
+  - Manage app configs — button — `home-config-manage-app` — R✅ I✅ `[disabled: no app configs]`
   - _(flag/telnet)_ Save/Load file, Clear flash — button — R✅ I✅
 
 ### 4.2 Play (`/play`)
@@ -403,7 +410,14 @@ past it to anything below.
   (`variant.runtime.default_hide_*`; `c64u-remote` ships both on)
 - **Device safety**: Allow circuit override — checkbox —
   `settings-allow-circuit-override` — R✅ I✅ ; the whole row is the target, so the
-  label activates it as well as the box
+  label activates it as well as the box ; Keep device settings after a restart —
+  checkbox — `settings-persist-config-to-flash` — R✅ I✅ _(default off: a device
+  setting changed from the app reaches the C64 straight away but is not written to
+  its flash, so a power cycle brings back what the C64 had saved. When on, the app
+  saves to flash once config writes have settled, so one slider drag costs one
+  flash write. Enabling it reveals the warning block
+  `settings-persist-config-to-flash-warning`, which is display-only and explains
+  the hold-RESTORE-at-power-up recovery)_
 - **Devices**: Add device — button — `settings-add-device` — R✅ I✅ ; Delete
   device — button — `settings-delete-device` — R✅ I✅ `[disabled: single device]`
   ; device row — button — `settings-device-row-*` — R✅ I✅ ; host — text —
@@ -439,14 +453,7 @@ past it to anything below.
   Boot settle (ms) — number — `settings-boot-settle` — R✅ I✅ ; Video stream port
   / Audio stream port — number ×2 — `settings-stream-video-port` /
   `settings-stream-audio-port` — R✅ I✅ ; Audio network buffer (ms) — number —
-  `settings-stream-network-buffer` — R✅ I✅ ; Screen colours — select —
-  `settings-vic-palette` — R✅ I✅ _(default Device palette (automatic): reads the
-  VPL selected on the connected C64U/U64 and falls back to Default if no VPL is
-  configured or it cannot be read. The nine bundled VICE palettes remain manual
-  alternatives; a 16-swatch preview `settings-vic-palette-preview` shows every
-  colour before you commit. Render-only: the stream carries 4-bit palette indices,
-  so this cannot change what the device sent, and frame decode is already a
-  16-entry LUT so the hot path is unaffected)_ ; Fast video (native assembly) —
+  `settings-stream-network-buffer` — R✅ I✅ ; Fast video (native assembly) —
   switch — `settings-stream-native-assembly` — R✅ I✅ _(default on; native VIC
   frame assembly, A/B / escape-hatch toggle — native builds only)_ ; Input
   priority (instant joystick) — switch — `settings-stream-input-priority` —
@@ -503,12 +510,12 @@ single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
 - **Notifications**: visibility — select — R✅ I✅ ; duration — slider — R✅ I✅
 - **Build/info**: REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅
   (`c64u-remote`: C64U User Guide — link — `settings-about-c64u-user-guide`
-  — R✅ I✅) ; Open Source Licenses — button — R✅ I✅ (sub-route
+  — R✅ I✅) ; Open source licenses — button — R✅ I✅ (sub-route
   `/settings/open-source-licenses`)
 
 ### 4.6 Docs (`/docs`)
 
-- Section toggles: Getting Started, Home, Play Files, Disks & Drives, Swapping
+- Section toggles: Getting Started, Home, Play files, Disks & Drives, Swapping
   Disks, Config, Settings, Diagnostics — button — `docs-toggle-*` — R✅ I✅
 - External links: Ultimate Documentation, REST API Reference, Ultimate 64
   Official Site — link — `docs-external-resource-*` — R✅ I✅
@@ -523,7 +530,7 @@ When an app dialog / sheet / Radix menu opens, it becomes the active scope and
 its controls are discovered the same way (Up/Down within, OK activates, Back/Esc
 closes). Examples: machine-action confirmations (Reset/Reboot/Power Off),
 config Save/Load/Manage, RAM snapshot manager, song selector, drive-status
-details, item/disk pickers, Diagnostics dialog, Open Source Licenses page.
+details, item/disk pickers, Diagnostics dialog, Open source licenses page.
 
 **Automatic device discovery dialog** (`startup-discovered-device-*`, shown after
 startup/resume discovery completes while no configured device is reachable):
@@ -752,7 +759,7 @@ the full machine:input tier]`; SPACE/RETURN/f-keys/cursors also work on the
 
 **Keypad Quick Menu** (`keypad-quick-menu`, opened by the Menu key when the
 focused item has no context menu): a keypad-navigable list of jump-to-page (×6),
-Game Mode (flag `remote_input_enabled`), Diagnostics, and Switch Device (when >1
+Game Mode (flag `remote_input_enabled`), Diagnostics, and Switch device (when >1
 saved device). Per-entry testids `keypad-quick-menu-tab-<label>`,
 `keypad-quick-menu-game-mode`, `keypad-quick-menu-diagnostics`,
 `keypad-quick-menu-switch-device`. The Game Mode entry carries the `0` shortcut
@@ -772,7 +779,7 @@ into a place it can be discovered without reading the manual.
    for the fixed header (top) and the guidance bar + tab bar (bottom) so the
    focused control is always fully revealed.
 3. **Device Switcher keypad path — ADDED.** Keypad `#` (and Menu → Quick Menu →
-   Switch Device) opens the device switcher, equivalent to long-pressing the
+   Switch device) opens the device switcher, equivalent to long-pressing the
    status badge. (Still requires ≥2 saved devices to do anything.)
 
 **Open:**

@@ -13,11 +13,11 @@ env:
 # one next-track transition occurred.
 - runFlow: subflows/launch-and-wait.yaml
 
-# Navigate to the Play Files tab
+# Navigate to the Play files tab
 - tapOn:
     point: "75%,95%"
 - extendedWaitUntil:
-    visible: "Play Files"
+    visible: "Play files"
     timeout: ${TIMEOUT}
 
 # Start playback

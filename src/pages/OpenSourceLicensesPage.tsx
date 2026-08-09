@@ -271,7 +271,7 @@ export default function OpenSourceLicensesPage() {
       <div className="mx-auto flex h-full w-full max-w-6xl min-w-0 flex-col px-3 py-3 sm:px-6 sm:py-4">
         <div className="mb-3 flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
           <div className="min-w-0 flex-1">
-            <h1 className="break-words text-lg font-semibold">Open Source Licenses</h1>
+            <h1 className="break-words text-lg font-semibold">Open source licenses</h1>
             <p className="break-words text-sm text-muted-foreground">Rendered from bundled `THIRD_PARTY_NOTICES.md`.</p>
           </div>
           <StatefulButton

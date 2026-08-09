@@ -39,7 +39,7 @@ export function RestoreSnapshotDialog({
   if (!snapshot) return null;
 
   const typeConfig = SNAPSHOT_TYPE_LIST.find((c) => c.type === snapshot.snapshotType);
-  const typeLabel = isReuSnapshotEntry(snapshot) ? "REU Snapshot" : (typeConfig?.label ?? snapshot.snapshotType);
+  const typeLabel = isReuSnapshotEntry(snapshot) ? "REU snapshot" : (typeConfig?.label ?? snapshot.snapshotType);
   const ranges = snapshot.metadata.display_ranges.join(", ");
   const label = snapshot.metadata.label;
   const createdAt = snapshot.metadata.created_at;
@@ -52,7 +52,7 @@ export function RestoreSnapshotDialog({
     <AppDialog open={open} onOpenChange={onOpenChange}>
       <AppDialogContent data-testid="restore-snapshot-dialog">
         <AppDialogHeader>
-          <AppDialogTitle>{isReuSnapshot ? "Restore REU Snapshot" : "Restore Snapshot"}</AppDialogTitle>
+          <AppDialogTitle>{isReuSnapshot ? "Restore REU snapshot" : "Restore snapshot"}</AppDialogTitle>
           <AppDialogDescription>
             {isReuSnapshot
               ? "Choose how the uploaded REU image should be applied."

@@ -52,7 +52,7 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
   return [
     {
       id: "getting-started",
-      title: "Getting Started",
+      title: "Getting started",
       icon: Wifi,
       content: (
         <div className="space-y-3 text-sm">
@@ -156,7 +156,7 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
     },
     {
       id: "play",
-      title: "Play Files",
+      title: "Play files",
       icon: Play,
       content: (
         <div className="space-y-3 text-sm">
@@ -199,7 +199,7 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
     },
     {
       id: "disks",
-      title: "Disks & Drives",
+      title: "Disks & drives",
       icon: Disc,
       content: (
         <div className="space-y-3 text-sm">
@@ -230,7 +230,7 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
     },
     {
       id: "disk-swapping",
-      title: "Swapping Disks",
+      title: "Swapping disks",
       icon: Disc,
       content: (
         <div className="space-y-3 text-sm">
@@ -333,7 +333,7 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
               <strong>Overview</strong> keeps Problems, Actions, Logs, Errors, and Traces in one place.
             </li>
             <li>
-              <strong>Health Check Detail</strong> shows REST, FTP, CONFIG, RASTER, and JIFFY probes, plus latency
+              <strong>Health check detail</strong> shows REST, FTP, CONFIG, RASTER, and JIFFY probes, plus latency
               percentiles and the overall result. Telnet activity appears when Telnet actions run.
             </li>
             <li>Expanded rows show payload details without leaving the sheet.</li>
@@ -348,8 +348,8 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
               reports with context.
             </li>
             <li>
-              Tools include Config Drift, Decision State, Latency, Health History, REST Heat Map, FTP Heat Map, and
-              Config Heat Map. Contributor filters include App, REST, FTP, and Telnet.
+              Tools include Config drift, Decision state, Latency, Health history, REST heat map, FTP heat map, and
+              Config heat map. Contributor filters include App, REST, FTP, and Telnet.
             </li>
           </ul>
           <p className="text-muted-foreground">
@@ -452,7 +452,7 @@ export default function DocsPage() {
           className="bg-card border border-border rounded-xl p-4 space-y-3"
           data-testid="docs-external-resources"
         >
-          <h3 className="font-medium">External Resources</h3>
+          <h3 className="font-medium">External resources</h3>
           <p className="text-sm text-muted-foreground">
             Official device manuals and API references used by {variant.displayName}.
           </p>

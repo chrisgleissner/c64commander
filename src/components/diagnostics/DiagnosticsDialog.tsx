@@ -949,7 +949,7 @@ const ConfigDriftSurface = ({ open, onOpenChange }: { open: boolean; onOpenChang
         data-testid="config-drift-surface"
       >
         <AppSheetHeader>
-          <AppSheetTitle className="text-base">Config Drift</AppSheetTitle>
+          <AppSheetTitle className="text-base">Config drift</AppSheetTitle>
           <AppSheetDescription className="sr-only">
             Review runtime configuration drift against persisted settings.
           </AppSheetDescription>

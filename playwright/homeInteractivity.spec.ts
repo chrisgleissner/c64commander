@@ -264,7 +264,7 @@ test.describe("Home interactions", () => {
     await resumeButton.click();
 
     await machineControls.getByRole("button", { name: "Power Off", exact: true }).click();
-    const powerOffDialog = page.getByRole("dialog", { name: "Confirm Power Off" });
+    const powerOffDialog = page.getByRole("dialog", { name: "Confirm power off" });
     await expect(powerOffDialog).toBeVisible();
     await powerOffDialog.getByRole("button", { name: "Power Off", exact: true }).click();
 
@@ -656,7 +656,7 @@ test.describe("Home interactions", () => {
     await page.goto("/");
     await waitForConnected(page);
 
-    await expect(page.getByTestId("home-lighting-group")).toContainText("LED LIGHTING");
+    await expect(page.getByTestId("home-lighting-group")).toContainText("LED lighting");
 
     const caseLight = page.getByTestId("home-led-summary");
     // The case-light rows are config-driven and populate asynchronously after

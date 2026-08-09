@@ -1096,7 +1096,7 @@ describe("HomePage SID status", () => {
     expect(screen.getByTestId("home-system-build-time").textContent).toContain("2024-03-20 12:34:00 UTC");
     expect(screen.getByText("Quick Actions")).toBeTruthy();
     expect(screen.queryByTestId("home-drive-summary")).toBeNull();
-    expect(screen.getByTestId("home-ram-folder-row").textContent).toContain("RAM Folder:");
+    expect(screen.getByTestId("home-ram-folder-row").textContent).toContain("RAM folder:");
     expect(screen.getByTestId("ram-dump-folder-trigger").textContent).toContain("...");
   });
 
@@ -1701,7 +1701,7 @@ describe("HomePage SID status", () => {
     renderHomePage();
 
     expectUserInterfaceControls("home-user-interface");
-    expect(within(screen.getByTestId("home-lighting-group")).getByText("LED LIGHTING")).toBeTruthy();
+    expect(within(screen.getByTestId("home-lighting-group")).getByText("LED lighting")).toBeTruthy();
     expectLightingControls("home-led", "Case Light");
     expect(screen.getByTestId("home-led-pattern")).toHaveTextContent("Single Color");
     expect(screen.getByTestId("home-keyboard-lighting-summary")).toBeInTheDocument();

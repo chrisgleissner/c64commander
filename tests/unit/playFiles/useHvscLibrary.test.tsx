@@ -585,8 +585,8 @@ describe("useHvscLibrary", () => {
       "HVSC status fetch failed",
       expect.objectContaining({ error: "status refresh failed" }),
     );
-    expect(mocks.toastMock).toHaveBeenCalledWith({ title: "HVSC update cancelled" });
-    expect(result.current.hvscInlineError).toBe("Cancelled");
+    expect(mocks.toastMock).toHaveBeenCalledWith({ title: "HVSC update canceled" });
+    expect(result.current.hvscInlineError).toBe("Canceled");
     expect(result.current.hvscDownloadStatus).toBe("idle");
     expect(result.current.hvscExtractionStatus).toBe("idle");
   });

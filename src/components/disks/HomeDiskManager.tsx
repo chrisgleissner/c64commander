@@ -1616,7 +1616,7 @@ export const HomeDiskManager = () => {
           setAddItemsProgress((prev) => ({
             ...prev,
             status: "idle",
-            message: "Add cancelled",
+            message: "Add canceled",
           }));
           return false;
         }

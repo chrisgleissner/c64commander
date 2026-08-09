@@ -12,11 +12,11 @@ env:
 # supported file categories (sid, mod, prg, crt, disk).
 - runFlow: subflows/launch-and-wait.yaml
 
-# Navigate to Play Files tab
+# Navigate to Play files tab
 - tapOn:
     point: "75%,95%"
 - extendedWaitUntil:
-    visible: "Play Files"
+    visible: "Play files"
     timeout: ${TIMEOUT}
 
 # SID: play a SID track, wait for auto-advance

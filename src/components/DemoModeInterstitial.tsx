@@ -71,7 +71,7 @@ export function DemoModeInterstitial() {
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2 py-2">
-          <Label htmlFor="demo-device-host">C64U Hostname / IP</Label>
+          <Label htmlFor="demo-device-host">C64U hostname / IP</Label>
           <Input
             id="demo-device-host"
             data-testid="demo-interstitial-host-input"
@@ -100,7 +100,7 @@ export function DemoModeInterstitial() {
               Retry connection
             </Button>
             <Button variant="secondary" onClick={handleSaveAndRetry}>
-              Save & Retry
+              Save & retry
             </Button>
             <Button
               variant="default"

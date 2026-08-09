@@ -55,7 +55,7 @@ export function ManageConfigDialog({ open, onOpenChange, configs, onRename, onDe
       <AppSheet open={open} onOpenChange={onOpenChange}>
         <AppSheetContent className="overflow-hidden p-0" data-testid="manage-configs-sheet">
           <AppSheetHeader>
-            <AppSheetTitle>Manage App Configs</AppSheetTitle>
+            <AppSheetTitle>Manage app configs</AppSheetTitle>
             <AppSheetDescription>Rename or delete saved configurations.</AppSheetDescription>
           </AppSheetHeader>
           <AppSheetBody className="px-4 py-4 sm:px-6">

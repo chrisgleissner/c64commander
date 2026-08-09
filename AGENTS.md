@@ -742,6 +742,43 @@ For these loops:
 - Describe only the current state of documents when changing them.
 - Do not claim builds, tests, or screenshot refreshes you did not actually perform.
 
+## User-visible text casing
+
+Sentence case for every piece of UI text: dialog and sheet titles, section headings, control
+labels, button labels, and the short descriptions under quick-action buttons. Capitalise only the
+first word.
+
+Three kinds of text keep their capitals, and they cover most of what looks like title case today.
+
+1. **Product feature names**, which are proper nouns: Live View, Remote Input, Game Mode, Lighting
+   Studio, Context Lens, Demo Mode, Online Archive, SID Radio, Device Safety.
+2. **Acronyms**: SID, RAM, REU, HVSC, HDMI, FTP, REST, IEC, CPU, C64.
+3. **Device config item names**, verbatim as the machine reports them: Turbo Control, Badline
+   Timing, Video Mode, HDMI Scan Lines, Serial Bus Mode, Cartridge Preference, User Port Power,
+   RAM Expansion, SuperCPU Detect, Music Detect, SID Select, Color Scheme, WASD Cursors. These
+   MUST NOT be re-cased. A user reading a label in the app has to be able to find the same setting
+   in the machine's own setup menu, and the machine spells it that way — including its American
+   "Color". The same applies to values the device supplies.
+
+So "Manage app configs" but "Save RAM"; "Switch device" but "Open Lighting Studio".
+
+## Spelling: American English
+
+All user-visible text and the manual use American English. Not British. color, behavior, organize,
+recognize, center, license (noun and verb), analog, catalog, gray, while (not "whilst"), toward
+(not "towards"), canceled, traveled.
+
+This is also what the machine itself uses — its config items are named "Color Scheme" and "Adjust
+Color Clock" — so the app and the device read as one system rather than two.
+
+Why sentence case rather than title case: it is what Material, Fluent, Primer, Polaris and Carbon
+all specify, and this app follows Android conventions rather than Apple's; there is no judgement
+call about which words count as major, so it can actually be applied consistently; and it survives
+translation into languages that have no title case.
+
+Two conventions the app deliberately keeps alongside this: quick-action button LABELS are single
+Title-Case words ("Save", "Load", "Reset"), and `SectionHeader` renders its title in upper case.
+
 ## Golden trace stewardship
 
 When modifying Playwright tests, REST routing, or tracing logic:
@@ -892,7 +929,7 @@ Rules that follow from it:
   `239.0.1.65:11001` audio). A device keeps streaming until something asks it to stop — surviving
   app restarts, device switches and crashes. Suspect an orphaned stream early. See
   [[live-view-device-switch-clean-transition]].
-- **Check the phone is awake and foregrounded before concluding anything about async behaviour.** A
+- **Check the phone is awake and foregrounded before concluding anything about async behavior.** A
   dozing WebView freezes timers and promises, which reads exactly like a hung native plugin: in the
   same session `StreamUdp.bind()` "never resolved" for 90 s purely because the screen was off.
 - **Zero underruns does not mean healthy audio.** An over-full buffer never underruns; it silently
@@ -927,7 +964,7 @@ touching anything you did not measure.
 
 "It sounds rough" cannot be graded against real music, whose spectrum moves constantly — a
 correlation score says only that _something_ differs. `tools/hil/make_tone_ladder_sid.py` emits a
-307-byte PSID playing a known C3→C4→C3 ladder that also steps the screen colour in unison with the
+307-byte PSID playing a known C3→C4→C3 ladder that also steps the screen color in unison with the
 notes, and `analyse_tone_ladder.py` reports per-note pitch error in cents and per-note duration.
 That turns "rough" into "notes are 0.965 s instead of 0.500 s", which points at a rate problem in
 one reading. Prefer building that instrument early over another round of reasoning about the code.
@@ -954,7 +991,7 @@ own. Every one of these was a _measurement_ bug that looked exactly like a devic
   fixed the real defect; the accidental filter would have hidden the next one.
 
 Validate against `sidplayfp` renders and a 6502 trace of the player (a ~90-line simulator over the
-handful of opcodes involved proves colour and note writes land on the same frame) _before_ pointing
+handful of opcodes involved proves color and note writes land on the same frame) _before_ pointing
 the instrument at hardware. Grade against published standards — ITU-R BT.1359-1 for A/V sync,
 BS.1770/EBU R128 for level — so the verdict means something outside this repo, and report median
 with IQR rather than a bare mean so one dropout cannot move the headline.

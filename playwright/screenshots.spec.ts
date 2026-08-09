@@ -195,7 +195,7 @@ const installHvscScreenshotMock = async (page: Page) => {
     const ensureNotCancelled = (cancelToken?: string) => {
       if (cancelToken && cancelTokens.has(cancelToken)) {
         state.ingestionState = "idle";
-        state.ingestionError = "Cancelled";
+        state.ingestionError = "Canceled";
         throw new Error("HVSC update cancelled");
       }
     };
@@ -251,7 +251,7 @@ const installHvscScreenshotMock = async (page: Page) => {
           cancelTokens.add(cancelToken);
         }
         state.ingestionState = "idle";
-        state.ingestionError = "Cancelled";
+        state.ingestionError = "Canceled";
       },
       ingestCachedHvsc: async () => buildStatus(),
       getHvscFolderListing: async ({ path }: { path: string }) => {
@@ -2433,6 +2433,28 @@ test.describe("App screenshots", () => {
     },
   );
 
+  test(
+    "capture screen colors screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      await page.goto("/");
+      await waitForConnected(page);
+
+      // The compact profile, because the sixteen swatches and the three targets are exactly the
+      // part of this control that has to survive the smallest screen the app supports.
+      await applyDisplayProfileViewport(page, "compact");
+      const row = getActiveMain(page).getByTestId("home-video-screen-colors");
+      await row.scrollIntoViewIfNeeded();
+      await waitForStableRender(page);
+      await captureScreenshot(page, testInfo, "home/screen-colors/01-video-card-row.png");
+
+      await row.click();
+      await expect(page.getByRole("dialog", { name: "Screen colors" })).toBeVisible();
+      await waitForStableRender(page);
+      await captureScreenshot(page, testInfo, "home/screen-colors/02-sheet.png");
+    },
+  );
+
   test("capture disks screenshots", { tag: "@screenshots" }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installListPreviewLimit(page, 3);
     await page.goto("/disks");
@@ -2774,7 +2796,7 @@ test.describe("App screenshots", () => {
     await installListPreviewLimit(page, 3);
     await page.goto("/play");
     await waitForConnected(page);
-    await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
     await expect(getActiveMain(page).getByTestId("playlist-list")).toContainText("intro.sid");
 
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -2891,7 +2913,7 @@ test.describe("App screenshots", () => {
       // C64 Commander - so those four are captured once per profile. The override is
       // written to localStorage, so it survives the `page.goto` calls further down.
       await applyDisplayProfileViewport(page, "compact");
-      await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
 
       // Open the stations launcher (song / style / taste seeds).
       const stationsLauncher = getActiveMain(page).getByTestId("sid-radio-launcher");
@@ -3071,7 +3093,7 @@ test.describe("App screenshots", () => {
         await page.getByTestId("tab-play").click();
         await expect(page).toHaveURL(/\/play$/);
         await waitForConnected(page);
-        await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
         await captureScreenshot(page, testInfo, profileScreenshotPath("play", profileId, "01-overview.png"));
 
         const viewAllDialog = await openViewAllIfPresent(page);
@@ -3093,7 +3115,7 @@ test.describe("App screenshots", () => {
       await seedArchiveSearchMock(page);
       await page.goto("/play");
       await waitForConnected(page);
-      await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
 
       const dialog = await openImportDialog(page);
       expect(dialog, "Add items dialog should open before capturing import screenshots").not.toBeNull();
@@ -3176,7 +3198,7 @@ test.describe("App screenshots", () => {
 
       await page.goto("/play");
       await waitForConnected(page);
-      await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
 
       const firstDialog = await openImportDialog(page);
       expect(firstDialog, "Add items dialog should open before capturing the first HVSC state").not.toBeNull();
@@ -3195,7 +3217,7 @@ test.describe("App screenshots", () => {
       await setHvscScreenshotMode(page, "ready");
       await page.reload({ waitUntil: "domcontentloaded" });
       await waitForConnected(page);
-      await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
 
       const readyDialog = await openImportDialog(page);
       expect(readyDialog, "Add items dialog should reopen before capturing the ready HVSC state").not.toBeNull();
@@ -3250,7 +3272,7 @@ test.describe("App screenshots", () => {
         await page.goto("/play");
         await applyDisplayProfileViewport(page, profileId);
         await waitForConnected(page);
-        await expect(page.getByRole("heading", { name: "Play Files" })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
 
         const dialog = await openImportDialog(page);
         expect(dialog, `Add items dialog should open for ${profileId} import screenshots`).not.toBeNull();

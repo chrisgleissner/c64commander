@@ -73,6 +73,17 @@ export type FtpWriteOptions = {
   traceContext?: NativeTraceContext;
 };
 
+export type FtpMakeDirectoryOptions = {
+  host: string;
+  port?: number;
+  username?: string;
+  password?: string;
+  path: string;
+  timeoutMs?: number;
+  connectTimeoutMs?: number;
+  traceContext?: NativeTraceContext;
+};
+
 export type FtpPingOptions = {
   host: string;
   port?: number;
@@ -89,6 +100,16 @@ export type FtpClientPlugin = {
   ) => Promise<{ entries: FtpEntry[]; partialFailures?: FtpRecursiveFailure[]; timedOut?: boolean }>;
   readFile: (options: FtpReadOptions) => Promise<{ data: string; sizeBytes?: number }>;
   writeFile: (options: FtpWriteOptions) => Promise<{ sizeBytes: number }>;
+  /**
+   * Creates one directory, and reports success when it already exists.
+   *
+   * The Ultimate only creates `/flash/data` the first time a palette is applied from its own file
+   * browser, so a device that has never done that has nowhere for the app to put a `.vpl` — and an
+   * `STOR` into a missing directory fails outright rather than creating it. "Already there" is not
+   * an error for any caller: every one of them wants the directory to exist afterwards, not to have
+   * been the one that made it.
+   */
+  makeDirectory: (options: FtpMakeDirectoryOptions) => Promise<{ created: boolean }>;
   pingFtp: (options: FtpPingOptions) => Promise<{ ok: boolean }>;
   /** Cancels an in-flight readFile identified by requestId (closes its data stream). */
   cancelRead: (options: { requestId: string }) => Promise<void>;
@@ -117,6 +138,7 @@ export const FtpClient: FtpClientPlugin = {
   listDirectoryRecursive: (options) => rawFtpClient.listDirectoryRecursive(withRuntimeFtpAuth(options)),
   readFile: (options) => rawFtpClient.readFile(withRuntimeFtpAuth(options)),
   writeFile: (options) => rawFtpClient.writeFile(withRuntimeFtpAuth(options)),
+  makeDirectory: (options) => rawFtpClient.makeDirectory(withRuntimeFtpAuth(options)),
   pingFtp: (options) => rawFtpClient.pingFtp(withRuntimeFtpAuth(options)),
   cancelRead: (options) => rawFtpClient.cancelRead(options),
   addListener: (eventName, listenerFunc) => rawFtpClient.addListener(eventName, listenerFunc),

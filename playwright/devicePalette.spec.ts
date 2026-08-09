@@ -9,12 +9,103 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { createMockC64Server, type ConfigItemState } from "../tests/mocks/mockC64Server";
 import { seedFtpConfig, startFtpTestServers } from "./ftpTestUtils";
-import { seedUiMocks } from "./uiMocks";
+import { seedUiMocks, uiFixtures } from "./uiMocks";
 import { assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from "./testArtifacts";
 import { saveCoverageFromPage } from "./withCoverage";
 
+/**
+ * The machine's palette, as the app reads it and as the app changes it.
+ *
+ * `U64 Specific Settings` / `Palette Definition` holds a bare FILENAME naming a `.vpl` inside
+ * `/flash/data`, which the FTP server spells `/Flash/data`. Reading the value as if it were a path
+ * is the defect these tests guard: it resolves nowhere on a real device, so the app paints the
+ * built-in palette while the row still claims to be following the C64. Every assertion on an FTP
+ * path below exists for that reason.
+ */
+
 const PALETTE_CATEGORY = "U64 Specific Settings";
 const PALETTE_ITEM = "Palette Definition";
+const PALETTE_ITEM_PATHNAME = "/v1/configs/U64%20Specific%20Settings/Palette%20Definition";
+
+const DEVICE_VPL = "device-palette.vpl";
+const DEVICE_VPL_PATH = `/Flash/data/${DEVICE_VPL}`;
+/** `# NAME:` of playwright/fixtures/ftp-root/Flash/data/device-palette.vpl. */
+const DEVICE_VPL_NAME = "U64 test palette";
+/** Colour index 2 of that fixture: `12 34 56`. */
+const DEVICE_VPL_COLOUR_2 = /rgb\(18, 52, 86\)/;
+/** Colour index 2 of the firmware's own palette, which the app renders as `Default`. */
+const FIRMWARE_COLOUR_2 = /rgb\(141, 47, 52\)/;
+/** Colour index 2 of the built-in `Monochrome` palette. */
+const MONOCHROME_COLOUR_2 = /rgb\(144, 144, 144\)/;
+
+type PaletteRequests = {
+  ftpReadPaths: string[];
+  ftpWritePaths: string[];
+  configWrites: string[];
+};
+
+/**
+ * Records the three things a palette change can touch, and keeps the writes off the fixture server.
+ *
+ * The mock FTP bridge implements `list`, `read` and `ping` only, so `write` and `mkdir` are answered
+ * here. That is also what makes the uploaded path observable, which is the point of tests 5 and 6.
+ *
+ * An uploaded file is kept and served back by the read route. Without that, the app writes a
+ * palette, selects it, and then reads a file the fixture FTP server has never heard of — which is
+ * an artefact of faking the upload rather than anything the app does wrong.
+ */
+const trackPaletteRequests = async (page: Page): Promise<PaletteRequests> => {
+  const requests: PaletteRequests = { ftpReadPaths: [], ftpWritePaths: [], configWrites: [] };
+  const uploaded = new Map<string, string>();
+
+  await page.route("**/v1/ftp/read", async (route) => {
+    const body = route.request().postDataJSON() as { path?: string } | null;
+    if (body?.path) requests.ftpReadPaths.push(body.path);
+    const stored = body?.path ? uploaded.get(body.path) : undefined;
+    if (stored === undefined) {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ data: stored, sizeBytes: Buffer.from(stored, "base64").length }),
+    });
+  });
+
+  await page.route("**/v1/ftp/write", async (route) => {
+    const body = route.request().postDataJSON() as { path?: string; data?: string } | null;
+    if (body?.path) {
+      requests.ftpWritePaths.push(body.path);
+      uploaded.set(body.path, body.data ?? "");
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ sizeBytes: Buffer.from(body?.data ?? "", "base64").length }),
+    });
+  });
+
+  await page.route("**/v1/ftp/mkdir", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ created: true }),
+    });
+  });
+
+  // A predicate rather than a glob: the write carries `?value=…`, and the pathname is percent
+  // encoded, so matching on the decoded pathname is the unambiguous form.
+  await page.route(
+    (url) => url.pathname === PALETTE_ITEM_PATHNAME,
+    async (route) => {
+      const request = route.request();
+      if (request.method() === "PUT") {
+        requests.configWrites.push(new URL(request.url()).searchParams.get("value") ?? "");
+      }
+      await route.continue();
+    },
+  );
+
+  return requests;
+};
 
 test.describe("device VIC palette", () => {
   let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
@@ -38,14 +129,11 @@ test.describe("device VIC palette", () => {
     }
   });
 
-  const start = async (page: Page, palette: string) => {
-    const state: Record<string, Record<string, ConfigItemState>> = {
-      [PALETTE_CATEGORY]: {
-        [PALETTE_ITEM]: {
-          value: palette,
-          details: { presets: ["", "/Usb0/Demos/device-palette.vpl"] },
-        },
-      },
+  const start = async (page: Page, palette: string, presets: string[] = ["", DEVICE_VPL]) => {
+    const state = JSON.parse(JSON.stringify(uiFixtures.configState)) as Record<string, Record<string, ConfigItemState>>;
+    state[PALETTE_CATEGORY] = {
+      ...(state[PALETTE_CATEGORY] ?? {}),
+      [PALETTE_ITEM]: { value: palette, details: { presets } },
     };
     server = await createMockC64Server(state);
     await seedFtpConfig(page, {
@@ -56,134 +144,159 @@ test.describe("device VIC palette", () => {
     await seedUiMocks(page, server.baseUrl);
   };
 
-  test("uses the configured VPL automatically and keeps a manual override", async ({ page }, testInfo) => {
-    await startStrictUiMonitoring(page, testInfo);
-    await start(page, "/Usb0/Demos/device-palette.vpl");
-    await page.goto("/settings");
+  const screenColorsRow = (page: Page) => page.getByTestId("home-video-screen-colors");
+  /**
+   * Where the palette came from sits on its own line, not appended to the name.
+   *
+   * Appending it truncated on the compact profile — the row read "Default (from…", losing the one
+   * thing the suffix existed to say — so the origin moved to a line of its own.
+   */
+  const followingLine = (page: Page) => page.getByTestId("home-video-screen-colors-following");
+  const homeSwatch = (page: Page, index: number) =>
+    page.getByTestId(`home-video-screen-colors-preview-swatch-${index}`);
 
-    const palette = page.getByTestId("settings-vic-palette");
-    await expect(palette).toContainText("Device palette");
-    await expect(page.getByTestId("settings-vic-palette-description")).toContainText(
-      "Test palette supplied by the configured U64 VPL",
+  const openSheet = async (page: Page) => {
+    const row = screenColorsRow(page);
+    await row.scrollIntoViewIfNeeded();
+    await row.click();
+    await expect(page.getByTestId("screen-colors-target")).toBeVisible();
+  };
+
+  const closeSheet = async (page: Page) => {
+    await page.getByTestId("screen-colors-close").click();
+    await expect(page.getByTestId("screen-colors-target")).toBeHidden();
+  };
+
+  test("paints the palette the C64 is set to, read from /Flash/data", async ({ page }, testInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    await start(page, DEVICE_VPL);
+    const requests = await trackPaletteRequests(page);
+    await page.goto("/");
+
+    // The row names the device's palette and says where the name came from.
+    await expect(screenColorsRow(page)).toContainText(DEVICE_VPL_NAME);
+    await expect(followingLine(page)).toHaveText("Following the C64");
+    await expect(homeSwatch(page, 2)).toHaveAttribute("style", DEVICE_VPL_COLOUR_2);
+
+    // The regression: `Palette Definition` is a filename, and only `/Flash/data/<filename>` reads it.
+    expect(requests.ftpReadPaths).toContain(DEVICE_VPL_PATH);
+    expect(requests.ftpReadPaths.filter((path) => path.endsWith(DEVICE_VPL))).toEqual([DEVICE_VPL_PATH]);
+  });
+
+  test("falls back to Default without any FTP read when the C64 has no palette file", async ({ page }, testInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    await start(page, "", [""]);
+    const requests = await trackPaletteRequests(page);
+    await page.goto("/");
+
+    await expect(screenColorsRow(page)).toContainText("Default");
+    await expect(followingLine(page)).toHaveText("Following the C64");
+    await expect(homeSwatch(page, 2)).toHaveAttribute("style", FIRMWARE_COLOUR_2);
+    expect(requests.ftpReadPaths).toEqual([]);
+  });
+
+  test("falls back to Default when the named palette file cannot be read", async ({ page }, testInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    await start(page, "missing-palette.vpl", ["", "missing-palette.vpl"]);
+    const requests = await trackPaletteRequests(page);
+    await page.unroute("**/v1/ftp/read");
+    await page.route("**/v1/ftp/read", async (route) => {
+      const body = route.request().postDataJSON() as { path?: string } | null;
+      if (body?.path) requests.ftpReadPaths.push(body.path);
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({}) });
+    });
+    await page.goto("/");
+
+    await expect(screenColorsRow(page)).toContainText("Default");
+    await expect(followingLine(page)).toHaveText("Following the C64");
+    await expect(homeSwatch(page, 2)).toHaveAttribute("style", FIRMWARE_COLOUR_2);
+    await expect.poll(() => requests.ftpReadPaths).toContain("/Flash/data/missing-palette.vpl");
+  });
+
+  test("the Local target changes this device only", async ({ page }, testInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    await start(page, DEVICE_VPL);
+    const requests = await trackPaletteRequests(page);
+    await page.goto("/");
+    await expect(homeSwatch(page, 2)).toHaveAttribute("style", DEVICE_VPL_COLOUR_2);
+
+    await openSheet(page);
+    await page.getByTestId("screen-colors-local").click();
+    await expect(page.getByTestId("screen-colors-target-hint")).toContainText("The C64 is not touched");
+    // Nothing is being sent to the machine, so the note about copying a file to flash is not shown.
+    await expect(page.getByTestId("screen-colors-install-note")).toBeHidden();
+
+    await page.getByTestId("screen-colors-palette-monochrome").click();
+    await expect(page.getByTestId("screen-colors-palette-monochrome")).toHaveAttribute("aria-pressed", "true");
+    await closeSheet(page);
+
+    await expect(screenColorsRow(page)).toContainText("Monochrome");
+    // Pinned to this device, so the row must stop claiming to follow the machine.
+    await expect(followingLine(page)).toHaveCount(0);
+    await expect(homeSwatch(page, 2)).toHaveAttribute("style", MONOCHROME_COLOUR_2);
+
+    expect(requests.configWrites).toEqual([]);
+    expect(requests.ftpWritePaths).toEqual([]);
+  });
+
+  test("the Remote target uploads the .vpl and selects it by filename", async ({ page }, testInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    await start(page, DEVICE_VPL);
+    const requests = await trackPaletteRequests(page);
+    await page.goto("/");
+    await expect(homeSwatch(page, 2)).toHaveAttribute("style", DEVICE_VPL_COLOUR_2);
+
+    await openSheet(page);
+    await page.getByTestId("screen-colors-remote").click();
+    await expect(page.getByTestId("screen-colors-target-hint")).toContainText("the television changes too");
+    await expect(page.getByTestId("screen-colors-install-note")).toBeVisible();
+
+    await page.getByTestId("screen-colors-palette-monochrome").click();
+
+    // The file goes into the directory the firmware reads palettes from...
+    await expect.poll(() => requests.ftpWritePaths).toEqual(["/Flash/data/monochrome.vpl"]);
+    // ...and the config item names it, bare, with no path in front of it.
+    await expect.poll(() => requests.configWrites).toEqual(["monochrome.vpl"]);
+
+    // Reading the machine back closes the loop: the app is still following the C64, and the palette
+    // it now finds there is the one it just uploaded.
+    await closeSheet(page);
+    await expect(screenColorsRow(page)).toContainText("Monochrome");
+    await expect(followingLine(page)).toHaveText("Following the C64");
+    await expect(homeSwatch(page, 2)).toHaveAttribute("style", MONOCHROME_COLOUR_2);
+    expect(requests.ftpReadPaths).toContain("/Flash/data/monochrome.vpl");
+  });
+
+  test("selecting Default clears the config item and uploads nothing", async ({ page }, testInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    await start(page, DEVICE_VPL);
+    const requests = await trackPaletteRequests(page);
+    await page.goto("/");
+    await expect(homeSwatch(page, 2)).toHaveAttribute("style", DEVICE_VPL_COLOUR_2);
+
+    await openSheet(page);
+    await page.getByTestId("screen-colors-remote").click();
+    await page.getByTestId("screen-colors-palette-default").click();
+
+    // The firmware's own palette needs no file, so an empty value is the whole change.
+    await expect.poll(() => requests.configWrites).toEqual([""]);
+    expect(requests.ftpWritePaths).toEqual([]);
+  });
+
+  test("offers the palettes already installed on the C64", async ({ page }, testInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    await start(page, "", ["", DEVICE_VPL]);
+    await trackPaletteRequests(page);
+    await page.goto("/");
+
+    await openSheet(page);
+    const installed = page.getByTestId("screen-colors-device-palettes");
+    await expect(installed).toBeVisible();
+    await expect(installed.getByTestId(`screen-colors-palette-device:${DEVICE_VPL}`)).toBeVisible();
+    await expect(installed).toContainText(DEVICE_VPL_NAME);
+    await expect(installed.getByTestId(`screen-colors-palette-device:${DEVICE_VPL}-strip-swatch-2`)).toHaveAttribute(
+      "style",
+      DEVICE_VPL_COLOUR_2,
     );
-    await expect(page.getByTestId("settings-vic-palette-swatch-2")).toHaveAttribute("style", /rgb\(18, 52, 86\)/);
-
-    await palette.click();
-    await page.getByRole("option", { name: "Monochrome" }).click();
-    await expect(page.getByTestId("settings-vic-palette-description")).toContainText("Classic monochrome");
-    await expect(page.getByTestId("settings-vic-palette-swatch-2")).toHaveAttribute("style", /rgb\(144, 144, 144\)/);
-  });
-
-  test("refreshes the configured VPL when automatic mode is re-enabled", async ({ page }, testInfo) => {
-    await startStrictUiMonitoring(page, testInfo);
-    await start(page, "/Usb0/Demos/device-palette.vpl");
-    const updatedVpl = `# NAME: Updated device palette
-# DESC: Updated after returning to automatic mode
-00 00 00
-f7 f7 f7
-12 34 56
-6a d4 cd
-98 35 a4
-4c b4 42
-2c 29 b1
-ef ef 5d
-98 4e 20
-5b 38 00
-d1 67 6d
-4a 4a 4a
-7b 7b 7b
-9f ef 93
-6d 6a ef
-b2 b2 b2`;
-    let ftpReads = 0;
-    let useUpdatedVpl = false;
-    await page.route("**/v1/ftp/read", async (route) => {
-      ftpReads += 1;
-      if (!useUpdatedVpl) {
-        await route.continue();
-        return;
-      }
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({ data: Buffer.from(updatedVpl).toString("base64"), sizeBytes: updatedVpl.length }),
-      });
-    });
-    await page.goto("/settings");
-
-    const palette = page.getByTestId("settings-vic-palette");
-    await expect(page.getByTestId("settings-vic-palette-description")).toContainText(
-      "Test palette supplied by the configured U64 VPL",
-    );
-    await expect.poll(() => ftpReads).toBe(1);
-
-    await palette.click();
-    await page.getByRole("option", { name: "Monochrome" }).click();
-    useUpdatedVpl = true;
-    await palette.click();
-    await page.getByRole("option", { name: "Device palette (automatic)" }).click();
-
-    await expect(page.getByTestId("settings-vic-palette-description")).toContainText(
-      "Updated after returning to automatic mode",
-    );
-    await expect(page.getByTestId("settings-vic-palette-swatch-2")).toHaveAttribute("style", /rgb\(18, 52, 86\)/);
-    await expect.poll(() => ftpReads).toBe(2);
-  });
-
-  test("falls back to Default without FTP when no VPL is selected", async ({ page }, testInfo) => {
-    await startStrictUiMonitoring(page, testInfo);
-    await start(page, "");
-    let ftpReads = 0;
-    await page.route("**/v1/ftp/read", async (route) => {
-      ftpReads += 1;
-      await route.continue();
-    });
-    await page.goto("/settings");
-
-    await expect(page.getByTestId("settings-vic-palette")).toContainText("Device palette");
-    await expect(page.getByTestId("settings-vic-palette-description")).toContainText("C64 Ultimate Default Palette");
-    await expect(page.getByTestId("settings-vic-palette-swatch-2")).toHaveAttribute("style", /rgb\(141, 47, 52\)/);
-    expect(ftpReads).toBe(0);
-  });
-
-  test("falls back to the firmware default without FTP when its palette setting cannot be determined", async ({
-    page,
-  }, testInfo) => {
-    await startStrictUiMonitoring(page, testInfo);
-    await start(page, "/Usb0/Demos/device-palette.vpl");
-    let ftpReads = 0;
-    await page.route("**/v1/ftp/read", async (route) => {
-      ftpReads += 1;
-      await route.continue();
-    });
-    await page.route("**/v1/configs/U64%20Specific%20Settings/Palette%20Definition", async (route) => {
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({}),
-      });
-    });
-    await page.goto("/settings");
-
-    await expect(page.getByTestId("settings-vic-palette-description")).toContainText("C64 Ultimate Default Palette");
-    await expect(page.getByTestId("settings-vic-palette-swatch-2")).toHaveAttribute("style", /rgb\(141, 47, 52\)/);
-    expect(ftpReads).toBe(0);
-  });
-
-  test("falls back to Default when the configured VPL cannot be retrieved", async ({ page }, testInfo) => {
-    await startStrictUiMonitoring(page, testInfo);
-    await start(page, "/Usb0/Demos/missing-palette.vpl");
-    let ftpReads = 0;
-    await page.route("**/v1/ftp/read", async (route) => {
-      ftpReads += 1;
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({}),
-      });
-    });
-    await page.goto("/settings");
-
-    await expect(page.getByTestId("settings-vic-palette")).toContainText("Device palette");
-    await expect(page.getByTestId("settings-vic-palette-description")).toContainText("C64 Ultimate Default Palette");
-    await expect(page.getByTestId("settings-vic-palette-swatch-2")).toHaveAttribute("style", /rgb\(141, 47, 52\)/);
-    await expect.poll(() => ftpReads).toBe(1);
   });
 });

@@ -531,8 +531,8 @@ export function DriveManager({
           <DialogHeader>
             <DialogTitle>
               {statusDetailsDialog
-                ? `${statusDetailsDialog.driveLabel}: ${statusDetailsDialog.status.message ?? "DOS Status"}`
-                : "DOS Status"}
+                ? `${statusDetailsDialog.driveLabel}: ${statusDetailsDialog.status.message ?? "DOS status"}`
+                : "DOS status"}
             </DialogTitle>
             <DialogDescription>
               {statusDetailsDialog && statusDetailsDialog.status.code !== null

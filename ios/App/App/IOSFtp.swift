@@ -50,6 +50,7 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "listDirectory", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "readFile", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "writeFile", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "makeDirectory", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pingFtp", returnType: CAPPluginReturnPromise),
     ]
 
@@ -149,6 +150,43 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
             } catch {
                 let details = FtpRequestOptions.failureDetails(for: call, operation: "writeFile")
                 IOSDiagnostics.log(.error, "FTP writeFile failed", details: details, error: error)
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
+
+    @objc public func makeDirectory(_ call: CAPPluginCall) {
+        queue.async {
+            do {
+                var options = try FtpRequestOptions(call: call)
+                guard let explicitPath = call.getString("path"), !explicitPath.isEmpty else {
+                    throw NativePluginError.invalidArgument("path is required")
+                }
+                options = FtpRequestOptions(
+                    host: options.host,
+                    port: options.port,
+                    username: options.username,
+                    password: options.password,
+                    path: explicitPath,
+                    timeout: options.timeout,
+                    connectTimeout: options.connectTimeout,
+                    traceDetails: options.traceDetails
+                )
+
+                let session = FtpSession(
+                    host: options.host,
+                    port: options.port,
+                    timeout: options.timeout,
+                    connectTimeout: options.connectTimeout
+                )
+                defer { session.disconnect() }
+                try session.connect()
+                try session.login(username: options.username, password: options.password)
+                let created = try session.makeDirectory(path: options.path)
+                call.resolve(["created": created])
+            } catch {
+                let details = FtpRequestOptions.failureDetails(for: call, operation: "makeDirectory")
+                IOSDiagnostics.log(.error, "FTP makeDirectory failed", details: details, error: error)
                 call.reject(error.localizedDescription)
             }
         }
@@ -357,6 +395,28 @@ final class FtpSession {
         try dataSession.writeAllBytes(data)
         dataSession.disconnect()
         _ = try readResponse(expectPrefix: [226, 250])
+    }
+
+    /// Creates exactly one directory at `path`.
+    ///
+    /// Returns `true` when the server created it, and `false` when it was
+    /// already there — a pre-existing directory is the state the caller wants,
+    /// not a failure. A failed MKD is followed by a CWD probe: a CWD that
+    /// succeeds proves the path is a directory, while anything else (permission
+    /// denied, an existing FILE at that path) throws with the server's own MKD
+    /// reply.
+    func makeDirectory(path: String) throws -> Bool {
+        let response = try sendAndRead("MKD \(path)")
+        if response.code == 257 || response.code == 250 {
+            return true
+        }
+
+        let probe = try sendAndRead("CWD \(path)")
+        if probe.code == 250 || probe.code == 200 {
+            return false
+        }
+
+        throw NativePluginError.operationFailed(response.message)
     }
 
     private func listDirectory(path: String, command: String) throws -> [FtpEntry] {
