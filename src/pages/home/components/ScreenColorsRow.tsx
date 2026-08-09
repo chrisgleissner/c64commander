@@ -71,11 +71,15 @@ export function ScreenColorsRow({
       <PaletteSwatchStrip palette={palette} height="h-5" testId="home-video-screen-colors-preview" />
       {/* Where the palette came from goes on its own line rather than after the name. Appended to
           the name it was the first thing to be truncated away on a narrow screen, which left the row
-          saying "Default (from…" — the one part a suffix exists to convey. */}
+          saying "Default (from…" — the one part a suffix exists to convey.
+
+          A span at the card's own size, not a smaller paragraph. Every other label in this card is
+          a span, and shrinking a caption to make it fit a narrow screen is the thing the smallest-
+          screen legibility floor exists to stop. */}
       {following ? (
-        <p className="text-[0.7rem] text-muted-foreground" data-testid="home-video-screen-colors-following">
+        <span className="block text-muted-foreground" data-testid="home-video-screen-colors-following">
           Following the C64
-        </p>
+        </span>
       ) : null}
       {/* Mounted only once opened. The sheet reads the machine's palette list, and Home should not
           carry that work — or the hooks behind it — for a row nobody has tapped. */}

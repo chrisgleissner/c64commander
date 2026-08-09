@@ -145,6 +145,13 @@ test.describe("device VIC palette", () => {
   };
 
   const screenColorsRow = (page: Page) => page.getByTestId("home-video-screen-colors");
+  /**
+   * Where the palette came from sits on its own line, not appended to the name.
+   *
+   * Appending it truncated on the compact profile — the row read "Default (from…", losing the one
+   * thing the suffix existed to say — so the origin moved to a line of its own.
+   */
+  const followingLine = (page: Page) => page.getByTestId("home-video-screen-colors-following");
   const homeSwatch = (page: Page, index: number) =>
     page.getByTestId(`home-video-screen-colors-preview-swatch-${index}`);
 
@@ -167,7 +174,8 @@ test.describe("device VIC palette", () => {
     await page.goto("/");
 
     // The row names the device's palette and says where the name came from.
-    await expect(screenColorsRow(page)).toContainText(`${DEVICE_VPL_NAME} (from C64)`);
+    await expect(screenColorsRow(page)).toContainText(DEVICE_VPL_NAME);
+    await expect(followingLine(page)).toHaveText("Following the C64");
     await expect(homeSwatch(page, 2)).toHaveAttribute("style", DEVICE_VPL_COLOUR_2);
 
     // The regression: `Palette Definition` is a filename, and only `/Flash/data/<filename>` reads it.
@@ -181,7 +189,8 @@ test.describe("device VIC palette", () => {
     const requests = await trackPaletteRequests(page);
     await page.goto("/");
 
-    await expect(screenColorsRow(page)).toContainText("Default (from C64)");
+    await expect(screenColorsRow(page)).toContainText("Default");
+    await expect(followingLine(page)).toHaveText("Following the C64");
     await expect(homeSwatch(page, 2)).toHaveAttribute("style", FIRMWARE_COLOUR_2);
     expect(requests.ftpReadPaths).toEqual([]);
   });
@@ -198,7 +207,8 @@ test.describe("device VIC palette", () => {
     });
     await page.goto("/");
 
-    await expect(screenColorsRow(page)).toContainText("Default (from C64)");
+    await expect(screenColorsRow(page)).toContainText("Default");
+    await expect(followingLine(page)).toHaveText("Following the C64");
     await expect(homeSwatch(page, 2)).toHaveAttribute("style", FIRMWARE_COLOUR_2);
     await expect.poll(() => requests.ftpReadPaths).toContain("/Flash/data/missing-palette.vpl");
   });
@@ -221,7 +231,8 @@ test.describe("device VIC palette", () => {
     await closeSheet(page);
 
     await expect(screenColorsRow(page)).toContainText("Monochrome");
-    await expect(screenColorsRow(page)).not.toContainText("(from C64)");
+    // Pinned to this device, so the row must stop claiming to follow the machine.
+    await expect(followingLine(page)).toHaveCount(0);
     await expect(homeSwatch(page, 2)).toHaveAttribute("style", MONOCHROME_COLOUR_2);
 
     expect(requests.configWrites).toEqual([]);
@@ -250,7 +261,8 @@ test.describe("device VIC palette", () => {
     // Reading the machine back closes the loop: the app is still following the C64, and the palette
     // it now finds there is the one it just uploaded.
     await closeSheet(page);
-    await expect(screenColorsRow(page)).toContainText("Monochrome (from C64)");
+    await expect(screenColorsRow(page)).toContainText("Monochrome");
+    await expect(followingLine(page)).toHaveText("Following the C64");
     await expect(homeSwatch(page, 2)).toHaveAttribute("style", MONOCHROME_COLOUR_2);
     expect(requests.ftpReadPaths).toContain("/Flash/data/monochrome.vpl");
   });
