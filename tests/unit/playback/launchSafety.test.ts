@@ -73,8 +73,14 @@ describe("launchSafety — withCartridgeParked", () => {
     await expect(withCartridgeParked(api as never, run)).resolves.toBe(42);
 
     expect(order).toEqual(["set:<empty>", "run", "set:Retro Replay"]);
-    expect(api.setConfigValue).toHaveBeenNthCalledWith(1, CART_CATEGORY, CART_ITEM, "");
-    expect(api.setConfigValue).toHaveBeenNthCalledWith(2, CART_CATEGORY, CART_ITEM, "Retro Replay");
+    // Both writes are marked transient. Parking is a workaround the app intends to undo, so if the
+    // user has asked for device settings to be kept, an empty cartridge must not be what gets kept.
+    expect(api.setConfigValue).toHaveBeenNthCalledWith(1, CART_CATEGORY, CART_ITEM, "", {
+      __c64uTransientConfigWrite: true,
+    });
+    expect(api.setConfigValue).toHaveBeenNthCalledWith(2, CART_CATEGORY, CART_ITEM, "Retro Replay", {
+      __c64uTransientConfigWrite: true,
+    });
   });
 
   it("restores the cartridge even when the run throws", async () => {
@@ -84,8 +90,12 @@ describe("launchSafety — withCartridgeParked", () => {
     });
     await expect(withCartridgeParked(api as never, run)).rejects.toThrow("launch boom");
     // parked then restored
-    expect(api.setConfigValue).toHaveBeenNthCalledWith(1, CART_CATEGORY, CART_ITEM, "");
-    expect(api.setConfigValue).toHaveBeenNthCalledWith(2, CART_CATEGORY, CART_ITEM, "Action Replay");
+    expect(api.setConfigValue).toHaveBeenNthCalledWith(1, CART_CATEGORY, CART_ITEM, "", {
+      __c64uTransientConfigWrite: true,
+    });
+    expect(api.setConfigValue).toHaveBeenNthCalledWith(2, CART_CATEGORY, CART_ITEM, "Action Replay", {
+      __c64uTransientConfigWrite: true,
+    });
   });
 
   it.each(["", "None", "none", "  none  "])("does not write when the value means none (%j)", async (value) => {

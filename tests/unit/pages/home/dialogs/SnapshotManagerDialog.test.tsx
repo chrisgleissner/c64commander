@@ -186,7 +186,7 @@ describe("SnapshotManagerDialog – type filter", () => {
     renderDialog([...SNAPSHOTS, REU_SNAPSHOT]);
     fireEvent.click(screen.getByTestId("snapshot-filter-type-reu"));
     expect(screen.getAllByTestId("snapshot-row")).toHaveLength(1);
-    expect(screen.getByText("REU Snapshot")).toBeInTheDocument();
+    expect(screen.getByText("REU snapshot")).toBeInTheDocument();
     expect(screen.getByText("capture.reu")).toBeInTheDocument();
   });
 

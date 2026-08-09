@@ -38,6 +38,7 @@ import { PrinterManager } from "./home/components/PrinterManager";
 import { LightingSummaryCard } from "./home/components/LightingSummaryCard";
 import { UserInterfaceSummaryCard } from "./home/components/UserInterfaceSummaryCard";
 import { SummaryConfigCard, SummaryConfigControlRow } from "./home/components/SummaryConfigCard";
+import { ScreenColorsRow } from "./home/components/ScreenColorsRow";
 import { PowerOffDialog } from "./home/dialogs/PowerOffDialog";
 import { SaveConfigDialog } from "./home/dialogs/SaveConfigDialog";
 import { LoadConfigDialog } from "./home/dialogs/LoadConfigDialog";
@@ -1112,7 +1113,7 @@ function HomePageContent() {
 
   const ramDumpFolderCard = (
     <div className="flex items-center gap-2 text-sm" data-testid="home-ram-folder-row">
-      <span className="text-muted-foreground">RAM Folder:</span>
+      <span className="text-muted-foreground">RAM folder:</span>
       <Button
         variant="ghost"
         size="sm"
@@ -1511,6 +1512,10 @@ function HomePageContent() {
                   focusId="home-video-summary"
                   focusOrder={520}
                 >
+                  {/* First in the card: the one row here that people actually change. It needs no
+                      device connection to work — the app's own palette is a local rendering choice
+                      — so it stays usable when the rest of the card is disabled. */}
+                  <ScreenColorsRow focusParentId="home-video-summary" focusOrder={5} />
                   <SummaryConfigControlRow
                     controlType="select"
                     disabled={!isActive || videoModePending}
@@ -1632,7 +1637,7 @@ function HomePageContent() {
                 <div data-testid="home-lighting-group">
                   <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border/60 bg-card/50 p-3">
                     <div className="space-y-2">
-                      <SectionHeader title="LED LIGHTING" className="pt-0" />
+                      <SectionHeader title="LED lighting" className="pt-0" />
                       {lightingStudioEnabled ? (
                         <div className="flex flex-wrap gap-2 text-xs">
                           <span
@@ -1848,7 +1853,7 @@ function HomePageContent() {
               <QuickActionCard
                 icon={Upload}
                 label="Save"
-                description="To App"
+                description="To app"
                 variant="success"
                 dataTestId="home-config-save-app"
                 focusId="home-config-save-app"
@@ -1860,7 +1865,7 @@ function HomePageContent() {
               <QuickActionCard
                 icon={Download}
                 label="Load"
-                description="From App"
+                description="From app"
                 dataTestId="home-config-load-app"
                 focusId="home-config-load-app"
                 focusOrder={640}
@@ -1881,7 +1886,7 @@ function HomePageContent() {
               <QuickActionCard
                 icon={FolderOpen}
                 label="Manage"
-                description="App Configs"
+                description="App configs"
                 dataTestId="home-config-manage-app"
                 focusId="home-config-manage-app"
                 focusOrder={660}
@@ -1892,7 +1897,7 @@ function HomePageContent() {
                 <QuickActionCard
                   icon={Download}
                   label="Save"
-                  description={saveConfigDisabledReason ?? "To File"}
+                  description={saveConfigDisabledReason ?? "To file"}
                   dataTestId="home-config-save-file"
                   focusId="home-config-save-file"
                   focusOrder={670}
@@ -1905,7 +1910,7 @@ function HomePageContent() {
                 <QuickActionCard
                   icon={Download}
                   label="Load"
-                  description="From File"
+                  description="From file"
                   dataTestId="home-config-load-file"
                   focusId="home-config-load-file"
                   focusOrder={680}
@@ -1918,7 +1923,7 @@ function HomePageContent() {
                 <QuickActionCard
                   icon={Trash2}
                   label="Clear Flash"
-                  description={clearFlashDisabledReason ?? "Factory Reset"}
+                  description={clearFlashDisabledReason ?? "Factory reset"}
                   variant="danger"
                   dataTestId="home-config-clear-flash"
                   focusId="home-config-clear-flash"

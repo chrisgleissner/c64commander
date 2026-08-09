@@ -317,7 +317,7 @@ export default function DeviceSwitchLabPage() {
               onClick={() => clearSavedDeviceSwitchMetrics()}
               disabled={running}
             >
-              Clear Metrics
+              Clear metrics
             </Button>
           </div>
         </div>
@@ -400,14 +400,14 @@ export default function DeviceSwitchLabPage() {
                 onClick={() => void runDirectedSwitch(fromDeviceId)}
                 disabled={running || !fromDeviceId}
               >
-                Switch To From Device
+                Switch to from device
               </Button>
               <Button
                 type="button"
                 onClick={() => void runDirectedSwitch(toDeviceId)}
                 disabled={running || !toDeviceId}
               >
-                Switch To To Device
+                Switch to to device
               </Button>
               <Button
                 type="button"
@@ -435,7 +435,7 @@ export default function DeviceSwitchLabPage() {
           </section>
 
           <section className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">Latency Summary</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">Latency summary</h2>
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-xl border border-white/10 bg-slate-950/70 p-3">
                 <dt className="text-slate-400">Transitions</dt>
@@ -467,7 +467,7 @@ export default function DeviceSwitchLabPage() {
 
         <section className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">Structured Result</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">Structured result</h2>
             <span className="text-xs text-slate-400">Also emitted as C64_SWITCH_LAB_RESULT in console/logcat</span>
           </div>
           <pre

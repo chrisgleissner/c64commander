@@ -258,6 +258,58 @@ class MockFtpServer(
           }
           send("226 Transfer complete")
         }
+        "STOR" -> {
+          if (!requireLogin()) return
+          val target = argument?.takeIf { it.isNotBlank() }?.let { resolvePath(it) } ?: ""
+          val file = resolveFile(target)
+          if (file == null || file.isDirectory || file.parentFile?.isDirectory != true) {
+            send("550 File not found")
+            return
+          }
+          send("150 Opening data connection")
+          withDataSocket { dataSocket ->
+            file.outputStream().use { output ->
+              val input = dataSocket.getInputStream()
+              val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+              while (true) {
+                val read = input.read(buffer)
+                if (read <= 0) break
+                output.write(buffer, 0, read)
+              }
+              output.flush()
+            }
+          }
+          send("226 Transfer complete")
+        }
+        "MKD", "XMKD" -> {
+          if (!requireLogin()) return
+          val raw = argument?.takeIf { it.isNotBlank() }
+          if (raw == null) {
+            send("550 Directory name required")
+            return
+          }
+          val target = resolvePath(raw)
+          val file = resolveFile(target)
+          if (file == null) {
+            send("550 Directory not found")
+            return
+          }
+          if (file.exists()) {
+            // A real server rejects MKD on any existing path. The client then
+            // probes with CWD to tell "already a directory" (success as far as
+            // the caller is concerned) from a genuine clash with a file, so both
+            // cases must fail here rather than the directory case reporting 257.
+            send(if (file.isDirectory) "550 Directory already exists" else "550 File already exists")
+            return
+          }
+          // mkdir(), not mkdirs(): MKD creates exactly one directory and fails
+          // when the parent is missing, which is what the client expects.
+          if (file.mkdir()) {
+            send("257 \"$target\" created")
+          } else {
+            send("550 Failed to create directory")
+          }
+        }
         "QUIT" -> {
           send("221 Goodbye")
           isClosed = true

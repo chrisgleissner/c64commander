@@ -383,8 +383,8 @@ export function DeviceDiscoveryInterstitial() {
   const passwordConfirmLabel = manualPasswordTarget
     ? "Connect"
     : passwordIntent?.action === "save"
-      ? "Save Device"
-      : "Use Device";
+      ? "Save device"
+      : "Use device";
 
   return (
     <Dialog

@@ -195,7 +195,7 @@ export const HvscSearchSheet = ({
           {showIntro ? (
             <SheetDescription>
               {stationActive
-                ? "Search the whole of HVSC by title or composer. The station keeps its place and carries on afterwards."
+                ? "Search the whole of HVSC by title or composer. The station keeps its place and carries on afterward."
                 : "Search the whole of HVSC by title or composer."}
             </SheetDescription>
           ) : (

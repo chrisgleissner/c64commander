@@ -39,7 +39,7 @@ describe("PlaybackSettingsPanel", () => {
     );
 
     expect(screen.getByTestId("songlengths-path-label")).toBeInTheDocument();
-    expect(screen.getByText("1024 Entries, 240 KB")).toBeInTheDocument();
+    expect(screen.getByText("1024 entries, 240 KB")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Change" })).toBeInTheDocument();
   });
 

@@ -71,7 +71,7 @@ test("Small Display 480x640 profile supports core interactions without overflow"
 
     const tabs = [
       { id: "tab-home", url: /\//, heading: "Home" },
-      { id: "tab-play", url: /\/play/, heading: "Play Files" },
+      { id: "tab-play", url: /\/play/, heading: "Play files" },
       { id: "tab-disks", url: /\/disks/, heading: "Disks" },
       { id: "tab-config", url: /\/config/, heading: "Config" },
       { id: "tab-settings", url: /\/settings/, heading: "Settings" },

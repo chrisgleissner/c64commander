@@ -12,11 +12,11 @@ env:
 # toggle mute/unmute several times, and verify the final state is consistent.
 - runFlow: subflows/launch-and-wait.yaml
 
-# Navigate to the Play Files tab
+# Navigate to the Play files tab
 - tapOn:
     point: "75%,95%"
 - extendedWaitUntil:
-    visible: "Play Files"
+    visible: "Play files"
     timeout: ${TIMEOUT}
 
 # Assert the playback volume controls are visible (connected + playing assumed in this flow)

@@ -30,6 +30,7 @@ import {
   validateConfigBatchWrite,
   validateConfigWrite,
 } from "@/lib/config/validateConfigWrite";
+import { noteConfigWritten, notePersistedToFlash } from "@/lib/config/configFlashPersistence";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
@@ -907,6 +908,15 @@ type C64ReadRequestOptions = RequestInit & {
   __c64uBypassCooldown?: boolean;
   __c64uBypassBackoff?: boolean;
   __c64uBypassCircuit?: boolean;
+  /**
+   * A config write the app intends to UNDO, so it must not be persisted to flash.
+   *
+   * Two callers set a config item, do something, and then set it back: the launch-safety cartridge
+   * swap and the health-check probe. Their intermediate value is not a setting the user chose, and
+   * if the restore never happened — the device dropped out mid-sequence — writing it to flash would
+   * make a transient workaround permanent.
+   */
+  __c64uTransientConfigWrite?: boolean;
   /**
    * An explicit, user-forced probe (the Diagnostics "Run health check" button).
    * Implies every bypass flag AND overrides the device-state gate, so it always
@@ -2356,6 +2366,10 @@ export class C64API {
     );
     this.assertConfigWriteAccepted(response as { errors?: string[] }, { category, item, value: resolvedValue });
     this.setCachedConfigValue(category, item, resolvedValue);
+    // The device has now EFFECTUATED this value but has not written it to flash — that needs a
+    // separate `save_to_flash`, which is what this arms. Only after the write was accepted: a
+    // rejected write left nothing to persist.
+    if (!options.__c64uTransientConfigWrite) noteConfigWritten(() => this.saveConfig({ __c64uIntent: "user" }));
     return response;
   }
 
@@ -2370,6 +2384,7 @@ export class C64API {
       this.request("/v1/configs:save_to_flash", { method: "PUT", ...options }),
     )) as { errors: string[] };
     this.assertConfigWriteAccepted(response, { category: "flash-save" });
+    notePersistedToFlash();
     return response;
   }
 
@@ -2460,6 +2475,7 @@ export class C64API {
         });
       });
       errors.push(...(response.errors ?? []));
+      noteConfigWritten(() => this.saveConfig({ __c64uIntent: "user" }));
     }
     return { errors };
   }

@@ -47,7 +47,7 @@ test.describe("Fuzz structured recovery", () => {
       /(REAL_CONNECTED|DEMO_ACTIVE)/,
     );
     await page.getByTestId("home-config-save-app").click();
-    const dialog = page.getByRole("dialog", { name: /Save to App/i });
+    const dialog = page.getByRole("dialog", { name: /Save to app/i });
     await expect(dialog).toBeVisible();
 
     let closed = false;

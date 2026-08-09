@@ -56,7 +56,6 @@ import {
 import { GameModeSettingsSection } from "@/pages/settings/GameModeSettingsSection";
 import { SettingsSection } from "@/pages/settings/SettingsSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { VicPaletteRow } from "@/pages/settings/VicPaletteRow";
 import { toast } from "@/hooks/use-toast";
 import { reportUserError } from "@/lib/uiErrors";
 import {
@@ -108,7 +107,9 @@ import {
   loadStartupDiscoveryWindowMs,
   loadDebugLoggingEnabled,
   loadDiskAutostartMode,
+  loadPersistConfigToFlash,
   loadVolumeSliderPreviewIntervalMs,
+  savePersistConfigToFlash,
   saveDemoModeEnabled,
   saveBackgroundRediscoveryIntervalMs,
   saveDiscoveryProbeTimeoutMs,
@@ -367,6 +368,7 @@ export default function SettingsPage() {
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
   const [demoModeEnabled, setDemoModeEnabled] = useState(loadDemoModeEnabled());
   const [diskAutostartMode, setDiskAutostartMode] = useState<DiskAutostartMode>(loadDiskAutostartMode());
+  const [persistConfigToFlash, setPersistConfigToFlash] = useState(loadPersistConfigToFlash);
   const [friendlySidNames, setFriendlySidNames] = useState(loadFriendlySidNames);
   // Content Explorer: In-Image Search (C) + Launch Safety boot-menu answer (B).
   const [searchInsideDisks, setSearchInsideDisks] = useState(loadSearchInsideDisks);
@@ -596,6 +598,9 @@ export default function SettingsPage() {
       }
       if (detail.key === APP_SETTINGS_KEYS.DISK_AUTOSTART_MODE_KEY) {
         setDiskAutostartMode(loadDiskAutostartMode());
+      }
+      if (detail.key === APP_SETTINGS_KEYS.PERSIST_CONFIG_TO_FLASH_KEY) {
+        setPersistConfigToFlash(loadPersistConfigToFlash());
       }
       if (detail.key === APP_SETTINGS_KEYS.VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY) {
         setVolumeSliderPreviewIntervalMs(loadVolumeSliderPreviewIntervalMs());
@@ -1412,7 +1417,7 @@ export default function SettingsPage() {
                     hostError={hostnameError}
                     portError={connectionFieldError}
                     idPrefix="settings-device"
-                    hostLabel="C64U Hostname / IP"
+                    hostLabel="C64U hostname / IP"
                     hostHint="Name or IP shown on your device."
                     onHostBlur={(value) => setHostnameError(validateDeviceHost(value))}
                     reachabilitySuggestion={reachabilitySuggestion}
@@ -1692,7 +1697,7 @@ export default function SettingsPage() {
                                   disabled={Boolean(discoverySwitchBusyId)}
                                   data-testid="settings-device-password-confirm"
                                 >
-                                  {discoverySwitchBusyId === candidate.id ? "Connecting" : "Use Device"}
+                                  {discoverySwitchBusyId === candidate.id ? "Connecting" : "Use device"}
                                 </Button>
                               </div>
                             </form>
@@ -1814,7 +1819,7 @@ export default function SettingsPage() {
                 <div className="flex items-start justify-between gap-3 min-w-0">
                   <div className="space-y-1 min-w-0">
                     <Label htmlFor="debug-logging" className="flex min-h-11 items-center font-medium">
-                      Enable Debug Logging
+                      Enable debug logging
                     </Label>
                     <p className="text-xs text-muted-foreground">
                       Emits all debug-level logs for diagnostics, including SAF and REST events.
@@ -2183,7 +2188,6 @@ export default function SettingsPage() {
                         </p>
                       </div>
                     ) : null}
-                    <VicPaletteRow />
                     <div className="col-span-2 flex items-start justify-between gap-3 min-w-0">
                       <div className="min-w-0">
                         <Label
@@ -2543,7 +2547,7 @@ export default function SettingsPage() {
             ) : null}
 
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Safety Mode</Label>
+              <Label className="text-sm font-medium">Safety mode</Label>
               <Select
                 value={deviceSafetyMode}
                 onValueChange={(value) => commitDeviceSafetyMode(value as DeviceSafetyMode)}
@@ -2564,6 +2568,46 @@ export default function SettingsPage() {
                 Mode presets adjust throttling, caching, cooldowns, and backoff behavior. Troubleshooting mode also
                 enables debug logging for richer diagnostics.
               </p>
+            </div>
+
+            {/* Device settings the app writes are RAM-only unless this is on, so the row has to
+                say what each state means, and — because the on state can persist a setting that
+                leaves the machine hard to use — how to boot past a bad one. */}
+            <div className="rounded-lg border border-border/70 p-3 space-y-2">
+              <div className="flex items-start justify-between gap-3 min-w-0">
+                <div className="min-w-0">
+                  <Label htmlFor="settings-persist-config-to-flash" className="flex min-h-11 items-center font-medium">
+                    Keep device settings after a restart
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    When off, a device setting you change here reaches the C64 straight away but does not last: the next
+                    power-up brings back what the C64 had saved. When on, the app also writes every device setting it
+                    changes to the C64&apos;s flash, so it survives a power cycle — the same as saving from the
+                    C64&apos;s own menu.
+                  </p>
+                </div>
+                <Checkbox
+                  id="settings-persist-config-to-flash"
+                  data-testid="settings-persist-config-to-flash"
+                  checked={persistConfigToFlash}
+                  onCheckedChange={(checked) => {
+                    const next = checked === true;
+                    setPersistConfigToFlash(next);
+                    savePersistConfigToFlash(next);
+                  }}
+                />
+              </div>
+              {persistConfigToFlash ? (
+                <p
+                  className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive"
+                  data-testid="settings-persist-config-to-flash-warning"
+                >
+                  A saved setting can leave the machine hard to use, and it comes back that way at every power-up. To
+                  recover, hold <strong>RESTORE</strong> while you power the C64 on. It then starts with default
+                  settings instead of the saved ones, which gets you back to a working machine. Nothing is erased: flash
+                  keeps the old values, so put the setting right and save it again to replace them.
+                </p>
+              ) : null}
             </div>
 
             <div className="rounded-lg border border-border/70 p-3 space-y-4">
@@ -2637,7 +2681,7 @@ export default function SettingsPage() {
 
             <div className="rounded-lg border border-border/70 p-3 space-y-4">
               <div className="space-y-2">
-                <Label className="font-medium">Advanced Controls</Label>
+                <Label className="font-medium">Advanced controls</Label>
                 <p className="text-xs text-muted-foreground">Fine-tuned device protection changes apply immediately.</p>
                 <Button
                   variant="outline"
@@ -3076,7 +3120,7 @@ export default function SettingsPage() {
           {/* The summary lists what this section holds and nothing else. It used to end in
               "settings transfer", but Export settings and Import settings are in Diagnostics,
               so anyone who opened About looking for them found only version rows and links. */}
-          <SettingsSection id="about" title="About" summary="Version, licences, documentation" icon={Info}>
+          <SettingsSection id="about" title="About" summary="Version, licenses, documentation" icon={Info}>
             {/* The developer-mode gesture: repeated taps on the version block. It lives on the
                 block rather than on the card, so it cannot fight the section's own toggle. */}
             <div
@@ -3129,7 +3173,7 @@ export default function SettingsPage() {
               onClick={() => navigate("/settings/open-source-licenses")}
             >
               <FileText className="h-4 w-4" />
-              Open Source Licenses
+              Open source licenses
             </button>
           </SettingsSection>
         </PageStack>
@@ -3151,7 +3195,7 @@ export default function SettingsPage() {
       <Dialog open={relaxedWarningOpen} onOpenChange={(open) => !open && handleCancelRelaxedMode()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Enable Relaxed Safety Mode?</DialogTitle>
+            <DialogTitle>Enable relaxed safety mode?</DialogTitle>
             <DialogDescription>
               Relaxed mode increases FTP concurrency and reduces protection. This can overload or destabilize real
               hardware. Confirm only if you understand the risks.
@@ -3162,7 +3206,7 @@ export default function SettingsPage() {
               Cancel
             </Button>
             <Button variant="destructive" onClick={handleConfirmRelaxedMode}>
-              Enable Relaxed
+              Enable relaxed
             </Button>
           </DialogFooter>
         </DialogContent>

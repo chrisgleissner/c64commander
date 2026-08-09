@@ -48,6 +48,6 @@ export const computeConfigDrift = async (): Promise<ConfigDriftResult> => {
     timestamp,
     driftItems: [],
     error:
-      "Persisted-config comparison is unavailable on this firmware. Reading the saved (flash) config would require a destructive reload that discards unsaved runtime changes, so Config Drift stays read-only.",
+      "Persisted-config comparison is unavailable on this firmware. Reading the saved (flash) config would require a destructive reload that discards unsaved runtime changes, so Config drift stays read-only.",
   };
 };

@@ -112,7 +112,7 @@ test.describe("Settings diagnostics workflows", () => {
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
-    const debugToggle = page.getByLabel("Enable Debug Logging");
+    const debugToggle = page.getByLabel("Enable debug logging");
     await expect(debugToggle).toBeVisible();
     await debugToggle.click();
     await snap(page, testInfo, "debug-logging-enabled");

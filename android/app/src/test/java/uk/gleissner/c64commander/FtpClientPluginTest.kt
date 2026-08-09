@@ -909,6 +909,207 @@ class FtpClientPluginTest {
   }
 
   @Test
+  fun makeDirectoryRejectsMissingHost() {
+    val plugin = FtpClientPlugin()
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn(null)
+    val latch = CountDownLatch(1)
+    doAnswer {
+              latch.countDown()
+              null
+            }
+            .`when`(call)
+            .reject("host is required")
+
+    plugin.makeDirectory(call)
+
+    assertTrue(latch.await(2, TimeUnit.SECONDS))
+  }
+
+  @Test
+  fun makeDirectoryRejectsMissingPath() {
+    val plugin = FtpClientPlugin()
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn(null)
+    val latch = CountDownLatch(1)
+    doAnswer {
+              latch.countDown()
+              null
+            }
+            .`when`(call)
+            .reject("path is required")
+
+    plugin.makeDirectory(call)
+
+    assertTrue(latch.await(2, TimeUnit.SECONDS))
+  }
+
+  @Test
+  fun makeDirectoryResolvesCreatedWhenTheServerCreatesIt() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.makeDirectory("/Temp/palettes")).thenReturn(true)
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/Temp/palettes")
+
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
+
+    plugin.makeDirectory(call)
+
+    verify(ftpClient).connect("127.0.0.1", 21)
+    verify(ftpClient).enterLocalPassiveMode()
+    assertTrue("Expected created=true", resolved?.optBoolean("created", false) == true)
+    // The directory was created outright, so no CWD probe is needed.
+    verify(ftpClient, never()).changeWorkingDirectory(any(String::class.java))
+  }
+
+  @Test
+  fun makeDirectoryResolvesNotCreatedWhenDirectoryAlreadyExists() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "")).thenReturn(true)
+    // MKD fails because the directory is already there. The caller only cares
+    // that the directory exists afterwards, so this must resolve rather than
+    // reject.
+    `when`(ftpClient.makeDirectory("/Temp/palettes")).thenReturn(false)
+    `when`(ftpClient.replyString).thenReturn("550 Directory already exists\r\n")
+    `when`(ftpClient.changeWorkingDirectory("/Temp/palettes")).thenReturn(true)
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn("/Temp/palettes")
+    `when`(call.getInt("port")).thenReturn(null)
+    `when`(call.getString("username")).thenReturn(null)
+    `when`(call.getString("password")).thenReturn(null)
+
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+              resolved = invocation.getArgument(0) as JSObject
+              null
+            }
+            .`when`(call)
+            .resolve(any())
+
+    plugin.makeDirectory(call)
+
+    verify(ftpClient).connect("127.0.0.1", 21)
+    verify(ftpClient).changeWorkingDirectory("/Temp/palettes")
+    assertNotNull("Expected an existing directory to resolve, not reject", resolved)
+    assertTrue("Expected created=false", resolved?.optBoolean("created", true) == false)
+    verify(call, never()).reject(any(String::class.java))
+  }
+
+  @Test
+  fun makeDirectoryRejectsWithServerReplyWhenPathIsAnExistingFile() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "")).thenReturn(true)
+    `when`(ftpClient.makeDirectory("/Temp/palettes")).thenReturn(false)
+    `when`(ftpClient.replyString).thenReturn("550 File already exists\r\n")
+    // The path exists but is a FILE, so the CWD probe fails - a genuine failure.
+    `when`(ftpClient.changeWorkingDirectory("/Temp/palettes")).thenReturn(false)
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn("/Temp/palettes")
+
+    plugin.makeDirectory(call)
+
+    verify(call).reject("550 File already exists")
+    verify(call, never()).resolve(any())
+  }
+
+  @Test
+  fun makeDirectoryRejectsOnLoginFailure() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "wrong")).thenReturn(false)
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("wrong")
+    `when`(call.getString("path")).thenReturn("/Temp/palettes")
+
+    plugin.makeDirectory(call)
+
+    verify(ftpClient).connect("127.0.0.1", 21)
+    verify(call).reject("FTP login failed")
+    verify(ftpClient, never()).makeDirectory(any(String::class.java))
+  }
+
+  @Test
+  fun makeDirectoryRejectsWithNormalizedTimeoutMessage() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    doAnswer { throw SocketTimeoutException("connect timed out") }
+            .`when`(ftpClient)
+            .connect("127.0.0.1", 21)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn("/Temp/palettes")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getInt("timeoutMs")).thenReturn(2500)
+
+    var rejectedMessage: String? = null
+    doAnswer { invocation ->
+              rejectedMessage = invocation.getArgument(0)
+              null
+            }
+            .`when`(call)
+            .reject(any(String::class.java))
+    doAnswer { invocation ->
+              rejectedMessage = invocation.getArgument(0)
+              null
+            }
+            .`when`(call)
+            .reject(any(String::class.java), any(Exception::class.java))
+
+    plugin.makeDirectory(call)
+
+    assertTrue((rejectedMessage ?: "").startsWith("FTP makeDirectory timed out after "))
+  }
+
+  @Test
   fun readFileCoversTraceAndDisconnectWarningOnException() {
     val plugin = FtpClientPlugin()
     plugin.runTask = { runnable -> runnable.run() }

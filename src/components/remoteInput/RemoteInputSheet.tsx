@@ -563,7 +563,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                   data-testid="remote-input-panic-button"
                   onClick={() => session.releaseAll()}
                 >
-                  Release All
+                  Release all
                 </Button>
               ) : null}
               {/* The way out of Game Mode, right-aligned beside the heading. Release All

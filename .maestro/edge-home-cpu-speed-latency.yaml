@@ -52,7 +52,7 @@ env:
 - tapOn:
     id: "tab-play"
 - extendedWaitUntil:
-    visible: "Play Files"
+    visible: "Play files"
     timeout: ${TIMEOUT}
 - tapOn:
     id: "tab-home"
@@ -88,7 +88,7 @@ env:
 - tapOn:
     id: "tab-play"
 - extendedWaitUntil:
-    visible: "Play Files"
+    visible: "Play files"
     timeout: ${TIMEOUT}
 - tapOn:
     id: "tab-home"

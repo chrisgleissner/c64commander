@@ -74,19 +74,19 @@ describe("DemoModeInterstitial", () => {
     expect(input.value).toBe("mydevice.local");
   });
 
-  it("Save & Retry persists the edited hostname and triggers settings discovery", () => {
+  it("Save & retry persists the edited hostname and triggers settings discovery", () => {
     render(<DemoModeInterstitial />);
     const input = screen.getByTestId("demo-interstitial-host-input");
     fireEvent.change(input, { target: { value: "192.168.1.100" } });
-    fireEvent.click(screen.getByRole("button", { name: /Save & Retry/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save & retry/i }));
     expect(updateC64APIConfig).toHaveBeenCalledWith("http://192.168.1.100", "saved-pass", "192.168.1.100");
     expect(dismissDemoInterstitial).toHaveBeenCalled();
     expect(discoverConnection).toHaveBeenCalledWith("settings");
   });
 
-  it("Save & Retry with unchanged input uses stored hostname and preserves password", () => {
+  it("Save & retry with unchanged input uses stored hostname and preserves password", () => {
     render(<DemoModeInterstitial />);
-    fireEvent.click(screen.getByRole("button", { name: /Save & Retry/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save & retry/i }));
     expect(updateC64APIConfig).toHaveBeenCalledWith("http://mydevice.local", "saved-pass", "mydevice.local");
     expect(discoverConnection).toHaveBeenCalledWith("settings");
   });
@@ -114,21 +114,21 @@ describe("DemoModeInterstitial", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("shows validation error when Save & Retry throws", () => {
+  it("shows validation error when Save & retry throws", () => {
     updateC64APIConfig.mockImplementationOnce(() => {
       throw new Error("connection refused");
     });
     render(<DemoModeInterstitial />);
-    fireEvent.click(screen.getByRole("button", { name: /Save & Retry/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save & retry/i }));
     expect(screen.getByTestId("demo-interstitial-host-error")).toHaveTextContent("connection refused");
   });
 
-  it("shows stringified error when Save & Retry throws a non-Error value", () => {
+  it("shows stringified error when Save & retry throws a non-Error value", () => {
     updateC64APIConfig.mockImplementationOnce(() => {
       throw "network timeout";
     });
     render(<DemoModeInterstitial />);
-    fireEvent.click(screen.getByRole("button", { name: /Save & Retry/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save & retry/i }));
     expect(screen.getByTestId("demo-interstitial-host-error")).toHaveTextContent("network timeout");
   });
 });

@@ -29,6 +29,7 @@ public enum FtpPluginContract {
         "listDirectory",
         "readFile",
         "writeFile",
+        "makeDirectory",
         "pingFtp",
     ]
 

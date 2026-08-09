@@ -209,12 +209,12 @@ export async function main(): Promise<void> {
       recordPass("F022", "/docs", "docs-page-load", "keypad", "KEY_6 navigated to DOCS; DOCS text detected");
 
       // Process docs items in order without resetting scroll between items.
-      // From docs-initial.xml discovery: Getting Started, Home, Play Files, Disks & Drives,
+      // From docs-initial.xml discovery: Getting Started, Home, Play files, Disks & Drives,
       // Swapping Disks, Config, Settings, Diagnostics (all clickable android.widget.Button).
       const docsItems = [
         { label: "docs-getting-started", text: "Getting Started" },
         { label: "docs-home", text: "Home" },
-        { label: "docs-play-files", text: "Play Files" },
+        { label: "docs-play-files", text: "Play files" },
         { label: "docs-disks-drives", text: "Disks & Drives" },
         { label: "docs-swapping-disks", text: "Swapping Disks" },
         { label: "docs-config", text: "Config" },

@@ -13,7 +13,7 @@ This document defines the required `Lighting Studio` feature set for C64 Command
   - `Connection Sentinel`
   - `Quiet Launch`
   - `Source Identity Map`
-  - `Circadian Palette`
+  - `Circadian palette`
 - `Context Lens` is required as a supporting explainability pattern, not as a standalone flagship feature
 
 ## 2. Entry Points And Surface Model
@@ -46,7 +46,7 @@ This document defines the required `Lighting Studio` feature set for C64 Command
   - `Connection Sentinel`
   - `Quiet Launch`
   - `Source Identity Map`
-  - `Circadian Palette`
+  - `Circadian palette`
 - Home must gain only lightweight summary elements and a `Studio` action; it must not gain new permanent rows of advanced controls
 
 ## 4. Required Feature Specs
@@ -130,7 +130,7 @@ This document defines the required `Lighting Studio` feature set for C64 Command
   - mixed playlists use the currently playing item as the active source owner
   - if no source is active, fall back to `Idle` and then to the base profile if `Idle` is unset
 
-### 4.6 Circadian Palette
+### 4.6 Circadian palette
 
 - Purpose: apply solar-aware palette shaping without introducing a full rule engine
 - Entry: `Lighting Studio` -> `Automation` -> `Circadian`
@@ -170,7 +170,7 @@ This document defines the required `Lighting Studio` feature set for C64 Command
   - `Evening`: intensity `0.75`, tint `Pastel`
   - `Night`: intensity `0.35`, tint `Whisper`
 - Scope limits:
-  - `Circadian Palette` may change intensity and tint only
+  - `Circadian palette` may change intensity and tint only
   - it may not change mode, pattern, SID select, strip type, strip length, or legacy RGB topology fields
 - Runtime behavior:
   - current period is resolved immediately on open, startup, reconnect, resume, timezone change, and location-source change
@@ -187,7 +187,7 @@ This document defines the required `Lighting Studio` feature set for C64 Command
 
 ### 4.7 Solar Calculation Module
 
-- Purpose: provide the deterministic offline solar calculations required by `Circadian Palette`
+- Purpose: provide the deterministic offline solar calculations required by `Circadian palette`
 - Implementation form:
   - one small standalone TypeScript module
   - directly importable by the lighting domain without UI coupling
@@ -232,7 +232,7 @@ This document defines the required `Lighting Studio` feature set for C64 Command
 - Polar and missing-event behavior:
   - the module must detect missing or invalid solar events from `suncalc`
   - it must not return partial undefined semantics to callers
-  - it must return a deterministic fallback result that allows `Circadian Palette` to use the fixed fallback schedule already defined in this spec
+  - it must return a deterministic fallback result that allows `Circadian palette` to use the fixed fallback schedule already defined in this spec
 - Recommended ownership:
   - the solar module is a pure domain utility consumed by the lighting resolver
   - location permission handling and city-selection UI stay outside the module
@@ -251,7 +251,7 @@ This document defines the required `Lighting Studio` feature set for C64 Command
 - Automation layer:
   - `Quiet Launch`
   - `Source Identity Map`
-  - `Circadian Palette`
+  - `Circadian palette`
   - `Connection Sentinel`
 - Explainability layer: `Context Lens`
 - Trust layer: manual lock may pause non-critical automations
@@ -267,7 +267,7 @@ Priority order, highest first:
 3. manual lock
 4. `Quiet Launch`
 5. `Source Identity Map`
-6. `Circadian Palette`
+6. `Circadian palette`
 7. ambient `Connection Sentinel`
 8. active base profile
 9. raw device-read fallback
@@ -284,7 +284,7 @@ Rules:
 - `Lighting Studio` must not create a new primary navigation destination
 - Home must remain a quick-control dashboard
 - all required features must resolve through the same priority model
-- `Circadian Palette` must ship in the first implementation wave
-- `Circadian Palette` must support permission-based location, manual latitude/longitude, and bundled city-list fallback
-- `Circadian Palette` must rely on one small standalone `suncalc`-based solar module rather than ad hoc date logic scattered through UI code
+- `Circadian palette` must ship in the first implementation wave
+- `Circadian palette` must support permission-based location, manual latitude/longitude, and bundled city-list fallback
+- `Circadian palette` must rely on one small standalone `suncalc`-based solar module rather than ad hoc date logic scattered through UI code
 - the app must not attempt frame-by-frame app-driven lighting animation

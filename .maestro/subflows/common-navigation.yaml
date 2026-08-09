@@ -33,7 +33,7 @@ tags:
       # assertNotVisible below is what covers that, and it is why every navigation in
       # this file carries one.
       #
-      # Page-content anchors were tried throughout this file and only "Play Files"
+      # Page-content anchors were tried throughout this file and only "Play files"
       # survived. Two things defeat them. Maestro matches a selector against an
       # element's whole text, and the browser merges inline spans into their containing
       # row, so "Firmware" is only ever part of "App <version> Device <host> Firmware
@@ -65,12 +65,12 @@ tags:
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
-          visible: "Play Files"
+          visible: "Play files"
           timeout: ${TIMEOUT}
 - extendedWaitUntil:
-    visible: "Play Files"
+    visible: "Play files"
     timeout: ${TIMEOUT}
-- assertVisible: "Play Files"
+- assertVisible: "Play files"
 - assertNotVisible: "Something went wrong"
 - takeScreenshot: play-tab
 # Settings, Config and Home are retried the same way as Play, and for the same reason:
@@ -88,7 +88,7 @@ tags:
           id: "tab-settings"
           optional: true
       # Matched on the tab, not on page content, for the reason set out at the top of
-      # this file: page-content anchors were tried here and only "Play Files" survived.
+      # this file: page-content anchors were tried here and only "Play files" survived.
       # The assertNotVisible below is the check that can tell a rendered page from a
       # crashed one.
       - extendedWaitUntil:
@@ -108,7 +108,7 @@ tags:
           id: "tab-config"
           optional: true
       # Matched on the tab, not on page content, for the reason set out at the top of
-      # this file: page-content anchors were tried here and only "Play Files" survived.
+      # this file: page-content anchors were tried here and only "Play files" survived.
       # The assertNotVisible below is the check that can tell a rendered page from a
       # crashed one.
       - extendedWaitUntil:
@@ -128,7 +128,7 @@ tags:
           id: "tab-home"
           optional: true
       # Matched on the tab, not on page content, for the reason set out at the top of
-      # this file: page-content anchors were tried here and only "Play Files" survived.
+      # this file: page-content anchors were tried here and only "Play files" survived.
       # The assertNotVisible below is the check that can tell a rendered page from a
       # crashed one.
       - extendedWaitUntil:

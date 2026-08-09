@@ -433,7 +433,7 @@ describe("hvscDownload", () => {
       expect(() => ensureNotCancelledWith(tokens, "t1", updater)).toThrow();
       expect(updater).toHaveBeenCalledWith({
         ingestionState: "idle",
-        ingestionError: "Cancelled",
+        ingestionError: "Canceled",
       });
     });
 

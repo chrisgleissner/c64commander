@@ -314,7 +314,7 @@ test.describe("Layout overflow safeguards", () => {
 
   layoutTest("settings page handles long hostnames without overflow @layout", async ({ page }, testInfo) => {
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
-    const hostInput = page.getByLabel("C64U Hostname / IP");
+    const hostInput = page.getByLabel("C64U hostname / IP");
     await hostInput.fill(
       "super-long-hostname-with-many-subdomains-and-segments-that-should-wrap-without-overflow.example.c64u.local",
     );

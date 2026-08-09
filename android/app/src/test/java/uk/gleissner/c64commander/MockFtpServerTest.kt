@@ -139,6 +139,73 @@ class MockFtpServerTest {
   }
 
   @Test
+  fun mkdCreatesDirectoryAndStorUploadsIntoIt() {
+    val rootDir = tempFolder.newFolder("ftp-root-mkd")
+    val server = MockFtpServer(rootDir, "secret")
+    val port = server.start()
+
+    val client = FTPClient()
+    client.connect("127.0.0.1", port)
+    assertTrue(client.login("user", "secret"))
+    client.enterLocalPassiveMode()
+    client.setFileType(org.apache.commons.net.ftp.FTP.BINARY_FILE_TYPE)
+
+    assertTrue("MKD must create a new directory", client.makeDirectory("/palettes"))
+    val created = java.io.File(rootDir, "palettes")
+    assertTrue("MKD must create the directory on disk", created.isDirectory)
+
+    // MKD on an existing directory fails, and the CWD probe the plugin uses to
+    // classify that failure must succeed - this is the "already exists" case
+    // that resolves as created=false rather than an error.
+    assertFalse("MKD on an existing directory must fail", client.makeDirectory("/palettes"))
+    assertTrue("The existing path must still be a directory", client.changeWorkingDirectory("/palettes"))
+    assertTrue(client.changeWorkingDirectory("/"))
+
+    val payload = "# VICE palette\n00 00 00\n".toByteArray()
+    assertTrue(
+            "STOR must upload into the directory just created",
+            client.storeFile("/palettes/demo.vpl", payload.inputStream()),
+    )
+
+    val uploaded = java.io.File(created, "demo.vpl")
+    assertTrue("STOR must write the file to disk", uploaded.isFile)
+    assertArrayEquals(payload, uploaded.readBytes())
+
+    // A round trip: the uploaded file lists and reads back byte for byte.
+    val names = client.listNames("/palettes")
+    assertNotNull(names)
+    assertTrue(names!!.any { it.endsWith("demo.vpl") })
+
+    val downloaded = java.io.ByteArrayOutputStream()
+    assertTrue(client.retrieveFile("/palettes/demo.vpl", downloaded))
+    assertArrayEquals(payload, downloaded.toByteArray())
+
+    client.disconnect()
+    server.stop()
+  }
+
+  @Test
+  fun mkdFailsWhenPathIsAnExistingFile() {
+    val rootDir = tempFolder.newFolder("ftp-root-mkd-file")
+    java.io.File(rootDir, "palettes").writeText("not a directory")
+    val server = MockFtpServer(rootDir, null)
+    val port = server.start()
+
+    val client = FTPClient()
+    client.connect("127.0.0.1", port)
+    assertTrue(client.login("user", "anything"))
+    client.enterLocalPassiveMode()
+
+    assertFalse("MKD must fail when a file already occupies the path", client.makeDirectory("/palettes"))
+    // The CWD probe must also fail, so the plugin reports a genuine error
+    // instead of treating the clash as "already exists".
+    assertFalse("CWD must fail on a path that is a file", client.changeWorkingDirectory("/palettes"))
+
+    client.disconnect()
+    server.stop()
+  }
+
+  @Test
   fun pathContainmentRejectsSiblingDirectorySharingRootPrefix() {
     val root = tempFolder.newFolder("mock-ftp-root")
     // A sibling directory whose name merely starts with the root's name -

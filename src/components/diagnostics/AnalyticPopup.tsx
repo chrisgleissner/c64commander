@@ -88,7 +88,7 @@ export function AnalyticPopup({
                 type="button"
                 onClick={onClose}
                 className="shrink-0 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                aria-label="Return to Diagnostics"
+                aria-label="Return to diagnostics"
                 data-testid="analytic-popup-return"
               >
                 ← Diagnostics

@@ -46,7 +46,7 @@ export function HealthCheckDetailView({
   liveProbes,
   isRunning,
   probeStates,
-  title = "Health Check Detail",
+  title = "Health check detail",
 }: Props) {
   const healthCheckState = useHealthCheckState();
   const activeProbeStates = probeStates ?? healthCheckState.probeStates;
@@ -109,7 +109,7 @@ export function HealthCheckDetailView({
                     : executionState?.state === "TIMEOUT"
                       ? "Timeout"
                       : executionState?.state === "CANCELLED"
-                        ? "Cancelled"
+                        ? "Canceled"
                         : (probe?.outcome ?? "—");
               const finalStatusClass =
                 executionState?.state != null

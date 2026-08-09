@@ -178,7 +178,7 @@ describe("RestoreSnapshotDialog – actions", () => {
     fireEvent.click(screen.getByTestId("restore-reu-load"));
     fireEvent.click(screen.getByTestId("restore-reu-preload"));
 
-    expect(screen.getByText("Restore REU Snapshot")).toBeInTheDocument();
+    expect(screen.getByText("Restore REU snapshot")).toBeInTheDocument();
     expect(onConfirm).toHaveBeenNthCalledWith(1, "load-into-reu");
     expect(onConfirm).toHaveBeenNthCalledWith(2, "preload-on-startup");
   });

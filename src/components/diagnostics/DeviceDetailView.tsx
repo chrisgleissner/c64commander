@@ -60,7 +60,7 @@ export function DeviceDetailView({ info, onBack }: Props) {
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
-        <h3 className="text-sm font-semibold text-foreground">Device Detail</h3>
+        <h3 className="text-sm font-semibold text-foreground">Device detail</h3>
       </div>
 
       {!info ? (

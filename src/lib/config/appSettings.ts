@@ -54,6 +54,8 @@ const STREAM_VIDEO_FRAME_RATE_MODE_KEY = "c64u_stream_video_frame_rate_mode";
 const STREAM_INPUT_PRIORITY_KEY = "c64u_stream_input_priority";
 const STREAM_AUDIO_ROUTE_KEY = "c64u_stream_audio_route";
 const VIC_PALETTE_KEY = "c64u_vic_palette";
+const PALETTE_TARGET_KEY = "c64u_palette_target";
+const PERSIST_CONFIG_TO_FLASH_KEY = "c64u_persist_config_to_flash";
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 200;
 export type NotificationVisibility = "errors-only" | "all";
@@ -1002,6 +1004,9 @@ export const APP_SETTINGS_KEYS = {
   LOCAL_SID_MODEL_KEY,
   LOCAL_SID_MODEL_FROM_DEVICE_KEY,
   LEARNED_DEVICE_SID_MODEL_KEY,
+  VIC_PALETTE_KEY,
+  PALETTE_TARGET_KEY,
+  PERSIST_CONFIG_TO_FLASH_KEY,
 };
 
 /**
@@ -1020,4 +1025,52 @@ export const saveVicPaletteId = (id: string) => {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(VIC_PALETTE_KEY, id);
   broadcast(VIC_PALETTE_KEY, id);
+};
+
+/**
+ * Which screens a palette choice lands on: this app, the C64, or both.
+ *
+ * Remembered rather than re-asked, the same way the "Listen on" choice is remembered for playback.
+ * Someone who has decided they want colour changes to reach the television has decided it for every
+ * palette they try, not just the first one.
+ *
+ * The default is `local` because it is the only option that cannot touch the machine: a first tap
+ * changes the phone's picture and nothing else, and reaching the C64 stays a deliberate act.
+ */
+export type PaletteTarget = "local" | "remote" | "both";
+export const DEFAULT_PALETTE_TARGET: PaletteTarget = "local";
+const PALETTE_TARGETS: PaletteTarget[] = ["local", "remote", "both"];
+
+export const loadPaletteTarget = (): PaletteTarget => {
+  if (typeof localStorage === "undefined") return DEFAULT_PALETTE_TARGET;
+  const raw = localStorage.getItem(PALETTE_TARGET_KEY);
+  return PALETTE_TARGETS.includes(raw as PaletteTarget) ? (raw as PaletteTarget) : DEFAULT_PALETTE_TARGET;
+};
+
+export const savePaletteTarget = (target: PaletteTarget) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(PALETTE_TARGET_KEY, target);
+  broadcast(PALETTE_TARGET_KEY, target);
+};
+
+/**
+ * Whether device settings changed from the app are written to the machine's flash.
+ *
+ * OFF by default, which means a change applies immediately but the machine's next power-up brings
+ * back what was there before. A phone invites experimenting with settings, and an experiment that
+ * a power cycle undoes is one nobody has to undo by hand.
+ *
+ * Turning it on is a real commitment — it is easy to persist something that leaves the machine
+ * hard to use — so the Settings copy has to say so, and has to say how to get back: hold RESTORE
+ * while powering the machine on. The firmware reads `U64_RESTORE_REG` at boot and starts in safe
+ * mode, loading defaults instead of the stored config (`components/config.cc:47-62`, and the store
+ * read at `:182`). That is a recovery boot rather than an erase — flash still holds the old values
+ * until they are saved over.
+ */
+export const loadPersistConfigToFlash = () => readBoolean(PERSIST_CONFIG_TO_FLASH_KEY, false);
+
+export const savePersistConfigToFlash = (enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(PERSIST_CONFIG_TO_FLASH_KEY, enabled ? "1" : "0");
+  broadcast(PERSIST_CONFIG_TO_FLASH_KEY, enabled);
 };

@@ -34,7 +34,7 @@ tags:
           text: "Retry connection"
           optional: true
       - tapOn:
-          text: "Save & Retry"
+          text: "Save & retry"
           optional: true
       - tapOn:
           text: "Done"

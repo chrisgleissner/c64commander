@@ -258,6 +258,54 @@ private final class MockFtpSession {
             }
             sendLine("226 Transfer complete")
 
+        case "STOR":
+            guard requireLogin() else { return }
+            guard let path = argument?.trimmingCharacters(in: .whitespaces), !path.isEmpty else {
+                sendLine("550 File not found")
+                return
+            }
+            let resolved = resolvePath(path)
+            guard let fileURL = resolveFile(resolved),
+                  !isDirectoryURL(fileURL),
+                  isDirectoryURL(fileURL.deletingLastPathComponent()) else {
+                sendLine("550 File not found")
+                return
+            }
+            sendLine("150 Opening data connection")
+            if let dataFD = acceptDataConnection() {
+                receiveFileData(from: dataFD, to: fileURL)
+                Darwin.close(dataFD)
+            }
+            sendLine("226 Transfer complete")
+
+        case "MKD", "XMKD":
+            guard requireLogin() else { return }
+            guard let path = argument?.trimmingCharacters(in: .whitespaces), !path.isEmpty else {
+                sendLine("550 Directory name required")
+                return
+            }
+            let resolved = resolvePath(path)
+            guard let dirURL = resolveFile(resolved) else {
+                sendLine("550 Directory not found")
+                return
+            }
+            if FileManager.default.fileExists(atPath: dirURL.path) {
+                // A real server rejects MKD on any existing path. The client then
+                // probes with CWD to tell "already a directory" (success as far as
+                // the caller is concerned) from a genuine clash with a file, so both
+                // cases must fail here rather than the directory case reporting 257.
+                sendLine(isDirectoryURL(dirURL) ? "550 Directory already exists" : "550 File already exists")
+                return
+            }
+            // withIntermediateDirectories: false — MKD creates exactly one
+            // directory and fails when the parent is missing.
+            do {
+                try FileManager.default.createDirectory(at: dirURL, withIntermediateDirectories: false)
+                sendLine("257 \"\(resolved)\" created")
+            } catch {
+                sendLine("550 Failed to create directory")
+            }
+
         case "QUIT":
             sendLine("221 Goodbye")
             closed = true
@@ -410,6 +458,17 @@ private final class MockFtpSession {
                 offset += n
             }
         }
+    }
+
+    private func receiveFileData(from dataFD: Int32, to fileURL: URL) {
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let n = Darwin.read(dataFD, &buffer, buffer.count)
+            if n <= 0 { break }
+            data.append(contentsOf: buffer.prefix(n))
+        }
+        try? data.write(to: fileURL)
     }
 
     // MARK: - Path Resolution

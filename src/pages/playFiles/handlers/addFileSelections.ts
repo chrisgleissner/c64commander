@@ -1169,7 +1169,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         setAddItemsProgress((prev) => ({
           ...prev,
           status: "idle",
-          message: "Add cancelled",
+          message: "Add canceled",
         }));
         markPlaylistRepositoryPhase(playlistStorageKey, "IDLE", {
           expectedCount: playlistSnapshotRef.current.length,

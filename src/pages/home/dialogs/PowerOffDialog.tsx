@@ -28,7 +28,7 @@ export function PowerOffDialog({ open, onOpenChange, onConfirm, isPending }: Pow
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Confirm Power Off</DialogTitle>
+          <DialogTitle>Confirm power off</DialogTitle>
           <DialogDescription>
             Once powered off, this machine cannot be powered on again via software. Use the physical power button on the
             device to power it back on.

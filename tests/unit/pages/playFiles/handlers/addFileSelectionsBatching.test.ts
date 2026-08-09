@@ -365,8 +365,8 @@ describe("addFileSelections batching", () => {
         .map(([updater]: [unknown]) =>
           typeof updater === "function" ? updater({ status: "scanning", message: "Scanning..." } as any) : null,
         )
-        .find((value: unknown) => (value as { message?: string } | null)?.message === "Add cancelled");
-      expect(abortProgressUpdate).toMatchObject({ status: "idle", message: "Add cancelled" });
+        .find((value: unknown) => (value as { message?: string } | null)?.message === "Add canceled");
+      expect(abortProgressUpdate).toMatchObject({ status: "idle", message: "Add canceled" });
       expect(addLog).toHaveBeenCalledWith(
         "debug",
         "Add items scan cancelled",

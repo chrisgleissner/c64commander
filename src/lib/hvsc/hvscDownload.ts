@@ -569,7 +569,7 @@ export const ensureNotCancelledWith = (
 ) => {
   if (!token) return;
   if (cancelTokens.get(token)?.cancelled) {
-    stateUpdater?.({ ingestionState: "idle", ingestionError: "Cancelled" });
+    stateUpdater?.({ ingestionState: "idle", ingestionError: "Canceled" });
     throw createHvscCancellationError();
   }
 };

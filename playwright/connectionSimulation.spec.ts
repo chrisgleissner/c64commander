@@ -828,7 +828,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
 
     server.setReachable(true);
 
-    const hostInput = page.getByLabel("C64U Hostname / IP");
+    const hostInput = page.getByLabel("C64U hostname / IP");
     await hostInput.fill(host);
 
     const autoDemoToggle = page.getByRole("checkbox", { name: /Automatic Demo Mode/i }).first();

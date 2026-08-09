@@ -38,6 +38,7 @@ import {
   saveVolumeSliderPreviewIntervalMs,
   saveNotificationDurationMs,
   saveFriendlySidNames,
+  savePersistConfigToFlash,
   APP_SETTINGS_KEYS,
 } from "@/lib/config/appSettings";
 import { applyScreenOrientationMode } from "@/lib/native/screenOrientation";
@@ -505,6 +506,8 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadStartupDiscoveryWindowMs: vi.fn(() => 3000),
   loadDebugLoggingEnabled: vi.fn(() => true),
   loadDiskAutostartMode: vi.fn(() => "kernal"),
+  loadPersistConfigToFlash: vi.fn(() => false),
+  savePersistConfigToFlash: vi.fn(),
   loadVolumeSliderPreviewIntervalMs: vi.fn(() => 200),
   loadSearchInsideDisks: vi.fn(() => false),
   saveSearchInsideDisks: vi.fn(),
@@ -530,8 +533,6 @@ vi.mock("@/lib/config/appSettings", () => ({
   loadStreamInputPriority: vi.fn(() => true),
   saveStreamInputPriority: vi.fn(),
   loadStreamNativeAudio: vi.fn(() => true),
-  loadVicPaletteId: vi.fn(() => "default"),
-  saveVicPaletteId: vi.fn(),
   saveStreamNativeAudio: vi.fn(),
   loadStreamAudioRoute: vi.fn(() => "dynamic"),
   saveStreamAudioRoute: vi.fn(),
@@ -596,6 +597,7 @@ vi.mock("@/lib/config/appSettings", () => ({
     BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY: "c64u_background_rediscovery_interval_ms",
     DISCOVERY_PROBE_TIMEOUT_MS_KEY: "c64u_discovery_probe_timeout_ms",
     DISK_AUTOSTART_MODE_KEY: "c64u_disk_autostart_mode",
+    PERSIST_CONFIG_TO_FLASH_KEY: "c64u_persist_config_to_flash",
     VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY: "c64u_volume_slider_preview_interval_ms",
     NOTIFICATION_DURATION_MS_KEY: "c64u_notification_duration_ms",
     AUTO_ROTATION_ENABLED_KEY: "c64u_auto_rotation_enabled",
@@ -2428,6 +2430,28 @@ describe("SettingsPage", () => {
 
     expect(saveVolumeSliderPreviewIntervalMs).toHaveBeenCalledWith(345);
     expect(saveVolumeSliderPreviewIntervalMs).toHaveBeenCalledTimes(2);
+  });
+
+  // Off is the default and it is the state in which nothing the app changes survives a power
+  // cycle, so the row has to explain both states without being switched on. The recovery route
+  // only matters once the setting is on, so it is asserted in the on state.
+  it("explains both states of the keep-settings row, and only warns once it is on", async () => {
+    renderSettingsPage();
+
+    const section = screen.getByTestId("settings-section-device-safety");
+    expect(section).toHaveTextContent(/keep device settings after a restart/i);
+    expect(section).toHaveTextContent(/when off, a device setting you change here/i);
+    expect(section).toHaveTextContent(/when on, the app also writes/i);
+    expect(screen.queryByTestId("settings-persist-config-to-flash-warning")).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("settings-persist-config-to-flash"));
+    });
+
+    expect(savePersistConfigToFlash).toHaveBeenCalledWith(true);
+    const warning = screen.getByTestId("settings-persist-config-to-flash-warning");
+    expect(warning).toHaveTextContent(/RESTORE/);
+    expect(warning).toHaveTextContent(/nothing is erased/i);
   });
 
   it("responds to c64u-device-safety-updated event", async () => {

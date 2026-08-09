@@ -871,7 +871,7 @@ export default function PlayFilesPage() {
       reportUserError({
         operation: "HVSC_CANCEL",
         title: "HVSC shutdown failed",
-        description: "HVSC was disabled, but the active preparation task could not be cancelled cleanly.",
+        description: "HVSC was disabled, but the active preparation task could not be canceled cleanly.",
         error,
         context: { preparationState: hvsc.hvscPreparationState },
         // The disable itself succeeded; a lingering background task is a
@@ -2414,7 +2414,7 @@ export default function PlayFilesPage() {
 
   return (
     <div className={pageShellClassName}>
-      <AppBar title="Play Files" />
+      <AppBar title="Play files" />
       <PageContainer>
         <PageStack>
           {lightingStudioEnabled && lightingResolved.sourceCue ? (

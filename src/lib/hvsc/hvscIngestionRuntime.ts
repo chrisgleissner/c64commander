@@ -372,7 +372,7 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
 
   const ensureNotCancelledLocal = () => {
     if (cancelTokens.get(cancelToken)?.cancelled) {
-      updateHvscState({ ingestionState: "idle", ingestionError: "Cancelled" });
+      updateHvscState({ ingestionState: "idle", ingestionError: "Canceled" });
       throw createHvscCancellationError();
     }
   };

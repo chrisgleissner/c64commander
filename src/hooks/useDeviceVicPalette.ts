@@ -8,48 +8,37 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { extractConfigValue } from "@/lib/config/configValueExtractor";
 import { loadVicPaletteId } from "@/lib/config/appSettings";
-import { readFtpFile } from "@/lib/ftp/ftpClient";
-import { resolveFtpConnectionOptions } from "@/lib/ftp/ftpConfig";
 import { addLog } from "@/lib/logging";
 import { useC64ConfigItem, useConnectionRoutingEpoch } from "@/hooks/useC64Connection";
 import { useAppVisibilityState } from "@/hooks/useScreenActivity";
+import {
+  PALETTE_CATEGORY,
+  PALETTE_ITEM,
+  devicePaletteIdFilename,
+  readDevicePalette,
+  readDevicePaletteFilename,
+} from "@/lib/palettes/devicePalettes";
 import {
   DEVICE_VIC_PALETTE_ID,
   U64_FIRMWARE_DEFAULT_VIC_PALETTE,
   setActiveVicPalette,
   setActiveVicPaletteDefinition,
 } from "@/lib/streams/vicPalette";
-import { parseVpl } from "@/lib/streams/vpl";
 import { subscribeVicPalettePreference } from "@/lib/streams/vicPalettePreference";
-
-const PALETTE_CATEGORY = "U64 Specific Settings";
-const PALETTE_ITEM = "Palette Definition";
-
-const readPalettePath = (response: unknown): string => {
-  if (!response || typeof response !== "object") return "";
-  const category = (response as Record<string, unknown>)[PALETTE_CATEGORY];
-  if (!category || typeof category !== "object") return "";
-  const categoryRecord = category as Record<string, unknown>;
-  const items = categoryRecord.items;
-  const item =
-    items && typeof items === "object"
-      ? (items as Record<string, unknown>)[PALETTE_ITEM]
-      : categoryRecord[PALETTE_ITEM];
-  const value = extractConfigValue(item);
-  return typeof value === "string" ? value.trim() : "";
-};
-
-const decodeBase64Text = (base64: string) => {
-  const binary = atob(base64);
-  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-};
 
 export const useDeviceVicPalette = (): void => {
   const paletteId = useSyncExternalStore(subscribeVicPalettePreference, loadVicPaletteId, loadVicPaletteId);
   const automatic = paletteId === DEVICE_VIC_PALETTE_ID;
+  /**
+   * A palette that lives on the machine, pinned by the user rather than followed.
+   *
+   * Its colors are not in the built-in table, so the id alone cannot paint it — the file has to be
+   * read again. Doing that here is what makes the choice survive closing the app: on a cold start
+   * only the id is in storage, and without this the app would quietly paint Default while the UI
+   * showed the device palette as the selected one.
+   */
+  const pinnedFilename = devicePaletteIdFilename(paletteId);
   const routingEpoch = useConnectionRoutingEpoch();
   const appVisible = useAppVisibilityState();
   const queryClient = useQueryClient();
@@ -57,20 +46,15 @@ export const useDeviceVicPalette = (): void => {
     intent: "background",
     staleTime: 60_000,
   });
-  const palettePath = automatic ? readPalettePath(config.data) : "";
+  // A FILENAME, not a path: `Palette Definition` names a file inside `/flash/data`, so it only
+  // resolves once that directory is put back in front of it. Reading the raw value as an FTP path
+  // fails on every real device and quietly falls back to the built-in palette, which looks exactly
+  // like the machine having no palette set.
+  const paletteFilename = automatic ? readDevicePaletteFilename(config.data) : pinnedFilename;
   const devicePalette = useQuery({
-    queryKey: ["device-vic-palette", routingEpoch, palettePath],
-    queryFn: async () => {
-      const connection = await resolveFtpConnectionOptions();
-      const result = await readFtpFile({
-        ...connection,
-        path: palettePath,
-        timeoutMs: 3_000,
-        __c64uIntent: "background",
-      });
-      return parseVpl(decodeBase64Text(result.data), `device:${palettePath}`);
-    },
-    enabled: automatic && Boolean(palettePath),
+    queryKey: ["device-vic-palette", routingEpoch, paletteFilename],
+    queryFn: () => readDevicePalette(paletteFilename),
+    enabled: Boolean(paletteFilename),
     retry: false,
     staleTime: Infinity,
   });
@@ -82,16 +66,20 @@ export const useDeviceVicPalette = (): void => {
   }, [appVisible, automatic, queryClient, routingEpoch]);
 
   useEffect(() => {
-    if (!automatic) {
-      setActiveVicPalette(paletteId);
-      return;
-    }
     if (devicePalette.data) {
+      // Covers both a pinned device palette and the followed one; either way the colors have to
+      // come from the file, because the id is not in the built-in table.
       setActiveVicPaletteDefinition(devicePalette.data);
       return;
     }
+    if (!automatic && !pinnedFilename) {
+      setActiveVicPalette(paletteId);
+      return;
+    }
+    // Following the machine with nothing selected, or a pinned file that is not readable yet or at
+    // all. The machine's own built-in palette is the honest answer in every one of those cases.
     setActiveVicPaletteDefinition(U64_FIRMWARE_DEFAULT_VIC_PALETTE);
-  }, [automatic, devicePalette.data, paletteId]);
+  }, [automatic, devicePalette.data, paletteId, pinnedFilename]);
 
   useEffect(() => {
     if (!automatic || !config.error) return;
@@ -101,10 +89,10 @@ export const useDeviceVicPalette = (): void => {
   }, [automatic, config.error]);
 
   useEffect(() => {
-    if (!automatic || !palettePath || !devicePalette.error) return;
+    if (!paletteFilename || !devicePalette.error) return;
     addLog("warn", "Device palette unavailable; using Default", {
-      path: palettePath,
+      filename: paletteFilename,
       message: devicePalette.error.message,
     });
-  }, [automatic, devicePalette.error, palettePath]);
+  }, [devicePalette.error, paletteFilename]);
 };

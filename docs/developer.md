@@ -192,7 +192,7 @@ Expected behavior:
 
 Lock/unlock cannot be fully validated in CI. For local Android validation:
 
-1. Start playback on the Play Files page with a short-duration SID.
+1. Start playback on the Play files page with a short-duration SID.
 2. Lock the device (example): `adb shell input keyevent 26`.
 3. Wait until after the track duration.
 4. Unlock the device.

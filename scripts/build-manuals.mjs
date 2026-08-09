@@ -43,7 +43,7 @@ const slugify = (value) => {
 };
 
 // One accent hue per top-level chapter. Shown in the running header, the chapter
-// heading, and that chapter's Table of Contents entries, so the colour tells you
+// heading, and that chapter's Table of Contents entries, so the color tells you
 // at a glance which part of the manual you are in. Chosen for legibility on the
 // warm off-white page and to echo a friendly retro palette.
 const CHAPTER_COLORS = [
@@ -88,8 +88,8 @@ const buildToc = (markdown) => {
 };
 
 // Stamps each body heading with its anchor id, its hierarchical number, and the
-// accent colour of its chapter (as a CSS variable), so headings, running headers,
-// and the ToC share one colour and numbering system. The number is baked into the
+// accent color of its chapter (as a CSS variable), so headings, running headers,
+// and the ToC share one color and numbering system. The number is baked into the
 // text (not a CSS counter) so it survives Paged.js pagination unchanged.
 const addHeadingIds = (html, toc) => {
   let headingIndex = 0;
@@ -104,7 +104,7 @@ const addHeadingIds = (html, toc) => {
 };
 
 /**
- * Trim size and the four margins, in millimetres.
+ * Trim size and the four margins, in millimeters.
  *
  * Held in one place because they are the decision the rest of the print layout
  * follows: the measure (page width minus the two side margins) is what sets the
@@ -175,7 +175,7 @@ const MONO = `"Plex Mono", "Manual Symbols", Consolas, monospace`;
 // polyfill, since headless Chromium alone supports neither running headers nor
 // Table-of-Contents page numbers). Named strings carry the current chapter into
 // the page header; target-counter fills the ToC page numbers; a per-page CSS
-// variable (--accent, set by a Paged.js handler) colours the header.
+// variable (--accent, set by a Paged.js handler) colors the header.
 const pdfCss = `
   @page {
     size: ${PAGE.width}mm ${PAGE.height}mm;
@@ -420,7 +420,7 @@ const pdfCss = `
   .idx-term { color: #1a1917; }
   .idx-pages { color: #6b6257; font-variant-numeric: tabular-nums; }
   .idx-see { color: #8a8177; font-style: italic; }
-  /* Marks are anchors only. They must not colour, space or otherwise disturb the
+  /* Marks are anchors only. They must not color, space or otherwise disturb the
      prose they sit in. */
   .idx { all: unset; }
 
@@ -668,13 +668,20 @@ const autoSaveConfigLocation = (variant) =>
     ? "Set it on the Commodore 64 Ultimate at **C= + RESTORE → User interface → Auto save config**; the same setting appears in Config as **User interface → Auto save config**."
     : "On a Commodore 64 Ultimate, set it at **C= + RESTORE → User interface → Auto save config**. C64 Commander mirrors that menu in Config as **User interface → Auto save config**. On other supported devices, search Config for **Auto Save Config** if the menu naming differs.";
 
+/**
+ * The machine's `Auto save config` governs the machine's OWN setup menu, and nothing else.
+ *
+ * The firmware reads it in one place, when you leave that menu on screen. A setting changed over
+ * the network is applied and then left unsaved whatever it says, so the manual must not send anyone
+ * to it expecting their app changes to stick. That is what the app's own setting is for.
+ */
 const autoSaveConfigGuidance = (variant) =>
-  `To make configuration changes save themselves, set **Auto save config** to **Yes**. ${autoSaveConfigLocation(
+  `The machine's own **Auto save config** does not cover this. It decides whether the machine saves changes you make in its on-screen setup menu, and has no effect on changes made from the app. ${autoSaveConfigLocation(
     variant,
   )}`;
 
 const saveToFlashGuidance = (variant) =>
-  `Use **Save to flash** when **Auto save config** is **Ask** or **No**, or when you want to force a flash save now. ${autoSaveConfigGuidance(
+  `Turn on **Keep device settings after a restart** in **Settings → Device Safety** to have the app save every device setting it changes, or use **Save** in the Config card to write the current settings to flash once. ${autoSaveConfigGuidance(
     variant,
   )}`;
 
@@ -792,7 +799,7 @@ const featureRows = ({ features, variant }) => {
     [
       "Save/load device config",
       "**Home → Config**",
-      "Save to flash when Auto save config is Ask or No, or to force a save now.",
+      "Save writes the current settings to flash. Turn on Keep device settings after a restart to do it automatically.",
     ],
     [
       "App-stored config snapshots",
@@ -937,6 +944,12 @@ const featureRows = ({ features, variant }) => {
     ],
     ["Notification style and duration", "**Settings → Notifications**", "Show everything, or errors alone."],
     ["Device Safety", "**Settings → Device Safety**", deviceSafetyGuidance(variant)],
+    [
+      "Keep device settings after a restart",
+      "**Settings → Device Safety**",
+      "Off by default: changes apply at once but a power cycle undoes them. See Making settings stick.",
+    ],
+    ["Screen colors (palette)", "**Home → Video → Screen colors**", "Apply to this device, the C64, or both."],
     ["Diagnostics", "**Header badge / `*`**, Settings → Diagnostics", "Badge is preferred for fast access."],
     ["Logs, traces, errors, health checks", "**Diagnostics**", "Use filters and Share for support."],
     ["Built-in help", "**Docs**", "Good for quick reminders inside the app."],
@@ -1182,11 +1195,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
         ]
       : []),
-    `Keep going and you reach Quick Config: the settings you are most likely to want mid-session, in three cards. **CPU & RAM** holds the processor speed, turbo behaviour and the RAM expansion. **Ports** holds the joystick swap, the serial bus, the cartridge preference and the user port. **Video** holds the output mode, the resolution and the scan lines. Beside them are a **User Interface** card and, on a machine with lights, **Case Light** and **Keyboard Light**.`,
+    `Keep going and you reach Quick Config: the settings you are most likely to want mid-session, in three cards. **CPU & RAM** holds the processor speed, turbo behavior and the RAM expansion. **Ports** holds the joystick swap, the serial bus, the cartridge preference and the user port. **Video** holds the output mode, the resolution and the scan lines. Beside them are a **User Interface** card and, on a machine with lights, **Case Light** and **Keyboard Light**.`,
     "",
     "Everything here is in Config as well. Quick Config saves you the search.",
     "",
-    `The lower cards cover drives, the printer, the SID mixer, streams, and the **Config** card. That last one holds **Save to flash**, which writes the current settings into flash on ${targetDeviceShortName(
+    `The lower cards cover drives, the printer, the SID mixer, streams, and the **Config** card. That last one holds **Save**, which writes the current settings into flash on ${targetDeviceShortName(
       variant,
     )} so they survive a power cycle, along with Load, Reset, Revert, and the app's own named configuration snapshots.`,
     "",
@@ -1274,7 +1287,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "### Settings",
     "",
-    "Settings controls app behaviour and saved connection details.",
+    "Settings controls app behavior and saved connection details.",
     "",
     image("Settings overview", profile, "settings/profiles/{profile}/01-overview.png"),
     "",
@@ -1294,9 +1307,21 @@ export const renderManualMarkdown = ({ variant, features }) => {
       variant,
     )}. Saved devices and passwords are deliberately left out, so the file is safe to move about.`,
     "",
-    "**Notifications** decides whether you see every message or only errors, and how long each one stays on screen. **About** shows the version and links to the open source licences.",
+    "**Notifications** decides whether you see every message or only errors, and how long each one stays on screen. **About** shows the version and links to the open source licenses.",
     "",
     "Feature switches appear only where a feature is safe for anyone to change. A feature this edition does not support is absent from Settings and from this manual.",
+    "",
+    "#### Making settings stick",
+    "",
+    `A setting you change from the app reaches ${targetDeviceShortName(
+      variant,
+    )} at once — the colors, the video mode, the LED lights and the rest all change as you make them. By default that is as far as it goes: switch the machine off and on, and it comes back the way it was. Nothing you try from the app is permanent, which makes it a safe place to experiment.`,
+    "",
+    "**Keep device settings after a restart**, in **Settings → Device Safety**, changes that. With it on, every device setting the app changes is also written to the machine's own storage, so it survives a power cycle, exactly as though you had saved it from the machine's setup menu.",
+    "",
+    `Turn it on deliberately. It is not hard to save a setting that leaves the machine awkward to use, and once saved it comes back that way every time. The way out is to hold **RESTORE** while you switch ${targetDeviceShortName(
+      variant,
+    )} on: it then starts with its default settings instead of the saved ones, which is enough to get you back to a working machine. Nothing is erased — your saved values are still there — so you can put the setting right and save it again.`,
     "",
     "### Docs",
     "",
@@ -1349,7 +1374,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "1. Open **Settings → Connection**.",
     "2. Review the saved-device list.",
-    "3. Give each device a name you will recognise, and check its ports.",
+    "3. Give each device a name you will recognize, and check its ports.",
     "4. Use **Save & Connect** after changing the active device.",
     "5. Remove any device that is no longer on your network.",
     "",
@@ -1456,22 +1481,20 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "1. Try **Home → Quick Config** first.",
     "2. If the setting is not there, open **Config** and search.",
     "3. Change the value.",
-    "4. Use **Save to flash** if **Auto save config** is **Ask** or **No** and the change should survive a device reboot or power cycle.",
+    "4. Use **Save** in the Config card if the change should survive a device reboot or power cycle, unless **Keep device settings after a restart** is already on.",
     "",
     "Preferred path: Home for common settings; Config for the full tree.",
     "",
     "### Save Device Configuration",
     "",
-    "Use this flow when **Auto save config** is **Ask** or **No**, or when you want to force a flash save now.",
+    "Use this flow to write the current settings to flash once. A device setting changed from the app is applied straight away but is not saved unless you save it, so without this the machine's next power-up brings back what it had before.",
     "",
     "1. Make the changes you need on Home or Config.",
     "2. Confirm the device is healthy.",
     "3. Open the **Config** card on Home.",
-    "4. Choose **Save to flash**.",
+    "4. Choose **Save** in the Config card.",
     "",
-    `Preferred path: set **Auto save config** to **Yes** when you want the firmware to save changes automatically. ${autoSaveConfigLocation(
-      variant,
-    )}`,
+    "Preferred path: turn on **Keep device settings after a restart** in **Settings → Device Safety** and the app saves for you, a moment after your changes settle.",
     "",
     "### Investigate a Problem",
     "",
@@ -1531,7 +1554,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `**Volume** and **Mute** follow whichever machine is sounding: playing here, they change this tune alone and leave your ringer and notifications as they were; playing on the C64, they move the machine’s own mixer. Your ${appDeviceName(variant)} will either play a tune itself or play the sound sent from your C64, never both at once — whichever you start last takes over.`,
     "",
-    `The rest is under **Settings → SID Radio**. **Crossfade** overlaps one tune into the next, both audible while the first fades away: **Off** for a clean cut, or **Short** (0.6s), **Medium** (1.5s), **Long** (3s), or **Longest** (4s). It starts at Off. Only your ${appDeviceName(variant)} can sound two tunes at once, so the control is greyed out while **Listen on** is set to the C64.`,
+    `The rest is under **Settings → SID Radio**. **Crossfade** overlaps one tune into the next, both audible while the first fades away: **Off** for a clean cut, or **Short** (0.6s), **Medium** (1.5s), **Long** (3s), or **Longest** (4s). It starts at Off. Only your ${appDeviceName(variant)} can sound two tunes at once, so the control is grayed out while **Listen on** is set to the C64.`,
     "",
     "There are two versions of the SID chip — the **6581** and the **8580** — and music written for one sounds a little different on the other. Most files say which the composer used, and those always play on the chip they name. For the many older files that say nothing, turn on **Match my Commodore 64** and the app reads the chip out of your own machine; **Otherwise use** picks between 6581 and 8580 for when it has not read one yet. A line underneath tells you which is in use at the moment.",
     "",
@@ -1557,9 +1580,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "- **From tunes you like.** This unlocks once five tunes carry a heart, and builds a station out of them.",
     "- **Surprise me.** Anything at all.",
     "",
-    "Switch on **Based on my likes** to tilt any mood towards your own taste. The station keeps the mood's name; what changes is the music it reaches for.",
+    "Switch on **Based on my likes** to tilt any mood toward your own taste. The station keeps the mood's name; what changes is the music it reaches for.",
     "",
-    "You can also start from whatever is already playing. Tap **More like this** and the station follows that tune. It appears whenever a SID the collection recognises is playing, including while another station is running.",
+    "You can also start from whatever is already playing. Tap **More like this** and the station follows that tune. It appears whenever a SID the collection recognizes is playing, including while another station is running.",
     "",
     "#### Telling it what you like",
     "",
@@ -1661,7 +1684,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 `When you steer your ${appDeviceName(
                   variant,
-                )} with a physical keypad, those same keys could drive the C64 or move the picture, so Live View makes the difference impossible to mistake. The mirror wears a coloured border, and a matching label in the corner of the picture, that tell you at a glance which one you are doing: **blue**, marked **“C64”**, means your keys go straight to the machine, as usual; **amber**, marked **“View”**, means your keys zoom and pan the picture instead.`,
+                )} with a physical keypad, those same keys could drive the C64 or move the picture, so Live View makes the difference impossible to mistake. The mirror wears a colored border, and a matching label in the corner of the picture, that tell you at a glance which one you are doing: **blue**, marked **“C64”**, means your keys go straight to the machine, as usual; **amber**, marked **“View”**, means your keys zoom and pan the picture instead.`,
                 "",
                 "Press `*` or the **menu key**, or the on-screen **Fit** button, to change between the two. You are never stranded in front of a frozen game: adjusting the view returns to driving on its own after a short pause. While the border is amber, the keypad moves the view like this:",
                 "",
@@ -1673,7 +1696,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "| **6**, or D-pad right | Pan right |",
                 "| **3** or **9** | Zoom in |",
                 "| **1** or **7** | Zoom out |",
-                "| **0**, **5**, or the centre/OK key | Fit the whole screen back on |",
+                "| **0**, **5**, or the center/OK key | Fit the whole screen back on |",
                 "| the **menu** key | Return to driving the C64 |",
                 "",
                 "In **Game Mode**, while the border is blue and the keys are driving the C64, `#` brings the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again — so the picture and the sound can be turned off and on without a touchscreen.",
@@ -1688,7 +1711,13 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "One number sits beside them: the **audio network buffer**, 60 milliseconds to begin with. It is how much sound the app holds in hand against a network that delivers in fits and starts. Lower it for the shortest possible delay, raise it if the sound breaks up.",
                 "",
-                `Your C64 sends colour *numbers* rather than colours, so the app decides what shade to paint each one. **Settings → Play and Disk → Screen colours** starts with **Device palette (automatic)**: it reads the VPL selected on ${targetDeviceShortName(variant)} and uses the same colours as its output. If no VPL is configured, or the file cannot be read over FTP, it safely uses **Default** instead. You can choose Default or any of the eight bundled alternatives — warmer, cooler, monochrome, and so on — at any time. All sixteen colours are shown before you choose. It changes only how Live View looks on your device; the C64 carries on exactly as before, and it costs the picture nothing.`,
+                `Your C64 sends color *numbers* rather than colors, so something has to decide what shade to paint each one. That choice is **Screen colors**, the first row of the **Video** card on the Home page. It shows the palette in use and all sixteen of its colors; tap it to choose another.`,
+                "",
+                `A palette can apply in two places, and **Show on** decides which of them — the same question the Play page asks about a tune. **Local** changes the picture in Live View on your device and touches nothing else. **Remote** changes what ${targetDeviceShortName(variant)} itself draws, so the television in the room changes too. **Both** does each of them.`,
+                "",
+                `The list starts with **Follow the C64**, which is where it begins: Live View simply paints whatever palette the machine is set to, so your phone and your television match. Below that are nine bundled palettes — warmer, cooler, monochrome, and so on — each with all sixteen of its colors shown before you choose. Any palette already installed on ${targetDeviceShortName(variant)} is listed too, under **Already on this C64**.`,
+                "",
+                `Sending a palette to the machine copies a small file to its storage and changes the picture straight away. Whether it is still there after you switch the machine off is a separate question, answered by **Keep device settings after a restart** in **Settings → Device Safety** — see *Making settings stick*.`,
                 "",
                 "The **picture** is the demanding part, so you get a say in how much of it to draw. Open **Stats** — it appears under Live View while it is playing — and choose a **Video frame rate**:",
                 "",
@@ -1702,7 +1731,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "Under Live View are three checks you can run whenever something seems off. They come with the app; **A/V Sync tests** in Settings → Experimental Features hides them if you would rather not see them.",
                 "",
                 "- **A/V sync** and **Tap latency** answer *when*: how far apart the sound and picture are, and how long it takes a keypress to come back to you.",
-                "- **Tone & colour ladder** answers *what*. It plays a short tune on your C64 — a scale from C3 up to C4 and back, half a second a note — and changes the screen colour on every single note, stepping through all sixteen C64 colours as it goes. Because the C64 changes the note and the colour at the very same instant, anything that arrives out of step arrived that way across your network.",
+                "- **Tone & color ladder** answers *what*. It plays a short tune on your C64 — a scale from C3 up to C4 and back, half a second a note — and changes the screen color on every single note, stepping through all sixteen C64 colors as it goes. Because the C64 changes the note and the color at the very same instant, anything that arrives out of step arrived that way across your network.",
                 "",
                 "The ladder grades what comes back and shows you five numbers: how many notes were **in tune**, how far off the **pitch** was, whether notes ran **long or short**, whether the two deliberate **silent gaps** really were silent, and how far apart the **sound and picture** were. Wrong pitches, notes running long, or a gap that is not silent all point the same way — the sound is being corrupted on the way to you rather than merely delayed. The most common cause by far is a second machine on your network streaming into the same place, and this check makes that obvious in one run.",
                 "",
@@ -1806,12 +1835,12 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "Lying down, or somewhere the sensor cannot tell? The **Orientation** control in Game Mode's toolbar pins it — **Auto**, **0°**, **90°** or **270°** — for as long as the sheet is open. It is deliberately not remembered: an orientation pinned for one game should not still apply to the next one weeks later.",
                 "",
-                "Prefer different keys? **Settings → Play and Disk → Joystick keys** offers **Diamond (8-centred)**, which is the arrangement above, **Classic T9** (2, 4, 6 and 8 with 5 as fire), and **Custom**, where you press the key you want for each direction. You only ever set it up upright; every other way round follows from that.",
+                "Prefer different keys? **Settings → Play and Disk → Joystick keys** offers **Diamond (8-centered)**, which is the arrangement above, **Classic T9** (2, 4, 6 and 8 with 5 as fire), and **Custom**, where you press the key you want for each direction. You only ever set it up upright; every other way round follows from that.",
               ]
             : [
                 "#### Steering with a physical keyboard",
                 "",
-                "**Settings → Play and Disk → Joystick keys** decides which keys steer. **Classic T9** uses 2, 4, 6 and 8 with 5 as fire, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centred)** uses the four keys around 8, with 8 itself as fire. **Custom** lets you press the key you want for each direction. A hardware D-pad always steers as well, whatever you choose here. The mapping turns with your device, so you only ever set it up one way up, and the **Orientation** control in Game Mode's toolbar pins it — **Auto**, **0°**, **90°** or **270°** — where the sensor cannot tell.",
+                "**Settings → Play and Disk → Joystick keys** decides which keys steer. **Classic T9** uses 2, 4, 6 and 8 with 5 as fire, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centered)** uses the four keys around 8, with 8 itself as fire. **Custom** lets you press the key you want for each direction. A hardware D-pad always steers as well, whatever you choose here. The mapping turns with your device, so you only ever set it up one way up, and the **Orientation** control in Game Mode's toolbar pins it — **Auto**, **0°**, **90°** or **270°** — where the sensor cannot tell.",
               ]),
           "",
           "Leave with **Exit**, at the top of the Game Mode toolbar, or your device's Back button. Both release everything you were holding. Closing the sheet also stops the picture and sound if Game Mode was what started them, and leaves them running if they were already on before you arrived.",
@@ -1943,10 +1972,10 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "When you tap **Save RAM**, the app asks which region of memory to capture:",
           "",
-          "- **CPU + RAM Snapshot** freezes the running program and stores the whole 64K of memory together with the processor's registers, so it can pick up exactly where it left off. It suits BASIC and unhurried programs; a fast game may not resume cleanly. Not every machine or every program will give up its processor state, and when that happens the app says so and points you at a Program snapshot instead. Once in a while a program stays frozen afterwards, and the app tells you that too — restore it, or reset the machine.",
+          "- **CPU + RAM snapshot** freezes the running program and stores the whole 64K of memory together with the processor's registers, so it can pick up exactly where it left off. It suits BASIC and unhurried programs; a fast game may not resume cleanly. Not every machine or every program will give up its processor state, and when that happens the app says so and points you at a Program snapshot instead. Once in a while a program stays frozen afterwards, and the app tells you that too — restore it, or reset the machine.",
           "- **Program Snapshot** stores almost all of memory (everything but the stack). A good all-round choice.",
           "- **Basic Snapshot** stores just the BASIC program and its variables.",
-          "- **Screen Snapshot** stores the current screen and its colours.",
+          "- **Screen Snapshot** stores the current screen and its colors.",
           "- **Custom Snapshot** lets you type the exact address ranges you want.",
           "",
           `Snapshots live on your ${appDeviceName(
@@ -1971,7 +2000,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Every change — on Home, on Disks, or in Config — reaches the running device at once, and almost all of them take effect there and then; a few, the cartridge choice among them, wait for the next reset. But the device holds two copies of its settings: the **live** ones it is using now, and a **flash** copy it reloads at power-on. A change is live instantly; it survives a reboot or power cycle only once it reaches flash.",
     "",
-    `The **Config** card on Home decides which. **Save to flash** writes the live settings into flash now — reach for it when **Auto save config** is Ask or No. Beside it are **Load** from flash, **Reset** to the factory settings, and **Revert**, which undoes the changes you have made since the last save. The app also keeps its own named **configuration snapshots** on the ${appDeviceName(
+    `The **Config** card on Home decides which. **Save** writes the live settings into flash now — reach for it when you have left **Keep device settings after a restart** off and want this one change to last. Beside it are **Load** from flash, **Reset** to the factory settings, and **Revert**, which undoes the changes you have made since the last save. The app also keeps its own named **configuration snapshots** on the ${appDeviceName(
       variant,
     )}, apart from the device's flash: save the setup you like, then load it back whenever you want the whole thing at once.`,
     "",
@@ -2179,7 +2208,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
         ],
         ["Program", "Almost all of memory, skipping the stack. A good all-round choice.", "$0000–$00FF, $0200–$FFFF"],
         ["Basic", "The BASIC program and its variables.", "$002B–$0038, $0801–$9FFF"],
-        ["Screen", "The current screen and its colours.", "VIC bank, $D000–$D02E, $D800–$DBFF, $DD00–$DD01"],
+        ["Screen", "The current screen and its colors.", "VIC bank, $D000–$D02E, $D800–$DBFF, $DD00–$DD01"],
         ["Custom", "Exactly the address ranges you type.", "User-defined"],
       ],
     ),
@@ -2360,7 +2389,7 @@ const INDEX_TERMS = [
   { term: "Ethernet", match: ["**Ethernet**"] },
   { term: "feature switches", match: ["Feature switches", "Stable Features"] },
   { term: "firmware", match: ["firmware"] },
-  { term: "flash, saving to", match: ["**Save to flash**"] },
+  { term: "flash, saving to", match: ["**Keep device settings after a restart**"] },
   { term: "Follow", match: ["**Follow**"] },
   { term: "FTP", match: ["FTP File Service", "FTP"] },
   { term: "Game Mode", match: ["#### Game Mode", "**Game Mode**"] },
@@ -2388,7 +2417,7 @@ const INDEX_TERMS = [
   { term: "NTSC", match: ["**NTSC**"] },
   { term: "orientation", match: ["**Orientation**", "Orientation"] },
   { term: "PAL", match: ["**PAL**"] },
-  { term: "palettes", match: ["Screen colours"] },
+  { term: "palettes", match: ["Screen colors"] },
   { term: "Pause", match: ["Pause/Resume"] },
   { term: "Play page", match: ["### Play"] },
   { term: "playlist", match: ["playlist"] },
@@ -2423,7 +2452,7 @@ const INDEX_TERMS = [
   { term: "streams", match: ["### Streams", "**Home → Streams**"] },
   { term: "T9 text entry", match: ["T9 Text Entry", "T9 mode"] },
   { term: "Telnet", match: ["Telnet Remote Menu Service", "Telnet"] },
-  { term: "tone and colour ladder", match: ["Tone & colour ladder"] },
+  { term: "tone and color ladder", match: ["Tone & color ladder"] },
   { term: "traces", match: ["Traces"] },
   { term: "tunes, choosing", match: ["1/19"] },
   { term: "tunes, names of", match: ["what the individual tunes inside a file are called"] },
@@ -2531,14 +2560,14 @@ const renderIndexHtml = (pagesByEntry) => {
 
 /**
  * The colophon a bound manual carries on the back of its title page: which
- * edition this is, what it is for, who owns it, and the licence. Also the place
+ * edition this is, what it is for, who owns it, and the license. Also the place
  * the Commodore trademark is acknowledged, which a printed product needs and a
  * web page can get away with omitting.
  */
 /**
  * The edition printed on the imprint page: the most recent release tag.
  *
- * Not `package.json`'s version. That is the version being *worked towards* and
+ * Not `package.json`'s version. That is the version being *worked toward* and
  * moves with every commit on the way there, so a manual built mid-cycle would
  * claim to describe a release that does not exist yet. The newest tag is the last
  * release that actually shipped, which is the one a reader holding a printed copy
@@ -2608,7 +2637,7 @@ const paginate = async ({ browser, html, collectMarks = false }) => {
   await page.addScriptTag({ path: pagedPolyfillPath });
   await page.evaluate(async () => {
     const Paged = window.Paged;
-    // Tints each page's running header with its chapter's accent colour, and tags
+    // Tints each page's running header with its chapter's accent color, and tags
     // the two kinds of page whose furniture the stylesheet then strips.
     class ChapterAccentHandler extends Paged.Handler {
       constructor(chunker, polisher, caller) {

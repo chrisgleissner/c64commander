@@ -37,7 +37,7 @@ describe("ClearFlashDialog", () => {
 
   it("renders when open", () => {
     render(<ClearFlashDialog {...defaultProps} />);
-    expect(screen.getByText("Clear Flash Configuration?")).toBeInTheDocument();
+    expect(screen.getByText("Clear flash configuration?")).toBeInTheDocument();
     expect(
       screen.getByText("This will reset all saved settings to factory defaults. This cannot be undone."),
     ).toBeInTheDocument();
@@ -45,7 +45,7 @@ describe("ClearFlashDialog", () => {
 
   it("does not render when closed", () => {
     render(<ClearFlashDialog {...defaultProps} open={false} />);
-    expect(screen.queryByText("Clear Flash Configuration?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Clear flash configuration?")).not.toBeInTheDocument();
   });
 
   it("calls onConfirm when Clear Flash button is clicked", () => {

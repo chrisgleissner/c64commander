@@ -44,7 +44,7 @@ export const PlaybackSettingsPanel = ({
   songlengthsError,
 }: PlaybackSettingsPanelProps) => {
   const songlengthsMetadata = [
-    songlengthsEntryCount !== null ? `${songlengthsEntryCount} Entries` : null,
+    songlengthsEntryCount !== null ? `${songlengthsEntryCount} entries` : null,
     songlengthsSizeLabel,
   ]
     .filter(Boolean)

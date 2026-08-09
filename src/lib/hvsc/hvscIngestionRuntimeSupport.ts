@@ -123,7 +123,7 @@ export const formatPathListPreview = (paths: string[]) => {
 };
 
 export const applyCancelledIngestionState = (
-  message = "Cancelled",
+  message = "Canceled",
   emitProgress?: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void,
   archiveName?: string,
 ) => {

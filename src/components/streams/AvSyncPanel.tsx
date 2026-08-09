@@ -125,7 +125,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
       <CollapsibleSection
         testid="av-sync"
         icon={<Activity className="h-4 w-4 text-muted-foreground" aria-hidden />}
-        title="A/V Sync"
+        title="A/V sync"
         summary={
           <span className="text-xs text-muted-foreground" data-testid="av-sync-count">
             {stats.count} {stats.count === 1 ? "pop" : "pops"}
@@ -242,7 +242,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
       <CollapsibleSection
         testid="av-tone-ladder"
         icon={<Music className="h-4 w-4 text-muted-foreground" aria-hidden />}
-        title="Tone & colour ladder"
+        title="Tone & color ladder"
         summary={
           <span className="text-xs text-muted-foreground" data-testid="av-tone-ladder-summary">
             {ladder.result ? `${ladder.result.inTunePct}% in tune` : "not measured"}
@@ -351,7 +351,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
                 <thead className="sticky top-0 bg-muted/80 text-[11px] uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-2 py-1 text-left font-medium">Note</th>
-                    <th className="px-2 py-1 text-left font-medium">Colour</th>
+                    <th className="px-2 py-1 text-left font-medium">Color</th>
                     <th className="px-2 py-1 text-right font-medium">Heard</th>
                     <th className="px-2 py-1 text-right font-medium">{"\u0394"} cents</th>
                     <th className="px-2 py-1 text-right font-medium">{"\u0394"} length</th>
@@ -393,7 +393,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
           </p>
         ) : (
           <p className="mt-2 text-[11px] text-muted-foreground">
-            Plays a known scale that changes the screen colour on every note. Tap <strong>Run test</strong> with Listen
+            Plays a known scale that changes the screen color on every note. Tap <strong>Run test</strong> with Listen
             and Watch both on.
           </p>
         )}

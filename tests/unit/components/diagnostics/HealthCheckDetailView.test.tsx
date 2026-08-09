@@ -352,7 +352,7 @@ describe("HealthCheckDetailView", () => {
 
       const row = screen.getByTestId("health-check-probe-rest");
       expect(row.getAttribute("data-live-status")).toBe("done");
-      expect(row).toHaveTextContent("Cancelled");
+      expect(row).toHaveTextContent("Canceled");
       expect(row).toHaveTextContent("User aborted the probe");
       expect(row).toHaveTextContent("—");
       expect(screen.queryByText("User aborted the probe", { selector: "p" })).not.toBeInTheDocument();
@@ -362,7 +362,7 @@ describe("HealthCheckDetailView", () => {
   describe("header", () => {
     it("renders the title without a redundant back control", () => {
       render(<HealthCheckDetailView result={makeResult()} />);
-      expect(screen.getByText("Health Check Detail")).toBeVisible();
+      expect(screen.getByText("Health check detail")).toBeVisible();
       expect(screen.queryByTestId("health-check-detail-back")).toBeNull();
     });
   });
