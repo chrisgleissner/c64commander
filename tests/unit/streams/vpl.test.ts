@@ -60,4 +60,10 @@ describe("VPL parser", () => {
       "partial.vpl: expected 16 colours, found 15",
     );
   });
+
+  it.each(["ffjunk", "1.5", "0g"])("rejects a malformed hexadecimal component (%s)", (component) => {
+    expect(() => parseVpl(validVpl.replace("00 00 00", `${component} 00 00`), "malformed.vpl")).toThrow(
+      "malformed.vpl: cannot read",
+    );
+  });
 });

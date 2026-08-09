@@ -90,9 +90,10 @@ export const activeVicPaletteLut = (): Uint32Array => {
 };
 
 export const setActiveVicPalette = (id: string): void => {
+  saveVicPaletteId(id);
+  if (id === DEVICE_VIC_PALETTE_ID) return;
   const current = ensureActive();
   const next = vicPaletteById(id);
-  saveVicPaletteId(id);
   // Rebuilding on every call would be harmless for correctness but would churn the table the decode
   // loop is holding, so a no-op selection stays a no-op.
   if (next.id === current.id) return;

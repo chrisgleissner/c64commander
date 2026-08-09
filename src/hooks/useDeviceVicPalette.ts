@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useSyncExternalStore } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { extractConfigValue } from "@/lib/config/configValueExtractor";
 import { loadVicPaletteId } from "@/lib/config/appSettings";
@@ -14,6 +14,7 @@ import { readFtpFile } from "@/lib/ftp/ftpClient";
 import { resolveFtpConnectionOptions } from "@/lib/ftp/ftpConfig";
 import { addLog } from "@/lib/logging";
 import { useC64ConfigItem, useConnectionRoutingEpoch } from "@/hooks/useC64Connection";
+import { useAppVisibilityState } from "@/hooks/useScreenActivity";
 import {
   DEVICE_VIC_PALETTE_ID,
   U64_FIRMWARE_DEFAULT_VIC_PALETTE,
@@ -50,6 +51,8 @@ export const useDeviceVicPalette = (): void => {
   const paletteId = useSyncExternalStore(subscribeVicPalettePreference, loadVicPaletteId, loadVicPaletteId);
   const automatic = paletteId === DEVICE_VIC_PALETTE_ID;
   const routingEpoch = useConnectionRoutingEpoch();
+  const appVisible = useAppVisibilityState();
+  const queryClient = useQueryClient();
   const config = useC64ConfigItem(PALETTE_CATEGORY, PALETTE_ITEM, automatic, {
     intent: "background",
     staleTime: 60_000,
@@ -71,6 +74,12 @@ export const useDeviceVicPalette = (): void => {
     retry: false,
     staleTime: Infinity,
   });
+
+  useEffect(() => {
+    if (!automatic || !appVisible) return;
+    void queryClient.invalidateQueries({ queryKey: ["c64-config-item", PALETTE_CATEGORY, PALETTE_ITEM] });
+    void queryClient.invalidateQueries({ queryKey: ["device-vic-palette", routingEpoch] });
+  }, [appVisible, automatic, queryClient, routingEpoch]);
 
   useEffect(() => {
     if (!automatic) {

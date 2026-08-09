@@ -41,6 +41,7 @@ import {
   loadEnableSwipeNavigation,
   loadStartupDiscoveryWindowMs,
   loadVolumeSliderPreviewIntervalMs,
+  loadVicPaletteId,
   saveAutomaticDemoModeEnabled,
   saveBackgroundRediscoveryIntervalMs,
   saveDiscoveryProbeTimeoutMs,
@@ -50,6 +51,7 @@ import {
   saveEnableSwipeNavigation,
   saveStartupDiscoveryWindowMs,
   saveVolumeSliderPreviewIntervalMs,
+  saveVicPaletteId,
 } from "@/lib/config/appSettings";
 
 const collectSettingEvents = () => {
@@ -91,6 +93,16 @@ describe("appSettings", () => {
     expect(DEFAULT_PLAYBACK_ENGINE).toBe("c64"); // spec §12.5: C64 by default (local is opt-in)
     expect(loadLocalEngineEnabled()).toBe(DEFAULT_LOCAL_ENGINE_ENABLED);
     expect(DEFAULT_LOCAL_ENGINE_ENABLED).toBe(true); // GA: the on-device engine choice is offered
+    expect(loadVicPaletteId()).toBe("device");
+  });
+
+  it("persists the VIC palette preference and notifies mounted palette consumers", () => {
+    const { events, dispose } = collectSettingEvents();
+    saveVicPaletteId("monochrome");
+
+    expect(loadVicPaletteId()).toBe("monochrome");
+    expect(events).toContainEqual({ key: "c64u_vic_palette", value: "monochrome" });
+    dispose();
   });
 
   it("persists the local-engine rollout gate and emits an event", () => {

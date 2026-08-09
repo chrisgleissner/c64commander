@@ -88,13 +88,16 @@ describe("selecting a palette", () => {
 
   it("swaps the lookup table and notifies once", () => {
     const listener = vi.fn();
-    subscribeVicPalette(listener);
+    const unsubscribe = subscribeVicPalette(listener);
     const before = activeVicPaletteLut();
 
     setActiveVicPalette("monochrome");
 
     expect(activeVicPalette().id).toBe("monochrome");
     expect(activeVicPaletteLut()).not.toBe(before);
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+    setActiveVicPalette("night");
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
@@ -114,6 +117,16 @@ describe("selecting a palette", () => {
 
     expect(localStorage.getItem("c64u_vic_palette")).toBe(DEVICE_VIC_PALETTE_ID);
     expect(activeVicPalette().id).toBe("default");
+  });
+
+  it("keeps the current device palette in place when automatic mode is selected", () => {
+    setActiveVicPalette("monochrome");
+    const lut = activeVicPaletteLut();
+
+    setActiveVicPalette(DEVICE_VIC_PALETTE_ID);
+
+    expect(activeVicPalette().id).toBe("monochrome");
+    expect(activeVicPaletteLut()).toBe(lut);
   });
 
   it("does nothing at all when the same palette is picked again", () => {

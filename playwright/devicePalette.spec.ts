@@ -74,6 +74,61 @@ test.describe("device VIC palette", () => {
     await expect(page.getByTestId("settings-vic-palette-swatch-2")).toHaveAttribute("style", /rgb\(144, 144, 144\)/);
   });
 
+  test("refreshes the configured VPL when automatic mode is re-enabled", async ({ page }, testInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    await start(page, "/Usb0/Demos/device-palette.vpl");
+    const updatedVpl = `# NAME: Updated device palette
+# DESC: Updated after returning to automatic mode
+00 00 00
+f7 f7 f7
+12 34 56
+6a d4 cd
+98 35 a4
+4c b4 42
+2c 29 b1
+ef ef 5d
+98 4e 20
+5b 38 00
+d1 67 6d
+4a 4a 4a
+7b 7b 7b
+9f ef 93
+6d 6a ef
+b2 b2 b2`;
+    let ftpReads = 0;
+    let useUpdatedVpl = false;
+    await page.route("**/v1/ftp/read", async (route) => {
+      ftpReads += 1;
+      if (!useUpdatedVpl) {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ data: Buffer.from(updatedVpl).toString("base64"), sizeBytes: updatedVpl.length }),
+      });
+    });
+    await page.goto("/settings");
+
+    const palette = page.getByTestId("settings-vic-palette");
+    await expect(page.getByTestId("settings-vic-palette-description")).toContainText(
+      "Test palette supplied by the configured U64 VPL",
+    );
+    await expect.poll(() => ftpReads).toBe(1);
+
+    await palette.click();
+    await page.getByRole("option", { name: "Monochrome" }).click();
+    useUpdatedVpl = true;
+    await palette.click();
+    await page.getByRole("option", { name: "Device palette (automatic)" }).click();
+
+    await expect(page.getByTestId("settings-vic-palette-description")).toContainText(
+      "Updated after returning to automatic mode",
+    );
+    await expect(page.getByTestId("settings-vic-palette-swatch-2")).toHaveAttribute("style", /rgb\(18, 52, 86\)/);
+    await expect.poll(() => ftpReads).toBe(2);
+  });
+
   test("falls back to Default without FTP when no VPL is selected", async ({ page }, testInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     await start(page, "");
@@ -116,7 +171,9 @@ test.describe("device VIC palette", () => {
   test("falls back to Default when the configured VPL cannot be retrieved", async ({ page }, testInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     await start(page, "/Usb0/Demos/missing-palette.vpl");
+    let ftpReads = 0;
     await page.route("**/v1/ftp/read", async (route) => {
+      ftpReads += 1;
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({}),
@@ -127,5 +184,6 @@ test.describe("device VIC palette", () => {
     await expect(page.getByTestId("settings-vic-palette")).toContainText("Device palette");
     await expect(page.getByTestId("settings-vic-palette-description")).toContainText("C64 Ultimate Default Palette");
     await expect(page.getByTestId("settings-vic-palette-swatch-2")).toHaveAttribute("style", /rgb\(141, 47, 52\)/);
+    await expect.poll(() => ftpReads).toBe(1);
   });
 });
