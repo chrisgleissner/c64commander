@@ -446,7 +446,15 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
-        className={cn("relative flex w-full touch-none select-none items-center", className)}
+        // touch-pan-y, not touch-none: this is a horizontal control, so it only needs to
+        // own the horizontal touch axis. touch-none blocked the vertical axis too, which
+        // meant a page scroll gesture that happened to start on a slider - not uncommon on
+        // Home, where several sliders stretch to nearly the full card width - was captured
+        // entirely by the slider instead of scrolling the page. Worse, Radix's Slider jumps
+        // a track press straight to the touch position, so the blocked gesture silently
+        // changed the slider's value and wrote it to the device. touch-pan-y hands the
+        // vertical axis back to native scrolling and keeps only the horizontal drag.
+        className={cn("relative flex w-full touch-pan-y select-none items-center", className)}
         data-swipe-exclude="true"
         {...props}
         min={min}

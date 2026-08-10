@@ -24,6 +24,17 @@ const featureFlagsRef = vi.hoisted(() => ({
   flags: {} as FeatureFlags,
 }));
 
+const variantRef = vi.hoisted(() => ({
+  id: "c64commander" as string,
+  displayName: "C64 Commander" as string,
+}));
+
+vi.mock("@/generated/variant", () => ({
+  get variant() {
+    return { id: variantRef.id, displayName: variantRef.displayName };
+  },
+}));
+
 vi.mock("framer-motion", () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   motion: {
@@ -57,6 +68,8 @@ vi.mock("@/lib/tracing/userTrace", () => ({
 describe("DocsPage", () => {
   beforeEach(() => {
     featureFlagsRef.flags = { ...defaultFlags };
+    variantRef.id = "c64commander";
+    variantRef.displayName = "C64 Commander";
     // Card open/closed state now persists to localStorage (CollapsibleSection), where
     // it previously reset on every mount - clear it so one test's clicks cannot leak
     // into the next test's expectations.
@@ -90,6 +103,16 @@ describe("DocsPage", () => {
       "https://1541u-documentation.readthedocs.io/en/latest/api/api_calls.html",
     );
     expect(screen.getByTestId("docs-external-resource-site")).toHaveAttribute("href", "https://ultimate64.com/");
+  });
+
+  it("hides the External resources card on c64u-remote, whose only link is already on Settings -> About", () => {
+    variantRef.id = "c64u-remote";
+    variantRef.displayName = "C64U Remote";
+
+    render(<DocsPage />);
+
+    expect(screen.queryByTestId("docs-external-resources")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("docs-external-resource-c64u-user-guide")).not.toBeInTheDocument();
   });
 
   it("describes enabled feature-flagged surfaces", () => {

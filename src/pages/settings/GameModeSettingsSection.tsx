@@ -146,9 +146,9 @@ export const GameModeSettingsSection = () => {
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          Which physical keys steer the joystick. <strong>Diamond</strong> uses the four keys around 8, with 8 as fire.{" "}
-          <strong>Classic T9</strong> uses 2, 4, 6 and 8 with 5 as fire. Choose <strong>Custom</strong> to press the key
-          you want for each direction. The mapping turns with your device, so you only ever set it up for portrait.
+          Which physical keys steer the joystick. <strong>Diamond</strong> uses the four keys around 8, with 8 as fire;{" "}
+          <strong>Classic T9</strong> uses 2, 4, 6 and 8, with 5 as fire; <strong>Custom</strong> lets you press your
+          own key per direction. The mapping turns with your device, so you set it up once, in portrait.
         </p>
       </div>
 
@@ -215,13 +215,13 @@ export const GameModeSettingsSection = () => {
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          Hiding the joystick gives the live picture the whole screen. <strong>Auto</strong> waits to see how you play:
-          the joystick stays until you steer the game with a physical key, then it goes, and touching it brings it back.{" "}
-          <strong>Visible</strong> always keeps it. <strong>Hidden</strong> takes it away as soon as the picture is on.
-          Whichever you choose, <strong>Hide joystick</strong> and <strong>Show joystick</strong> on the Game mode
-          toolbar switch for the game you are playing. Press <kbd>#</kbd> for RETURN, SPACE, the other quick keys and
-          the Live View switches, <kbd>*</kbd> to adjust the view, and Back to leave. With the picture switched off the
-          joystick stays on screen, so Game mode is never blank.
+          Hiding the joystick gives the live picture the whole screen. <strong>Auto</strong> shows it until you steer
+          with a physical key, then hides it until you touch it again. <strong>Visible</strong> always shows it;{" "}
+          <strong>Hidden</strong> hides it as soon as the picture is on. Either way, the toolbar&apos;s{" "}
+          <strong>Hide joystick</strong> / <strong>Show joystick</strong> buttons override this for the game you&apos;re
+          playing. Press <kbd>#</kbd> for RETURN, SPACE, the other quick keys and the Live View switches, <kbd>*</kbd>{" "}
+          to adjust the view, and Back to leave. With the picture off, the joystick stays on screen, so Game mode is
+          never blank.
         </p>
       </div>
 
