@@ -392,6 +392,11 @@ export default function DocsPage() {
   const { flags } = useFeatureFlags();
   const docSections = useMemo(() => buildDocSections(flags), [flags]);
   const externalResourceLinks = getDocsExternalResourceLinks();
+  // Widened to `string`: `variant.id` is generated as a single literal per build, so
+  // comparing it directly against a different variant's literal is a compile error on
+  // whichever variant was generated locally, the same reason getDocsExternalResourceLinks
+  // above takes `variantId: string` rather than reading `variant.id`'s own narrow type.
+  const variantId: string = variant.id;
   return (
     <div className={pageShellClassName}>
       <AppBar title="Docs" />
@@ -408,34 +413,38 @@ export default function DocsPage() {
           </motion.div>
         ))}
 
-        {/* External Links */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: docSections.length * 0.05 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-3"
-          data-testid="docs-external-resources"
-        >
-          <h3 className="font-medium">External resources</h3>
-          <p className="text-sm text-muted-foreground">
-            Official device manuals and API references used by {variant.displayName}.
-          </p>
-          <div className="space-y-2">
-            {externalResourceLinks.map((link) => (
-              <a
-                key={link.id}
-                href={link.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex min-h-11 items-center gap-2 text-sm text-primary hover:underline"
-                data-testid={link.testId}
-              >
-                <ExternalLink className="h-4 w-4" />
-                {link.label}
-              </a>
-            ))}
-          </div>
-        </motion.div>
+        {/* External Links. Omitted on c64u-remote: that edition's only external link is
+            the C64U User Guide, already reachable from Settings -> About, so a whole
+            standalone card for one duplicate link is not worth the space. */}
+        {variantId !== "c64u-remote" && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: docSections.length * 0.05 }}
+            className="bg-card border border-border rounded-xl p-4 space-y-3"
+            data-testid="docs-external-resources"
+          >
+            <h3 className="font-medium">External resources</h3>
+            <p className="text-sm text-muted-foreground">
+              Official device manuals and API references used by {variant.displayName}.
+            </p>
+            <div className="space-y-2">
+              {externalResourceLinks.map((link) => (
+                <a
+                  key={link.id}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-h-11 items-center gap-2 text-sm text-primary hover:underline"
+                  data-testid={link.testId}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  {link.label}
+                </a>
+              ))}
+            </div>
+          </motion.div>
+        )}
       </PageContainer>
     </div>
   );

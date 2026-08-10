@@ -183,14 +183,14 @@ describe("SidRadioSettingsSection SID chip", () => {
     // way would reasonably think the app was ignoring them.
     render(<SidRadioSettingsSection />);
     const block = screen.getByTestId("settings-sid-chip");
-    expect(block).toHaveTextContent(/always play on the chip they name/i);
+    expect(block).toHaveTextContent(/name their chip and always play on it/i);
   });
 
   it("takes the chip from the connected machine by default and says which one is in use", async () => {
     saveLearnedDeviceSidModel("6581");
     render(<SidRadioSettingsSection />);
     expect(screen.getByTestId("settings-sid-chip-from-device")).toBeChecked();
-    expect(screen.getByTestId("settings-sid-chip-effective")).toHaveTextContent(/currently play on the 6581/i);
+    expect(screen.getByTestId("settings-sid-chip-effective")).toHaveTextContent(/play on the 6581/i);
     expect(screen.getByTestId("settings-sid-chip")).toHaveTextContent(/Last read: 6581/);
   });
 
@@ -199,7 +199,7 @@ describe("SidRadioSettingsSection SID chip", () => {
     render(<SidRadioSettingsSection />);
     fireEvent.click(screen.getByTestId("settings-sid-chip-from-device"));
     await waitFor(() => expect(loadLocalSidModelFromDevice()).toBe(false));
-    expect(screen.getByTestId("settings-sid-chip-effective")).toHaveTextContent(/currently play on the 8580/i);
+    expect(screen.getByTestId("settings-sid-chip-effective")).toHaveTextContent(/play on the 8580/i);
   });
 
   it("persists the manual choice and reflects it once inference is off", async () => {
@@ -207,7 +207,7 @@ describe("SidRadioSettingsSection SID chip", () => {
     render(<SidRadioSettingsSection />);
     fireEvent.click(screen.getByTestId("settings-sid-chip-6581"));
     await waitFor(() => expect(loadLocalSidModel()).toBe("6581"));
-    expect(screen.getByTestId("settings-sid-chip-effective")).toHaveTextContent(/currently play on the 6581/i);
+    expect(screen.getByTestId("settings-sid-chip-effective")).toHaveTextContent(/play on the 6581/i);
   });
 
   it("says nothing has been read yet when no machine has answered", () => {

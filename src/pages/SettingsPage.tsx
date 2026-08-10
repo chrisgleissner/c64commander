@@ -1230,8 +1230,8 @@ export default function SettingsPage() {
                   })}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Makes everything in the app larger. This is on top of your device&apos;s own text size setting, which
-                  the app already follows, so you only need this if you want the app larger than the rest of your phone.
+                  Scales the app&apos;s own text on top of your device&apos;s text size, which it already follows. Use
+                  this only to make the app bigger than the rest of your phone.
                 </p>
               </div>
 
@@ -1279,7 +1279,7 @@ export default function SettingsPage() {
                     })}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Choose how the app rotates. Portrait stays upright. Landscape stays wide. Auto follows the phone.
+                    Portrait stays upright, Landscape stays wide, Auto follows the phone.
                   </p>
                 </div>
                 {isAndroid ? (
@@ -1949,9 +1949,8 @@ export default function SettingsPage() {
                       Friendly SID names
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      Show SID tunes as “Bossa in Do” rather than “Bossa_in_Do_2SID.sid”, with a badge for the number of
-                      SID chips the tune plays through. Programs, cartridges and disk images always keep their file
-                      name.
+                      Shows SID tunes as “Bossa in Do” instead of “Bossa_in_Do_2SID.sid”, badged with the chip count.
+                      Programs, cartridges and disk images keep their file name.
                     </p>
                   </div>
                   <Checkbox
@@ -1991,9 +1990,8 @@ export default function SettingsPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Classic KERNAL load mounts the disk and uses LOAD"*",8,1 then RUN. DMA (Direct Memory Access)
-                    extracts the first PRG from a D64/D71/D81 image and writes it directly to C64 memory for faster
-                    starts. Some loaders may not like DMA.
+                    Classic KERNAL load mounts the disk and runs LOAD"*",8,1. DMA writes the first PRG straight into C64
+                    memory for a faster start; some loaders reject it.
                   </p>
                 </div>
 
@@ -2029,9 +2027,8 @@ export default function SettingsPage() {
                           Answer cartridge boot menu after reset
                         </Label>
                         <p className="text-xs text-muted-foreground">
-                          Advanced. For machines running a cartridge that shows a boot menu on reset: press a key after
-                          a Mount &amp; Load reset so the typed LOAD is not swallowed by the menu. Leave off unless you
-                          run such a cartridge.
+                          Advanced. Presses a key after a Mount &amp; Load reset so a cartridge&apos;s boot menu
+                          doesn&apos;t swallow the typed LOAD. Leave off unless you run such a cartridge.
                         </p>
                       </div>
                       <Checkbox
@@ -2149,10 +2146,9 @@ export default function SettingsPage() {
                         }}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Jitter buffer depth for Live View audio, so a late, reordered or bursty delivery still plays in
-                        order and a lost packet is concealed instead of clicking. On Android this is a floor — the
-                        native pipeline deepens it by itself if the network turns out to need it. Default 60 ms; 0 =
-                        lowest latency, least resilient.
+                        Jitter buffer for Live View audio: keeps late, reordered or bursty packets in order and hides
+                        loss instead of clicking. On Android this is a floor — the native pipeline can deepen it further
+                        if needed. Default 60 ms; 0 = lowest latency, least resilient.
                       </p>
                     </div>
                     {isDeveloperModeEnabled ? (
@@ -2178,13 +2174,12 @@ export default function SettingsPage() {
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                          <strong>Developer preview — not in released firmware yet.</strong> When you listen to C64
-                          audio <strong>without video</strong>, the C64 can send it over <strong>Wi‑Fi</strong> — handy
-                          when the C64 and this device share only a wireless router. Wi‑Fi audio can&apos;t run at the
-                          same time as video. <strong>Dynamic</strong> (recommended) uses Wi‑Fi while audio is alone and
-                          moves to Ethernet when you add video, so both share one route. <strong>Always Wi‑Fi</strong>{" "}
-                          keeps audio on Wi‑Fi and blocks video until you change this. <strong>Always Ethernet</strong>{" "}
-                          never uses Wi‑Fi.
+                          <strong>Developer preview — not in released firmware yet.</strong> Audio-only C64 sound can
+                          travel over <strong>Wi‑Fi</strong> — handy when the C64 and this device share only a wireless
+                          router — but Wi‑Fi audio and video can&apos;t run together. <strong>Dynamic</strong>{" "}
+                          (recommended) uses Wi‑Fi for audio alone and switches to Ethernet once video joins.{" "}
+                          <strong>Always Wi‑Fi</strong> keeps audio on Wi‑Fi and blocks video.{" "}
+                          <strong>Always Ethernet</strong> never uses Wi‑Fi.
                         </p>
                       </div>
                     ) : null}
@@ -2197,8 +2192,8 @@ export default function SettingsPage() {
                           Fast video (native assembly)
                         </Label>
                         <p className="text-xs text-muted-foreground">
-                          Assemble Live View video frames natively so the full frame rate (50 fps PAL / 60 fps NTSC) is
-                          reached. Leave on; turn off only to compare or if video misbehaves. Android only.
+                          Assembles Live View video frames natively for full frame rate (50 fps PAL / 60 fps NTSC).
+                          Leave on; turn off only to compare or troubleshoot. Android only.
                         </p>
                       </div>
                       <Checkbox
@@ -2221,10 +2216,9 @@ export default function SettingsPage() {
                           Input priority (instant joystick)
                         </Label>
                         <p className="text-xs text-muted-foreground">
-                          Give the joystick, keyboard and mouse absolute priority over the picture: while you are
-                          actively driving the C64, the video briefly drops its frame rate so your input reaches the
-                          machine instantly, then the picture ramps straight back up. Leave on; turn off only to
-                          compare.
+                          Gives joystick, keyboard and mouse priority over the picture: while you&apos;re actively
+                          driving the C64, video briefly drops its frame rate so input lands instantly, then ramps back
+                          up. Leave on; turn off only to compare.
                         </p>
                       </div>
                       <Checkbox
@@ -2247,9 +2241,9 @@ export default function SettingsPage() {
                           Low-latency audio (native)
                         </Label>
                         <p className="text-xs text-muted-foreground">
-                          Play Live View audio through a native low-latency track instead of the browser audio engine,
-                          cutting the delay between a keypress and the sound you hear. Leave on; turn off only to
-                          compare or if audio misbehaves. Android only.
+                          Plays Live View audio through a native low-latency track instead of the browser engine,
+                          cutting keypress-to-sound delay. Leave on; turn off only to compare or troubleshoot. Android
+                          only.
                         </p>
                       </div>
                       <Checkbox
@@ -2274,8 +2268,8 @@ export default function SettingsPage() {
                       Show Autofire button
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      Autofire is rarely needed for C64 games, so its control is hidden from the Remote Input joystick
-                      and game mode by default. Turn this on to show it.
+                      Rarely needed for C64 games, so it&apos;s hidden from the Remote Input joystick and game mode by
+                      default. Turn on to show it.
                     </p>
                   </div>
                   <Checkbox
@@ -2304,8 +2298,8 @@ export default function SettingsPage() {
                     data-testid="settings-autofire-rate-slider"
                   />
                   <p className="text-xs text-muted-foreground">
-                    How many times per second Remote Input Autofire presses FIRE while held. Also adjustable on the
-                    Remote Input joystick. Default 5/s. Range {MIN_AUTOFIRE_RATE_HZ}–{MAX_AUTOFIRE_RATE_HZ}/s.
+                    How many times per second Autofire presses FIRE while held. Also adjustable on the Remote Input
+                    joystick. Default 5/s, range {MIN_AUTOFIRE_RATE_HZ}–{MAX_AUTOFIRE_RATE_HZ}/s.
                   </p>
                 </div>
               </div>
@@ -2379,8 +2373,8 @@ export default function SettingsPage() {
             <SettingsSection id="hvsc" title="HVSC" summary="Where the SID music collection comes from" icon={Cpu}>
               <div className="space-y-3 text-sm">
                 <p className="text-xs text-muted-foreground">
-                  HVSC visibility follows the unified feature registry, and the archive mirror can be overridden here
-                  when you need to point downloads at a different source.
+                  HVSC visibility follows the Experimental Features registry. Override the archive mirror below to point
+                  downloads at a different source.
                 </p>
 
                 <div className="space-y-2">
@@ -2415,9 +2409,9 @@ export default function SettingsPage() {
                     data-testid="hvsc-update-check-interval"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Automatic HVSC update checks run from the Play page when HVSC is installed and ready. The minimum
-                    interval is {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS} day
-                    {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS === 1 ? "" : "s"} to avoid unnecessary mirror load.
+                    Automatic HVSC update checks run from the Play page once HVSC is installed. Minimum interval:{" "}
+                    {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS} day
+                    {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS === 1 ? "" : "s"}, to limit mirror load.
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Last automatic update check:{" "}
@@ -2439,8 +2433,8 @@ export default function SettingsPage() {
             >
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  CommoServe availability now follows the unified Experimental Features registry. Host and header
-                  overrides remain independent operational settings.
+                  CommoServe availability follows the Experimental Features registry; host and header overrides are
+                  separate settings.
                 </p>
 
                 <div className="space-y-2">
@@ -2580,10 +2574,9 @@ export default function SettingsPage() {
                     Keep device settings after a restart
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    When off, a device setting you change here reaches the C64 straight away but does not last: the next
-                    power-up brings back what the C64 had saved. When on, the app also writes every device setting it
-                    changes to the C64&apos;s flash, so it survives a power cycle — the same as saving from the
-                    C64&apos;s own menu.
+                    Off: a setting you change here reaches the C64 immediately but doesn&apos;t last — the next power-up
+                    restores what the C64 had saved. On: the app also writes each change to the C64&apos;s flash, so it
+                    survives a power cycle, same as saving from the C64&apos;s own menu.
                   </p>
                 </div>
                 <Checkbox
@@ -3039,8 +3032,8 @@ export default function SettingsPage() {
                     }}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Controls how often drag previews are sent while device-backed sliders are moving, including CPU,
-                    playback volume, SID mixer, and lighting controls. Default 200 ms. Range 100–500 ms.
+                    How often drag previews are sent while device-backed sliders move (CPU, playback volume, SID mixer,
+                    lighting). Default 200 ms, range 100–500 ms.
                   </p>
                 </div>
 

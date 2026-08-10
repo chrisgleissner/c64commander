@@ -152,7 +152,7 @@ describe("choosing between the shipped layouts", () => {
     render(<GameModeSettingsSection />);
     const section = screen.getByTestId("settings-game-mode-section");
     expect(section).toHaveTextContent("the four keys around 8, with 8 as fire");
-    expect(section).toHaveTextContent("2, 4, 6 and 8 with 5 as fire");
+    expect(section).toHaveTextContent("2, 4, 6 and 8, with 5 as fire");
   });
 });
 

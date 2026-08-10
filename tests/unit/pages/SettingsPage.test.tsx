@@ -2440,8 +2440,8 @@ describe("SettingsPage", () => {
 
     const section = screen.getByTestId("settings-section-device-safety");
     expect(section).toHaveTextContent(/keep device settings after a restart/i);
-    expect(section).toHaveTextContent(/when off, a device setting you change here/i);
-    expect(section).toHaveTextContent(/when on, the app also writes/i);
+    expect(section).toHaveTextContent(/off: a setting you change here/i);
+    expect(section).toHaveTextContent(/on: the app also writes/i);
     expect(screen.queryByTestId("settings-persist-config-to-flash-warning")).not.toBeInTheDocument();
 
     await act(async () => {
