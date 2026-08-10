@@ -1630,6 +1630,18 @@ const waitForConnected = async (page: Page) => {
   );
 };
 
+// Several Home cards (Audio, Lighting, Streams, Printers, Config actions) are collapsible
+// and closed by default, so their contents are not in the DOM until each section is
+// opened. `scope` is the page or the currently active panel's <main>, matching whichever
+// the caller is already scoping its other lookups to.
+const openHomeSection = async (scope: Page | Locator, id: string) => {
+  const toggle = scope.getByTestId(`home-section-toggle-${id}`);
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.scrollIntoViewIfNeeded();
+    await toggle.click();
+  }
+};
+
 const waitForTraceSeedBridge = async (page: Page) => {
   await page
     .waitForFunction(
@@ -2104,6 +2116,7 @@ test.describe("App screenshots", () => {
       });
       await page.goto("/");
       await waitForConnected(page);
+      await openHomeSection(activeMain, "streams");
       await expect(activeMain.getByTestId("home-stream-endpoint-display-audio")).toHaveText(/\d+\.\d+\.\d+\.\d+:\d+/);
 
       await activeMain.getByTestId("home-stream-start-audio").click();
@@ -2132,6 +2145,7 @@ test.describe("App screenshots", () => {
         await activeMain.getByTestId("home-stream-confirm-vic").click();
       }
 
+      await openHomeSection(activeMain, "audio");
       await expect(activeMain.getByTestId("home-sid-address-socket1")).toHaveText(/\$[0-9A-F]{4}|\$----/);
       await activeMain.getByTestId("home-sid-status").getByRole("button", { name: "Reset" }).click();
       await page.waitForTimeout(250);
@@ -2413,6 +2427,7 @@ test.describe("App screenshots", () => {
       await waitForConnected(page);
 
       await applyDisplayProfileViewport(page, "medium");
+      await openHomeSection(getActiveMain(page), "lighting");
       await getActiveMain(page).getByTestId("home-lighting-studio").click();
       const dialogMedium = page.getByRole("dialog", { name: "Lighting Studio" });
       await expect(dialogMedium).toBeVisible();
@@ -3313,7 +3328,13 @@ test.describe("App screenshots", () => {
       // chapter open so the other specs can reach the controls inside them, so the first-visit
       // state is written explicitly here — only Connection open. Clearing the key instead would
       // not work, because the fixture's seed writes it again on the next navigation.
-      await page.evaluate(() => localStorage.setItem("c64u_settings_open_sections", JSON.stringify(["connection"])));
+      //
+      // Settings' open/closed memory now lives in the shared collapsibleSectionStore key, scoped
+      // per page ("settings:<id>"), not in its own dedicated key. Writing the old key only feeds a
+      // one-time import that adds to whatever the shared key already has - it does not replace it -
+      // so a page that already opened other sections earlier in this run stays open regardless of
+      // what gets written here. The shared key is written directly instead, as a full replacement.
+      await page.evaluate(() => localStorage.setItem("c64u_open_sections", JSON.stringify(["settings:connection"])));
       await page.reload();
       await waitForConnected(page);
       await expect(page.getByTestId("settings-section-appearance")).toHaveAttribute("data-open", "false");
@@ -3336,7 +3357,7 @@ test.describe("App screenshots", () => {
           "notifications",
           "about",
         ];
-        localStorage.setItem("c64u_settings_open_sections", JSON.stringify(ids));
+        localStorage.setItem("c64u_open_sections", JSON.stringify(ids.map((id) => `settings:${id}`)));
       });
       await page.reload();
       await waitForConnected(page);
@@ -3967,6 +3988,13 @@ test.describe("App screenshots", () => {
     });
 
     for (const profileId of DISPLAY_PROFILE_VIEWPORT_SEQUENCE) {
+      // Docs sections now remember open/closed across navigations (the shared
+      // collapsibleSectionStore, scoped "docs:<id>"). Each iteration below wants to click
+      // Play from closed, but a previous iteration's click - never undone - would otherwise
+      // leave it already open, and clicking an open section closes it instead of opening it.
+      // localStorage is origin-scoped, not page-load-scoped, so clearing it now on the
+      // currently loaded page is enough to affect the goto below too.
+      await page.evaluate(() => localStorage.removeItem("c64u_open_sections"));
       await page.goto("/docs");
       await expect(page).toHaveURL(/\/docs$/);
       await applyDisplayProfileViewport(page, profileId);

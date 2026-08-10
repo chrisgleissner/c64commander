@@ -35,10 +35,10 @@ describe("README screenshot coverage", () => {
         "docs/img/app/home/00-overview-light.png",
         "docs/img/app/home/sections/01-system-info-to-cpu-ram.png",
         "docs/img/app/home/01-overview-dark.png",
-        "docs/img/app/home/sections/02-quick-config-to-keyboard-light.png",
-        "docs/img/app/home/sections/03-quick-config-to-printers.png",
-        "docs/img/app/home/sections/04-printers-to-sid.png",
-        "docs/img/app/home/sections/05-sid-to-config.png",
+        "docs/img/app/home/sections/02-cpu-ram-to-audio.png",
+        "docs/img/app/home/sections/03-audio-to-keyboard-light.png",
+        "docs/img/app/home/sections/04-keyboard-light-to-printers.png",
+        "docs/img/app/home/sections/05-printers-to-config.png",
       ]),
     );
 

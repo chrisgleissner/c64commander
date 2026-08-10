@@ -30,6 +30,10 @@ interface SectionHeaderProps {
   focusId?: string;
   /** Lower sorts earlier in keypad d-pad traversal. Defaults to 0. */
   focusOrder?: number;
+  /** Skips the title row (bullet + heading). For a section whose title is now owned by
+   * an outer `CollapsibleSection` header, so this renders only the reset button/actions
+   * row - kept reachable beside the toggle rather than duplicating the heading. */
+  hideTitle?: boolean;
 }
 
 export function SectionHeader({
@@ -44,6 +48,7 @@ export function SectionHeader({
   resetTestId,
   focusId,
   focusOrder = 0,
+  hideTitle = false,
 }: SectionHeaderProps) {
   const resetFocusRef = useFocusItem<HTMLButtonElement>({
     id: focusId ?? "",
@@ -51,6 +56,26 @@ export function SectionHeader({
     group: "home-sections",
     disabled: resetDisabled,
   });
+  const actionsRow = (
+    <div className="flex items-center gap-2">
+      {actions}
+      {resetAction && (
+        <Button
+          ref={resetFocusRef}
+          variant="outline"
+          size="sm"
+          onClick={resetAction}
+          disabled={resetDisabled}
+          data-testid={resetTestId}
+        >
+          {isResetting ? "Resetting…" : resetLabel}
+        </Button>
+      )}
+    </div>
+  );
+
+  if (hideTitle) return actionsRow;
+
   return (
     <div className={cn("flex items-center justify-between gap-2", className)}>
       <h3 className="category-header">
@@ -58,21 +83,7 @@ export function SectionHeader({
         {title}
         {children}
       </h3>
-      <div className="flex items-center gap-2">
-        {actions}
-        {resetAction && (
-          <Button
-            ref={resetFocusRef}
-            variant="outline"
-            size="sm"
-            onClick={resetAction}
-            disabled={resetDisabled}
-            data-testid={resetTestId}
-          >
-            {isResetting ? "Resetting…" : resetLabel}
-          </Button>
-        )}
-      </div>
+      {actionsRow}
     </div>
   );
 }

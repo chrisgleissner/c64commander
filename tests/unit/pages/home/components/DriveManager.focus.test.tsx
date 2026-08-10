@@ -167,8 +167,12 @@ describe("DriveManager keypad focus ring (C64U Remote)", () => {
   it("center-activates the focused Reset Drives without firing a drive toggle", () => {
     renderInRing();
 
-    // Initial selection is the labelled Drives group; OK descends to Reset Drives.
+    // Drives is itself collapsible now, so its own toggle is the ring's first stop. OK
+    // establishes focus there without activating (the section is already open); a step
+    // down reaches Reset Drives.
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    expect(document.activeElement).toBe(screen.getByTestId("home-section-toggle-drives"));
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
     expect(document.activeElement).toBe(screen.getByTestId("home-drives-reset"));
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     expect(onResetDrivesSpy).toHaveBeenCalledTimes(1);
@@ -178,7 +182,8 @@ describe("DriveManager keypad focus ring (C64U Remote)", () => {
   it("center-activates a focused drive toggle without firing the section reset", () => {
     renderInRing();
 
-    fireEvent.keyDown(document.body, { code: "DpadCenter" }); // enter Drives group → reset
+    fireEvent.keyDown(document.body, { code: "DpadCenter" }); // enter the ring → section toggle
+    fireEvent.keyDown(document.body, { code: "DpadDown" }); // → reset
     fireEvent.keyDown(document.body, { code: "DpadDown" }); // → drive A toggle
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     expect(updateConfigValueSpy).toHaveBeenCalledWith(

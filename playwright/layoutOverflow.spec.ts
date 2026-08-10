@@ -502,6 +502,9 @@ test.describe("Layout overflow safeguards", () => {
 
       const titleZone = page.getByTestId("app-bar-title-zone");
       const badge = page.getByTestId("unified-health-badge");
+      // Lighting is a collapsible card, closed by default - its Studio button is not in
+      // the DOM until the section is opened.
+      await page.getByTestId("home-section-toggle-lighting").click();
       await page.getByTestId("home-lighting-studio").click();
 
       const lightingSheet = page.getByTestId("lighting-studio-sheet");

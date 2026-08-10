@@ -67,37 +67,32 @@ describe("planHomeScreenshotSlices", () => {
       {
         slug: "system-info-to-cpu-ram",
         scrollTop: 0,
-        sectionSlugs: ["system-info", "quick-actions", "quick-config", "cpu-ram"],
+        sectionSlugs: ["system-info", "quick-actions", "cpu-ram"],
       },
       {
         slug: "system-info-to-cpu-ram-part-2",
         scrollTop: 180,
-        sectionSlugs: ["system-info", "quick-actions", "quick-config", "cpu-ram", "ports"],
+        sectionSlugs: ["system-info", "quick-actions", "cpu-ram", "ports"],
       },
       {
-        slug: "quick-config-to-user-interface",
+        slug: "cpu-ram-to-audio",
         scrollTop: 420,
-        sectionSlugs: ["quick-config", "cpu-ram", "ports", "video", "user-interface"],
+        sectionSlugs: ["cpu-ram", "ports", "video", "audio"],
       },
       {
-        slug: "quick-config-to-keyboard-light",
+        slug: "audio-to-keyboard-light",
         scrollTop: 620,
-        sectionSlugs: ["quick-config", "user-interface", "case-light", "keyboard-light"],
+        sectionSlugs: ["audio", "user-interface", "case-light", "keyboard-light"],
       },
       {
-        slug: "quick-config-to-printers",
+        slug: "keyboard-light-to-printers",
         scrollTop: 860,
-        sectionSlugs: ["quick-config", "keyboard-light", "drives", "printers"],
+        sectionSlugs: ["keyboard-light", "drives", "printers"],
       },
       {
-        slug: "printers-to-sid",
+        slug: "printers-to-config",
         scrollTop: 1080,
-        sectionSlugs: ["printers", "sid", "streams"],
-      },
-      {
-        slug: "sid-to-config",
-        scrollTop: 1300,
-        sectionSlugs: ["sid", "streams", "config"],
+        sectionSlugs: ["printers", "streams", "config"],
       },
     ]);
 
@@ -107,39 +102,39 @@ describe("planHomeScreenshotSlices", () => {
         slice: {
           slug: "system-info-to-cpu-ram",
           scrollTop: 0,
-          sectionSlugs: ["system-info", "quick-actions", "quick-config", "cpu-ram"],
+          sectionSlugs: ["system-info", "quick-actions", "cpu-ram"],
         },
       },
       {
-        fileName: "02-quick-config-to-keyboard-light.png",
+        fileName: "02-cpu-ram-to-audio.png",
         slice: {
-          slug: "quick-config-to-keyboard-light",
+          slug: "cpu-ram-to-audio",
+          scrollTop: 420,
+          sectionSlugs: ["cpu-ram", "ports", "video", "audio"],
+        },
+      },
+      {
+        fileName: "03-audio-to-keyboard-light.png",
+        slice: {
+          slug: "audio-to-keyboard-light",
           scrollTop: 620,
-          sectionSlugs: ["quick-config", "user-interface", "case-light", "keyboard-light"],
+          sectionSlugs: ["audio", "user-interface", "case-light", "keyboard-light"],
         },
       },
       {
-        fileName: "03-quick-config-to-printers.png",
+        fileName: "04-keyboard-light-to-printers.png",
         slice: {
-          slug: "quick-config-to-printers",
+          slug: "keyboard-light-to-printers",
           scrollTop: 860,
-          sectionSlugs: ["quick-config", "keyboard-light", "drives", "printers"],
+          sectionSlugs: ["keyboard-light", "drives", "printers"],
         },
       },
       {
-        fileName: "04-printers-to-sid.png",
+        fileName: "05-printers-to-config.png",
         slice: {
-          slug: "printers-to-sid",
+          slug: "printers-to-config",
           scrollTop: 1080,
-          sectionSlugs: ["printers", "sid", "streams"],
-        },
-      },
-      {
-        fileName: "05-sid-to-config.png",
-        slice: {
-          slug: "sid-to-config",
-          scrollTop: 1300,
-          sectionSlugs: ["sid", "streams", "config"],
+          sectionSlugs: ["printers", "streams", "config"],
         },
       },
     ]);
@@ -150,32 +145,32 @@ describe("planHomeScreenshotSlices", () => {
       {
         slug: "system-info-to-cpu-ram",
         scrollTop: 8,
-        sectionSlugs: ["system-info", "quick-actions", "quick-config", "cpu-ram"],
+        sectionSlugs: ["system-info", "quick-actions", "cpu-ram"],
       },
       {
-        slug: "quick-config-to-user-interface",
+        slug: "cpu-ram-to-video",
         scrollTop: 514,
-        sectionSlugs: ["quick-config", "cpu-ram", "ports", "video", "user-interface"],
+        sectionSlugs: ["cpu-ram", "ports", "video"],
       },
       {
-        slug: "quick-config-to-keyboard-light",
+        slug: "audio-to-lighting",
         scrollTop: 1020,
-        sectionSlugs: ["quick-config", "case-light", "keyboard-light"],
+        sectionSlugs: ["audio", "lighting"],
       },
       {
-        slug: "quick-config-to-drives",
+        slug: "lighting-to-drives",
         scrollTop: 1526,
-        sectionSlugs: ["quick-config", "keyboard-light", "drives"],
+        sectionSlugs: ["lighting", "drives"],
       },
       {
-        slug: "drives-to-sid",
+        slug: "drives-to-printers",
         scrollTop: 2032,
-        sectionSlugs: ["drives", "printers", "sid"],
+        sectionSlugs: ["drives", "printers"],
       },
       {
-        slug: "sid-to-streams",
+        slug: "printers-to-streams",
         scrollTop: 2538,
-        sectionSlugs: ["sid", "streams"],
+        sectionSlugs: ["printers", "streams"],
       },
       {
         slug: "streams-to-config",
@@ -190,35 +185,35 @@ describe("planHomeScreenshotSlices", () => {
         slice: {
           slug: "system-info-to-cpu-ram",
           scrollTop: 8,
-          sectionSlugs: ["system-info", "quick-actions", "quick-config", "cpu-ram"],
+          sectionSlugs: ["system-info", "quick-actions", "cpu-ram"],
         },
       },
       {
-        fileName: "02-quick-config-to-keyboard-light.png",
+        fileName: "02-cpu-ram-to-audio.png",
         slice: {
-          slug: "quick-config-to-keyboard-light",
+          slug: "cpu-ram-to-video",
+          scrollTop: 514,
+          sectionSlugs: ["cpu-ram", "ports", "video"],
+        },
+      },
+      {
+        fileName: "03-audio-to-keyboard-light.png",
+        slice: {
+          slug: "audio-to-lighting",
           scrollTop: 1020,
-          sectionSlugs: ["quick-config", "case-light", "keyboard-light"],
+          sectionSlugs: ["audio", "lighting"],
         },
       },
       {
-        fileName: "03-quick-config-to-printers.png",
+        fileName: "04-keyboard-light-to-printers.png",
         slice: {
-          slug: "quick-config-to-drives",
+          slug: "lighting-to-drives",
           scrollTop: 1526,
-          sectionSlugs: ["quick-config", "keyboard-light", "drives"],
+          sectionSlugs: ["lighting", "drives"],
         },
       },
       {
-        fileName: "04-printers-to-sid.png",
-        slice: {
-          slug: "drives-to-sid",
-          scrollTop: 2032,
-          sectionSlugs: ["drives", "printers", "sid"],
-        },
-      },
-      {
-        fileName: "05-sid-to-config.png",
+        fileName: "05-printers-to-config.png",
         slice: {
           slug: "streams-to-config",
           scrollTop: 3032,
@@ -233,32 +228,27 @@ describe("planHomeScreenshotSlices", () => {
       {
         slug: "system-info-to-cpu-ram",
         scrollTop: 8,
-        sectionSlugs: ["system-info", "quick-actions", "quick-config", "cpu-ram"],
+        sectionSlugs: ["system-info", "quick-actions", "cpu-ram"],
       },
       {
-        slug: "quick-config-to-user-interface",
+        slug: "cpu-ram-to-video",
         scrollTop: 514,
-        sectionSlugs: ["quick-config", "cpu-ram", "ports", "video", "user-interface"],
+        sectionSlugs: ["cpu-ram", "ports", "video"],
       },
       {
-        slug: "case-light-to-keyboard-light",
+        slug: "keyboard-light-only",
         scrollTop: 1020,
-        sectionSlugs: ["case-light", "keyboard-light"],
+        sectionSlugs: ["keyboard-light"],
       },
       {
-        slug: "drives-to-printers",
+        slug: "printers-only",
         scrollTop: 1526,
-        sectionSlugs: ["drives", "printers"],
+        sectionSlugs: ["printers"],
       },
       {
-        slug: "drives-to-sid",
+        slug: "config-only",
         scrollTop: 2032,
-        sectionSlugs: ["drives", "printers", "sid"],
-      },
-      {
-        slug: "streams-to-config",
-        scrollTop: 3032,
-        sectionSlugs: ["streams", "config"],
+        sectionSlugs: ["config"],
       },
     ]);
 
@@ -268,39 +258,39 @@ describe("planHomeScreenshotSlices", () => {
         slice: {
           slug: "system-info-to-cpu-ram",
           scrollTop: 8,
-          sectionSlugs: ["system-info", "quick-actions", "quick-config", "cpu-ram"],
+          sectionSlugs: ["system-info", "quick-actions", "cpu-ram"],
         },
       },
       {
-        fileName: "02-quick-config-to-keyboard-light.png",
+        fileName: "02-cpu-ram-to-audio.png",
         slice: {
-          slug: "case-light-to-keyboard-light",
+          slug: "cpu-ram-to-video",
+          scrollTop: 514,
+          sectionSlugs: ["cpu-ram", "ports", "video"],
+        },
+      },
+      {
+        fileName: "03-audio-to-keyboard-light.png",
+        slice: {
+          slug: "keyboard-light-only",
           scrollTop: 1020,
-          sectionSlugs: ["case-light", "keyboard-light"],
+          sectionSlugs: ["keyboard-light"],
         },
       },
       {
-        fileName: "03-quick-config-to-printers.png",
+        fileName: "04-keyboard-light-to-printers.png",
         slice: {
-          slug: "drives-to-printers",
+          slug: "printers-only",
           scrollTop: 1526,
-          sectionSlugs: ["drives", "printers"],
+          sectionSlugs: ["printers"],
         },
       },
       {
-        fileName: "04-printers-to-sid.png",
+        fileName: "05-printers-to-config.png",
         slice: {
-          slug: "drives-to-sid",
+          slug: "config-only",
           scrollTop: 2032,
-          sectionSlugs: ["drives", "printers", "sid"],
-        },
-      },
-      {
-        fileName: "05-sid-to-config.png",
-        slice: {
-          slug: "streams-to-config",
-          scrollTop: 3032,
-          sectionSlugs: ["streams", "config"],
+          sectionSlugs: ["config"],
         },
       },
     ]);

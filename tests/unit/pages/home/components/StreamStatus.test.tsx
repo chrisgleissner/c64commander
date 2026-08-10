@@ -7,8 +7,17 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StreamStatus } from "@/pages/home/components/StreamStatus";
+import { writeOpenSection } from "@/lib/ui/collapsibleSectionStore";
+
+// Streams is closed by default now that it is a collapsible CollapsibleSection - these
+// tests exercise its content, not the collapse mechanism (which has its own tests), so
+// pre-open it the same way a returning user's remembered state would.
+beforeEach(() => {
+  localStorage.clear();
+  writeOpenSection("home", "streams", true);
+});
 
 const { updateConfigValueSpy, handleStreamStartSpy, handleStreamStopSpy, handleStreamCommitSpy, avMirror } = vi.hoisted(
   () => ({
@@ -61,11 +70,10 @@ vi.mock("@/pages/home/hooks/useStreamData", () => ({
 vi.mock("framer-motion", () => ({
   motion: {
     div: ({ children, ...rest }: any) => <div {...rest}>{children}</div>,
+    section: ({ children, ...rest }: any) => <section {...rest}>{children}</section>,
+    span: ({ children, ...rest }: any) => <span {...rest}>{children}</span>,
   },
-}));
-
-vi.mock("@/components/SectionHeader", () => ({
-  SectionHeader: ({ title }: any) => <div>{title}</div>,
+  AnimatePresence: ({ children }: any) => <>{children}</>,
 }));
 
 vi.mock("@/components/ui/button", () => ({

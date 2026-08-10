@@ -7,7 +7,6 @@
  */
 
 import { ReactNode, useRef, useState } from "react";
-import { motion } from "framer-motion";
 import {
   RotateCcw,
   Power,
@@ -19,9 +18,10 @@ import {
   Download,
   RefreshCw,
   Joystick,
+  Zap,
   LucideIcon,
 } from "lucide-react";
-import { SectionHeader } from "@/components/SectionHeader";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { QuickActionCard } from "@/components/QuickActionCard";
 import { ProfileActionGrid } from "@/components/layout/PageContainer";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
@@ -191,16 +191,15 @@ export function MachineControls({
 
   return (
     <>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="space-y-2"
-        data-section-label="Quick Actions"
+      <CollapsibleSection
+        scope="home"
+        id="quick-actions"
+        title="Quick Actions"
+        icon={Zap}
+        defaultOpen
+        testId="home-quick-actions"
+        badge={effectiveBusy && <span className="text-xs text-muted-foreground">Working…</span>}
       >
-        <SectionHeader title="Quick Actions">
-          {effectiveBusy && <span className="ml-2 text-xs text-muted-foreground">Working…</span>}
-        </SectionHeader>
         <div className="space-y-2">
           <ProfileActionGrid
             compactColumns={2}
@@ -359,7 +358,7 @@ export function MachineControls({
           ) : null}
           {footer ? <div data-testid="home-machine-footer">{footer}</div> : null}
         </div>
-      </motion.div>
+      </CollapsibleSection>
       <MachineActionConfirmationDialog
         open={pendingDestructiveAction !== null}
         action={pendingDestructiveAction}

@@ -6,9 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { Printer } from "lucide-react";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
 import { usePrinterData } from "../hooks/usePrinterData";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { PRINTER_CONTROL_SPEC, PRINTER_HOME_ITEMS, PRINTER_BUS_ID_DEFAULTS, DriveControlSpec } from "../constants";
 import {
   formatPrinterLabel,
@@ -178,20 +180,29 @@ export function PrinterManager({
   });
 
   return (
-    <div className="space-y-3" data-section-label="Printers">
-      <SectionHeader
-        title="Printers"
-        resetAction={async () =>
-          await onResetPrinter(async () => {
-            await refetchDrives();
-          })
-        }
-        resetDisabled={!isConnected || machineTaskBusy}
-        isResetting={machineTaskId === "reset-printer"}
-        resetTestId="home-printer-reset"
-        focusId="home-printer-reset"
-        focusOrder={400}
-      />
+    <CollapsibleSection
+      scope="home"
+      id="printers"
+      title="Printers"
+      icon={Printer}
+      testId="home-printers"
+      actions={
+        <SectionHeader
+          hideTitle
+          title="Printers"
+          resetAction={async () =>
+            await onResetPrinter(async () => {
+              await refetchDrives();
+            })
+          }
+          resetDisabled={!isConnected || machineTaskBusy}
+          isResetting={machineTaskId === "reset-printer"}
+          resetTestId="home-printer-reset"
+          focusId="home-printer-reset"
+          focusOrder={400}
+        />
+      }
+    >
       <div className="space-y-2" data-testid="home-printer-group">
         <div className="bg-card border border-border rounded-xl p-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
@@ -309,6 +320,6 @@ export function PrinterManager({
           )}
         </div>
       </div>
-    </div>
+    </CollapsibleSection>
   );
 }

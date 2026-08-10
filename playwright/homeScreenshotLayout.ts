@@ -95,27 +95,34 @@ export const planHomeScreenshotSlices = ({
   return slices;
 };
 
+// Home's former "Quick Config" wrapper dissolved into separate top-level cards -
+// CPU & RAM, Ports, Video, Audio, User Interface, Lighting - in that DOM order, with
+// Audio now sitting directly under Video rather than after Printers. The requirements
+// below were re-plotted against that order rather than reusing the old "quick-config"
+// and "sid" slugs, which no longer exist.
 const CANONICAL_HOME_SCREENSHOT_REQUIREMENTS: CanonicalHomeScreenshotRequirement[] = [
   {
     fileName: "01-system-info-to-cpu-ram.png",
     requiredSectionSlugs: ["system-info", "cpu-ram"],
   },
   {
-    fileName: "02-quick-config-to-keyboard-light.png",
-    requiredSectionSlugs: ["quick-config", "keyboard-light"],
+    fileName: "02-cpu-ram-to-audio.png",
+    requiredSectionSlugs: ["cpu-ram", "audio"],
+    fallbackSectionSlugs: ["cpu-ram", "video"],
   },
   {
-    fileName: "03-quick-config-to-printers.png",
-    requiredSectionSlugs: ["quick-config", "printers"],
-    fallbackSectionSlugs: ["quick-config", "drives"],
+    fileName: "03-audio-to-keyboard-light.png",
+    requiredSectionSlugs: ["audio", "keyboard-light"],
+    fallbackSectionSlugs: ["audio", "lighting"],
   },
   {
-    fileName: "04-printers-to-sid.png",
-    requiredSectionSlugs: ["printers", "sid"],
+    fileName: "04-keyboard-light-to-printers.png",
+    requiredSectionSlugs: ["keyboard-light", "printers"],
+    fallbackSectionSlugs: ["lighting", "drives"],
   },
   {
-    fileName: "05-sid-to-config.png",
-    requiredSectionSlugs: ["sid", "config"],
+    fileName: "05-printers-to-config.png",
+    requiredSectionSlugs: ["printers", "config"],
     fallbackSectionSlugs: ["config"],
   },
 ];

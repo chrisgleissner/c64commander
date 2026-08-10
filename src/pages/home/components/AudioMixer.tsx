@@ -7,9 +7,10 @@
  */
 
 import { useMemo } from "react";
-import { motion } from "framer-motion";
+import { Volume2 } from "lucide-react";
 import { getC64API } from "@/lib/c64api";
 import { useActionTrace } from "@/hooks/useActionTrace";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SectionHeader } from "@/components/SectionHeader";
 import { Slider } from "@/components/ui/slider";
 import { createNumericSliderDomain, useDeviceBoundSlider } from "@/hooks/useDeviceBoundSlider";
@@ -274,20 +275,22 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
   });
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.36 }}
-      className="space-y-2"
-      data-testid="home-sid-status"
-      data-section-label="SID"
+    <CollapsibleSection
+      scope="home"
+      id="audio"
+      title="Audio"
+      icon={Volume2}
+      testId="home-sid-status"
+      actions={
+        <SectionHeader
+          hideTitle
+          title="SID"
+          resetAction={() => void handleSidReset()}
+          resetDisabled={!isConnected || machineTaskBusy}
+          resetTestId="home-sid-reset"
+        />
+      }
     >
-      <SectionHeader
-        title="SID"
-        resetAction={() => void handleSidReset()}
-        resetDisabled={!isConnected || machineTaskBusy}
-        resetTestId="home-sid-reset"
-      />
       <div className="space-y-3">
         {hasMasterVolume ? (
           <MasterVolumeControl
@@ -644,6 +647,6 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
           );
         })}
       </div>
-    </motion.div>
+    </CollapsibleSection>
   );
 }

@@ -98,12 +98,12 @@ Control the machine, quick actions, lighting, drives, printer, SID mixer, stream
     <td><img src="docs/img/app/home/01-overview-dark.png" alt="Home top row and quick actions (Dark)" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="docs/img/app/home/sections/02-quick-config-to-keyboard-light.png" alt="Home sections from quick config through keyboard light" width="360"/></td>
-    <td><img src="docs/img/app/home/sections/03-quick-config-to-printers.png" alt="Home sections from quick config through printers" width="360"/></td>
-    <td><img src="docs/img/app/home/sections/04-printers-to-sid.png" alt="Home sections from printers through SID" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/02-cpu-ram-to-audio.png" alt="Home sections from CPU and RAM through audio" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/03-audio-to-keyboard-light.png" alt="Home sections from audio through keyboard light" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/04-keyboard-light-to-printers.png" alt="Home sections from keyboard light through printers" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="docs/img/app/home/sections/05-sid-to-config.png" alt="Home sections from SID through config" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/05-printers-to-config.png" alt="Home sections from printers through config" width="360"/></td>
     <td><img src="docs/img/app/home/dialogs/05-lighting-studio-medium.png" alt="Lighting Studio bottom sheet" width="360"/></td>
     <td><img src="docs/img/app/home/03-demo-mode-interstitial.png" alt="Demo Mode interstitial" width="360"/></td>
   </tr>

@@ -6,34 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, type LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
+import { type LucideIcon } from "lucide-react";
 
-import { cn } from "@/lib/utils";
-
-const OPEN_SECTIONS_KEY = "c64u_settings_open_sections";
-
-const readOpenSections = (): Set<string> => {
-  if (typeof localStorage === "undefined") return new Set();
-  const raw = localStorage.getItem(OPEN_SECTIONS_KEY);
-  if (!raw) return new Set();
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return new Set(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : []);
-  } catch (error) {
-    console.warn(`Discarding unreadable stored Settings section state at ${OPEN_SECTIONS_KEY}`, error);
-    return new Set();
-  }
-};
-
-const writeOpenSection = (id: string, open: boolean): void => {
-  if (typeof localStorage === "undefined") return;
-  const ids = readOpenSections();
-  if (open) ids.add(id);
-  else ids.delete(id);
-  localStorage.setItem(OPEN_SECTIONS_KEY, JSON.stringify([...ids]));
-};
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 
 export interface SettingsSectionProps {
   id: string;
@@ -65,81 +41,22 @@ export const SettingsSection = ({
   id,
   title,
   summary,
-  icon: Icon,
+  icon,
   defaultOpen = false,
   badge,
   testId,
   children,
-}: SettingsSectionProps) => {
-  const [open, setOpen] = useState(defaultOpen);
-
-  useEffect(() => {
-    const stored = readOpenSections();
-    if (stored.size > 0 || !defaultOpen) setOpen(stored.has(id));
-  }, [id, defaultOpen]);
-
-  const toggle = useCallback(() => {
-    setOpen((current) => {
-      writeOpenSection(id, !current);
-      return !current;
-    });
-  }, [id]);
-
-  return (
-    <motion.section
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="overflow-hidden rounded-xl border border-border bg-card"
-      data-testid={testId ?? `settings-section-${id}`}
-      data-open={open ? "true" : "false"}
-      data-section-label={title}
-    >
-      <button
-        type="button"
-        onClick={toggle}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-        // The accessibility tree exposes the HTML id, not data-testid, so this is what
-        // makes the header addressable from outside the browser.
-        id={`settings-section-toggle-${id}`}
-        data-testid={`settings-section-toggle-${id}`}
-        aria-expanded={open}
-        aria-controls={`settings-section-body-${id}`}
-      >
-        <span className="flex min-w-0 items-center gap-3">
-          <span className="rounded-lg bg-primary/10 p-2">
-            <Icon className="h-5 w-5 text-primary" aria-hidden />
-          </span>
-          <span className="flex min-w-0 flex-col">
-            {/* Still a real heading: the section titles are how the page is navigated, by a
-                screen reader and by anyone scanning it. The badge sits beside the heading
-                rather than inside it, so the heading's accessible name stays the title alone. */}
-            <span className="flex items-center gap-2">
-              <h2 className="font-medium">{title}</h2>
-              {badge}
-            </span>
-            {/* Wrapped, not truncated: a summary cut off mid-word tells the reader less than
-                no summary at all, and this page is read on a narrow screen. */}
-            <span className="text-xs leading-snug text-muted-foreground">{summary}</span>
-          </span>
-        </span>
-        <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }} aria-hidden>
-          <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
-        </motion.span>
-      </button>
-
-      <AnimatePresence initial={false}>
-        {open ? (
-          <motion.div
-            id={`settings-section-body-${id}`}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <div className={cn("space-y-4 border-t border-border px-4 py-4")}>{children}</div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-    </motion.section>
-  );
-};
+}: SettingsSectionProps) => (
+  <CollapsibleSection
+    scope="settings"
+    id={id}
+    title={title}
+    summary={summary}
+    icon={icon}
+    defaultOpen={defaultOpen}
+    badge={badge}
+    testId={testId}
+  >
+    {children}
+  </CollapsibleSection>
+);

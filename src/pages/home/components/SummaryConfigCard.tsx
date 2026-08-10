@@ -28,6 +28,10 @@ type SummaryConfigCardProps = {
   sectionLabel?: string;
   testId: string;
   title: string;
+  /** Skips the visible title line - for a card whose title is now owned by an outer
+   * `CollapsibleSection` header, so this renders only the rows. The focus-group
+   * registration (still keyed by `title`) and testid are unaffected. */
+  hideTitle?: boolean;
 };
 
 type SummaryConfigControlRowProps = {
@@ -56,6 +60,7 @@ export function SummaryConfigCard({
   sectionLabel,
   testId,
   title,
+  hideTitle = false,
 }: SummaryConfigCardProps) {
   // A card is a focus GROUP: OK descends into its control rows, Back ascends.
   // (The old model overloaded dpadRight to descend; the controller now does this
@@ -69,12 +74,14 @@ export function SummaryConfigCard({
   return (
     <div
       ref={focusRef}
-      className="bg-card border border-border rounded-xl p-3 space-y-2 outline-none"
+      className={
+        hideTitle ? "space-y-2 outline-none" : "bg-card border border-border rounded-xl p-3 space-y-2 outline-none"
+      }
       data-section-label={sectionLabel}
       data-testid={testId}
       tabIndex={focusId ? -1 : undefined}
     >
-      <p className="text-xs font-semibold text-primary uppercase tracking-wider">{title}</p>
+      {hideTitle ? null : <p className="text-xs font-semibold text-primary uppercase tracking-wider">{title}</p>}
       <div className="space-y-2 text-xs">{children}</div>
     </div>
   );

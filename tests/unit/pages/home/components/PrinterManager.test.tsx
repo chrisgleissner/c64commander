@@ -9,6 +9,15 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PrinterManager } from "@/pages/home/components/PrinterManager";
+import { writeOpenSection } from "@/lib/ui/collapsibleSectionStore";
+
+// Printers is closed by default now that it is a collapsible CollapsibleSection - these
+// tests exercise its content, not the collapse mechanism (which has its own tests), so
+// pre-open it the same way a returning user's remembered state would.
+beforeEach(() => {
+  localStorage.clear();
+  writeOpenSection("home", "printers", true);
+});
 
 const { updateConfigValueSpy, resolveConfigValueSpy } = vi.hoisted(() => ({
   updateConfigValueSpy: vi.fn().mockResolvedValue(undefined),
@@ -42,9 +51,9 @@ vi.mock("@/hooks/useActionTrace", () => ({
 }));
 
 vi.mock("@/components/SectionHeader", () => ({
-  SectionHeader: ({ title, resetAction, resetDisabled, resetTestId, isResetting }: any) => (
+  SectionHeader: ({ title, resetAction, resetDisabled, resetTestId, isResetting, hideTitle }: any) => (
     <div>
-      <span>{title}</span>
+      {hideTitle ? null : <span>{title}</span>}
       <button
         onClick={resetAction}
         disabled={resetDisabled}

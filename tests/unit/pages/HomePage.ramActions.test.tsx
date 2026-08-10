@@ -223,7 +223,23 @@ const renderWithRouter = (ui: JSX.Element) =>
     />,
   );
 
-const renderHomePage = () => renderWithRouter(<HomePage />);
+/**
+ * Home is now a set of collapsible cards, so a card's controls are not in the DOM until
+ * its section is opened. These tests are about what those controls do, not about the
+ * collapse itself, so every section is opened right after render.
+ */
+const expandAllSections = () => {
+  const toggles = screen.queryAllByTestId(/^home-section-toggle-/);
+  toggles.forEach((toggle) => {
+    if (toggle.getAttribute("aria-expanded") !== "true") fireEvent.click(toggle);
+  });
+};
+
+const renderHomePage = () => {
+  const result = renderWithRouter(<HomePage />);
+  expandAllSections();
+  return result;
+};
 
 const confirmMachineAction = (name: string) => {
   const dialog = screen.getByRole("dialog", { name: `${name}?` });

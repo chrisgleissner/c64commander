@@ -6,10 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Fragment, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, ExternalLink, Wifi, Settings, Play, Home, Disc, Sliders, Activity } from "lucide-react";
+import { Fragment, useMemo } from "react";
+import { motion } from "framer-motion";
+import { ExternalLink, Wifi, Settings, Play, Home, Disc, Sliders, Activity, type LucideIcon } from "lucide-react";
 import { AppBar } from "@/components/AppBar";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
@@ -22,7 +23,7 @@ import type { FeatureFlags } from "@/lib/config/featureFlags";
 interface DocSection {
   id: string;
   title: string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   content: React.ReactNode;
 }
 
@@ -370,56 +371,19 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
 };
 
 function DocSectionCard({ section }: { section: DocSection }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const Icon = section.icon;
-  const contentId = `docs-section-${section.id}`;
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-card border border-border rounded-xl overflow-hidden"
-      data-testid={`docs-card-${section.id}`}
+    <CollapsibleSection
+      scope="docs"
+      id={section.id}
+      title={section.title}
+      icon={section.icon}
+      testId={`docs-card-${section.id}`}
+      toggleTestId={`docs-toggle-${section.id}`}
+      bodyId={`docs-section-${section.id}`}
+      onToggleClick={wrapUserEvent(() => {}, "toggle", "DocsSection", { title: section.title }, "DocsHeader")}
     >
-      <button
-        onClick={wrapUserEvent(
-          () => setIsOpen(!isOpen),
-          "toggle",
-          "DocsSection",
-          { title: section.title },
-          "DocsHeader",
-        )}
-        className="w-full flex items-center justify-between p-4 text-left"
-        aria-expanded={isOpen}
-        aria-controls={contentId}
-        id={`docs-toggle-${section.id}`}
-        data-testid={`docs-toggle-${section.id}`}
-      >
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <Icon className="h-5 w-5 text-primary" />
-          </div>
-          <span className="font-medium">{section.title}</span>
-        </div>
-        <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-          <ChevronDown className="h-5 w-5 text-muted-foreground" />
-        </motion.div>
-      </button>
-
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            id={contentId}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <div className="border-t border-border p-4">{section.content}</div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+      {section.content}
+    </CollapsibleSection>
   );
 }
 

@@ -22,7 +22,10 @@ import {
 vi.mock("framer-motion", () => ({
   motion: {
     div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    section: ({ children, ...props }: any) => <section {...props}>{children}</section>,
+    span: ({ children, ...props }: any) => <span {...props}>{children}</span>,
   },
+  AnimatePresence: ({ children }: any) => <>{children}</>,
 }));
 
 vi.mock("@capacitor/app", () => ({
@@ -80,14 +83,19 @@ describe("MachineControls keypad focus ring (C64U Remote)", () => {
     const focusContext = { current: null as FocusNavigationContextValue | null };
     renderInRing({}, focusContext);
 
-    // Selection starts on the labelled Quick Actions group; OK descends to the
-    // first child, then stepping down walks Menu → Pause → Reset → Reboot.
+    // Quick Actions is itself collapsible now, so its own toggle is the ring's first
+    // stop. Selection starts there; OK establishes focus without activating (the
+    // section is already open), and stepping down from it walks Menu → Pause → Reset →
+    // Reboot.
     expect(focusContext.current?.engine.sourceForId("home-machine-reset")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("home-machine-reboot")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("home-machine-pause-resume")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("home-machine-menu")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("home-machine-power-off")).toBe("dom+explicit");
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    expect(document.activeElement).toBe(screen.getByTestId("home-section-toggle-quick-actions"));
+
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Menu" }));
 
     // Center fires only the focused (non-destructive) action; no dialog, no other handler.
@@ -118,11 +126,13 @@ describe("MachineControls keypad focus ring (C64U Remote)", () => {
     expect(screen.queryByRole("button", { name: "Save RAM" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Power Cycle" })).not.toBeInTheDocument();
 
-    // Descend, then five DpadDown steps from the first child wrap exactly back to the first card,
-    // confirming the ring holds only the five visible actions.
+    // Enter the ring (lands on the section's own toggle, its first stop), step once more
+    // onto the first card, then six DpadDown steps - one for the toggle, five for the
+    // actions - wrap exactly back to it, confirming the ring holds only those six stops.
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Menu" }));
-    const order = ["Pause", "Reset", "Reboot", "Power Off", "Menu"];
+    const order = ["Pause", "Reset", "Reboot", "Power Off", "Quick Actions", "Menu"];
     for (const name of order) {
       fireEvent.keyDown(document.body, { code: "DpadDown" });
       expect(document.activeElement).toBe(screen.getByRole("button", { name }));
