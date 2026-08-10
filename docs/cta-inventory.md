@@ -519,8 +519,8 @@ single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
   Disks, Config, Settings, Diagnostics — button — `docs-toggle-*` — R✅ I✅
 - External links: Ultimate Documentation, REST API Reference, Ultimate 64
   Official Site — link — `docs-external-resource-*` — R✅ I✅
-  (`c64u-remote`: single C64U User Guide link —
-  `docs-external-resource-c64u-user-guide` — R✅ I✅)
+  (`c64u-remote`: card hidden — its only external link, the C64U User Guide,
+  is already reachable from Settings → About, see §4.5 above)
 
 ---
 
