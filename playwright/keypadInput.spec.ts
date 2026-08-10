@@ -145,14 +145,19 @@ test.describe("Keypad / T9 input", () => {
     await expect(slider).toBeVisible();
     const thumb = slider.getByRole("slider");
 
-    // Grouping is innermost-wins: the CPU & RAM card is itself a top-level ring
-    // stop (the outer "Quick Config" wrapper is no longer a separate focus stop),
-    // so OK descends straight from the card into its first control.
-    const cpuCard = page.getByTestId("home-cpu-summary");
-    expect(await ringFocus(page, cpuCard)).toBe(true);
-    await expect(cpuCard).toHaveAttribute(SELECTED, "true");
-    await page.keyboard.press("Enter");
-    await expect(page.getByTestId("home-cpu-turbo-control")).toHaveAttribute(SELECTED, "true");
+    // CPU & RAM is its own top-level collapsible card (the old "Quick Config" wrapper
+    // that used to group it with Ports/Video is gone) and opens by default, so its
+    // controls are already in the DOM and reachable by plain ArrowDown - a card's own
+    // toggle only needs an OK/Enter when the card is closed. ringFocus's "go in" check
+    // is exactly that: it presses OK only when positioned on a closed
+    // `[data-section-label]` container, and otherwise keeps stepping - so reaching the
+    // turbo control is a second ringFocus call, not a separate explicit Enter.
+    const cpuToggle = page.getByTestId("home-section-toggle-cpu-ram");
+    expect(await ringFocus(page, cpuToggle)).toBe(true);
+    await expect(cpuToggle).toHaveAttribute(SELECTED, "true");
+    const turboControl = page.getByTestId("home-cpu-turbo-control");
+    expect(await ringFocus(page, turboControl)).toBe(true);
+    await expect(turboControl).toHaveAttribute(SELECTED, "true");
     await page.keyboard.press("ArrowDown");
     await expect(thumb).toHaveAttribute(SELECTED, "true");
     await snap(page, testInfo, "slider-focused");
