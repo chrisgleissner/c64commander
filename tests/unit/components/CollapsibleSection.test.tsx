@@ -67,7 +67,7 @@ describe("CollapsibleSection", () => {
   });
 
   it("once any section in a scope has been touched, an untouched defaultOpen section in that scope reads closed", () => {
-    render(
+    const first = render(
       <>
         <CollapsibleSection scope="test" id="quick-actions" title="Quick Actions" icon={Radio} defaultOpen>
           <p>Reset</p>
@@ -80,6 +80,10 @@ describe("CollapsibleSection", () => {
     // Touch the closed-by-default section - this makes the scope "touched".
     fireEvent.click(screen.getByTestId("test-section-toggle-printers"));
     expect(screen.getByText("Printer A")).toBeInTheDocument();
+    // Unmount before re-rendering: otherwise this render's own still-open quick-actions
+    // section (defaultOpen) would leave its own "Reset" in the document regardless of
+    // what the second render below does, masking the behaviour under test.
+    first.unmount();
 
     // Re-render fresh: quick-actions was never explicitly stored as open, and the scope
     // now has entries, so it reads its own (absent) stored state rather than defaultOpen.
@@ -88,6 +92,8 @@ describe("CollapsibleSection", () => {
         <p>Reset</p>
       </CollapsibleSection>,
     );
+    expect(screen.queryByText("Reset")).not.toBeInTheDocument();
+    expect(screen.getByTestId("test-section-quick-actions")).toHaveAttribute("data-open", "false");
     unmount();
   });
 
