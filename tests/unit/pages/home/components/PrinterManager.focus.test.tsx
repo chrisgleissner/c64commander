@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
@@ -14,6 +14,23 @@ import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 // Uses the REAL SectionHeader + Button so the keypad focus ring (focusId /
 // focusOrder) is exercised: only the data hooks and the d-pad-operated selects
 // (M2.5) are stubbed.
+//
+// Printers now starts closed, so these tests open it mid-test rather than on mount.
+// Real framer-motion animates that reveal from height:0/opacity:0, and jsdom applies
+// those inline styles synchronously without ever progressing the animation (no rAF
+// ticks run in this environment) - so the newly revealed content stayed effectively
+// invisible for the rest of the test, and the enable toggle inside it was never
+// reachable. Mocking framer-motion here, the same way MachineControls.focus.test.tsx
+// already does, renders the content as plain elements with no transition to get stuck in.
+vi.mock("framer-motion", () => ({
+  motion: {
+    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    section: ({ children, ...props }: any) => <section {...props}>{children}</section>,
+    span: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  },
+  AnimatePresence: ({ children }: any) => <>{children}</>,
+}));
+
 const { updateConfigValueSpy, resolveConfigValueSpy, onResetPrinterSpy } = vi.hoisted(() => ({
   updateConfigValueSpy: vi.fn().mockResolvedValue(undefined),
   resolveConfigValueSpy: vi.fn(
@@ -71,6 +88,16 @@ const renderInRing = (overrides: { isConnected?: boolean } = {}) => {
   );
 };
 
+// The ring's DOM discovery coalesces mutations into a single microtask rescan
+// (FocusDiscoveryEngine.scheduleRefresh, queueMicrotask) rather than rescanning
+// synchronously. `fireEvent` flushes React's own effects via `act`, but does not by
+// itself let a *microtask* queued from inside those effects run before the next
+// `fireEvent` call reads the ring. Opening Printers mounts the enable toggle for the
+// first time and queues exactly that rescan, so the tests below flush one microtask
+// turn after opening before continuing - otherwise the toggle stays undiscovered and
+// navigation silently wraps between the two elements that were already known.
+const flushFocusDiscovery = () => act(() => Promise.resolve());
+
 describe("PrinterManager keypad focus ring (C64U Remote)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -79,35 +106,50 @@ describe("PrinterManager keypad focus ring (C64U Remote)", () => {
     );
   });
 
-  it("traverses Reset Printer → the ON/OFF toggle top-to-bottom in focusOrder", () => {
+  it("traverses Reset Printer → the ON/OFF toggle top-to-bottom in focusOrder", async () => {
     renderInRing();
 
-    // The labelled Printers section is selected first; OK descends to Reset.
+    // Printers starts closed, so the ring's first stop is the section's own toggle - not
+    // yet Reset, which is not in the DOM until the section is opened. The first Center
+    // establishes focus there without activating it; a second Center is what opens it.
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    expect(document.activeElement).toBe(screen.getByTestId("home-section-toggle-printers"));
+    fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    await flushFocusDiscovery();
+
+    // One step down reaches Reset, now that opening the section put it in the DOM.
+    fireEvent.keyDown(document.body, { code: "DpadDown" });
     expect(document.activeElement).toBe(screen.getByTestId("home-printer-reset"));
 
-    // One step down reaches the enable toggle.
+    // One more step down reaches the enable toggle.
     fireEvent.keyDown(document.body, { code: "DpadDown" });
     expect(document.activeElement).toBe(screen.getByTestId("home-printer-toggle"));
 
-    // Another step wraps back to Reset Printer, confirming only the two CTAs cycle.
+    // Another step wraps back to the section's own toggle, which is the ring's first
+    // stop now that it is a member too - confirming the three items cycle as a whole.
     fireEvent.keyDown(document.body, { code: "DpadDown" });
-    expect(document.activeElement).toBe(screen.getByTestId("home-printer-reset"));
+    expect(document.activeElement).toBe(screen.getByTestId("home-section-toggle-printers"));
   });
 
-  it("center-activates the focused Reset Printer without toggling the printer", () => {
+  it("center-activates the focused Reset Printer without toggling the printer", async () => {
     renderInRing();
 
-    fireEvent.keyDown(document.body, { code: "DpadCenter" }); // enter Printers group → reset
+    fireEvent.keyDown(document.body, { code: "DpadCenter" }); // enter ring → section toggle
+    fireEvent.keyDown(document.body, { code: "DpadCenter" }); // activates it, opening the section
+    await flushFocusDiscovery();
+    fireEvent.keyDown(document.body, { code: "DpadDown" }); // → reset
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     expect(onResetPrinterSpy).toHaveBeenCalledTimes(1);
     expect(updateConfigValueSpy).not.toHaveBeenCalled();
   });
 
-  it("center-activates the focused ON/OFF toggle without firing the section reset", () => {
+  it("center-activates the focused ON/OFF toggle without firing the section reset", async () => {
     renderInRing();
 
-    fireEvent.keyDown(document.body, { code: "DpadCenter" }); // enter Printers group → reset
+    fireEvent.keyDown(document.body, { code: "DpadCenter" }); // enter ring → section toggle
+    fireEvent.keyDown(document.body, { code: "DpadCenter" }); // activates it, opening the section
+    await flushFocusDiscovery();
+    fireEvent.keyDown(document.body, { code: "DpadDown" }); // → reset
     fireEvent.keyDown(document.body, { code: "DpadDown" }); // → printer toggle
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     expect(updateConfigValueSpy).toHaveBeenCalledWith(

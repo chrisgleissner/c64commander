@@ -54,8 +54,20 @@ const waitForConnected = async (page: Page) => {
   );
 };
 
+// Audio, Lighting, Streams and Config actions are collapsible Home cards, closed by
+// default - their contents are not in the DOM until each section is opened. Idempotent,
+// so it is safe to call more than once for a test that touches more than one section.
+const openHomeSection = async (page: Page, id: string) => {
+  const toggle = page.getByTestId(`home-section-toggle-${id}`);
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.scrollIntoViewIfNeeded();
+    await toggle.click();
+  }
+};
+
 const waitForStreamsReady = async (page: Page) => {
   await waitForConnected(page);
+  await openHomeSection(page, "streams");
   await expect
     .poll(
       async () => ({
@@ -221,6 +233,7 @@ test.describe("Home interactions", () => {
       )
       .toBe(true);
 
+    await openHomeSection(page, "audio");
     const sidEntry = page.getByTestId("home-sid-entry-socket1");
     const sidToggle = page.getByTestId("home-sid-toggle-socket1");
     await expect(sidEntry).toBeVisible();
@@ -463,7 +476,6 @@ test.describe("Home interactions", () => {
     allowWarnings(test.info(), "Expected validation toast for invalid stream host input.");
     await page.goto("/");
     await waitForStreamsReady(page);
-
     await page.getByTestId("home-stream-edit-toggle-vic").click();
     const input = page.getByTestId("home-stream-endpoint-vic");
     await input.fill("bad host!:11000");
@@ -573,6 +585,7 @@ test.describe("Home interactions", () => {
 
     await page.goto("/");
     await waitForConnected(page);
+    await openHomeSection(page, "audio");
     const socket1Address = page.getByTestId("home-sid-address-socket1");
     await expect(socket1Address).toHaveAttribute("role", "combobox", { timeout: CONFIG_READY_TIMEOUT_MS });
     if (!((await socket1Address.textContent()) ?? "").includes("$D400")) {
@@ -621,6 +634,8 @@ test.describe("Home interactions", () => {
   test("SID type column renders and LED controls stay inline", async ({ page }: { page: Page }) => {
     await page.goto("/");
     await waitForConnected(page);
+    await openHomeSection(page, "audio");
+    await openHomeSection(page, "lighting");
 
     const socketType = page.getByTestId("home-sid-type-socket1");
     await expect(socketType).toBeVisible();
@@ -655,8 +670,12 @@ test.describe("Home interactions", () => {
   test("lighting summaries use updated labels and control order", async ({ page }: { page: Page }) => {
     await page.goto("/");
     await waitForConnected(page);
+    await openHomeSection(page, "lighting");
 
-    await expect(page.getByTestId("home-lighting-group")).toContainText("LED lighting");
+    // "LED lighting" no longer has its own sub-heading inside the group: the merged
+    // "Lighting" card's own title already says so, and repeating it a second time
+    // immediately below would be redundant.
+    await expect(page.getByTestId("home-lighting-group")).toContainText("Lighting");
 
     const caseLight = page.getByTestId("home-led-summary");
     // The case-light rows are config-driven and populate asynchronously after
@@ -682,6 +701,7 @@ test.describe("Home interactions", () => {
   test("lighting pattern keeps the user-facing label while sending the raw API value", async ({ page, server }) => {
     await page.goto("/");
     await waitForConnected(page);
+    await openHomeSection(page, "lighting");
 
     await page.getByTestId("home-led-pattern").click();
     await page.getByRole("option", { name: /^Outward$/ }).click();
@@ -706,6 +726,8 @@ test.describe("Home interactions", () => {
     await page.goto("/");
     await applyCompactDisplayProfile(page);
     await waitForConnected(page);
+    await openHomeSection(page, "printers");
+    await openHomeSection(page, "audio");
 
     const driveA = page.getByTestId("home-drive-row-a");
     const driveB = page.getByTestId("home-drive-row-b");
@@ -751,6 +773,7 @@ test.describe("Home interactions", () => {
   test("stateless actions clear focus after click", async ({ page }: { page: Page }) => {
     await page.goto("/");
     await waitForConnected(page);
+    await openHomeSection(page, "config-actions");
 
     const action = page.getByTestId("home-config-save-app");
     await action.scrollIntoViewIfNeeded();

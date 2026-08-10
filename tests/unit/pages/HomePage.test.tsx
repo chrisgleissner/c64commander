@@ -218,7 +218,24 @@ const renderWithRouter = (ui: JSX.Element) =>
     />,
   );
 
-const renderHomePage = () => renderWithRouter(<HomePage />);
+/**
+ * Home is now a set of collapsible cards (mirrors Settings), so a card's controls are not
+ * in the DOM until its section is opened. These tests are about what those controls do, not
+ * about the collapse itself — CollapsibleSection.test.tsx covers that generically — so every
+ * section is opened right after render.
+ */
+const expandAllSections = () => {
+  const toggles = screen.queryAllByTestId(/^home-section-toggle-/);
+  toggles.forEach((toggle) => {
+    if (toggle.getAttribute("aria-expanded") !== "true") fireEvent.click(toggle);
+  });
+};
+
+const renderHomePage = () => {
+  const result = renderWithRouter(<HomePage />);
+  expandAllSections();
+  return result;
+};
 
 const HDMI_RESOLUTION_OPTIONS = [
   "SD (480p/576p)",
@@ -483,7 +500,11 @@ const expectCpuControls = () => {
   expect(screen.getByTestId("quickconfig-ram-expansion")).toBeTruthy();
   expect(screen.getByTestId("quickconfig-ram-size")).toBeTruthy();
 
-  const labels = Array.from(section.querySelectorAll(".text-muted-foreground")).map((node) => node.textContent);
+  // Scoped to the section's body, not its header: the header's own chevron icon carries
+  // "text-muted-foreground" too, and an SVG's textContent is "", which would otherwise show
+  // up as a leading blank entry that has nothing to do with the control labels below.
+  const body = document.getElementById("home-section-body-cpu-ram");
+  const labels = Array.from(body?.querySelectorAll(".text-muted-foreground") ?? []).map((node) => node.textContent);
   expect(labels).toEqual([
     "Turbo Control",
     "CPU Speed",
@@ -604,6 +625,10 @@ vi.mock("framer-motion", () => ({
     span: ({ children, ...props }: any) => {
       const { initial, animate, exit, transition, variants, ...validProps } = props;
       return <span {...validProps}>{children}</span>;
+    },
+    section: ({ children, ...props }: any) => {
+      const { initial, animate, exit, transition, variants, ...validProps } = props;
+      return <section {...validProps}>{children}</section>;
     },
   },
   AnimatePresence: ({ children }: any) => <>{children}</>,
@@ -1444,15 +1469,16 @@ describe("HomePage SID status", () => {
 
     renderHomePage();
 
-    const quickConfig = screen.getByTestId("home-quick-config");
-    expect(within(quickConfig).getByTestId("home-cpu-speed-value").textContent).toBe("1");
+    // CPU & RAM, Ports and Video are each their own top-level CollapsibleSection now,
+    // rather than sharing a "Quick Config" column wrapper, so these query the page directly.
+    expect(screen.getByTestId("home-cpu-speed-value").textContent).toBe("1");
     expectCpuControls();
     expectVideoControls();
     expectPortsControls();
 
-    const cpuCard = within(quickConfig).getByTestId("home-cpu-summary");
-    const portsCard = within(quickConfig).getByTestId("home-ports-summary");
-    const videoCard = within(quickConfig).getByTestId("home-video-summary");
+    const cpuCard = screen.getByTestId("home-cpu-summary");
+    const portsCard = screen.getByTestId("home-ports-summary");
+    const videoCard = screen.getByTestId("home-video-summary");
     expect(cpuCard.getAttribute("data-section-label")).toBe("CPU & RAM");
     expect(portsCard.getAttribute("data-section-label")).toBe("Ports");
     expect(videoCard.getAttribute("data-section-label")).toBe("Video");
@@ -1701,7 +1727,10 @@ describe("HomePage SID status", () => {
     renderHomePage();
 
     expectUserInterfaceControls("home-user-interface");
-    expect(within(screen.getByTestId("home-lighting-group")).getByText("LED lighting")).toBeTruthy();
+    // "LED lighting" no longer has its own sub-heading inside the group: the merged
+    // "Lighting" card's own CollapsibleSection title already says so, and repeating it a
+    // second time immediately below would be redundant.
+    expect(within(screen.getByTestId("home-lighting-group")).getByText("Lighting")).toBeTruthy();
     expectLightingControls("home-led", "Case Light");
     expect(screen.getByTestId("home-led-pattern")).toHaveTextContent("Single Color");
     expect(screen.getByTestId("home-keyboard-lighting-summary")).toBeInTheDocument();
@@ -1718,11 +1747,14 @@ describe("HomePage SID status", () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
 
-    const cardColumn = screen.getByTestId("home-secondary-cards");
-    const userInterfaceCard = within(cardColumn).getByTestId("home-user-interface-summary");
-    const lightingGroup = within(cardColumn).getByTestId("home-lighting-group");
-    const caseLightingCard = within(cardColumn).getByTestId("home-led-summary");
-    const keyboardLightingCard = within(cardColumn).getByTestId("home-keyboard-lighting-summary");
+    // Each of these is now its own top-level CollapsibleSection rather than a shared
+    // "secondary cards" column, so the order check below runs against the page directly.
+    // "home-user-interface-summary" is the outer CollapsibleSection - it is what carries
+    // data-section-label, since the inner card's own label is hidden in favor of it.
+    const userInterfaceCard = screen.getByTestId("home-user-interface-summary");
+    const lightingGroup = screen.getByTestId("home-lighting-group");
+    const caseLightingCard = screen.getByTestId("home-led-summary");
+    const keyboardLightingCard = screen.getByTestId("home-keyboard-lighting-summary");
     expect(userInterfaceCard.getAttribute("data-section-label")).toBe("User Interface");
     expect(caseLightingCard.getAttribute("data-section-label")).toBe("Case Light");
     expect(keyboardLightingCard.getAttribute("data-section-label")).toBe("Keyboard Light");

@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { motion } from "framer-motion";
-import { SectionHeader } from "@/components/SectionHeader";
+import { Waves } from "lucide-react";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
@@ -45,15 +45,7 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
   } = useStreamData(isConnected, configWritePending, updateConfigValue);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.38 }}
-      className="space-y-2"
-      data-testid="home-stream-status"
-      data-section-label="Streams"
-    >
-      <SectionHeader title="Streams" />
+    <CollapsibleSection scope="home" id="streams" title="Streams" icon={Waves} testId="home-stream-status">
       <div className="space-y-2">
         {streamControlEntries.map((entry) => {
           const draft = streamDrafts[entry.key] ?? {
@@ -194,6 +186,6 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
           );
         })}
       </div>
-    </motion.div>
+    </CollapsibleSection>
   );
 }

@@ -26,6 +26,13 @@ const waitForConnected = async (page: Page) => {
   );
 };
 
+// Lighting is a collapsible Home card, closed by default - its Studio button and chips
+// are not in the DOM until the section is opened.
+const openLightingSection = async (page: Page) => {
+  const toggle = page.getByTestId("home-section-toggle-lighting");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+};
+
 const getActiveSlot = (page: Page) => page.locator('[data-slot-active="true"]');
 
 const applyMediumDisplayProfile = async (page: Page) => {
@@ -93,6 +100,7 @@ test.describe("Lighting Studio", () => {
     await page.goto("/");
     await waitForConnected(page);
 
+    await openLightingSection(page);
     await expect(page.getByTestId("home-lighting-automation-chip")).toHaveText("Auto: Connected");
     await page.getByTestId("home-lighting-studio").click();
     await expect(page.getByRole("dialog", { name: "Lighting Studio" })).toBeVisible();
@@ -194,6 +202,7 @@ test.describe("Lighting Studio", () => {
     await page.goto("/");
     await waitForConnected(page);
 
+    await openLightingSection(page);
     await page.getByTestId("home-lighting-studio").click();
 
     const studioSheet = page.getByTestId("lighting-studio-sheet");
@@ -252,6 +261,7 @@ test.describe("Lighting Studio", () => {
     await waitForConnected(page);
     await applyMediumDisplayProfile(page);
 
+    await openLightingSection(page);
     await page.getByTestId("home-lighting-studio").click();
     const dialog = page.getByRole("dialog", { name: "Lighting Studio" });
     await expect(dialog).toBeVisible();
@@ -318,6 +328,7 @@ test.describe("Lighting Studio", () => {
     await diagnosticsSheet.getByRole("button", { name: "Close" }).click();
     await expect(diagnosticsSheet).toBeHidden();
 
+    await openLightingSection(page);
     await page.getByTestId("home-lighting-studio").click();
     const lightingSheet = page.getByTestId("lighting-studio-sheet");
     await expect(lightingSheet).toBeVisible();

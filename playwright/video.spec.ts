@@ -127,19 +127,28 @@ const tourHome = async (page: Page) => {
   await smoothScrollToLocator(page, page.getByTestId("home-machine-controls"), 1800);
   await page.waitForTimeout(SHORT_PAUSE_MS);
 
-  await smoothScrollToLocator(page, page.getByTestId("home-quick-config"), 1800);
+  // "Quick Config" dissolved into separate collapsible cards. Video, Ports and CPU & RAM
+  // stay open by default; the rest (Audio, Lighting, Streams, Config actions) start
+  // closed and are opened here, right before the tour touches their contents.
+  await smoothScrollToLocator(page, page.getByTestId("home-video-summary"), 1800);
   await openAndCloseSelect(page, page.getByTestId("home-video-mode"));
 
-  await smoothScrollToLocator(page, page.getByTestId("home-led-summary"), 1800);
+  await smoothScrollToLocator(page, page.getByTestId("home-lighting-group"), 1800);
+  await page.getByTestId("home-section-toggle-lighting").click();
+  await page.waitForTimeout(SHORT_PAUSE_MS);
   await openAndCloseSelect(page, page.getByTestId("home-led-tint"));
 
   await smoothScrollToLocator(page, page.getByTestId("home-drives-group"), 2000);
   await openAndCloseSelect(page, page.getByTestId("home-drive-type-a"));
 
-  await smoothScrollToLocator(page, page.getByTestId("home-printer-group"), 2000);
+  await smoothScrollToLocator(page, page.getByTestId("home-printers"), 2000);
+  await page.getByTestId("home-section-toggle-printers").click();
+  await page.waitForTimeout(SHORT_PAUSE_MS);
   await openAndCloseSelect(page, page.getByTestId("home-printer-bus"));
 
   await smoothScrollToLocator(page, page.getByTestId("home-sid-status"), 2200);
+  await page.getByTestId("home-section-toggle-audio").click();
+  await page.waitForTimeout(SHORT_PAUSE_MS);
   const panSlider = page.getByTestId("home-sid-pan-socket1").getByRole("slider");
   const panBox = await panSlider.boundingBox();
   if (panBox) {
@@ -150,6 +159,8 @@ const tourHome = async (page: Page) => {
   }
 
   await smoothScrollToLocator(page, page.getByTestId("home-stream-status"), 2200);
+  await page.getByTestId("home-section-toggle-streams").click();
+  await page.waitForTimeout(SHORT_PAUSE_MS);
   const streamEdit = page.getByTestId("home-stream-edit-toggle-audio");
   if (await streamEdit.count()) {
     await streamEdit.click();
@@ -159,6 +170,8 @@ const tourHome = async (page: Page) => {
   }
 
   await smoothScrollToBottom(page, 2800);
+  await page.getByTestId("home-section-toggle-config-actions").click();
+  await page.waitForTimeout(SHORT_PAUSE_MS);
   const saveAppButton = page.getByTestId("home-config-save-app");
   await openAndCloseDialog(page, saveAppButton, "Save to app");
 

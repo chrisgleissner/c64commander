@@ -28,6 +28,8 @@ vi.mock("framer-motion", () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   motion: {
     div: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+    section: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) => <section {...props}>{children}</section>,
+    span: ({ children, ...props }: React.HTMLAttributes<HTMLSpanElement>) => <span {...props}>{children}</span>,
   },
 }));
 
@@ -55,6 +57,10 @@ vi.mock("@/lib/tracing/userTrace", () => ({
 describe("DocsPage", () => {
   beforeEach(() => {
     featureFlagsRef.flags = { ...defaultFlags };
+    // Card open/closed state now persists to localStorage (CollapsibleSection), where
+    // it previously reset on every mount - clear it so one test's clicks cannot leak
+    // into the next test's expectations.
+    localStorage.clear();
   });
 
   it("renders the docs shell and expands help sections on demand", () => {

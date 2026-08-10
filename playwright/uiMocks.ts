@@ -463,27 +463,41 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         // collapse, so the fixture starts from the state a returning user is in: all open.
         // The collapsed default has its own test in `settingsSections.spec.ts`.
         //
-        // Written only when nothing is stored yet. This init script re-runs on every navigation,
-        // so writing unconditionally would overwrite a chapter the test had just opened or
-        // closed, and no test could show that the choice survives leaving the page.
-        if (localStorage.getItem("c64u_settings_open_sections") === null)
-          localStorage.setItem(
-            "c64u_settings_open_sections",
-            JSON.stringify([
-              "appearance",
-              "connection",
-              "diagnostics",
-              "play-and-disk",
-              "feature-group-stable",
-              "feature-group-experimental",
-              "sid-radio",
-              "hvsc",
-              "online-archive",
-              "device-safety",
-              "notifications",
-              "about",
-            ]),
-          );
+        // Settings' open/closed memory lives in the shared collapsibleSectionStore key
+        // ("c64u_open_sections"), scoped per page ("settings:<id>"), not in a Settings-only
+        // key. Seeding is still written only once: this init script re-runs on every
+        // navigation, and writing unconditionally would overwrite a chapter the test had
+        // just opened or closed, so no test could show that the choice survives leaving the
+        // page. "Once" is judged by whether any "settings:" entry exists yet, rather than by
+        // whether the shared key exists at all, because the key can already be non-empty
+        // from another scope (e.g. Docs) seeded earlier in the same test - and unlike the
+        // Settings-only key this one is never deleted out from under that check, so the
+        // guard only fires on a page's genuine first visit to Settings.
+        (() => {
+          let ids: unknown = [];
+          try {
+            ids = JSON.parse(localStorage.getItem("c64u_open_sections") ?? "[]");
+          } catch {
+            ids = [];
+          }
+          const existing = Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : [];
+          if (existing.some((id) => id.startsWith("settings:"))) return;
+          const settingsIds = [
+            "appearance",
+            "connection",
+            "diagnostics",
+            "play-and-disk",
+            "feature-group-stable",
+            "feature-group-experimental",
+            "sid-radio",
+            "hvsc",
+            "online-archive",
+            "device-safety",
+            "notifications",
+            "about",
+          ].map((id) => `settings:${id}`);
+          localStorage.setItem("c64u_open_sections", JSON.stringify([...existing, ...settingsIds]));
+        })();
         if (seedFeatureFlags) {
           localStorage.setItem("c64u_dev_mode_enabled", "1");
           localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");

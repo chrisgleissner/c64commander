@@ -1,5 +1,14 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { writeOpenSection } from "@/lib/ui/collapsibleSectionStore";
+
+// Audio is closed by default now that it is a collapsible CollapsibleSection - these
+// tests exercise its content, not the collapse mechanism (which has its own tests), so
+// pre-open it the same way a returning user's remembered state would.
+beforeEach(() => {
+  localStorage.clear();
+  writeOpenSection("home", "audio", true);
+});
 
 const { toastSpy, reportUserErrorSpy, c64ApiMockRef, queryClientMockRef, updateConfigValueSpy, resolveConfigValueSpy } =
   vi.hoisted(() => ({
@@ -57,15 +66,20 @@ vi.mock("@/lib/logging", () => ({
   buildErrorLogDetails: buildErrorLogDetailsSpy,
 }));
 
-vi.mock("framer-motion", () => ({
-  motion: {
-    div: ({ children, ...props }: any) => {
-      const { initial, animate, exit, transition, variants, ...validProps } = props;
-      return <div {...validProps}>{children}</div>;
+vi.mock("framer-motion", () => {
+  const stripMotionProps = (props: any) => {
+    const { initial, animate, exit, transition, variants, ...validProps } = props;
+    return validProps;
+  };
+  return {
+    motion: {
+      div: ({ children, ...props }: any) => <div {...stripMotionProps(props)}>{children}</div>,
+      section: ({ children, ...props }: any) => <section {...stripMotionProps(props)}>{children}</section>,
+      span: ({ children, ...props }: any) => <span {...stripMotionProps(props)}>{children}</span>,
     },
-  },
-  AnimatePresence: ({ children }: any) => <>{children}</>,
-}));
+    AnimatePresence: ({ children }: any) => <>{children}</>,
+  };
+});
 
 vi.mock("@/hooks/useC64Connection", () => ({
   VISIBLE_C64_QUERY_OPTIONS: {
@@ -204,7 +218,7 @@ vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
 vi.mock("@/components/SectionHeader", () => ({
   SectionHeader: (props: any) => (
     <div data-testid={props.resetTestId}>
-      <span>{props.title}</span>
+      {props.hideTitle ? null : <span>{props.title}</span>}
       <button onClick={props.resetAction} disabled={props.resetDisabled} data-testid="reset-btn">
         Reset
       </button>
@@ -254,9 +268,9 @@ describe("AudioMixer", () => {
     }),
   };
 
-  it("renders SID section header", () => {
+  it("renders Audio section header", () => {
     render(<AudioMixer {...defaultProps} />);
-    expect(screen.getByText("SID")).toBeDefined();
+    expect(screen.getByText("Audio")).toBeDefined();
   });
 
   it("renders a SID card for each control entry", () => {

@@ -93,11 +93,11 @@ Two more actions can join that last band: a **Reboot (Clr Mem)** that wipes memo
 
 Directly below sits **Live View**, which brings the sound and the picture of the running machine into the app. It has a chapter of its own later on.
 
-Keep going and you reach Quick Config: the settings you are most likely to want mid-session, in three cards. **CPU & RAM** holds the processor speed, turbo behavior and the RAM expansion. **Ports** holds the joystick swap, the serial bus, the cartridge preference and the user port. **Video** holds the output mode, the resolution and the scan lines. Beside them are a **User Interface** card and, on a machine with lights, **Case Light** and **Keyboard Light**.
+Keep going and the rest of Home is a set of cards, each its own labeled chapter you open or close by tapping its header. **CPU & RAM** holds the processor speed, turbo behavior and the RAM expansion. **Video**, directly followed by **Audio**, holds the output mode, resolution and scan lines, and then the SID mixer's channel strips — audio and video sit together because that is how most people think about them. **Ports** holds the joystick swap, the serial bus, the cartridge preference and the user port. **User Interface** rounds the group out, and, on a machine that has them, so does **Lighting**, for the case and keyboard lights.
 
-Everything here is in Config as well. Quick Config saves you the search.
+Which of these start open and which start closed is chosen once, for a first-time visit, in favor of the cards most people touch every session; every card is closed or opened the same way, by tapping its header, and the app remembers what you left open from then on — a card you never use can stay out of the way, and one you always want stays exactly where you put it. Everything here is in Config as well; these cards just save you the search.
 
-The lower cards cover drives, the printer, the SID mixer, streams, and the **Config** card. That last one holds **Save**, which writes the current settings into flash on the connected Ultimate-family device so they survive a power cycle, along with Load, Reset, Revert, and the app's own named configuration snapshots.
+The remaining cards cover drives, the printer, streams, and **Config actions**. That last one holds **Save**, which writes the current settings into flash on the connected Ultimate-family device so they survive a power cycle, along with Load, Reset, Revert, and the app's own named configuration snapshots.
 
 **Game Mode** and **Remote Input** are the second-screen joystick and keyboard for the C64. Both have their own walkthrough in [Remote Input](#remote-input), later in this guide.
 
@@ -356,10 +356,10 @@ Preferred path: adjust drive setup before mounting.
 
 ### Change a Common Setting
 
-1. Try **Home → Quick Config** first.
+1. Try Home's own cards first — CPU & RAM, Video, Audio, Ports, User Interface, Lighting.
 2. If the setting is not there, open **Config** and search.
 3. Change the value.
-4. Use **Save** in the Config card if the change should survive a device reboot or power cycle, unless **Keep device settings after a restart** is already on.
+4. Use **Save** in the Config actions card if the change should survive a device reboot or power cycle, unless **Keep device settings after a restart** is already on.
 
 Preferred path: Home for common settings; Config for the full tree.
 
@@ -434,7 +434,7 @@ There are two versions of the SID chip — the **6581** and the **8580** — and
 
 #### The SID Audio Mixer
 
-A C64 can have more than one SID chip. **Home → SID / Audio mixer** gives you a **master volume**, plus a **volume** and **stereo position** for each SID your machine reports. Pan one SID left and another right for stereo, or turn one down so the other leads. Changes take effect immediately, and the same controls appear in **Config → Audio Mixer**.
+A C64 can have more than one SID chip. **Home → Audio** gives you a **master volume**, plus a **volume** and **stereo position** for each SID your machine reports. Pan one SID left and another right for stereo, or turn one down so the other leads. Changes take effect immediately, and the same controls appear in **Config → Audio Mixer**.
 
 ### SID Radio
 
@@ -733,7 +733,7 @@ _Availability: on by default. You can turn it off in Settings → Stable Feature
 
 ### The Virtual Printer
 
-Your C64 prints over the serial bus, and the machine provides the printer itself, so there is no separate box to buy or connect. **Home → Printer** turns it on, picks the **emulation** — a Commodore MPS, say — and sets the **bus ID**, the **output type**, the **ink density** and the character sets. **Reset** clears the printer and starts a fresh page.
+Your C64 prints over the serial bus, and the machine provides the printer itself, so there is no separate box to buy or connect. **Home → Printers** turns it on, picks the **emulation** — a Commodore MPS, say — and sets the **bus ID**, the **output type**, the **ink density** and the character sets. **Reset** clears the printer and starts a fresh page.
 
 One more control, **Flush/Eject**, finishes the current page and sends it on. It goes through the Telnet menu service, so it appears once you turn on **Home printer shortcut actions** in Settings → Experimental Features.
 
@@ -871,19 +871,19 @@ Preferred locations are marked first.
 | Save / Load RAM | **Home → Quick Actions** | On by default. You can turn it off in Settings → Stable Features. |
 | Game Mode | **Home → Quick Actions**, Play (while an item plays), `0` | The first tile in Quick Actions. Opens the controller with the picture and sound as you last left them. |
 | Remote Input | **Home → Quick Actions**, Play (while an item plays) | On by default. You can turn it off in Settings → Stable Features. Joystick needs firmware 1.2.0 or newer on a Commodore 64 Ultimate, or 3.15 or newer on an Ultimate 64; otherwise only Keys are available. |
-| CPU speed and turbo | **Home → Quick Config**, Config | Home is preferred for common changes. |
-| Video mode and scan lines | **Home → Quick Config**, Config | Home is preferred. |
-| Joystick, serial bus, cartridge, user port | **Home → Quick Config**, Config | Home is preferred. |
-| Case and keyboard lights | **Home → Quick Config**, Config | Shown for machines that have them. |
+| CPU speed and turbo | **Home → CPU & RAM**, Config | Home is preferred for common changes. |
+| Video mode and scan lines | **Home → Video**, Config | Home is preferred. |
+| Joystick, serial bus, cartridge, user port | **Home → Ports**, Config | Home is preferred. |
+| Case and keyboard lights | **Home → Lighting**, Config | Shown for machines that have them. |
 | Drive power, bus, type, reset | **Disks**, Home → Drives | Disks for the drives themselves; Home for a quick look. |
 | Mount and eject disks | **Disks**, Home → Drives | Disks shows the collection most clearly. |
 | Disk groups and rotation | **Disks** | Groups are assigned as you add a folder; rotate from the drive card. |
 | Soft IEC folder | **Disks** | Read loose files from a folder on the device, with no disk image at all. |
-| Printer controls | **Home → Printer**, Config | Home is preferred. |
-| SID mixer | **Home → SID / Audio mixer**, Config → Audio Mixer | Home is preferred for live mixing. |
+| Printer controls | **Home → Printers**, Config | Home is preferred. |
+| SID mixer | **Home → Audio**, Config → Audio Mixer | Home is preferred for live mixing. |
 | Streams | **Home → Streams**, Config | Visible when the device exposes streaming support. |
-| Save/load device config | **Home → Config** | Save writes the current settings to flash. Turn on Keep device settings after a restart to do it automatically. |
-| App-stored config snapshots | **Home → Config** | Named snapshots kept by the app, apart from the device flash. |
+| Save/load device config | **Home → Config actions** | Save writes the current settings to flash. Turn on Keep device settings after a restart to do it automatically. |
+| App-stored config snapshots | **Home → Config actions** | Named snapshots kept by the app, apart from the device flash. |
 | Disk Explorer (launch a program inside a disk) | **Disks → disk menu → Open (Disk Explorer)** | On by default. You can turn it off in Settings → Stable Features. |
 | Create a blank disk | **Disks → New disk** | On by default. You can turn it off in Settings → Stable Features. |
 | Search inside disk images | **Settings → Play and Disk** | Off to begin with. Turn it on in Settings → Experimental Features. |
@@ -894,7 +894,7 @@ Preferred locations are marked first.
 | Live View checks (A/V sync, tap latency, tone ladder) | **Home → Live View** | On by default. You can turn it off in Settings → Experimental Features. |
 | Advanced config file actions | **Home → Config actions** | Off to begin with. Turn it on in Settings → Experimental Features. |
 | Advanced drive shortcuts | **Home → Drives** | Off to begin with. Turn it on in Settings → Experimental Features. |
-| Advanced printer shortcuts | **Home → Printer** | Off to begin with. Turn it on in Settings → Experimental Features. |
+| Advanced printer shortcuts | **Home → Printers** | Off to begin with. Turn it on in Settings → Experimental Features. |
 | Full configuration tree | **Config** | Use search, open a category, edit rows. |
 | Add playlist items | **Play → Add items** | Sources: Local, C64U, HVSC, CommoServe. |
 | Playback controls | **Play** | Play, stop, pause, previous and next, shuffle, repeat, reshuffle, volume. |

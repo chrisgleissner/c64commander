@@ -46,6 +46,9 @@ test.describe("Fuzz structured recovery", () => {
       "data-connection-state",
       /(REAL_CONNECTED|DEMO_ACTIVE)/,
     );
+    // Config actions is a collapsible Home card, closed by default - the Save to app
+    // button is not in the DOM until the section is opened.
+    await page.getByTestId("home-section-toggle-config-actions").click();
     await page.getByTestId("home-config-save-app").click();
     const dialog = page.getByRole("dialog", { name: /Save to app/i });
     await expect(dialog).toBeVisible();

@@ -136,7 +136,9 @@ test.describe("Home against a device that answers only the minimum REST surface"
     await expect(page.getByTestId("page-error-boundary-fallback")).toHaveCount(0);
     await expect(page.getByText("Something went wrong")).toHaveCount(0);
     await expect(page.getByTestId("home-header-title")).toBeVisible();
-    await expect(page.getByTestId("home-quick-config")).toBeVisible();
+    // "Quick Config" dissolved into separate collapsible cards; CPU & RAM (open by
+    // default) is the equivalent sanity check that those cards rendered.
+    await expect(page.getByTestId("home-cpu-summary")).toBeVisible();
     expect(pageErrors, `unhandled page errors:\n${pageErrors.join("\n---\n")}`).toEqual([]);
   });
 });

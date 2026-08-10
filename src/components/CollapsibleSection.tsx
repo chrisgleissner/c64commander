@@ -1,0 +1,174 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
+import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ChevronDown, type LucideIcon } from "lucide-react";
+
+import { cn } from "@/lib/utils";
+import { readOpenSections, writeOpenSection } from "@/lib/ui/collapsibleSectionStore";
+
+export interface CollapsibleSectionProps {
+  /** Which page this section belongs to (e.g. "home", "settings", "docs"). Namespaces
+   * the persisted open/closed state so two pages can each use the id "video" without
+   * reading or writing each other's memory. */
+  scope: string;
+  id: string;
+  title: string;
+  /** One line saying what is inside, so the page can be read without opening anything.
+   * Omit for a page (like Docs) whose card titles already say enough on their own. */
+  summary?: string;
+  icon: LucideIcon;
+  /** Opened on a first visit to this scope. Reserved for the section(s) most visits are
+   * actually about - see each page's own call site for why a given section does or does
+   * not set this. */
+  defaultOpen?: boolean;
+  /** Shown beside the title - a count, a state, or a warning that must be visible while closed. */
+  badge?: ReactNode;
+  /** Rendered beside the toggle, outside it (e.g. a "Reset" button) - stays reachable
+   * without opening the section, matching what these sections did before they were
+   * collapsible. */
+  actions?: ReactNode;
+  /** Root testid. Defaults to `${scope}-section-${id}`. */
+  testId?: string;
+  /** Toggle button testid/HTML id. Defaults to `${scope}-section-toggle-${id}`. */
+  toggleTestId?: string;
+  /** Body element HTML id, referenced by the toggle's `aria-controls`. Defaults to
+   * `${scope}-section-body-${id}`. */
+  bodyId?: string;
+  /** `data-section-label` on the root, read by the screenshot catalog and the keypad
+   * focus engine's "innermost wins" section grouping. Defaults to `title`. */
+  sectionLabel?: string;
+  /** Fires after every toggle, with the new open state - for callers that need their
+   * own side effect (analytics, focus movement) beyond the persisted memory this
+   * component already keeps on its own. */
+  onToggle?: (open: boolean) => void;
+  /** Fires on the toggle button's own click event, before the toggle happens - for a
+   * caller that traces the click itself (e.g. `wrapUserEvent`) rather than the
+   * resulting open/closed state. Most callers want `onToggle`, not this. */
+  onToggleClick?: (event: MouseEvent<HTMLButtonElement>) => void;
+  children: ReactNode;
+}
+
+/**
+ * One collapsible chapter of a page: Settings, Docs and Home's own summary cards all
+ * render through this. Closed, a section is one line of plain language (or just its
+ * title) saying what it is; open, it is exactly what it always was. Nothing about the
+ * content moves - the only thing this adds is whether it is on screen before you have
+ * asked for it, and whether that choice is remembered.
+ *
+ * Which sections are open is remembered per scope, so a user who lives in one of them
+ * on one page is not made to open it again on every visit - and touching any section on
+ * a page you have not touched before does not disturb a different page's defaults.
+ */
+export const CollapsibleSection = ({
+  scope,
+  id,
+  title,
+  summary,
+  icon: Icon,
+  defaultOpen = false,
+  badge,
+  actions,
+  testId,
+  toggleTestId,
+  bodyId,
+  sectionLabel,
+  onToggle,
+  onToggleClick,
+  children,
+}: CollapsibleSectionProps) => {
+  const [open, setOpen] = useState(defaultOpen);
+
+  useEffect(() => {
+    const stored = readOpenSections(scope);
+    if (stored.size > 0 || !defaultOpen) setOpen(stored.has(id));
+  }, [scope, id, defaultOpen]);
+
+  const toggle = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      onToggleClick?.(event);
+      setOpen((current) => {
+        const next = !current;
+        writeOpenSection(scope, id, next);
+        onToggle?.(next);
+        return next;
+      });
+    },
+    [scope, id, onToggle, onToggleClick],
+  );
+
+  const resolvedToggleTestId = toggleTestId ?? `${scope}-section-toggle-${id}`;
+  const resolvedBodyId = bodyId ?? `${scope}-section-body-${id}`;
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="overflow-hidden rounded-xl border border-border bg-card"
+      data-testid={testId ?? `${scope}-section-${id}`}
+      data-open={open ? "true" : "false"}
+      data-section-label={sectionLabel ?? title}
+    >
+      <div className="flex items-center gap-2 pr-2">
+        {/* The clickable toggle stops at the chevron; `actions` sits as a sibling rather
+            than inside this button, because an interactive control (e.g. a Reset button)
+            cannot nest inside another button without breaking the DOM and the a11y tree. */}
+        <button
+          type="button"
+          onClick={toggle}
+          className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4 py-3 text-left"
+          // The accessibility tree exposes the HTML id, not data-testid, so this is what
+          // makes the header addressable from outside the browser.
+          id={resolvedToggleTestId}
+          data-testid={resolvedToggleTestId}
+          aria-expanded={open}
+          aria-controls={resolvedBodyId}
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="rounded-lg bg-primary/10 p-2">
+              <Icon className="h-5 w-5 text-primary" aria-hidden />
+            </span>
+            <span className="flex min-w-0 flex-col">
+              {/* Still a real heading: the section titles are how the page is navigated, by a
+                  screen reader and by anyone scanning it. The badge sits beside the heading
+                  rather than inside it, so the heading's accessible name stays the title alone. */}
+              <span className="flex items-center gap-2">
+                <h2 className="font-medium">{title}</h2>
+                {badge}
+              </span>
+              {summary ? (
+                // Wrapped, not truncated: a summary cut off mid-word tells the reader less
+                // than no summary at all, and these pages are read on a narrow screen.
+                <span className="text-xs leading-snug text-muted-foreground">{summary}</span>
+              ) : null}
+            </span>
+          </span>
+          <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }} aria-hidden>
+            <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
+          </motion.span>
+        </button>
+        {actions}
+      </div>
+
+      <AnimatePresence initial={false}>
+        {open ? (
+          <motion.div
+            id={resolvedBodyId}
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className={cn("space-y-4 border-t border-border px-4 py-4")}>{children}</div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </motion.section>
+  );
+};

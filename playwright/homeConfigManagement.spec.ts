@@ -25,8 +25,19 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+// Config actions is a collapsible Home card, closed by default - its buttons are not in
+// the DOM until the section is opened.
+const openConfigActionsSection = async (page: Page) => {
+  const toggle = page.getByTestId("home-section-toggle-config-actions");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.scrollIntoViewIfNeeded();
+    await toggle.click();
+  }
+};
+
 const openSaveDialog = async (page: Page) => {
   // Click the "Save to App" QuickActionCard (label="Save", description="To app")
+  await openConfigActionsSection(page);
   const button = page.getByTestId("home-config-save-app");
   await button.scrollIntoViewIfNeeded();
   await button.click();
@@ -36,6 +47,7 @@ const openSaveDialog = async (page: Page) => {
 const openLoadDialog = async (page: Page) => {
   // Click the "Load from App" QuickActionCard (label="Load", description="From app")
   // There are two "Load" cards, we want the second one (first is "From flash", second is "From app")
+  await openConfigActionsSection(page);
   const button = page.getByTestId("home-config-load-app");
   await button.scrollIntoViewIfNeeded();
   await button.click();
@@ -45,6 +57,7 @@ const openLoadDialog = async (page: Page) => {
 const openManageDialog = async (page: Page) => {
   // Click the "Manage" QuickActionCard (label="Manage", description="App configs")
   // Need to wait for it to be enabled (requires appConfigs.length > 0)
+  await openConfigActionsSection(page);
   const button = page.getByTestId("home-config-manage-app");
   await button.waitFor({ state: "visible", timeout: 5000 });
   await expect(button).toBeEnabled();
@@ -356,8 +369,12 @@ test.describe("Home page app config management", () => {
     });
     const sidGroup = page.getByTestId("home-sid-status");
     await expect(sidGroup).toBeVisible({ timeout: 20000 });
-    await expect(sidGroup.locator("h3").filter({ hasText: "SID" })).toBeVisible();
+    // The reset button lives in the section's always-visible header, reachable without
+    // opening it; the socket rows below are the collapsible body and are not in the DOM
+    // until the section is opened.
     await expect(page.getByTestId("home-sid-reset")).toBeVisible();
+    await page.getByTestId("home-section-toggle-audio").click();
+    await expect(sidGroup.locator("h2").filter({ hasText: "Audio" })).toBeVisible();
     await expect(sidGroup).toContainText("SID Socket 1");
     await expect(sidGroup).toContainText("ON");
     await expect(sidGroup).toContainText("SID Socket 2");

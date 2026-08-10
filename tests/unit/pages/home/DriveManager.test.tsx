@@ -280,7 +280,10 @@ describe("DriveManager", () => {
 
   it("renders Drives section header", () => {
     render(<DriveManager {...defaultProps} />);
-    expect(screen.getByText("Drives")).toBeDefined();
+    // getByRole rather than getByText: the section title now sits inside a
+    // CollapsibleSection heading, and "Drives" also appears in the section's own
+    // data-section-label attribute context, so a text-only query is ambiguous.
+    expect(screen.getByRole("heading", { name: "Drives" })).toBeDefined();
   });
 
   it("renders drive cards for all DRIVE_CONTROL_SPECS", () => {

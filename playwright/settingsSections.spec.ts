@@ -35,11 +35,21 @@ const CLOSED_BY_DEFAULT = [
  * page and reloading would just restore it. This registers a second init script instead, which
  * runs after the seed on every navigation and removes what the seed just wrote. It must be
  * called before the first `goto`.
+ *
+ * Settings' open/closed memory lives in the shared collapsibleSectionStore key
+ * ("c64u_open_sections"), scoped per page ("settings:<id>"), alongside entries for other pages
+ * (e.g. Docs) that this helper must leave untouched - so it strips only the "settings:" entries
+ * out of the array rather than deleting the whole key.
  */
 const startAtFirstVisit = async (page: Page) => {
   await page.addInitScript(() => {
     try {
-      localStorage.removeItem("c64u_settings_open_sections");
+      const raw = localStorage.getItem("c64u_open_sections");
+      const ids: unknown = raw ? JSON.parse(raw) : [];
+      const kept = Array.isArray(ids)
+        ? ids.filter((id): id is string => typeof id === "string" && !id.startsWith("settings:"))
+        : [];
+      localStorage.setItem("c64u_open_sections", JSON.stringify(kept));
     } catch (error) {
       if (location.origin !== "null") throw error;
     }

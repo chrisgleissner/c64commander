@@ -30,7 +30,10 @@ vi.mock("@/lib/deviceInteraction/machineInterrupt", () => ({
 vi.mock("framer-motion", () => ({
   motion: {
     div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    section: ({ children, ...props }: any) => <section {...props}>{children}</section>,
+    span: ({ children, ...props }: any) => <span {...props}>{children}</span>,
   },
+  AnimatePresence: ({ children }: any) => <>{children}</>,
 }));
 
 vi.mock("@/components/SectionHeader", () => ({

@@ -19,6 +19,12 @@ import {
   FolderOpen,
   AlertCircle,
   Keyboard,
+  Cpu,
+  Monitor,
+  Plug,
+  PanelTop,
+  Lightbulb,
+  Settings2,
 } from "lucide-react";
 import { variant } from "@/generated/variant";
 import { useC64ConfigItems, useC64Connection } from "@/hooks/useC64Connection";
@@ -100,10 +106,11 @@ import { buildOptionDomainKey, useDeviceConfigOptionDomains } from "./home/hooks
 import { normalizeOptionToken } from "./home/utils/uiLogic";
 import { buildConfigKey, readItemOptions, resolveConfigDisplayValue } from "./home/utils/HomeConfigUtils";
 
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SectionHeader } from "@/components/SectionHeader";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { cn } from "@/lib/utils";
-import { PageContainer, PageStack, ProfileActionGrid, ProfileSplitSection } from "@/components/layout/PageContainer";
+import { PageContainer, PageStack, ProfileActionGrid } from "@/components/layout/PageContainer";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
 import { useTelnetActions } from "@/hooks/useTelnetActions";
@@ -1282,518 +1289,507 @@ function HomePageContent() {
             </div>
           ) : null}
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25 }}
-            className="space-y-2"
-            data-section-label="Quick Config"
+          <CollapsibleSection
+            scope="home"
+            id="cpu-ram"
+            title="CPU & RAM"
+            icon={Cpu}
+            defaultOpen
+            testId="home-cpu-summary"
           >
-            <SectionHeader title="Quick Config" />
-            <ProfileSplitSection minColumnWidth="20rem" testId="home-quick-config-layout">
-              <div className="space-y-3" data-testid="home-quick-config">
-                <SummaryConfigCard
-                  sectionLabel="CPU & RAM"
-                  title="CPU & RAM"
-                  testId="home-cpu-summary"
-                  focusId="home-cpu-summary"
-                  focusOrder={500}
-                >
-                  <SummaryConfigControlRow
-                    controlType="select"
-                    disabled={!isActive || turboControlPending}
-                    focusId="home-cpu-turbo-control"
-                    focusOrder={10}
-                    focusParentId="home-cpu-summary"
-                    label="Turbo Control"
-                    options={displayedTurboControlOptions}
-                    selectTriggerClassName={inlineSelectTriggerClass}
-                    testId="home-cpu-turbo-control"
-                    value={displayedTurboControlValue}
-                    onValueChange={(value) =>
-                      void updateConfigValue(
-                        "U64 Specific Settings",
-                        "Turbo Control",
-                        value,
-                        "HOME_TURBO_CONTROL",
-                        "Turbo control updated",
-                      )
-                    }
-                  />
-                  <HomeCpuSpeedSlider
-                    isActive={isActive}
-                    cpuSpeedOptions={effectiveCpuSpeedOptions}
-                    cpuSpeedValue={cpuSpeedValue}
-                    keypadFocusParentId="home-cpu-summary"
-                    turboControlOptions={effectiveTurboControlOptions}
-                    turboControlValue={turboControlValue}
-                  />
-                  <SummaryConfigControlRow
-                    disabled={!isActive || badlineTimingPending}
-                    focusId="home-cpu-badline-timing"
-                    focusOrder={60}
-                    focusParentId="home-cpu-summary"
-                    label="Badline Timing"
-                    options={displayedBadlineTimingOptions}
-                    selectTriggerClassName={inlineSelectTriggerClass}
-                    testId="home-cpu-badline-timing"
-                    value={displayedBadlineTimingValue}
-                    onValueChange={(value) =>
-                      void updateConfigValue(
-                        "U64 Specific Settings",
-                        "Badline Timing",
-                        value,
-                        "HOME_BADLINE_TIMING",
-                        "Badline timing updated",
-                      )
-                    }
-                  />
-                  <SummaryConfigControlRow
-                    disabled={!isActive || superCpuDetectPending}
-                    focusId="home-cpu-supercpu-detect"
-                    focusOrder={70}
-                    focusParentId="home-cpu-summary"
-                    label="SuperCPU Detect"
-                    options={displayedSuperCpuDetectOptions}
-                    selectTriggerClassName={inlineSelectTriggerClass}
-                    testId="home-cpu-supercpu-detect"
-                    value={displayedSuperCpuDetectValue}
-                    onValueChange={(value) =>
-                      void updateConfigValue(
-                        "U64 Specific Settings",
-                        "SuperCPU Detect (D0BC)",
-                        value,
-                        "HOME_SUPERCPU_DETECT",
-                        "SuperCPU detect updated",
-                      )
-                    }
-                  />
-                  <SummaryConfigControlRow
-                    disabled={!isActive || ramExpansionPending}
-                    focusId="quickconfig-ram-expansion"
-                    focusOrder={80}
-                    focusParentId="home-cpu-summary"
-                    label="RAM Expansion"
-                    options={displayedRamExpansionOptions}
-                    selectTriggerClassName={inlineSelectTriggerClass}
-                    testId="quickconfig-ram-expansion"
-                    value={displayedRamExpansionValue}
-                    onValueChange={(value) =>
-                      void updateConfigValue(
-                        "C64 and Cartridge Settings",
-                        "RAM Expansion Unit",
-                        value,
-                        "HOME_RAM_EXPANSION",
-                        "RAM expansion updated",
-                      )
-                    }
-                  />
-                  {reuSizeVisible && (
-                    <SummaryConfigControlRow
-                      disabled={!isActive || reuSizePending}
-                      focusId="quickconfig-ram-size"
-                      focusOrder={90}
-                      focusParentId="home-cpu-summary"
-                      label="RAM Size (REU)"
-                      options={displayedReuSizeOptions}
-                      selectTriggerClassName={inlineSelectTriggerClass}
-                      testId="quickconfig-ram-size"
-                      value={displayedReuSizeValue}
-                      onValueChange={(value) =>
-                        void updateConfigValue(
-                          "C64 and Cartridge Settings",
-                          "REU Size",
-                          value,
-                          "HOME_REU_SIZE",
-                          "RAM size updated",
-                        )
-                      }
-                    />
-                  )}
-                </SummaryConfigCard>
+            <SummaryConfigCard
+              title="CPU & RAM"
+              testId="home-cpu-summary-rows"
+              focusId="home-cpu-summary"
+              focusOrder={500}
+              hideTitle
+            >
+              <SummaryConfigControlRow
+                controlType="select"
+                disabled={!isActive || turboControlPending}
+                focusId="home-cpu-turbo-control"
+                focusOrder={10}
+                focusParentId="home-cpu-summary"
+                label="Turbo Control"
+                options={displayedTurboControlOptions}
+                selectTriggerClassName={inlineSelectTriggerClass}
+                testId="home-cpu-turbo-control"
+                value={displayedTurboControlValue}
+                onValueChange={(value) =>
+                  void updateConfigValue(
+                    "U64 Specific Settings",
+                    "Turbo Control",
+                    value,
+                    "HOME_TURBO_CONTROL",
+                    "Turbo control updated",
+                  )
+                }
+              />
+              <HomeCpuSpeedSlider
+                isActive={isActive}
+                cpuSpeedOptions={effectiveCpuSpeedOptions}
+                cpuSpeedValue={cpuSpeedValue}
+                keypadFocusParentId="home-cpu-summary"
+                turboControlOptions={effectiveTurboControlOptions}
+                turboControlValue={turboControlValue}
+              />
+              <SummaryConfigControlRow
+                disabled={!isActive || badlineTimingPending}
+                focusId="home-cpu-badline-timing"
+                focusOrder={60}
+                focusParentId="home-cpu-summary"
+                label="Badline Timing"
+                options={displayedBadlineTimingOptions}
+                selectTriggerClassName={inlineSelectTriggerClass}
+                testId="home-cpu-badline-timing"
+                value={displayedBadlineTimingValue}
+                onValueChange={(value) =>
+                  void updateConfigValue(
+                    "U64 Specific Settings",
+                    "Badline Timing",
+                    value,
+                    "HOME_BADLINE_TIMING",
+                    "Badline timing updated",
+                  )
+                }
+              />
+              <SummaryConfigControlRow
+                disabled={!isActive || superCpuDetectPending}
+                focusId="home-cpu-supercpu-detect"
+                focusOrder={70}
+                focusParentId="home-cpu-summary"
+                label="SuperCPU Detect"
+                options={displayedSuperCpuDetectOptions}
+                selectTriggerClassName={inlineSelectTriggerClass}
+                testId="home-cpu-supercpu-detect"
+                value={displayedSuperCpuDetectValue}
+                onValueChange={(value) =>
+                  void updateConfigValue(
+                    "U64 Specific Settings",
+                    "SuperCPU Detect (D0BC)",
+                    value,
+                    "HOME_SUPERCPU_DETECT",
+                    "SuperCPU detect updated",
+                  )
+                }
+              />
+              <SummaryConfigControlRow
+                disabled={!isActive || ramExpansionPending}
+                focusId="quickconfig-ram-expansion"
+                focusOrder={80}
+                focusParentId="home-cpu-summary"
+                label="RAM Expansion"
+                options={displayedRamExpansionOptions}
+                selectTriggerClassName={inlineSelectTriggerClass}
+                testId="quickconfig-ram-expansion"
+                value={displayedRamExpansionValue}
+                onValueChange={(value) =>
+                  void updateConfigValue(
+                    "C64 and Cartridge Settings",
+                    "RAM Expansion Unit",
+                    value,
+                    "HOME_RAM_EXPANSION",
+                    "RAM expansion updated",
+                  )
+                }
+              />
+              {reuSizeVisible && (
+                <SummaryConfigControlRow
+                  disabled={!isActive || reuSizePending}
+                  focusId="quickconfig-ram-size"
+                  focusOrder={90}
+                  focusParentId="home-cpu-summary"
+                  label="RAM Size (REU)"
+                  options={displayedReuSizeOptions}
+                  selectTriggerClassName={inlineSelectTriggerClass}
+                  testId="quickconfig-ram-size"
+                  value={displayedReuSizeValue}
+                  onValueChange={(value) =>
+                    void updateConfigValue(
+                      "C64 and Cartridge Settings",
+                      "REU Size",
+                      value,
+                      "HOME_REU_SIZE",
+                      "RAM size updated",
+                    )
+                  }
+                />
+              )}
+            </SummaryConfigCard>
+          </CollapsibleSection>
 
-                <SummaryConfigCard
-                  sectionLabel="Ports"
-                  title="Ports"
-                  testId="home-ports-summary"
-                  focusId="home-ports-summary"
-                  focusOrder={510}
-                >
-                  <SummaryConfigControlRow
-                    controlType="select"
-                    disabled={!isActive || joystickSwapPending}
-                    focusId="home-joystick-swapper"
-                    focusOrder={10}
-                    focusParentId="home-ports-summary"
-                    label="Joystick Input"
-                    options={isActive ? effectiveJoystickSwapOptions : [unavailableLabel]}
-                    selectTriggerClassName={inlineSelectTriggerClass}
-                    testId="home-joystick-swapper"
-                    value={displayedJoystickSwapValue}
-                    onValueChange={(value) =>
-                      void updateConfigValue(
-                        "U64 Specific Settings",
-                        "Joystick Swapper",
-                        value,
-                        "HOME_JOYSTICK_SWAPPER",
-                        "Joystick input updated",
-                      )
-                    }
-                  />
-                  <SummaryConfigControlRow
-                    controlType="select"
-                    disabled={!isActive || serialBusModePending}
-                    focusId="home-serial-bus-mode"
-                    focusOrder={20}
-                    focusParentId="home-ports-summary"
-                    label="Serial Bus Mode"
-                    options={displayedSerialBusModeOptions}
-                    selectTriggerClassName={inlineSelectTriggerClass}
-                    testId="home-serial-bus-mode"
-                    value={displayedSerialBusModeValue}
-                    onValueChange={(value) =>
-                      void updateConfigValue(
-                        "U64 Specific Settings",
-                        "Serial Bus Mode",
-                        value,
-                        "HOME_SERIAL_BUS_MODE",
-                        "Serial bus mode updated",
-                      )
-                    }
-                  />
-                  <SummaryConfigControlRow
-                    controlType="select"
-                    disabled={!isActive || cartridgePreferencePending}
-                    focusId="home-cartridge-preference"
-                    focusOrder={30}
-                    focusParentId="home-ports-summary"
-                    label="Cartridge Preference"
-                    options={displayedCartridgePreferenceOptions}
-                    selectTriggerClassName={inlineSelectTriggerClass}
-                    testId="home-cartridge-preference"
-                    value={displayedCartridgePreferenceValue}
-                    onValueChange={(value) =>
-                      void updateConfigValue(
-                        "C64 and Cartridge Settings",
-                        "Cartridge Preference",
-                        value,
-                        "HOME_CARTRIDGE_PREFERENCE",
-                        "Cartridge preference updated",
-                      )
-                    }
-                  />
-                  <SummaryConfigControlRow
-                    controlType="checkbox"
-                    disabled={!isActive || userPortPowerPending}
-                    focusId="home-user-port-power"
-                    focusOrder={40}
-                    focusParentId="home-ports-summary"
-                    label="User Port Power"
-                    options={displayedUserPortPowerOptions}
-                    selectTriggerClassName={inlineSelectTriggerClass}
-                    testId="home-user-port-power"
-                    value={displayedUserPortPowerValue}
-                    onValueChange={(value) =>
-                      void updateConfigValue(
-                        "U64 Specific Settings",
-                        "UserPort Power Enable",
-                        value,
-                        "HOME_USER_PORT_POWER",
-                        "User port power updated",
-                      )
-                    }
-                  />
-                </SummaryConfigCard>
+          <CollapsibleSection scope="home" id="ports" title="Ports" icon={Plug} testId="home-ports-summary">
+            <SummaryConfigCard
+              title="Ports"
+              testId="home-ports-summary-rows"
+              focusId="home-ports-summary"
+              focusOrder={510}
+              hideTitle
+            >
+              <SummaryConfigControlRow
+                controlType="select"
+                disabled={!isActive || joystickSwapPending}
+                focusId="home-joystick-swapper"
+                focusOrder={10}
+                focusParentId="home-ports-summary"
+                label="Joystick Input"
+                options={isActive ? effectiveJoystickSwapOptions : [unavailableLabel]}
+                selectTriggerClassName={inlineSelectTriggerClass}
+                testId="home-joystick-swapper"
+                value={displayedJoystickSwapValue}
+                onValueChange={(value) =>
+                  void updateConfigValue(
+                    "U64 Specific Settings",
+                    "Joystick Swapper",
+                    value,
+                    "HOME_JOYSTICK_SWAPPER",
+                    "Joystick input updated",
+                  )
+                }
+              />
+              <SummaryConfigControlRow
+                controlType="select"
+                disabled={!isActive || serialBusModePending}
+                focusId="home-serial-bus-mode"
+                focusOrder={20}
+                focusParentId="home-ports-summary"
+                label="Serial Bus Mode"
+                options={displayedSerialBusModeOptions}
+                selectTriggerClassName={inlineSelectTriggerClass}
+                testId="home-serial-bus-mode"
+                value={displayedSerialBusModeValue}
+                onValueChange={(value) =>
+                  void updateConfigValue(
+                    "U64 Specific Settings",
+                    "Serial Bus Mode",
+                    value,
+                    "HOME_SERIAL_BUS_MODE",
+                    "Serial bus mode updated",
+                  )
+                }
+              />
+              <SummaryConfigControlRow
+                controlType="select"
+                disabled={!isActive || cartridgePreferencePending}
+                focusId="home-cartridge-preference"
+                focusOrder={30}
+                focusParentId="home-ports-summary"
+                label="Cartridge Preference"
+                options={displayedCartridgePreferenceOptions}
+                selectTriggerClassName={inlineSelectTriggerClass}
+                testId="home-cartridge-preference"
+                value={displayedCartridgePreferenceValue}
+                onValueChange={(value) =>
+                  void updateConfigValue(
+                    "C64 and Cartridge Settings",
+                    "Cartridge Preference",
+                    value,
+                    "HOME_CARTRIDGE_PREFERENCE",
+                    "Cartridge preference updated",
+                  )
+                }
+              />
+              <SummaryConfigControlRow
+                controlType="checkbox"
+                disabled={!isActive || userPortPowerPending}
+                focusId="home-user-port-power"
+                focusOrder={40}
+                focusParentId="home-ports-summary"
+                label="User Port Power"
+                options={displayedUserPortPowerOptions}
+                selectTriggerClassName={inlineSelectTriggerClass}
+                testId="home-user-port-power"
+                value={displayedUserPortPowerValue}
+                onValueChange={(value) =>
+                  void updateConfigValue(
+                    "U64 Specific Settings",
+                    "UserPort Power Enable",
+                    value,
+                    "HOME_USER_PORT_POWER",
+                    "User port power updated",
+                  )
+                }
+              />
+            </SummaryConfigCard>
+          </CollapsibleSection>
 
-                <SummaryConfigCard
-                  sectionLabel="Video"
-                  title="Video"
-                  testId="home-video-summary"
-                  focusId="home-video-summary"
-                  focusOrder={520}
-                >
-                  {/* First in the card: the one row here that people actually change. It needs no
+          <CollapsibleSection
+            scope="home"
+            id="video"
+            title="Video"
+            icon={Monitor}
+            defaultOpen
+            testId="home-video-summary"
+          >
+            <SummaryConfigCard
+              title="Video"
+              testId="home-video-summary-rows"
+              focusId="home-video-summary"
+              focusOrder={520}
+              hideTitle
+            >
+              {/* First in the card: the one row here that people actually change. It needs no
                       device connection to work — the app's own palette is a local rendering choice
                       — so it stays usable when the rest of the card is disabled. */}
-                  <ScreenColorsRow focusParentId="home-video-summary" focusOrder={5} />
-                  <SummaryConfigControlRow
-                    controlType="select"
-                    disabled={!isActive || videoModePending}
-                    focusId="home-video-mode"
-                    focusOrder={10}
-                    focusParentId="home-video-summary"
-                    label="Video Mode"
-                    options={displayedVideoModeOptions}
-                    selectTriggerClassName={inlineSelectTriggerClass}
-                    testId="home-video-mode"
-                    value={displayedVideoModeValue}
-                    onValueChange={(value) =>
-                      void updateConfigValue(
-                        "U64 Specific Settings",
-                        "System Mode",
-                        value,
-                        "HOME_VIDEO_MODE",
-                        "Video mode updated",
-                      )
-                    }
-                  />
-                  <SummaryConfigControlRow
-                    controlType="select"
-                    disabled={!isActive || hdmiResolutionPending}
-                    focusId="home-video-hdmi-resolution"
-                    focusOrder={20}
-                    focusParentId="home-video-summary"
-                    label="HDMI Resolution"
-                    options={displayedHdmiResolutionOptions}
-                    selectTriggerClassName={inlineSelectTriggerClass}
-                    testId="home-video-hdmi-resolution"
-                    value={displayedHdmiResolutionValue}
-                    onValueChange={(value) =>
-                      void updateConfigValue(
-                        "U64 Specific Settings",
-                        "HDMI Scan Resolution",
-                        value,
-                        "HOME_HDMI_RESOLUTION",
-                        "HDMI resolution updated",
-                      )
-                    }
-                  />
-                  <SummaryConfigControlRow
-                    controlType="checkbox"
-                    disabled={!isActive || hdmiScanPending}
-                    focusId="home-video-scanlines"
-                    focusOrder={30}
-                    focusParentId="home-video-summary"
-                    label="HDMI Scan Lines"
-                    options={isActive ? effectiveHdmiScanOptions : [unavailableLabel]}
-                    selectTriggerClassName={inlineSelectTriggerClass}
-                    testId="home-video-scanlines"
-                    value={isActive ? hdmiScanValue : unavailableLabel}
-                    onValueChange={(value) =>
-                      void updateConfigValue(
-                        "U64 Specific Settings",
-                        "HDMI Scan lines",
-                        value,
-                        "HOME_HDMI_SCAN",
-                        "HDMI scan lines updated",
-                      )
-                    }
-                  />
-                  <SummaryConfigControlRow
-                    controlType="select"
-                    disabled={!isActive || analogVideoPending}
-                    focusId="home-video-analog"
-                    focusOrder={40}
-                    focusParentId="home-video-summary"
-                    label="Analog"
-                    options={displayedAnalogVideoOptions}
-                    selectTriggerClassName={inlineSelectTriggerClass}
-                    testId="home-video-analog"
-                    value={displayedAnalogVideoValue}
-                    onValueChange={(value) =>
-                      void updateConfigValue(
-                        "U64 Specific Settings",
-                        "Analog Video Mode",
-                        value,
-                        "HOME_ANALOG_VIDEO_MODE",
-                        "Analog video mode updated",
-                      )
-                    }
-                  />
-                  <SummaryConfigControlRow
-                    controlType="select"
-                    disabled={!isActive || digitalVideoPending}
-                    focusId="home-video-digital"
-                    focusOrder={50}
-                    focusParentId="home-video-summary"
-                    label="Digital"
-                    options={displayedDigitalVideoOptions}
-                    selectTriggerClassName={inlineSelectTriggerClass}
-                    testId="home-video-digital"
-                    value={displayedDigitalVideoValue}
-                    onValueChange={(value) =>
-                      void updateConfigValue(
-                        "U64 Specific Settings",
-                        "Digital Video Mode",
-                        value,
-                        "HOME_DIGITAL_VIDEO_MODE",
-                        "Digital video mode updated",
-                      )
-                    }
-                  />
-                </SummaryConfigCard>
-              </div>
-
-              <div className="space-y-3" data-testid="home-secondary-cards">
-                <UserInterfaceSummaryCard
-                  category="User Interface Settings"
-                  config={userInterfaceConfig}
-                  isActive={isActive}
-                  hasLoaded={userInterfaceLoaded}
-                  optionDomains={optionDomains}
-                  selectTriggerClassName={inlineSelectTriggerClass}
-                  testIdPrefix="home-user-interface"
-                />
-                <div data-testid="home-lighting-group">
-                  <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border/60 bg-card/50 p-3">
-                    <div className="space-y-2">
-                      <SectionHeader title="LED lighting" className="pt-0" />
-                      {lightingStudioEnabled ? (
-                        <div className="flex flex-wrap gap-2 text-xs">
-                          <span
-                            className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1"
-                            data-testid="home-lighting-profile-chip"
-                          >
-                            {lightingResolved.activeProfile
-                              ? `${lightingResolved.activeProfile.name}${isActiveProfileModified ? " *" : ""}`
-                              : "Device look"}
-                          </span>
-                          {lightingResolved.activeAutomationChip ? (
-                            <span
-                              className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1"
-                              data-testid="home-lighting-automation-chip"
-                            >
-                              {lightingResolved.activeAutomationChip}
-                            </span>
-                          ) : null}
-                          {manualLockEnabled ? (
-                            <span
-                              className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1"
-                              data-testid="home-lighting-lock-chip"
-                            >
-                              Manual lock
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                    {lightingStudioEnabled ? (
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleOpenContextLens}
-                          data-testid="home-lighting-why"
-                        >
-                          Why this look?
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={manualLockEnabled ? unlockCurrentLook : lockCurrentLook}
-                          data-testid="home-lighting-lock-toggle"
-                        >
-                          {manualLockEnabled ? "Resume auto" : "Hold look"}
-                        </Button>
-                        <Button size="sm" onClick={handleOpenStudio} data-testid="home-lighting-studio">
-                          Studio
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-                <LightingSummaryCard
-                  category="LED Strip Settings"
-                  config={ledStripConfig}
-                  isActive={isActive}
-                  hasLoaded={ledStripLoaded}
-                  onManualLightingChange={markManualLightingChange}
-                  operationPrefix="HOME_LED"
-                  sectionLabel="Case Light"
-                  selectTriggerClassName={inlineSelectTriggerClass}
-                  successLabel="Case light"
-                  testIdPrefix="home-led"
-                />
-                {keyboardLightingRequested ? (
-                  <LightingSummaryCard
-                    category="Keyboard Lighting"
-                    config={keyboardLightingConfig}
-                    isActive={isActive}
-                    hasLoaded={keyboardLightingLoaded}
-                    onManualLightingChange={markManualLightingChange}
-                    operationPrefix="HOME_KEYBOARD_LIGHTING"
-                    sectionLabel="Keyboard Light"
-                    selectTriggerClassName={inlineSelectTriggerClass}
-                    successLabel="Keyboard light"
-                    testIdPrefix="home-keyboard-lighting"
-                  />
-                ) : null}
-              </div>
-            </ProfileSplitSection>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="space-y-3"
-            data-section-label="Drives"
-          >
-            <DriveManager
-              isConnected={isActive}
-              handleAction={handleAction}
-              machineTaskBusy={machineTaskBusy}
-              machineTaskId={machineTaskId}
-              onResetDrives={handleResetDrives}
-              telnetAvailable={homeTelnetDriveActionsEnabled && telnet.isAvailable}
-              telnetBusy={telnet.isBusy}
-              telnetActiveActionId={telnet.activeActionId}
-              getTelnetActionSupport={telnet.getActionSupport}
-              onTelnetAction={async (actionId) => {
-                const successTitles: Partial<Record<TelnetActionId, string>> = {
-                  driveAReset: "Drive A reset",
-                  driveBTurnOn: "Drive B turned on",
-                  iecTurnOn: "Soft IEC Drive turned on",
-                  iecReset: "Soft IEC Drive reset",
-                  iecSetDir: "Soft IEC directory set",
-                };
-                await executeTelnetAction({
-                  actionId: actionId as TelnetActionId,
-                  successTitle:
-                    successTitles[actionId as TelnetActionId] ??
-                    `${TELNET_ACTIONS[actionId as TelnetActionId]?.label ?? "Drive action"} completed`,
-                  failureOperation: "HOME_DRIVE_TELNET",
-                  failureTitle: "Drive action failed",
-                });
-              }}
-            />
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.34 }}
-            className="space-y-3"
-            data-section-label="Printers"
-          >
-            <PrinterManager
-              isConnected={isActive}
-              machineTaskBusy={machineTaskBusy}
-              machineTaskId={machineTaskId}
-              onResetPrinter={handleResetPrinter}
-              telnetAvailable={homeTelnetPrinterActionsEnabled && telnet.isAvailable}
-              telnetBusy={telnet.isBusy}
-              telnetActiveActionId={telnet.activeActionId}
-              getTelnetActionSupport={telnet.getActionSupport}
-              onTelnetAction={async (actionId) => {
-                const successTitles: Partial<Record<TelnetActionId, string>> = {
-                  printerTurnOn: "Printer turned on",
-                  printerFlush: "Printer flushed",
-                  printerReset: "Printer reset",
-                };
-                await executeTelnetAction({
-                  actionId: actionId as TelnetActionId,
-                  successTitle:
-                    successTitles[actionId as TelnetActionId] ??
-                    `${TELNET_ACTIONS[actionId as TelnetActionId]?.label ?? "Printer action"} completed`,
-                  failureOperation: "HOME_PRINTER_TELNET",
-                  failureTitle: "Printer action failed",
-                });
-              }}
-            />
-          </motion.div>
+              <ScreenColorsRow focusParentId="home-video-summary" focusOrder={5} />
+              <SummaryConfigControlRow
+                controlType="select"
+                disabled={!isActive || videoModePending}
+                focusId="home-video-mode"
+                focusOrder={10}
+                focusParentId="home-video-summary"
+                label="Video Mode"
+                options={displayedVideoModeOptions}
+                selectTriggerClassName={inlineSelectTriggerClass}
+                testId="home-video-mode"
+                value={displayedVideoModeValue}
+                onValueChange={(value) =>
+                  void updateConfigValue(
+                    "U64 Specific Settings",
+                    "System Mode",
+                    value,
+                    "HOME_VIDEO_MODE",
+                    "Video mode updated",
+                  )
+                }
+              />
+              <SummaryConfigControlRow
+                controlType="select"
+                disabled={!isActive || hdmiResolutionPending}
+                focusId="home-video-hdmi-resolution"
+                focusOrder={20}
+                focusParentId="home-video-summary"
+                label="HDMI Resolution"
+                options={displayedHdmiResolutionOptions}
+                selectTriggerClassName={inlineSelectTriggerClass}
+                testId="home-video-hdmi-resolution"
+                value={displayedHdmiResolutionValue}
+                onValueChange={(value) =>
+                  void updateConfigValue(
+                    "U64 Specific Settings",
+                    "HDMI Scan Resolution",
+                    value,
+                    "HOME_HDMI_RESOLUTION",
+                    "HDMI resolution updated",
+                  )
+                }
+              />
+              <SummaryConfigControlRow
+                controlType="checkbox"
+                disabled={!isActive || hdmiScanPending}
+                focusId="home-video-scanlines"
+                focusOrder={30}
+                focusParentId="home-video-summary"
+                label="HDMI Scan Lines"
+                options={isActive ? effectiveHdmiScanOptions : [unavailableLabel]}
+                selectTriggerClassName={inlineSelectTriggerClass}
+                testId="home-video-scanlines"
+                value={isActive ? hdmiScanValue : unavailableLabel}
+                onValueChange={(value) =>
+                  void updateConfigValue(
+                    "U64 Specific Settings",
+                    "HDMI Scan lines",
+                    value,
+                    "HOME_HDMI_SCAN",
+                    "HDMI scan lines updated",
+                  )
+                }
+              />
+              <SummaryConfigControlRow
+                controlType="select"
+                disabled={!isActive || analogVideoPending}
+                focusId="home-video-analog"
+                focusOrder={40}
+                focusParentId="home-video-summary"
+                label="Analog"
+                options={displayedAnalogVideoOptions}
+                selectTriggerClassName={inlineSelectTriggerClass}
+                testId="home-video-analog"
+                value={displayedAnalogVideoValue}
+                onValueChange={(value) =>
+                  void updateConfigValue(
+                    "U64 Specific Settings",
+                    "Analog Video Mode",
+                    value,
+                    "HOME_ANALOG_VIDEO_MODE",
+                    "Analog video mode updated",
+                  )
+                }
+              />
+              <SummaryConfigControlRow
+                controlType="select"
+                disabled={!isActive || digitalVideoPending}
+                focusId="home-video-digital"
+                focusOrder={50}
+                focusParentId="home-video-summary"
+                label="Digital"
+                options={displayedDigitalVideoOptions}
+                selectTriggerClassName={inlineSelectTriggerClass}
+                testId="home-video-digital"
+                value={displayedDigitalVideoValue}
+                onValueChange={(value) =>
+                  void updateConfigValue(
+                    "U64 Specific Settings",
+                    "Digital Video Mode",
+                    value,
+                    "HOME_DIGITAL_VIDEO_MODE",
+                    "Digital video mode updated",
+                  )
+                }
+              />
+            </SummaryConfigCard>
+          </CollapsibleSection>
 
           <AudioMixer isConnected={isActive} machineTaskBusy={machineTaskBusy} runMachineTask={runMachineTask} />
+
+          <CollapsibleSection
+            scope="home"
+            id="user-interface"
+            title="User Interface"
+            icon={PanelTop}
+            testId="home-user-interface-summary"
+          >
+            <UserInterfaceSummaryCard
+              category="User Interface Settings"
+              config={userInterfaceConfig}
+              isActive={isActive}
+              hasLoaded={userInterfaceLoaded}
+              optionDomains={optionDomains}
+              selectTriggerClassName={inlineSelectTriggerClass}
+              testIdPrefix="home-user-interface"
+              hideTitle
+            />
+          </CollapsibleSection>
+
+          <CollapsibleSection scope="home" id="lighting" title="Lighting" icon={Lightbulb} testId="home-lighting-group">
+            {lightingStudioEnabled ? (
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span
+                    className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1"
+                    data-testid="home-lighting-profile-chip"
+                  >
+                    {lightingResolved.activeProfile
+                      ? `${lightingResolved.activeProfile.name}${isActiveProfileModified ? " *" : ""}`
+                      : "Device look"}
+                  </span>
+                  {lightingResolved.activeAutomationChip ? (
+                    <span
+                      className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1"
+                      data-testid="home-lighting-automation-chip"
+                    >
+                      {lightingResolved.activeAutomationChip}
+                    </span>
+                  ) : null}
+                  {manualLockEnabled ? (
+                    <span
+                      className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1"
+                      data-testid="home-lighting-lock-chip"
+                    >
+                      Manual lock
+                    </span>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={handleOpenContextLens} data-testid="home-lighting-why">
+                    Why this look?
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={manualLockEnabled ? unlockCurrentLook : lockCurrentLook}
+                    data-testid="home-lighting-lock-toggle"
+                  >
+                    {manualLockEnabled ? "Resume auto" : "Hold look"}
+                  </Button>
+                  <Button size="sm" onClick={handleOpenStudio} data-testid="home-lighting-studio">
+                    Studio
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+            <LightingSummaryCard
+              category="LED Strip Settings"
+              config={ledStripConfig}
+              isActive={isActive}
+              hasLoaded={ledStripLoaded}
+              onManualLightingChange={markManualLightingChange}
+              operationPrefix="HOME_LED"
+              sectionLabel="Case Light"
+              selectTriggerClassName={inlineSelectTriggerClass}
+              successLabel="Case light"
+              testIdPrefix="home-led"
+            />
+            {keyboardLightingRequested ? (
+              <LightingSummaryCard
+                category="Keyboard Lighting"
+                config={keyboardLightingConfig}
+                isActive={isActive}
+                hasLoaded={keyboardLightingLoaded}
+                onManualLightingChange={markManualLightingChange}
+                operationPrefix="HOME_KEYBOARD_LIGHTING"
+                sectionLabel="Keyboard Light"
+                selectTriggerClassName={inlineSelectTriggerClass}
+                successLabel="Keyboard light"
+                testIdPrefix="home-keyboard-lighting"
+              />
+            ) : null}
+          </CollapsibleSection>
+
+          <DriveManager
+            isConnected={isActive}
+            handleAction={handleAction}
+            machineTaskBusy={machineTaskBusy}
+            machineTaskId={machineTaskId}
+            onResetDrives={handleResetDrives}
+            telnetAvailable={homeTelnetDriveActionsEnabled && telnet.isAvailable}
+            telnetBusy={telnet.isBusy}
+            telnetActiveActionId={telnet.activeActionId}
+            getTelnetActionSupport={telnet.getActionSupport}
+            onTelnetAction={async (actionId) => {
+              const successTitles: Partial<Record<TelnetActionId, string>> = {
+                driveAReset: "Drive A reset",
+                driveBTurnOn: "Drive B turned on",
+                iecTurnOn: "Soft IEC Drive turned on",
+                iecReset: "Soft IEC Drive reset",
+                iecSetDir: "Soft IEC directory set",
+              };
+              await executeTelnetAction({
+                actionId: actionId as TelnetActionId,
+                successTitle:
+                  successTitles[actionId as TelnetActionId] ??
+                  `${TELNET_ACTIONS[actionId as TelnetActionId]?.label ?? "Drive action"} completed`,
+                failureOperation: "HOME_DRIVE_TELNET",
+                failureTitle: "Drive action failed",
+              });
+            }}
+          />
+
+          <PrinterManager
+            isConnected={isActive}
+            machineTaskBusy={machineTaskBusy}
+            machineTaskId={machineTaskId}
+            onResetPrinter={handleResetPrinter}
+            telnetAvailable={homeTelnetPrinterActionsEnabled && telnet.isAvailable}
+            telnetBusy={telnet.isBusy}
+            telnetActiveActionId={telnet.activeActionId}
+            getTelnetActionSupport={telnet.getActionSupport}
+            onTelnetAction={async (actionId) => {
+              const successTitles: Partial<Record<TelnetActionId, string>> = {
+                printerTurnOn: "Printer turned on",
+                printerFlush: "Printer flushed",
+                printerReset: "Printer reset",
+              };
+              await executeTelnetAction({
+                actionId: actionId as TelnetActionId,
+                successTitle:
+                  successTitles[actionId as TelnetActionId] ??
+                  `${TELNET_ACTIONS[actionId as TelnetActionId]?.label ?? "Printer action"} completed`,
+                failureOperation: "HOME_PRINTER_TELNET",
+                failureTitle: "Printer action failed",
+              });
+            }}
+          />
 
           {deviceCapabilities.supportsStreaming ? <StreamStatus isConnected={isActive} /> : null}
 
@@ -1807,16 +1803,14 @@ function HomePageContent() {
            * 600–690 (they render last). The persistent TabBar sits above all page
            * content at 1000+.
            */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="space-y-3"
-            data-section-label="Config"
+          <CollapsibleSection
+            scope="home"
+            id="config-actions"
+            title="Config"
+            icon={Settings2}
+            testId="home-config-actions"
+            badge={isApplying && <span className="text-xs text-muted-foreground">Applying…</span>}
           >
-            <SectionHeader title="Config">
-              {isApplying && <span className="ml-2 text-xs text-muted-foreground">Applying…</span>}
-            </SectionHeader>
             <ProfileActionGrid compactColumns={2} mediumColumns={4} expandedColumns={4} cardDensity="compact">
               <QuickActionCard
                 icon={Save}
@@ -1934,7 +1928,7 @@ function HomePageContent() {
                 />
               )}
             </ProfileActionGrid>
-          </motion.div>
+          </CollapsibleSection>
 
           {/* Config Fetch Error */}
           {configFetchError && (

@@ -33,6 +33,9 @@ type UserInterfaceSummaryCardProps = {
   optionDomains?: DeviceConfigOptionDomains;
   selectTriggerClassName: string;
   testIdPrefix: string;
+  /** Skips the visible title line - for use inside an outer `CollapsibleSection` that
+   * already shows a heading for this card. */
+  hideTitle?: boolean;
 };
 
 export function UserInterfaceSummaryCard({
@@ -43,6 +46,7 @@ export function UserInterfaceSummaryCard({
   optionDomains = {},
   selectTriggerClassName,
   testIdPrefix,
+  hideTitle = false,
 }: UserInterfaceSummaryCardProps) {
   const { configWritePending, resolveConfigValue, updateConfigValue } = useSharedConfigActions();
   const unavailableLabel = CONFIG_UNAVAILABLE_LABEL;
@@ -87,11 +91,16 @@ export function UserInterfaceSummaryCard({
 
   return (
     <SummaryConfigCard
-      sectionLabel="User Interface"
+      sectionLabel={hideTitle ? undefined : "User Interface"}
       title="User Interface"
-      testId={`${testIdPrefix}-summary`}
+      // Nested inside an outer CollapsibleSection (hideTitle), that outer wrapper reuses
+      // `${testIdPrefix}-summary` as ITS OWN testid to preserve what existing callers
+      // already look up - so this inner card needs a distinct one to avoid colliding
+      // with it. Standalone, there is no outer wrapper to collide with.
+      testId={hideTitle ? `${testIdPrefix}-summary-rows` : `${testIdPrefix}-summary`}
       focusId={`${testIdPrefix}-summary`}
       focusOrder={530}
+      hideTitle={hideTitle}
     >
       <SummaryConfigControlRow
         disabled={!isActive || interfaceTypePending}

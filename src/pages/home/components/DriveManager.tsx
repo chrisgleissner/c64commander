@@ -7,11 +7,13 @@
  */
 
 import { useRef, useState, useMemo } from "react";
+import { HardDrive } from "lucide-react";
 import { getC64API } from "@/lib/c64api";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { useSharedConfigActions } from "../hooks/ConfigActionsContext";
 import { useDriveData } from "../hooks/useDriveData";
 import { DriveCard } from "../DriveCard";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SectionHeader } from "@/components/SectionHeader";
 import { Button } from "@/components/ui/button";
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
@@ -260,20 +262,30 @@ export function DriveManager({
   });
 
   return (
-    <div className="space-y-3" data-section-label="Drives">
-      <SectionHeader
-        title="Drives"
-        resetAction={async () =>
-          await onResetDrives(async () => {
-            await refetchDrives();
-          })
-        }
-        resetDisabled={!isConnected || machineTaskBusy}
-        isResetting={machineTaskId === "reset-drives"}
-        resetTestId="home-drives-reset"
-        focusId="home-drives-reset"
-        focusOrder={300}
-      />
+    <CollapsibleSection
+      scope="home"
+      id="drives"
+      title="Drives"
+      icon={HardDrive}
+      defaultOpen
+      testId="home-drives"
+      actions={
+        <SectionHeader
+          hideTitle
+          title="Drives"
+          resetAction={async () =>
+            await onResetDrives(async () => {
+              await refetchDrives();
+            })
+          }
+          resetDisabled={!isConnected || machineTaskBusy}
+          isResetting={machineTaskId === "reset-drives"}
+          resetTestId="home-drives-reset"
+          focusId="home-drives-reset"
+          focusOrder={300}
+        />
+      }
+    >
       <div
         className={
           profile === "expanded"
@@ -558,6 +570,6 @@ export function DriveManager({
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </CollapsibleSection>
   );
 }
