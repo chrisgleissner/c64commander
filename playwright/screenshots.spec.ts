@@ -38,7 +38,7 @@ import {
 import { getScreenshotFraming, type ScreenshotFramingSurface } from "./screenshotFraming";
 import { describeCaptureBudgetViolation, findCaptureBudgetViolation, toCssPixels } from "./screenshotViewportBudget";
 import { registerScreenshotSections, sanitizeSegment } from "./screenshotCatalog";
-import { planHomeScreenshotSlices, selectCanonicalHomeScreenshotSlices } from "./homeScreenshotLayout";
+import { planHomeScreenshotSlices } from "./homeScreenshotLayout";
 import { shouldSkipFuzzyScreenshotPrune } from "../scripts/screenshotPrunePolicy.js";
 import { PLAYBACK_SESSION_KEY, SHARED_PLAYLIST_STORAGE_KEY } from "../src/pages/playFiles/playFilesUtils";
 import {
@@ -744,6 +744,12 @@ const waitForStableRender = async (page: Page) => {
     if (!(runway instanceof HTMLElement)) return true;
     return runway.dataset.runwayPhase !== "transitioning";
   });
+  // A click that starts a CollapsibleSection reveal (framer-motion, height/opacity, 0.2s) does
+  // not necessarily have registered with the Web Animations API by the very next task - the
+  // check below saw zero running animations because none had started yet, not because none were
+  // needed, and captured mid-reveal as a result. This gives a just-triggered animation one frame
+  // to register before asking whether anything is still running.
+  await page.evaluate(() => new Promise(requestAnimationFrame));
   await page.waitForFunction(() => {
     const animations = document.getAnimations();
     return animations.every((animation) => {
@@ -1536,7 +1542,25 @@ const captureLabeledSections = async (page: Page, testInfo: TestInfo, pageId: st
   }
 };
 
+/**
+ * Opens every closed Home card in DOM order, so the sections captured below reflect the
+ * whole page rather than whatever happened to already be open by default. Each click is
+ * followed by the page's own stability wait, not a fixed guess at the reveal's duration -
+ * `waitForStableRender` already accounts for the animation itself (see its own comment on
+ * why a click needs a frame before that check means anything).
+ */
+const openAllHomeSections = async (page: Page) => {
+  const toggles = await page.locator('[data-testid^="home-section-toggle-"]').all();
+  for (const toggle of toggles) {
+    if ((await toggle.getAttribute("aria-expanded")) === "true") continue;
+    await toggle.scrollIntoViewIfNeeded();
+    await toggle.click();
+    await waitForStableRender(page);
+  }
+};
+
 const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
+  await openAllHomeSections(page);
   await waitForStableRender(page);
   const layout = await page.evaluate(() => {
     const activeSlot = document.querySelector('[data-slot-active="true"]');
@@ -1586,10 +1610,14 @@ const captureHomeSections = async (page: Page, testInfo: TestInfo) => {
     maxScroll: layout.maxScroll,
   });
 
-  const canonicalSlices = selectCanonicalHomeScreenshotSlices(slices);
-
-  for (let index = 0; index < canonicalSlices.length; index += 1) {
-    const { fileName, slice } = canonicalSlices[index];
+  // Every slice `planHomeScreenshotSlices` produces is captured, not a curated handful -
+  // it already groups small adjacent sections into one image and splits a section taller
+  // than the screen into numbered continuations, so walking the full list is what makes
+  // this folder cover the whole page rather than whichever sections a fixed shortlist
+  // happened to name at the time it was written.
+  for (let index = 0; index < slices.length; index += 1) {
+    const slice = slices[index];
+    const fileName = `${String(index + 1).padStart(2, "0")}-${slice.slug}.png`;
     await page.evaluate((nextScrollTop) => {
       const activeSlot = document.querySelector<HTMLElement>('[data-slot-active="true"]');
       const scrollContainer =

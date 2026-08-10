@@ -10,17 +10,6 @@ export type HomeScreenshotSlice = {
   sectionSlugs: string[];
 };
 
-export type CanonicalHomeScreenshotSlice = {
-  fileName: string;
-  slice: HomeScreenshotSlice;
-};
-
-type CanonicalHomeScreenshotRequirement = {
-  fileName: string;
-  requiredSectionSlugs: string[];
-  fallbackSectionSlugs?: string[];
-};
-
 type PlanHomeScreenshotSlicesOptions = {
   sections: HomeSectionBounds[];
   viewportHeight: number;
@@ -34,6 +23,14 @@ type PlanHomeScreenshotSlicesOptions = {
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
+/**
+ * Slices a Home render into a top-to-bottom sequence of viewport-sized screenshots.
+ *
+ * Adjacent small sections share one slice, and a section taller than the viewport gets
+ * numbered continuation slices instead of being clipped - the caller captures every slice
+ * this returns, so the resulting set covers the whole page rather than a fixed shortlist
+ * of named sections that can fall out of date as sections are added, renamed, or reordered.
+ */
 export const planHomeScreenshotSlices = ({
   sections,
   viewportHeight,
@@ -93,71 +90,4 @@ export const planHomeScreenshotSlices = ({
   }
 
   return slices;
-};
-
-// Home's former "Quick Config" wrapper dissolved into separate top-level cards -
-// CPU & RAM, Ports, Video, Audio, User Interface, Lighting - in that DOM order, with
-// Audio now sitting directly under Video rather than after Printers. The requirements
-// below were re-plotted against that order rather than reusing the old "quick-config"
-// and "sid" slugs, which no longer exist.
-const CANONICAL_HOME_SCREENSHOT_REQUIREMENTS: CanonicalHomeScreenshotRequirement[] = [
-  {
-    fileName: "01-system-info-to-cpu-ram.png",
-    requiredSectionSlugs: ["system-info", "cpu-ram"],
-  },
-  {
-    fileName: "02-cpu-ram-to-audio.png",
-    requiredSectionSlugs: ["cpu-ram", "audio"],
-    fallbackSectionSlugs: ["cpu-ram", "video"],
-  },
-  {
-    fileName: "03-audio-to-keyboard-light.png",
-    requiredSectionSlugs: ["audio", "keyboard-light"],
-    fallbackSectionSlugs: ["audio", "lighting"],
-  },
-  {
-    fileName: "04-keyboard-light-to-printers.png",
-    requiredSectionSlugs: ["keyboard-light", "printers"],
-    fallbackSectionSlugs: ["lighting", "drives"],
-  },
-  {
-    fileName: "05-printers-to-config.png",
-    requiredSectionSlugs: ["printers", "config"],
-    fallbackSectionSlugs: ["config"],
-  },
-];
-
-export const selectCanonicalHomeScreenshotSlices = (slices: HomeScreenshotSlice[]): CanonicalHomeScreenshotSlice[] => {
-  let minimumIndex = 0;
-
-  return CANONICAL_HOME_SCREENSHOT_REQUIREMENTS.map((requirement) => {
-    const remainingSlices = slices.slice(minimumIndex);
-    const exactMatch = remainingSlices.find((candidate) =>
-      requirement.requiredSectionSlugs.every((sectionSlug) => candidate.sectionSlugs.includes(sectionSlug)),
-    );
-    const fallbackMatch =
-      exactMatch || !requirement.fallbackSectionSlugs
-        ? null
-        : remainingSlices.find((candidate) =>
-            requirement.fallbackSectionSlugs!.every((sectionSlug) => candidate.sectionSlugs.includes(sectionSlug)),
-          );
-    const terminalSectionSlug = requirement.requiredSectionSlugs[requirement.requiredSectionSlugs.length - 1];
-    const terminalMatch =
-      exactMatch || fallbackMatch
-        ? null
-        : remainingSlices.find((candidate) => candidate.sectionSlugs.includes(terminalSectionSlug));
-    const slice = exactMatch ?? fallbackMatch ?? terminalMatch;
-    if (!slice) {
-      throw new Error(
-        `Missing canonical Home screenshot slice for ${requirement.fileName} (${requirement.requiredSectionSlugs.join(
-          ", ",
-        )})`,
-      );
-    }
-    minimumIndex = slices.indexOf(slice) + 1;
-    return {
-      fileName: requirement.fileName,
-      slice,
-    };
-  });
 };

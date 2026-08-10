@@ -93,7 +93,7 @@ Two more actions can join that last band: a **Reboot (Clr Mem)** that wipes memo
 
 Directly below sits **Live View**, which brings the sound and the picture of the running machine into the app. It has a chapter of its own later on.
 
-Keep going and the rest of Home is a set of cards, each its own labeled chapter you open or close by tapping its header. **CPU & RAM** holds the processor speed, turbo behavior and the RAM expansion. **Video**, directly followed by **Audio**, holds the output mode, resolution and scan lines, and then the SID mixer's channel strips — audio and video sit together because that is how most people think about them. **Ports** holds the joystick swap, the serial bus, the cartridge preference and the user port. **User Interface** and **Lighting** (on a machine with lights) round the group out.
+Keep going and the rest of Home is a set of cards, each its own labeled chapter you open or close by tapping its header. **CPU & RAM** holds the processor speed, turbo behavior and the RAM expansion. **Video**, directly followed by **Audio**, holds the output mode, resolution and scan lines, and then the SID mixer's channel strips — audio and video sit together because that is how most people think about them. **Ports** holds the joystick swap, the serial bus, the cartridge preference and the user port. **User Interface** rounds the group out, and, on a machine that has them, so do the case and keyboard lights.
 
 Which of these start open and which start closed is chosen once, for a first-time visit, in favor of the cards most people touch every session; every card is closed or opened the same way, by tapping its header, and the app remembers what you left open from then on — a card you never use can stay out of the way, and one you always want stays exactly where you put it. Everything here is in Config as well; these cards just save you the search.
 
@@ -356,7 +356,7 @@ Preferred path: adjust drive setup before mounting.
 
 ### Change a Common Setting
 
-1. Try Home's own cards first — CPU & RAM, Video, Audio, Ports, User Interface, Lighting.
+1. Try Home's own cards first — CPU & RAM, Video, Audio, Ports, User Interface.
 2. If the setting is not there, open **Config** and search.
 3. Change the value.
 4. Use **Save** in the Config actions card if the change should survive a device reboot or power cycle, unless **Keep device settings after a restart** is already on.
@@ -874,7 +874,7 @@ Preferred locations are marked first.
 | CPU speed and turbo | **Home → CPU & RAM**, Config | Home is preferred for common changes. |
 | Video mode and scan lines | **Home → Video**, Config | Home is preferred. |
 | Joystick, serial bus, cartridge, user port | **Home → Ports**, Config | Home is preferred. |
-| Case and keyboard lights | **Home → Lighting**, Config | Shown for machines that have them. |
+| Case and keyboard lights | **Home**, Config | Shown for machines that have them. |
 | Drive power, bus, type, reset | **Disks**, Home → Drives | Disks for the drives themselves; Home for a quick look. |
 | Mount and eject disks | **Disks**, Home → Drives | Disks shows the collection most clearly. |
 | Disk groups and rotation | **Disks** | Groups are assigned as you add a folder; rotate from the drive card. |

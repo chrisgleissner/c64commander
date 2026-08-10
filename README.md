@@ -94,16 +94,16 @@ Control the machine, quick actions, lighting, drives, printer, SID mixer, stream
 <table>
   <tr>
     <td><img src="docs/img/app/home/00-overview-light.png" alt="C64 Commander intro" width="360"/></td>
-    <td><img src="docs/img/app/home/sections/01-system-info-to-cpu-ram.png" alt="Home top row and quick actions (Light)" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/01-system-info-to-live-view.png" alt="Home top row and quick actions (Light)" width="360"/></td>
     <td><img src="docs/img/app/home/01-overview-dark.png" alt="Home top row and quick actions (Dark)" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="docs/img/app/home/sections/02-cpu-ram-to-audio.png" alt="Home sections from CPU and RAM through audio" width="360"/></td>
-    <td><img src="docs/img/app/home/sections/03-audio-to-keyboard-light.png" alt="Home sections from audio through keyboard light" width="360"/></td>
-    <td><img src="docs/img/app/home/sections/04-keyboard-light-to-printers.png" alt="Home sections from keyboard light through printers" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/04-video-to-audio.png" alt="Home sections from video through audio" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/08-lighting-to-keyboard-light.png" alt="Home sections through lighting" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/10-drives-to-printers.png" alt="Home sections from drives through printers" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="docs/img/app/home/sections/05-printers-to-config.png" alt="Home sections from printers through config" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/12-streams-to-config.png" alt="Home sections from streams through config" width="360"/></td>
     <td><img src="docs/img/app/home/dialogs/05-lighting-studio-medium.png" alt="Lighting Studio bottom sheet" width="360"/></td>
     <td><img src="docs/img/app/home/03-demo-mode-interstitial.png" alt="Demo Mode interstitial" width="360"/></td>
   </tr>

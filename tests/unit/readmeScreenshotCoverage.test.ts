@@ -33,12 +33,12 @@ describe("README screenshot coverage", () => {
     expect(sources).toEqual(
       expect.arrayContaining([
         "docs/img/app/home/00-overview-light.png",
-        "docs/img/app/home/sections/01-system-info-to-cpu-ram.png",
+        "docs/img/app/home/sections/01-system-info-to-live-view.png",
         "docs/img/app/home/01-overview-dark.png",
-        "docs/img/app/home/sections/02-cpu-ram-to-audio.png",
-        "docs/img/app/home/sections/03-audio-to-keyboard-light.png",
-        "docs/img/app/home/sections/04-keyboard-light-to-printers.png",
-        "docs/img/app/home/sections/05-printers-to-config.png",
+        "docs/img/app/home/sections/04-video-to-audio.png",
+        "docs/img/app/home/sections/08-lighting-to-keyboard-light.png",
+        "docs/img/app/home/sections/10-drives-to-printers.png",
+        "docs/img/app/home/sections/12-streams-to-config.png",
       ]),
     );
 
