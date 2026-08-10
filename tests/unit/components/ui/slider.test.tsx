@@ -232,6 +232,23 @@ describe("Slider default value", () => {
   });
 });
 
+describe("Slider touch handling", () => {
+  // A page-scroll gesture that happens to start on a slider must still scroll the page:
+  // several sliders (SID mixer volume/pan, CPU speed) stretch close to the full width of
+  // their card, so a vertical swipe landing on one is routine, not an edge case. touch-none
+  // blocked the vertical axis along with the horizontal one it actually needs, so a swipe
+  // starting there was captured by the slider - which also jumps its track press to the
+  // touch position, silently changing the slider's value - instead of scrolling the page.
+  // touch-pan-y keeps only the horizontal axis, handing vertical panning back to the browser.
+  it("keeps the vertical touch axis free for page scrolling", () => {
+    render(<Slider value={[50]} min={0} max={100} step={1} data-testid="test-slider" />);
+
+    const root = screen.getByTestId("test-slider");
+    expect(root.className).toContain("touch-pan-y");
+    expect(root.className).not.toContain("touch-none");
+  });
+});
+
 describe("Slider custom classes", () => {
   it("applies custom thumb class name", () => {
     render(<Slider value={[50]} min={0} max={100} step={1} thumbClassName="custom-thumb" data-testid="test-slider" />);
