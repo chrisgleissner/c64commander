@@ -10,6 +10,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { PlaybackEngineToggle } from "@/pages/playFiles/components/PlaybackEngineToggle";
 import { loadMirrorC64Audio, loadPlaybackEngine } from "@/lib/config/appSettings";
+import { addLog } from "@/lib/logging";
+
+vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
 // The toggle hides "Both" unless the C64's audio can actually reach this
 // device, which it decides from the Live View / audio-mirror flags. These tests
@@ -139,6 +142,28 @@ describe("PlaybackEngineToggle listen targets", () => {
     fireEvent.click(screen.getByTestId("playback-engine-local"));
     expect(loadPlaybackEngine()).toBe("local");
     expect(mirror.session.stopAudio).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * HARD25-007: switching to "local" silently swallowed a stopAudio() failure the
+   * "both"/"c64" branch logs. A failed stop leaves the C64's audio playing under
+   * the new local engine, with nothing to show for it but this log.
+   */
+  it("logs a failed stop when moving to this device, matching the c64/both branch", async () => {
+    mirror.audioLive = true;
+    mirror.session.stopAudio.mockRejectedValueOnce(new Error("bridge unavailable"));
+    vi.mocked(addLog).mockClear();
+    render(<PlaybackEngineToggle />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("playback-engine-local"));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("could not stop"),
+      expect.objectContaining({ error: expect.stringContaining("bridge unavailable") }),
+    );
   });
 
   it("labels the options Local, Remote, Both, in that order", () => {

@@ -66,7 +66,7 @@ describe("CollapsibleSection", () => {
     expect(screen.getByText("Joystick")).toBeInTheDocument();
   });
 
-  it("once any section in a scope has been touched, an untouched defaultOpen section in that scope reads closed", () => {
+  it("keeps an untouched defaultOpen section open even after another section in the same scope is touched", () => {
     const first = render(
       <>
         <CollapsibleSection scope="test" id="quick-actions" title="Quick Actions" icon={Radio} defaultOpen>
@@ -77,16 +77,34 @@ describe("CollapsibleSection", () => {
         </CollapsibleSection>
       </>,
     );
-    // Touch the closed-by-default section - this makes the scope "touched".
+    // Touch the closed-by-default section - this must not disturb quick-actions, which
+    // was never itself toggled.
     fireEvent.click(screen.getByTestId("test-section-toggle-printers"));
     expect(screen.getByText("Printer A")).toBeInTheDocument();
-    // Unmount before re-rendering: otherwise this render's own still-open quick-actions
-    // section (defaultOpen) would leave its own "Reset" in the document regardless of
-    // what the second render below does, masking the behaviour under test.
     first.unmount();
 
-    // Re-render fresh: quick-actions was never explicitly stored as open, and the scope
-    // now has entries, so it reads its own (absent) stored state rather than defaultOpen.
+    // Re-render fresh: quick-actions was never explicitly stored, so it must fall back
+    // to its own defaultOpen regardless of what else in the scope has been stored.
+    const { unmount } = render(
+      <CollapsibleSection scope="test" id="quick-actions" title="Quick Actions" icon={Radio} defaultOpen>
+        <p>Reset</p>
+      </CollapsibleSection>,
+    );
+    expect(screen.getByText("Reset")).toBeInTheDocument();
+    expect(screen.getByTestId("test-section-quick-actions")).toHaveAttribute("data-open", "true");
+    unmount();
+  });
+
+  it("remembers an explicitly closed defaultOpen section across remounts", () => {
+    const first = render(
+      <CollapsibleSection scope="test" id="quick-actions" title="Quick Actions" icon={Radio} defaultOpen>
+        <p>Reset</p>
+      </CollapsibleSection>,
+    );
+    fireEvent.click(screen.getByTestId("test-section-toggle-quick-actions"));
+    expect(screen.queryByText("Reset")).not.toBeInTheDocument();
+    first.unmount();
+
     const { unmount } = render(
       <CollapsibleSection scope="test" id="quick-actions" title="Quick Actions" icon={Radio} defaultOpen>
         <p>Reset</p>

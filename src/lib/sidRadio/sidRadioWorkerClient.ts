@@ -216,14 +216,12 @@ export class SidRadioWorkerClient {
   }
 
   terminate(): void {
+    // Reject rather than merely clear: a caller awaiting `load()`/`compute()` at the
+    // moment of termination (e.g. an unmounting component) would otherwise hang
+    // forever, since its promise would neither resolve nor reject (HARD25-003).
+    this.failAllPending("SID Radio worker terminated");
     this.worker?.terminate();
     this.worker = null;
     this.loadInFlight = null;
-    if (this.loadPending) {
-      clearTimeout(this.loadPending.timer);
-      this.loadPending = null;
-    }
-    for (const pending of this.computePending.values()) clearTimeout(pending.timer);
-    this.computePending.clear();
   }
 }

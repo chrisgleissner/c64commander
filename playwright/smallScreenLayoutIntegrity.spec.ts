@@ -192,6 +192,47 @@ test.describe("Small screen layout integrity", () => {
   }
 
   /**
+   * The tab labels are `rem`-sized, so the app's own Text size setting (a pure CSS
+   * variable, unlike device font scale this harness can't simulate) grows them too. At
+   * largest Text size the six tabs no longer fit, and a fixed-width bar pushed Settings/
+   * Docs off-screen with no way back (HARD25-002). Must stay reachable by scroll.
+   */
+  test("tab bar stays reachable when the app's own text size is set to Largest @layout", async ({ page }) => {
+    await seedUiMocks(page, server.baseUrl);
+    await page.addInitScript(() => {
+      localStorage.setItem("c64u_display_profile_override", "compact");
+      localStorage.setItem("c64u_text_scale", "largest");
+    });
+    await page.setViewportSize(compactViewport);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+
+    const nav = page.locator("nav.tab-bar");
+    const scrollWidth = await nav.evaluate((el) => el.scrollWidth);
+    const clientWidth = await nav.evaluate((el) => el.clientWidth);
+    expect(
+      scrollWidth,
+      "tab bar must actually overflow at Largest text size for this test to be meaningful",
+    ).toBeGreaterThan(clientWidth);
+    const overflowX = await nav.evaluate((el) => getComputedStyle(el).overflowX);
+    expect(["auto", "scroll"]).toContain(overflowX);
+
+    for (const route of TAB_ROUTES) {
+      const tabId = `tab-${route.label.toLowerCase().replace(/\s+/g, "-")}`;
+      const tab = page.getByTestId(tabId);
+      await tab.scrollIntoViewIfNeeded();
+      const reachable = await tab.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const cx = r.x + r.width / 2;
+        const cy = r.y + r.height / 2;
+        const top = document.elementFromPoint(cx, cy);
+        return !!top && (el.contains(top) || top.contains(el));
+      });
+      expect(reachable, `${route.label} tab must be reachable after scrolling the tab bar into view`).toBe(true);
+    }
+  });
+
+  /**
    * Dialogs, sheets and interstitials, which the page sweeps above cannot reach.
    *
    * Radix marks everything behind an open dialog `aria-hidden`, and the audit skips

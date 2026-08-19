@@ -862,9 +862,13 @@ button:focus-visible,
     background-color: hsl(var(--background));
   }
 
+  /* At large device font scale + app Text size, .tab-item-label's rem sizing can
+     outgrow the pixel budget this bar was tuned for, pushing tabs off-screen with no
+     way back (HARD25-002). overflow-x keeps every tab reachable by scroll instead. */
   .tab-bar {
     @apply flex items-center justify-around
            bg-card border-t border-border
+           overflow-x-auto
            px-2;
     padding-top: var(--app-chrome-rail-padding-y);
     padding-bottom: 0.5rem;

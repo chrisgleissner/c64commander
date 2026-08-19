@@ -113,12 +113,17 @@ describe("NativeUdpStreamReceiver (native platform)", () => {
     receiver.close();
   });
 
-  it("reports an error when the native bind fails (without throwing from ready)", async () => {
+  /**
+   * HARD25-004: ready() swallowed a bind failure and resolved anyway, so the
+   * mirror controllers' try/catch never caught it and told the device to stream
+   * into a socket that was never bound.
+   */
+  it("rejects ready() when the native bind fails, so callers do not tell the device to stream into a dead socket", async () => {
     streamUdp.bind.mockRejectedValueOnce(new Error("EADDRINUSE"));
     const receiver = createStreamReceiver({ name: "audio", port: 11001 });
     const states: string[] = [];
     receiver.onStateChange((s) => states.push(s));
-    await expect(receiver.ready?.()).resolves.toBeUndefined();
+    await expect(receiver.ready?.()).rejects.toThrow(/EADDRINUSE/);
     expect(states).toContain("error");
     expect(receiver.destination).toBe("239.0.1.65:11001"); // still known (multicast)
     receiver.close();

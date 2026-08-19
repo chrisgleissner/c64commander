@@ -9,14 +9,14 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StreamStatus } from "@/pages/home/components/StreamStatus";
-import { writeOpenSection } from "@/lib/ui/collapsibleSectionStore";
+import { writeSectionState } from "@/lib/ui/collapsibleSectionStore";
 
 // Streams is closed by default now that it is a collapsible CollapsibleSection - these
 // tests exercise its content, not the collapse mechanism (which has its own tests), so
 // pre-open it the same way a returning user's remembered state would.
 beforeEach(() => {
   localStorage.clear();
-  writeOpenSection("home", "streams", true);
+  writeSectionState("home", "streams", true);
 });
 
 const { updateConfigValueSpy, handleStreamStartSpy, handleStreamStopSpy, handleStreamCommitSpy, avMirror } = vi.hoisted(

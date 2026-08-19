@@ -69,7 +69,18 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
     if (target === "local") {
       // Nothing to mirror once the tune renders here, and leaving the stream up
       // would keep the C64's audio playing underneath the on-device engine.
-      if (audioLive) void session.stopAudio().catch(() => undefined);
+      if (audioLive) {
+        void session.stopAudio().catch((error) => {
+          // A failed stop here means the C64's mirrored audio keeps playing
+          // audibly underneath the newly started local engine (HARD25-007) - log it
+          // the same way the "both"/"c64" branch below logs its own stopAudio()/
+          // startAudio() failure, instead of discarding it silently.
+          addLog("warn", "Playback: could not stop the Live View audio route", {
+            service: "playback",
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
       setEngine("local");
       return;
     }

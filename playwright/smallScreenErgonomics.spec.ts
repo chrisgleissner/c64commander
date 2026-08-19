@@ -203,7 +203,12 @@ const expectNoHorizontalOverflow = async (page: Page) => {
     for (const element of Array.from(document.querySelectorAll<HTMLElement>("nav, header, footer, main"))) {
       const style = window.getComputedStyle(element);
       if (style.display === "none" || style.visibility === "hidden") continue;
-      if (element.scrollWidth - element.clientWidth > 1) {
+      // Skip elements that scroll horizontally by design (HARD25-002's tab bar): their
+      // scrollWidth > clientWidth is intended, not clipped. A fixed-px tolerance was
+      // tried instead and proved environment-fragile (2px locally, 7px on CI's font
+      // metrics for the same markup). Non-scrollable elements still use 1px.
+      const scrollable = style.overflowX === "auto" || style.overflowX === "scroll";
+      if (!scrollable && element.scrollWidth - element.clientWidth > 1) {
         const testId = element.getAttribute("data-testid");
         offenders.push({
           selector: `${element.tagName.toLowerCase()}${testId ? `[data-testid=${testId}]` : `.${element.className.split(/\s+/)[0]}`}`,

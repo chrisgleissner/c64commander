@@ -254,6 +254,11 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
       .catch((error) => {
         this.stateHandler?.("error");
         addLog("warn", "Native UDP stream bind failed", { error: (error as Error)?.message ?? String(error) });
+        // Rethrow: audioMirrorController/videoMirrorController await ready() inside a
+        // try/catch specifically to avoid telling the device to stream into a socket
+        // that was never bound (HARD25-004). A resolved readyPromise here would let
+        // that happen silently, with only this warn log to show for it.
+        throw error;
       });
   }
 
