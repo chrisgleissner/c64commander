@@ -6,13 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   LocalSidChunkScheduler,
   type AudioScheduleBuffer,
   type AudioScheduleSink,
   type AudioScheduleSource,
 } from "@/lib/playback/localSidChunkScheduler";
+import { addLog } from "@/lib/logging";
+
+vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
 /** A deterministic fake AudioContext: a manually-advanced clock + recording sinks. */
 class FakeSink implements AudioScheduleSink {
@@ -169,6 +172,46 @@ describe("LocalSidChunkScheduler", () => {
     scheduler.schedule(makeChunk(24000), 2);
     // Must not throw even though the underlying source.stop() does.
     expect(() => scheduler.stopAll()).not.toThrow();
+  });
+
+  it("stopAll logs a source that throws on stop, same as the immediate-stop path", () => {
+    const sink = new FakeSink(48000);
+    const scheduler = new LocalSidChunkScheduler(sink);
+    scheduler.schedule(makeChunk(24000), 2);
+    vi.mocked(addLog).mockClear();
+    sink.throwOnStop = true;
+    scheduler.stopAll();
+    expect(addLog).toHaveBeenCalledWith(
+      "debug",
+      expect.stringContaining("stop failed"),
+      expect.objectContaining({ error: expect.any(String) }),
+    );
+  });
+
+  /**
+   * HARD25-006: the crossfade path (keepSourcesFor > 0) swallowed a stop() failure
+   * with a bare `catch { void 0; }`, while the immediate-stop path right below it
+   * logged the identical failure at debug. Two copies of the same teardown rule had
+   * already drifted apart.
+   */
+  it("stopAll({ keepSourcesFor }) logs a source that throws on stop, same as the immediate path", () => {
+    vi.useFakeTimers();
+    try {
+      const sink = new FakeSink(48000);
+      const scheduler = new LocalSidChunkScheduler(sink);
+      scheduler.schedule(makeChunk(24000), 2);
+      vi.mocked(addLog).mockClear();
+      sink.throwOnStop = true;
+      scheduler.stopAll({ keepSourcesFor: 50 });
+      vi.advanceTimersByTime(50);
+      expect(addLog).toHaveBeenCalledWith(
+        "debug",
+        expect.stringContaining("stop failed"),
+        expect.objectContaining({ error: expect.any(String) }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("supports mono chunks (channels = 1)", () => {

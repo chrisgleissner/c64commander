@@ -239,9 +239,13 @@ export class LocalSidChunkScheduler {
         for (const source of fading) {
           try {
             source.stop();
-          } catch {
-            // Already ended: nothing to stop.
-            void 0;
+          } catch (error) {
+            // A source that already ended throws on stop(); harmless during teardown.
+            // Same rule as the immediate-stop path below - the two used to disagree
+            // (HARD25-006): this one silently discarded the error instead of logging it.
+            addLog("debug", "Local SID: crossfading source stop failed (ignored during teardown)", {
+              error: (error as Error)?.message ?? String(error),
+            });
           }
         }
       }, keepFor);
