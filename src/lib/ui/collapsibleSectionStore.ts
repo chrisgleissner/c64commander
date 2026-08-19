@@ -22,22 +22,49 @@ const LEGACY_SETTINGS_SCOPE = "settings";
 
 const compositeKey = (scope: string, id: string): string => `${scope}:${id}`;
 
-const readRawIds = (key: string): Set<string> => {
-  if (typeof localStorage === "undefined") return new Set();
+// Explicit per-id decisions only ("this id was opened" / "this id was closed"), never an
+// id's mere absence. A plain set of open ids cannot distinguish "never touched, so keep
+// this section's own defaultOpen" from "explicitly closed" - both look like "not in the
+// set". That ambiguity used to collapse every untouched defaultOpen section the moment
+// any other section in the same scope was toggled at all (see HARD-style bug: closing
+// one Home card silently closed Quick Actions, Drives, CPU & RAM and Video too, since
+// none of those had ever been individually written to storage). Storing a boolean per
+// touched id removes the ambiguity: an id absent from the map was never touched and
+// keeps its defaultOpen.
+const readRawEntries = (key: string): Map<string, boolean> => {
+  if (typeof localStorage === "undefined") return new Map();
   const raw = localStorage.getItem(key);
-  if (!raw) return new Set();
+  if (!raw) return new Map();
   try {
     const parsed: unknown = JSON.parse(raw);
-    return new Set(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : []);
+    if (Array.isArray(parsed)) {
+      // Pre-fix format: a bare array of open ids. Every id in it was explicitly open;
+      // ids outside it may have been untouched OR explicitly closed, and the old format
+      // cannot tell those apart. Best-effort: treat every listed id as explicitly open
+      // and leave everything else untouched, rather than inventing false closes.
+      const entries = new Map<string, boolean>();
+      for (const id of parsed) {
+        if (typeof id === "string") entries.set(id, true);
+      }
+      return entries;
+    }
+    if (parsed && typeof parsed === "object") {
+      const entries = new Map<string, boolean>();
+      for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof value === "boolean") entries.set(id, value);
+      }
+      return entries;
+    }
+    return new Map();
   } catch (error) {
     console.warn(`Discarding unreadable stored collapsible-section state at ${key}`, error);
-    return new Set();
+    return new Map();
   }
 };
 
-const writeRawIds = (key: string, ids: Set<string>): void => {
+const writeRawEntries = (key: string, entries: Map<string, boolean>): void => {
   if (typeof localStorage === "undefined") return;
-  localStorage.setItem(key, JSON.stringify([...ids]));
+  localStorage.setItem(key, JSON.stringify(Object.fromEntries(entries)));
 };
 
 /**
@@ -50,27 +77,27 @@ const migrateLegacySettingsSections = (): void => {
   if (typeof localStorage === "undefined") return;
   const legacyRaw = localStorage.getItem(LEGACY_SETTINGS_KEY);
   if (legacyRaw === null) return;
-  const legacyIds = readRawIds(LEGACY_SETTINGS_KEY);
-  const current = readRawIds(OPEN_SECTIONS_KEY);
-  for (const id of legacyIds) current.add(compositeKey(LEGACY_SETTINGS_SCOPE, id));
-  writeRawIds(OPEN_SECTIONS_KEY, current);
+  const legacyEntries = readRawEntries(LEGACY_SETTINGS_KEY);
+  const current = readRawEntries(OPEN_SECTIONS_KEY);
+  for (const [id, open] of legacyEntries) current.set(compositeKey(LEGACY_SETTINGS_SCOPE, id), open);
+  writeRawEntries(OPEN_SECTIONS_KEY, current);
   localStorage.removeItem(LEGACY_SETTINGS_KEY);
 };
 
-export const readOpenSections = (scope: string): Set<string> => {
+/** Explicit open/closed decisions for `scope`, keyed by the section id alone (unprefixed).
+ * An id absent from the returned map was never toggled by the user. */
+export const readSectionStates = (scope: string): Map<string, boolean> => {
   migrateLegacySettingsSections();
   const prefix = `${scope}:`;
-  const ids = new Set<string>();
-  for (const key of readRawIds(OPEN_SECTIONS_KEY)) {
-    if (key.startsWith(prefix)) ids.add(key.slice(prefix.length));
+  const states = new Map<string, boolean>();
+  for (const [key, open] of readRawEntries(OPEN_SECTIONS_KEY)) {
+    if (key.startsWith(prefix)) states.set(key.slice(prefix.length), open);
   }
-  return ids;
+  return states;
 };
 
-export const writeOpenSection = (scope: string, id: string, open: boolean): void => {
-  const ids = readRawIds(OPEN_SECTIONS_KEY);
-  const key = compositeKey(scope, id);
-  if (open) ids.add(key);
-  else ids.delete(key);
-  writeRawIds(OPEN_SECTIONS_KEY, ids);
+export const writeSectionState = (scope: string, id: string, open: boolean): void => {
+  const entries = readRawEntries(OPEN_SECTIONS_KEY);
+  entries.set(compositeKey(scope, id), open);
+  writeRawEntries(OPEN_SECTIONS_KEY, entries);
 };

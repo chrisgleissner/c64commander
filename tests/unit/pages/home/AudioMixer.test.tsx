@@ -1,13 +1,13 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { writeOpenSection } from "@/lib/ui/collapsibleSectionStore";
+import { writeSectionState } from "@/lib/ui/collapsibleSectionStore";
 
 // Audio is closed by default now that it is a collapsible CollapsibleSection - these
 // tests exercise its content, not the collapse mechanism (which has its own tests), so
 // pre-open it the same way a returning user's remembered state would.
 beforeEach(() => {
   localStorage.clear();
-  writeOpenSection("home", "audio", true);
+  writeSectionState("home", "audio", true);
 });
 
 const { toastSpy, reportUserErrorSpy, c64ApiMockRef, queryClientMockRef, updateConfigValueSpy, resolveConfigValueSpy } =

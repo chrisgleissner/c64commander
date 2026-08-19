@@ -11,7 +11,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { readOpenSections, writeOpenSection } from "@/lib/ui/collapsibleSectionStore";
+import { readSectionStates, writeSectionState } from "@/lib/ui/collapsibleSectionStore";
 
 export interface CollapsibleSectionProps {
   /** Which page this section belongs to (e.g. "home", "settings", "docs"). Namespaces
@@ -86,8 +86,11 @@ export const CollapsibleSection = ({
   const [open, setOpen] = useState(defaultOpen);
 
   useEffect(() => {
-    const stored = readOpenSections(scope);
-    if (stored.size > 0 || !defaultOpen) setOpen(stored.has(id));
+    // Only override the initial `defaultOpen` state if THIS id was explicitly toggled
+    // before. An id the user never touched must keep its own default regardless of
+    // what else in the scope has been opened or closed (see the store's own comment).
+    const stored = readSectionStates(scope);
+    if (stored.has(id)) setOpen(stored.get(id) ?? defaultOpen);
   }, [scope, id, defaultOpen]);
 
   const toggle = useCallback(
@@ -95,7 +98,7 @@ export const CollapsibleSection = ({
       onToggleClick?.(event);
       setOpen((current) => {
         const next = !current;
-        writeOpenSection(scope, id, next);
+        writeSectionState(scope, id, next);
         onToggle?.(next);
         return next;
       });
