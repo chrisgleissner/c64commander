@@ -53,6 +53,25 @@ class FtpClientPluginTest {
     assertEquals(3, executor.maximumPoolSize)
   }
 
+  // HARD25-008: pluginContextOrNull() used to swallow the reason `context` was
+  // unavailable with `catch (_: Throwable) { null }` and log nothing, leaving no
+  // trace of why the caller's in-app Diagnostics entry never showed up. A plugin
+  // with no bridge attached (as every test in this file constructs it) is exactly
+  // the case where accessing `context` throws.
+  @Test
+  fun pluginContextOrNullLogsWhenContextIsUnavailable() {
+    val plugin = FtpClientPlugin()
+    val method = FtpClientPlugin::class.java.getDeclaredMethod("pluginContextOrNull")
+    method.isAccessible = true
+
+    ShadowLog.clear()
+    val result = method.invoke(plugin) as Context?
+
+    assertEquals(null, result)
+    val logs = ShadowLog.getLogsForTag("FtpClientPlugin")
+    assertTrue(logs.any { it.msg?.contains("Plugin context unavailable") == true })
+  }
+
   @Test
   fun listDirectoryRejectsMissingHost() {
     val plugin = FtpClientPlugin()

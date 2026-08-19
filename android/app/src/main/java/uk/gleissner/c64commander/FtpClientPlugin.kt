@@ -9,6 +9,7 @@
 package uk.gleissner.c64commander
 
 import android.content.Context
+import android.util.Log
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -82,7 +83,12 @@ class FtpClientPlugin : Plugin() {
   private fun pluginContextOrNull(): Context? {
     return try {
       context
-    } catch (_: Throwable) {
+    } catch (error: Exception) {
+      // Every call site feeds this straight into AppLogger, whose logcat line still
+      // runs on a null context - only the in-app Diagnostics broadcast is skipped. A
+      // silently swallowed reason here (HARD25-008) left no trace of WHY context
+      // access failed, only that the resulting Diagnostics entry never showed up.
+      Log.w(logTag, "Plugin context unavailable", error)
       null
     }
   }
