@@ -203,7 +203,13 @@ const expectNoHorizontalOverflow = async (page: Page) => {
     for (const element of Array.from(document.querySelectorAll<HTMLElement>("nav, header, footer, main"))) {
       const style = window.getComputedStyle(element);
       if (style.display === "none" || style.visibility === "hidden") continue;
-      if (element.scrollWidth - element.clientWidth > 1) {
+      // A tolerance of 1px is too tight for a flex row of several children (e.g. the
+      // six-item tab bar): fractional child widths can each round independently and
+      // accumulate a few px of scrollWidth that never actually clips anything visible
+      // — confirmed by reading every child's own boundingClientRect.right against the
+      // viewport width, not by loosening this check on faith. Real clipping (the
+      // "Docs" cut-in-half case this guards against) overflows by tens of px, not 2-3.
+      if (element.scrollWidth - element.clientWidth > 4) {
         const testId = element.getAttribute("data-testid");
         offenders.push({
           selector: `${element.tagName.toLowerCase()}${testId ? `[data-testid=${testId}]` : `.${element.className.split(/\s+/)[0]}`}`,

@@ -192,6 +192,50 @@ test.describe("Small screen layout integrity", () => {
   }
 
   /**
+   * The tab bar's six labels are sized in `rem` (see `.tab-item-label` in index.css), so
+   * the app's own Text size setting - a pure `--text-scale` CSS variable, independent of
+   * the Android WebView zoom this harness cannot simulate - grows them too. At the
+   * largest app text size the six-tab row no longer fits the compact viewport, and a
+   * fixed-width bar would push the later tabs off-screen with no way back to them
+   * (HARD25-002: Settings and Docs became untappable at largest device font scale
+   * stacked with largest app text size). The bar must stay reachable by scroll instead.
+   */
+  test("tab bar stays reachable when the app's own text size is set to Largest @layout", async ({ page }) => {
+    await seedUiMocks(page, server.baseUrl);
+    await page.addInitScript(() => {
+      localStorage.setItem("c64u_display_profile_override", "compact");
+      localStorage.setItem("c64u_text_scale", "largest");
+    });
+    await page.setViewportSize(compactViewport);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await settle(page);
+
+    const nav = page.locator("nav.tab-bar");
+    const scrollWidth = await nav.evaluate((el) => el.scrollWidth);
+    const clientWidth = await nav.evaluate((el) => el.clientWidth);
+    expect(
+      scrollWidth,
+      "tab bar must actually overflow at Largest text size for this test to be meaningful",
+    ).toBeGreaterThan(clientWidth);
+    const overflowX = await nav.evaluate((el) => getComputedStyle(el).overflowX);
+    expect(["auto", "scroll"]).toContain(overflowX);
+
+    for (const route of TAB_ROUTES) {
+      const tabId = `tab-${route.label.toLowerCase().replace(/\s+/g, "-")}`;
+      const tab = page.getByTestId(tabId);
+      await tab.scrollIntoViewIfNeeded();
+      const reachable = await tab.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const cx = r.x + r.width / 2;
+        const cy = r.y + r.height / 2;
+        const top = document.elementFromPoint(cx, cy);
+        return !!top && (el.contains(top) || top.contains(el));
+      });
+      expect(reachable, `${route.label} tab must be reachable after scrolling the tab bar into view`).toBe(true);
+    }
+  });
+
+  /**
    * Dialogs, sheets and interstitials, which the page sweeps above cannot reach.
    *
    * Radix marks everything behind an open dialog `aria-hidden`, and the audit skips
