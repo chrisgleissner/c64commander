@@ -177,6 +177,77 @@ describe("useSidRadio", () => {
     expect(appended.length).toBeGreaterThan(0);
   });
 
+  /**
+   * HARD25-005: the lookahead-refill effect guards against a superseded generation
+   * (another station started, or stop() called) but the unmount cleanup never bumped
+   * the generation counter. A refill already in flight when the component unmounted
+   * would resolve later and still pass its stale generation check, calling appendItems
+   * (which writes to the playlist store the caller owns, not local state) for a station
+   * the user already left.
+   */
+  it("does not append refill items that resolve after the hook has unmounted", async () => {
+    const client = makeClient();
+    let resolveRefillCompute: ((result: StationResult) => void) | null = null;
+    let computeCalls = 0;
+    client.compute = vi.fn((request: StationRequest): Promise<StationResult> => {
+      computeCalls += 1;
+      if (computeCalls === 1) {
+        // The initial station-start refill: resolve immediately, as the other tests do.
+        // Exactly LOOKAHEAD (10) candidates, so the provider's buffer is fully consumed
+        // and does not carry leftover candidates that would let the second refill below
+        // answer itself from the buffer without a genuine second compute() call.
+        const pool = Array.from({ length: 10 }, (_, i) => i + 1).filter((o) => !request.exclude.includes(o));
+        return Promise.resolve({
+          candidates: pool.slice(0, request.count).map((trackOrdinal) => ({
+            trackOrdinal,
+            md5_48: `m${trackOrdinal}`,
+            songNr: 1,
+            score: 10 - trackOrdinal,
+            reason: "similar" as const,
+            fileTrackOrdinals: [trackOrdinal],
+          })),
+        });
+      }
+      // The lookahead refill triggered below: held open until after unmount.
+      return new Promise<StationResult>((resolve) => {
+        resolveRefillCompute = resolve;
+      });
+    });
+    const params = baseParams(client, { playlistLength: 10, currentIndex: 0 });
+    const { result, rerender, unmount } = renderHook((p: ReturnType<typeof baseParams>) => useSidRadio(p), {
+      initialProps: params,
+    });
+    await act(async () => {
+      await result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+    // Advance the cursor to within the refill threshold of the tail — starts the
+    // lookahead refill, whose compute() call is now held open above.
+    act(() => {
+      rerender({ ...params, currentIndex: 8, playlistLength: 10 });
+    });
+    await waitFor(() => expect(computeCalls).toBe(2));
+
+    unmount();
+    await act(async () => {
+      // Enough candidates to satisfy the refill's full batch in one round — otherwise
+      // the provider's internal loop would issue a further compute() call that this
+      // test never answers, and the outer refill() promise would simply never settle.
+      resolveRefillCompute?.({
+        candidates: Array.from({ length: 20 }, (_, i) => ({
+          trackOrdinal: 100 + i,
+          md5_48: `m${100 + i}`,
+          songNr: 1,
+          score: 1,
+          reason: "similar" as const,
+          fileTrackOrdinals: [100 + i],
+        })),
+      });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(params.appendItems).not.toHaveBeenCalled();
+  });
+
   it("surfaces a 'no radio for this tune' notice when the seed has no neighbours (Q5)", async () => {
     const client = makeClient();
     client.compute = vi.fn(async () => ({ candidates: [], empty: "no-neighbours" }));
