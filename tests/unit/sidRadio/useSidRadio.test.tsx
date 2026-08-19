@@ -21,6 +21,9 @@ import type {
   StationRequest,
 } from "@/lib/sidRadio/sidRadioWorkerProtocol";
 import { DEFAULT_STATION_BALANCE, type StationResult } from "@/lib/sidRadio/stationEngine";
+import { addLog } from "@/lib/logging";
+
+vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
 beforeEach(async () => {
   localStorage.clear();
@@ -246,6 +249,62 @@ describe("useSidRadio", () => {
     });
 
     expect(params.appendItems).not.toHaveBeenCalled();
+  });
+
+  /**
+   * HARD25-010 (found by the PR's automated review after HARD25-003/HARD25-005 landed):
+   * terminate() now rejects an in-flight compute() (HARD25-003) instead of hanging it. The
+   * lookahead-refill effect's `.then(...).finally(...)` chain had no `.catch()`, so a refill
+   * that rejects - e.g. because the worker client was terminated while it was in flight -
+   * became an unhandled promise rejection instead of being logged. Vitest fails a test run on
+   * an unhandled rejection, which is itself the proof this needs no special detection.
+   */
+  it("logs, rather than throws unhandled, when a lookahead refill's compute() rejects", async () => {
+    const client = makeClient();
+    let rejectRefillCompute: ((error: Error) => void) | null = null;
+    let computeCalls = 0;
+    client.compute = vi.fn((request: StationRequest): Promise<StationResult> => {
+      computeCalls += 1;
+      if (computeCalls === 1) {
+        const pool = Array.from({ length: 10 }, (_, i) => i + 1).filter((o) => !request.exclude.includes(o));
+        return Promise.resolve({
+          candidates: pool.map((trackOrdinal) => ({
+            trackOrdinal,
+            md5_48: `m${trackOrdinal}`,
+            songNr: 1,
+            score: 10 - trackOrdinal,
+            reason: "similar" as const,
+            fileTrackOrdinals: [trackOrdinal],
+          })),
+        });
+      }
+      return new Promise<StationResult>((_resolve, reject) => {
+        rejectRefillCompute = reject;
+      });
+    });
+    const params = baseParams(client, { playlistLength: 10, currentIndex: 0 });
+    const { result, rerender } = renderHook((p: ReturnType<typeof baseParams>) => useSidRadio(p), {
+      initialProps: params,
+    });
+    await act(async () => {
+      await result.current.startSongRadio("aabbccddeeff", "Commando");
+    });
+    act(() => {
+      rerender({ ...params, currentIndex: 8, playlistLength: 10 });
+    });
+    await waitFor(() => expect(computeCalls).toBe(2));
+
+    vi.mocked(addLog).mockClear();
+    await act(async () => {
+      rejectRefillCompute?.(new Error("worker terminated"));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("lookahead refill failed"),
+      expect.objectContaining({ error: expect.stringContaining("worker terminated") }),
+    );
   });
 
   it("surfaces a 'no radio for this tune' notice when the seed has no neighbours (Q5)", async () => {

@@ -622,6 +622,17 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
         // Only the generation that set the flag may clear it. A superseded refill settling later
         // would otherwise release the *new* station's lock and let a second refill run beside it.
         if (stationGenerationRef.current === generation) refillingRef.current = false;
+      })
+      .catch((error: unknown) => {
+        // HARD25-010: terminate() (HARD25-003) now rejects an in-flight compute() instead of
+        // hanging it, and the unmount cleanup (HARD25-005) bumps the generation but does not stop
+        // this refill's own compute() call from rejecting once the worker is terminated. `.finally()`
+        // above re-throws whatever it received, so without this catch a user leaving the SID Radio
+        // page mid-refill produced an unhandled promise rejection on every such navigation.
+        addLog("warn", "SID Radio: lookahead refill failed", {
+          service: "sid-radio",
+          error: error instanceof Error ? error.message : String(error),
+        });
       });
   }, [station, currentIndex, playlistLength, appendItems]);
 
