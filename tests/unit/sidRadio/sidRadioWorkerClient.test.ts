@@ -191,10 +191,8 @@ describe("SidRadioWorkerClient", () => {
   });
 
   /**
-   * HARD25-003: terminate() used to clear the pending timers and drop the resolver
-   * references without ever calling reject(). A caller still awaiting load()/compute()
-   * at that moment (e.g. an unmounting component) would hang forever instead of seeing
-   * its promise settle.
+   * HARD25-003: terminate() cleared pending timers without rejecting them, so a
+   * caller still awaiting load()/compute() (e.g. an unmounting component) hung forever.
    */
   it("rejects a pending load() when terminate() is called mid-flight", async () => {
     const worker = new FakeWorker(() => null); // never answers

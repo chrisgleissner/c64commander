@@ -181,12 +181,9 @@ describe("useSidRadio", () => {
   });
 
   /**
-   * HARD25-005: the lookahead-refill effect guards against a superseded generation
-   * (another station started, or stop() called) but the unmount cleanup never bumped
-   * the generation counter. A refill already in flight when the component unmounted
-   * would resolve later and still pass its stale generation check, calling appendItems
-   * (which writes to the playlist store the caller owns, not local state) for a station
-   * the user already left.
+   * HARD25-005: unmount never bumped the generation counter, so an in-flight refill
+   * could resolve later, pass its stale check, and call appendItems (playlist store,
+   * not local state) for a station the user already left.
    */
   it("does not append refill items that resolve after the hook has unmounted", async () => {
     const client = makeClient();
@@ -252,12 +249,9 @@ describe("useSidRadio", () => {
   });
 
   /**
-   * HARD25-010 (found by the PR's automated review after HARD25-003/HARD25-005 landed):
-   * terminate() now rejects an in-flight compute() (HARD25-003) instead of hanging it. The
-   * lookahead-refill effect's `.then(...).finally(...)` chain had no `.catch()`, so a refill
-   * that rejects - e.g. because the worker client was terminated while it was in flight -
-   * became an unhandled promise rejection instead of being logged. Vitest fails a test run on
-   * an unhandled rejection, which is itself the proof this needs no special detection.
+   * HARD25-010: terminate() now rejects an in-flight compute() (HARD25-003), but the
+   * refill's `.then().finally()` chain had no `.catch()`, so a rejection became an
+   * unhandled promise rejection instead of being logged.
    */
   it("logs, rather than throws unhandled, when a lookahead refill's compute() rejects", async () => {
     const client = makeClient();

@@ -862,13 +862,9 @@ button:focus-visible,
     background-color: hsl(var(--background));
   }
 
-  /* justify-around only governs layout while the six tabs fit the viewport. At large
-     device font scale stacked with the app's own largest Text size, `.tab-item-label`'s
-     rem-based sizing (see its own comment) can grow past the pixel budget this bar was
-     tuned for, and a fixed-width flex row would then push later tabs off-screen with no
-     way back to them — Settings and Docs became untappable (HARD25-002). overflow-x
-     keeps every tab reachable by scroll regardless of how much the label/icon rem
-     values grow, instead of trying to re-budget pixels for every scale combination. */
+  /* At large device font scale + app Text size, .tab-item-label's rem sizing can
+     outgrow the pixel budget this bar was tuned for, pushing tabs off-screen with no
+     way back (HARD25-002). overflow-x keeps every tab reachable by scroll instead. */
   .tab-bar {
     @apply flex items-center justify-around
            bg-card border-t border-border

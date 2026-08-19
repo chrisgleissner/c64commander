@@ -145,11 +145,9 @@ describe("PlaybackEngineToggle listen targets", () => {
   });
 
   /**
-   * HARD25-007: switching to "local" silently swallowed a stopAudio() failure with
-   * no logging and no reaction, while the "both"/"c64" branch a few lines below logs
-   * the identical failure. A failed stop here leaves the C64's mirrored audio
-   * playing audibly underneath the newly started local engine, with nothing to show
-   * for it but this log.
+   * HARD25-007: switching to "local" silently swallowed a stopAudio() failure the
+   * "both"/"c64" branch logs. A failed stop leaves the C64's audio playing under
+   * the new local engine, with nothing to show for it but this log.
    */
   it("logs a failed stop when moving to this device, matching the c64/both branch", async () => {
     mirror.audioLive = true;

@@ -192,13 +192,10 @@ test.describe("Small screen layout integrity", () => {
   }
 
   /**
-   * The tab bar's six labels are sized in `rem` (see `.tab-item-label` in index.css), so
-   * the app's own Text size setting - a pure `--text-scale` CSS variable, independent of
-   * the Android WebView zoom this harness cannot simulate - grows them too. At the
-   * largest app text size the six-tab row no longer fits the compact viewport, and a
-   * fixed-width bar would push the later tabs off-screen with no way back to them
-   * (HARD25-002: Settings and Docs became untappable at largest device font scale
-   * stacked with largest app text size). The bar must stay reachable by scroll instead.
+   * The tab labels are `rem`-sized, so the app's own Text size setting (a pure CSS
+   * variable, unlike device font scale this harness can't simulate) grows them too. At
+   * largest Text size the six tabs no longer fit, and a fixed-width bar pushed Settings/
+   * Docs off-screen with no way back (HARD25-002). Must stay reachable by scroll.
    */
   test("tab bar stays reachable when the app's own text size is set to Largest @layout", async ({ page }) => {
     await seedUiMocks(page, server.baseUrl);

@@ -189,10 +189,8 @@ describe("LocalSidChunkScheduler", () => {
   });
 
   /**
-   * HARD25-006: the crossfade path (keepSourcesFor > 0) swallowed a stop() failure
-   * with a bare `catch { void 0; }`, while the immediate-stop path right below it
-   * logged the identical failure at debug. Two copies of the same teardown rule had
-   * already drifted apart.
+   * HARD25-006: the crossfade path swallowed a stop() failure the immediate-stop
+   * path right below it logged at debug - two copies of one rule had drifted apart.
    */
   it("stopAll({ keepSourcesFor }) logs a source that throws on stop, same as the immediate path", () => {
     vi.useFakeTimers();

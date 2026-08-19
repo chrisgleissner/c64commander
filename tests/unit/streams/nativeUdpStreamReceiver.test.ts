@@ -114,10 +114,9 @@ describe("NativeUdpStreamReceiver (native platform)", () => {
   });
 
   /**
-   * HARD25-004: ready() used to swallow a bind failure and resolve anyway, so
-   * audioMirrorController/videoMirrorController's `await receiver.ready?.()` inside a
-   * try/catch never caught it and went on to tell the device to start streaming into a
-   * socket that was never bound on the phone - the only trace was a warn log.
+   * HARD25-004: ready() swallowed a bind failure and resolved anyway, so the
+   * mirror controllers' try/catch never caught it and told the device to stream
+   * into a socket that was never bound.
    */
   it("rejects ready() when the native bind fails, so callers do not tell the device to stream into a dead socket", async () => {
     streamUdp.bind.mockRejectedValueOnce(new Error("EADDRINUSE"));

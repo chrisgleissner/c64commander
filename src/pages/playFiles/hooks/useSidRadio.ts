@@ -648,12 +648,9 @@ export const useSidRadio = (params: UseSidRadioParams): UseSidRadioResult => {
 
   useEffect(() => {
     return () => {
-      // Bump the generation so an in-flight lookahead refill (see the effect above)
-      // cannot pass its `stationGenerationRef.current !== generation` guard once this
-      // hook instance is gone. Without it the refill still resolves and calls
-      // `appendItems`/`saveSidRadioSession` - both of which write to state owned
-      // outside this hook instance - silently mutating the playlist/session for a
-      // station the user already left (HARD25-005).
+      // Bumps the generation so an in-flight lookahead refill can't pass its guard
+      // after this hook instance is gone - otherwise it still mutates the playlist/
+      // session for a station the user already left (HARD25-005).
       stationGenerationRef.current += 1;
       clientRef.current?.terminate();
       clientRef.current = null;

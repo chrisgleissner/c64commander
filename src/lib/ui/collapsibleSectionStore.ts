@@ -22,15 +22,10 @@ const LEGACY_SETTINGS_SCOPE = "settings";
 
 const compositeKey = (scope: string, id: string): string => `${scope}:${id}`;
 
-// Explicit per-id decisions only ("this id was opened" / "this id was closed"), never an
-// id's mere absence. A plain set of open ids cannot distinguish "never touched, so keep
-// this section's own defaultOpen" from "explicitly closed" - both look like "not in the
-// set". That ambiguity used to collapse every untouched defaultOpen section the moment
-// any other section in the same scope was toggled at all (see HARD-style bug: closing
-// one Home card silently closed Quick Actions, Drives, CPU & RAM and Video too, since
-// none of those had ever been individually written to storage). Storing a boolean per
-// touched id removes the ambiguity: an id absent from the map was never touched and
-// keeps its defaultOpen.
+// Explicit per-id open/closed decisions, never mere absence: a plain set of open ids
+// can't distinguish "never touched" from "explicitly closed", which used to collapse
+// every untouched defaultOpen section the moment any sibling was toggled (HARD25-001).
+// An id absent from this map was never touched and keeps its own defaultOpen.
 const readRawEntries = (key: string): Map<string, boolean> => {
   if (typeof localStorage === "undefined") return new Map();
   const raw = localStorage.getItem(key);
