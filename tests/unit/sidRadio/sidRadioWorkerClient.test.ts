@@ -189,4 +189,40 @@ describe("SidRadioWorkerClient", () => {
     await expect(computeP).rejects.toThrow(/died mid-compute/);
     client.terminate();
   });
+
+  /**
+   * HARD25-003: terminate() used to clear the pending timers and drop the resolver
+   * references without ever calling reject(). A caller still awaiting load()/compute()
+   * at that moment (e.g. an unmounting component) would hang forever instead of seeing
+   * its promise settle.
+   */
+  it("rejects a pending load() when terminate() is called mid-flight", async () => {
+    const worker = new FakeWorker(() => null); // never answers
+    const client = new SidRadioWorkerClient(() => worker as unknown as Worker);
+    const loadP = client.load({ timeoutMs: 60_000 });
+    queueMicrotask(() => client.terminate());
+    await expect(loadP).rejects.toThrow(/terminated/);
+  });
+
+  it("rejects a pending compute() when terminate() is called mid-flight", async () => {
+    const worker = new FakeWorker((message) => {
+      if (message.type !== "load") return null; // compute never answers
+      return { type: "ready", stats: buildReadyStats(buildDefaultTinyFixture(), false) };
+    });
+    const client = new SidRadioWorkerClient(() => worker as unknown as Worker);
+    await client.load();
+    const computeP = client.compute(
+      {
+        seed: { kind: "song", md5_48: "abcdef012345" },
+        shuffleSeed: 1,
+        likes: [],
+        notForMe: [],
+        exclude: [],
+        count: 4,
+      },
+      60_000,
+    );
+    queueMicrotask(() => client.terminate());
+    await expect(computeP).rejects.toThrow(/terminated/);
+  });
 });
