@@ -78,7 +78,9 @@ describe("page-shell bounded viewport contract", () => {
   it("keeps the initial page handoff tighter than the general page rhythm", () => {
     expect(getDisplayProfileLayoutTokens("compact").pagePaddingTop).toBe("0.5rem");
     expect(getDisplayProfileLayoutTokens("medium").pagePaddingTop).toBe("0.75rem");
-    expect(getDisplayProfileLayoutTokens("expanded").pagePaddingTop).toBe("0.875rem");
+    // Retuned when the expanded root moved to 19.5px: this is a rem, so the absolute gap grew with
+    // it and crossed the 16 px ceiling `layoutOverflow.spec.ts` puts on the header-to-content gap.
+    expect(getDisplayProfileLayoutTokens("expanded").pagePaddingTop).toBe("0.8125rem");
     expect(Number.parseFloat(getDisplayProfileLayoutTokens("medium").pagePaddingTop)).toBeLessThan(
       Number.parseFloat(getDisplayProfileLayoutTokens("medium").pagePaddingY),
     );

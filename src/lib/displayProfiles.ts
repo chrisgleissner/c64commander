@@ -132,7 +132,11 @@ export const getDisplayProfileLayoutTokens = (profile: DisplayProfile) => {
         readingMaxWidth: "1080px",
         pagePaddingX: "1.5rem",
         pagePaddingY: "1.5rem",
-        pagePaddingTop: "0.875rem",
+        // 0.8125rem, not 0.875rem: this is a rem, so it grew with the root size, and
+        // 0.875 x 19.5 is 17.06 CSS px — just over the 16 px that `layoutOverflow.spec.ts`
+        // allows between the header and the first content block before it reads as a detached
+        // blank band. 0.8125 x 19.5 is 15.84 px.
+        pagePaddingTop: "0.8125rem",
         sectionGap: "1.5rem",
         panelGap: "1.25rem",
         actionGridColumns: 4,

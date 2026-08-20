@@ -52,7 +52,7 @@ describe("displayProfiles", () => {
       actionGridMinWidth: "9rem",
       pageMaxWidth: "1200px",
       isCompactDialog: false,
-      pagePaddingTop: "0.875rem",
+      pagePaddingTop: "0.8125rem",
       rootFontSize: "19.5px",
     });
   });
