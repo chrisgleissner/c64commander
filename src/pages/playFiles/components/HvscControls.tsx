@@ -118,11 +118,10 @@ export const HvscControls = ({
       scope="play"
       id="hvsc"
       title="HVSC"
-      summary={
-        hvscInstalledVersion
-          ? `Installed version ${hvscInstalledVersion}`
-          : "HVSC will be prepared automatically the first time you choose Add items -> HVSC."
-      }
+      // Short, and deliberately not the "prepared automatically the first time you choose Add
+      // items -> HVSC" sentence: the summary is rendered inside the toggle, so it becomes part of
+      // the card's accessible name, and that sentence made the header answer to "Add items".
+      summary={hvscInstalledVersion ? `Installed version ${hvscInstalledVersion}` : "Not installed yet"}
       icon={Library}
       testId="hvsc-controls"
       // Closed on a first visit. The archive is prepared automatically the first time a listener
@@ -132,7 +131,14 @@ export const HvscControls = ({
     >
       <div className="flex items-center justify-between gap-2">
         {/* The installed version is the card's summary line, so it is not repeated here. */}
-        <p className="min-w-0 text-xs text-muted-foreground">Status: {hvscPreparationStatusLabel}</p>
+        <div className="min-w-0">
+          {hvscInstalledVersion ? null : (
+            <p className="text-xs text-muted-foreground">
+              HVSC will be prepared automatically the first time you choose Add items -&gt; HVSC.
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">Status: {hvscPreparationStatusLabel}</p>
+        </div>
 
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {/* "Download" and "Ingest", not "Download HVSC" and "Ingest HVSC". The heading two
