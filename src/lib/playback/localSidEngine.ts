@@ -272,6 +272,20 @@ const nativeAudioBackend = (): NativeLocalAudioBackend | null => {
   return StreamUdp as unknown as NativeLocalAudioBackend;
 };
 
+/**
+ * A gain ramp that could not be scheduled has already been replaced by a direct assignment, so the
+ * listener still hears the right level — but the CLICK the ramp existed to avoid is now audible,
+ * and a fade that silently became a step is exactly the kind of thing that gets blamed on the SID
+ * engine. Logged at debug: it is recoverable, and on a busy AudioContext it can repeat.
+ */
+const reportGainSchedulingFailure = (operation: string, error: unknown): void => {
+  addLog("debug", "Local SID audio: gain ramp could not be scheduled, set directly instead", {
+    service: "local-sid",
+    operation,
+    error: (error as Error)?.message ?? String(error),
+  });
+};
+
 const webAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) => {
   const Ctor =
     typeof AudioContext !== "undefined"
@@ -315,7 +329,8 @@ const webAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) => {
         master.gain.cancelScheduledValues(now);
         master.gain.setValueAtTime(master.gain.value, now);
         master.gain.linearRampToValueAtTime(0.0001, now + ms / 1000);
-      } catch {
+      } catch (error) {
+        reportGainSchedulingFailure("fadeOut", error);
         master.gain.value = 0;
       }
     },
@@ -327,7 +342,8 @@ const webAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) => {
         // buffer is an audible click.
         master.gain.setValueAtTime(master.gain.value, context.currentTime);
         master.gain.linearRampToValueAtTime(clamped, context.currentTime + 0.02);
-      } catch {
+      } catch (error) {
+        reportGainSchedulingFailure("setGain", error);
         master.gain.value = clamped;
       }
     },
@@ -338,7 +354,8 @@ const webAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) => {
         master.gain.cancelScheduledValues(now);
         master.gain.setValueAtTime(0.0001, now);
         master.gain.linearRampToValueAtTime(target, now + ms / 1000);
-      } catch {
+      } catch (error) {
+        reportGainSchedulingFailure("fadeIn", error);
         master.gain.value = target;
       }
     },

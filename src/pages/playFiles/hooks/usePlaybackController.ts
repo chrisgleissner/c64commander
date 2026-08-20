@@ -848,7 +848,17 @@ export function usePlaybackController({
       // the network, and is left alone rather than fetched on a guess.
       const resolved = neighbour.request.file
         ? neighbour.request
-        : ((await resolveHvscRuntimeRequest(neighbour).catch(() => null))?.request ?? neighbour.request);
+        : ((
+            await resolveHvscRuntimeRequest(neighbour).catch((error: unknown) => {
+              // Falling back to the unresolved request is right — this is speculative warming and
+              // must never disturb what is playing — but a resolution that always fails means every
+              // skip starts cold, which is a silent, permanent loss of the feature.
+              addLog("debug", "Playback: could not resolve a neighbouring track for lead-in warming", {
+                error: (error as Error)?.message ?? String(error),
+              });
+              return null;
+            })
+          )?.request ?? neighbour.request);
       const file = resolved.file;
       if (!file) continue;
       try {

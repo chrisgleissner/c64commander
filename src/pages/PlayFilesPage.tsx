@@ -1499,7 +1499,13 @@ export default function PlayFilesPage() {
     return () => {
       cancelled = true;
       if (handle) {
-        void handle.remove();
+        // Caught, not fire-and-forget: an unhandled rejection here is reported as an app error by
+        // the global handler, and a listener that cannot be removed is worth naming on its own.
+        void handle.remove().catch((error: unknown) => {
+          addLog("debug", "Play: removing the background auto-skip listener failed", {
+            error: (error as Error)?.message ?? String(error),
+          });
+        });
       }
     };
   }, [autoAdvanceGuardRef, handleNextRef, playbackStateRef, queueBackgroundDueAtUpdateRef, syncPlaybackTimelineRef]);

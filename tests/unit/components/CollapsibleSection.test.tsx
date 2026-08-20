@@ -1,3 +1,4 @@
+import { forwardRef, useEffect } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Radio } from "lucide-react";
@@ -6,9 +7,22 @@ import { CollapsibleSection } from "@/components/CollapsibleSection";
 
 vi.mock("framer-motion", () => ({
   motion: {
-    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    // The real `motion.div` reports when its height animation settles, which is when the component
+    // scrolls a freshly-expanded section into view. The stand-in reports it on mount, which is the
+    // same moment for a non-animating test.
+    div: ({ children, onAnimationComplete, ...props }: any) => {
+      useEffect(() => {
+        onAnimationComplete?.();
+      }, [onAnimationComplete]);
+      return <div {...props}>{children}</div>;
+    },
     span: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    section: ({ children, ...props }: any) => <section {...props}>{children}</section>,
+    // forwardRef, because the component takes a ref on the section to scroll it into view.
+    section: forwardRef(({ children, ...props }: any, ref: any) => (
+      <section ref={ref} {...props}>
+        {children}
+      </section>
+    )),
   },
   AnimatePresence: ({ children }: any) => <>{children}</>,
 }));
@@ -54,6 +68,35 @@ describe("CollapsibleSection", () => {
       </CollapsibleSection>,
     );
     expect(screen.getByText("Volume and mute per chip")).toBeInTheDocument();
+  });
+
+  it("scrolls a freshly-expanded section into view without scrolling its header past the top", () => {
+    // Opening a card near the bottom of the list used to leave its body below the fold, which is
+    // worse now that one card is open at a time: the reader taps a title and sees nothing happen.
+    // `block: "nearest"` scrolls the least amount that reveals the card, and aligns the TOP when
+    // the card is taller than the scrollport — so the header of the section just opened stays put.
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      writable: true,
+      value: scrollIntoView,
+    });
+
+    render(
+      <CollapsibleSection scope="test" id="audio" title="Audio" icon={Radio}>
+        <p>Channel strip</p>
+      </CollapsibleSection>,
+    );
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("test-section-toggle-audio"));
+
+    expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: "nearest" }));
+    scrollIntoView.mockClear();
+
+    // Collapsing must not scroll: AnimatePresence reports the exit animation as complete too.
+    fireEvent.click(screen.getByTestId("test-section-toggle-audio"));
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
   it("honors defaultOpen on a first visit to a fresh scope", () => {

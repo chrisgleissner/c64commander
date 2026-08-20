@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 
@@ -123,6 +123,28 @@ export const CollapsibleSection = ({
 
   const { profile } = useDisplayProfile();
   const singleOpen = profile === "compact";
+  const sectionRef = useRef<HTMLElement | null>(null);
+
+  /**
+   * Bring a freshly-expanded section into view without pushing its own header out of it.
+   *
+   * Opening a card near the bottom of the list left its body below the fold, which matters more now
+   * that one card is open at a time: the reader taps a title and sees nothing happen. `block:
+   * "nearest"` is exactly the rule asked for — it scrolls the least amount that brings the element
+   * into view, and when the element is TALLER than the scrollport it aligns the top, so the header
+   * of the section just opened is never scrolled past. A section already fully visible is left
+   * alone.
+   *
+   * Run after the height animation settles rather than on the click, because until then the body
+   * still measures zero and the scroll would be computed against the collapsed box.
+   */
+  const revealExpanded = useCallback(() => {
+    // AnimatePresence also reports the EXIT animation as complete; collapsing must not scroll.
+    if (!open) return;
+    const element = sectionRef.current;
+    if (!element || typeof element.scrollIntoView !== "function") return;
+    element.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }, [open]);
 
   const toggle = useCallback(
     (event: MouseEvent<HTMLButtonElement>) => {
@@ -172,8 +194,12 @@ export const CollapsibleSection = ({
 
   return (
     <motion.section
+      ref={sectionRef}
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
+      // Clear the fixed guidance bar when this section is scrolled into view. The variable is 0px
+      // whenever the bar is not showing, so nothing is reserved for it then.
+      style={{ scrollMarginBottom: "var(--keypad-guidance-reserved-height, 0px)" }}
       className="overflow-hidden rounded-xl border border-border bg-card"
       data-testid={testId ?? `${scope}-section-${id}`}
       data-open={open ? "true" : "false"}
@@ -248,6 +274,7 @@ export const CollapsibleSection = ({
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
+            onAnimationComplete={revealExpanded}
           >
             <div className={cn("border-t border-border", singleOpen ? "space-y-3 px-3 py-3" : "space-y-4 px-4 py-4")}>
               {children}
