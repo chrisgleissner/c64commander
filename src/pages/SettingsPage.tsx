@@ -1184,7 +1184,11 @@ export default function SettingsPage() {
               summary="Theme, text size, orientation, full screen"
               icon={Monitor}
             >
-              <div className="grid grid-cols-3 gap-2">
+              {/* Both this group and the display-profile group below contain a button labelled
+                  "Auto", so on their own a screen reader announces "Auto, button" twice with no way
+                  to tell them apart. Naming the GROUP resolves that without renaming the buttons,
+                  whose visible labels are what everyone else reads. */}
+              <div className="grid grid-cols-3 gap-2" role="group" aria-label="Theme">
                 {themeOptions.map((option) => {
                   const Icon = option.icon;
                   const isActive = theme === option.value;
@@ -1267,7 +1271,12 @@ export default function SettingsPage() {
 
               <div className="space-y-2 rounded-lg border border-border/70 p-3">
                 <Label className="text-sm font-medium">Display profile</Label>
-                <div className="grid grid-cols-2 gap-2" data-testid="settings-display-profile-override">
+                <div
+                  className="grid grid-cols-2 gap-2"
+                  role="group"
+                  aria-label="Display profile"
+                  data-testid="settings-display-profile-override"
+                >
                   {displayProfileOptions.map((option) => {
                     const isActive = displayProfileOverride === option.value;
                     return (

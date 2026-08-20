@@ -504,6 +504,38 @@ describe("on-device playback through the native track", () => {
     expect(backend.writes.length).toBeGreaterThan(0);
   });
 
+  it("gives up when the platform never answers the open, instead of latching the pump", async () => {
+    // `openAudioTrack` is a Capacitor call, and Capacitor delivers a plugin result by evaluating
+    // JavaScript in the page — a hidden WebView suspends it indefinitely rather than failing it.
+    // `pump()` awaits this inside its `try`, so an open that never settles means the `finally` that
+    // clears `pumping` never runs and no later pump can start: silence for the rest of the session
+    // with the transport still reporting playback.
+    vi.useFakeTimers();
+    try {
+      const backend = createBackend();
+      let opens = 0;
+      backend.openAudioTrack = () => {
+        opens += 1;
+        return new Promise(() => {}); // never settles, like a suspended Capacitor bridge
+      };
+      const sink = createNativeLocalSidSink(RATE, backend);
+      scheduleChunk(sink, 1);
+
+      // Well inside the deadline: one attempt in flight, and the pump is legitimately waiting on it.
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(opens).toBe(1);
+
+      // Past the deadline the attempt is abandoned, the pump loop breaks and its `finally` releases
+      // the gate, so a later slice can start a fresh pump and try again. Without the deadline the
+      // first attempt is still pending, `pumping` never clears, and `opens` stays at 1 forever.
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(opens).toBeGreaterThan(1);
+      expect(backend.writes).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("gives up quietly when the track cannot be opened", async () => {
     const backend = createBackend();
     backend.openAudioTrack = async () => {
