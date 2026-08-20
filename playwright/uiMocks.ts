@@ -474,14 +474,12 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         // Settings-only key this one is never deleted out from under that check, so the
         // guard only fires on a page's genuine first visit to Settings.
         (() => {
-          let ids: unknown = [];
+          let storedSections: unknown = [];
           try {
-            ids = JSON.parse(localStorage.getItem("c64u_open_sections") ?? "[]");
+            storedSections = JSON.parse(localStorage.getItem("c64u_open_sections") ?? "[]");
           } catch {
-            ids = [];
+            storedSections = [];
           }
-          const existing = Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : [];
-          if (existing.some((id) => id.startsWith("settings:"))) return;
           const settingsIds = [
             "appearance",
             "connection",
@@ -496,7 +494,28 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
             "notifications",
             "about",
           ].map((id) => `settings:${id}`);
-          localStorage.setItem("c64u_open_sections", JSON.stringify([...existing, ...settingsIds]));
+          if (Array.isArray(storedSections)) {
+            const existing = storedSections.filter((id): id is string => typeof id === "string");
+            if (existing.some((id) => id.startsWith("settings:"))) return;
+            localStorage.setItem("c64u_open_sections", JSON.stringify([...existing, ...settingsIds]));
+            return;
+          }
+          if (storedSections && typeof storedSections === "object") {
+            const existing = Object.entries(storedSections).filter((entry): entry is [string, boolean] => {
+              const [id, open] = entry;
+              return typeof id === "string" && typeof open === "boolean";
+            });
+            if (existing.some(([id]) => id.startsWith("settings:"))) return;
+            localStorage.setItem(
+              "c64u_open_sections",
+              JSON.stringify({
+                ...Object.fromEntries(existing),
+                ...Object.fromEntries(settingsIds.map((id) => [id, true])),
+              }),
+            );
+            return;
+          }
+          localStorage.setItem("c64u_open_sections", JSON.stringify(settingsIds));
         })();
         if (seedFeatureFlags) {
           localStorage.setItem("c64u_dev_mode_enabled", "1");
