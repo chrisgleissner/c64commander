@@ -3032,7 +3032,7 @@ export default function PlayFilesPage() {
           ) : null}
 
           {hvscControlsEnabled && (
-            <div data-section-label="HVSC" data-testid="play-section-hvsc">
+            <div data-testid="play-section-hvsc">
               <HvscManager hvscControlsEnabled={true} hvsc={hvsc} />
             </div>
           )}

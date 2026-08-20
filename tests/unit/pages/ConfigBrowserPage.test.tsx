@@ -48,7 +48,22 @@ vi.mock("framer-motion", () => {
   }: Record<string, unknown> & { children?: ReactNode }) => <div {...rest}>{children}</div>;
   return {
     AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
-    motion: { div: Motion },
+    // Any element, not just `div`. The page renders through `CollapsibleSection`, which uses
+    // `motion.section` and `motion.span`; a mock that defines only `motion.div` hands React
+    // `undefined` for those and the whole tree fails to render.
+    // Cached per tag. A proxy that builds a new function on every access hands React a new
+    // component type on every render, so React unmounts and remounts the whole subtree each
+    // time — which silently reset state the tests depend on.
+    motion: new Proxy({} as Record<string, unknown>, {
+      get: (target, tag: string) => {
+        if (!target[tag]) {
+          target[tag] = (props: Record<string, unknown> & { children?: ReactNode }) => (
+            <Motion {...props} data-motion-tag={tag} />
+          );
+        }
+        return target[tag];
+      },
+    }),
   };
 });
 
@@ -206,6 +221,11 @@ const setupDefaultMocks = () => {
 afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
+  // The category cards render through `CollapsibleSection`, which remembers which sections a
+  // user opened in localStorage — the same behaviour the Settings cards have. Without clearing
+  // it, one test's open card is restored in the next one and the tests only pass in the order
+  // they happen to run in.
+  localStorage.clear();
 });
 
 describe("ConfigBrowserPage", () => {
@@ -504,8 +524,9 @@ describe("ConfigBrowserPage", () => {
 
     initialRender.unmount();
     renderConfigBrowserPage();
-    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
 
+    // No second click: the category cards remember which sections were opened, the same way the
+    // Settings cards do, so "Audio Mixer" is restored open on this second mount.
     expect(await screen.findByTestId("row-vol-ultisid-2")).toHaveAttribute("data-value", "0 dB");
   });
 
@@ -1173,7 +1194,9 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /general/i }));
+    // No second click: the category cards remember which sections were opened, the same way the
+    // Settings cards do, so "General" is restored open on this second mount. Clicking it here
+    // would close it again.
     expect(await screen.findByText(/no settings available/i)).toBeInTheDocument();
   });
 });

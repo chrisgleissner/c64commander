@@ -7,9 +7,9 @@
  */
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, Layers } from "lucide-react";
+import { Layers } from "lucide-react";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import type { AuthoritativeConfigValueState } from "@/hooks/useAuthoritativeConfigValueState";
 import { claimedItemsForCategory, routeAdvancedItem, type MenuHierarchy } from "@/lib/config/menuMapping";
 import { FallbackCategoryBlock } from "./FallbackCategoryBlock";
@@ -46,64 +46,35 @@ export function AdvancedFallbackSection({
   const sectionId = "config-advanced-fallback-body";
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-card border border-border rounded-xl overflow-hidden"
-      data-testid="config-advanced-fallback"
+    <CollapsibleSection
+      scope="config"
+      id="advanced-fallback"
+      title="Advanced (REST-only) settings"
+      summary="Everything not on a menu page"
+      icon={Layers}
+      testId="config-advanced-fallback"
+      toggleTestId="config-advanced-fallback-toggle"
+      bodyId={sectionId}
+      onOpenChange={setIsOpen}
+      onToggleClick={wrapUserEvent(
+        () => undefined,
+        "toggle",
+        "ConfigSection",
+        { title: "Advanced (REST-only) settings" },
+        "ConfigHeader",
+      )}
     >
-      <button
-        onClick={wrapUserEvent(
-          () => setIsOpen((open) => !open),
-          "toggle",
-          "ConfigSection",
-          { title: "Advanced (REST-only) settings" },
-          "ConfigHeader",
-        )}
-        className="w-full flex items-center justify-between px-4 py-3 text-left"
-        data-testid="config-advanced-fallback-toggle"
-        aria-expanded={isOpen}
-        aria-controls={sectionId}
-      >
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-muted">
-            <Layers className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <div className="flex flex-col">
-            <span className="font-medium text-sm">Advanced (REST-only) settings</span>
-            <span className="text-xs text-muted-foreground">Everything not on a menu page</span>
-          </div>
-        </div>
-        <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-          <ChevronDown className="h-5 w-5 text-muted-foreground" />
-        </motion.div>
-      </button>
-
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            id={sectionId}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <div className="border-t border-border px-4 pt-2 pb-3">
-              {categories.map((category) => (
-                <FallbackCategoryBlock
-                  key={category}
-                  category={category}
-                  claimed={claimedItemsForCategory(hierarchy, category)}
-                  accept={(item) => routeAdvancedItem(hierarchy, family, category, item) === null}
-                  active={isOpen}
-                  authoritativeValues={authoritativeValues}
-                  writeLeaf={writeLeaf}
-                />
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+      {categories.map((category) => (
+        <FallbackCategoryBlock
+          key={category}
+          category={category}
+          claimed={claimedItemsForCategory(hierarchy, category)}
+          accept={(item) => routeAdvancedItem(hierarchy, family, category, item) === null}
+          active={isOpen}
+          authoritativeValues={authoritativeValues}
+          writeLeaf={writeLeaf}
+        />
+      ))}
+    </CollapsibleSection>
   );
 }

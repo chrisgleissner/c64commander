@@ -40,7 +40,16 @@ const STAT_FIELDS: ReadonlyArray<{ label: string; key: keyof AvSyncStats; testid
 ];
 
 /** A collapsible section with a header (icon + title + summary) and a toggle chevron. */
-function CollapsibleSection({
+/*
+ * A disclosure nested INSIDE the Live View card, not one of the page-level cards. Those all render
+ * through `@/components/CollapsibleSection`, which draws a bordered card with an icon tile and the
+ * page's card padding — chrome that reads as a top-level card and is wrong one level down. This
+ * keeps the flatter nested treatment and the canonical component's 44px touch floor.
+ *
+ * Named for what it is: an earlier version of this function was also called `CollapsibleSection`,
+ * which shadowed the real component's name in this file.
+ */
+function NestedDisclosure({
   icon,
   title,
   summary,
@@ -60,7 +69,7 @@ function CollapsibleSection({
     <div className={cn("rounded-lg border border-border p-3", className)} data-testid={`${testid}-section`}>
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-2 text-left"
+        className="flex min-h-11 w-full items-center justify-between gap-2 text-left"
         aria-expanded={expanded}
         onClick={() => setExpanded((value) => !value)}
         data-testid={`${testid}-toggle`}
@@ -122,7 +131,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
 
   return (
     <div className={cn("space-y-3", className)} data-testid="av-sync-panel">
-      <CollapsibleSection
+      <NestedDisclosure
         testid="av-sync"
         icon={<Activity className="h-4 w-4 text-muted-foreground" aria-hidden />}
         title="A/V sync"
@@ -175,9 +184,9 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
             Positive means audio lags the picture. Tap <strong>Run test</strong> with Listen and Watch both on.
           </p>
         )}
-      </CollapsibleSection>
+      </NestedDisclosure>
 
-      <CollapsibleSection
+      <NestedDisclosure
         testid="av-sync-lat"
         icon={<Keyboard className="h-4 w-4 text-muted-foreground" aria-hidden />}
         title="Tap latency"
@@ -237,9 +246,9 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
             latency and the pop&apos;s audio↔video offset right away.
           </p>
         )}
-      </CollapsibleSection>
+      </NestedDisclosure>
 
-      <CollapsibleSection
+      <NestedDisclosure
         testid="av-tone-ladder"
         icon={<Music className="h-4 w-4 text-muted-foreground" aria-hidden />}
         title="Tone & color ladder"
@@ -397,7 +406,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
             and Watch both on.
           </p>
         )}
-      </CollapsibleSection>
+      </NestedDisclosure>
     </div>
   );
 }

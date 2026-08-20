@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode, type Ref } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 
@@ -39,6 +39,9 @@ export interface CollapsibleSectionProps {
   defaultOpen?: boolean;
   /** Shown beside the title - a count, a state, or a warning that must be visible while closed. */
   badge?: ReactNode;
+  /** Forwarded to the toggle button, for a caller that registers the header with the keypad
+   * focus engine (`useFocusItem`). */
+  headerRef?: Ref<HTMLButtonElement>;
   /** Rendered beside the toggle, outside it (e.g. a "Reset" button) - stays reachable
    * without opening the section, matching what these sections did before they were
    * collapsible. */
@@ -53,6 +56,12 @@ export interface CollapsibleSectionProps {
   /** `data-section-label` on the root, read by the screenshot catalog and the keypad
    * focus engine's "innermost wins" section grouping. Defaults to `title`. */
   sectionLabel?: string;
+  /** Fires whenever the open state changes, including the restore from persisted state on
+   * mount and a close forced by the compact profile's one-open-at-a-time rule. Use this,
+   * not `onToggle`, for a caller that mirrors the open state (e.g. to gate a lazy fetch on
+   * it): `onToggle` only covers the user's own clicks, so a card restored open would leave
+   * the mirror reading closed. */
+  onOpenChange?: (open: boolean) => void;
   /** Fires after every toggle, with the new open state - for callers that need their
    * own side effect (analytics, focus movement) beyond the persisted memory this
    * component already keeps on its own. */
@@ -83,16 +92,28 @@ export const CollapsibleSection = ({
   icon: Icon,
   defaultOpen = false,
   badge,
+  headerRef,
   actions,
   testId,
   toggleTestId,
   bodyId,
   sectionLabel,
+  onOpenChange,
   onToggle,
   onToggleClick,
   children,
 }: CollapsibleSectionProps) => {
-  const [open, setOpen] = useState(defaultOpen);
+  // Read once, during the first render, not from an effect. From an effect the card renders
+  // closed and then opens on the next commit, and a caller mirroring the open state (see
+  // `onOpenChange`) sees a false "closed" in between — the Config page's Audio Mixer card treats
+  // exactly that as "the card was closed" and undoes an active Solo.
+  const [open, setOpen] = useState(() => {
+    // Only override `defaultOpen` if THIS id was explicitly toggled before. An id the user never
+    // touched keeps its own default regardless of what else in the scope was opened or closed
+    // (see the store's own comment).
+    const stored = readSectionStates(scope);
+    return stored.has(id) ? (stored.get(id) ?? defaultOpen) : defaultOpen;
+  });
   const [showSummary, setShowSummary] = useState(loadShowSectionDescriptions);
 
   // Off by default, and the setting is read here rather than threaded through every call site
@@ -112,14 +133,6 @@ export const CollapsibleSection = ({
     window.addEventListener("c64u-app-settings-updated", apply);
     return () => window.removeEventListener("c64u-app-settings-updated", apply);
   }, []);
-
-  useEffect(() => {
-    // Only override the initial `defaultOpen` state if THIS id was explicitly toggled
-    // before. An id the user never touched must keep its own default regardless of
-    // what else in the scope has been opened or closed (see the store's own comment).
-    const stored = readSectionStates(scope);
-    if (stored.has(id)) setOpen(stored.get(id) ?? defaultOpen);
-  }, [scope, id, defaultOpen]);
 
   const { profile } = useDisplayProfile();
   const singleOpen = profile === "compact";
@@ -199,6 +212,14 @@ export const CollapsibleSection = ({
     return () => window.removeEventListener(SECTION_OPENED_EVENT, onOther);
   }, [singleOpen, scope, id]);
 
+  // Mirrors `open` out to a caller that needs it, from an effect so every path that changes
+  // it is covered — the user's click, the restore on mount, and the accordion close.
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
+  useEffect(() => {
+    onOpenChangeRef.current?.(open);
+  }, [open]);
+
   const resolvedToggleTestId = toggleTestId ?? `${scope}-section-toggle-${id}`;
   const resolvedBodyId = bodyId ?? `${scope}-section-body-${id}`;
 
@@ -215,12 +236,13 @@ export const CollapsibleSection = ({
       data-open={open ? "true" : "false"}
       data-section-label={sectionLabel ?? title}
     >
-      <div className="flex items-center gap-2 pr-2">
+      <div className="flex items-center gap-3 pr-2">
         {/* The clickable toggle stops at the chevron; `actions` sits as a sibling rather
             than inside this button, because an interactive control (e.g. a Reset button)
             cannot nest inside another button without breaking the DOM and the a11y tree. */}
         <button
           type="button"
+          ref={headerRef}
           onClick={toggle}
           className={cn(
             "flex min-w-0 flex-1 items-center justify-between text-left",
@@ -290,11 +312,37 @@ export const CollapsibleSection = ({
               ) : null}
             </span>
           </span>
-          <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }} aria-hidden>
+        </button>
+        {actions}
+        {/*
+          Fixed order across every card: title, then any actions, then the chevron hard against the
+          right edge. The chevron used to sit inside the toggle button, which put `actions` to its
+          RIGHT and moved the chevron's horizontal position from card to card depending on whether
+          that card had an action. A control that moves is a control you have to look for, and on a
+          card with a destructive action (Home's "Reset" on Drives) the two ended up adjacent.
+          `gap-3` keeps a deliberate separation between the action and the chevron.
+
+          The chevron is its own button so it can sit outside the toggle — an interactive control
+          cannot nest inside another button. It is kept out of the accessibility tree and out of the
+          tab order, so it adds no second "expand" node for a screen reader or the keypad ring: it
+          is a second touch target for the same action the header row already exposes.
+        */}
+        <button
+          type="button"
+          onClick={toggle}
+          tabIndex={-1}
+          aria-hidden="true"
+          className="flex h-11 w-8 shrink-0 items-center justify-center"
+          // Deliberately NOT prefixed with the toggle's testid: callers select every header on a
+          // page with a prefix match (`^home-section-toggle-`), and a chevron caught by that
+          // selector is clicked as if it were another header — which closes the card the real
+          // header just opened.
+          data-testid={`${scope}-section-chevron-${id}`}
+        >
+          <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
             <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
           </motion.span>
         </button>
-        {actions}
       </div>
 
       <AnimatePresence initial={false}>

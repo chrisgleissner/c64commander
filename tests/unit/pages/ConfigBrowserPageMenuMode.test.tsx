@@ -38,7 +38,18 @@ vi.mock("framer-motion", () => {
     whileHover: _wh,
     ...rest
   }: Record<string, unknown> & { children?: ReactNode }) => <div {...rest}>{children}</div>;
-  return { AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>, motion: { div: Motion } };
+  return {
+    AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
+    // Any element, not just `div` — the page renders through `CollapsibleSection`, which uses
+    // `motion.section` and `motion.span`. Cached per tag: a proxy that builds a new function on
+    // every access hands React a new component type each render, remounting the whole subtree.
+    motion: new Proxy({} as Record<string, unknown>, {
+      get: (target, tag: string) => {
+        target[tag] ??= (props: Record<string, unknown> & { children?: ReactNode }) => <Motion {...props} />;
+        return target[tag];
+      },
+    }),
+  };
 });
 
 vi.mock("@/components/ThemeProvider", () => ({ useThemeContext: () => ({ theme: "light", setTheme: vi.fn() }) }));
@@ -127,6 +138,10 @@ const renderPage = () => {
 beforeEach(() => {
   mockSetConfig.mockReset();
   mockSetConfig.mockResolvedValue({});
+  // The menu pages render through `CollapsibleSection`, which remembers which sections a user
+  // opened — the same behaviour the Settings cards have. Without clearing it, one test's open
+  // page is restored in the next one, whose click then closes it.
+  localStorage.clear();
 });
 
 describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {

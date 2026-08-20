@@ -8,6 +8,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
+import { Library } from "lucide-react";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { Button } from "@/components/ui/button";
 import type { HvscPreparationPhase, HvscPreparationState } from "@/lib/hvsc";
 import type { HvscStageId } from "@/lib/hvsc/hvscStageModel";
@@ -112,23 +114,27 @@ export const HvscControls = ({
   const canIngest = hvscAvailable && hvscCanIngest && !hvscUpdating;
 
   return (
-    <div
-      id="hvsc-controls"
-      className="bg-card border border-border rounded-xl p-4 space-y-4"
-      data-testid="hvsc-controls"
+    <CollapsibleSection
+      scope="play"
+      id="hvsc"
+      title="HVSC"
+      summary={
+        hvscInstalledVersion
+          ? `Installed version ${hvscInstalledVersion}`
+          : "HVSC will be prepared automatically the first time you choose Add items -> HVSC."
+      }
+      icon={Library}
+      testId="hvsc-controls"
+      // Closed on a first visit. The archive is prepared automatically the first time a listener
+      // picks HVSC, so this card is a maintenance panel — a download, an ingest and a reindex —
+      // that most visits to the Play page have no reason to open.
+      defaultOpen={false}
     >
       <div className="flex items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-medium">HVSC</p>
-          <p className="text-xs text-muted-foreground">
-            {hvscInstalledVersion
-              ? `Installed version ${hvscInstalledVersion}`
-              : "HVSC will be prepared automatically the first time you choose Add items -> HVSC."}
-          </p>
-          <p className="text-xs text-muted-foreground">Status: {hvscPreparationStatusLabel}</p>
-        </div>
+        {/* The installed version is the card's summary line, so it is not repeated here. */}
+        <p className="min-w-0 text-xs text-muted-foreground">Status: {hvscPreparationStatusLabel}</p>
 
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {/* "Download" and "Ingest", not "Download HVSC" and "Ingest HVSC". The heading two
               lines above says HVSC and nothing else in this block does anything else, so the
               repeat bought nothing and cost the width: on a 320px screen "Download HVSC" ran
@@ -243,6 +249,6 @@ export const HvscControls = ({
           </div>
         </div>
       ) : null}
-    </div>
+    </CollapsibleSection>
   );
 };
