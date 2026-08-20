@@ -726,11 +726,20 @@ button:focus-visible,
   }
 
   @media (max-width: 380px) {
+    /* Absolute, not rem, throughout this block. It exists for the case where a reader has forced a
+       LARGER profile onto a 320px screen: every rem value here would scale with that profile's
+       bigger root and make the bar wider still, which is the opposite of what the case needs.
+       `min-w-11` at a 19.5px root is 53.6px, and six of those is 322px against a 320px screen — so
+       the last tab was drawn past the edge. 44px is the touch floor and 264px of tabs fits. */
+    .tab-item {
+      min-width: 44px;
+      gap: 2px;
+      padding-left: 2px;
+      padding-right: 2px;
+    }
+
     .tab-item-label {
-      /* Absolute, not rem. This rule exists for the case where a reader has forced a LARGER profile
-         onto a 320px screen, and a rem value would scale with that profile's bigger root and make
-         the labels wider still — the opposite of what is needed. 14px is the readability floor, so
-         this is as small as a tab label is ever allowed to be. */
+      /* 14px is the readability floor, so this is as small as a tab label is ever allowed to be. */
       font-size: 14px;
     }
   }
@@ -861,29 +870,6 @@ button:focus-visible,
   .app-chrome-badge:focus-visible .app-chrome-badge-surface {
     background-color: hsl(var(--app-chrome-badge-surface-hover));
     border-color: hsl(var(--primary) / 0.45);
-  }
-
-  /*
-   * A touch target larger than the box that draws it.
-   *
-   * The compact header is a 28 px strip, and the badge inside it used to carry `min-h-[44px]` for
-   * the touch floor — which set the height of the whole header. The pseudo-element extends the
-   * pressable area to 44 px without contributing to layout, so the strip stays 28 px and a finger
-   * still gets its 44 px. The Callback 8020 has no touchscreen at all and reaches this through the
-   * focus ring; this is for the small touch phones that also resolve to compact.
-   */
-  .app-chrome-badge-hit-expand {
-    position: relative;
-  }
-
-  .app-chrome-badge-hit-expand::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 0;
-    right: 0;
-    height: 44px;
-    transform: translateY(-50%);
   }
 
   .app-chrome-badge:active .app-chrome-badge-surface {

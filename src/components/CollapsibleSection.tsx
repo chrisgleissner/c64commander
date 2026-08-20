@@ -217,7 +217,10 @@ export const CollapsibleSection = ({
             // Compact trims the header's own padding and gaps. Tuned for a 393 px screen, the
             // original px-4/py-3/gap-3 spent about 12 CSS px per card that a 320x427 screen with
             // 218 px of scrollable height cannot spare — roughly one extra card on screen.
-            singleOpen ? "gap-2 px-3 py-1.5" : "gap-3 px-4 py-3",
+            // min-h-11 is the 44px touch floor. The compact profile trims padding and drops the icon
+            // tile, but it must not take the row below the floor: the target handset's touchscreen
+            // is off by default, not absent, and this app also runs on small touch phones.
+            singleOpen ? "min-h-11 gap-2 px-3 py-1.5" : "gap-3 px-4 py-3",
           )}
           // The accessibility tree exposes the HTML id, not data-testid, so this is what
           // makes the header addressable from outside the browser.
