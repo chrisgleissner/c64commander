@@ -38,14 +38,14 @@ describe("displayProfiles", () => {
       pagePaddingX: "0.5rem",
       pagePaddingY: "0.5rem",
       pagePaddingTop: "0.5rem",
-      rootFontSize: "18px",
+      rootFontSize: "16px",
     });
     expect(getDisplayProfileLayoutTokens("medium")).toMatchObject({
       pageMaxWidth: "960px",
       actionGridMinWidth: "0px",
       isCompactDialog: false,
       pagePaddingTop: "0.75rem",
-      rootFontSize: "19.2px",
+      rootFontSize: "17px",
     });
     expect(getDisplayProfileLayoutTokens("expanded")).toMatchObject({
       actionGridColumns: 4,
@@ -53,7 +53,7 @@ describe("displayProfiles", () => {
       pageMaxWidth: "1200px",
       isCompactDialog: false,
       pagePaddingTop: "0.875rem",
-      rootFontSize: "21px",
+      rootFontSize: "19.5px",
     });
   });
 });

@@ -15,6 +15,7 @@ import { AvMirrorControls } from "./AvMirrorControls";
 import { AvMirrorPreview } from "./AvMirrorPreview";
 import { AvSyncPanel } from "./AvSyncPanel";
 import { StreamStatsPanel } from "./StreamStatsPanel";
+import { HelperText } from "@/components/ui/HelperText";
 
 export interface LiveViewCardProps {
   audioEnabled?: boolean;
@@ -75,9 +76,9 @@ export function LiveViewCard({
 
       {showPreview && showAvSyncTests && <AvSyncPanel className="mt-3" />}
 
-      <p className="mt-2 text-xs text-muted-foreground">
+      <HelperText className="mt-2">
         Hear{videoEnabled ? " and see" : ""} the running machine. Open Remote Input for the full zoomable screen.
-      </p>
+      </HelperText>
     </div>
   );
 }

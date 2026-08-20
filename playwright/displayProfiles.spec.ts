@@ -349,7 +349,12 @@ test.describe("display profiles", () => {
 
     expect(compactSizing.paddingTop).toBeLessThanOrEqual(compactSizing.paddingLeft);
     expect(compactSizing.headerClasses.includes("pt-safe")).toBe(false);
-    expect(compactSizing.bodyFontSize).toBeGreaterThan(mediumSizing.bodyFontSize * 1.25);
+    // Compact used to carry LARGER body text than medium, which was the wrong way round: the two
+    // profiles have almost identical physical pixels, so the phone with more room to spend was the
+    // harder one to read. Root sizes are now derived per profile from real display geometry
+    // (`displayProfiles.ts`), and what has to hold is that compact clears the body-text floor — not
+    // that it beats medium. `tests/unit/lib/displayProfiles.test.ts` asserts the legibility rule.
+    expect(compactSizing.bodyFontSize).toBeGreaterThanOrEqual(16);
     expect(Math.abs(compactSizing.headerFontSize - mediumSizing.headerFontSize)).toBeLessThan(0.1);
   });
 

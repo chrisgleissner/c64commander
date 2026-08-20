@@ -44,9 +44,14 @@ export const DISPLAY_PROFILE_OVERRIDE_LABELS: Record<DisplayProfileOverride, str
  *
  * | profile  | reference hardware                   | ppi | mm/CSS px | distance | root    | angle |
  * |----------|--------------------------------------|-----|-----------|----------|---------|-------|
- * | compact  | 3.25in 480x640 handset, DPR 1.5      | 246 | 0.1548    | 300 mm   | 18px    | 22.7' |
- * | medium   | 5.7in 1080x2280 phone, DPR 2.75      | 443 | 0.1578    | 300 mm   | 19.2px  | 24.7' |
- * | expanded | 10.1in 1200x1920 tablet, DPR 1.5     | 224 | 0.1700    | 400 mm   | 21px    | 21.8' |
+ * | compact  | 3.25in 480x640 handset, DPR 1.5      | 246 | 0.1548    | 300 mm   | 16px    | 20.2' |
+ * | medium   | 5.7in 1080x2280 phone, DPR 2.75      | 443 | 0.1578    | 300 mm   | 17px    | 21.8' |
+ * | expanded | 10.1in 1200x1920 tablet, DPR 1.5     | 224 | 0.1700    | 400 mm   | 19.5px  | 20.2' |
+ *
+ * These sit just above the 20-arcminute comfortable floor rather than comfortably inside it, which
+ * is a deliberate trade for screen space on the smallest profile. They cannot go lower without
+ * breaching the repository's own 16 px minimum for body text (`AGENTS.md`, "Reach and readability
+ * are requirements"), which is what stops the compact root going below 16px.
  *
  * Medium was 16px — 20.5 arcminutes, right on the comfortable floor, and smaller than compact
  * despite the two having almost identical physical pixels. Expanded was the worst at 18.1', below
@@ -102,14 +107,17 @@ export const getDisplayProfileLayoutTokens = (profile: DisplayProfile) => {
   switch (profile) {
     case "compact":
       return {
-        rootFontSize: "18px",
+        rootFontSize: "16px",
         pageMaxWidth: "100%",
         readingMaxWidth: "100%",
         pagePaddingX: "0.5rem",
         pagePaddingY: "0.5rem",
         pagePaddingTop: "0.5rem",
-        sectionGap: "1rem",
-        panelGap: "0.875rem",
+        // 12 gaps between 13 cards is 192 CSS px of the 332 the smallest screen has for content —
+        // more than half of it spent on nothing. Halved here; the cards have their own borders, so
+        // they stay distinct without it.
+        sectionGap: "0.5rem",
+        panelGap: "0.625rem",
         actionGridColumns: 2,
         actionGridMinWidth: "0px",
         actionGridGap: "0.625rem",
@@ -119,7 +127,7 @@ export const getDisplayProfileLayoutTokens = (profile: DisplayProfile) => {
       };
     case "expanded":
       return {
-        rootFontSize: "21px",
+        rootFontSize: "19.5px",
         pageMaxWidth: "1200px",
         readingMaxWidth: "1080px",
         pagePaddingX: "1.5rem",
@@ -136,7 +144,7 @@ export const getDisplayProfileLayoutTokens = (profile: DisplayProfile) => {
       };
     default:
       return {
-        rootFontSize: "19.2px",
+        rootFontSize: "17px",
         pageMaxWidth: "960px",
         readingMaxWidth: "960px",
         pagePaddingX: "1rem",

@@ -729,6 +729,39 @@ test.describe("Home interactions", () => {
     // The compact profile keeps ONE card open at a time, so each section's stacking is checked while
     // that section is the open one. Opening them all first and measuring afterwards would only ever
     // see the last one.
+    // Both rows are measured in ONE evaluate, and in document coordinates.
+    // `boundingBox()` is viewport-relative, so scrolling the second element into view between the
+    // two reads makes the comparison meaningless: the first box was captured at a different scroll
+    // offset. That produced a failure showing B "above" A while the screenshots showed them
+    // correctly stacked.
+    const stackedPair = async (firstId: string, secondId: string) => {
+      for (const id of [firstId, secondId]) {
+        const locator = page.getByTestId(id);
+        await locator.scrollIntoViewIfNeeded();
+        await expect(locator).toBeVisible();
+      }
+      return page.evaluate(
+        ([a, b]) => {
+          const documentTop = (element: Element) => {
+            let top = element.getBoundingClientRect().top;
+            for (let node = element.parentElement; node; node = node.parentElement) top += node.scrollTop;
+            return top;
+          };
+          const first = document.querySelector(`[data-testid="${a}"]`) as HTMLElement | null;
+          const second = document.querySelector(`[data-testid="${b}"]`) as HTMLElement | null;
+          if (!first || !second) return null;
+          return {
+            firstTop: documentTop(first),
+            firstHeight: first.getBoundingClientRect().height,
+            secondTop: documentTop(second),
+            firstWidth: first.getBoundingClientRect().width,
+            secondWidth: second.getBoundingClientRect().width,
+          };
+        },
+        [firstId, secondId] as const,
+      );
+    };
+
     const boxOf = async (testId: string) => {
       const locator = page.getByTestId(testId);
       await locator.scrollIntoViewIfNeeded();
@@ -738,21 +771,24 @@ test.describe("Home interactions", () => {
       return box!;
     };
 
+    const expectStacked = async (firstId: string, secondId: string) => {
+      const pair = await stackedPair(firstId, secondId);
+      expect(pair).not.toBeNull();
+      expect(pair!.secondTop).toBeGreaterThanOrEqual(pair!.firstTop + pair!.firstHeight - 1);
+      return pair!;
+    };
+
     await openHomeSection(page, "drives");
-    const driveABox = await boxOf("home-drive-row-a");
-    const driveBBox = await boxOf("home-drive-row-b");
-    expect(driveBBox.y).toBeGreaterThanOrEqual(driveABox.y + driveABox.height - 1);
+    await expectStacked("home-drive-row-a", "home-drive-row-b");
 
     await openHomeSection(page, "printers");
-    const printerToggleBox = await boxOf("home-printer-toggle");
-    const printerBusBox = await boxOf("home-printer-bus");
-    expect(printerBusBox.y).toBeGreaterThanOrEqual(printerToggleBox.y + printerToggleBox.height - 1);
+    await expectStacked("home-printer-toggle", "home-printer-bus");
 
     await openHomeSection(page, "audio");
+    await expectStacked("home-sid-volume-socket1", "home-sid-pan-socket1");
     const sidEntryBox = await boxOf("home-sid-entry-socket1");
     const sidVolumeBox = await boxOf("home-sid-volume-socket1");
     const sidPanBox = await boxOf("home-sid-pan-socket1");
-    expect(sidPanBox.y).toBeGreaterThanOrEqual(sidVolumeBox.y + sidVolumeBox.height - 1);
     expect(sidVolumeBox.width).toBeGreaterThan(sidEntryBox.width * 0.55);
     expect(sidPanBox.width).toBeGreaterThan(sidEntryBox.width * 0.55);
   });

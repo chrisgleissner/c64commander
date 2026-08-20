@@ -134,6 +134,7 @@ import {
 import { deriveDeviceCapabilities, detectStreamingFromConfig } from "@/lib/deviceCapabilities";
 import { STREAM_ITEMS } from "@/lib/config/homeStreams";
 import { INLINE_SUMMARY_CONTROL_CLASS } from "@/pages/home/inlineControlStyles";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 
 // HARD18-012b: the Ultimate's entire network stack is down for the whole
 // boot duration after a real power cycle - long enough that, unsuppressed,
@@ -151,6 +152,8 @@ export default function HomePage() {
 }
 
 function HomePageContent() {
+  const { profile } = useDisplayProfile();
+  const isCompactProfile = profile === "compact";
   const { status } = useC64Connection();
   const isActive = status.isConnected;
   const [keyboardLightingRequested, setKeyboardLightingRequested] = useState(true);
@@ -1239,7 +1242,10 @@ function HomePageContent() {
       />
 
       <PageContainer>
-        <PageStack className="gap-4">
+        {/* No gap override on the smallest screen: the profile token is halved there, and a fixed
+            gap-4 spent 16 CSS px between each of thirteen cards — 192 px of a 332 px content area
+            on nothing. */}
+        <PageStack className={isCompactProfile ? undefined : "gap-4"}>
           {/* System Info */}
           <SystemInfo />
 

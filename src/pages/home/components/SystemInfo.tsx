@@ -30,7 +30,7 @@ export function SystemInfo() {
       animate={{ opacity: 1, y: 0 }}
       type="button"
       onClick={() => setExpanded((prev) => !prev)}
-      className="w-full text-left px-2 py-2"
+      className={cn("w-full text-left px-2", profile === "compact" ? "py-1" : "py-2")}
       aria-expanded={expanded}
       data-testid="home-system-info"
       data-section-label="System info"
@@ -45,7 +45,9 @@ export function SystemInfo() {
       <div
         className={cn(
           "gap-x-4 text-sm",
-          profile === "compact" ? "grid grid-cols-1 gap-y-0.5" : "flex flex-wrap items-center gap-y-1",
+          // Tight leading on the smallest screen: three rows at the default 1.55 leading took 94 CSS
+          // px of a 332 px content area to say three short things.
+          profile === "compact" ? "grid grid-cols-1 gap-y-0 leading-tight" : "flex flex-wrap items-center gap-y-1",
         )}
       >
         <span className="flex min-w-0 items-baseline gap-1.5">
