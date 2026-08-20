@@ -725,25 +725,6 @@ button:focus-visible,
     font-size: 0.9rem;
   }
 
-  @media (max-width: 380px) {
-    /* Absolute, not rem, throughout this block. It exists for the case where a reader has forced a
-       LARGER profile onto a 320px screen: every rem value here would scale with that profile's
-       bigger root and make the bar wider still, which is the opposite of what the case needs.
-       `min-w-11` at a 19.5px root is 53.6px, and six of those is 322px against a 320px screen — so
-       the last tab was drawn past the edge. 44px is the touch floor and 264px of tabs fits. */
-    .tab-item {
-      min-width: 44px;
-      gap: 2px;
-      padding-left: 2px;
-      padding-right: 2px;
-    }
-
-    .tab-item-label {
-      /* 14px is the readability floor, so this is as small as a tab label is ever allowed to be. */
-      font-size: 14px;
-    }
-  }
-
   :root[data-display-profile="compact"] :where([class~="text-sm"]) {
     font-size: 1.125rem;
     line-height: 1.55rem;
@@ -986,6 +967,28 @@ button:focus-visible,
   .tab-item {
     @apply flex min-w-11 shrink-0 flex-col items-center gap-0.5 px-0.5 py-0.5
            text-muted-foreground transition-colors;
+  }
+
+  /* Declared in @layer components, next to `.tab-item` itself. An earlier attempt put this in
+     @layer base, where it never applied: layer order beats source order, so the components-layer
+     `.tab-item` won every time and the bar kept overflowing. */
+  @media (max-width: 380px) {
+    /* Absolute, not rem, throughout this block. It exists for the case where a reader has forced a
+       LARGER profile onto a 320px screen: every rem value here would scale with that profile's
+       bigger root and make the bar wider still, which is the opposite of what the case needs.
+       `min-w-11` at a 19.5px root is 53.6px, and six of those is 322px against a 320px screen — so
+       the last tab was drawn past the edge. 44px is the touch floor and 264px of tabs fits. */
+    .tab-item {
+      min-width: 44px;
+      gap: 2px;
+      padding-left: 2px;
+      padding-right: 2px;
+    }
+
+    .tab-item-label {
+      /* 14px is the readability floor, so this is as small as a tab label is ever allowed to be. */
+      font-size: 14px;
+    }
   }
 
   /* The label stays on one line.

@@ -103,6 +103,27 @@ describe("CollapsibleSection", () => {
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
+  it("does not scroll the page when a defaultOpen card simply mounts", () => {
+    // A defaultOpen card reports its open animation complete on MOUNT. Scrolling then moves the
+    // page the moment it loads, before the reader has done anything — measured in a layout spec as
+    // the first content block sitting 201 px above the header's bottom.
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      writable: true,
+      value: scrollIntoView,
+    });
+
+    render(
+      <CollapsibleSection scope="test" id="drives" title="Drives" icon={Radio} defaultOpen>
+        <p>Drive A</p>
+      </CollapsibleSection>,
+    );
+
+    expect(screen.getByText("Drive A")).toBeInTheDocument();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
   it("honors defaultOpen on a first visit to a fresh scope", () => {
     render(
       <CollapsibleSection scope="test" id="drives" title="Drives" icon={Radio} defaultOpen>

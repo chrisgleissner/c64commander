@@ -124,6 +124,8 @@ export const CollapsibleSection = ({
   const { profile } = useDisplayProfile();
   const singleOpen = profile === "compact";
   const sectionRef = useRef<HTMLElement | null>(null);
+  /** True only between a user opening this card and the reveal that follows it. */
+  const openedByUserRef = useRef(false);
 
   /**
    * Bring a freshly-expanded section into view without pushing its own header out of it.
@@ -141,6 +143,11 @@ export const CollapsibleSection = ({
   const revealExpanded = useCallback(() => {
     // AnimatePresence also reports the EXIT animation as complete; collapsing must not scroll.
     if (!open) return;
+    // Only an explicit toggle scrolls. A `defaultOpen` card reports its open animation complete on
+    // MOUNT, so without this the page scrolled itself down the moment it loaded — measured as the
+    // first content block sitting 201 px above the header's bottom.
+    if (!openedByUserRef.current) return;
+    openedByUserRef.current = false;
     const element = sectionRef.current;
     if (!element || typeof element.scrollIntoView !== "function") return;
     element.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
@@ -152,7 +159,10 @@ export const CollapsibleSection = ({
       setOpen((current) => {
         const next = !current;
         writeSectionState(scope, id, next);
-        if (next) announceSectionOpened(scope, id);
+        if (next) {
+          openedByUserRef.current = true;
+          announceSectionOpened(scope, id);
+        }
         onToggle?.(next);
         return next;
       });
