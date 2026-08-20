@@ -711,12 +711,27 @@ test.describe("HVSC Play page", () => {
     );
   };
 
+  /**
+   * Opens the HVSC card.
+   *
+   * It is closed on a first visit — it is a maintenance panel (download, ingest, reindex) and the
+   * archive is prepared automatically the first time a listener picks HVSC — so every test that
+   * drives its controls has to open it. Safe to call when it is already open.
+   */
+  const openHvscCard = async (page: Page) => {
+    const toggle = page.getByTestId("play-section-toggle-hvsc");
+    await expect(toggle).toBeVisible();
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  };
+
   test("HVSC not installed -> install -> ready", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, { installedVersion: 0, installDelayMs: 4000 });
     await page.route("**/v1/runners:sidplay**", (route: Route) =>
       route.fulfill({ status: 200, body: JSON.stringify({ errors: [] }) }),
     );
     await page.goto("/play");
+    await openHvscCard(page);
     await snap(page, testInfo, "play-open");
     await page.getByRole("button", { name: "Download HVSC" }).click();
     await expect(page.getByTestId("hvsc-summary")).toContainText("HVSC ready");
@@ -730,6 +745,7 @@ test.describe("HVSC Play page", () => {
   test("HVSC install shows progress updates", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, { installedVersion: 0 });
     await page.goto("/play");
+    await openHvscCard(page);
     await snap(page, testInfo, "play-open");
     await page.getByRole("button", { name: "Download HVSC" }).click();
     const hvscDialog = await openHvscSourceBrowser(page);
@@ -744,6 +760,8 @@ test.describe("HVSC Play page", () => {
     await installMocks(page, { installedVersion: 0 });
 
     await page.goto("/play");
+
+    await openHvscCard(page);
     await snap(page, testInfo, "hvsc-runtime-open");
 
     await page.getByRole("button", { name: "Download HVSC" }).click();
@@ -768,6 +786,7 @@ test.describe("HVSC Play page", () => {
       seedInProgressSummary: true,
     });
     await page.goto("/play");
+    await openHvscCard(page);
     await snap(page, testInfo, "play-open");
     await expect(page.getByTestId("hvsc-stop")).toBeVisible();
     await page.getByTestId("hvsc-stop").click();
@@ -781,6 +800,7 @@ test.describe("HVSC Play page", () => {
   test("HVSC install -> play sends SID to C64U", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, { installedVersion: 0 });
     await page.goto("/play");
+    await openHvscCard(page);
     await snap(page, testInfo, "play-open");
     await page.getByRole("button", { name: "Download HVSC" }).click();
     await addHvscDemoTrackToPlaylist(page);
@@ -803,6 +823,7 @@ test.describe("HVSC Play page", () => {
   test("HVSC playlist survives reload", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, { installedVersion: 0 });
     await page.goto("/play");
+    await openHvscCard(page);
     await snap(page, testInfo, "play-open");
     await page.getByRole("button", { name: "Download HVSC" }).click();
     await addHvscDemoTrackToPlaylist(page);
@@ -848,6 +869,7 @@ test.describe("HVSC Play page", () => {
   }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, { installedVersion: 0 });
     await page.goto("/play");
+    await openHvscCard(page);
     await waitForRealConnectionBadge(page);
     await snap(page, testInfo, "play-connected");
 
@@ -863,6 +885,7 @@ test.describe("HVSC Play page", () => {
       ingestionProgressSteps: [1],
     });
     await page.goto("/play");
+    await openHvscCard(page);
     await page.getByRole("button", { name: "Download HVSC" }).click();
     await expect(page.getByTestId("hvsc-summary")).toContainText("HVSC ready");
     await snap(page, testInfo, "hvsc-download-progress");
@@ -876,6 +899,7 @@ test.describe("HVSC Play page", () => {
       installDelayMs: 2000,
     });
     await page.goto("/play");
+    await openHvscCard(page);
     await page.getByRole("button", { name: "Download HVSC" }).click();
 
     await expect(page.getByTestId("hvsc-progress")).toBeVisible();
@@ -890,6 +914,7 @@ test.describe("HVSC Play page", () => {
       failStage: "extract",
     });
     await page.goto("/play");
+    await openHvscCard(page);
     await snap(page, testInfo, "play-open");
     await page.getByRole("button", { name: "Download HVSC" }).click();
     await expect(page.getByText(/Simulated extraction failure/i).first()).toBeVisible();
@@ -927,6 +952,8 @@ test.describe("HVSC Play page", () => {
     );
 
     await page.goto("/play");
+
+    await openHvscCard(page);
     await snap(page, testInfo, "play-open");
     await addHvscDemoTrackToPlaylist(page);
     await snap(page, testInfo, "hvsc-list");
@@ -946,6 +973,8 @@ test.describe("HVSC Play page", () => {
     );
 
     await page.goto("/play");
+
+    await openHvscCard(page);
     await snap(page, testInfo, "play-open");
     await page.getByRole("button", { name: "Download HVSC" }).click();
     const hvscDialog = await openHvscSourceBrowser(page);
@@ -962,6 +991,7 @@ test.describe("HVSC Play page", () => {
   test("Local ZIP ingestion is not shown on Play page", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, { installedVersion: 84 });
     await page.goto("/play");
+    await openHvscCard(page);
     await snap(page, testInfo, "play-open");
     await expect(page.getByText(/local\.zip/i)).toHaveCount(0);
     await snap(page, testInfo, "zip-hidden");
@@ -971,6 +1001,7 @@ test.describe("HVSC Play page", () => {
     allowWarnings(testInfo, "Expected error toast for HVSC update check failure.");
     await installMocks(page, { installedVersion: 0, failCheck: true });
     await page.goto("/play");
+    await openHvscCard(page);
     await snap(page, testInfo, "play-open");
     await page.getByRole("button", { name: "Download HVSC" }).click();
     await expect(page.getByText(/Simulated update check failure/i).first()).toBeVisible();
@@ -985,6 +1016,7 @@ test.describe("HVSC Play page", () => {
       failInstallAttempts: 1,
     });
     await page.goto("/play");
+    await openHvscCard(page);
     await snap(page, testInfo, "play-open");
     await page.getByRole("button", { name: "Download HVSC" }).click();
     await expect(page.getByText(/Simulated extraction failure/i).first()).toBeVisible();
@@ -999,6 +1031,7 @@ test.describe("HVSC Play page", () => {
       failInstallAttempts: 1,
     });
     await page.goto("/play");
+    await openHvscCard(page);
     await snap(page, testInfo, "play-open");
     await page.getByRole("button", { name: "Download HVSC" }).click();
     await expect(page.getByText(/Simulated ingestion failure/i).first()).toBeVisible();
@@ -1009,6 +1042,7 @@ test.describe("HVSC Play page", () => {
     // 1. Install mocks with installedVersion: baseline (83)
     await installMocks(page, { installedVersion: 83 });
     await page.goto("/play");
+    await openHvscCard(page);
 
     const dialog = await openHvscSourceBrowser(page);
     await openHvscDemoFolder(dialog);
