@@ -1434,7 +1434,7 @@ export default function SettingsPage() {
                             </p>
                           </div>
                           {isSelected ? (
-                            <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                            <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                               Selected
                             </span>
                           ) : null}
@@ -2338,7 +2338,7 @@ export default function SettingsPage() {
               icon={Cpu}
               testId={`settings-feature-group-${group.key}`}
               badge={
-                <span className="rounded-full border border-border/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                <span className="rounded-full border border-border/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                   {group.features.filter((feature) => feature.value).length}/{group.features.length} on
                 </span>
               }
@@ -2358,7 +2358,7 @@ export default function SettingsPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">{feature.definition.title}</span>
                         {isDeveloperModeEnabled && feature.definition.developer_only ? (
-                          <span className="rounded-full border border-border/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          <span className="rounded-full border border-border/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                             Developer only
                           </span>
                         ) : null}

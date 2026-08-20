@@ -45,7 +45,7 @@ describe("displayProfiles", () => {
       actionGridMinWidth: "0px",
       isCompactDialog: false,
       pagePaddingTop: "0.75rem",
-      rootFontSize: "17px",
+      rootFontSize: "18px",
     });
     expect(getDisplayProfileLayoutTokens("expanded")).toMatchObject({
       actionGridColumns: 4,

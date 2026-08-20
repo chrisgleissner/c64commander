@@ -117,7 +117,7 @@ function PaletteRow({
             say nothing about where the palette landed. */}
         {onDevice ? (
           <span
-            className="shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-[0.65rem] text-muted-foreground"
+            className="shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-xs text-muted-foreground"
             data-testid={`${testId}-on-device`}
           >
             On the C64

@@ -54,7 +54,14 @@ export const ringFocus = async (page: Page, target: Locator, maxSteps = 80): Pro
     const goIn = await page.evaluate((node) => {
       const selected = document.querySelector('[data-key-selected="true"]');
       if (!selected) return false;
+      // Descend when the target is inside whatever is selected.
       if (node instanceof Element && selected !== node && selected.contains(node)) return true;
+      // Otherwise open a closed card ONLY when the target is not in the document at all, which is
+      // the case where it must be behind one. Opening every closed card on the way past used to be
+      // harmless because cards stayed open; the compact profile now keeps one open at a time, so a
+      // card opened earlier in the walk is closed again by the next one and the walk can spend its
+      // whole step budget reopening cards instead of advancing to a target that is already visible.
+      if (node instanceof Element) return false;
       return selected.matches("[data-section-label]") && selected.getAttribute("data-open") === "false";
     }, handle);
     await handle?.dispose();

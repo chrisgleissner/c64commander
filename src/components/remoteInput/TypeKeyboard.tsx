@@ -156,7 +156,7 @@ const KeyboardKeyButtonImpl = ({
   const secondaryEl = showSecondary ? (
     <span
       className={cn(
-        "text-[0.6rem] font-normal leading-none",
+        "text-xs font-normal leading-none",
         // RUN/STOP: RUN and STOP are the same caution-tier action, so the
         // secondary legend inherits the key's own tone colour (e.g.
         // text-warning, set on the button itself) instead of being muted.
@@ -172,7 +172,7 @@ const KeyboardKeyButtonImpl = ({
     // No real shifted legend, but reserve its exact line height (an invisible
     // 0.6rem line) so the main label lines up with sibling keys that do carry
     // one — e.g. "0" dropping to sit level with "1"-"9".
-    <span className="text-[0.6rem] font-normal leading-none" aria-hidden="true" style={{ visibility: "hidden" }}>
+    <span className="text-xs font-normal leading-none" aria-hidden="true" style={{ visibility: "hidden" }}>
       {" "}
     </span>
   ) : null;
@@ -241,11 +241,11 @@ const KeyboardKeyButtonImpl = ({
         // every other key's label) with a very small arrow above and
         // another below, centered and never overlapping the label.
         <span className="flex flex-col items-center justify-center leading-none">
-          <span className="text-[0.5rem] leading-none text-muted-foreground" aria-hidden="true">
+          <span className="text-xs leading-none text-muted-foreground" aria-hidden="true">
             {def.cursorArrows.above}
           </span>
           {mainEl}
-          <span className="text-[0.5rem] leading-none text-muted-foreground" aria-hidden="true">
+          <span className="text-xs leading-none text-muted-foreground" aria-hidden="true">
             {def.cursorArrows.below}
           </span>
         </span>

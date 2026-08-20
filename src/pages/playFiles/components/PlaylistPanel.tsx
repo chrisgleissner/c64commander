@@ -90,7 +90,7 @@ export const PlaylistPanel = ({
         return (
           // min-h-11 gives the 44px target size. The checkbox itself is small, but the label
           // is what the user presses, so the floor belongs here.
-          <label key={category} className="flex min-h-11 items-center gap-1 text-[11px] text-muted-foreground">
+          <label key={category} className="flex min-h-11 items-center gap-1 text-xs text-muted-foreground">
             <Checkbox
               checked={playlistTypeFilters.includes(category)}
               onCheckedChange={() => onToggleFilter(category)}

@@ -71,7 +71,7 @@ export function AdvancedFallbackSection({
           </div>
           <div className="flex flex-col">
             <span className="font-medium text-sm">Advanced (REST-only) settings</span>
-            <span className="text-[11px] text-muted-foreground">Everything not on a menu page</span>
+            <span className="text-xs text-muted-foreground">Everything not on a menu page</span>
           </div>
         </div>
         <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>

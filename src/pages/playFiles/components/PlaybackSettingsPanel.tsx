@@ -96,7 +96,7 @@ export const PlaybackSettingsPanel = ({
               <p className="text-xs text-muted-foreground">Not selected.</p>
             )}
             {songlengthsPath && (songlengthsSizeLabel || songlengthsEntryCount !== null) ? (
-              <p className="text-[11px] text-muted-foreground">{songlengthsMetadata}</p>
+              <p className="text-xs text-muted-foreground">{songlengthsMetadata}</p>
             ) : null}
           </div>
           <Button variant="outline" size="sm" onClick={onChooseSonglengthsFile}>

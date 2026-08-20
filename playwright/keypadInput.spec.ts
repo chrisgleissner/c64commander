@@ -177,6 +177,40 @@ test.describe("Keypad / T9 input", () => {
     await snap(page, testInfo, "slider-focus-moved");
   });
 
+  test("the ring walks over a bare text field instead of being trapped in it @layout", async ({ page }, testInfo) => {
+    await enableKeypad(page);
+    await page.goto("/");
+    await expect(page.getByTestId("tab-home")).toBeVisible();
+    await page.getByTestId("tab-config").click();
+    await expect(page).toHaveURL(/\/config/);
+
+    // The Config category search is a plain <input> with no field-row wrapper, so
+    // it is a ring item in its own right. Previously the ring focused it on
+    // arrival, every later key became an editable target, and the global handler
+    // returned before any navigation ran — the ring could never leave the field.
+    // On the keypad-only target device that is unescapable.
+    const search = page.getByPlaceholder("Search categories...");
+    await expect(search).toBeVisible();
+    const reached = await ringFocus(page, search, 90);
+    expect(reached).toBe(true);
+
+    // Arriving does not take DOM focus, so the field is selected but not editing.
+    expect(await search.evaluate((el) => document.activeElement === el)).toBe(false);
+
+    // And the ring moves on.
+    await page.keyboard.press("ArrowDown");
+    await expect(search).not.toHaveAttribute(SELECTED, "true");
+    await snap(page, testInfo, "ring-left-bare-field");
+
+    // Enter still opens the field for editing, and Back still gets out of it.
+    const back = await ringFocus(page, search, 90);
+    expect(back).toBe(true);
+    await page.keyboard.press("Enter");
+    await expect.poll(() => search.evaluate((el) => document.activeElement === el)).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect.poll(() => search.evaluate((el) => document.activeElement === el)).toBe(false);
+  });
+
   test("HAZARD 2: a config dropdown opens by key and Radix owns option nav; Escape closes", async ({
     page,
   }, testInfo) => {

@@ -137,7 +137,7 @@ export const getDisplayProfileLayoutTokens = (profile: DisplayProfile) => {
         // allows between the header and the first content block before it reads as a detached
         // blank band. 0.8125 x 19.5 is 15.84 px.
         pagePaddingTop: "0.8125rem",
-        sectionGap: "1.5rem",
+        sectionGap: "1.125rem",
         panelGap: "1.25rem",
         actionGridColumns: 4,
         actionGridMinWidth: "9rem",
@@ -148,13 +148,13 @@ export const getDisplayProfileLayoutTokens = (profile: DisplayProfile) => {
       };
     default:
       return {
-        rootFontSize: "17px",
+        rootFontSize: "18px",
         pageMaxWidth: "960px",
         readingMaxWidth: "960px",
         pagePaddingX: "1rem",
         pagePaddingY: "1.25rem",
         pagePaddingTop: "0.75rem",
-        sectionGap: "1.25rem",
+        sectionGap: "0.875rem",
         panelGap: "1rem",
         actionGridColumns: 4,
         actionGridMinWidth: "0px",

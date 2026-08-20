@@ -173,8 +173,8 @@ function SnapshotRow({
             <div
               className={
                 profile === "expanded"
-                  ? "grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2 text-[11px]"
-                  : "grid grid-cols-1 gap-2 text-[11px]"
+                  ? "grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2 text-xs"
+                  : "grid grid-cols-1 gap-2 text-xs"
               }
             >
               <div className="space-y-1">

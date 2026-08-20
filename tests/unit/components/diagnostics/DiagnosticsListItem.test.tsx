@@ -26,7 +26,7 @@ describe("DiagnosticsListItem", () => {
     expect(screen.getByTestId("diagnostics-severity-glyph")).toHaveTextContent("I");
     expect(screen.getByTestId("diagnostics-severity-glyph")).toHaveClass("whitespace-nowrap");
     expect(screen.getByTestId("diagnostics-timestamp-base")).toBeInTheDocument();
-    expect(screen.getByTestId("diagnostics-timestamp-ms")).toHaveClass("text-[11px]");
+    expect(screen.getByTestId("diagnostics-timestamp-ms")).toHaveClass("text-xs");
   });
 
   it("renders action origin dot and secondary line", () => {

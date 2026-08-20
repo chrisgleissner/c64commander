@@ -258,7 +258,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
           {item.subtitle ? (
             <div
               className={cn(
-                "text-[11px] text-muted-foreground break-words whitespace-normal max-w-full",
+                "text-xs text-muted-foreground break-words whitespace-normal max-w-full",
                 item.subtitleClassName,
               )}
               data-testid={item.subtitleTestId}
@@ -267,9 +267,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
             </div>
           ) : null}
           {item.meta ? (
-            <div className="text-[11px] text-muted-foreground break-words whitespace-normal max-w-full">
-              {item.meta}
-            </div>
+            <div className="text-xs text-muted-foreground break-words whitespace-normal max-w-full">{item.meta}</div>
           ) : null}
         </div>
       </div>

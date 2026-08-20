@@ -635,17 +635,36 @@ button:focus-visible,
   flex: 0 0 auto;
 }
 
-/*
- * The smallest supported screen fits the breadcrumb and three soft keys, and not the optional
- * shortcut as well. The shortcut is a convenience — the key still works — whereas a legend drawn
- * past the right edge tells the reader nothing at all.
- */
 :root[data-display-profile="compact"] .keypad-guidance-keys {
   gap: 0.375rem;
 }
 
-:root[data-display-profile="compact"] .keypad-guidance-key[data-soft="shortcut"] {
-  display: none;
+/*
+ * A narrow screen fits the breadcrumb and three soft keys, and not the optional shortcut as well.
+ * The shortcut is a convenience — the key still works — whereas a legend drawn past the right edge
+ * tells the reader nothing at all.
+ *
+ * The threshold is the viewport width, not the display profile. What decides whether the legend
+ * fits is how many pixels it has, and the legend is sized in rem, so a profile whose root font is
+ * larger needs a wider screen for the same four keys. A 393px phone on the medium profile draws
+ * the legend 7px past the right edge, which is why this is not gated on `compact` alone.
+ */
+@media (max-width: 430px) {
+  .keypad-guidance-key[data-soft="shortcut"] {
+    display: none;
+  }
+}
+
+/*
+ * The header shares its width between the page title, the connection host and the status word. On
+ * a 393 px phone all three were drawn truncated at once, so the host — the one whose truncated
+ * form ("192.168.1.…") carries no information, and which Home and Settings both show in full — is
+ * dropped first. See the comment beside `app-chrome-badge-host` in `UnifiedHealthBadge`.
+ */
+@media (max-width: 430px) {
+  .app-chrome-badge-host {
+    display: none;
+  }
 }
 
 .keypad-guidance-key {
@@ -741,13 +760,123 @@ button:focus-visible,
   }
 
   /* The app-bar title is the same physical size on compact and medium, so the chrome does not
-     appear to change size as a reader moves between them. That makes this value a FUNCTION of both
-     profiles' root sizes: medium renders text-xl at 1.25rem against a 17px root = 21.25px, so
-     compact needs 21.25 / 16 = 1.328rem to match. `displayProfiles.spec.ts` asserts the two stay
-     within 0.1px of each other, which is what catches this drifting when a root size changes. */
+     appear to change size as a reader moves between them. That makes this value a FUNCTION of the
+     medium scale: medium renders text-xl at 24px, so compact needs 24 / 16 = 1.5rem to match.
+     `displayProfiles.spec.ts` asserts the two stay within 0.1px of each other, which is what
+     catches this drifting when either profile's sizes change. */
   :root[data-display-profile="compact"] :where(.c64-header[class~="text-xl"]) {
-    font-size: 1.328rem;
+    font-size: 1.5rem;
+    line-height: 1.65rem;
+  }
+
+  /*
+   * A compressed type scale for the ordinary phone profile.
+   *
+   * Measured on a Pixel 4 at medium, Home rendered four sizes: 12.75 / 14.875 / 17 / 21.25 px. At a
+   * 30 cm reading distance and this panel's physical pixel (0.1578 mm per CSS px), the smallest of
+   * those subtends 16.4 arcminutes — under the ~20' at which a reader with average corrected sight
+   * reads comfortably, and under the repository's own 14 px floor. Nine elements on one page were
+   * at that size, including the device host in the header.
+   *
+   * The scale is therefore compressed rather than uniformly scaled: the bottom comes up most, the
+   * top barely moves, so the RANGE narrows from 1.67x to 1.59x while nothing is left below the
+   * floor. `xs` and `sm` collapse onto one "small" size — five near-identical steps read as sizes
+   * that are off by a little rather than as a deliberate scale.
+   *
+   *   xs, sm 17px (21.8')   base 19px (24.4')   lg 21px (27.0')   xl 23px   2xl 27px
+   *
+   * Adjacent steps are 9.5-17%, which stays visibly separated. Values are in rem so the reader's
+   * own Text size setting still scales them; the rem figures are against this profile's 17px root.
+   */
+  /*
+   * The phone profile's own type scale.
+   *
+   * Two problems made the default Tailwind ramp unreadable here. Its smallest steps landed at
+   * 12.75px and 14.875px against the old 17px root, and 12.75px subtends 16.4 arcminutes at the
+   * 30cm a phone is actually held at — under the ~20' a reader with average eyesight is
+   * comfortable with, and under this repo's own 14px floor. On top of that, 800 of the app's 841
+   * text-size utilities are `text-xs` or `text-sm`, so those two steps carry nearly all the type
+   * and the rest of the ramp is almost unused.
+   *
+   * So the ramp is rebuilt around those two steps rather than scaled uniformly. The root moves to
+   * 18px so that text inherited from it and `text-sm` are the same size — otherwise the two sit
+   * 1px apart and read as a mistake rather than a decision. `text-xs` sits one clear step below at
+   * 16px, which is where the app's secondary and meta text now renders.
+   *
+   *   xs 16px   sm 18px (= root)   base 20px   lg 22px   xl 24px   2xl 27px
+   *
+   * Each step is 9-12.5% above the one before, which is far enough apart to read as deliberate.
+   * The smallest step is 25% larger than it was and the rest are about 20% larger, which is what
+   * the sizes were reviewed against on the device.
+   */
+  :root[data-display-profile="medium"] :where([class~="text-xs"]) {
+    font-size: 0.8889rem;
+    line-height: 1.25rem;
+  }
+
+  :root[data-display-profile="medium"] :where([class~="text-sm"]) {
+    font-size: 1rem;
+    line-height: 1.4rem;
+  }
+
+  :root[data-display-profile="medium"] :where([class~="text-base"]) {
+    font-size: 1.1111rem;
     line-height: 1.5rem;
+  }
+
+  :root[data-display-profile="medium"] :where([class~="text-lg"]) {
+    font-size: 1.2222rem;
+    line-height: 1.6rem;
+  }
+
+  :root[data-display-profile="medium"] :where([class~="text-xl"]) {
+    font-size: 1.3333rem;
+    line-height: 1.7rem;
+  }
+
+  :root[data-display-profile="medium"] :where([class~="text-2xl"]) {
+    font-size: 1.5rem;
+    line-height: 1.85rem;
+  }
+
+  /*
+   * The same compression on the tablet profile, against its 19.5px root.
+   *
+   * Its smallest step was 14.6px — above the 14px floor but only just, and a tablet is held further
+   * away, so it subtended less than the phone's. `xs` and `sm` merge here too.
+   *
+   *   xs, sm 17.06px   base 19.5px   lg 21.45px   xl 23.4px   2xl 27.3px
+   */
+  /*
+   * The same shape on the tablet profile, against its 19.5px root: `text-sm` matches the inherited
+   * size and `text-xs` sits one step below it. Its smallest step was 14.6px, above the 14px floor
+   * but only just, and a tablet is held further away than a phone so it subtended less.
+   *
+   *   xs 17.06px   sm 19.5px (= root)   base 21.45px   lg 23.4px   xl 25.35px   2xl 29.25px
+   */
+  :root[data-display-profile="expanded"] :where([class~="text-xs"]) {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  :root[data-display-profile="expanded"] :where([class~="text-base"]) {
+    font-size: 1.1rem;
+    line-height: 1.5rem;
+  }
+
+  :root[data-display-profile="expanded"] :where([class~="text-lg"]) {
+    font-size: 1.2rem;
+    line-height: 1.6rem;
+  }
+
+  :root[data-display-profile="expanded"] :where([class~="text-xl"]) {
+    font-size: 1.3rem;
+    line-height: 1.7rem;
+  }
+
+  :root[data-display-profile="expanded"] :where([class~="text-2xl"]) {
+    font-size: 1.5rem;
+    line-height: 1.9rem;
   }
 
   /* Custom font families */

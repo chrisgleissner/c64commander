@@ -130,7 +130,7 @@ export function MenuPageSection({
           </div>
           <div className="flex flex-col">
             {groupLabel ? (
-              <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{groupLabel}</span>
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">{groupLabel}</span>
             ) : null}
             <span className="font-medium text-sm">{page.label}</span>
           </div>
@@ -167,7 +167,7 @@ export function MenuPageSection({
               ))}
               {advancedCategories.length > 0 ? (
                 <div data-testid={`config-page-advanced-${slug}`}>
-                  <h4 className="px-1 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                  <h4 className="px-1 pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground/70">
                     Advanced
                   </h4>
                   {advancedCategories.map((category) => (

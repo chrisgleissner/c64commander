@@ -1827,7 +1827,7 @@ export const HomeDiskManager = () => {
           title: disk.name,
           filterText: `${disk.name} ${disk.path} ${disk.group ?? ""}`,
           meta: (
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               {groupMeta}
               {configStatusLabel ? <span>{configStatusLabel}</span> : null}
             </div>
@@ -2095,7 +2095,7 @@ export const HomeDiskManager = () => {
                         />
                       ) : null}
                       {mountedDisk?.group ? (
-                        <span className={cn(pickDiskGroupColor(mountedDisk.group).text, "truncate text-[11px]")}>
+                        <span className={cn(pickDiskGroupColor(mountedDisk.group).text, "truncate text-xs")}>
                           {mountedDisk.group}
                         </span>
                       ) : null}
@@ -2612,7 +2612,7 @@ export const HomeDiskManager = () => {
                       <span className={cn(option.color.text, "max-w-[180px] break-words whitespace-normal")}>
                         {option.name}
                       </span>
-                      <span className="text-[11px] text-muted-foreground">({option.count})</span>
+                      <span className="text-xs text-muted-foreground">({option.count})</span>
                     </Button>
                   ))}
                 </div>

@@ -80,7 +80,7 @@ export function MenuBlock({ block, active, authoritativeValues, writeLeaf }: Men
   return (
     <div data-testid={block.title ? `config-subsection-${block.title.toLowerCase().replace(/\s+/g, "-")}` : undefined}>
       {block.title ? (
-        <h4 className="px-1 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <h4 className="px-1 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {block.title}
         </h4>
       ) : null}
@@ -111,7 +111,7 @@ export function MenuBlock({ block, active, authoritativeValues, writeLeaf }: Men
             data-testid="config-menu-only"
           >
             <span className="text-sm">{entry.label}</span>
-            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">On device</span>
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">On device</span>
           </div>
         ))}
       </div>

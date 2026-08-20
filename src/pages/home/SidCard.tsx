@@ -274,7 +274,7 @@ export function SidCard({
           <span
             className={cn(
               "font-medium text-muted-foreground shrink-0 whitespace-nowrap",
-              profile === "compact" ? "text-xs w-8" : "text-[11px] w-6",
+              profile === "compact" ? "text-xs w-8" : "text-xs w-6",
             )}
           >
             Vol
@@ -301,7 +301,7 @@ export function SidCard({
           <span
             className={cn(
               "font-medium text-muted-foreground shrink-0 whitespace-nowrap",
-              profile === "compact" ? "text-xs w-8" : "text-[11px] w-6",
+              profile === "compact" ? "text-xs w-8" : "text-xs w-6",
             )}
           >
             Pan

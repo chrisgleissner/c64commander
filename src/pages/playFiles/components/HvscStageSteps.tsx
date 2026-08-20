@@ -68,7 +68,7 @@ export const HvscStageSteps = ({
               />
               <span
                 className={cn(
-                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-[11px] font-semibold transition-colors",
+                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs font-semibold transition-colors",
                   step.status === "done" && "border-primary bg-primary text-primary-foreground",
                   step.status === "active" && "border-primary bg-background text-primary",
                   step.status === "pending" && "border-border bg-background text-muted-foreground",
@@ -97,7 +97,7 @@ export const HvscStageSteps = ({
             </div>
             <span
               className={cn(
-                "text-center text-[11px] leading-tight",
+                "text-center text-xs leading-tight",
                 step.status === "pending" ? "text-muted-foreground" : "text-foreground",
                 step.status === "active" && "font-medium",
               )}
@@ -113,14 +113,14 @@ export const HvscStageSteps = ({
           most of the wait on a first install without saying what it is doing. Only the running
           step's sentence appears: the other three describe work that is done or has not begun. */}
       {activeStep ? (
-        <p className="text-center text-[11px] leading-snug text-muted-foreground" data-testid={`${testId}-explains`}>
+        <p className="text-center text-xs leading-snug text-muted-foreground" data-testid={`${testId}-explains`}>
           {activeStep.description}
         </p>
       ) : null}
 
       {/* The running step's own counter. Scoped to one step, where a percentage is honest. */}
       {counts !== null || percent !== null || detailLabel ? (
-        <p className="text-center text-[11px] text-muted-foreground" data-testid={`${testId}-detail`}>
+        <p className="text-center text-xs text-muted-foreground" data-testid={`${testId}-detail`}>
           {[counts, percent !== null ? `${percent}%` : null, detailLabel].filter(Boolean).join(" · ")}
         </p>
       ) : null}

@@ -217,7 +217,7 @@ export function HealthHistoryPopup({ open, onClose, history: providedHistory }: 
                 })}
               </div>
               <div
-                className="mt-2 grid grid-cols-5 gap-2 text-[11px] text-muted-foreground"
+                className="mt-2 grid grid-cols-5 gap-2 text-xs text-muted-foreground"
                 data-testid="health-history-axis"
               >
                 {tickMarks.map((tick) => (

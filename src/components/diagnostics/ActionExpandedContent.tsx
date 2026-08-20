@@ -31,13 +31,13 @@ const PayloadPreviewBlock = ({ label, preview }: { label: string; preview?: Payl
   if (!preview) return null;
   return (
     <div className="space-y-1">
-      <p className="text-[11px] font-medium text-foreground">{label}</p>
+      <p className="text-xs font-medium text-foreground">{label}</p>
       <p className="text-muted-foreground">
         bytes: {preview.byteCount}
         {preview.truncated ? ` · showing ${preview.previewByteCount}` : ""}
       </p>
-      <pre className="overflow-x-auto whitespace-pre text-[11px] text-muted-foreground">HEX {preview.hex}</pre>
-      <pre className="overflow-x-auto whitespace-pre text-[11px] text-muted-foreground">ASCII {preview.ascii}</pre>
+      <pre className="overflow-x-auto whitespace-pre text-xs text-muted-foreground">HEX {preview.hex}</pre>
+      <pre className="overflow-x-auto whitespace-pre text-xs text-muted-foreground">ASCII {preview.ascii}</pre>
     </div>
   );
 };
@@ -46,8 +46,8 @@ const JsonBlock = ({ label, value }: { label: string; value: unknown }) => {
   if (value === undefined) return null;
   return (
     <div className="space-y-1">
-      <p className="text-[11px] font-medium text-foreground">{label}</p>
-      <pre className="overflow-x-auto whitespace-pre text-[11px] text-muted-foreground">
+      <p className="text-xs font-medium text-foreground">{label}</p>
+      <pre className="overflow-x-auto whitespace-pre text-xs text-muted-foreground">
         {JSON.stringify(value, null, 2)}
       </pre>
     </div>
@@ -131,7 +131,7 @@ export const ActionExpandedContent = ({ summary, deviceLabel = null }: Props) =>
       {restEffects.length > 0 ? (
         <div className="space-y-2">
           <p className="text-xs font-semibold">REST</p>
-          <p className="text-[11px] text-muted-foreground">User activity: {summary.actionName}</p>
+          <p className="text-xs text-muted-foreground">User activity: {summary.actionName}</p>
           {restEffects.map((effect, index) => (
             <div
               key={`${summary.correlationId}-rest-${index}`}

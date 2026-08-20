@@ -125,7 +125,7 @@ export const HvscControls = ({
               ? `Installed version ${hvscInstalledVersion}`
               : "HVSC will be prepared automatically the first time you choose Add items -> HVSC."}
           </p>
-          <p className="text-[11px] text-muted-foreground">Status: {hvscPreparationStatusLabel}</p>
+          <p className="text-xs text-muted-foreground">Status: {hvscPreparationStatusLabel}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">

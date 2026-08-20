@@ -498,7 +498,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
           <div
             data-testid="slider-value-display"
             className={cn(
-              "pointer-events-none absolute -top-7 text-[11px] font-semibold text-foreground transition-opacity duration-150 opacity-100",
+              "pointer-events-none absolute -top-7 text-xs font-semibold text-foreground transition-opacity duration-150 opacity-100",
               valueLabelClassName,
             )}
             style={{

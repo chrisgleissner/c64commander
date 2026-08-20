@@ -230,7 +230,13 @@ export const CollapsibleSection = ({
             // min-h-11 is the 44px touch floor. The compact profile trims padding and drops the icon
             // tile, but it must not take the row below the floor: the target handset's touchscreen
             // is off by default, not absent, and this app also runs on small touch phones.
-            singleOpen ? "min-h-11 gap-2 px-3 py-1.5" : "gap-3 px-4 py-3",
+            //
+            // The other profiles keep the tile but no longer let it set the row height. A closed
+            // card is one line of text, and Settings stacks eleven of them; at py-3 around a
+            // p-2 tile each closed card cost 67.5 CSS px on the phone profile against 27 px of
+            // actual text. py-2 around a p-1.5 tile holds the row at 54 px, still above the 44 px
+            // touch floor, and gives back most of a screen over the length of the page.
+            singleOpen ? "min-h-11 gap-2 px-3 py-1.5" : "min-h-11 gap-2.5 px-4 py-2",
           )}
           // The accessibility tree exposes the HTML id, not data-testid, so this is what
           // makes the header addressable from outside the browser.
@@ -239,14 +245,14 @@ export const CollapsibleSection = ({
           aria-expanded={open}
           aria-controls={resolvedBodyId}
         >
-          <span className={cn("flex min-w-0 items-center", singleOpen ? "gap-2.5" : "gap-3")}>
+          <span className={cn("flex min-w-0 items-center", singleOpen ? "gap-2.5" : "gap-2.5")}>
             {/*
               Compact drops the tile around the icon and keeps the icon itself. The tile was a 30 px
               box in a 47 px row, so it — not the title — set the height of every closed card, and a
               320x427 screen has 218 px of scrollable height to spend. The icon still carries the
               scanning cue; the box around it was decoration.
             */}
-            <span className={cn(singleOpen ? "shrink-0" : "rounded-lg bg-primary/10 p-2")}>
+            <span className={cn(singleOpen ? "shrink-0" : "rounded-lg bg-primary/10 p-1.5")}>
               <Icon className={cn("text-primary", singleOpen ? "h-[1.125rem] w-[1.125rem]" : "h-5 w-5")} aria-hidden />
             </span>
             <span className="flex min-w-0 flex-col">

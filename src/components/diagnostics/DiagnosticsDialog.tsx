@@ -388,7 +388,7 @@ const FilterChip = ({ label }: { label: string }) => (
   // shrink-0: without it the chips are flex items that can be squeezed below the width
   // of their own text, which on the smallest screen left "Problems" in a 29px box and
   // drew it over the chip beside it.
-  <span className="shrink-0 rounded-full border border-border/70 bg-background px-2 py-0.5 text-[11px] font-medium leading-4">
+  <span className="shrink-0 rounded-full border border-border/70 bg-background px-2 py-0.5 text-xs font-medium leading-4">
     {label}
   </span>
 );
@@ -569,7 +569,7 @@ const EvidenceRow = ({
                 it to the width of the row, and "Actions" was being broken into "Action" and
                 "s" on two lines. The contributor is the part that can afford to be cut
                 short. */}
-            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="shrink-0 whitespace-nowrap">{entry.type}</span>
               {entry.contributor ? <span className="min-w-0 truncate">· {entry.contributor}</span> : null}
               <span className="shrink-0 whitespace-nowrap">· {formatDiagnosticsTimestamp(entry.timestamp)}</span>
@@ -585,7 +585,7 @@ const EvidenceRow = ({
         {expanded && expandedDetail ? (
           typeof expandedDetail === "string" ? (
             <pre
-              className="mt-2 overflow-x-auto rounded-md border border-border/70 bg-muted/30 p-2 text-[11px] leading-4 text-foreground"
+              className="mt-2 overflow-x-auto rounded-md border border-border/70 bg-muted/30 p-2 text-xs leading-4 text-foreground"
               data-testid={`evidence-detail-${entry.id}`}
             >
               {expandedDetail}
@@ -689,7 +689,7 @@ const FilterEditorSurface = ({
           <div className="space-y-3">
             {showDeviceFilter ? (
               <section className="space-y-1.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Device</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Device</p>
                 <div className="flex flex-wrap gap-1.5">
                   <FilterToggleChip
                     label="All devices"
@@ -715,7 +715,7 @@ const FilterEditorSurface = ({
             ) : null}
 
             <section className="space-y-1.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Activity types</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Activity types</p>
               <div className="flex flex-wrap gap-1.5">
                 {EVIDENCE_ORDER.map((type) => (
                   <FilterToggleChip
@@ -729,7 +729,7 @@ const FilterEditorSurface = ({
             </section>
 
             <section className="space-y-1.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Contributor</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contributor</p>
               <div className="flex flex-wrap gap-1.5">
                 {(["All", "App", "REST", "FTP", "TELNET"] as const).map((option) => (
                   <FilterToggleChip
@@ -746,7 +746,7 @@ const FilterEditorSurface = ({
             </section>
 
             <section className="space-y-1.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Severity</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Severity</p>
               <div className="flex flex-wrap gap-1.5">
                 {(["All", "Errors", "Warnings", "Info"] as const).map((option) => (
                   <FilterToggleChip
@@ -763,7 +763,7 @@ const FilterEditorSurface = ({
             </section>
 
             <section className="space-y-1.5 border-t border-border/70 pt-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Quick filters</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quick filters</p>
               <div className="flex flex-wrap gap-1.5">
                 <Button
                   type="button"
@@ -1476,7 +1476,7 @@ export function DiagnosticsDialog({
 
   const overflowPanelContent = (
     <>
-      <p className="px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Views</p>
+      <p className="px-3 pb-1 pt-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Views</p>
       <button
         type="button"
         className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
@@ -1824,7 +1824,7 @@ export function DiagnosticsDialog({
               <p className="mb-1 text-xs font-semibold text-foreground" data-testid="evidence-heading">
                 Activity
               </p>
-              <p className="mb-2 text-[11px] text-muted-foreground" data-testid="activity-kinds-line">
+              <p className="mb-2 text-xs text-muted-foreground" data-testid="activity-kinds-line">
                 Problems, actions, logs, and traces across App, REST, FTP, and Telnet
               </p>
               <div

@@ -158,7 +158,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
         <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
           {STAT_FIELDS.map((field) => (
             <div key={field.key} className="rounded-md bg-muted/50 px-2 py-1.5 text-center">
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{field.label}</div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">{field.label}</div>
               <div className="text-sm font-semibold tabular-nums" data-testid={`av-sync-stat-${field.testid}`}>
                 {fmtMs(stats[field.key] as number | null)}
               </div>
@@ -171,7 +171,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
             {testError}
           </p>
         ) : (
-          <p className="mt-2 text-[11px] text-muted-foreground">
+          <p className="mt-2 text-xs text-muted-foreground">
             Positive means audio lags the picture. Tap <strong>Run test</strong> with Listen and Watch both on.
           </p>
         )}
@@ -213,12 +213,12 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
             ] as const
           ).map((field) => (
             <div key={field.testid} className="rounded-md bg-muted/50 px-2 py-1.5 text-center">
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{field.label}</div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">{field.label}</div>
               <div className="text-sm font-semibold tabular-nums" data-testid={`av-sync-lat-${field.testid}`}>
                 {fmtLatency(field.last)}
               </div>
               <div
-                className="text-[11px] tabular-nums text-muted-foreground"
+                className="text-xs tabular-nums text-muted-foreground"
                 data-testid={`av-sync-lat-${field.testid}-p99`}
               >
                 p99 {fmtLatency(field.p99)}
@@ -232,7 +232,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
             {testError}
           </p>
         ) : (
-          <p className="mt-2 text-[11px] text-muted-foreground">
+          <p className="mt-2 text-xs text-muted-foreground">
             Load the space program, then <strong>Send SPACE</strong> repeatedly. Shows the latest press → see / hear
             latency and the pop&apos;s audio↔video offset right away.
           </p>
@@ -322,17 +322,17 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
                 ] as const
               ).map((field) => (
                 <div key={field.testid} className="rounded-md bg-muted/50 px-2 py-1.5 text-center">
-                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{field.label}</div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">{field.label}</div>
                   <div className="text-sm font-semibold tabular-nums" data-testid={`av-tone-ladder-${field.testid}`}>
                     {field.value}
                   </div>
-                  <div className="text-[11px] tabular-nums text-muted-foreground">{field.sub}</div>
+                  <div className="text-xs tabular-nums text-muted-foreground">{field.sub}</div>
                 </div>
               ))}
             </div>
 
             {ladder.result.shortNotes > 0 || ladder.result.longNotes > 0 ? (
-              <p className="mt-2 text-[11px] text-muted-foreground" data-testid="av-tone-ladder-length-warning">
+              <p className="mt-2 text-xs text-muted-foreground" data-testid="av-tone-ladder-length-warning">
                 {ladder.result.shortNotes > 0
                   ? `${ladder.result.shortNotes} note(s) cut short \u2014 audio lost. `
                   : ""}
@@ -347,8 +347,8 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
               className="mt-2 max-h-40 overflow-y-auto rounded-md border border-border/60"
               data-testid="av-tone-ladder-notes"
             >
-              <table className="w-full text-[11px] tabular-nums">
-                <thead className="sticky top-0 bg-muted/80 text-[11px] uppercase tracking-wide text-muted-foreground">
+              <table className="w-full text-xs tabular-nums">
+                <thead className="sticky top-0 bg-muted/80 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-2 py-1 text-left font-medium">Note</th>
                     <th className="px-2 py-1 text-left font-medium">Color</th>
@@ -392,7 +392,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
             {ladder.error}
           </p>
         ) : (
-          <p className="mt-2 text-[11px] text-muted-foreground">
+          <p className="mt-2 text-xs text-muted-foreground">
             Plays a known scale that changes the screen color on every note. Tap <strong>Run test</strong> with Listen
             and Watch both on.
           </p>

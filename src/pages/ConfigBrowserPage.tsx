@@ -803,7 +803,7 @@ function CategorySection({
           </div>
           <div className="flex flex-col">
             {groupLabel ? (
-              <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{groupLabel}</span>
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">{groupLabel}</span>
             ) : null}
             <span className="font-medium text-sm">{displayTitle ?? categoryName}</span>
           </div>
@@ -882,9 +882,9 @@ function CategorySection({
 
                     const rightAccessory = isSidVolume ? (
                       <div className="flex items-center gap-3">
-                        {isMutedBySolo && <span className="text-[11px] font-medium text-muted-foreground">Muted</span>}
+                        {isMutedBySolo && <span className="text-xs font-medium text-muted-foreground">Muted</span>}
                         <div className="flex items-center gap-2">
-                          <Label htmlFor={`solo-${item.name}`} className="text-[11px] uppercase tracking-wide">
+                          <Label htmlFor={`solo-${item.name}`} className="text-xs uppercase tracking-wide">
                             Solo
                           </Label>
                           <Switch
