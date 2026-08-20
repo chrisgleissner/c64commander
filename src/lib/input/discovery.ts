@@ -184,11 +184,31 @@ const readingPosition = (element: Element): ReadingPosition => {
   const rect = element.getBoundingClientRect();
   let top = rect.top;
   let left = rect.left;
-  for (let node: Element | null = element.parentElement; node; node = node.parentElement) {
+  // A viewport-anchored element does not move when the document scrolls, so its rect is ALREADY
+  // its stable position and adding scroll offsets would make it drift — reintroducing, for fixed
+  // elements, exactly the instability this function exists to remove. Accumulation therefore stops
+  // at the first fixed element, itself included.
+  //
+  // `sticky` is deliberately not treated the same way: a sticky element scrolls with its container
+  // until it sticks, so accumulating is right for all of its travel and only approximate while it
+  // is pinned. Nothing in the ring is sticky today.
+  for (
+    let node: Element | null = isViewportAnchored(element) ? null : element.parentElement;
+    node;
+    node = node.parentElement
+  ) {
     top += node.scrollTop;
     left += node.scrollLeft;
+    if (isViewportAnchored(node)) break;
   }
   return { top, left, hasBox: rect.width > 0 || rect.height > 0 };
+};
+
+/** True when the element is taken out of flow and pinned to the viewport. */
+const isViewportAnchored = (element: Element): boolean => {
+  const view = element.ownerDocument?.defaultView;
+  if (!view?.getComputedStyle) return false;
+  return view.getComputedStyle(element).position === "fixed";
 };
 
 const comparePositions = (a: Element, pa: ReadingPosition, b: Element, pb: ReadingPosition): number => {

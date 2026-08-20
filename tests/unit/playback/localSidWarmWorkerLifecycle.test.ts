@@ -100,6 +100,24 @@ describe("LocalSidEngine — the lead-in renderer's lifecycle", () => {
     expect(built[1].ofType("prerender")).toHaveLength(1);
   });
 
+  it("ignores a late failure from a renderer it has already replaced", async () => {
+    // The listeners outlive the worker they belong to. Without an identity check, a late `error`
+    // from the crashed original terminated the replacement the next warm had just built — a healthy
+    // thread killed by a dead one's parting message.
+    const { engine, built } = makeWarmOnlyEngine();
+    engine.warmLeadIn("first#0", someTune(), 0, 4);
+    built[0].emitError("segfault");
+    expect(built[0].terminated).toBe(true);
+
+    engine.warmLeadIn("second#0", someTune(), 0, 4);
+    expect(built).toHaveLength(2);
+
+    // The original, already discarded, reports again.
+    built[0].emitError("late segfault");
+
+    expect(built[1].terminated).toBe(false);
+  });
+
   it("terminates the lead-in renderer on dispose(), so a teardown leaks no thread", async () => {
     const { engine, built } = makeWarmOnlyEngine();
     engine.warmLeadIn("first#0", someTune(), 0, 4);

@@ -331,9 +331,18 @@ export class AudioMirrorController {
   private nativeArrivalAdvanced(): boolean {
     const packets = this.nativeSink?.getStats()?.arrival?.packets;
     if (typeof packets !== "number") return false;
-    const advanced = packets > this.lastSeenArrivalPackets;
+    const previous = this.lastSeenArrivalPackets;
     this.lastSeenArrivalPackets = packets;
-    return advanced;
+    // A counter that went BACKWARDS was reset or wrapped, not stalled — the plugin rebinding its
+    // socket restarts it from zero — so it counts as arrival rather than as silence.
+    //
+    // No regression test accompanies this, deliberately: the baseline is re-tracked on every poll,
+    // so a reset costs exactly one missed stamp and the next poll sees an increase again. One
+    // second of a silence budget of eight cannot starve the watchdog, and a test asserting "still
+    // live" passes with or without this line. The line stays because it states the intent, not
+    // because it changes a reachable outcome.
+    if (packets < previous) return true;
+    return packets > previous;
   }
 
   /**

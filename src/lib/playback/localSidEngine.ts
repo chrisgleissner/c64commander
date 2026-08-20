@@ -2129,15 +2129,19 @@ export class LocalSidEngine {
       this.warmWorker.addEventListener("message", (event: MessageEvent<LocalSidWorkerToMain>) =>
         this.onWarmMessage(event.data),
       );
+      // Captured, and checked by identity before acting. These listeners outlive the worker they
+      // belong to: a late `error` from a worker that has already been discarded would otherwise
+      // terminate whatever replacement the next warm had built, killing a healthy thread.
+      const warmWorker = this.warmWorker;
       this.warmWorker.addEventListener("error", (event: { message?: string }) => {
         addLog("warn", "Local SID lead-in renderer failed", { service: "local-sid", error: event.message });
-        this.discardWarmWorker();
+        if (this.warmWorker === warmWorker) this.discardWarmWorker();
       });
       this.warmWorker.addEventListener("messageerror", () => {
         addLog("warn", "Local SID lead-in renderer sent a message that could not be deserialized", {
           service: "local-sid",
         });
-        this.discardWarmWorker();
+        if (this.warmWorker === warmWorker) this.discardWarmWorker();
       });
       this.warmWorker.postMessage({
         type: "load",

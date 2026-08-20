@@ -243,6 +243,41 @@ describe("sortIntoReadingOrder", () => {
     expect(idsAt(390)).toEqual(unscrolled);
   });
 
+  it("does not drift a position:fixed element as the page scrolls", () => {
+    // A fixed element's rect is already its stable position — it does not move when the document
+    // scrolls — so adding ancestor scroll offsets to it would make its ordering depend on the
+    // scroll offset, which is the instability this ordering exists to remove.
+    // The element that matters is one pinned to the viewport from INSIDE a scrolling container:
+    // that is where the ancestor walk would otherwise add the container's scrollTop to a rect that
+    // never moved.
+    const host = mount(`
+      <div id="scroller">
+        <button id="content">content</button>
+        <button id="pinned">pinned to the viewport</button>
+      </div>
+    `);
+    const scroller = host.querySelector("#scroller") as HTMLElement;
+    let scrolled = 0;
+    Object.defineProperty(scroller, "scrollTop", { configurable: true, get: () => scrolled });
+
+    const content = host.querySelector("#content")!;
+    const pinned = host.querySelector("#pinned") as HTMLElement;
+    // The pinned element sits ABOVE the content, so accumulating the container's scrollTop onto it
+    // pushes it past the content and REVERSES the two — which is the failure this guards.
+    layOut(pinned, 300, () => 0);
+    layOut(content, 400, () => scrolled);
+    pinned.style.position = "fixed";
+
+    const idsAt = (scroll: number) => {
+      scrolled = scroll;
+      return sortIntoReadingOrder([content, pinned]).map((element) => element.id);
+    };
+
+    expect(idsAt(0)).toEqual(["pinned", "content"]);
+    expect(idsAt(200)).toEqual(["pinned", "content"]);
+    expect(idsAt(500)).toEqual(["pinned", "content"]);
+  });
+
   it("still orders by DOM position when nothing has a layout box", () => {
     const host = mount(`<button id="one">1</button><button id="two">2</button><button id="three">3</button>`);
     const [one, two, three] = ["#one", "#two", "#three"].map((selector) => host.querySelector(selector)!);

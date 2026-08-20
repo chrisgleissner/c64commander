@@ -74,6 +74,7 @@ async function connect() {
     const slot = pending.get(msg.id);
     if (!slot) return;
     pending.delete(msg.id);
+    clearTimeout(slot.timer);
     if (msg.error) slot.reject(new Error(JSON.stringify(msg.error)));
     else slot.resolve(msg.result);
   });
@@ -84,11 +85,13 @@ async function connect() {
   const send = (method, params = {}) =>
     new Promise((resolve, reject) => {
       const id = nextId++;
-      pending.set(id, { resolve, reject });
-      ws.send(JSON.stringify({ id, method, params }));
-      setTimeout(() => {
+      // The timer is stored on the pending entry and cleared when the reply lands. Left uncancelled
+      // it survives every successful call, and a gate run makes hundreds of them.
+      const timer = setTimeout(() => {
         if (pending.delete(id)) reject(new Error("timeout " + method));
       }, 20000);
+      pending.set(id, { resolve, reject, timer });
+      ws.send(JSON.stringify({ id, method, params }));
     });
   const evaluate = async (expression) => {
     const r = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
@@ -250,12 +253,16 @@ async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
     }
     if (!landed) continue;
 
+    const before = await evaluate(STATE_EXPR);
     key(KEY.CENTER);
     await sleep(settleMs + 240);
     const inside = await evaluate(STATE_EXPR);
-    // OK on a card either descends into it or activates it. If the route or the overlay depth
-    // changed, this was an activation, not a descend — undo it and move on.
-    if (inside.route !== stops.routePath && inside.overlayDepth > 0) {
+    // OK on a card either descends into it or activates it. If the route changed or an overlay
+    // opened, this was an activation, not a descend — undo it and move on. The route to compare
+    // against is the one read immediately BEFORE the press: an earlier version compared against
+    // `stops.routePath`, which is a property of an ARRAY and therefore always undefined, so the
+    // guard collapsed to the overlay check and a route change with no overlay walked the wrong page.
+    if (inside.route !== before.route || inside.overlayDepth > before.overlayDepth) {
       key(KEY.BACK);
       await sleep(settleMs + 200);
       continue;
@@ -345,8 +352,14 @@ async function main() {
       );
     }
     if (boot.profile !== "compact") {
-      console.log(
-        `WARNING: display profile is "${boot.profile}", not "compact". The profile is frozen at mount unless screen orientation is Auto, so force-stop and relaunch the app after changing wm size.`,
+      // Fatal, not a warning. Every assertion below — the 44x44 hit areas, the 14px text floor, the
+      // horizontal-overflow check — is scoped to the compact panel. Grading a different layout and
+      // reporting a result for it is exactly the "gate that cannot report the fault it exists to
+      // catch" shape this tool was written against.
+      throw new Error(
+        `display profile is "${boot.profile}", not "compact" — refusing to grade the wrong layout. ` +
+          `The profile is frozen at mount unless screen orientation is Auto, so set the geometry ` +
+          `(wm size 480x640; wm density 240) and then force-stop and relaunch the app.`,
       );
     }
     // Engage key-navigation modality; until a key arrives the app is in pointer modality and

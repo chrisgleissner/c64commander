@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Radio } from "lucide-react";
 
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -29,9 +29,31 @@ vi.mock("framer-motion", async () => {
   };
 });
 
+let mockProfile: "compact" | "medium" | "expanded" = "medium";
+
+vi.mock("@/hooks/useDisplayProfile", () => ({
+  useDisplayProfile: () => ({ profile: mockProfileRef() }),
+}));
+
+const mockProfileRef = () => mockProfile;
+
 describe("CollapsibleSection", () => {
+  // The stub is installed on the prototype by the scroll tests, and the framer-motion stand-in
+  // calls `onAnimationComplete` on mount — so without restoring it, every later test in this file
+  // would render against a spy left behind by an earlier one.
+  const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+
   beforeEach(() => {
     localStorage.clear();
+    mockProfile = "medium";
+  });
+
+  afterEach(() => {
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      writable: true,
+      value: originalScrollIntoView,
+    });
   });
 
   it("renders closed by default and opens on tap", () => {
@@ -124,6 +146,54 @@ describe("CollapsibleSection", () => {
 
     expect(screen.getByText("Drive A")).toBeInTheDocument();
     expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("keeps one card open at a time in the compact profile, and closes the sibling it replaces", () => {
+    // Compact opens one card at a time so the reader keeps the list of titles around whatever is
+    // open. The sibling closes through a window event, and its closed state is persisted so
+    // returning to the page does not re-open every card the reader has ever looked at.
+    mockProfile = "compact";
+    render(
+      <>
+        <CollapsibleSection scope="settings" id="first" title="First" icon={Radio}>
+          <p>First body</p>
+        </CollapsibleSection>
+        <CollapsibleSection scope="settings" id="second" title="Second" icon={Radio}>
+          <p>Second body</p>
+        </CollapsibleSection>
+      </>,
+    );
+
+    fireEvent.click(screen.getByTestId("settings-section-toggle-first"));
+    expect(screen.getByTestId("settings-section-first")).toHaveAttribute("data-open", "true");
+
+    fireEvent.click(screen.getByTestId("settings-section-toggle-second"));
+
+    expect(screen.getByTestId("settings-section-second")).toHaveAttribute("data-open", "true");
+    expect(screen.getByTestId("settings-section-first")).toHaveAttribute("data-open", "false");
+    expect(JSON.parse(localStorage.getItem("c64u_open_sections") ?? "{}")["settings:first"]).toBe(false);
+  });
+
+  it("leaves both cards open outside the compact profile", () => {
+    // A taller screen has room for several bodies at once, and closing one to open another would
+    // just be obstructive there.
+    mockProfile = "medium";
+    render(
+      <>
+        <CollapsibleSection scope="home" id="alpha" title="Alpha" icon={Radio}>
+          <p>Alpha body</p>
+        </CollapsibleSection>
+        <CollapsibleSection scope="home" id="beta" title="Beta" icon={Radio}>
+          <p>Beta body</p>
+        </CollapsibleSection>
+      </>,
+    );
+
+    fireEvent.click(screen.getByTestId("home-section-toggle-alpha"));
+    fireEvent.click(screen.getByTestId("home-section-toggle-beta"));
+
+    expect(screen.getByTestId("home-section-alpha")).toHaveAttribute("data-open", "true");
+    expect(screen.getByTestId("home-section-beta")).toHaveAttribute("data-open", "true");
   });
 
   it("honors defaultOpen on a first visit to a fresh scope", () => {
