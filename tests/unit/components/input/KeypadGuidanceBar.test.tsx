@@ -84,7 +84,10 @@ describe("KeypadGuidanceBar", () => {
     // A plain button → OK activates it; at the page root the left soft key is Back;
     // no context menu → the Menu slot is hidden.
     expect(actionText("keypad-guidance-center")).toBe("Activate");
-    expect(actionText("keypad-guidance-left")).toBe("Back");
+    // The left cap already reads "Back", so the word beside it is dropped rather than repeated —
+    // on a 320 px screen "Back Back" pushed the row past the viewport and truncated "Activate".
+    expect(screen.getByTestId("keypad-guidance-left")).toHaveTextContent("Back");
+    expect(actionText("keypad-guidance-left")).toBe("");
     expect(screen.getByTestId("keypad-guidance-right")).toHaveAttribute("hidden");
   });
 
@@ -100,9 +103,11 @@ describe("KeypadGuidanceBar", () => {
 
     expect(bar()).toHaveAttribute("data-visible", "true");
     expect(breadcrumb()).toHaveTextContent("Actions");
-    // hasContextMenu(current) → the right slot is revealed and labelled "Menu".
+    // hasContextMenu(current) → the right slot is revealed. Its cap already reads "Menu", so the
+    // action word beside it is dropped rather than repeating it.
     expect(screen.getByTestId("keypad-guidance-right")).not.toHaveAttribute("hidden");
-    expect(actionText("keypad-guidance-right")).toBe("Menu");
+    expect(screen.getByTestId("keypad-guidance-right")).toHaveTextContent("Menu");
+    expect(actionText("keypad-guidance-right")).toBe("");
   });
 
   it("falls back to 'Navigation' when the visible ring item has no readable label", () => {

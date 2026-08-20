@@ -1227,20 +1227,14 @@ function HomePageContent() {
     <div className={pageShellClassName}>
       <AppBar
         title="Home"
-        leading={
-          <div className="flex min-h-11 items-center gap-2 min-w-0">
-            <img
-              src={variant.assets.public.homeLogoPng}
-              alt={variant.displayName}
-              className="h-9 w-auto rounded-xl shrink-0 object-contain shadow-sm sm:h-11"
-              data-testid="home-header-logo"
-            />
-            <div className="min-w-0 flex items-center">
-              <h1 className="c64-header text-xl leading-none truncate" data-testid="home-header-title">
-                Home
-              </h1>
-            </div>
-          </div>
+        titleTestId="home-header-title"
+        leadingVisual={
+          <img
+            src={variant.assets.public.homeLogoPng}
+            alt={variant.displayName}
+            className="h-9 w-auto shrink-0 rounded-xl object-contain shadow-sm sm:h-11"
+            data-testid="home-header-logo"
+          />
         }
       />
 

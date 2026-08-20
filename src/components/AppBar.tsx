@@ -19,11 +19,22 @@ import { INTERSTITIAL_Z_INDEX } from "@/components/ui/interstitialStyles";
 type Props = {
   title: ReactNode;
   subtitle?: ReactNode;
+  /** Replaces the whole title zone. Prefer {@link Props.leadingVisual} — see its note. */
   leading?: ReactNode;
+  /**
+   * A mark rendered before the title, inside this component's own title markup.
+   *
+   * `leading` replaces the title zone entirely, so a page that only wanted a logo beside the title
+   * had to copy the title's own markup to keep it looking the same — and Home's copy then drifted
+   * from this one. A page that just needs a mark uses this instead and keeps one title.
+   */
+  leadingVisual?: ReactNode;
+  /** testid on the rendered title, for a page whose title is addressed by name in a spec. */
+  titleTestId?: string;
   children?: ReactNode;
 };
 
-export function AppBar({ title, subtitle: _subtitle, leading, children }: Props) {
+export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, titleTestId, children }: Props) {
   const headerRef = useRef<HTMLElement | null>(null);
   const { profile } = useDisplayProfile();
   const screenActive = useScreenActivity();
@@ -82,7 +93,14 @@ export function AppBar({ title, subtitle: _subtitle, leading, children }: Props)
       >
         <div className="flex min-h-11 items-center justify-between gap-2" data-testid="app-bar-row">
           <div className="flex min-h-11 min-w-0 items-center" data-testid="app-bar-title-zone">
-            {leading ? leading : <h1 className="c64-header text-xl leading-none truncate">{title}</h1>}
+            {leading ?? (
+              <div className="flex min-h-11 min-w-0 items-center gap-2">
+                {leadingVisual}
+                <h1 className="c64-header truncate text-xl leading-none" data-testid={titleTestId}>
+                  {title}
+                </h1>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-1">
             {/* Live A/V mirror indicator — renders only while a stream is active. */}

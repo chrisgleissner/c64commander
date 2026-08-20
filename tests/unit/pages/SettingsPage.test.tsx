@@ -1592,7 +1592,11 @@ describe("SettingsPage", () => {
       }
     });
 
-    it("says what each closed section decides, so nothing has to be opened to find it", () => {
+    it("says what each closed section decides, once card descriptions are turned on", () => {
+      // Descriptions are off by default: on the smallest supported screen they cost about half the
+      // height of every closed card, and the titles already name what each card is. When a reader
+      // does turn them on, each one still has to describe its own section.
+      localStorage.setItem("c64u_show_section_descriptions", "1");
       render(
         <RouterProvider
           router={buildRouter(<SettingsPage />)}
@@ -1716,6 +1720,9 @@ describe("SettingsPage", () => {
     });
 
     renderSettingsPageWithDisplayProfileProvider();
+    // The compact profile keeps one card open at a time, so opening every section in turn leaves
+    // the last one open rather than all of them. Open the one this test is about.
+    fireEvent.click(screen.getByTestId("settings-section-toggle-appearance"));
 
     expect(screen.getByText(/Auto currently resolves to Small display\./i)).toBeInTheDocument();
 
@@ -2002,7 +2009,7 @@ describe("SettingsPage", () => {
   it("requests the global diagnostics overlay from the settings trigger", () => {
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Diagnostics" }));
 
     expect(mockPrimeDiagnosticsOverlaySuppression).toHaveBeenCalled();
     expect(requestDiagnosticsOpen).toHaveBeenCalledWith("settings");

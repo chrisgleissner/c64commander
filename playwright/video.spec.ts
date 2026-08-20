@@ -255,7 +255,7 @@ const tourSettings = async (page: Page) => {
   await seedDiagnosticsTraces(page);
 
   const diagnosticsButton = page.getByRole("button", {
-    name: "Diagnostics",
+    name: "Open Diagnostics",
     exact: true,
   });
   await diagnosticsButton.scrollIntoViewIfNeeded();

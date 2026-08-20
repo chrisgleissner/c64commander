@@ -166,6 +166,7 @@ import {
   type NotificationVisibility,
   type ScreenOrientationMode,
 } from "@/lib/config/appSettings";
+import { loadShowSectionDescriptions, saveShowSectionDescriptions } from "@/lib/ui/collapsibleSectionStore";
 import { applyFullScreenFromSettings } from "@/lib/native/fullScreen";
 import {
   getActiveAutoResolutionContext,
@@ -423,6 +424,7 @@ export default function SettingsPage() {
   const [notificationDurationMs, setNotificationDurationMs] = useState(loadNotificationDurationMs);
   const [screenOrientationMode, setScreenOrientationMode] = useState<ScreenOrientationMode>(loadScreenOrientationMode);
   const [hideStatusBar, setHideStatusBar] = useState(loadHideStatusBar);
+  const [showSectionDescriptions, setShowSectionDescriptions] = useState(loadShowSectionDescriptions);
   const [hideNavigationBar, setHideNavigationBar] = useState(loadHideNavigationBar);
   const [hvscBaseUrlInput, setHvscBaseUrlInput] = useState(() => getHvscBaseUrlOverride() ?? "");
   const [hvscBaseUrlPreview, setHvscBaseUrlPreview] = useState(() => getHvscBaseUrl());
@@ -1005,6 +1007,11 @@ export default function SettingsPage() {
     void applyScreenOrientationMode(mode);
   };
 
+  const commitShowSectionDescriptions = (enabled: boolean) => {
+    setShowSectionDescriptions(enabled);
+    saveShowSectionDescriptions(enabled);
+  };
+
   const commitHideStatusBar = (enabled: boolean) => {
     setHideStatusBar(enabled);
     saveHideStatusBar(enabled);
@@ -1166,7 +1173,9 @@ export default function SettingsPage() {
 
       <PageContainer size="reading">
         <PageStack>
-          <div className="space-y-3" data-testid="settings-top-layout">
+          {/* Compact tightens the space between closed cards: 13 px between 39 px cards is a third
+              of the list's height spent on gaps. */}
+          <div className={cn(isCompactProfile ? "space-y-1.5" : "space-y-3")} data-testid="settings-top-layout">
             {/* 1. Appearance */}
             <SettingsSection
               id="appearance"
@@ -1233,6 +1242,26 @@ export default function SettingsPage() {
                   Scales the app&apos;s own text on top of your device&apos;s text size, which it already follows. Use
                   this only to make the app bigger than the rest of your phone.
                 </p>
+              </div>
+
+              <div className="space-y-2 rounded-lg border border-border/70 p-3">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Label htmlFor="show-section-descriptions" className="flex min-h-11 items-center font-medium">
+                      Card descriptions
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      Show the line under each card title saying what is inside. Off by default: on a small screen it
+                      costs about half the height of every closed card.
+                    </p>
+                  </div>
+                  <Checkbox
+                    id="show-section-descriptions"
+                    data-testid="settings-show-section-descriptions"
+                    checked={showSectionDescriptions}
+                    onCheckedChange={(checked) => commitShowSectionDescriptions(checked === true)}
+                  />
+                </div>
               </div>
 
               <div className="space-y-2 rounded-lg border border-border/70 p-3">
@@ -1813,7 +1842,11 @@ export default function SettingsPage() {
                   data-testid="diagnostics-open-dialog"
                 >
                   <FileText className="h-4 w-4 mr-2" />
-                  Diagnostics
+                  {/* "Open Diagnostics", not "Diagnostics": the section header above it is a
+                      disclosure button whose accessible name is its title, so two buttons on this
+                      page would otherwise both be called "Diagnostics". Saying what the button does
+                      is clearer anyway. */}
+                  Open Diagnostics
                 </Button>
 
                 <div className="flex items-start justify-between gap-3 min-w-0">

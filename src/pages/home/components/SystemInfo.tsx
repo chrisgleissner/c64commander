@@ -35,18 +35,36 @@ export function SystemInfo() {
       data-testid="home-system-info"
       data-section-label="System info"
     >
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-        <span className="text-muted-foreground">App</span>
-        <span className="font-semibold text-foreground" data-testid="home-system-version">
-          {buildInfo.versionLabel || "Not available"}
+      {/*
+        Each label keeps its own value on the same line. As six independent spans in one wrapping
+        flex row, a label could end one line and its value start the next: on a 320 px screen this
+        read "App 0.9.8-rc4-9de8e Device / C64-Ultimate-716824 Firmware / 1.2.0" across three lines,
+        which does not say which value belongs to which label. In compact each pair gets its own
+        row; wider screens keep the single flowing line, where there is room for it.
+      */}
+      <div
+        className={cn(
+          "gap-x-4 text-sm",
+          profile === "compact" ? "grid grid-cols-1 gap-y-0.5" : "flex flex-wrap items-center gap-y-1",
+        )}
+      >
+        <span className="flex min-w-0 items-baseline gap-1.5">
+          <span className="shrink-0 text-muted-foreground">App</span>
+          <span className="min-w-0 truncate font-semibold text-foreground" data-testid="home-system-version">
+            {buildInfo.versionLabel || "Not available"}
+          </span>
         </span>
-        <span className="text-muted-foreground">Device</span>
-        <span className="font-semibold text-foreground" data-testid="home-system-device">
-          {deviceValue}
+        <span className="flex min-w-0 items-baseline gap-1.5">
+          <span className="shrink-0 text-muted-foreground">Device</span>
+          <span className="min-w-0 truncate font-semibold text-foreground" data-testid="home-system-device">
+            {deviceValue}
+          </span>
         </span>
-        <span className="text-muted-foreground">Firmware</span>
-        <span className="font-semibold text-foreground" data-testid="home-system-firmware">
-          {firmwareValue}
+        <span className="flex min-w-0 items-baseline gap-1.5">
+          <span className="shrink-0 text-muted-foreground">Firmware</span>
+          <span className="min-w-0 truncate font-semibold text-foreground" data-testid="home-system-firmware">
+            {firmwareValue}
+          </span>
         </span>
       </div>
       {expanded && (

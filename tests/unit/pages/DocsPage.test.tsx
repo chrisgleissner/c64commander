@@ -31,7 +31,9 @@ const variantRef = vi.hoisted(() => ({
 
 vi.mock("@/generated/variant", () => ({
   get variant() {
-    return { id: variantRef.id, displayName: variantRef.displayName };
+    // `runtime` is part of the real module and is read at import time by app settings, which the
+    // display-profile hook pulls in; a mock without it fails the whole suite on import.
+    return { id: variantRef.id, displayName: variantRef.displayName, runtime: {} };
   },
 }));
 

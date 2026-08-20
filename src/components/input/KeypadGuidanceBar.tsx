@@ -111,11 +111,53 @@ const setAttrIfChanged = (element: HTMLElement | null, name: string, value: stri
   if (element && element.getAttribute(name) !== value) element.setAttribute(name, value);
 };
 
+/**
+ * Reserve the bar's height at the bottom of the page content while it is showing.
+ *
+ * The bar is `position: fixed` above the tab bar, so without this it covers the last 32 CSS px of
+ * the scroll box — on a 320x427 screen that is 15% of the 218 px of scrollable height, and the
+ * content underneath simply cannot be read. The reservation goes on the content stack rather than
+ * on `.page-shell` itself: that scroll box must not gain a bottom reservation of any kind (BUG-066
+ * and BUG-072 both did and were reverted; `tests/unit/pageShellClearance.test.ts` locks it).
+ */
+const reserveGuidanceHeight = (reserved: boolean): void => {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const next = reserved ? "var(--keypad-guidance-bar-height)" : "0px";
+  if (root.style.getPropertyValue("--keypad-guidance-reserved-height") === next) return;
+  root.style.setProperty("--keypad-guidance-reserved-height", next);
+};
+
+/**
+ * Set a slot's action word, or drop it when it only repeats the key cap beside it.
+ *
+ * The left soft key is labelled "Back" and its commonest action is also "Back", so the bar read
+ * "Back Back". On a 320 px screen that redundancy is not free: it pushed the row past the viewport
+ * and truncated the next key's word to "Acti…", which is the one that actually needed saying.
+ */
+const setActionText = (action: HTMLElement | null, cap: string, label: string): void => {
+  setTextIfChanged(action, label.trim().toLowerCase() === cap.toLowerCase() ? "" : label);
+};
+
+/**
+ * The breadcrumb, as much of it as the screen can carry.
+ *
+ * On the smallest screen the breadcrumb gets whatever the key legend does not need — around 80 px.
+ * A joined trail truncates from the right, so "Drives › Reset" would render as "Drives › Re…" and
+ * lose the part that says where the reader actually is. Compact therefore shows the last segment
+ * alone, which is the answer to "where am I" and fits.
+ */
+const formatBreadcrumb = (segments: readonly string[]): string => {
+  if (segments.length === 0) return "Navigation";
+  const compact = typeof document !== "undefined" && document.documentElement.dataset.displayProfile === "compact";
+  return compact ? segments[segments.length - 1] : segments.join("  ›  ");
+};
+
 /** Show/hide a soft-key slot and set its action text, each guarded by a value bail. */
-const applySlot = (slot: HTMLElement | null, action: HTMLElement | null, label: string | null): void => {
+const applySlot = (slot: HTMLElement | null, action: HTMLElement | null, label: string | null, cap = ""): void => {
   if (!slot || !action) return;
   if (label) {
-    setTextIfChanged(action, label);
+    setActionText(action, cap, label);
     if (slot.hasAttribute("hidden")) slot.removeAttribute("hidden");
   } else if (!slot.hasAttribute("hidden")) {
     slot.setAttribute("hidden", "");
@@ -151,19 +193,18 @@ export const KeypadGuidanceBar = () => {
     );
     if (!labels.visible) {
       setAttrIfChanged(root, "data-visible", "false");
+      reserveGuidanceHeight(false);
       return;
     }
     setAttrIfChanged(root, "data-visible", "true");
+    reserveGuidanceHeight(true);
     // One joined text node (not per-segment elements): the bar is aria-hidden
     // chrome that mirrors on-screen text, so a single string keeps it out of
     // role/text queries for the real controls behind it.
-    setTextIfChanged(
-      breadcrumbRef.current,
-      labels.breadcrumb.length > 0 ? labels.breadcrumb.join("  ›  ") : "Navigation",
-    );
-    setTextIfChanged(leftActionRef.current, labels.left);
-    applySlot(centerSlotRef.current, centerActionRef.current, labels.center);
-    applySlot(rightSlotRef.current, rightActionRef.current, labels.right);
+    setTextIfChanged(breadcrumbRef.current, formatBreadcrumb(labels.breadcrumb));
+    setActionText(leftActionRef.current, "Back", labels.left);
+    applySlot(centerSlotRef.current, centerActionRef.current, labels.center, "OK");
+    applySlot(rightSlotRef.current, rightActionRef.current, labels.right, "Menu");
     applySlot(shortcutSlotRef.current, shortcutActionRef.current, labels.shortcut);
   }, [context, gameModeAvailable]);
 

@@ -55,11 +55,37 @@
      useFocusNavigation `focusRingElement`). */
   --keypad-scroll-margin-top: calc(var(--safe-area-inset-top) + var(--app-bar-height, 72px) + 0.5rem);
   /* Mirrors the `.keypad-guidance-bar` box (keep in sync with that rule): vertical
-     padding (2 x 0.375rem) + text (0.8125rem x 1.15 line-height) + 1px border-top.
-     Centralised here so the scroll margin cannot silently drift from the bar's
-     actual height when the bar's font/padding is tweaked. */
-  --keypad-guidance-bar-height: calc(0.75rem + (0.8125rem * 1.15) + 1px);
+     padding (2 x --keypad-guidance-padding-y) + text (--keypad-guidance-font-size x 1.15
+     line-height) + 1px border-top. Centralised here so the scroll margin cannot silently drift
+     from the bar's actual height when the bar's font/padding is tweaked. */
+  --keypad-guidance-font-size: 0.8125rem;
+  --keypad-guidance-padding-y: 0.375rem;
+  --keypad-guidance-bar-height: calc(
+    (2 * var(--keypad-guidance-padding-y)) + (var(--keypad-guidance-font-size) * 1.15) + 1px
+  );
   --keypad-scroll-margin-bottom: calc(var(--app-tab-bar-frame-height) + var(--keypad-guidance-bar-height) + 0.5rem);
+}
+
+/*
+ * The smallest supported screen gets a tighter frame.
+ *
+ * Measured from Commodore's own Callback 8020 renders, the device's UI spends 49 device px (33 CSS
+ * px) on its status bar and 30 device px (20 CSS px) on its soft-key legend — 12.4% of the panel,
+ * leaving 87.6% for content. The app's own chrome was more than twice that at the bottom alone.
+ * These overrides bring the frame closer to what the handset itself does while keeping every tab
+ * button above the 44 px touch floor, and lift the guidance text to the 14 px floor (0.875rem is
+ * 14.9 px against this profile's 17 px root) while spending less height on it.
+ *
+ * DELTAS ONLY. Every variable these override is declared in the plain `:root` block above, so the
+ * other profiles keep their own values — moving a declaration down here instead of overriding it
+ * leaves it unset elsewhere, which makes any shorthand that references it collapse to its initial
+ * value on those profiles.
+ */
+:root[data-display-profile="compact"] {
+  --app-tab-bar-visual-height: 3rem;
+  --app-tab-bar-nav-padding-y: 0.25rem;
+  --keypad-guidance-font-size: 0.875rem;
+  --keypad-guidance-padding-y: 0.125rem;
 }
 
 :root[data-c64-motion-mode="reduced"] {
@@ -545,8 +571,8 @@ button:focus-visible,
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.375rem 0.75rem;
-  font-size: 0.8125rem;
+  padding: var(--keypad-guidance-padding-y) 0.75rem;
+  font-size: var(--keypad-guidance-font-size);
   line-height: 1.15;
   background: hsl(var(--background) / 0.97);
   border-top: 1px solid hsl(var(--border));
@@ -558,8 +584,17 @@ button:focus-visible,
 .keypad-guidance-breadcrumb {
   display: flex;
   align-items: center;
+  /*
+   * The breadcrumb absorbs all the pressure, and the key legend never does.
+   *
+   * These two compete for one 320 px row. Letting the breadcrumb grow (flex-basis auto) meant a
+   * long one — the health badge's "Connected to 192.168.1.148, system healthy" is a ring stop —
+   * took 146 px and clipped the word "Back" off the left soft key. The keys say what the three
+   * physical keys do right now and are useless clipped; the breadcrumb is context and reads fine
+   * shortened. So: basis 0, shrink freely, truncate.
+   */
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -591,7 +626,26 @@ button:focus-visible,
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  /*
+   * Never shrinks. With the optional shortcut hidden on the smallest screen the legend is bounded
+   * at about 215 px ("Back Exit" + "OK Activate" + "Menu"), which fits 320 px alongside a
+   * truncated breadcrumb — so it does not need to shrink, and must not, because a half-drawn key
+   * name is worse than a shorter breadcrumb.
+   */
   flex: 0 0 auto;
+}
+
+/*
+ * The smallest supported screen fits the breadcrumb and three soft keys, and not the optional
+ * shortcut as well. The shortcut is a convenience — the key still works — whereas a legend drawn
+ * past the right edge tells the reader nothing at all.
+ */
+:root[data-display-profile="compact"] .keypad-guidance-keys {
+  gap: 0.375rem;
+}
+
+:root[data-display-profile="compact"] .keypad-guidance-key[data-soft="shortcut"] {
+  display: none;
 }
 
 .keypad-guidance-key {
@@ -599,13 +653,17 @@ button:focus-visible,
   align-items: center;
   gap: 0.3rem;
   white-space: nowrap;
+  /* Whole or not at all — see `.keypad-guidance-keys`. */
+  flex: 0 0 auto;
 }
 
 .keypad-guidance-cap {
   display: inline-flex;
   align-items: center;
   padding: 0.05rem 0.35rem;
-  font-size: 0.6875rem;
+  /* The key caps name the physical keys, so they are read as much as the actions beside them and
+     answer to the same 14px floor. They were 0.6875rem = 11.7px at the compact root. */
+  font-size: var(--keypad-guidance-font-size);
   font-weight: 600;
   line-height: 1.3;
   color: hsl(var(--muted-foreground));
@@ -817,6 +875,13 @@ button:focus-visible,
     display: flex;
     flex-direction: column;
     gap: var(--display-profile-section-gap);
+    /*
+     * Clear the fixed keypad guidance bar, which sits above the tab bar and would otherwise cover
+     * the last rows of the page. Reserved here, on the content, rather than on the `.page-shell`
+     * scroll box — that box must never carry a bottom reservation (see its own comment). The
+     * variable is 0px unless the bar is actually showing, so nothing is spent when it is not.
+     */
+    padding-bottom: var(--keypad-guidance-reserved-height, 0px);
   }
 
   .profile-action-grid {

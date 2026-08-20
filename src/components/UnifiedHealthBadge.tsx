@@ -578,15 +578,25 @@ export function UnifiedHealthBadge({ className }: Props) {
           aria-hidden="true"
         >
           <span className="inline-flex min-w-0 max-w-full select-none items-center overflow-hidden whitespace-nowrap leading-none">
-            <span
-              className="truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
-              data-overlay-critical="badge"
-            >
-              {badgeText.leadingLabel}
-            </span>
-            <span className="shrink-0 whitespace-pre" aria-hidden="true">
-              {" "}
-            </span>
+            {/*
+              The host name is dropped on the smallest screen. At 320 px it took 154 px — 48% of the
+              header — to render "192.168.1.148" truncated to "192.168.1…", which names nothing, in
+              12.75 px type that is under the 14 px floor. The glyph is what this badge is for, and
+              the host is on Home's system row and in Settings for anyone who wants it.
+            */}
+            {profile === "compact" ? null : (
+              <>
+                <span
+                  className="truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+                  data-overlay-critical="badge"
+                >
+                  {badgeText.leadingLabel}
+                </span>
+                <span className="shrink-0 whitespace-pre" aria-hidden="true">
+                  {" "}
+                </span>
+              </>
+            )}
             <span
               className={cn(
                 "inline-flex h-[1em] w-[1em] shrink-0 items-center justify-center align-middle font-sans text-[1rem] leading-none transform-gpu",

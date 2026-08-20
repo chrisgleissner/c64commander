@@ -18,7 +18,7 @@ describe("CollapsibleSection", () => {
     localStorage.clear();
   });
 
-  it("renders closed by default and opens on tap, showing the summary either way", () => {
+  it("renders closed by default and opens on tap", () => {
     render(
       <CollapsibleSection scope="test" id="audio" title="Audio" summary="Volume and mute per chip" icon={Radio}>
         <p>Channel strip</p>
@@ -26,7 +26,6 @@ describe("CollapsibleSection", () => {
     );
 
     expect(screen.getByText("Audio")).toBeInTheDocument();
-    expect(screen.getByText("Volume and mute per chip")).toBeInTheDocument();
     expect(screen.queryByText("Channel strip")).not.toBeInTheDocument();
     expect(screen.getByTestId("test-section-audio")).toHaveAttribute("data-open", "false");
 
@@ -34,6 +33,27 @@ describe("CollapsibleSection", () => {
 
     expect(screen.getByText("Channel strip")).toBeInTheDocument();
     expect(screen.getByTestId("test-section-audio")).toHaveAttribute("data-open", "true");
+  });
+
+  it("hides the summary by default, and shows it once card descriptions are turned on", () => {
+    // The description is the largest single consumer of vertical space on a page of closed cards:
+    // a Settings card header measures 97 CSS px with it and roughly half that without, against the
+    // 218 CSS px of scrollable height a 320x427 screen has.
+    const { unmount } = render(
+      <CollapsibleSection scope="test" id="audio" title="Audio" summary="Volume and mute per chip" icon={Radio}>
+        <p>Channel strip</p>
+      </CollapsibleSection>,
+    );
+    expect(screen.queryByText("Volume and mute per chip")).not.toBeInTheDocument();
+    unmount();
+
+    localStorage.setItem("c64u_show_section_descriptions", "1");
+    render(
+      <CollapsibleSection scope="test" id="audio" title="Audio" summary="Volume and mute per chip" icon={Radio}>
+        <p>Channel strip</p>
+      </CollapsibleSection>,
+    );
+    expect(screen.getByText("Volume and mute per chip")).toBeInTheDocument();
   });
 
   it("honors defaultOpen on a first visit to a fresh scope", () => {
