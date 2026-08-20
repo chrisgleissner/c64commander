@@ -707,14 +707,32 @@ button:focus-visible,
   }
 
   /* Tab labels on the smallest screen.
-     The compact profile renders text-xs at 16px, at which the six labels plus the 44px
-     minimum tab width come to more than the bar can hold at 320px and "Docs" is clipped
-     off the right edge. 0.9rem is 14.4px, which clears the 14px readability floor and
-     brings the row to about 284px against the 304px available, so it fits with room to
-     spare rather than by a few pixels. */
+     Six labels plus the 44px minimum tab width come to more than the bar can hold at 320px, and
+     "Docs" is clipped off the right edge. 0.9rem clears the 14px readability floor and brings the
+     row well inside the width available.
+
+     Keyed off the VIEWPORT as well as the profile. A reader can override the profile to Standard or
+     Large on a 320px screen, and then the bar was sized for a screen they do not have: the labels
+     grew with the larger root and the last tab was drawn past the edge. The screen is what decides
+     whether the labels fit, so the media query is the rule and the profile selector only keeps the
+     behaviour when a wider screen is running the compact profile deliberately. */
+  :root[data-display-profile="compact"] .tab-item-label,
+  .tab-item-label {
+    line-height: 1.15;
+  }
+
   :root[data-display-profile="compact"] .tab-item-label {
     font-size: 0.9rem;
-    line-height: 1.15;
+  }
+
+  @media (max-width: 380px) {
+    .tab-item-label {
+      /* Absolute, not rem. This rule exists for the case where a reader has forced a LARGER profile
+         onto a 320px screen, and a rem value would scale with that profile's bigger root and make
+         the labels wider still — the opposite of what is needed. 14px is the readability floor, so
+         this is as small as a tab label is ever allowed to be. */
+      font-size: 14px;
+    }
   }
 
   :root[data-display-profile="compact"] :where([class~="text-sm"]) {
@@ -732,8 +750,13 @@ button:focus-visible,
     line-height: 1.95rem;
   }
 
+  /* The app-bar title is the same physical size on compact and medium, so the chrome does not
+     appear to change size as a reader moves between them. That makes this value a FUNCTION of both
+     profiles' root sizes: medium renders text-xl at 1.25rem against a 17px root = 21.25px, so
+     compact needs 21.25 / 16 = 1.328rem to match. `displayProfiles.spec.ts` asserts the two stay
+     within 0.1px of each other, which is what catches this drifting when a root size changes. */
   :root[data-display-profile="compact"] :where(.c64-header[class~="text-xl"]) {
-    font-size: 1.1765rem;
+    font-size: 1.328rem;
     line-height: 1.5rem;
   }
 
