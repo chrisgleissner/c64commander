@@ -840,6 +840,29 @@ button:focus-visible,
     border-color: hsl(var(--primary) / 0.45);
   }
 
+  /*
+   * A touch target larger than the box that draws it.
+   *
+   * The compact header is a 28 px strip, and the badge inside it used to carry `min-h-[44px]` for
+   * the touch floor — which set the height of the whole header. The pseudo-element extends the
+   * pressable area to 44 px without contributing to layout, so the strip stays 28 px and a finger
+   * still gets its 44 px. The Callback 8020 has no touchscreen at all and reaches this through the
+   * focus ring; this is for the small touch phones that also resolve to compact.
+   */
+  .app-chrome-badge-hit-expand {
+    position: relative;
+  }
+
+  .app-chrome-badge-hit-expand::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 44px;
+    transform: translateY(-50%);
+  }
+
   .app-chrome-badge:active .app-chrome-badge-surface {
     background-color: hsl(var(--app-chrome-badge-surface-hover));
   }

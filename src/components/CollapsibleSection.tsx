@@ -214,9 +214,15 @@ export const CollapsibleSection = ({
               {/* Still a real heading: the section titles are how the page is navigated, by a
                   screen reader and by anyone scanning it. The badge sits beside the heading
                   rather than inside it, so the heading's accessible name stays the title alone. */}
-              <span className="flex items-center gap-2">
-                <h2 className="font-medium">{title}</h2>
-                {badge}
+              {/*
+                Title and badge stay on one line, so every closed card is the same height.
+                Without `min-w-0`/`truncate` on the heading and `shrink-0` on the badge, a long
+                title next to a badge wrapped onto a second row: "Experimental Features" with its
+                "7/11 on" badge measured 64 CSS px against 38 for every other card on the page.
+              */}
+              <span className="flex min-w-0 items-center gap-2">
+                <h2 className="min-w-0 truncate font-medium">{title}</h2>
+                {badge ? <span className="shrink-0">{badge}</span> : null}
               </span>
               {summary && showSummary ? (
                 // Wrapped, not truncated: a summary cut off mid-word tells the reader less

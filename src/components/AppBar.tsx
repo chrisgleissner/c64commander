@@ -37,6 +37,9 @@ type Props = {
 export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, titleTestId, children }: Props) {
   const headerRef = useRef<HTMLElement | null>(null);
   const { profile } = useDisplayProfile();
+  // The smallest screen gets a slim status strip instead of a 44 px row: 24 CSS px of the 427 the
+  // panel has, which is half a collapsed card, spent on a bar that holds one title and one dot.
+  const isCompact = profile === "compact";
   const screenActive = useScreenActivity();
   const appChromeMode = useAppChromeMode();
 
@@ -91,10 +94,16 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
           paddingBottom: "var(--app-chrome-rail-padding-y)",
         }}
       >
-        <div className="flex min-h-11 items-center justify-between gap-2" data-testid="app-bar-row">
-          <div className="flex min-h-11 min-w-0 items-center" data-testid="app-bar-title-zone">
+        <div
+          className={cn("flex items-center justify-between gap-2", isCompact ? "min-h-0" : "min-h-11")}
+          data-testid="app-bar-row"
+        >
+          <div
+            className={cn("flex min-w-0 items-center", isCompact ? "min-h-0" : "min-h-11")}
+            data-testid="app-bar-title-zone"
+          >
             {leading ?? (
-              <div className="flex min-h-11 min-w-0 items-center gap-2">
+              <div className={cn("flex min-w-0 items-center gap-2", isCompact ? "min-h-0" : "min-h-11")}>
                 {leadingVisual}
                 <h1 className="c64-header truncate text-xl leading-none" data-testid={titleTestId}>
                   {title}

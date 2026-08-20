@@ -47,6 +47,31 @@ export const loadShowSectionDescriptions = (): boolean => {
   return localStorage.getItem(SECTION_DESCRIPTIONS_KEY) === "1";
 };
 
+/**
+ * One window listener for the whole app, fanned out to subscribers.
+ *
+ * Settings alone renders around sixty pieces of secondary text, and every collapsible card reads
+ * this too. Each of them adding its own `c64u-app-settings-updated` listener would put a hundred
+ * listeners on one event on the slowest device the app supports.
+ */
+const descriptionSubscribers = new Set<() => void>();
+let descriptionListenerAttached = false;
+
+export const subscribeShowSectionDescriptions = (onChange: () => void): (() => void) => {
+  descriptionSubscribers.add(onChange);
+  if (!descriptionListenerAttached && typeof window !== "undefined") {
+    descriptionListenerAttached = true;
+    window.addEventListener("c64u-app-settings-updated", (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string }>).detail;
+      if (detail?.key && detail.key !== SECTION_DESCRIPTIONS_KEY) return;
+      for (const subscriber of descriptionSubscribers) subscriber();
+    });
+  }
+  return () => {
+    descriptionSubscribers.delete(onChange);
+  };
+};
+
 export const saveShowSectionDescriptions = (enabled: boolean): void => {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(SECTION_DESCRIPTIONS_KEY, enabled ? "1" : "0");

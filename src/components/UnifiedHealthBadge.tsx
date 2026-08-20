@@ -565,8 +565,12 @@ export function UnifiedHealthBadge({ className }: Props) {
         }}
         onClick={handleClick}
         className={cn(
-          "app-chrome-badge inline-flex shrink min-w-0 select-none items-center overflow-hidden rounded-md bg-transparent px-0 py-0 min-h-[44px] touch-none",
-          profile === "compact" ? "max-w-[min(48vw,12rem)]" : "max-w-full",
+          "app-chrome-badge inline-flex shrink min-w-0 select-none items-center overflow-hidden rounded-md bg-transparent px-0 py-0 touch-none",
+          // Compact keeps the 44 px pressable area but stops it setting the header's height — see
+          // `.app-chrome-badge-hit-expand`. The header is a 28 px strip on this profile.
+          profile === "compact"
+            ? "app-chrome-badge-hit-expand max-w-[min(48vw,12rem)] min-h-0"
+            : "max-w-full min-h-[44px]",
           "text-foreground transition-opacity hover:opacity-90 active:opacity-80",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-0",
           className,
