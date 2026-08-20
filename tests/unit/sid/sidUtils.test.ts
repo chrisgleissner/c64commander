@@ -12,6 +12,7 @@ import {
   buildSidTrackSubsongs,
   createSslPayload,
   getSidSongCount,
+  MAX_SID_SUBSONGS,
   parseSidHeaderMetadata,
 } from "@/lib/sid/sidUtils";
 
@@ -52,6 +53,32 @@ const createSidHeader = (options?: {
 };
 
 describe("sidUtils", () => {
+  describe("a header that declares more subsongs than the format allows", () => {
+    // The count is one 16-bit field, so a corrupt or hostile header reads up to 65,535 where
+    // PSID/RSID permit 256. Every consumer of the count sizes something from it — playlist entries,
+    // Tunes-sheet rows, the SSL sidecar — so the clamp belongs at the parse, not at each consumer.
+    const absurd = 65535;
+
+    it("clamps the parsed subsong count to the format's limit", () => {
+      const metadata = parseSidHeaderMetadata(createSidHeader({ songs: absurd }).buffer);
+      expect(metadata.songs).toBe(MAX_SID_SUBSONGS);
+    });
+
+    it("clamps the standalone song count used by the local file source", () => {
+      expect(getSidSongCount(createSidHeader({ songs: absurd }).buffer as ArrayBuffer)).toBe(MAX_SID_SUBSONGS);
+    });
+
+    it("builds at most one playlist subsong entry per permitted subsong", () => {
+      expect(buildSidTrackSubsongs(absurd, 1)).toHaveLength(MAX_SID_SUBSONGS);
+    });
+
+    it("keeps the SSL sidecar inside the 512 bytes the firmware reads", () => {
+      const payload = createSslPayload(120_000, { songNr: absurd });
+      expect(payload.byteLength).toBe(MAX_SID_SUBSONGS * 2);
+      expect(payload.byteLength).toBeLessThanOrEqual(512);
+    });
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();

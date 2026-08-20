@@ -293,6 +293,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
               <Stat label="Decimated" value={num(live.decimated)} testid="decimated" />
               <Stat label="Backlog" value={num(live.backlogReplacements)} testid="backlog" />
               <Stat label="Lost" value={num(live.framesLost)} testid="frames-lost" />
+              <Stat label="Lost pkts" value={num(live.droppedPackets)} testid="video-dropped-packets" />
             </div>
           </section>
 
@@ -301,7 +302,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
             <div className="mb-1 text-[11px] font-medium">Audio</div>
             <div className={cn("grid gap-2", statColumns("grid-cols-3", "grid-cols-2"))}>
               <Stat label="Concealed" value={num(live.audioConcealed)} testid="concealed" />
-              <Stat label="Dropped pkts" value={num(live.droppedPackets)} testid="dropped-packets" />
+              <Stat label="Dropped pkts" value={num(live.audioLostPackets)} testid="dropped-packets" />
               <Stat label="Buf min" value={ms(summary.audioBufferMsMin)} testid="audio-buffer-min" />
             </div>
           </section>

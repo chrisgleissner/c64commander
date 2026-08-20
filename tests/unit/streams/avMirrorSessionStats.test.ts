@@ -118,6 +118,23 @@ describe("AvMirrorSession — governor + telemetry wiring", () => {
     expect(stats.summary.videoPresented).toBeGreaterThan(0);
   });
 
+  it("keeps audio packet loss separate from video packet loss in the Stats snapshot", async () => {
+    // The two mirrors are separate multicast streams with separate sequence spaces, and the video
+    // stream is what costs the audio stream its packets — so one counter cannot stand in for the
+    // other. The panel's Audio section reads `audioLostPackets`; before this was carried through it
+    // read the video counter and could never report audio loss at all.
+    const { session, videoReceiver } = makeSession();
+    await session.startVideo();
+    videoReceiver.open();
+    videoReceiver.emit(videoFrame(0, 0), 0);
+    videoReceiver.emit(videoFrame(5, 1), 0); // four packets missing on the video stream
+
+    const live = session.getStatsSnapshot().live;
+
+    expect(live.droppedPackets).toBeGreaterThan(0);
+    expect(live.audioLostPackets).toBe(0); // no audio was streaming, so nothing was lost on it
+  });
+
   it("broadcasts Stats snapshots to subscribers on tick", async () => {
     const { session, videoReceiver } = makeSession();
     await session.startVideo();

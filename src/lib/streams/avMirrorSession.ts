@@ -89,7 +89,16 @@ export interface AvStatsSnapshot {
     partialConcealed: number;
     repeatedFrames: number;
     framesLost: number;
+    /** Video packets lost on the wire, counted from sequence gaps by the VIC assembler. */
     droppedPackets: number;
+    /**
+     * Audio packets lost on the wire.
+     *
+     * Separate from `droppedPackets`, and not derivable from it: the two mirrors are separate
+     * multicast streams with separate sequence spaces, and video streaming is what costs the audio
+     * stream its packets, so the numbers move in opposite directions.
+     */
+    audioLostPackets: number;
     standard: VideoStandard;
   };
 }
@@ -520,6 +529,7 @@ export class AvMirrorSession {
         repeatedFrames: video.repeatedFrames,
         framesLost: video.framesLost,
         droppedPackets: video.droppedPackets,
+        audioLostPackets: signals.audioLostPackets,
         standard: video.standard,
       },
     };
