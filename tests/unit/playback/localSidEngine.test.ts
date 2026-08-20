@@ -612,6 +612,44 @@ describe("LocalSidEngine — default environment factories", () => {
     await expect(play).rejects.toThrow(/deserial/i);
   });
 
+  it("throws a crashed worker away, so the next play does not wait out its own timeout", async () => {
+    // The reply-timeout path already discards an unresponsive worker. A crash has to do the same:
+    // `ensureWorker` only builds a new one when `worker` is null, so keeping the dead instance made
+    // the next load post into it and reject 15 s later instead of starting the tune.
+    const built: FakeWorker[] = [new FakeWorker()];
+    let handed = 0;
+    const engine = new LocalSidEngine({ workerFactory: () => built[Math.min(handed++, built.length - 1)] });
+    const crashed = built[0];
+    const load = engine.load();
+    crashed.emitError("segfault");
+    await expect(load).rejects.toThrow(/segfault/);
+    expect(crashed.terminated).toBe(true);
+
+    const fresh = new FakeWorker();
+    built.push(fresh);
+    const retry = engine.load();
+    fresh.emit({ type: "ready", moduleLoadMs: 1 });
+    await expect(retry).resolves.toBeUndefined();
+    expect(built.length).toBe(2);
+  });
+
+  it("throws away a worker whose message could not be deserialized, for the same reason", async () => {
+    const built: FakeWorker[] = [new FakeWorker()];
+    let handed = 0;
+    const engine = new LocalSidEngine({ workerFactory: () => built[Math.min(handed++, built.length - 1)] });
+    const crashed = built[0];
+    const load = engine.load();
+    crashed.emitMessageError();
+    await expect(load).rejects.toThrow(/deserial/i);
+    expect(crashed.terminated).toBe(true);
+
+    const fresh = new FakeWorker();
+    built.push(fresh);
+    const retry = engine.load();
+    fresh.emit({ type: "ready", moduleLoadMs: 1 });
+    await expect(retry).resolves.toBeUndefined();
+  });
+
   it("surfaces a worker crash during playback via onError", async () => {
     const onError = vi.fn();
     const { engine, worker } = makeEngine();
