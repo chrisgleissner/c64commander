@@ -58,7 +58,11 @@ describe("CollapsibleSection", () => {
         <p>Channel strip</p>
       </CollapsibleSection>,
     );
-    expect(screen.queryByText("Volume and mute per chip")).not.toBeInTheDocument();
+    // Present but visually hidden, not removed: it still names the section for a screen reader, and
+    // it keeps this disclosure button's accessible name stable, which is what stops it colliding
+    // with a same-named button inside the section.
+    const hidden = screen.getByText("Volume and mute per chip");
+    expect(hidden).toHaveClass("sr-only");
     unmount();
 
     localStorage.setItem("c64u_show_section_descriptions", "1");
@@ -67,7 +71,7 @@ describe("CollapsibleSection", () => {
         <p>Channel strip</p>
       </CollapsibleSection>,
     );
-    expect(screen.getByText("Volume and mute per chip")).toBeInTheDocument();
+    expect(screen.getByText("Volume and mute per chip")).not.toHaveClass("sr-only");
   });
 
   it("scrolls a freshly-expanded section into view without scrolling its header past the top", () => {

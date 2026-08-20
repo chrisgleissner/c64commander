@@ -86,9 +86,12 @@ test.describe("Settings sections", () => {
       await expect(page.getByTestId(`settings-section-${id}`)).toHaveAttribute("data-open", "false");
     }
 
-    // Each closed chapter still says what it decides, so nothing has to be opened to find it.
-    await expect(page.getByTestId("settings-section-appearance")).toContainText("Theme");
-    await expect(page.getByTestId("settings-section-play-and-disk")).toContainText("Live View");
+    // Each closed chapter still says what it decides. The description is off by default now — it
+    // was the largest consumer of height on a page of closed cards — so it is carried in the
+    // chapter's accessible name rather than drawn, and a reader who wants it back turns on
+    // Settings -> Appearance -> Card descriptions.
+    await expect(page.getByRole("button", { name: /Appearance.*Theme/s })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Play and Disk.*Live View/s })).toBeVisible();
   });
 
   test("opening a chapter reveals exactly the controls it always held", async ({ page }) => {

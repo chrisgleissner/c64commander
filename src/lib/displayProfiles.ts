@@ -32,6 +32,30 @@ export const DISPLAY_PROFILE_OVERRIDE_LABELS: Record<DisplayProfileOverride, str
   expanded: DISPLAY_PROFILE_LABELS.expanded,
 };
 
+/**
+ * Root type sizes, set from the physical size of a pixel on each profile's real hardware rather
+ * than from taste.
+ *
+ * A CSS pixel is not a fixed physical size — the device pixel ratio the browser picks decides that.
+ * Measured from the rendered glyphs, cap height is 0.71 em, so the visual angle a reader actually
+ * gets is `2 * atan(root * 0.71 * mmPerCssPx / (2 * distance))`. A reader at 20/40 — roughly average
+ * corrected sight in the 50-60 age range this app targets — is at threshold near 10 arcminutes and
+ * comfortable from about 20.
+ *
+ * | profile  | reference hardware                   | ppi | mm/CSS px | distance | root    | angle |
+ * |----------|--------------------------------------|-----|-----------|----------|---------|-------|
+ * | compact  | 3.25in 480x640 handset, DPR 1.5      | 246 | 0.1548    | 300 mm   | 18px    | 22.7' |
+ * | medium   | 5.7in 1080x2280 phone, DPR 2.75      | 443 | 0.1578    | 300 mm   | 19.2px  | 24.7' |
+ * | expanded | 10.1in 1200x1920 tablet, DPR 1.5     | 224 | 0.1700    | 400 mm   | 21px    | 21.8' |
+ *
+ * Medium was 16px — 20.5 arcminutes, right on the comfortable floor, and smaller than compact
+ * despite the two having almost identical physical pixels. Expanded was the worst at 18.1', below
+ * the floor, because a tablet is held further away and its pixels are physically larger without the
+ * type being any larger to match. The expanded row's hardware is an assumption; the other two are
+ * the devices this was measured on.
+ *
+ * The user's own Text size setting still scales on top of all three.
+ */
 export const resolveDisplayProfile = (width: number): DisplayProfile => {
   if (!Number.isFinite(width) || width <= 0) return "medium";
   if (width <= DISPLAY_PROFILE_THRESHOLDS.compactMax) return "compact";
@@ -78,7 +102,7 @@ export const getDisplayProfileLayoutTokens = (profile: DisplayProfile) => {
   switch (profile) {
     case "compact":
       return {
-        rootFontSize: "17px",
+        rootFontSize: "18px",
         pageMaxWidth: "100%",
         readingMaxWidth: "100%",
         pagePaddingX: "0.5rem",
@@ -95,7 +119,7 @@ export const getDisplayProfileLayoutTokens = (profile: DisplayProfile) => {
       };
     case "expanded":
       return {
-        rootFontSize: "17.5px",
+        rootFontSize: "21px",
         pageMaxWidth: "1200px",
         readingMaxWidth: "1080px",
         pagePaddingX: "1.5rem",
@@ -112,7 +136,7 @@ export const getDisplayProfileLayoutTokens = (profile: DisplayProfile) => {
       };
     default:
       return {
-        rootFontSize: "16px",
+        rootFontSize: "19.2px",
         pageMaxWidth: "960px",
         readingMaxWidth: "960px",
         pagePaddingX: "1rem",

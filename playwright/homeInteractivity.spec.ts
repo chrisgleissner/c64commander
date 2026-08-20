@@ -726,48 +726,35 @@ test.describe("Home interactions", () => {
     await page.goto("/");
     await applyCompactDisplayProfile(page);
     await waitForConnected(page);
-    await openHomeSection(page, "printers");
-    await openHomeSection(page, "audio");
-
-    const driveA = page.getByTestId("home-drive-row-a");
-    const driveB = page.getByTestId("home-drive-row-b");
-    const printerToggle = page.getByTestId("home-printer-toggle");
-    const printerBus = page.getByTestId("home-printer-bus");
-    const sidEntry = page.getByTestId("home-sid-entry-socket1");
-    const sidVolume = page.getByTestId("home-sid-volume-socket1");
-    const sidPan = page.getByTestId("home-sid-pan-socket1");
-
-    for (const locator of [driveA, driveB, printerToggle, printerBus, sidEntry, sidVolume, sidPan]) {
+    // The compact profile keeps ONE card open at a time, so each section's stacking is checked while
+    // that section is the open one. Opening them all first and measuring afterwards would only ever
+    // see the last one.
+    const boxOf = async (testId: string) => {
+      const locator = page.getByTestId(testId);
       await locator.scrollIntoViewIfNeeded();
       await expect(locator).toBeVisible();
-    }
+      const box = await locator.boundingBox();
+      expect(box).not.toBeNull();
+      return box!;
+    };
 
-    const [driveABox, driveBBox, printerToggleBox, printerBusBox, sidEntryBox, sidVolumeBox, sidPanBox] =
-      await Promise.all([
-        driveA.boundingBox(),
-        driveB.boundingBox(),
-        printerToggle.boundingBox(),
-        printerBus.boundingBox(),
-        sidEntry.boundingBox(),
-        sidVolume.boundingBox(),
-        sidPan.boundingBox(),
-      ]);
+    await openHomeSection(page, "drives");
+    const driveABox = await boxOf("home-drive-row-a");
+    const driveBBox = await boxOf("home-drive-row-b");
+    expect(driveBBox.y).toBeGreaterThanOrEqual(driveABox.y + driveABox.height - 1);
 
-    expect(driveABox).not.toBeNull();
-    expect(driveBBox).not.toBeNull();
-    expect(printerToggleBox).not.toBeNull();
-    expect(printerBusBox).not.toBeNull();
-    expect(sidEntryBox).not.toBeNull();
-    expect(sidVolumeBox).not.toBeNull();
-    expect(sidPanBox).not.toBeNull();
+    await openHomeSection(page, "printers");
+    const printerToggleBox = await boxOf("home-printer-toggle");
+    const printerBusBox = await boxOf("home-printer-bus");
+    expect(printerBusBox.y).toBeGreaterThanOrEqual(printerToggleBox.y + printerToggleBox.height - 1);
 
-    if (driveABox && driveBBox && printerToggleBox && printerBusBox && sidEntryBox && sidVolumeBox && sidPanBox) {
-      expect(driveBBox.y).toBeGreaterThanOrEqual(driveABox.y + driveABox.height - 1);
-      expect(printerBusBox.y).toBeGreaterThanOrEqual(printerToggleBox.y + printerToggleBox.height - 1);
-      expect(sidPanBox.y).toBeGreaterThanOrEqual(sidVolumeBox.y + sidVolumeBox.height - 1);
-      expect(sidVolumeBox.width).toBeGreaterThan(sidEntryBox.width * 0.55);
-      expect(sidPanBox.width).toBeGreaterThan(sidEntryBox.width * 0.55);
-    }
+    await openHomeSection(page, "audio");
+    const sidEntryBox = await boxOf("home-sid-entry-socket1");
+    const sidVolumeBox = await boxOf("home-sid-volume-socket1");
+    const sidPanBox = await boxOf("home-sid-pan-socket1");
+    expect(sidPanBox.y).toBeGreaterThanOrEqual(sidVolumeBox.y + sidVolumeBox.height - 1);
+    expect(sidVolumeBox.width).toBeGreaterThan(sidEntryBox.width * 0.55);
+    expect(sidPanBox.width).toBeGreaterThan(sidEntryBox.width * 0.55);
   });
 
   test("stateless actions clear focus after click", async ({ page }: { page: Page }) => {

@@ -1840,11 +1840,7 @@ export default function SettingsPage() {
                   data-testid="diagnostics-open-dialog"
                 >
                   <FileText className="h-4 w-4 mr-2" />
-                  {/* "Open Diagnostics", not "Diagnostics": the section header above it is a
-                      disclosure button whose accessible name is its title, so two buttons on this
-                      page would otherwise both be called "Diagnostics". Saying what the button does
-                      is clearer anyway. */}
-                  Open Diagnostics
+                  Diagnostics
                 </Button>
 
                 <div className="flex items-start justify-between gap-3 min-w-0">

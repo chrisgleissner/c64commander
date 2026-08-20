@@ -250,10 +250,22 @@ export const CollapsibleSection = ({
                 <h2 className="min-w-0 truncate font-medium">{title}</h2>
                 {badge ? <span className="shrink-0">{badge}</span> : null}
               </span>
-              {summary && showSummary ? (
+              {summary ? (
                 // Wrapped, not truncated: a summary cut off mid-word tells the reader less
                 // than no summary at all, and these pages are read on a narrow screen.
-                <span className={cn("leading-snug text-muted-foreground", singleOpen ? "text-sm" : "text-xs")}>
+                //
+                // When descriptions are off it becomes screen-reader-only rather than disappearing.
+                // Two reasons. It is still useful to someone who cannot see the layout the setting
+                // exists to protect. And the accessible NAME of this disclosure button is built from
+                // its contents, so dropping the summary shortened "Diagnostics Logs, health checks…"
+                // to "Diagnostics" — which then collided with the "Diagnostics" button inside the
+                // section, leaving two buttons on the page with one name.
+                <span
+                  className={cn(
+                    "leading-snug text-muted-foreground",
+                    showSummary ? (singleOpen ? "text-sm" : "text-xs") : "sr-only",
+                  )}
+                >
                   {summary}
                 </span>
               ) : null}

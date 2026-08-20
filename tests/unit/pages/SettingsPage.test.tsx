@@ -2009,7 +2009,7 @@ describe("SettingsPage", () => {
   it("requests the global diagnostics overlay from the settings trigger", () => {
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Diagnostics" }));
+    fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
 
     expect(mockPrimeDiagnosticsOverlaySuppression).toHaveBeenCalled();
     expect(requestDiagnosticsOpen).toHaveBeenCalledWith("settings");
