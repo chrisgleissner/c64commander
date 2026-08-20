@@ -1017,7 +1017,7 @@ describe("HomePage SID status", () => {
     expect(within(drivesGroup).getByTestId("home-drive-row-soft-iec")).toBeTruthy();
     expect(within(drivesGroup).getByText("Drive A")).toBeTruthy();
     expect(within(drivesGroup).getByText("Drive B")).toBeTruthy();
-    expect(within(drivesGroup).getByText("Soft IEC Drive")).toBeTruthy();
+    expect(within(drivesGroup).getByText("Soft IEC")).toBeTruthy();
     expect(within(drivesGroup).getAllByText("Bus ID").length).toBeGreaterThanOrEqual(3);
     expect(within(drivesGroup).getAllByText("Type").length).toBeGreaterThanOrEqual(2);
     expect(within(drivesGroup).getByText("Path")).toBeTruthy();

@@ -46,6 +46,8 @@ export interface CollapsibleSectionProps {
    * without opening the section, matching what these sections did before they were
    * collapsible. */
   actions?: ReactNode;
+  /** Extra classes on the card root, for a caller that has to place the card itself. */
+  className?: string;
   /** Root testid. Defaults to `${scope}-section-${id}`. */
   testId?: string;
   /** Toggle button testid/HTML id. Defaults to `${scope}-section-toggle-${id}`. */
@@ -94,6 +96,7 @@ export const CollapsibleSection = ({
   badge,
   headerRef,
   actions,
+  className,
   testId,
   toggleTestId,
   bodyId,
@@ -231,7 +234,7 @@ export const CollapsibleSection = ({
       // Clear the fixed guidance bar when this section is scrolled into view. The variable is 0px
       // whenever the bar is not showing, so nothing is reserved for it then.
       style={{ scrollMarginBottom: "var(--keypad-guidance-reserved-height, 0px)" }}
-      className="overflow-hidden rounded-xl border border-border bg-card"
+      className={cn("overflow-hidden rounded-xl border border-border bg-card", className)}
       data-testid={testId ?? `${scope}-section-${id}`}
       data-open={open ? "true" : "false"}
       data-section-label={sectionLabel ?? title}

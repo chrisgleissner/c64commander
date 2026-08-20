@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { MonitorPlay, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { useAvMirror } from "@/hooks/useAvMirror";
 import { AvMirrorControls } from "./AvMirrorControls";
 import { AvMirrorPreview } from "./AvMirrorPreview";
@@ -37,48 +37,62 @@ export function LiveViewCard({
   showAvSyncTests = true,
   className,
 }: LiveViewCardProps) {
-  const { video, anyLive } = useAvMirror();
+  const { video, anyLive, stopAll } = useAvMirror();
   const [expanded, setExpanded] = useState(false);
   const showPreview = videoEnabled && video.state !== "off";
 
   return (
-    <div className={cn("rounded-lg border border-border p-3", className)} data-testid="live-view-card">
+    <CollapsibleSection
+      scope="home"
+      id="live-view"
+      title="Live View"
+      icon={MonitorPlay}
+      testId="live-view-card"
+      className={className}
+      // Closed on a first visit. Mirroring is something a listener turns on deliberately, and the
+      // card carries a preview, the stream statistics and the A/V measurement tools underneath it.
+      defaultOpen={false}
+      actions={
+        anyLive ? (
+          // Stops both streams without opening the card. Mirroring keeps a multicast receiver and
+          // an audio track running, so "stop it now" has to be reachable from the closed card —
+          // otherwise the only way to stop it is to open the card and find the two toggles.
+          <Button variant="outline" size="sm" onClick={stopAll} data-testid="live-view-stop">
+            Reset
+          </Button>
+        ) : null
+      }
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <MonitorPlay className="h-5 w-5 text-muted-foreground" aria-hidden />
-          <span className="font-medium">Live View</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <AvMirrorControls showAudio={audioEnabled} showVideo={videoEnabled} />
-          {showPreview && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8"
-              aria-label={expanded ? "Collapse preview" : "Expand preview"}
-              aria-pressed={expanded}
-              onClick={() => setExpanded((value) => !value)}
-              data-testid="live-view-expand"
-            >
-              {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </Button>
-          )}
-        </div>
+        <AvMirrorControls showAudio={audioEnabled} showVideo={videoEnabled} />
+        {showPreview && (
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-11 w-11"
+            aria-label={expanded ? "Collapse preview" : "Expand preview"}
+            aria-pressed={expanded}
+            onClick={() => setExpanded((value) => !value)}
+            data-testid="live-view-expand"
+          >
+            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+        )}
       </div>
 
       {showPreview && (
-        <div className="mt-3 flex justify-center">
+        <div className="flex justify-center">
           <AvMirrorPreview size={expanded ? "immersive" : "check"} />
         </div>
       )}
 
-      {anyLive && <StreamStatsPanel className="mt-3" />}
+      {anyLive && <StreamStatsPanel />}
 
-      {showPreview && showAvSyncTests && <AvSyncPanel className="mt-3" />}
+      {showPreview && showAvSyncTests && <AvSyncPanel />}
 
-      <HelperText className="mt-2">
+      <HelperText>
         Hear{videoEnabled ? " and see" : ""} the running machine. Open Remote Input for the full zoomable screen.
       </HelperText>
-    </div>
+    </CollapsibleSection>
   );
 }

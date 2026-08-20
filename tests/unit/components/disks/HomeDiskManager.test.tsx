@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { openAllCards, resetCardMemory } from "../../helpers/cards";
 import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
 
@@ -191,6 +192,7 @@ vi.mock("@/lib/native/safUtils", () => ({
 
 describe("HomeDiskManager", () => {
   beforeEach(() => {
+    resetCardMemory();
     vi.clearAllMocks();
     // Reset hooks return values
     useC64ConnectionMock.status = {
@@ -217,7 +219,13 @@ describe("HomeDiskManager", () => {
     };
   });
 
-  const renderComponent = () => render(<HomeDiskManager />);
+  const renderComponent = () => {
+    const view = render(<HomeDiskManager />);
+    // Drive B and the Soft IEC drive are closed on a first visit; several of these tests assert
+    // what is inside them.
+    openAllCards();
+    return view;
+  };
 
   it("renders drives and disk list", () => {
     renderComponent();

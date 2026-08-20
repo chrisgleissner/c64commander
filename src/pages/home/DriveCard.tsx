@@ -10,6 +10,8 @@ import React from "react";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { Button } from "@/components/ui/button";
+import { HardDrive } from "lucide-react";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
@@ -53,6 +55,8 @@ export interface DriveCardProps {
   isConnected: boolean;
   className?: string;
   testIdSuffix: string;
+  /** Opened on a first visit. Only the primary drive sets this. */
+  defaultOpen?: boolean;
   footer?: React.ReactNode;
   /**
    * When set, registers this drive's enable (ON/OFF) toggle into the keypad
@@ -92,6 +96,7 @@ export function DriveCard({
   isConnected,
   className,
   testIdSuffix,
+  defaultOpen = false,
   footer,
   focusId,
   focusOrder = 0,
@@ -108,13 +113,17 @@ export function DriveCard({
   });
 
   return (
-    <div
-      className={cn("bg-card border border-border rounded-xl p-3 space-y-2", className)}
-      data-testid={`home-drive-row-${testIdSuffix}`}
-    >
-      {/* Row 1: Name and Power */}
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-primary uppercase tracking-wide">{name}</p>
+    <CollapsibleSection
+      scope="home"
+      id={`drive-${testIdSuffix}`}
+      title={name}
+      icon={HardDrive}
+      className={className}
+      testId={`home-drive-row-${testIdSuffix}`}
+      defaultOpen={defaultOpen}
+      // ON/OFF stays outside the body: whether a drive is powered is the one thing worth seeing,
+      // and worth being able to change, without opening the card.
+      actions={
         <Button
           ref={toggleFocusRef}
           variant="outline"
@@ -126,8 +135,8 @@ export function DriveCard({
         >
           {enabled ? "ON" : "OFF"}
         </Button>
-      </div>
-
+      }
+    >
       {/* Row 1.5: Mounted Path */}
       {(mountedPath !== undefined || pathValue !== undefined) && (
         <div className="flex items-center gap-2 text-xs">
@@ -207,6 +216,6 @@ export function DriveCard({
       </div>
 
       {footer}
-    </div>
+    </CollapsibleSection>
   );
 }

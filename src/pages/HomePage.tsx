@@ -1280,13 +1280,11 @@ function HomePageContent() {
           />
 
           {liveViewEnabled && (audioMirrorEnabled || videoMirrorEnabled) && deviceCapabilities.supportsStreaming ? (
-            <div data-section-label="Live View">
-              <LiveViewCard
-                audioEnabled={audioMirrorEnabled}
-                videoEnabled={videoMirrorEnabled}
-                showAvSyncTests={avSyncTestsEnabled}
-              />
-            </div>
+            <LiveViewCard
+              audioEnabled={audioMirrorEnabled}
+              videoEnabled={videoMirrorEnabled}
+              showAvSyncTests={avSyncTestsEnabled}
+            />
           ) : null}
 
           <CollapsibleSection

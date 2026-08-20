@@ -7,6 +7,7 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
+import { openAllCards, resetCardMemory } from "../../helpers/cards";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LiveViewCard } from "@/components/streams/LiveViewCard";
 
@@ -38,11 +39,13 @@ vi.mock("@/components/streams/AvSyncPanel", () => ({
 
 describe("LiveViewCard", () => {
   beforeEach(() => {
+    resetCardMemory();
     mirror.state = { video: { state: "off" } };
   });
 
   it("renders controls and a hint, with no preview or Stats while nothing is live", () => {
     render(<LiveViewCard />);
+    openAllCards();
     expect(screen.getByTestId("live-view-card")).toBeInTheDocument();
     expect(screen.getByTestId("controls")).toBeInTheDocument();
     expect(screen.queryByTestId("preview")).toBeNull();
@@ -54,11 +57,13 @@ describe("LiveViewCard", () => {
   it("mounts the Stats panel while a stream is live", () => {
     mirror.state = { video: { state: "live" } };
     render(<LiveViewCard />);
+    openAllCards();
     expect(screen.getByTestId("stream-stats")).toBeInTheDocument();
   });
 
   it("passes audio/video enablement to the controls and drops 'see' from the hint", () => {
     render(<LiveViewCard audioEnabled videoEnabled={false} />);
+    openAllCards();
     const controls = screen.getByTestId("controls");
     expect(controls).toHaveAttribute("data-audio", "true");
     expect(controls).toHaveAttribute("data-video", "false");
@@ -68,6 +73,7 @@ describe("LiveViewCard", () => {
   it("shows a collapsible check preview once video is active and expands to immersive", () => {
     mirror.state = { video: { state: "live" } };
     render(<LiveViewCard />);
+    openAllCards();
     expect(screen.getByTestId("preview")).toHaveAttribute("data-size", "check");
 
     const expand = screen.getByTestId("live-view-expand");
@@ -80,6 +86,7 @@ describe("LiveViewCard", () => {
   it("does not offer the preview/expand when video is disabled even if a stream reports state", () => {
     mirror.state = { video: { state: "live" } };
     render(<LiveViewCard videoEnabled={false} />);
+    openAllCards();
     expect(screen.queryByTestId("preview")).toBeNull();
     expect(screen.queryByTestId("live-view-expand")).toBeNull();
   });

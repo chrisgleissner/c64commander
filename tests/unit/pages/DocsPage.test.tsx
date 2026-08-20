@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { resetCardMemory } from "../helpers/cards";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import DocsPage from "@/pages/DocsPage";
@@ -69,6 +70,7 @@ vi.mock("@/lib/tracing/userTrace", () => ({
 
 describe("DocsPage", () => {
   beforeEach(() => {
+    resetCardMemory();
     featureFlagsRef.flags = { ...defaultFlags };
     variantRef.id = "c64commander";
     variantRef.displayName = "C64 Commander";
@@ -96,6 +98,10 @@ describe("DocsPage", () => {
     fireEvent.click(screen.getByTestId("docs-toggle-diagnostics"));
 
     expect(screen.getByText(/Closing a deep-linked diagnostics view returns to Settings/)).toBeInTheDocument();
+
+    // External resources is closed on a first visit: it points at other people's documentation,
+    // read once if at all, and the page's own chapters are what a reader came for.
+    fireEvent.click(screen.getByTestId("docs-section-toggle-external-resources"));
     expect(screen.getByTestId("docs-external-resource-docs")).toHaveAttribute(
       "href",
       "https://1541u-documentation.readthedocs.io/",

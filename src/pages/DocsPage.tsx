@@ -417,17 +417,17 @@ export default function DocsPage() {
             the C64U User Guide, already reachable from Settings -> About, so a whole
             standalone card for one duplicate link is not worth the space. */}
         {variantId !== "c64u-remote" && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: docSections.length * 0.05 }}
-            className="bg-card border border-border rounded-xl p-4 space-y-3"
-            data-testid="docs-external-resources"
+          <CollapsibleSection
+            scope="docs"
+            id="external-resources"
+            title="External resources"
+            summary={`Official device manuals and API references used by ${variant.displayName}.`}
+            icon={ExternalLink}
+            testId="docs-external-resources"
+            // Closed on a first visit: these are references to other people's documentation, read
+            // once if at all, and the page's own chapters are what a reader came for.
+            defaultOpen={false}
           >
-            <h3 className="font-medium">External resources</h3>
-            <p className="text-sm text-muted-foreground">
-              Official device manuals and API references used by {variant.displayName}.
-            </p>
             <div className="space-y-2">
               {externalResourceLinks.map((link) => (
                 <a
@@ -443,7 +443,7 @@ export default function DocsPage() {
                 </a>
               ))}
             </div>
-          </motion.div>
+          </CollapsibleSection>
         )}
       </PageContainer>
     </div>

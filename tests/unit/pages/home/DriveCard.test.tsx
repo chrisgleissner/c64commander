@@ -33,6 +33,8 @@ vi.mock("@/components/ui/select", () => ({
 }));
 
 const defaultProps = {
+  // The card is one of several closed on a first visit; these tests are about its contents.
+  defaultOpen: true,
   name: "Drive 8",
   enabled: true,
   onToggle: vi.fn(),

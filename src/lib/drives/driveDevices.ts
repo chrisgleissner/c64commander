@@ -10,7 +10,7 @@ import type { DriveInfo, DrivesResponse } from "@/lib/c64api";
 
 export type DriveDeviceClass = "PHYSICAL_DRIVE_A" | "PHYSICAL_DRIVE_B" | "SOFT_IEC_DRIVE" | "PRINTER";
 
-export type DriveDeviceLabel = "Drive A" | "Drive B" | "Soft IEC Drive" | "Printer";
+export type DriveDeviceLabel = "Drive A" | "Drive B" | "Soft IEC" | "Printer";
 
 export type KnownDriveDevice = {
   class: DriveDeviceClass;
@@ -49,7 +49,7 @@ const DEVICE_CLASS_ORDER: Record<DriveDeviceClass, number> = {
 const DEVICE_CLASS_LABEL: Record<DriveDeviceClass, DriveDeviceLabel> = {
   PHYSICAL_DRIVE_A: "Drive A",
   PHYSICAL_DRIVE_B: "Drive B",
-  SOFT_IEC_DRIVE: "Soft IEC Drive",
+  SOFT_IEC_DRIVE: "Soft IEC",
   PRINTER: "Printer",
 };
 

@@ -152,7 +152,9 @@ export const DRIVE_CONTROL_SPECS: DriveControlSpec[] = [
     enabledItem: "IEC Drive",
     busItem: "Soft Drive Bus ID",
     testIdSuffix: "soft-iec",
-    label: "Soft IEC Drive",
+    // "Soft IEC", not "Soft IEC Drive": it sits beside "Drive A" and "Drive B", where the word
+    // adds nothing, and the longer label truncated to "Soft IE..." in the card header.
+    label: "Soft IEC",
   },
 ];
 
