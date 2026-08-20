@@ -50,6 +50,50 @@ describe("FocusDiscoveryEngine", () => {
     engine.stop();
   });
 
+  it("puts the tab bar after the page content, wherever the content has scrolled to", () => {
+    // The tab bar sits outside the scrolling `main.page-shell`, so a single sort over the union of
+    // both by viewport position interleaved them: on a 320x427 screen the whole tab bar landed
+    // between every one or two content stops, because content that had scrolled above the tab bar
+    // sorted before it and content still below it sorted after.
+    mount(`
+      <main id="scroller">
+        <button id="content-top">top</button>
+        <button id="content-bottom">bottom</button>
+      </main>
+      <nav data-focus-scope="tabbar">
+        <button id="tab-a">A</button>
+        <button id="tab-b">B</button>
+      </nav>
+    `);
+    const scroller = el("scroller");
+    let scrolled = 0;
+    Object.defineProperty(scroller, "scrollTop", { configurable: true, get: () => scrolled });
+    const layOut = (id: string, documentTop: number, scrolls: boolean) => {
+      Object.defineProperty(el(id), "getBoundingClientRect", {
+        configurable: true,
+        value: () => ({ top: documentTop - (scrolls ? scrolled : 0), left: 0, width: 100, height: 20 }) as DOMRect,
+      });
+    };
+    layOut("content-top", 10, true);
+    layOut("content-bottom", 400, true);
+    // The tab bar does not move when the content scrolls.
+    layOut("tab-a", 300, false);
+    layOut("tab-b", 300, false);
+
+    const { controller, engine } = makeEngine();
+    const order = (scroll: number) => {
+      scrolled = scroll;
+      engine.stop();
+      engine.start();
+      return controller.list().map((item) => engine.elementForId(item.id)?.id ?? item.id);
+    };
+
+    for (const scroll of [0, 150, 390]) {
+      expect(order(scroll)).toEqual(["content-top", "content-bottom", "tab-a", "tab-b"]);
+    }
+    engine.stop();
+  });
+
   it("builds groups from DOM containment so the top level traverses cards, OK descends", () => {
     mount(`
       <div data-focus-group="card-a" id="card-a">

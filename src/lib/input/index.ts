@@ -61,6 +61,7 @@ export {
   SCOPE_ATTR,
   TABBAR_SCOPE_SELECTOR,
   compareFocusables,
+  sortIntoReadingOrder,
   discoverInteractiveElements,
   isFocusVisible,
   isFocusDisabled,
