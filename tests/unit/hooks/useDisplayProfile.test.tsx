@@ -115,7 +115,7 @@ describe("DisplayProfileProvider", () => {
     expect(screen.getByTestId("auto-profile")).toHaveTextContent("compact");
     expect(screen.getByTestId("profile")).toHaveTextContent("compact");
     expect(document.documentElement.dataset.displayProfile).toBe("compact");
-    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("17px");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("16px");
     expect(document.documentElement.style.getPropertyValue("--display-profile-page-padding-top")).toBe("0.5rem");
     expect(document.documentElement.style.getPropertyValue("--display-profile-viewport-width")).toBe("320px");
 
@@ -125,7 +125,7 @@ describe("DisplayProfileProvider", () => {
     expect(screen.getByTestId("profile")).toHaveTextContent("expanded");
     expect(localStorage.getItem(DISPLAY_PROFILE_OVERRIDE_KEY)).toBe("expanded");
     expect(document.documentElement.dataset.displayProfile).toBe("expanded");
-    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("17.5px");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("19.5px");
 
     act(() => {
       setViewportWidth(700);
@@ -275,7 +275,7 @@ describe("DisplayProfileProvider", () => {
     );
 
     expect(document.documentElement.dataset.displayProfile).toBe("compact");
-    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("17px");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("16px");
     expect(document.documentElement.style.getPropertyValue("--display-profile-page-padding-top")).toBe("0.5rem");
     expect(document.documentElement.style.getPropertyValue("--display-profile-viewport-width")).toBe("320px");
 
@@ -303,7 +303,7 @@ describe("DisplayProfileProvider", () => {
     );
 
     expect(document.documentElement.dataset.displayProfile).toBe("compact");
-    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("17px");
+    expect(document.documentElement.style.getPropertyValue("--display-profile-root-font-size")).toBe("16px");
     expect(document.documentElement.style.getPropertyValue("--display-profile-page-padding-top")).toBe("0.5rem");
     expect(document.documentElement.style.getPropertyValue("--display-profile-viewport-width")).toBe("320px");
 

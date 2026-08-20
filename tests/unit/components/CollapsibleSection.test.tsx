@@ -1,31 +1,33 @@
-import { forwardRef, useEffect } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Radio } from "lucide-react";
 
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 
-vi.mock("framer-motion", () => ({
-  motion: {
-    // The real `motion.div` reports when its height animation settles, which is when the component
-    // scrolls a freshly-expanded section into view. The stand-in reports it on mount, which is the
-    // same moment for a non-animating test.
-    div: ({ children, onAnimationComplete, ...props }: any) => {
-      useEffect(() => {
-        onAnimationComplete?.();
-      }, [onAnimationComplete]);
-      return <div {...props}>{children}</div>;
-    },
-    span: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    // forwardRef, because the component takes a ref on the section to scroll it into view.
-    section: forwardRef(({ children, ...props }: any, ref: any) => (
-      <section ref={ref} {...props}>
-        {children}
-      </section>
-    )),
-  },
-  AnimatePresence: ({ children }: any) => <>{children}</>,
-}));
+vi.mock("framer-motion", async () => {
+  // Everything the factory needs is declared INSIDE it: `vi.mock` is hoisted above module-level
+  // consts, so anything referenced from outside would be in its temporal dead zone when
+  // framer-motion is first imported.
+  const react = await import("react");
+  // The real `motion.div` reports when its height animation settles, which is when the component
+  // scrolls a freshly-expanded section into view. The stand-in reports it on mount, which is the
+  // same moment for a test that does not animate.
+  const MotionDiv = ({ children, onAnimationComplete, ...props }: any) => {
+    react.useEffect(() => {
+      onAnimationComplete?.();
+    }, [onAnimationComplete]);
+    return react.createElement("div", props, children);
+  };
+  // forwardRef, because the component takes a ref on the section to scroll it into view.
+  const MotionSection = react.forwardRef(({ children, ...props }: any, ref: any) =>
+    react.createElement("section", { ...props, ref }, children),
+  );
+  const MotionSpan = ({ children, ...props }: any) => react.createElement("span", props, children);
+  return {
+    motion: { div: MotionDiv, span: MotionSpan, section: MotionSection },
+    AnimatePresence: ({ children }: any) => children,
+  };
+});
 
 describe("CollapsibleSection", () => {
   beforeEach(() => {
