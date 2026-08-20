@@ -22,6 +22,7 @@ import { AudioPlaybackBuffer } from "./audioPlaybackBuffer";
 import { AudioMirrorPlayer } from "./audioPlayer";
 import { NativeAudioSink } from "./audioNativeSink";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
+import { StreamArrivalWatchdog } from "./streamArrivalWatchdog";
 
 export type AudioMirrorState = "off" | "connecting" | "live" | "error";
 
@@ -95,6 +96,14 @@ export class AudioMirrorController {
   /** Seq-gap loss counter for the native path (which has no JS playback buffer to count drops). */
   private nativeLostPackets = 0;
   private nativeLastSeq: number | null = null;
+  /** Last socket-level packet count seen from the native sink, for the arrival watchdog's poll. */
+  private lastSeenArrivalPackets = -1;
+  /** Notices that the multicast audio stopped arriving; a bound socket reports nothing when it does. */
+  private readonly arrivalWatchdog = new StreamArrivalWatchdog({
+    now: () => (typeof performance !== "undefined" ? performance.now() : Date.now()),
+    pollArrival: () => this.nativeArrivalAdvanced(),
+    onStale: (silentMs) => this.reportStreamWentSilent(silentMs),
+  });
   private batcher = new AudioBatcher();
   private playbackBuffer: AudioPlaybackBuffer | null = null;
   private snapshot: AudioMirrorSnapshot = {
@@ -216,9 +225,13 @@ export class AudioMirrorController {
     receiver.onStateChange((connection) => {
       if (connection === "open") {
         this.update({ state: "live" });
+        this.lastSeenArrivalPackets = -1;
+        this.arrivalWatchdog.start();
       } else if (connection === "error") {
+        this.arrivalWatchdog.stop();
         this.update({ state: "error", error: "Lost the audio stream connection." });
       } else if (connection === "closed" && this.snapshot.state !== "off") {
+        this.arrivalWatchdog.stop();
         this.update({ state: "off" });
       }
     });
@@ -226,6 +239,7 @@ export class AudioMirrorController {
     receiver.onDatagram((bytes, arrivalMs) => {
       const parsed = parseAudioPacket(bytes);
       if (!parsed) return;
+      this.arrivalWatchdog.noteArrival();
       // Analyzer feed: RAW per-packet stream (fine-grained, wire-stamped) — measurement integrity.
       // Runs on BOTH paths; the native path plays in the plugin, so JS does only this + loss counting.
       const samples = bytesToInt16LE(parsed.body);
@@ -307,7 +321,38 @@ export class AudioMirrorController {
     });
   }
 
+  /**
+   * True when the plugin's socket-level packet count has moved since the last poll.
+   *
+   * On the shipping native path the plugin owns playback and stops emitting datagrams to JS, so
+   * `onDatagram` never fires and there is nothing per-packet to stamp — this counter is the only
+   * evidence left that audio is still arriving.
+   */
+  private nativeArrivalAdvanced(): boolean {
+    const packets = this.nativeSink?.getStats()?.arrival?.packets;
+    if (typeof packets !== "number") return false;
+    const advanced = packets > this.lastSeenArrivalPackets;
+    this.lastSeenArrivalPackets = packets;
+    return advanced;
+  }
+
+  /**
+   * The stream went quiet while the mirror still believed it was live.
+   *
+   * Reported as an error rather than switched off silently: silence under a control that still reads
+   * "Listening" sends the user to look at the C64's volume, the cable and the device rather than at
+   * the network, which is where the fault actually is.
+   */
+  private reportStreamWentSilent(silentMs: number): void {
+    if (this.snapshot.state !== "live") return;
+    addLog("warn", "Audio Mirror: no audio arrived for long enough to call the stream lost", {
+      silentMs: Math.round(silentMs),
+    });
+    this.update({ state: "error", error: "The audio stream stopped arriving." });
+  }
+
   async stop(): Promise<void> {
+    this.arrivalWatchdog.stop();
     try {
       await this.deps.stopStream("audio");
     } catch (error) {

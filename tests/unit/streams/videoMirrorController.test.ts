@@ -87,6 +87,47 @@ describe("VideoMirrorController", () => {
     expect(controller.getSnapshot().state).toBe("live");
   });
 
+  it("calls the stream lost when nothing arrives, instead of reading live forever", async () => {
+    // Cutting the phone's Wi-Fi after the mirror is live leaves the bound multicast socket open with
+    // no error and no close, so the receiver reports nothing. On device the card read "Watching" for
+    // over three minutes with no network at all.
+    vi.useFakeTimers();
+    try {
+      let clock = 0;
+      const receiver = new FakeReceiver();
+      const controller = new VideoMirrorController({
+        createReceiver: () => receiver,
+        renderFrame: vi.fn(),
+        startStream: vi.fn(async () => ({ errors: [] })),
+        stopStream: vi.fn(async () => ({ errors: [] })),
+        onChange: vi.fn(),
+        now: () => clock,
+      });
+      await controller.start();
+      receiver.emitState("open");
+      expect(controller.getSnapshot().state).toBe("live");
+
+      // Frames keep arriving: still live.
+      for (let i = 0; i < 6; i += 1) {
+        clock += 1000;
+        await vi.advanceTimersByTimeAsync(1000);
+        completeFrame(receiver, i, i);
+      }
+      expect(controller.getSnapshot().state).toBe("live");
+
+      // The network goes away. Nothing arrives, and nothing else can notice.
+      for (let i = 0; i < 10; i += 1) {
+        clock += 1000;
+        await vi.advanceTimersByTimeAsync(1000);
+      }
+
+      expect(controller.getSnapshot().state).toBe("error");
+      expect(controller.getSnapshot().error).toMatch(/stopped arriving/i);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("stamps a frame with the EARLIEST arrival of its packets, despite reordering", async () => {
     const receiver = new FakeReceiver();
     const renderFrame = vi.fn();

@@ -87,6 +87,94 @@ const fakeNativeSink = (opens = true, arrival?: { lostPackets: number }) => {
 };
 
 describe("AudioMirrorController", () => {
+  /** Step the fake clock and the interval timers together, one watchdog check at a time. */
+  const tickSeconds = async (seconds: number) => {
+    for (let i = 0; i < seconds; i += 1) await vi.advanceTimersByTimeAsync(1000);
+  };
+
+  it("calls the stream lost when audio stops arriving, instead of reading live forever", async () => {
+    // Cutting the phone's Wi-Fi after the mirror is live leaves the bound multicast socket open with
+    // no error and no close, so the receiver reports nothing and the control keeps reading "Listening".
+    vi.useFakeTimers();
+    try {
+      const receiver = new FakeReceiver();
+      const controller = new AudioMirrorController({
+        createReceiver: () => receiver,
+        createPlayer: () => fakePlayer(true),
+        startStream: vi.fn(async () => ({ errors: [] })),
+        stopStream: vi.fn(async () => ({ errors: [] })),
+        onChange: vi.fn(),
+        networkBufferMs: 0,
+      });
+      await controller.start();
+      receiver.emitState("open");
+      expect(controller.getSnapshot().state).toBe("live");
+
+      for (let second = 0; second < 6; second += 1) {
+        await tickSeconds(1);
+        receiver.emit(audioPacket(second));
+      }
+      expect(controller.getSnapshot().state).toBe("live");
+
+      await tickSeconds(10);
+
+      expect(controller.getSnapshot().state).toBe("error");
+      expect(controller.getSnapshot().error).toMatch(/stopped arriving/i);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("counts the native socket's own packet tally, since those datagrams never reach JS", async () => {
+    // On the shipping native path the plugin owns playback and stops emitting datagrams to JS, so a
+    // watchdog stamped only from `onDatagram` would report every healthy native stream as lost.
+    vi.useFakeTimers();
+    try {
+      const receiver = new FakeReceiver();
+      const arrival = {
+        packets: 0,
+        meanGapMs: 4,
+        maxGapMs: 8,
+        gapsOver20ms: 0,
+        gapsOver50ms: 0,
+        maxClump: 1,
+        lostPackets: 0,
+      };
+      const sink = {
+        open: vi.fn(async () => true),
+        getStats: vi.fn(() => ({ bufferedMs: 30, underruns: 0, concealedMs: 0, arrival })),
+        close: vi.fn(async () => {}),
+        get bufferCapacityMs() {
+          return 40;
+        },
+      } as unknown as NativeAudioSink;
+      const controller = new AudioMirrorController({
+        createReceiver: () => receiver,
+        createNativeSink: () => sink,
+        startStream: vi.fn(async () => ({ errors: [] })),
+        stopStream: vi.fn(async () => ({ errors: [] })),
+        onChange: vi.fn(),
+      });
+      await controller.start();
+      receiver.emitState("open");
+      expect(controller.getSnapshot().state).toBe("live");
+
+      // The plugin keeps receiving; no datagram crosses the bridge.
+      for (let second = 0; second < 20; second += 1) {
+        arrival.packets += 250;
+        await tickSeconds(1);
+      }
+      expect(controller.getSnapshot().state).toBe("live");
+
+      // The socket stops receiving: the tally stops moving.
+      await tickSeconds(10);
+      expect(controller.getSnapshot().state).toBe("error");
+      expect(controller.getSnapshot().error).toMatch(/stopped arriving/i);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("connects, goes live, plays batched chunks and reports destination to the device", async () => {
     const receiver = new FakeReceiver();
     const player = fakePlayer(true);
