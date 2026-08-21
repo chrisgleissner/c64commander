@@ -132,7 +132,7 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
               className="size-11 shrink-0"
               aria-label="Quick menu"
               data-testid="app-bar-quick-menu"
-              onClick={() => requestQuickMenuOpen()}
+              onClick={() => requestQuickMenuOpen("pointer")}
             >
               <MoreVertical className="h-5 w-5 text-muted-foreground" aria-hidden />
             </Button>

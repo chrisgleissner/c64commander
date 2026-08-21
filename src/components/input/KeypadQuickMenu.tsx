@@ -6,13 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
-import { requestDeviceSwitcherOpen, subscribeQuickMenuOpen } from "@/lib/input/keypadCommands";
+import { requestDeviceSwitcherOpen, subscribeQuickMenuOpen, type QuickMenuSource } from "@/lib/input/keypadCommands";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
@@ -32,13 +32,31 @@ import {
  * becomes the active focus scope, so it is keypad-navigable with no extra wiring:
  * Up/Down move between entries, OK activates, Back/Esc closes.
  */
+/** The physical key that reaches this entry directly, drawn as the keycap it is. */
+const ShortcutKey = ({ children }: { children: ReactNode }) => (
+  <kbd className="inline-flex min-w-6 shrink-0 items-center justify-center rounded border border-border bg-muted px-1 py-0.5 font-sans text-xs font-semibold text-muted-foreground">
+    {children}
+  </kbd>
+);
+
 export function KeypadQuickMenu() {
   const navigate = useNavigate();
   const savedDevices = useSavedDevices();
   const remoteInputEnabled = useFeatureFlagValue("remote_input_enabled");
   const [open, setOpen] = useState(false);
+  const [source, setSource] = useState<QuickMenuSource>("keypad");
+  // Only a keypad user needs the page jumps and the key names. Someone who tapped the app bar has
+  // the tab bar in front of them, and a key legend names keys their device may not have.
+  const fromKeypad = source === "keypad";
 
-  useEffect(() => subscribeQuickMenuOpen(() => setOpen(true)), []);
+  useEffect(
+    () =>
+      subscribeQuickMenuOpen((nextSource) => {
+        setSource(nextSource ?? "keypad");
+        setOpen(true);
+      }),
+    [],
+  );
 
   const run = useCallback((action: () => void) => {
     setOpen(false);
@@ -79,29 +97,35 @@ export function KeypadQuickMenu() {
       <DialogContent className="flex max-h-[85dvh] max-w-xs flex-col overflow-hidden" data-testid="keypad-quick-menu">
         <DialogHeader>
           <DialogTitle>Quick menu</DialogTitle>
-          <DialogDescription>Jump to a page or open a high-value action.</DialogDescription>
+          <DialogDescription>
+            {fromKeypad ? "Jump to a page or open a high-value action." : "Actions for this page."}
+          </DialogDescription>
         </DialogHeader>
         <div className="-mx-1 grid min-h-0 flex-1 gap-1.5 overflow-y-auto px-1">
-          {TAB_ROUTES.map((route) => (
-            <Button
-              key={route.path}
-              variant="ghost"
-              className="justify-start"
-              data-testid={`keypad-quick-menu-tab-${route.label.toLowerCase()}`}
-              onClick={() => run(() => navigate(route.path))}
-            >
-              {route.label}
-            </Button>
-          ))}
+          {fromKeypad
+            ? TAB_ROUTES.map((route, index) => (
+                <Button
+                  key={route.path}
+                  variant="ghost"
+                  className="justify-start gap-3"
+                  data-testid={`keypad-quick-menu-tab-${route.label.toLowerCase()}`}
+                  onClick={() => run(() => navigate(route.path))}
+                >
+                  <ShortcutKey>{index + 1}</ShortcutKey>
+                  {route.label}
+                </Button>
+              ))
+            : null}
           {/* Carried here as well as on `0`, so the shortcut is discoverable without
               reading the manual — in the same place the page jumps already are. */}
           {remoteInputEnabled ? (
             <Button
               variant="ghost"
-              className="justify-start"
+              className="justify-start gap-3"
               data-testid="keypad-quick-menu-game-mode"
               onClick={() => run(() => void startGameMode())}
             >
+              {fromKeypad ? <ShortcutKey>0</ShortcutKey> : null}
               Game Mode
             </Button>
           ) : null}
@@ -132,15 +156,17 @@ export function KeypadQuickMenu() {
             data-testid="keypad-quick-menu-diagnostics"
             onClick={() => run(() => requestDiagnosticsOpen("header"))}
           >
+            {fromKeypad ? <ShortcutKey>✱</ShortcutKey> : null}
             Diagnostics
           </Button>
           {canSwitchDevices ? (
             <Button
               variant="ghost"
-              className="justify-start"
+              className="justify-start gap-3"
               data-testid="keypad-quick-menu-switch-device"
               onClick={() => run(() => requestDeviceSwitcherOpen())}
             >
+              {fromKeypad ? <ShortcutKey>#</ShortcutKey> : null}
               Switch device
             </Button>
           ) : null}

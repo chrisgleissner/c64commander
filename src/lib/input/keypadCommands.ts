@@ -18,14 +18,14 @@
 const DEVICE_SWITCHER_OPEN_EVENT = "c64u-device-switcher-open-request";
 const QUICK_MENU_OPEN_EVENT = "c64u-quick-menu-open-request";
 
-const emit = (name: string): void => {
+const emit = <T>(name: string, detail?: T): void => {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(name));
+  window.dispatchEvent(new CustomEvent(name, { detail }));
 };
 
-const subscribe = (name: string, handler: () => void): (() => void) => {
+const subscribe = <T>(name: string, handler: (detail: T) => void): (() => void) => {
   if (typeof window === "undefined") return () => {};
-  const listener = () => handler();
+  const listener = (event: Event) => handler((event as CustomEvent<T>).detail);
   window.addEventListener(name, listener);
   return () => window.removeEventListener(name, listener);
 };
@@ -38,7 +38,18 @@ export const subscribeDeviceSwitcherOpen = (handler: () => void): (() => void) =
   subscribe(DEVICE_SWITCHER_OPEN_EVENT, handler);
 
 /** Ask the Quick Menu to open (keypad Menu key with no item context menu). */
-export const requestQuickMenuOpen = (): void => emit(QUICK_MENU_OPEN_EVENT);
+/**
+ * How the Quick menu was opened.
+ *
+ * It decides what the menu is for. Opened from the keypad's Menu key it is the only way to reach
+ * the page jumps and the direct-key actions, and it names the key for each. Opened by tapping the
+ * app bar it is a menu for someone holding a touchscreen, who has the tab bar in front of them —
+ * repeating every page there would be a list of things they can already see.
+ */
+export type QuickMenuSource = "keypad" | "pointer";
+
+export const requestQuickMenuOpen = (source: QuickMenuSource = "keypad"): void => emit(QUICK_MENU_OPEN_EVENT, source);
 
 /** Subscribe the Quick Menu to open requests. Returns an unsubscribe. */
-export const subscribeQuickMenuOpen = (handler: () => void): (() => void) => subscribe(QUICK_MENU_OPEN_EVENT, handler);
+export const subscribeQuickMenuOpen = (handler: (source: QuickMenuSource) => void): (() => void) =>
+  subscribe(QUICK_MENU_OPEN_EVENT, handler);
