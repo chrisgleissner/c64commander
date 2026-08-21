@@ -83,7 +83,6 @@ export interface MachineControlsProps {
   onGameMode?: () => void;
   onAction: (fn: () => Promise<void>, label: string) => void;
   telnetBusy?: boolean;
-  footer?: ReactNode;
 }
 
 export function MachineControls({
@@ -112,7 +111,6 @@ export function MachineControls({
   onGameMode,
   onAction,
   telnetBusy = false,
-  footer,
 }: MachineControlsProps) {
   // Quick Actions drop to two columns on the compact profile (320 CSS px across), which
   // leaves each tile about 150px wide — narrower than "Game Mode" wants. The shorter
@@ -367,7 +365,6 @@ export function MachineControls({
               ))}
             </div>
           ) : null}
-          {footer ? <div data-testid="home-machine-footer">{footer}</div> : null}
         </div>
       </CollapsibleSection>
       <MachineActionConfirmationDialog
