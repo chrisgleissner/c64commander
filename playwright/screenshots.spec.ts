@@ -7,6 +7,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { openAllCards } from "./cards";
 import type { Locator, Page, TestInfo } from "@playwright/test";
 import { saveCoverageFromPage } from "./withCoverage";
 import { execFile as execFileCb } from "node:child_process";
@@ -2359,6 +2360,7 @@ test.describe("App screenshots", () => {
 
       // Snapshot Manager dialog
       await seedHomeDialogSnapshots("snapshot-manager");
+      await openAllCards(activeMain);
       await activeMain.getByTestId("home-load-ram").click();
       if (
         await page
@@ -2687,6 +2689,8 @@ test.describe("App screenshots", () => {
       const liveView = getActiveMain(page).getByTestId("live-view-card");
       await expect(liveView).toBeVisible();
       await liveView.scrollIntoViewIfNeeded();
+      // Live View is closed on a first visit; its controls live in the body.
+      await openAllCards(liveView);
       await liveView.getByTestId("av-video-toggle").click();
       // Wait until decoded frames are flowing (the fps badge only shows once they are).
       await expect(liveView.getByTestId("av-mirror-fps")).toBeVisible({ timeout: 8000 });
@@ -2982,6 +2986,7 @@ test.describe("App screenshots", () => {
       // Reaching for one particular tune while a station is running. A station is endless and
       // chooses for you, which is the point of it right up until you want to hear one specific
       // thing — so this searches the whole archive by title or composer without stopping it.
+      await openAllCards(getActiveMain(page));
       const findATune = getActiveMain(page).getByTestId("hvsc-search-open");
       await expect(findATune).toBeVisible();
       await findATune.click();
