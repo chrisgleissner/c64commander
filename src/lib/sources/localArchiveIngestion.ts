@@ -7,7 +7,13 @@
  */
 
 import { unzipSync } from "fflate";
-import { addErrorLog } from "@/lib/logging";
+import {
+  removeScratchTree,
+  walkScratchFiles,
+  writeArchiveToScratch,
+  type SevenZipFileSystem,
+  type SevenZipScratchPaths,
+} from "@/lib/archive/sevenZipScratch";
 import type { LocalSidFile } from "./LocalFsSongSource";
 
 export type LocalArchiveIngestionResult = {
@@ -89,92 +95,31 @@ const getSevenZipModule = async () => {
 
 const extractSevenZArchive = async (archive: LocalSidFile): Promise<LocalSidFile[]> => {
   const module = await getSevenZipModule();
+  const fs = module as SevenZipFileSystem;
   const buffer = new Uint8Array(await readArchiveBuffer(archive));
   const workingDir = `/work-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
-  const archiveName = normalizePath(archive.name) || `archive${SEVEN_Z_EXTENSION}`;
-  const archivePath = `${workingDir}/${archiveName}`;
-  const outputDir = `${workingDir}/out`;
-
-  const cleanupDir = (dir: string) => {
-    const entries = module.FS.readdir(dir);
-    entries.forEach((entry: string) => {
-      if (entry === "." || entry === "..") return;
-      const fullPath = `${dir}/${entry}`;
-      const stat = module.FS.stat(fullPath);
-      if (module.FS.isDir(stat.mode)) {
-        cleanupDir(fullPath);
-        module.FS.rmdir(fullPath);
-      } else {
-        module.FS.unlink(fullPath);
-      }
-    });
+  const paths: SevenZipScratchPaths = {
+    workingDir,
+    outputDir: `${workingDir}/out`,
+    archivePath: `${workingDir}/${normalizePath(archive.name) || `archive${SEVEN_Z_EXTENSION}`}`,
   };
 
   try {
-    module.FS.mkdir(workingDir);
-    module.FS.mkdir(outputDir);
-    const stream = module.FS.open(archivePath, "w+");
-    module.FS.write(stream, buffer, 0, buffer.length);
-    module.FS.close(stream);
+    writeArchiveToScratch(fs, paths, buffer);
 
-    module.callMain(["x", archivePath, `-o${outputDir}`, "-y"]);
+    module.callMain(["x", paths.archivePath, `-o${paths.outputDir}`, "-y"]);
 
     const results: LocalSidFile[] = [];
-    const walkDir = (dir: string, prefix: string) => {
-      const entries = module.FS.readdir(dir);
-      entries.forEach((entry: string) => {
-        if (entry === "." || entry === "..") return;
-        const fullPath = `${dir}/${entry}`;
-        const stat = module.FS.stat(fullPath);
-        if (module.FS.isDir(stat.mode)) {
-          walkDir(fullPath, `${prefix}${entry}/`);
-          return;
-        }
-        if (!isSidFile(entry)) return;
-        const data = module.FS.readFile(fullPath, {
-          encoding: "binary",
-        }) as Uint8Array;
-        results.push(buildExtractedFile(archive.name, `${prefix}${entry}`, data));
-      });
-    };
-    walkDir(outputDir, "");
+    walkScratchFiles(fs, paths.outputDir, ({ path, fullPath }) => {
+      if (!isSidFile(path)) return;
+      results.push(buildExtractedFile(archive.name, path, fs.FS.readFile(fullPath, { encoding: "binary" })));
+    });
     return results;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to extract ${archive.name}: ${message}`);
   } finally {
-    try {
-      cleanupDir(outputDir);
-    } catch (error) {
-      addErrorLog("SevenZip cleanup failed", {
-        error: (error as Error).message,
-        step: "cleanupDir",
-      });
-    }
-    try {
-      module.FS.rmdir(outputDir);
-    } catch (error) {
-      addErrorLog("SevenZip cleanup failed", {
-        error: (error as Error).message,
-        step: "rmdir-output",
-      });
-    }
-    try {
-      module.FS.unlink(archivePath);
-    } catch (error) {
-      addErrorLog("SevenZip cleanup failed", {
-        error: (error as Error).message,
-        step: "unlink-archive",
-      });
-    }
-    try {
-      module.FS.rmdir(workingDir);
-    } catch (error) {
-      addErrorLog("SevenZip cleanup failed", {
-        error: (error as Error).message,
-        step: "rmdir-workdir",
-      });
-    }
+    removeScratchTree(fs, paths);
   }
 };
 
