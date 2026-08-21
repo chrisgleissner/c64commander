@@ -139,8 +139,29 @@ export const getBadgeSafeZoneBottomPx = (): number => {
   return resolveAppBarHeightPx();
 };
 
-export const resolveAppSheetTopClearancePx = () =>
-  Math.max(0, getBadgeSafeZoneBottomPx() - resolveHeaderOverlapDeltaPx());
+/**
+ * How far down a bottom sheet starts, so it clears the status badge.
+ *
+ * Normally this is the badge lane: the badge is shorter than the header, so a sheet that clears the
+ * badge may sit higher than the header's own bottom and use the space the header is not filling.
+ *
+ * That reasoning only holds once the header has laid out. Measured while it is still animating open
+ * it reports a fraction of its settled size — 24px against the 90px the same header settles at —
+ * and the sheet then started 13px from the top of the screen, over the badge it exists to clear. So
+ * an implausibly short header is treated as "not measured yet" and the app bar's CSS height, which
+ * does not depend on when the question is asked, is used instead.
+ */
+export const resolveAppSheetTopClearancePx = () => {
+  const overlap = resolveHeaderOverlapDeltaPx();
+  const fromBadgeLane = Math.max(0, getBadgeSafeZoneBottomPx() - overlap);
+
+  const appBar = getAppBarBounds();
+  const settledHeight = resolveAppBarHeightPx();
+  const headerHasLaidOut = !appBar || appBar.bottom - appBar.top >= settledHeight / 2;
+  if (headerHasLaidOut) return fromBadgeLane;
+
+  return Math.max(fromBadgeLane, Math.max(0, settledHeight - overlap));
+};
 
 export const resolveWorkflowSheetLayout = () => ({
   top: resolveAppSheetTopClearancePx(),
