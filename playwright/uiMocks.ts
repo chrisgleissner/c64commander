@@ -473,27 +473,38 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         // from another scope (e.g. Docs) seeded earlier in the same test - and unlike the
         // Settings-only key this one is never deleted out from under that check, so the
         // guard only fires on a page's genuine first visit to Settings.
+        //
+        // The real store (`collapsibleSectionStore.ts`) only ever persists this key as an
+        // id -> open object; the bare array below is merely how THIS seed writes its very
+        // first value. Reading it back with an array-only parse meant that the instant a
+        // test toggled one section - converting the key to the real object shape - this
+        // script stopped recognizing any "settings:" id as already seeded, and rewrote the
+        // key as a fresh all-open array on the next navigation, silently discarding whatever
+        // the test had just closed (a chapter closed on one visit did not stay closed on the
+        // next). Parsing both shapes into one entries map, and always writing the object
+        // shape back, keeps this guard correct once the real store has touched the key.
         (() => {
-          let stored: unknown = null;
-          try {
-            stored = JSON.parse(localStorage.getItem("c64u_open_sections") ?? "null");
-          } catch {
-            stored = null;
-          }
           // The store has two shapes and the guard has to read both. A bare array of open ids is
-          // the legacy shape, and what this seed writes; the app itself writes an object of
+          // the legacy shape, and what this seed used to write; the app itself writes an object of
           // `{id: open}`, because it has to record an explicit close as well as an open. Reading
           // only the array shape meant the guard never fired once the app had written, so the seed
           // overwrote the state on the next navigation and reopened every chapter the test had
           // just closed — which is precisely what "still closed on the next visit" asserts.
-          const existingEntries: Array<[string, boolean]> = Array.isArray(stored)
-            ? stored.filter((id): id is string => typeof id === "string").map((id) => [id, true])
-            : stored && typeof stored === "object"
-              ? Object.entries(stored as Record<string, unknown>).filter(
-                  (entry): entry is [string, boolean] => typeof entry[1] === "boolean",
-                )
-              : [];
-          if (existingEntries.some(([id]) => id.startsWith("settings:"))) return;
+          let parsed: unknown = [];
+          try {
+            parsed = JSON.parse(localStorage.getItem("c64u_open_sections") ?? "[]");
+          } catch {
+            parsed = [];
+          }
+          const entries: Record<string, boolean> = {};
+          if (Array.isArray(parsed)) {
+            for (const id of parsed) if (typeof id === "string") entries[id] = true;
+          } else if (parsed && typeof parsed === "object") {
+            for (const [id, open] of Object.entries(parsed as Record<string, unknown>)) {
+              if (typeof open === "boolean") entries[id] = open;
+            }
+          }
+          if (Object.keys(entries).some((id) => id.startsWith("settings:"))) return;
           const settingsIds = [
             "appearance",
             "connection",
@@ -508,11 +519,9 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
             "notifications",
             "about",
           ].map((id) => `settings:${id}`);
-          // Written in the object shape the app uses, so a later read of this key does not have to
-          // guess which shape it is looking at.
-          const seeded: Record<string, boolean> = Object.fromEntries(existingEntries);
-          for (const id of settingsIds) seeded[id] = true;
-          localStorage.setItem("c64u_open_sections", JSON.stringify(seeded));
+          // Written in the object shape the app uses, so a later read does not have to guess.
+          for (const id of settingsIds) entries[id] = true;
+          localStorage.setItem("c64u_open_sections", JSON.stringify(entries));
         })();
         if (seedFeatureFlags) {
           localStorage.setItem("c64u_dev_mode_enabled", "1");
