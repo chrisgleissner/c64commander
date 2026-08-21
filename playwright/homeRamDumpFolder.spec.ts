@@ -46,7 +46,16 @@ test.describe("Home quick actions RAM folder display", () => {
     }
   });
 
-  test("shows inline RAM folder trigger and hides drive summary @layout", async ({
+  /**
+   * Opens the Save RAM dialog, which is where the RAM folder row lives. Where snapshots are written
+   * is a property of saving and loading them, not a Quick Action of its own.
+   */
+  const openSaveRamDialog = async (page: Page) => {
+    await page.getByTestId("home-save-ram").click();
+    await expect(page.getByTestId("save-ram-dialog")).toBeVisible();
+  };
+
+  test("shows the RAM folder trigger in the Save RAM dialog and hides drive summary @layout", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/");
@@ -58,6 +67,10 @@ test.describe("Home quick actions RAM folder display", () => {
     // this test is actually about.
     await expect(page.getByText("Quick Actions")).toBeVisible();
     await expect(page.getByTestId("home-drive-summary")).toHaveCount(0);
+
+    // Not on the page itself any more.
+    await expect(page.getByTestId("home-ram-folder-row")).toHaveCount(0);
+    await openSaveRamDialog(page);
 
     const trigger = page.getByTestId("ram-dump-folder-trigger");
     await expect(page.getByTestId("home-ram-folder-row")).toContainText("RAM folder:");
@@ -82,6 +95,7 @@ test.describe("Home quick actions RAM folder display", () => {
       localStorage.removeItem("c64u_ram_dump_folder:v1");
     });
     await page.goto("/");
+    await openSaveRamDialog(page);
 
     await expect(page.getByTestId("ram-dump-folder-trigger")).toHaveText("...");
   });

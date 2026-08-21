@@ -53,6 +53,21 @@ env:
     end: 50%, 38%
     duration: 400
 - waitForAnimationToEnd
+# The HVSC card is closed on a first visit — it is a maintenance panel, and the archive is prepared
+# automatically the first time a listener picks HVSC — so its controls are not in the tree until the
+# card is opened. `id:` here is the HTML id, which CollapsibleSection sets to the same string as the
+# testid.
+- scrollUntilVisible:
+    element:
+      id: play-section-toggle-hvsc
+    direction: DOWN
+    speed: 80
+    timeout: ${LONG_TIMEOUT}
+    visibilityPercentage: 50
+    centerElement: true
+- tapOn:
+    id: play-section-toggle-hvsc
+- waitForAnimationToEnd
 - scrollUntilVisible:
     element:
       id: hvsc-download

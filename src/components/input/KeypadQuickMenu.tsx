@@ -66,10 +66,10 @@ export function KeypadQuickMenu() {
   const canSwitchDevices = savedDevices.devices.length > 1;
 
   /*
-   * The section entries only appear on a page that has sections, and the wording is the action the
-   * press performs. "Expand all" shows while anything is still closed, so the entry is the one a
-   * reader who wants to scroll the whole page reaches for; once everything is open it becomes
-   * "Collapse all", which is the way back to reading the page as an index.
+   * Both section entries are always listed on a page that has sections, rather than one entry whose
+   * wording flips. A single entry means reading it to find out which way it will go; two mean the
+   * one you want is always in the same place. Whichever would do nothing is disabled, so the menu
+   * still says which of them is available.
    */
   const [sectionCounts, setSectionCounts] = useState({ total: 0, closed: 0 });
   useEffect(() => {
@@ -134,10 +134,20 @@ export function KeypadQuickMenu() {
               <Button
                 variant="ghost"
                 className="justify-start"
-                data-testid="keypad-quick-menu-sections-toggle"
-                onClick={() => run(() => requestSectionsBulk(sectionCounts.closed > 0))}
+                data-testid="keypad-quick-menu-sections-expand"
+                onClick={() => run(() => requestSectionsBulk(true))}
+                disabled={sectionCounts.closed === 0}
               >
-                {sectionCounts.closed > 0 ? "Expand all sections" : "Collapse all sections"}
+                Expand all sections
+              </Button>
+              <Button
+                variant="ghost"
+                className="justify-start"
+                data-testid="keypad-quick-menu-sections-collapse"
+                onClick={() => run(() => requestSectionsBulk(false))}
+                disabled={sectionCounts.closed === sectionCounts.total}
+              >
+                Collapse all sections
               </Button>
               <Button
                 variant="ghost"

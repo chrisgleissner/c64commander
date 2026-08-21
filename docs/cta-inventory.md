@@ -772,14 +772,16 @@ a touchscreen and has the TabBar in front of them.
 
 Always present: Game Mode (flag `remote_input_enabled`), Diagnostics, Switch
 device (when >1 saved device), and — on a page that has collapsible cards —
-`keypad-quick-menu-sections-toggle` (expand or collapse every section on the
-page; the label states whichever the press will do) and
+`keypad-quick-menu-sections-expand` and `keypad-quick-menu-sections-collapse`
+(both always listed, so the one you want is always in the same place; whichever
+would do nothing is disabled) and
 `keypad-quick-menu-section-descriptions` (show or hide the one-line description
 under each card title).
 
 Per-entry testids `keypad-quick-menu-tab-<label>`, `keypad-quick-menu-game-mode`,
 `keypad-quick-menu-diagnostics`, `keypad-quick-menu-switch-device`,
-`keypad-quick-menu-sections-toggle`, `keypad-quick-menu-section-descriptions`.
+`keypad-quick-menu-sections-expand`, `keypad-quick-menu-sections-collapse`,
+`keypad-quick-menu-section-descriptions`.
 
 ---
 
