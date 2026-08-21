@@ -166,6 +166,10 @@ q("tab-home")?.click();await wait(2000);
 const card=q("live-view-card");
 if(!card) return JSON.stringify({error:"the Live View card is not on Home"});
 card.scrollIntoView({block:"center"});await wait(400);
+// Live View is a collapsible card and is closed on a first visit, so the mirror toggles are not
+// in the tree until it is opened. The toggle is a button that says it is not expanded.
+const toggle=card.querySelector('button[aria-expanded="false"][aria-controls]');
+if(toggle){toggle.click();await wait(800);card.scrollIntoView({block:"center"});await wait(400);}
 for(const [id,want] of [["av-audio-toggle",${audio}],["av-video-toggle",${video}]]){
   const b=q(id); if(!b) return JSON.stringify({error:id+" is not on the card"});
   if((b.getAttribute("aria-pressed")==="true")!==want){b.click();await wait(3000);}
