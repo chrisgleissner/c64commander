@@ -155,4 +155,20 @@ describe("interstitialStyles", () => {
     expect(getBadgeSafeZoneBottomPx()).toBe(21);
     expect(resolveAppSheetTopClearancePx()).toBeGreaterThan(40);
   });
+
+  it("does not put the sheet across the whole screen when nothing has a position yet", () => {
+    // The zero case, which is what a sheet opening on a page whose header has not been placed
+    // reads: the sheet filled the viewport top to bottom, over everything it exists to clear.
+    const header = document.createElement("div");
+    header.setAttribute("data-testid", "app-bar-row");
+    stubRect(header, { top: 0, left: 0, right: 0, bottom: 0 });
+    document.body.appendChild(header);
+
+    const badge = document.createElement("button");
+    badge.setAttribute("data-testid", "unified-health-badge");
+    stubRect(badge, { top: 0, left: 0, right: 0, bottom: 0 });
+    document.body.appendChild(badge);
+
+    expect(resolveAppSheetTopClearancePx()).toBeGreaterThan(40);
+  });
 });

@@ -154,13 +154,14 @@ export const getBadgeSafeZoneBottomPx = (): number => {
 export const resolveAppSheetTopClearancePx = () => {
   const overlap = resolveHeaderOverlapDeltaPx();
   const fromBadgeLane = Math.max(0, getBadgeSafeZoneBottomPx() - overlap);
+  const fromCssHeight = Math.max(0, resolveAppBarHeightPx() - overlap);
 
-  const appBar = getAppBarBounds();
-  const settledHeight = resolveAppBarHeightPx();
-  const headerHasLaidOut = !appBar || appBar.bottom - appBar.top >= settledHeight / 2;
-  if (headerHasLaidOut) return fromBadgeLane;
-
-  return Math.max(fromBadgeLane, Math.max(0, settledHeight - overlap));
+  // The badge lane is believed only when it is in the region a laid-out header would put it. A
+  // rect read before layout reports a fraction of the settled size, or zero — measured at 24px and
+  // at 0 against the 90px the same header settles at, which put the sheet over the badge and then
+  // across the whole screen. Below half of what the CSS height implies, the measurement is not a
+  // shorter badge lane, it is a measurement taken too early.
+  return fromBadgeLane >= fromCssHeight / 2 ? fromBadgeLane : fromCssHeight;
 };
 
 export const resolveWorkflowSheetLayout = () => ({
