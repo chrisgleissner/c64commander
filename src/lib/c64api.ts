@@ -2481,52 +2481,39 @@ export class C64API {
   }
 
   // Machine control endpoints
-  async machineReset(): Promise<{ errors: string[] }> {
-    return this.request("/v1/machine:reset", {
+  // The machine control verbs are fire-and-forget: the firmware acts on the PUT
+  // and its reply body carries nothing worth inspecting, so success-body
+  // inspection is skipped for all of them alike.
+  private machineAction(verb: string): Promise<{ errors: string[] }> {
+    return this.request(`/v1/machine:${verb}`, {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
       __c64uSkipSuccessBodyInspection: true,
     });
+  }
+
+  async machineReset(): Promise<{ errors: string[] }> {
+    return this.machineAction("reset");
   }
 
   async machineReboot(): Promise<{ errors: string[] }> {
-    return this.request("/v1/machine:reboot", {
-      method: "PUT",
-      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
-      __c64uSkipSuccessBodyInspection: true,
-    });
+    return this.machineAction("reboot");
   }
 
   async machinePause(): Promise<{ errors: string[] }> {
-    return this.request("/v1/machine:pause", {
-      method: "PUT",
-      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
-      __c64uSkipSuccessBodyInspection: true,
-    });
+    return this.machineAction("pause");
   }
 
   async machineResume(): Promise<{ errors: string[] }> {
-    return this.request("/v1/machine:resume", {
-      method: "PUT",
-      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
-      __c64uSkipSuccessBodyInspection: true,
-    });
+    return this.machineAction("resume");
   }
 
   async machinePowerOff(): Promise<{ errors: string[] }> {
-    return this.request("/v1/machine:poweroff", {
-      method: "PUT",
-      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
-      __c64uSkipSuccessBodyInspection: true,
-    });
+    return this.machineAction("poweroff");
   }
 
   async machineMenuButton(): Promise<{ errors: string[] }> {
-    return this.request("/v1/machine:menu_button", {
-      method: "PUT",
-      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
-      __c64uSkipSuccessBodyInspection: true,
-    });
+    return this.machineAction("menu_button");
   }
 
   async getMachineInputState(options: C64ReadRequestOptions = {}): Promise<MachineInputStateResponse> {
