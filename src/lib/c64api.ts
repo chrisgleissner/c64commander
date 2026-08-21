@@ -2728,50 +2728,37 @@ export class C64API {
     return response;
   }
 
-  async mountDriveUpload(
-    drive: "a" | "b",
-    image: Blob,
-    type?: string,
-    mode?: "readwrite" | "readonly" | "unlinked",
-    metadata: UploadValidationMetadata = {},
-    options: C64ReadRequestOptions = {},
+  // The shape every binary-upload endpoint shares: resolve the filename and
+  // validate the bytes, POST them as one octet-stream body, log the REST call
+  // whether or not it got that far, then parse. Callers supply what differs and
+  // assert the parsed body themselves, because a drive mount and a runner
+  // report a refusal differently.
+  private async postBinaryUpload(
+    file: Blob,
+    spec: {
+      path: string;
+      operation: string;
+      expectedType?: SupportedC64FileType;
+      resolveFilename: () => string;
+      failureLogMessage: string;
+      onPayloadReady?: (upload: { headers: Record<string, string>; body: ArrayBuffer }, baseUrl: string) => void;
+    },
+    options: C64ReadRequestOptions,
   ): Promise<{ errors: string[] }> {
-    let path = `/v1/drives/${drive}:mount`;
-    if (type || mode) {
-      const params = new URLSearchParams();
-      if (type) params.set("type", type);
-      if (mode) params.set("mode", mode);
-      path = `${path}?${params.toString()}`;
-    }
-
+    const { path } = spec;
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
     const method = "POST";
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
-      const upload = await this.buildBinaryUploadRequest(image, {
-        filename: metadata.filename ?? extractUploadFilename(image, `disk.${type ?? "img"}`),
-        operation: "DRIVE_MOUNT_UPLOAD",
+      const upload = await this.buildBinaryUploadRequest(file, {
+        filename: spec.resolveFilename(),
+        operation: spec.operation,
         endpoint: path,
-        expectedType: resolveDiskUploadType(type),
+        expectedType: spec.expectedType,
       });
-      addLog("debug", "Drive mount upload payload ready", {
-        drive,
-        type: type ?? null,
-        mode: mode ?? null,
-        baseUrl,
-        deviceHost: this.deviceHost,
-        fingerprint: buildBinaryFingerprint(new Uint8Array(upload.body)),
-      });
-      addLog("debug", "Drive mount upload payload prepared", {
-        drive,
-        type: type ?? null,
-        mode: mode ?? null,
-        sizeBytes: typeof image?.size === "number" ? image.size : null,
-        baseUrl,
-        deviceHost: this.deviceHost,
-      });
+      spec.onPayloadReady?.(upload, baseUrl);
       response = await this.fetchWithTimeout(
         `${baseUrl}${path}`,
         {
@@ -2791,7 +2778,7 @@ export class C64API {
     if (!response.ok) {
       const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
       addErrorLog(
-        "Drive mount upload failed",
+        spec.failureLogMessage,
         buildErrorLogDetails(error, {
           status: response.status,
           statusText: response.statusText,
@@ -2800,9 +2787,56 @@ export class C64API {
       throw error;
     }
 
-    const result = await this.parseResponseJson<{ errors: string[] }>(response, path, {
+    return this.parseResponseJson<{ errors: string[] }>(response, path, {
       allowNonJsonSuccess: true,
     });
+  }
+
+  async mountDriveUpload(
+    drive: "a" | "b",
+    image: Blob,
+    type?: string,
+    mode?: "readwrite" | "readonly" | "unlinked",
+    metadata: UploadValidationMetadata = {},
+    options: C64ReadRequestOptions = {},
+  ): Promise<{ errors: string[] }> {
+    let path = `/v1/drives/${drive}:mount`;
+    if (type || mode) {
+      const params = new URLSearchParams();
+      if (type) params.set("type", type);
+      if (mode) params.set("mode", mode);
+      path = `${path}?${params.toString()}`;
+    }
+
+    const result = await this.postBinaryUpload(
+      image,
+      {
+        path,
+        operation: "DRIVE_MOUNT_UPLOAD",
+        expectedType: resolveDiskUploadType(type),
+        resolveFilename: () => metadata.filename ?? extractUploadFilename(image, `disk.${type ?? "img"}`),
+        failureLogMessage: "Drive mount upload failed",
+        onPayloadReady: (upload, baseUrl) => {
+          addLog("debug", "Drive mount upload payload ready", {
+            drive,
+            type: type ?? null,
+            mode: mode ?? null,
+            baseUrl,
+            deviceHost: this.deviceHost,
+            fingerprint: buildBinaryFingerprint(new Uint8Array(upload.body)),
+          });
+          addLog("debug", "Drive mount upload payload prepared", {
+            drive,
+            type: type ?? null,
+            mode: mode ?? null,
+            sizeBytes: typeof image?.size === "number" ? image.size : null,
+            baseUrl,
+            deviceHost: this.deviceHost,
+          });
+        },
+      },
+      options,
+    );
     this.assertDriveWriteAccepted(result, "mount", drive);
     return result;
   }
@@ -2968,50 +3002,17 @@ export class C64API {
     metadata: UploadValidationMetadata = {},
     options: C64ReadRequestOptions = {},
   ): Promise<{ errors: string[] }> {
-    const path = "/v1/runners:modplay";
-    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-    let status: number | "error" = "error";
-    const method = "POST";
-    let response: Response;
-    try {
-      const baseUrl = this.getBaseUrl();
-      const upload = await this.buildBinaryUploadRequest(modFile, {
-        filename: metadata.filename ?? extractUploadFilename(modFile, "track.mod"),
+    const parsed = await this.postBinaryUpload(
+      modFile,
+      {
+        path: "/v1/runners:modplay",
         operation: "MOD_PLAY_UPLOAD",
-        endpoint: path,
         expectedType: "mod",
-      });
-      response = await this.fetchWithTimeout(
-        `${baseUrl}${path}`,
-        {
-          method,
-          headers: upload.headers,
-          body: upload.body,
-          signal: options.signal,
-          __c64uIntent: options.__c64uIntent,
-        },
-        options.timeoutMs ?? UPLOAD_REQUEST_TIMEOUT_MS,
-      );
-      status = response.status;
-    } finally {
-      this.logRestCall(method, path, status, startedAt);
-    }
-
-    if (!response.ok) {
-      const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
-      addErrorLog(
-        "MOD upload failed",
-        buildErrorLogDetails(error, {
-          status: response.status,
-          statusText: response.statusText,
-        }),
-      );
-      throw error;
-    }
-
-    const parsed = await this.parseResponseJson<{ errors: string[] }>(response, path, {
-      allowNonJsonSuccess: true,
-    });
+        resolveFilename: () => metadata.filename ?? extractUploadFilename(modFile, "track.mod"),
+        failureLogMessage: "MOD upload failed",
+      },
+      options,
+    );
     this.assertActionAccepted(parsed, "MOD upload playback");
     return parsed;
   }
@@ -3030,50 +3031,17 @@ export class C64API {
     metadata: UploadValidationMetadata = {},
     options: C64ReadRequestOptions = {},
   ): Promise<{ errors: string[] }> {
-    const path = "/v1/runners:run_prg";
-    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-    let status: number | "error" = "error";
-    const method = "POST";
-    let response: Response;
-    try {
-      const baseUrl = this.getBaseUrl();
-      const upload = await this.buildBinaryUploadRequest(prgFile, {
-        filename: metadata.filename ?? extractUploadFilename(prgFile, "program.prg"),
+    const parsed = await this.postBinaryUpload(
+      prgFile,
+      {
+        path: "/v1/runners:run_prg",
         operation: "PRG_RUN_UPLOAD",
-        endpoint: path,
         expectedType: "prg",
-      });
-      response = await this.fetchWithTimeout(
-        `${baseUrl}${path}`,
-        {
-          method,
-          headers: upload.headers,
-          body: upload.body,
-          signal: options.signal,
-          __c64uIntent: options.__c64uIntent,
-        },
-        options.timeoutMs ?? UPLOAD_REQUEST_TIMEOUT_MS,
-      );
-      status = response.status;
-    } finally {
-      this.logRestCall(method, path, status, startedAt);
-    }
-
-    if (!response.ok) {
-      const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
-      addErrorLog(
-        "PRG upload failed",
-        buildErrorLogDetails(error, {
-          status: response.status,
-          statusText: response.statusText,
-        }),
-      );
-      throw error;
-    }
-
-    const parsed = await this.parseResponseJson<{ errors: string[] }>(response, path, {
-      allowNonJsonSuccess: true,
-    });
+        resolveFilename: () => metadata.filename ?? extractUploadFilename(prgFile, "program.prg"),
+        failureLogMessage: "PRG upload failed",
+      },
+      options,
+    );
     this.assertActionAccepted(parsed, "PRG upload run");
     return parsed;
   }
@@ -3092,50 +3060,17 @@ export class C64API {
     metadata: UploadValidationMetadata = {},
     options: C64ReadRequestOptions = {},
   ): Promise<{ errors: string[] }> {
-    const path = "/v1/runners:load_prg";
-    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-    let status: number | "error" = "error";
-    const method = "POST";
-    let response: Response;
-    try {
-      const baseUrl = this.getBaseUrl();
-      const upload = await this.buildBinaryUploadRequest(prgFile, {
-        filename: metadata.filename ?? extractUploadFilename(prgFile, "program.prg"),
+    const parsed = await this.postBinaryUpload(
+      prgFile,
+      {
+        path: "/v1/runners:load_prg",
         operation: "PRG_LOAD_UPLOAD",
-        endpoint: path,
         expectedType: "prg",
-      });
-      response = await this.fetchWithTimeout(
-        `${baseUrl}${path}`,
-        {
-          method,
-          headers: upload.headers,
-          body: upload.body,
-          signal: options.signal,
-          __c64uIntent: options.__c64uIntent,
-        },
-        options.timeoutMs ?? UPLOAD_REQUEST_TIMEOUT_MS,
-      );
-      status = response.status;
-    } finally {
-      this.logRestCall(method, path, status, startedAt);
-    }
-
-    if (!response.ok) {
-      const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
-      addErrorLog(
-        "PRG upload failed",
-        buildErrorLogDetails(error, {
-          status: response.status,
-          statusText: response.statusText,
-        }),
-      );
-      throw error;
-    }
-
-    const parsed = await this.parseResponseJson<{ errors: string[] }>(response, path, {
-      allowNonJsonSuccess: true,
-    });
+        resolveFilename: () => metadata.filename ?? extractUploadFilename(prgFile, "program.prg"),
+        failureLogMessage: "PRG upload failed",
+      },
+      options,
+    );
     this.assertActionAccepted(parsed, "PRG upload load");
     return parsed;
   }
@@ -3173,51 +3108,17 @@ export class C64API {
     metadata: UploadValidationMetadata = {},
     options: C64ReadRequestOptions = {},
   ): Promise<{ errors: string[] }> {
-    const path = "/v1/runners:run_crt";
-    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-    let status: number | "error" = "error";
-    const method = "POST";
-    let response: Response;
-    try {
-      const baseUrl = this.getBaseUrl();
-      const filename = requireUploadFilename(crtFile, metadata, "CRT_RUN_UPLOAD");
-      const upload = await this.buildBinaryUploadRequest(crtFile, {
-        filename,
+    const parsed = await this.postBinaryUpload(
+      crtFile,
+      {
+        path: "/v1/runners:run_crt",
         operation: "CRT_RUN_UPLOAD",
-        endpoint: path,
         expectedType: "crt",
-      });
-      response = await this.fetchWithTimeout(
-        `${baseUrl}${path}`,
-        {
-          method,
-          headers: upload.headers,
-          body: upload.body,
-          signal: options.signal,
-          __c64uIntent: options.__c64uIntent,
-        },
-        options.timeoutMs ?? UPLOAD_REQUEST_TIMEOUT_MS,
-      );
-      status = response.status;
-    } finally {
-      this.logRestCall(method, path, status, startedAt);
-    }
-
-    if (!response.ok) {
-      const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
-      addErrorLog(
-        "CRT upload failed",
-        buildErrorLogDetails(error, {
-          status: response.status,
-          statusText: response.statusText,
-        }),
-      );
-      throw error;
-    }
-
-    const parsed = await this.parseResponseJson<{ errors: string[] }>(response, path, {
-      allowNonJsonSuccess: true,
-    });
+        resolveFilename: () => requireUploadFilename(crtFile, metadata, "CRT_RUN_UPLOAD"),
+        failureLogMessage: "CRT upload failed",
+      },
+      options,
+    );
     this.assertActionAccepted(parsed, "CRT upload run");
     return parsed;
   }
