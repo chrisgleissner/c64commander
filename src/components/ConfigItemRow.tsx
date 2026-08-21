@@ -621,14 +621,14 @@ export function ConfigItemRow({
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.preventDefault();
-              (e.currentTarget as HTMLInputElement).blur();
+              e.currentTarget.blur();
               textFrameRef.current?.focus();
               return;
             }
             if (e.key !== "Enter") return;
             if (isReadOnly) return;
             commitTextValue();
-            (e.currentTarget as HTMLInputElement).blur();
+            e.currentTarget.blur();
             textFrameRef.current?.focus();
           }}
           onBlur={() => {

@@ -72,7 +72,7 @@ const StatelessButton = React.forwardRef<HTMLButtonElement, ButtonProps>(
           onPointerUp?.(event as unknown as React.PointerEvent<HTMLButtonElement>);
           if (event.defaultPrevented) return;
           if (event.pointerType === "mouse") return;
-          if ((event.currentTarget as HTMLElement).matches(":disabled")) return;
+          if (event.currentTarget.matches(":disabled")) return;
           suppressNextClickRef.current = true;
           invokeClick(event);
         }}

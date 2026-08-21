@@ -27,7 +27,7 @@ const sortObjectKeys = (value: unknown): unknown => {
   }
   if (value && typeof value === "object") {
     const normalized: Record<string, unknown> = {};
-    Object.keys(value as Record<string, unknown>)
+    Object.keys(value)
       .sort((left, right) => left.localeCompare(right))
       .forEach((key) => {
         normalized[key] = sortObjectKeys((value as Record<string, unknown>)[key]);

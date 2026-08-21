@@ -94,13 +94,13 @@ const lastVisibilityResumeInvalidationAtMs = new Map<C64QueryPrefix, number>();
 
 const invalidateByPrefix = (queryClient: QueryClient, prefixes: ReadonlyArray<C64QueryPrefix>) => {
   uniquePrefixes(prefixes).forEach((prefix) => {
-    queryClient.invalidateQueries({ queryKey: [prefix] });
+    void queryClient.invalidateQueries({ queryKey: [prefix] });
   });
 };
 
 const refetchActiveByPrefix = (queryClient: QueryClient, prefixes: ReadonlyArray<C64QueryPrefix>) => {
   uniquePrefixes(prefixes).forEach((prefix) => {
-    queryClient.refetchQueries({ queryKey: [prefix], type: "active" });
+    void queryClient.refetchQueries({ queryKey: [prefix], type: "active" });
   });
 };
 
@@ -124,7 +124,7 @@ export const invalidateForVisibilityResume = (queryClient: QueryClient, pathname
     ) {
       return;
     }
-    queryClient.invalidateQueries({ queryKey: [prefix] });
+    void queryClient.invalidateQueries({ queryKey: [prefix] });
     lastVisibilityResumeInvalidationAtMs.set(prefix, now);
   });
 };

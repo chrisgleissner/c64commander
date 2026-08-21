@@ -155,7 +155,7 @@ export const useScreenColors = ({ enabled = true }: { enabled?: boolean } = {}) 
 
   return {
     /** `"device"` when the app is following the machine, otherwise a palette id. */
-    selectedId: selectedId as ScreenColorsSelection,
+    selectedId: selectedId,
     following: selectedId === DEVICE_VIC_PALETTE_ID,
     /** The palette actually on screen right now, device-resolved when following. */
     painted,

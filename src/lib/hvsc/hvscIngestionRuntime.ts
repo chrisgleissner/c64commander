@@ -34,7 +34,7 @@ import {
   getHvscCacheDir,
   deleteCachedArchive,
 } from "./hvscFilesystem";
-import { loadHvscState, updateHvscState, isUpdateApplied, markUpdateApplied, type HvscState } from "./hvscStateStore";
+import { loadHvscState, updateHvscState, isUpdateApplied, markUpdateApplied } from "./hvscStateStore";
 import { invalidateHvscHydration } from "./hvscHydrationControl";
 import { getDefaultHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
 import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from "./hvscSongLengthService";
@@ -87,7 +87,7 @@ const runtimeState = getHvscIngestionRuntimeState();
 export { isIngestionRuntimeActive, recoverStaleIngestionState } from "./hvscIngestionRuntimeSupport";
 
 const ensureNotCancelled = (token?: string) => {
-  ensureNotCancelledWith(runtimeState.cancelTokens, token, (patch) => updateHvscState(patch as Partial<HvscState>));
+  ensureNotCancelledWith(runtimeState.cancelTokens, token, (patch) => updateHvscState(patch));
 };
 
 const canUseNativeHvscIngestion = () => {
@@ -273,7 +273,7 @@ export const applyIngestionSuccess = ({
   cancelToken: string;
   cancelTokens: Map<string, { cancelled: boolean }>;
 }) => {
-  ensureNotCancelledWith(cancelTokens, cancelToken, (patch) => updateHvscState(patch as Partial<HvscState>));
+  ensureNotCancelledWith(cancelTokens, cancelToken, (patch) => updateHvscState(patch));
   updateHvscState({
     installedBaselineVersion: baselineInstalled,
     installedVersion: plan.version,

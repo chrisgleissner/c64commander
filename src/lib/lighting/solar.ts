@@ -94,7 +94,7 @@ export const calculateSolarTimes = (input: SolarLocationInput, date: Date): Sola
           sunset: raw.sunset!,
           dawn: isValidDate(raw.dawn) ? raw.dawn! : fallback.dawn,
           dusk: isValidDate(raw.dusk) ? raw.dusk! : fallback.dusk,
-          solarNoon: isValidDate(raw.solarNoon) ? raw.solarNoon! : fallback.solarNoon,
+          solarNoon: isValidDate(raw.solarNoon) ? raw.solarNoon : fallback.solarNoon,
         },
     fallbackActive,
   };

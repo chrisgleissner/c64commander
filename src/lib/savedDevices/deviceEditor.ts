@@ -19,12 +19,10 @@ export const sanitizeSavedDeviceNameInput = (value: string) => value.trim().slic
 
 export const sanitizeSavedDevicePortInput = (value: string) => value.replace(/[^0-9]/g, "");
 
-const normalizeDraftSource = (source: SavedDevice["nameSource"] | SavedDevice["typeSource"] | undefined) =>
+const normalizeDraftSource = (source: SavedDevice["nameSource"] | undefined) =>
   source === "USER" || source === "custom" ? "USER" : "INFERRED";
 
-const normalizeDraftSourceInput = (
-  source: SavedDevice["nameSource"] | SavedDevice["typeSource"] | undefined,
-): SavedDeviceFieldSource | null => {
+const normalizeDraftSourceInput = (source: SavedDevice["nameSource"] | undefined): SavedDeviceFieldSource | null => {
   if (source === "USER" || source === "custom") return "USER";
   if (source === "INFERRED" || source === "auto") return "INFERRED";
   return null;

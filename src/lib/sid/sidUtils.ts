@@ -270,7 +270,7 @@ export const createSslPayload = (
   const bytes = new Uint8Array(songNr * 2);
   const targetDurationMs = (() => {
     const subs = options.subsongDurationsSeconds;
-    if (subs && Number.isFinite(subs[songNr - 1] as number) && (subs[songNr - 1] as number) >= 0) {
+    if (subs && Number.isFinite(subs[songNr - 1]) && (subs[songNr - 1] as number) >= 0) {
       return Math.floor((subs[songNr - 1] as number) * 1000);
     }
     return durationMs;

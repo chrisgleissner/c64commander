@@ -199,7 +199,7 @@ export const isStilInstalled = async (): Promise<boolean> =>
 export const writeStilShards = async (entries: Map<string, StilEntry>, release: number): Promise<void> => {
   const shards: Shard[] = Array.from({ length: STIL_SHARD_COUNT }, () => ({}));
   for (const [path, entry] of entries) {
-    shards[shardForPath(path)]![path] = entry;
+    shards[shardForPath(path)][path] = entry;
   }
   await resetStilStore();
   storeGeneration += 1;
@@ -249,7 +249,7 @@ const findInShard = (shard: Shard, virtualPath: string): StilEntry | null => {
   if (exact) return exact;
   const folded = virtualPath.toLowerCase();
   for (const key of Object.keys(shard)) {
-    if (key.toLowerCase() === folded) return shard[key] as StilEntry;
+    if (key.toLowerCase() === folded) return shard[key];
   }
   return null;
 };

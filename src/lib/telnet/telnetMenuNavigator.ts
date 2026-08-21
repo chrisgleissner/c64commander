@@ -187,7 +187,7 @@ export function createMenuNavigator(session: TelnetSessionApi): MenuNavigator {
       }
     }
 
-    return screen as TelnetScreen;
+    return screen;
   }
 
   /** Find the top-level (level 0) menu on screen */

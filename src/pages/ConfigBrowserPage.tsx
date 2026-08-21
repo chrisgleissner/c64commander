@@ -221,7 +221,7 @@ function CategorySection({
 
   useEffect(() => {
     if (isOpen) {
-      refetch();
+      void refetch();
     }
   }, [isOpen, refetch]);
 

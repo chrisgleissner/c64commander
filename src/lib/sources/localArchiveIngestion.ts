@@ -53,7 +53,7 @@ const buildExtractedFile = (archiveName: string, entryPath: string, data: Uint8A
 };
 
 const readArchiveBuffer = async (archive: LocalSidFile): Promise<ArrayBuffer> => {
-  if (typeof (archive as LocalSidFile).arrayBuffer === "function") {
+  if (typeof archive.arrayBuffer === "function") {
     return archive.arrayBuffer();
   }
   if (archive instanceof Blob) {

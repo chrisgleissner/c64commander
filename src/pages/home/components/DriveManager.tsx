@@ -301,13 +301,13 @@ export function DriveManager({
           let summary: { mountedLabel: string; isMounted: boolean } | undefined;
 
           if (spec.class === "PHYSICAL_DRIVE_A") {
-            category = driveASettingsCategory as Record<string, unknown> | undefined;
+            category = driveASettingsCategory;
             summary = driveSummaryItems.find((s) => s.key === "a");
           } else if (spec.class === "PHYSICAL_DRIVE_B") {
-            category = driveBSettingsCategory as Record<string, unknown> | undefined;
+            category = driveBSettingsCategory;
             summary = driveSummaryItems.find((s) => s.key === "b");
           } else if (spec.class === "SOFT_IEC_DRIVE") {
-            category = softIecConfig as Record<string, unknown> | undefined;
+            category = softIecConfig;
             summary = driveSummaryItems.find((s) => s.key === "softiec");
           }
 
@@ -367,14 +367,7 @@ export function DriveManager({
 
           let mountedPath = summary?.mountedLabel;
           if (isSoftIec) {
-            mountedPath = String(
-              resolveConfigValue(
-                softIecConfig as Record<string, unknown> | undefined,
-                "SoftIEC Drive Settings",
-                "Default Path",
-                "/USB0/",
-              ),
-            );
+            mountedPath = String(resolveConfigValue(softIecConfig, "SoftIEC Drive Settings", "Default Path", "/USB0/"));
           }
           const mountedPathLabel = isSoftIec ? "Path" : "Disk";
           const pathPending = isSoftIec

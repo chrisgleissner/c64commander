@@ -7,7 +7,7 @@
  */
 
 import { addErrorLog, addLog } from "@/lib/logging";
-import type { HvscIngestionState, HvscProgressEvent } from "./hvscTypes";
+import type { HvscProgressEvent } from "./hvscTypes";
 import { loadHvscState, updateHvscState } from "./hvscStateStore";
 import { loadHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
 
@@ -178,7 +178,7 @@ export const recoverStaleIngestionState = (): boolean => {
     ingestionState: state.ingestionState,
   });
   updateHvscState({
-    ingestionState: "error" as HvscIngestionState,
+    ingestionState: "error",
     ingestionError: "Interrupted by app restart",
   });
   const summary = loadHvscStatusSummary();

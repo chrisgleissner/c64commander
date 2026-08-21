@@ -49,7 +49,7 @@ export const liveConfigFromFixture = (parsed: unknown): LiveConfig => {
   return liveConfigFromCategoryItems(
     Object.fromEntries(
       Object.entries(categoriesRaw).map(([category, body]) => {
-        const items = ((body as { items?: Record<string, unknown> })?.items ?? {}) as Record<string, unknown>;
+        const items = (body as { items?: Record<string, unknown> })?.items ?? {};
         return [category, items];
       }),
     ),

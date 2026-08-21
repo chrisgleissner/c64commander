@@ -191,7 +191,7 @@ export class SidRadioWorkerClient {
       try {
         worker = this.ensureWorker();
       } catch (error) {
-        reject(error as Error);
+        reject(error);
         return;
       }
       const timer = setTimeout(() => {
@@ -221,7 +221,7 @@ export class SidRadioWorkerClient {
       try {
         worker = this.ensureWorker();
       } catch (error) {
-        reject(error as Error);
+        reject(error);
         return;
       }
       const id = this.nextId;

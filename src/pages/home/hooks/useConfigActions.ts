@@ -96,7 +96,7 @@ export function useConfigActions() {
   const resolveConfigValue = (payload: unknown, category: string, itemName: string, fallback: string | number) => {
     const key = buildConfigKey(category, itemName);
     const value = readItemValue(payload, category, itemName);
-    return authoritativeValues.resolveValue(key, value as string | number | undefined, fallback);
+    return authoritativeValues.resolveValue(key, value, fallback);
   };
 
   const setConfigOverride = (category: string, itemName: string, value: string | number) => {

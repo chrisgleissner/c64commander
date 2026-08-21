@@ -350,7 +350,7 @@ export const assemble = (program: Stmt[], origin: number): AssembleResult => {
   const resolve = (operand: Operand): number => {
     if (typeof operand === "number") return operand;
     if (!(operand in symbols)) throw new Error(`assemble: undefined label "${operand}"`);
-    return symbols[operand]!;
+    return symbols[operand];
   };
 
   for (const stmt of program) {

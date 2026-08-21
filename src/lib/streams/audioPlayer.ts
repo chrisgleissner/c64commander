@@ -40,7 +40,7 @@ const defaultFactory: AudioContextFactory = () => {
     (globalThis as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext })
       .AudioContext ?? (globalThis as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctor) throw new Error("WebAudio is not available in this environment.");
-  return new Ctor() as unknown as MinimalAudioContext;
+  return new Ctor();
 };
 
 export class AudioMirrorPlayer {

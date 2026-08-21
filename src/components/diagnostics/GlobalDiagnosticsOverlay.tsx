@@ -317,9 +317,8 @@ export const GlobalDiagnosticsOverlay = () => {
       applyOverlaySeedState((event as CustomEvent<DiagnosticsOverlaySeedState>).detail);
     };
 
-    window.addEventListener(DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT, handleOverlaySeedState as EventListener);
-    return () =>
-      window.removeEventListener(DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT, handleOverlaySeedState as EventListener);
+    window.addEventListener(DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT, handleOverlaySeedState);
+    return () => window.removeEventListener(DIAGNOSTICS_TEST_OVERLAY_STATE_EVENT, handleOverlaySeedState);
   }, []);
 
   useEffect(() => {
@@ -327,8 +326,8 @@ export const GlobalDiagnosticsOverlay = () => {
       setAnalyticsRevision((revision) => revision + 1);
     };
 
-    window.addEventListener(DIAGNOSTICS_TEST_ANALYTICS_EVENT, handleAnalyticsSeed as EventListener);
-    return () => window.removeEventListener(DIAGNOSTICS_TEST_ANALYTICS_EVENT, handleAnalyticsSeed as EventListener);
+    window.addEventListener(DIAGNOSTICS_TEST_ANALYTICS_EVENT, handleAnalyticsSeed);
+    return () => window.removeEventListener(DIAGNOSTICS_TEST_ANALYTICS_EVENT, handleAnalyticsSeed);
   }, []);
 
   const buildDiagnosticsExportData = useCallback(() => {

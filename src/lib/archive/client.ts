@@ -54,7 +54,7 @@ export const decodeNativeBinaryData = (value: unknown): ArrayBuffer => {
     return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
   }
   if (Array.isArray(value)) {
-    return Uint8Array.from(value).buffer as ArrayBuffer;
+    return Uint8Array.from(value).buffer;
   }
   if (typeof value === "string") {
     if (typeof atob === "function") {

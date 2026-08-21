@@ -106,7 +106,7 @@ export const setActiveVicPaletteDefinition = (palette: VicPalette): void => {
   const current = ensureActive();
   if (
     current.id === palette.id &&
-    current.rgb.every((entry, index) => entry.every((value, channel) => value === palette.rgb[index]![channel]))
+    current.rgb.every((entry, index) => entry.every((value, channel) => value === palette.rgb[index][channel]))
   ) {
     return;
   }
@@ -131,7 +131,7 @@ export const __resetVicPalette = (): void => {
 
 /** `#rrggbb` for one entry of a palette — for swatches and previews. */
 export const paletteEntryHex = (palette: VicPalette, index: number): string => {
-  const [r, g, b] = palette.rgb[index & 0x0f]!;
+  const [r, g, b] = palette.rgb[index & 0x0f];
   return `#${[r, g, b].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
 };
 

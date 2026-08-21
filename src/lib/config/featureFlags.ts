@@ -161,7 +161,7 @@ export const computeResolution = (
   // and the variant's documented guarantee; developer mode still applies every
   // override via the explicit branch below.
   const overrideApplies = hasOverride && (developerMode || isStandardUserToggleable(definition));
-  const value = overrideApplies ? (override as boolean) : definition.enabled;
+  const value = overrideApplies ? override : definition.enabled;
   const visible = developerMode ? true : definition.visible_to_user;
   const editable = developerMode ? true : isStandardUserToggleable(definition);
   return {
@@ -169,7 +169,7 @@ export const computeResolution = (
     definition,
     value,
     hasOverride,
-    overrideValue: hasOverride ? (override as boolean) : null,
+    overrideValue: hasOverride ? override : null,
     visible,
     editable,
   };

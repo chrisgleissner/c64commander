@@ -391,7 +391,7 @@ const decodeNativeBase64ToArrayBuffer = (value: unknown): ArrayBuffer => {
       const decoded = atob(value);
       return Uint8Array.from(decoded, (char) => char.charCodeAt(0)).buffer;
     }
-    return Uint8Array.from(Buffer.from(value, "base64")).buffer as ArrayBuffer;
+    return Uint8Array.from(Buffer.from(value, "base64")).buffer;
   }
   return new ArrayBuffer(0);
 };
@@ -447,7 +447,7 @@ const capacitorHttpDeviceFetch = async (
   }
 
   const responseHeaders = new Headers();
-  for (const [key, value] of Object.entries((native.headers ?? {}) as Record<string, string>)) {
+  for (const [key, value] of Object.entries(native.headers ?? {})) {
     if (value != null) responseHeaders.set(key, String(value));
   }
   const status = native.status;
@@ -494,7 +494,7 @@ const getHeaderValue = (headers: HeadersInit | undefined, name: string): string 
     const match = headers.find(([key]) => key.toLowerCase() === name.toLowerCase());
     return match?.[1] ?? null;
   }
-  const record = headers as Record<string, string>;
+  const record = headers;
   const direct = record[name];
   if (typeof direct === "string") return direct;
   const ciKey = Object.keys(record).find((key) => key.toLowerCase() === name.toLowerCase());
@@ -1969,7 +1969,7 @@ export class C64API {
       .finally(() => {
         this.inFlightReadRequests.delete(readRequestKey);
       });
-    this.inFlightReadRequests.set(readRequestKey, sharedPromise as Promise<unknown>);
+    this.inFlightReadRequests.set(readRequestKey, sharedPromise);
     return awaitPromiseWithAbortSignal(sharedPromise, requestSignal);
   }
 
@@ -2228,7 +2228,7 @@ export class C64API {
           items: {},
         },
         errors: [],
-      } as ConfigResponse;
+      };
     }
 
     const skipItemEnrichment = options.__c64uSkipItemEnrichment === true;
@@ -2283,7 +2283,7 @@ export class C64API {
             items: {},
           },
           errors: [],
-        } as ConfigResponse;
+        };
       }
 
       if (isDeviceNotReadyRequestGate(categoryErrorMessage)) {
@@ -2331,7 +2331,7 @@ export class C64API {
         items: mergedItems,
       },
       errors: [],
-    } as ConfigResponse;
+    };
   }
 
   async setConfigValue(
@@ -2362,7 +2362,7 @@ export class C64API {
         ...options,
       }),
     );
-    this.assertConfigWriteAccepted(response as { errors?: string[] }, { category, item, value: resolvedValue });
+    this.assertConfigWriteAccepted(response, { category, item, value: resolvedValue });
     this.setCachedConfigValue(category, item, resolvedValue);
     // The device has now EFFECTUATED this value but has not written it to flash — that needs a
     // separate `save_to_flash`, which is what this arms. Only after the write was accepted: a
@@ -2378,26 +2378,26 @@ export class C64API {
   // user's tuning silently vanished on the next power-up. Assert like every other
   // config write so a rejection reaches the error path.
   async saveConfig(options: C64ReadRequestOptions = {}): Promise<{ errors: string[] }> {
-    const response = (await scheduleConfigWrite(() =>
-      this.request("/v1/configs:save_to_flash", { method: "PUT", ...options }),
-    )) as { errors: string[] };
+    const response = await scheduleConfigWrite(() =>
+      this.request<{ errors: string[] }>("/v1/configs:save_to_flash", { method: "PUT", ...options }),
+    );
     this.assertConfigWriteAccepted(response, { category: "flash-save" });
     notePersistedToFlash();
     return response;
   }
 
   async loadConfig(options: C64ReadRequestOptions = {}): Promise<{ errors: string[] }> {
-    const response = (await scheduleConfigWrite(() =>
-      this.request("/v1/configs:load_from_flash", { method: "PUT", ...options }),
-    )) as { errors: string[] };
+    const response = await scheduleConfigWrite(() =>
+      this.request<{ errors: string[] }>("/v1/configs:load_from_flash", { method: "PUT", ...options }),
+    );
     this.assertConfigWriteAccepted(response, { category: "flash-load" });
     return response;
   }
 
   async resetConfig(options: C64ReadRequestOptions = {}): Promise<{ errors: string[] }> {
-    const response = (await scheduleConfigWrite(() =>
-      this.request("/v1/configs:reset_to_default", { method: "PUT", ...options }),
-    )) as { errors: string[] };
+    const response = await scheduleConfigWrite(() =>
+      this.request<{ errors: string[] }>("/v1/configs:reset_to_default", { method: "PUT", ...options }),
+    );
     this.assertConfigWriteAccepted(response, { category: "reset-defaults" });
     return response;
   }

@@ -268,7 +268,7 @@ const nativeAudioBackend = (): NativeLocalAudioBackend | null => {
   // The same predicate the buffer sizes are chosen from, so the two can never disagree about which
   // sink this platform is going to get.
   if (!nativeLocalAudioAvailable()) return null;
-  return StreamUdp as unknown as NativeLocalAudioBackend;
+  return StreamUdp;
 };
 
 /**
@@ -808,7 +808,7 @@ export class LocalSidEngine {
       } catch (error) {
         // A failed load is not retained, so a caller can retry.
         this.loadInFlight = null;
-        reject(error as Error);
+        reject(error);
         return;
       }
       const timer = setTimeout(() => {
@@ -2089,7 +2089,7 @@ export class LocalSidEngine {
         sampleRate: this.requestedSampleRate,
         roms: { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer },
         sidModel: toEngineSidModel(resolveLocalSidModel()),
-      } as LocalSidMainToWorker,
+      },
       [sidBytes],
     );
   }
@@ -2145,7 +2145,7 @@ export class LocalSidEngine {
       this.warmWorker.postMessage({
         type: "load",
         engine: effectiveSidEmulationEngine(hasCompleteRomSet()),
-      } as LocalSidMainToWorker);
+      });
     }
     return this.warmWorker;
   }

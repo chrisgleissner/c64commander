@@ -18,7 +18,7 @@ type TraceAwareWindow = typeof window & { [key: string]: unknown };
 // Use structural check rather than instanceof to avoid cross-realm and non-DOM failures
 // (e.g. JSDOM tests, Capacitor WebViews, or nodes from a different frame).
 const isElement = (value: unknown): value is Element =>
-  typeof value === "object" && value !== null && "nodeType" in value && (value as { nodeType: unknown }).nodeType === 1;
+  typeof value === "object" && value !== null && "nodeType" in value && value.nodeType === 1;
 
 const getAriaLabelledByText = (element: Element) => {
   const labelledBy = element.getAttribute("aria-labelledby");

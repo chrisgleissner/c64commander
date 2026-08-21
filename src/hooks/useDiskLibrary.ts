@@ -68,7 +68,7 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
   const setDisks = useCallback((updater: DiskEntry[] | ((prev: DiskEntry[]) => DiskEntry[])) => {
     setLibraryState((prev) => ({
       uniqueId: prev.uniqueId,
-      disks: typeof updater === "function" ? (updater as (prev: DiskEntry[]) => DiskEntry[])(prev.disks) : updater,
+      disks: typeof updater === "function" ? updater(prev.disks) : updater,
     }));
   }, []);
 

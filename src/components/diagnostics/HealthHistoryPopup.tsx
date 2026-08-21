@@ -268,7 +268,7 @@ export function HealthHistoryPopup({ open, onClose, history: providedHistory }: 
                       <p className="text-xs text-muted-foreground">
                         {selectedTimelineEvents.length} check{selectedTimelineEvents.length === 1 ? "" : "s"}
                         {selectedTimelineEvents.length > 0
-                          ? ` · ${formatDiagnosticsTimestamp(selectedTimelineEvents[selectedTimelineEvents.length - 1]!.timestampMs)} to ${formatDiagnosticsTimestamp(selectedTimelineEvents[0]!.timestampMs)}`
+                          ? ` · ${formatDiagnosticsTimestamp(selectedTimelineEvents[selectedTimelineEvents.length - 1].timestampMs)} to ${formatDiagnosticsTimestamp(selectedTimelineEvents[0].timestampMs)}`
                           : ""}
                       </p>
                     </div>

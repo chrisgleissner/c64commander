@@ -130,7 +130,7 @@ export const normalizeDriveDevices = (payload?: Pick<DrivesResponse, "drives"> |
       if (!rawValue || typeof rawValue !== "object") {
         return;
       }
-      const raw = rawValue as DriveInfo;
+      const raw = rawValue;
       const deviceClass = resolveKnownClass(apiKey);
       if (!deviceClass) {
         unknownDevices.push({ apiKey, raw });

@@ -76,8 +76,8 @@ export function useHomeActions() {
       }
       setRamDumpFolder(detail);
     };
-    window.addEventListener("c64u-ram-dump-folder-updated", handler as EventListener);
-    return () => window.removeEventListener("c64u-ram-dump-folder-updated", handler as EventListener);
+    window.addEventListener("c64u-ram-dump-folder-updated", handler);
+    return () => window.removeEventListener("c64u-ram-dump-folder-updated", handler);
   }, []);
 
   const runMachineTask = trace(async function runMachineTask(

@@ -104,8 +104,8 @@ export const useReuSnapshotStore = () => {
     const handler = (event: Event) => {
       setSnapshots((event as CustomEvent<ReuSnapshotStorageEntry[]>).detail ?? []);
     };
-    window.addEventListener(UPDATE_EVENT, handler as EventListener);
-    return () => window.removeEventListener(UPDATE_EVENT, handler as EventListener);
+    window.addEventListener(UPDATE_EVENT, handler);
+    return () => window.removeEventListener(UPDATE_EVENT, handler);
   }, []);
 
   return { snapshots };

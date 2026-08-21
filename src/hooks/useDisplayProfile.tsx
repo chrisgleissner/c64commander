@@ -179,7 +179,7 @@ export function DisplayProfileProvider({ children }: { children: React.ReactNode
       }
     };
 
-    window.addEventListener("c64u-ui-preferences-changed", handlePreferences as EventListener);
+    window.addEventListener("c64u-ui-preferences-changed", handlePreferences);
     window.addEventListener("storage", handleStorage);
     window.addEventListener("c64u-app-settings-updated", handleSettingsUpdate);
 
@@ -188,7 +188,7 @@ export function DisplayProfileProvider({ children }: { children: React.ReactNode
     applyViewportTokens();
 
     return () => {
-      window.removeEventListener("c64u-ui-preferences-changed", handlePreferences as EventListener);
+      window.removeEventListener("c64u-ui-preferences-changed", handlePreferences);
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener("c64u-app-settings-updated", handleSettingsUpdate);
       restoreRootState(rootSnapshot);

@@ -71,6 +71,30 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": ["error", { args: "none", varsIgnorePattern: "^_", caughtErrors: "none" }],
     },
   },
+  {
+    // Type-aware rules, shipped code only. They need a TypeScript program, which
+    // costs about twenty seconds over `src/` - worth it for the first rule here.
+    //
+    // The project is `tsconfig.app.json`, NOT the root `tsconfig.json`. The root
+    // is a solution file (`files: []`) whose own compilerOptions are far laxer -
+    // `strictNullChecks: false`, `noImplicitAny: false` - so a rule resolved
+    // through it reasons about different types than the compiler CI runs, and
+    // reaches different conclusions.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/**/*.d.ts"],
+    languageOptions: {
+      parserOptions: { project: ["./tsconfig.app.json"], tsconfigRootDir: import.meta.dirname },
+    },
+    rules: {
+      // A device call whose promise nobody holds fails silently: the request is
+      // still in flight, the caller has already moved on, and a rejection
+      // surfaces as an unhandled rejection rather than a UI error state. Mark a
+      // deliberate fire-and-forget with `void`.
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-unnecessary-type-assertion": "error",
+      "@typescript-eslint/no-duplicate-type-constituents": "error",
+    },
+  },
   // Telnet and diagnostics paths must use structured addLog/addErrorLog,
   // never raw console.log. console.log lands as a JNI-bridged
   // "Msg: undefined" line in Android logcat when the first arg is undefined,

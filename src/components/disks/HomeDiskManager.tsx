@@ -884,7 +884,7 @@ export const HomeDiskManager = () => {
           title: targetEnabled ? "Drive powered on" : "Drive powered off",
           description: `${driveLabel} ${targetEnabled ? "enabled" : "disabled"}.`,
         });
-        queryClient.invalidateQueries({ queryKey: ["c64-drives"] });
+        void queryClient.invalidateQueries({ queryKey: ["c64-drives"] });
       } catch (error) {
         setDrivePowerOverride((prev) => {
           const next = { ...prev };
@@ -1833,7 +1833,7 @@ export const HomeDiskManager = () => {
           actionAriaLabel: `Mount ${disk.name}`,
           showSelection: options?.showSelection !== false,
           showMenu: options?.showMenu !== false,
-        } as ActionListItem);
+        });
         return acc;
       }, []);
     },

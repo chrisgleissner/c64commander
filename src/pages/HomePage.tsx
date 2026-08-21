@@ -205,7 +205,7 @@ function HomePageContent() {
     product: status.deviceInfo?.product,
     firmwareVersion: status.deviceInfo?.firmware_version,
     coreVersion: status.deviceInfo?.core_version,
-    streamEndpointsAdvertised: detectStreamingFromConfig(dataStreamsCategory as Record<string, unknown> | undefined),
+    streamEndpointsAdvertised: detectStreamingFromConfig(dataStreamsCategory),
   });
 
   const {

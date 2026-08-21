@@ -176,8 +176,8 @@ export const useSnapshotStore = (): {
       const detail = (event as CustomEvent<SnapshotStorageEntry[]>).detail;
       setSnapshots(detail);
     };
-    window.addEventListener(UPDATE_EVENT, handler as EventListener);
-    return () => window.removeEventListener(UPDATE_EVENT, handler as EventListener);
+    window.addEventListener(UPDATE_EVENT, handler);
+    return () => window.removeEventListener(UPDATE_EVENT, handler);
   }, []);
 
   const snapshotsByType = (type: SnapshotType | "all") => {

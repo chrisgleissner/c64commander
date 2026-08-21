@@ -695,10 +695,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
   const resolveSidEnablement = useCallback(
     async (forceRefresh = false) => {
       if (!forceRefresh && sidSocketsCategory && sidAddressingCategory) {
-        return buildSidEnablement(
-          sidSocketsCategory as Record<string, unknown>,
-          sidAddressingCategory as Record<string, unknown>,
-        );
+        return buildSidEnablement(sidSocketsCategory, sidAddressingCategory);
       }
       const readOptions = forceRefresh
         ? { __c64uIntent: "background" as const, __c64uBypassCache: true }
@@ -709,7 +706,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
           api.getConfigItems("SID Sockets Configuration", SID_SOCKETS_ITEMS, readOptions),
           api.getConfigItems("SID Addressing", SID_ADDRESSING_ITEMS, readOptions),
         ]);
-        return buildSidEnablement(sockets as Record<string, unknown>, addressing as Record<string, unknown>);
+        return buildSidEnablement(sockets, addressing);
       } catch (error) {
         addErrorLog("SID enablement lookup failed", {
           error: (error as Error).message,

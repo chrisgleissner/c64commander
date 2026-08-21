@@ -48,7 +48,7 @@ export const PlaybackConfigOverrideEditor = ({ item, onChangeOverrides }: Playba
   const categoryItems = useMemo(() => {
     if (!selectedCategory || !categoryData) return [] as CategoryItem[];
     const categoryBlock = categoryData[selectedCategory] as { items?: Record<string, unknown> } | undefined;
-    const itemsBlock = categoryBlock?.items ?? (categoryBlock as Record<string, unknown> | undefined);
+    const itemsBlock = categoryBlock?.items ?? categoryBlock;
     if (!itemsBlock || typeof itemsBlock !== "object") return [] as CategoryItem[];
     return Object.entries(itemsBlock)
       .filter(([name]) => name !== "errors")

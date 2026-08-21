@@ -50,10 +50,10 @@ export const SILENCE_PEAK_TO_PEAK = 64;
 /** Peak-to-peak of the buffer. 0 for a constant, whatever its offset. */
 export const peakToPeak = (pcm: Int16Array): number => {
   if (pcm.length === 0) return 0;
-  let min = pcm[0] as number;
+  let min = pcm[0];
   let max = min;
   for (let i = 1; i < pcm.length; i += 1) {
-    const v = pcm[i] as number;
+    const v = pcm[i];
     if (v < min) min = v;
     else if (v > max) max = v;
   }

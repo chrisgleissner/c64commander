@@ -328,8 +328,8 @@ export const subscribeDeviceSafetyUpdates = (listener: (detail: { key?: string; 
   const handler = (event: Event) => {
     listener((event as CustomEvent<{ key?: string; value?: unknown }>).detail ?? {});
   };
-  window.addEventListener("c64u-device-safety-updated", handler as EventListener);
-  return () => window.removeEventListener("c64u-device-safety-updated", handler as EventListener);
+  window.addEventListener("c64u-device-safety-updated", handler);
+  return () => window.removeEventListener("c64u-device-safety-updated", handler);
 };
 
 export const loadDeviceSafetyMode = (): DeviceSafetyMode => normalizeMode(readString(DEVICE_SAFETY_MODE_KEY));

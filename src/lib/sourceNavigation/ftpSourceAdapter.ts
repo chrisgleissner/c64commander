@@ -135,13 +135,13 @@ const listEntries = async (path: string, options?: { skipCache?: boolean }): Pro
 };
 
 const attachPartialFailures = (entries: SourceEntry[], failures: SourceRecursiveFailure[]): SourceRecursiveResult => {
-  if (!failures.length) return entries as SourceRecursiveResult;
+  if (!failures.length) return entries;
   Object.defineProperty(entries, "partialFailures", {
     value: failures,
     enumerable: false,
     configurable: true,
   });
-  return entries as SourceRecursiveResult;
+  return entries;
 };
 
 const listFilesRecursive = async (

@@ -297,7 +297,7 @@ const validateDeviceSafety = (value: unknown) => {
   if (!keysAreAllowed || !requiredKeysPresent) return "deviceSafety contains unknown or missing keys.";
   if (!isDeviceSafetyMode(record.mode)) return "deviceSafety.mode is invalid.";
   const numericKeys = DEVICE_SAFETY_KEYS.filter((key) => key !== "mode" && key !== "allowUserOverrideCircuit");
-  if (numericKeys.some((key) => key in record && !Number.isFinite(record[key] as number))) {
+  if (numericKeys.some((key) => key in record && !Number.isFinite(record[key]))) {
     return "deviceSafety numeric values must be numbers.";
   }
   if (typeof record.allowUserOverrideCircuit !== "boolean") return "allowUserOverrideCircuit must be boolean.";
@@ -320,7 +320,7 @@ export const importSettingsJson = async (
   }
   const appSettings = payload.appSettings as Record<string, unknown> | undefined;
   const deviceSafety = payload.deviceSafety as Record<string, unknown> | undefined;
-  const version = payload.version as 1 | typeof SETTINGS_EXPORT_VERSION;
+  const version = payload.version;
 
   const appError = validateAppSettings(appSettings, version === 1 ? LEGACY_OPTIONAL_APP_SETTINGS_KEYS : []);
   if (appError) return { ok: false, error: appError };

@@ -68,7 +68,7 @@ const isReadOnlyItem = (name: string) => name.startsWith("SID Detected Socket");
 const extractItems = (categoryName: string, response: ConfigResponse) => {
   const responseRecord = response as Record<string, unknown>;
   const categoryBlock = (responseRecord[categoryName] ?? response) as Record<string, unknown> | null;
-  const itemsBlock = (categoryBlock as Record<string, unknown> | null)?.items ?? categoryBlock;
+  const itemsBlock = categoryBlock?.items ?? categoryBlock;
 
   if (!itemsBlock || typeof itemsBlock !== "object") return [] as Array<{ name: string; value: string | number }>;
 
@@ -261,8 +261,8 @@ export function useAppConfigState() {
       }
     };
 
-    window.addEventListener("c64u-has-changes", handler as EventListener);
-    return () => window.removeEventListener("c64u-has-changes", handler as EventListener);
+    window.addEventListener("c64u-has-changes", handler);
+    return () => window.removeEventListener("c64u-has-changes", handler);
   }, [resolvedBaseUrl]);
 
   const captureInitialSnapshot = useCallback(async (): Promise<ConfigSnapshot | null> => {
@@ -447,15 +447,15 @@ export function useAppConfigState() {
 
       await api.updateConfigBatch(payload);
 
-      queryClient.invalidateQueries({ queryKey: ["c64-category"] });
-      queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
+      void queryClient.invalidateQueries({ queryKey: ["c64-category"] });
+      void queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
       // Home's quick-config controls (Turbo, Video Mode, RAM Expansion, SID
       // cards, lighting) read exclusively through c64-config-items/
       // c64-config-item, not c64-category/c64-all-config - without this,
       // Load From App / Revert / Load From Flash all keep showing pre-load
       // values on Home until the 30s staleTime lapses. See HARD9-017.
-      queryClient.invalidateQueries({ queryKey: ["c64-config-items"] });
-      queryClient.invalidateQueries({ queryKey: ["c64-config-item"] });
+      void queryClient.invalidateQueries({ queryKey: ["c64-config-items"] });
+      void queryClient.invalidateQueries({ queryKey: ["c64-config-item"] });
     },
     [queryClient],
   );

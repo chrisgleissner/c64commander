@@ -431,7 +431,7 @@ const createInitialEnvelope = (): PersistedSavedDevicesEnvelope => {
   if (debugBootstrapDevices) {
     return {
       version: 1,
-      selectedDeviceId: debugBootstrapDevices[0]!.id,
+      selectedDeviceId: debugBootstrapDevices[0].id,
       devices: debugBootstrapDevices,
       summaries: {},
       summaryLru: [],
@@ -817,7 +817,7 @@ export const updateSavedDevice = (deviceId: string, update: Partial<Omit<SavedDe
       summaries: clearSummary
         ? {
             ...envelope.summaries,
-            [deviceId]: resetSavedDeviceSummaryVerification(envelope.summaries[deviceId]!),
+            [deviceId]: resetSavedDeviceSummaryVerification(envelope.summaries[deviceId]),
           }
         : envelope.summaries,
     };
@@ -864,7 +864,7 @@ export const updateSelectedSavedDeviceConnection = (update: {
       summaries: clearSummary
         ? {
             ...envelope.summaries,
-            [selectedDeviceId]: resetSavedDeviceSummaryVerification(envelope.summaries[selectedDeviceId]!),
+            [selectedDeviceId]: resetSavedDeviceSummaryVerification(envelope.summaries[selectedDeviceId]),
           }
         : envelope.summaries,
     };

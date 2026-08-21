@@ -260,7 +260,7 @@ export const createCpuSnapshot = async (
   // capture has frozen the program.
   const dumpFullRam = async () => {
     const { blocks } = await dumpRamRanges(api, [{ start: 0x0000, length: 0x10000 }]);
-    return blocks[0]!;
+    return blocks[0];
   };
 
   const data = await captureCpuSnapshotData(api, dumpFullRam);
