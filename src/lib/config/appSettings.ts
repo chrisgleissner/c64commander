@@ -121,6 +121,15 @@ const readBooleanWithLegacy = (key: string, legacyKey: string, fallback: boolean
   return fallback;
 };
 
+const readRawString = (key: string) => (typeof localStorage === "undefined" ? null : localStorage.getItem(key));
+
+// Nothing stored, no localStorage at all, or a value this build no longer
+// recognises all mean the same thing to a caller: use the default.
+const readEnum = <T extends string>(key: string, allowed: readonly T[], fallback: T): T => {
+  const raw = readRawString(key);
+  return allowed.includes(raw as T) ? (raw as T) : fallback;
+};
+
 const readNumber = (key: string, fallback: number) => {
   if (typeof localStorage === "undefined") return fallback;
   const raw = localStorage.getItem(key);
@@ -135,13 +144,32 @@ const broadcast = (key: string, value: unknown) => {
   window.dispatchEvent(new CustomEvent("c64u-app-settings-updated", { detail: { key, value } }));
 };
 
+// Every setting is stored the same way: skip entirely when there is no
+// localStorage (SSR, and the Node-side Playwright collection pass), write, then
+// announce the new value on the shared "c64u-app-settings-updated" event so
+// live hooks re-read it. These three primitives are that sequence; the exported
+// save* functions add only their own clamp or normalisation on top.
+const writeBoolean = (key: string, enabled: boolean) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(key, enabled ? "1" : "0");
+  broadcast(key, enabled);
+};
+
+const writeNumber = (key: string, value: number) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(key, String(value));
+  broadcast(key, value);
+};
+
+const writeString = (key: string, value: string) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(key, value);
+  broadcast(key, value);
+};
+
 export const loadDebugLoggingEnabled = () => readBoolean(DEBUG_LOGGING_KEY, false);
 
-export const saveDebugLoggingEnabled = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(DEBUG_LOGGING_KEY, enabled ? "1" : "0");
-  broadcast(DEBUG_LOGGING_KEY, enabled);
-};
+export const saveDebugLoggingEnabled = (enabled: boolean) => writeBoolean(DEBUG_LOGGING_KEY, enabled);
 
 /**
  * Full-screen (immersive) defaults come from the active build variant
@@ -154,29 +182,17 @@ export const DEFAULT_HIDE_NAVIGATION_BAR = Boolean(variant.runtime.defaultHideNa
 
 export const loadHideStatusBar = () => readBoolean(HIDE_STATUS_BAR_KEY, DEFAULT_HIDE_STATUS_BAR);
 
-export const saveHideStatusBar = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(HIDE_STATUS_BAR_KEY, enabled ? "1" : "0");
-  broadcast(HIDE_STATUS_BAR_KEY, enabled);
-};
+export const saveHideStatusBar = (enabled: boolean) => writeBoolean(HIDE_STATUS_BAR_KEY, enabled);
 
 export const loadHideNavigationBar = () => readBoolean(HIDE_NAVIGATION_BAR_KEY, DEFAULT_HIDE_NAVIGATION_BAR);
 
-export const saveHideNavigationBar = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(HIDE_NAVIGATION_BAR_KEY, enabled ? "1" : "0");
-  broadcast(HIDE_NAVIGATION_BAR_KEY, enabled);
-};
+export const saveHideNavigationBar = (enabled: boolean) => writeBoolean(HIDE_NAVIGATION_BAR_KEY, enabled);
 
 export const loadConfigWriteIntervalMs = () =>
   clampInterval(readNumber(CONFIG_WRITE_INTERVAL_KEY, DEFAULT_CONFIG_WRITE_INTERVAL_MS));
 
-export const saveConfigWriteIntervalMs = (value: number) => {
-  if (typeof localStorage === "undefined") return;
-  const clamped = clampInterval(value);
-  localStorage.setItem(CONFIG_WRITE_INTERVAL_KEY, String(clamped));
-  broadcast(CONFIG_WRITE_INTERVAL_KEY, clamped);
-};
+export const saveConfigWriteIntervalMs = (value: number) =>
+  writeNumber(CONFIG_WRITE_INTERVAL_KEY, clampInterval(value));
 
 export const clampConfigWriteIntervalMs = (value: number) => clampInterval(value);
 
@@ -197,12 +213,8 @@ export const saveAutomaticDemoModeEnabled = saveDemoModeEnabled;
 export const loadStartupDiscoveryWindowMs = () =>
   clampDiscoveryWindowMs(readNumber(STARTUP_DISCOVERY_WINDOW_MS_KEY, DEFAULT_STARTUP_DISCOVERY_WINDOW_MS));
 
-export const saveStartupDiscoveryWindowMs = (value: number) => {
-  if (typeof localStorage === "undefined") return;
-  const clamped = clampDiscoveryWindowMs(value);
-  localStorage.setItem(STARTUP_DISCOVERY_WINDOW_MS_KEY, String(clamped));
-  broadcast(STARTUP_DISCOVERY_WINDOW_MS_KEY, clamped);
-};
+export const saveStartupDiscoveryWindowMs = (value: number) =>
+  writeNumber(STARTUP_DISCOVERY_WINDOW_MS_KEY, clampDiscoveryWindowMs(value));
 
 export const clampStartupDiscoveryWindowMs = (value: number) => clampDiscoveryWindowMs(value);
 
@@ -211,12 +223,8 @@ export const loadBackgroundRediscoveryIntervalMs = () =>
     readNumber(BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY, DEFAULT_BACKGROUND_REDISCOVERY_INTERVAL_MS),
   );
 
-export const saveBackgroundRediscoveryIntervalMs = (value: number) => {
-  if (typeof localStorage === "undefined") return;
-  const clamped = clampBackgroundRediscoveryIntervalMsInternal(value);
-  localStorage.setItem(BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY, String(clamped));
-  broadcast(BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY, clamped);
-};
+export const saveBackgroundRediscoveryIntervalMs = (value: number) =>
+  writeNumber(BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY, clampBackgroundRediscoveryIntervalMsInternal(value));
 
 export const clampBackgroundRediscoveryIntervalMs = (value: number) =>
   clampBackgroundRediscoveryIntervalMsInternal(value);
@@ -224,39 +232,24 @@ export const clampBackgroundRediscoveryIntervalMs = (value: number) =>
 export const loadDiscoveryProbeTimeoutMs = () =>
   clampDiscoveryProbeTimeoutMsInternal(readNumber(DISCOVERY_PROBE_TIMEOUT_MS_KEY, DEFAULT_DISCOVERY_PROBE_TIMEOUT_MS));
 
-export const saveDiscoveryProbeTimeoutMs = (value: number) => {
-  if (typeof localStorage === "undefined") return;
-  const clamped = clampDiscoveryProbeTimeoutMsInternal(value);
-  localStorage.setItem(DISCOVERY_PROBE_TIMEOUT_MS_KEY, String(clamped));
-  broadcast(DISCOVERY_PROBE_TIMEOUT_MS_KEY, clamped);
-};
+export const saveDiscoveryProbeTimeoutMs = (value: number) =>
+  writeNumber(DISCOVERY_PROBE_TIMEOUT_MS_KEY, clampDiscoveryProbeTimeoutMsInternal(value));
 
 export const clampDiscoveryProbeTimeoutMs = (value: number) => clampDiscoveryProbeTimeoutMsInternal(value);
 
-export const loadDiskAutostartMode = () => {
-  if (typeof localStorage === "undefined") return DEFAULT_DISK_AUTOSTART_MODE;
-  const raw = localStorage.getItem(DISK_AUTOSTART_MODE_KEY);
-  return normalizeDiskAutostartMode(raw ?? DEFAULT_DISK_AUTOSTART_MODE);
-};
+export const loadDiskAutostartMode = () =>
+  normalizeDiskAutostartMode(readRawString(DISK_AUTOSTART_MODE_KEY) ?? DEFAULT_DISK_AUTOSTART_MODE);
 
-export const saveDiskAutostartMode = (mode: DiskAutostartMode) => {
-  if (typeof localStorage === "undefined") return;
-  const normalized = normalizeDiskAutostartMode(mode);
-  localStorage.setItem(DISK_AUTOSTART_MODE_KEY, normalized);
-  broadcast(DISK_AUTOSTART_MODE_KEY, normalized);
-};
+export const saveDiskAutostartMode = (mode: DiskAutostartMode) =>
+  writeString(DISK_AUTOSTART_MODE_KEY, normalizeDiskAutostartMode(mode));
 
 export const loadVolumeSliderPreviewIntervalMs = () =>
   clampVolumeSliderPreviewIntervalMsInternal(
     readNumber(VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY, DEFAULT_VOLUME_SLIDER_PREVIEW_INTERVAL_MS),
   );
 
-export const saveVolumeSliderPreviewIntervalMs = (value: number) => {
-  if (typeof localStorage === "undefined") return;
-  const clamped = clampVolumeSliderPreviewIntervalMsInternal(value);
-  localStorage.setItem(VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY, String(clamped));
-  broadcast(VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY, clamped);
-};
+export const saveVolumeSliderPreviewIntervalMs = (value: number) =>
+  writeNumber(VOLUME_SLIDER_PREVIEW_INTERVAL_MS_KEY, clampVolumeSliderPreviewIntervalMsInternal(value));
 
 export const clampVolumeSliderPreviewIntervalMs = (value: number) => clampVolumeSliderPreviewIntervalMsInternal(value);
 
@@ -293,32 +286,15 @@ const clampBootSettleMsInternal = (value: number) => {
 export const loadBootMenuAnswerEnabled = () =>
   readBoolean(BOOT_MENU_ANSWER_ENABLED_KEY, DEFAULT_BOOT_MENU_ANSWER_ENABLED);
 
-export const saveBootMenuAnswerEnabled = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(BOOT_MENU_ANSWER_ENABLED_KEY, enabled ? "1" : "0");
-  broadcast(BOOT_MENU_ANSWER_ENABLED_KEY, enabled);
-};
+export const saveBootMenuAnswerEnabled = (enabled: boolean) => writeBoolean(BOOT_MENU_ANSWER_ENABLED_KEY, enabled);
 
-export const loadBootMenuKey = (): BootMenuKey => {
-  if (typeof localStorage === "undefined") return DEFAULT_BOOT_MENU_KEY;
-  return normalizeBootMenuKey(localStorage.getItem(BOOT_MENU_KEY_KEY));
-};
+export const loadBootMenuKey = (): BootMenuKey => normalizeBootMenuKey(readRawString(BOOT_MENU_KEY_KEY));
 
-export const saveBootMenuKey = (value: BootMenuKey) => {
-  if (typeof localStorage === "undefined") return;
-  const normalized = normalizeBootMenuKey(value);
-  localStorage.setItem(BOOT_MENU_KEY_KEY, normalized);
-  broadcast(BOOT_MENU_KEY_KEY, normalized);
-};
+export const saveBootMenuKey = (value: BootMenuKey) => writeString(BOOT_MENU_KEY_KEY, normalizeBootMenuKey(value));
 
 export const loadBootSettleMs = () => clampBootSettleMsInternal(readNumber(BOOT_SETTLE_MS_KEY, DEFAULT_BOOT_SETTLE_MS));
 
-export const saveBootSettleMs = (value: number) => {
-  if (typeof localStorage === "undefined") return;
-  const clamped = clampBootSettleMsInternal(value);
-  localStorage.setItem(BOOT_SETTLE_MS_KEY, String(clamped));
-  broadcast(BOOT_SETTLE_MS_KEY, clamped);
-};
+export const saveBootSettleMs = (value: number) => writeNumber(BOOT_SETTLE_MS_KEY, clampBootSettleMsInternal(value));
 
 export const clampBootSettleMs = (value: number) => clampBootSettleMsInternal(value);
 
@@ -328,11 +304,7 @@ export const DEFAULT_SEARCH_INSIDE_DISKS = false;
 
 export const loadSearchInsideDisks = () => readBoolean(SEARCH_INSIDE_DISKS_KEY, DEFAULT_SEARCH_INSIDE_DISKS);
 
-export const saveSearchInsideDisks = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(SEARCH_INSIDE_DISKS_KEY, enabled ? "1" : "0");
-  broadcast(SEARCH_INSIDE_DISKS_KEY, enabled);
-};
+export const saveSearchInsideDisks = (enabled: boolean) => writeBoolean(SEARCH_INSIDE_DISKS_KEY, enabled);
 
 // Live Mirror (Content Explorer D/E): UDP ports the device streams to and the
 // receiver/bridge binds. Defaults 11000 (video) / 11001 (audio); configurable
@@ -348,22 +320,14 @@ const clampPort = (value: number, fallback: number) => {
 export const loadStreamVideoPort = () =>
   clampPort(readNumber(STREAM_VIDEO_PORT_KEY, DEFAULT_STREAM_VIDEO_PORT), DEFAULT_STREAM_VIDEO_PORT);
 
-export const saveStreamVideoPort = (value: number) => {
-  if (typeof localStorage === "undefined") return;
-  const clamped = clampPort(value, DEFAULT_STREAM_VIDEO_PORT);
-  localStorage.setItem(STREAM_VIDEO_PORT_KEY, String(clamped));
-  broadcast(STREAM_VIDEO_PORT_KEY, clamped);
-};
+export const saveStreamVideoPort = (value: number) =>
+  writeNumber(STREAM_VIDEO_PORT_KEY, clampPort(value, DEFAULT_STREAM_VIDEO_PORT));
 
 export const loadStreamAudioPort = () =>
   clampPort(readNumber(STREAM_AUDIO_PORT_KEY, DEFAULT_STREAM_AUDIO_PORT), DEFAULT_STREAM_AUDIO_PORT);
 
-export const saveStreamAudioPort = (value: number) => {
-  if (typeof localStorage === "undefined") return;
-  const clamped = clampPort(value, DEFAULT_STREAM_AUDIO_PORT);
-  localStorage.setItem(STREAM_AUDIO_PORT_KEY, String(clamped));
-  broadcast(STREAM_AUDIO_PORT_KEY, clamped);
-};
+export const saveStreamAudioPort = (value: number) =>
+  writeNumber(STREAM_AUDIO_PORT_KEY, clampPort(value, DEFAULT_STREAM_AUDIO_PORT));
 
 /**
  * Audio jitter buffer depth (ms) for Live View — how much audio is held back so a late, reordered
@@ -395,12 +359,8 @@ const clampNetworkBufferMs = (value: number) => {
 export const loadStreamNetworkBufferMs = () =>
   clampNetworkBufferMs(readNumber(STREAM_NETWORK_BUFFER_MS_KEY, DEFAULT_STREAM_NETWORK_BUFFER_MS));
 
-export const saveStreamNetworkBufferMs = (value: number) => {
-  if (typeof localStorage === "undefined") return;
-  const clamped = clampNetworkBufferMs(value);
-  localStorage.setItem(STREAM_NETWORK_BUFFER_MS_KEY, String(clamped));
-  broadcast(STREAM_NETWORK_BUFFER_MS_KEY, clamped);
-};
+export const saveStreamNetworkBufferMs = (value: number) =>
+  writeNumber(STREAM_NETWORK_BUFFER_MS_KEY, clampNetworkBufferMs(value));
 
 /**
  * Native video assembly (Live View fast path). When on (default), the Android StreamUdp plugin
@@ -415,11 +375,8 @@ export const DEFAULT_STREAM_NATIVE_VIDEO_ASSEMBLY = true;
 export const loadStreamNativeVideoAssembly = () =>
   readBoolean(STREAM_NATIVE_VIDEO_ASSEMBLY_KEY, DEFAULT_STREAM_NATIVE_VIDEO_ASSEMBLY);
 
-export const saveStreamNativeVideoAssembly = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(STREAM_NATIVE_VIDEO_ASSEMBLY_KEY, enabled ? "1" : "0");
-  broadcast(STREAM_NATIVE_VIDEO_ASSEMBLY_KEY, enabled);
-};
+export const saveStreamNativeVideoAssembly = (enabled: boolean) =>
+  writeBoolean(STREAM_NATIVE_VIDEO_ASSEMBLY_KEY, enabled);
 
 /**
  * Native low-latency audio (Live View). When on (default), decoded PCM is played through a native
@@ -446,11 +403,7 @@ export const DEFAULT_MIRROR_C64_AUDIO = true;
 
 export const loadMirrorC64Audio = () => readBoolean(MIRROR_C64_AUDIO_KEY, DEFAULT_MIRROR_C64_AUDIO);
 
-export const saveMirrorC64Audio = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(MIRROR_C64_AUDIO_KEY, enabled ? "1" : "0");
-  broadcast(MIRROR_C64_AUDIO_KEY, enabled);
-};
+export const saveMirrorC64Audio = (enabled: boolean) => writeBoolean(MIRROR_C64_AUDIO_KEY, enabled);
 
 /**
  * Whether the C64's picture should also be shown on this device.
@@ -466,21 +419,13 @@ export const DEFAULT_MIRROR_C64_VIDEO = true;
 
 export const loadMirrorC64Video = () => readBoolean(MIRROR_C64_VIDEO_KEY, DEFAULT_MIRROR_C64_VIDEO);
 
-export const saveMirrorC64Video = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(MIRROR_C64_VIDEO_KEY, enabled ? "1" : "0");
-  broadcast(MIRROR_C64_VIDEO_KEY, enabled);
-};
+export const saveMirrorC64Video = (enabled: boolean) => writeBoolean(MIRROR_C64_VIDEO_KEY, enabled);
 
 export const DEFAULT_STREAM_NATIVE_AUDIO = true;
 
 export const loadStreamNativeAudio = () => readBoolean(STREAM_NATIVE_AUDIO_KEY, DEFAULT_STREAM_NATIVE_AUDIO);
 
-export const saveStreamNativeAudio = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(STREAM_NATIVE_AUDIO_KEY, enabled ? "1" : "0");
-  broadcast(STREAM_NATIVE_AUDIO_KEY, enabled);
-};
+export const saveStreamNativeAudio = (enabled: boolean) => writeBoolean(STREAM_NATIVE_AUDIO_KEY, enabled);
 
 /**
  * Live View video frame-rate mode (spec §11.1). A user *maximum*: `auto` tries full source cadence
@@ -492,19 +437,11 @@ export type StreamVideoFrameRateMode = "auto" | "100" | "50" | "25";
 export const DEFAULT_STREAM_VIDEO_FRAME_RATE_MODE: StreamVideoFrameRateMode = "auto";
 const FRAME_RATE_MODES: readonly StreamVideoFrameRateMode[] = ["auto", "100", "50", "25"] as const;
 
-export const loadStreamVideoFrameRateMode = (): StreamVideoFrameRateMode => {
-  if (typeof localStorage === "undefined") return DEFAULT_STREAM_VIDEO_FRAME_RATE_MODE;
-  const raw = localStorage.getItem(STREAM_VIDEO_FRAME_RATE_MODE_KEY);
-  return FRAME_RATE_MODES.includes(raw as StreamVideoFrameRateMode)
-    ? (raw as StreamVideoFrameRateMode)
-    : DEFAULT_STREAM_VIDEO_FRAME_RATE_MODE;
-};
+export const loadStreamVideoFrameRateMode = (): StreamVideoFrameRateMode =>
+  readEnum(STREAM_VIDEO_FRAME_RATE_MODE_KEY, FRAME_RATE_MODES, DEFAULT_STREAM_VIDEO_FRAME_RATE_MODE);
 
-export const saveStreamVideoFrameRateMode = (mode: StreamVideoFrameRateMode) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(STREAM_VIDEO_FRAME_RATE_MODE_KEY, mode);
-  broadcast(STREAM_VIDEO_FRAME_RATE_MODE_KEY, mode);
-};
+export const saveStreamVideoFrameRateMode = (mode: StreamVideoFrameRateMode) =>
+  writeString(STREAM_VIDEO_FRAME_RATE_MODE_KEY, mode);
 
 /**
  * Input priority (Live View). When on (default), active C64 input (joystick/keyboard/mouse) briefly
@@ -518,11 +455,7 @@ export const DEFAULT_STREAM_INPUT_PRIORITY = true;
 
 export const loadStreamInputPriority = () => readBoolean(STREAM_INPUT_PRIORITY_KEY, DEFAULT_STREAM_INPUT_PRIORITY);
 
-export const saveStreamInputPriority = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(STREAM_INPUT_PRIORITY_KEY, enabled ? "1" : "0");
-  broadcast(STREAM_INPUT_PRIORITY_KEY, enabled);
-};
+export const saveStreamInputPriority = (enabled: boolean) => writeBoolean(STREAM_INPUT_PRIORITY_KEY, enabled);
 
 /**
  * Live View **audio route** — how Listen-only audio reaches the app (firmware
@@ -543,39 +476,22 @@ export type StreamAudioRoute = "dynamic" | "wifi" | "ethernet";
 export const DEFAULT_STREAM_AUDIO_ROUTE: StreamAudioRoute = "dynamic";
 const STREAM_AUDIO_ROUTES: readonly StreamAudioRoute[] = ["dynamic", "wifi", "ethernet"] as const;
 
-export const loadStreamAudioRoute = (): StreamAudioRoute => {
-  if (typeof localStorage === "undefined") return DEFAULT_STREAM_AUDIO_ROUTE;
-  const raw = localStorage.getItem(STREAM_AUDIO_ROUTE_KEY);
-  return STREAM_AUDIO_ROUTES.includes(raw as StreamAudioRoute) ? (raw as StreamAudioRoute) : DEFAULT_STREAM_AUDIO_ROUTE;
-};
+export const loadStreamAudioRoute = (): StreamAudioRoute =>
+  readEnum(STREAM_AUDIO_ROUTE_KEY, STREAM_AUDIO_ROUTES, DEFAULT_STREAM_AUDIO_ROUTE);
 
-export const saveStreamAudioRoute = (route: StreamAudioRoute) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(STREAM_AUDIO_ROUTE_KEY, route);
-  broadcast(STREAM_AUDIO_ROUTE_KEY, route);
-};
+export const saveStreamAudioRoute = (route: StreamAudioRoute) => writeString(STREAM_AUDIO_ROUTE_KEY, route);
 
-export const loadNotificationVisibility = (): NotificationVisibility => {
-  if (typeof localStorage === "undefined") return DEFAULT_NOTIFICATION_VISIBILITY;
-  const raw = localStorage.getItem(NOTIFICATION_VISIBILITY_KEY);
-  return raw === "all" ? "all" : DEFAULT_NOTIFICATION_VISIBILITY;
-};
+export const loadNotificationVisibility = (): NotificationVisibility =>
+  readRawString(NOTIFICATION_VISIBILITY_KEY) === "all" ? "all" : DEFAULT_NOTIFICATION_VISIBILITY;
 
-export const saveNotificationVisibility = (value: NotificationVisibility) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(NOTIFICATION_VISIBILITY_KEY, value);
-  broadcast(NOTIFICATION_VISIBILITY_KEY, value);
-};
+export const saveNotificationVisibility = (value: NotificationVisibility) =>
+  writeString(NOTIFICATION_VISIBILITY_KEY, value);
 
 export const loadNotificationDurationMs = () =>
   clampNotificationDurationMsInternal(readNumber(NOTIFICATION_DURATION_MS_KEY, DEFAULT_NOTIFICATION_DURATION_MS));
 
-export const saveNotificationDurationMs = (value: number) => {
-  if (typeof localStorage === "undefined") return;
-  const clamped = clampNotificationDurationMsInternal(value);
-  localStorage.setItem(NOTIFICATION_DURATION_MS_KEY, String(clamped));
-  broadcast(NOTIFICATION_DURATION_MS_KEY, clamped);
-};
+export const saveNotificationDurationMs = (value: number) =>
+  writeNumber(NOTIFICATION_DURATION_MS_KEY, clampNotificationDurationMsInternal(value));
 
 export const clampNotificationDurationMs = (value: number) => clampNotificationDurationMsInternal(value);
 
@@ -613,11 +529,7 @@ export const saveAutoRotationEnabled = (enabled: boolean) => {
 export const loadEnableSwipeNavigation = () =>
   readBoolean(ENABLE_SWIPE_NAVIGATION_KEY, DEFAULT_ENABLE_SWIPE_NAVIGATION);
 
-export const saveEnableSwipeNavigation = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(ENABLE_SWIPE_NAVIGATION_KEY, enabled ? "1" : "0");
-  broadcast(ENABLE_SWIPE_NAVIGATION_KEY, enabled);
-};
+export const saveEnableSwipeNavigation = (enabled: boolean) => writeBoolean(ENABLE_SWIPE_NAVIGATION_KEY, enabled);
 
 /**
  * SID Radio master flag (spec §0.4, `sidRadioEnabled`). **GA: on by default.**
@@ -629,11 +541,7 @@ export const DEFAULT_SID_RADIO_ENABLED = true;
 
 export const loadSidRadioEnabled = () => readBoolean(SID_RADIO_ENABLED_KEY, DEFAULT_SID_RADIO_ENABLED);
 
-export const saveSidRadioEnabled = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(SID_RADIO_ENABLED_KEY, enabled ? "1" : "0");
-  broadcast(SID_RADIO_ENABLED_KEY, enabled);
-};
+export const saveSidRadioEnabled = (enabled: boolean) => writeBoolean(SID_RADIO_ENABLED_KEY, enabled);
 
 /**
  * The ambient ♥/✕ ranking affordance (spec §0.4, `sidRankingEnabled`). **GA: on
@@ -644,11 +552,7 @@ export const DEFAULT_SID_RANKING_ENABLED = true;
 
 export const loadSidRankingEnabled = () => readBoolean(SID_RANKING_ENABLED_KEY, DEFAULT_SID_RANKING_ENABLED);
 
-export const saveSidRankingEnabled = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(SID_RANKING_ENABLED_KEY, enabled ? "1" : "0");
-  broadcast(SID_RANKING_ENABLED_KEY, enabled);
-};
+export const saveSidRankingEnabled = (enabled: boolean) => writeBoolean(SID_RANKING_ENABLED_KEY, enabled);
 
 /**
  * Playback engine (spec §12.5, Track B). `"c64"` plays on the Ultimate and
@@ -661,16 +565,10 @@ export type PlaybackEngine = "c64" | "local";
 
 export const DEFAULT_PLAYBACK_ENGINE: PlaybackEngine = "c64";
 
-export const loadPlaybackEngine = (): PlaybackEngine => {
-  if (typeof localStorage === "undefined") return DEFAULT_PLAYBACK_ENGINE;
-  return localStorage.getItem(PLAYBACK_ENGINE_KEY) === "local" ? "local" : DEFAULT_PLAYBACK_ENGINE;
-};
+export const loadPlaybackEngine = (): PlaybackEngine =>
+  readRawString(PLAYBACK_ENGINE_KEY) === "local" ? "local" : DEFAULT_PLAYBACK_ENGINE;
 
-export const savePlaybackEngine = (engine: PlaybackEngine) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(PLAYBACK_ENGINE_KEY, engine);
-  broadcast(PLAYBACK_ENGINE_KEY, engine);
-};
+export const savePlaybackEngine = (engine: PlaybackEngine) => writeString(PLAYBACK_ENGINE_KEY, engine);
 
 /**
  * Which SID emulation the on-device engine uses (Track B).
@@ -743,12 +641,8 @@ export const loadSidRadioMinSeconds = () => {
   return Math.min(MAX_SID_RADIO_MIN_SECONDS, Math.max(0, Math.round(raw)));
 };
 
-export const saveSidRadioMinSeconds = (seconds: number) => {
-  if (typeof localStorage === "undefined") return;
-  const clamped = Math.min(MAX_SID_RADIO_MIN_SECONDS, Math.max(0, Math.round(seconds)));
-  localStorage.setItem(SID_RADIO_MIN_SECONDS_KEY, String(clamped));
-  broadcast(SID_RADIO_MIN_SECONDS_KEY, clamped);
-};
+export const saveSidRadioMinSeconds = (seconds: number) =>
+  writeNumber(SID_RADIO_MIN_SECONDS_KEY, Math.min(MAX_SID_RADIO_MIN_SECONDS, Math.max(0, Math.round(seconds))));
 
 /**
  * Show SID tunes under a readable name rather than their file name.
@@ -765,21 +659,13 @@ export const DEFAULT_FRIENDLY_SID_NAMES = true;
 
 export const loadFriendlySidNames = () => readBoolean(FRIENDLY_SID_NAMES_KEY, DEFAULT_FRIENDLY_SID_NAMES);
 
-export const saveFriendlySidNames = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(FRIENDLY_SID_NAMES_KEY, enabled ? "1" : "0");
-  broadcast(FRIENDLY_SID_NAMES_KEY, enabled);
-};
+export const saveFriendlySidNames = (enabled: boolean) => writeBoolean(FRIENDLY_SID_NAMES_KEY, enabled);
 
 export const DEFAULT_LOCAL_ENGINE_AUTO_ROMS = true;
 
 export const loadLocalEngineAutoRoms = () => readBoolean(LOCAL_ENGINE_AUTO_ROMS_KEY, DEFAULT_LOCAL_ENGINE_AUTO_ROMS);
 
-export const saveLocalEngineAutoRoms = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(LOCAL_ENGINE_AUTO_ROMS_KEY, enabled ? "1" : "0");
-  broadcast(LOCAL_ENGINE_AUTO_ROMS_KEY, enabled);
-};
+export const saveLocalEngineAutoRoms = (enabled: boolean) => writeBoolean(LOCAL_ENGINE_AUTO_ROMS_KEY, enabled);
 
 /**
  * The emulation to actually instantiate, given whether the ROMs are in hand.
@@ -802,16 +688,10 @@ export const saveLocalEngineAutoRoms = (enabled: boolean) => {
 export const effectiveSidEmulationEngine = (romsAvailable: boolean): SidEmulationEngine =>
   romsAvailable ? loadSidEmulationEngine() : "sidlite";
 
-export const loadSidEmulationEngine = (): SidEmulationEngine => {
-  if (typeof localStorage === "undefined") return DEFAULT_SID_EMULATION_ENGINE;
-  return localStorage.getItem(SID_EMULATION_ENGINE_KEY) === "sidlite" ? "sidlite" : DEFAULT_SID_EMULATION_ENGINE;
-};
+export const loadSidEmulationEngine = (): SidEmulationEngine =>
+  readRawString(SID_EMULATION_ENGINE_KEY) === "sidlite" ? "sidlite" : DEFAULT_SID_EMULATION_ENGINE;
 
-export const saveSidEmulationEngine = (engine: SidEmulationEngine) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(SID_EMULATION_ENGINE_KEY, engine);
-  broadcast(SID_EMULATION_ENGINE_KEY, engine);
-};
+export const saveSidEmulationEngine = (engine: SidEmulationEngine) => writeString(SID_EMULATION_ENGINE_KEY, engine);
 
 /**
  * A SID revision, as the two chips are universally named. The engine models exactly these two.
@@ -836,16 +716,10 @@ const normalizeLocalSidModel = (value: unknown): LocalSidModel | null =>
  */
 export const DEFAULT_LOCAL_SID_MODEL: LocalSidModel = "8580";
 
-export const loadLocalSidModel = (): LocalSidModel => {
-  if (typeof localStorage === "undefined") return DEFAULT_LOCAL_SID_MODEL;
-  return normalizeLocalSidModel(localStorage.getItem(LOCAL_SID_MODEL_KEY)) ?? DEFAULT_LOCAL_SID_MODEL;
-};
+export const loadLocalSidModel = (): LocalSidModel =>
+  normalizeLocalSidModel(readRawString(LOCAL_SID_MODEL_KEY)) ?? DEFAULT_LOCAL_SID_MODEL;
 
-export const saveLocalSidModel = (model: LocalSidModel) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(LOCAL_SID_MODEL_KEY, model);
-  broadcast(LOCAL_SID_MODEL_KEY, model);
-};
+export const saveLocalSidModel = (model: LocalSidModel) => writeString(LOCAL_SID_MODEL_KEY, model);
 
 /**
  * Take the fallback chip from the Ultimate the app is connected to, when it has one.
@@ -858,11 +732,7 @@ export const DEFAULT_LOCAL_SID_MODEL_FROM_DEVICE = true;
 export const loadLocalSidModelFromDevice = () =>
   readBoolean(LOCAL_SID_MODEL_FROM_DEVICE_KEY, DEFAULT_LOCAL_SID_MODEL_FROM_DEVICE);
 
-export const saveLocalSidModelFromDevice = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(LOCAL_SID_MODEL_FROM_DEVICE_KEY, enabled ? "1" : "0");
-  broadcast(LOCAL_SID_MODEL_FROM_DEVICE_KEY, enabled);
-};
+export const saveLocalSidModelFromDevice = (enabled: boolean) => writeBoolean(LOCAL_SID_MODEL_FROM_DEVICE_KEY, enabled);
 
 /**
  * The last chip actually read from a connected Ultimate.
@@ -871,10 +741,8 @@ export const saveLocalSidModelFromDevice = (enabled: boolean) => {
  * when the machine is off, on the train, or on a different network. Nothing re-probes to render a
  * tune, so a device that cannot be reached costs playback no time at all.
  */
-export const loadLearnedDeviceSidModel = (): LocalSidModel | null => {
-  if (typeof localStorage === "undefined") return null;
-  return normalizeLocalSidModel(localStorage.getItem(LEARNED_DEVICE_SID_MODEL_KEY));
-};
+export const loadLearnedDeviceSidModel = (): LocalSidModel | null =>
+  normalizeLocalSidModel(readRawString(LEARNED_DEVICE_SID_MODEL_KEY));
 
 export const saveLearnedDeviceSidModel = (model: LocalSidModel | null) => {
   if (typeof localStorage === "undefined") return;
@@ -921,20 +789,15 @@ export const CROSSFADE_MS_MAX = 4000;
 export const DEFAULT_PLAYBACK_CROSSFADE_MS = 0;
 
 export const loadPlaybackCrossfadeMs = (): number => {
-  if (typeof localStorage === "undefined") return DEFAULT_PLAYBACK_CROSSFADE_MS;
-  const raw = localStorage.getItem(PLAYBACK_CROSSFADE_MS_KEY);
+  const raw = readRawString(PLAYBACK_CROSSFADE_MS_KEY);
   if (raw === null) return DEFAULT_PLAYBACK_CROSSFADE_MS;
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed)) return DEFAULT_PLAYBACK_CROSSFADE_MS;
   return Math.min(CROSSFADE_MS_MAX, Math.max(CROSSFADE_MS_MIN, parsed));
 };
 
-export const savePlaybackCrossfadeMs = (ms: number) => {
-  if (typeof localStorage === "undefined") return;
-  const clamped = Math.min(CROSSFADE_MS_MAX, Math.max(CROSSFADE_MS_MIN, Math.round(ms)));
-  localStorage.setItem(PLAYBACK_CROSSFADE_MS_KEY, String(clamped));
-  broadcast(PLAYBACK_CROSSFADE_MS_KEY, clamped);
-};
+export const savePlaybackCrossfadeMs = (ms: number) =>
+  writeNumber(PLAYBACK_CROSSFADE_MS_KEY, Math.min(CROSSFADE_MS_MAX, Math.max(CROSSFADE_MS_MIN, Math.round(ms))));
 
 /**
  * Local-engine gate (Track B). **GA: on by default** — the Play-page "Play on:
@@ -947,34 +810,21 @@ export const DEFAULT_LOCAL_ENGINE_ENABLED = true;
 
 export const loadLocalEngineEnabled = () => readBoolean(LOCAL_ENGINE_ENABLED_KEY, DEFAULT_LOCAL_ENGINE_ENABLED);
 
-export const saveLocalEngineEnabled = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(LOCAL_ENGINE_ENABLED_KEY, enabled ? "1" : "0");
-  broadcast(LOCAL_ENGINE_ENABLED_KEY, enabled);
-};
+export const saveLocalEngineEnabled = (enabled: boolean) => writeBoolean(LOCAL_ENGINE_ENABLED_KEY, enabled);
 
-const loadString = (key: string) => {
-  if (typeof localStorage === "undefined") return "";
-  return localStorage.getItem(key) ?? "";
-};
-
-const saveString = (key: string, value: string) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(key, value);
-  broadcast(key, value);
-};
+const loadString = (key: string) => readRawString(key) ?? "";
 
 export const loadArchiveHostOverride = () => loadString(ARCHIVE_HOST_OVERRIDE_KEY);
 
-export const saveArchiveHostOverride = (value: string) => saveString(ARCHIVE_HOST_OVERRIDE_KEY, value);
+export const saveArchiveHostOverride = (value: string) => writeString(ARCHIVE_HOST_OVERRIDE_KEY, value);
 
 export const loadArchiveClientIdOverride = () => loadString(ARCHIVE_CLIENT_ID_OVERRIDE_KEY);
 
-export const saveArchiveClientIdOverride = (value: string) => saveString(ARCHIVE_CLIENT_ID_OVERRIDE_KEY, value);
+export const saveArchiveClientIdOverride = (value: string) => writeString(ARCHIVE_CLIENT_ID_OVERRIDE_KEY, value);
 
 export const loadArchiveUserAgentOverride = () => loadString(ARCHIVE_USER_AGENT_OVERRIDE_KEY);
 
-export const saveArchiveUserAgentOverride = (value: string) => saveString(ARCHIVE_USER_AGENT_OVERRIDE_KEY, value);
+export const saveArchiveUserAgentOverride = (value: string) => writeString(ARCHIVE_USER_AGENT_OVERRIDE_KEY, value);
 
 export const APP_SETTINGS_KEYS = {
   DEBUG_LOGGING_KEY,
@@ -1016,16 +866,9 @@ export const APP_SETTINGS_KEYS = {
  * than here, so an id from an older build (or a palette that has since been removed) falls back to
  * the default instead of painting from an empty table.
  */
-export const loadVicPaletteId = (): string => {
-  if (typeof localStorage === "undefined") return "device";
-  return localStorage.getItem(VIC_PALETTE_KEY) ?? "device";
-};
+export const loadVicPaletteId = (): string => readRawString(VIC_PALETTE_KEY) ?? "device";
 
-export const saveVicPaletteId = (id: string) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(VIC_PALETTE_KEY, id);
-  broadcast(VIC_PALETTE_KEY, id);
-};
+export const saveVicPaletteId = (id: string) => writeString(VIC_PALETTE_KEY, id);
 
 /**
  * Which screens a palette choice lands on: this app, the C64, or both.
@@ -1041,17 +884,10 @@ export type PaletteTarget = "local" | "remote" | "both";
 export const DEFAULT_PALETTE_TARGET: PaletteTarget = "local";
 const PALETTE_TARGETS: PaletteTarget[] = ["local", "remote", "both"];
 
-export const loadPaletteTarget = (): PaletteTarget => {
-  if (typeof localStorage === "undefined") return DEFAULT_PALETTE_TARGET;
-  const raw = localStorage.getItem(PALETTE_TARGET_KEY);
-  return PALETTE_TARGETS.includes(raw as PaletteTarget) ? (raw as PaletteTarget) : DEFAULT_PALETTE_TARGET;
-};
+export const loadPaletteTarget = (): PaletteTarget =>
+  readEnum(PALETTE_TARGET_KEY, PALETTE_TARGETS, DEFAULT_PALETTE_TARGET);
 
-export const savePaletteTarget = (target: PaletteTarget) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(PALETTE_TARGET_KEY, target);
-  broadcast(PALETTE_TARGET_KEY, target);
-};
+export const savePaletteTarget = (target: PaletteTarget) => writeString(PALETTE_TARGET_KEY, target);
 
 /**
  * Whether device settings changed from the app are written to the machine's flash.
@@ -1069,8 +905,4 @@ export const savePaletteTarget = (target: PaletteTarget) => {
  */
 export const loadPersistConfigToFlash = () => readBoolean(PERSIST_CONFIG_TO_FLASH_KEY, false);
 
-export const savePersistConfigToFlash = (enabled: boolean) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(PERSIST_CONFIG_TO_FLASH_KEY, enabled ? "1" : "0");
-  broadcast(PERSIST_CONFIG_TO_FLASH_KEY, enabled);
-};
+export const savePersistConfigToFlash = (enabled: boolean) => writeBoolean(PERSIST_CONFIG_TO_FLASH_KEY, enabled);
