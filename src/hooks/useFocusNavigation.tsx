@@ -405,10 +405,14 @@ export const FocusNavigationProvider = ({
       // never log them, so typed text is never captured by diagnostics.
       if (isEditableTarget(event.target)) {
         // One exception: Back and Escape always have to be able to take DOM focus out of a
-        // field. Without it, anything that focuses a text input — an autofocus, a
-        // Tab, the ring's own activation — leaves a keypad-only user with no key
-        // that reaches the navigation handler again.
+        // field. Without it, anything that focuses a text input — an autofocus, a Tab, the ring's
+        // own activation — leaves a keypad-only user with no key that reaches the navigation
+        // handler again.
         if (action !== "back" && action !== "escape") return;
+        // Unless the field is inside an open dialog or sheet, where that overlay owns the key and
+        // the reader means "close this". Consuming it there left the dialog open with nothing but
+        // a blurred field to show for the press.
+        if (isWithinOpenOverlay(event.target)) return;
         if (event.target instanceof HTMLElement) event.target.blur();
         event.preventDefault();
         return;

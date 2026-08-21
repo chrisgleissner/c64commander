@@ -21,11 +21,17 @@ import type { Locator, Page } from "@playwright/test";
  * after `goto` there are no toggles yet and it would do nothing.
  */
 export const openAllCards = async (scope: Page | Locator): Promise<void> => {
-  const toggles = scope.locator('button[aria-expanded="false"][aria-controls]');
-  for (let index = 0; index < (await toggles.count()); index++) {
-    const toggle = toggles.nth(index);
-    // Re-read rather than trusting the snapshot: opening one card can close a sibling on the
-    // compact profile, where only one is open at a time.
-    if ((await toggle.getAttribute("aria-expanded")) === "false") await toggle.click();
+  // Element handles, not `nth(i)` on a live locator. Clicking one card changes which toggles still
+  // match `aria-expanded="false"`, so an index taken before the click points somewhere else — or
+  // at nothing, and the call then waits out its timeout.
+  const toggles = await scope.locator('button[aria-expanded="false"][aria-controls]').elementHandles();
+  for (const toggle of toggles) {
+    // Re-read each one: on the compact profile opening a card closes its siblings, so a toggle
+    // captured as closed may have been opened and closed again by the time its turn comes.
+    if ((await toggle.getAttribute("aria-expanded")) !== "false") continue;
+    // Opening a card scrolls it into view, which moves the ones below it — including under the
+    // fixed header, where a click would wait out its timeout.
+    await toggle.scrollIntoViewIfNeeded();
+    await toggle.click();
   }
 };

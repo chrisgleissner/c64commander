@@ -2357,10 +2357,11 @@ test.describe("App screenshots", () => {
         await captureScreenshot(page, testInfo, "home/dialogs/02-save-ram-custom-range.png");
         await page.keyboard.press("Escape");
       }
+      // The next step clicks a control on the page behind, which a dialog left open makes inert.
+      await expect(page.getByTestId("save-ram-dialog")).toHaveCount(0);
 
       // Snapshot Manager dialog
       await seedHomeDialogSnapshots("snapshot-manager");
-      await openAllCards(activeMain);
       await activeMain.getByTestId("home-load-ram").click();
       if (
         await page
@@ -2562,9 +2563,15 @@ test.describe("App screenshots", () => {
       //     directory, so we only capture when the entry list renders. ---
       const rowMenu = getActiveMain(page).getByRole("button", { name: "Item actions" }).first();
       if (await rowMenu.isVisible().catch(() => false)) {
+        // Anchored to the trigger: with the trigger near the fold, the popup opened outside the
+        // viewport and its items could be resolved but not clicked.
+        await rowMenu.scrollIntoViewIfNeeded();
         await rowMenu.click();
         const explorerItem = page.getByRole("menuitem", { name: /Open \(Disk Explorer\)/ });
         if (await explorerItem.isVisible().catch(() => false)) {
+          // The popup can open with its items below the fold on the shortest viewport, where a
+          // click resolves the element but never lands.
+          await explorerItem.scrollIntoViewIfNeeded();
           await explorerItem.click();
           const explorerDialog = page.getByRole("dialog");
           const listRendered = await explorerDialog
@@ -2716,6 +2723,9 @@ test.describe("App screenshots", () => {
       // profiles, so there are six: the compact ones show what a 320x426 screen fits, the
       // medium ones what a 393x727 screen fits.
       await applyDisplayProfileViewport(page, "compact");
+      // One card is open at a time on this profile, and the step above opened Live View — which
+      // closed Quick Actions, where Remote Input lives.
+      await openAllCards(getActiveMain(page).getByTestId("home-quick-actions"));
       await getActiveMain(page).getByTestId("home-machine-inline-openRemoteInput").click();
       const sheet = page.getByTestId("remote-input-sheet");
       await expect(sheet).toBeVisible();
@@ -2737,7 +2747,23 @@ test.describe("App screenshots", () => {
             { locator: sheet },
           );
         }
-        await immersiveMirror.getByTestId("av-immersive-fit").click();
+        // The zoom and fit controls hide themselves after an idle period, and the captures above
+        // take longer than that. A pointer on the picture is what brings them back, which is what
+        // a reader does too.
+        await immersiveMirror.hover();
+        const fitControl = immersiveMirror.getByTestId("av-immersive-fit");
+        await expect(fitControl).toBeVisible();
+        // Forced, with the two things a forced click skips checked here instead: it is visible,
+        // and it is the topmost element at its own centre. The control re-renders on its own
+        // auto-hide timer, so Playwright's stability wait never settles on it.
+        expect(
+          await fitControl.evaluate((element) => {
+            const box = element.getBoundingClientRect();
+            const top = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+            return Boolean(top && element.contains(top));
+          }),
+        ).toBe(true);
+        await fitControl.click({ force: true });
 
         // Game Mode, driven by key: the on-screen controls step aside so the picture has
         // the whole sheet. This state cannot be shown without a live picture to give the
@@ -2812,7 +2838,9 @@ test.describe("App screenshots", () => {
       allowVisualOverflow(testInfo, "Audio mixer controls overflow on narrow screenshot viewport.");
       await page.goto("/config");
       await waitForConnected(page);
-      await expect(page.getByRole("heading", { name: "Config" })).toBeVisible();
+      // The page title, exactly. `name` is a substring match by default, and the Config cards are
+      // real headings now — "SID sockets configuration" contains "config".
+      await expect(page.getByRole("heading", { name: "Config", exact: true })).toBeVisible();
       await expect
         .poll(async () => page.locator('[data-testid^="config-menu-page-"], [data-testid^="config-category-"]').count())
         .toBeGreaterThan(0);
@@ -2833,7 +2861,9 @@ test.describe("App screenshots", () => {
         await page.goto("/config");
         await applyDisplayProfileViewport(page, profileId);
         await waitForConnected(page);
-        await expect(page.getByRole("heading", { name: "Config" })).toBeVisible();
+        // The page title, exactly. `name` is a substring match by default, and the Config cards are
+        // real headings now — "SID sockets configuration" contains "config".
+        await expect(page.getByRole("heading", { name: "Config", exact: true })).toBeVisible();
         await captureScreenshot(page, testInfo, profileScreenshotPath("config", profileId, "01-overview.png"));
       }
     },
@@ -2986,7 +3016,6 @@ test.describe("App screenshots", () => {
       // Reaching for one particular tune while a station is running. A station is endless and
       // chooses for you, which is the point of it right up until you want to hear one specific
       // thing — so this searches the whole archive by title or composer without stopping it.
-      await openAllCards(getActiveMain(page));
       const findATune = getActiveMain(page).getByTestId("hvsc-search-open");
       await expect(findATune).toBeVisible();
       await findATune.click();

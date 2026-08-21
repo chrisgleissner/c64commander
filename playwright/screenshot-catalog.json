@@ -1,5 +1,5 @@
 {
-  "disks": ["drives", "disks"],
+  "disks": ["drives", "disks", "drive-a", "drive-b", "iec"],
   "config": [
     "memory-roms",
     "turbo-boost",
@@ -64,7 +64,9 @@
     "online-archive",
     "stable-features",
     "experimental-features",
-    "sid-radio"
+    "sid-radio",
+    "stable",
+    "experimental"
   ],
   "docs": [
     "getting-started",
@@ -119,6 +121,7 @@
     "save",
     "load",
     "revert",
-    "manage"
+    "manage",
+    "external-resources"
   ]
 }
