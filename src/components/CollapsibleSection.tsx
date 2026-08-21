@@ -53,6 +53,9 @@ export interface CollapsibleSectionProps {
    * without opening the section, matching what these sections did before they were
    * collapsible. */
   actions?: ReactNode;
+  /** Draw the icon without its tinted tile. For a card whose header already carries controls, the
+   * tile is decoration that costs the title about 46 CSS px of the row. */
+  plainIcon?: boolean;
   /** Extra classes on the card root, for a caller that has to place the card itself. */
   className?: string;
   /** Root testid. Defaults to `${scope}-section-${id}`. */
@@ -104,6 +107,7 @@ export const CollapsibleSection = ({
   badge,
   headerRef,
   actions,
+  plainIcon = false,
   className,
   testId,
   toggleTestId,
@@ -312,17 +316,20 @@ export const CollapsibleSection = ({
           aria-expanded={open}
           aria-controls={resolvedBodyId}
         >
-          <span className="flex min-w-0 items-center gap-2.5">
+          <span className="flex min-w-0 flex-1 items-center gap-2.5">
             {/*
               Compact drops the tile around the icon and keeps the icon itself. The tile was a 30 px
               box in a 47 px row, so it — not the title — set the height of every closed card, and a
               320x427 screen has 218 px of scrollable height to spend. The icon still carries the
               scanning cue; the box around it was decoration.
             */}
-            <span className={cn(singleOpen ? "shrink-0" : "rounded-lg bg-primary/10 p-1.5")}>
-              <Icon className={cn("text-primary", singleOpen ? "h-[1.125rem] w-[1.125rem]" : "h-5 w-5")} aria-hidden />
+            <span className={cn(singleOpen || plainIcon ? "shrink-0" : "rounded-lg bg-primary/10 p-1.5")}>
+              <Icon
+                className={cn("text-primary", singleOpen || plainIcon ? "h-[1.125rem] w-[1.125rem]" : "h-5 w-5")}
+                aria-hidden
+              />
             </span>
-            <span className="flex min-w-0 flex-col">
+            <span className="flex min-w-0 flex-1 flex-col">
               {/* Still a real heading: the section titles are how the page is navigated, by a
                   screen reader and by anyone scanning it. The badge sits beside the heading
                   rather than inside it, so the heading's accessible name stays the title alone. */}
@@ -333,7 +340,15 @@ export const CollapsibleSection = ({
                 "7/11 on" badge measured 64 CSS px against 38 for every other card on the page.
               */}
               <span className="flex min-w-0 items-center gap-2">
-                <h2 className="min-w-0 truncate font-medium">
+                {/*
+                  `flex-1` when the title has alternative wordings, so it fills the row rather than
+                  shrinking to its own text. `FittedText` measures the width it has been given, and
+                  in a shrink-to-fit box that is whatever the current wording needs — which makes
+                  the measurement a feedback loop: once a shorter wording is chosen the box shrinks
+                  to it and the longer one never fits again. Two identical drive cards side by side
+                  ended up reading "A" and "Drive B".
+                */}
+                <h2 className={cn("min-w-0 truncate font-medium", titleVariants?.length ? "flex-1" : undefined)}>
                   {titleVariants && titleVariants.length > 0 ? (
                     <FittedText variants={titleVariants} label={title} />
                   ) : (

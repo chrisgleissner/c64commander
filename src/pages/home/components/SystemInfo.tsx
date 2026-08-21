@@ -42,27 +42,33 @@ export function SystemInfo() {
         which does not say which value belongs to which label. In compact each pair gets its own
         row; wider screens keep the single flowing line, where there is room for it.
       */}
+      {/*
+        One wrapping row on every profile, packed as tightly as the values allow.
+        The one-pair-per-row grid this replaces was added when these were six independent spans and
+        a label could end one line with its value starting the next. They are three pair spans now,
+        and a flex item never splits across lines, so the pairs stay whole on their own. A row per
+        pair spent three lines saying three short things and left most of each line empty; wrapping
+        puts as many pairs on a line as fit and only spills when they genuinely do not.
+      */}
       <div
         className={cn(
-          "gap-x-4 text-sm",
-          // Tight leading on the smallest screen: three rows at the default 1.55 leading took 94 CSS
-          // px of a 332 px content area to say three short things.
-          profile === "compact" ? "grid grid-cols-1 gap-y-0 leading-tight" : "flex flex-wrap items-center gap-y-1",
+          "flex flex-wrap items-baseline gap-x-3 text-sm",
+          profile === "compact" ? "gap-y-0 leading-tight" : "gap-y-1",
         )}
       >
-        <span className="flex min-w-0 items-baseline gap-1.5">
+        <span className="flex min-w-0 max-w-full shrink-0 items-baseline gap-1.5">
           <span className="shrink-0 text-muted-foreground">App</span>
           <span className="min-w-0 truncate font-semibold text-foreground" data-testid="home-system-version">
             {buildInfo.versionLabel || "Not available"}
           </span>
         </span>
-        <span className="flex min-w-0 items-baseline gap-1.5">
+        <span className="flex min-w-0 max-w-full shrink-0 items-baseline gap-1.5">
           <span className="shrink-0 text-muted-foreground">Device</span>
           <span className="min-w-0 truncate font-semibold text-foreground" data-testid="home-system-device">
             {deviceValue}
           </span>
         </span>
-        <span className="flex min-w-0 items-baseline gap-1.5">
+        <span className="flex min-w-0 max-w-full shrink-0 items-baseline gap-1.5">
           <span className="shrink-0 text-muted-foreground">Firmware</span>
           <span className="min-w-0 truncate font-semibold text-foreground" data-testid="home-system-firmware">
             {firmwareValue}

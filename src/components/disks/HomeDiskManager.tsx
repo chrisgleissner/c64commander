@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps 
 import { useQueryClient } from "@tanstack/react-query";
 import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Folder, RotateCcw } from "lucide-react";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { driveCardTitleVariants } from "@/lib/drives/driveDevices";
 import { Button } from "@/components/ui/button";
 import { ResponsivePathText } from "@/components/ResponsivePathText";
 import { Input } from "@/components/ui/input";
@@ -1967,7 +1968,9 @@ export const HomeDiskManager = () => {
                   scope="disks"
                   id={`drive-${key}`}
                   title={driveLabel}
+                  titleVariants={driveCardTitleVariants(driveLabel)}
                   icon={HardDrive}
+                  plainIcon
                   testId={`drive-card-${key}`}
                   // Only the primary drive is open on a first visit. The others are there when
                   // they are needed and cost a screen each when they are not.
@@ -2205,9 +2208,9 @@ export const HomeDiskManager = () => {
               scope="disks"
               id="drive-soft-iec"
               title="Soft IEC Drive"
-              // Never truncated: the longest of these that fits is what gets drawn.
-              titleVariants={["Soft IEC Drive", "IEC Drive", "IEC"]}
+              titleVariants={driveCardTitleVariants("Soft IEC")}
               icon={HardDrive}
+              plainIcon
               testId="drive-soft-iec-row"
               // Closed on a first visit, like Drive B: a host-directory drive is set up once and
               // then left alone, and an open card costs a screen on the smallest supported display.

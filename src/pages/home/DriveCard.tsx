@@ -12,6 +12,7 @@ import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { Button } from "@/components/ui/button";
 import { HardDrive } from "lucide-react";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { driveCardTitleVariants } from "@/lib/drives/driveDevices";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { getOnOffButtonClass } from "@/lib/ui/buttonStyles";
@@ -117,7 +118,10 @@ export function DriveCard({
       scope="home"
       id={`drive-${testIdSuffix}`}
       title={name}
+      titleVariants={driveCardTitleVariants(name)}
       icon={HardDrive}
+      // The header already carries ON/OFF and mount; the tile would cost the title the room it needs.
+      plainIcon
       className={className}
       testId={`home-drive-row-${testIdSuffix}`}
       defaultOpen={defaultOpen}
