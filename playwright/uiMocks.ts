@@ -473,15 +473,32 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         // from another scope (e.g. Docs) seeded earlier in the same test - and unlike the
         // Settings-only key this one is never deleted out from under that check, so the
         // guard only fires on a page's genuine first visit to Settings.
+        //
+        // The real store (`collapsibleSectionStore.ts`) only ever persists this key as an
+        // id -> open object; the bare array below is merely how THIS seed writes its very
+        // first value. Reading it back with an array-only parse meant that the instant a
+        // test toggled one section - converting the key to the real object shape - this
+        // script stopped recognizing any "settings:" id as already seeded, and rewrote the
+        // key as a fresh all-open array on the next navigation, silently discarding whatever
+        // the test had just closed (a chapter closed on one visit did not stay closed on the
+        // next). Parsing both shapes into one entries map, and always writing the object
+        // shape back, keeps this guard correct once the real store has touched the key.
         (() => {
-          let ids: unknown = [];
+          let parsed: unknown = [];
           try {
-            ids = JSON.parse(localStorage.getItem("c64u_open_sections") ?? "[]");
+            parsed = JSON.parse(localStorage.getItem("c64u_open_sections") ?? "[]");
           } catch {
-            ids = [];
+            parsed = [];
           }
-          const existing = Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : [];
-          if (existing.some((id) => id.startsWith("settings:"))) return;
+          const entries: Record<string, boolean> = {};
+          if (Array.isArray(parsed)) {
+            for (const id of parsed) if (typeof id === "string") entries[id] = true;
+          } else if (parsed && typeof parsed === "object") {
+            for (const [id, open] of Object.entries(parsed as Record<string, unknown>)) {
+              if (typeof open === "boolean") entries[id] = open;
+            }
+          }
+          if (Object.keys(entries).some((id) => id.startsWith("settings:"))) return;
           const settingsIds = [
             "appearance",
             "connection",
@@ -496,7 +513,8 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
             "notifications",
             "about",
           ].map((id) => `settings:${id}`);
-          localStorage.setItem("c64u_open_sections", JSON.stringify([...existing, ...settingsIds]));
+          for (const id of settingsIds) entries[id] = true;
+          localStorage.setItem("c64u_open_sections", JSON.stringify(entries));
         })();
         if (seedFeatureFlags) {
           localStorage.setItem("c64u_dev_mode_enabled", "1");
