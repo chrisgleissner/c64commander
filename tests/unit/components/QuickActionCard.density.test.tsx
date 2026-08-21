@@ -58,7 +58,9 @@ describe("QuickActionCard", () => {
       </DisplayProfileProvider>,
     );
 
-    expect(screen.getByText("Very long compact action label").className).toContain("text-[11px]");
+    // The step, not a hard-coded pixel size. An arbitrary `text-[11px]` renders 11px on every
+    // profile, under the 14px floor, and is invisible to the per-profile type scale.
+    expect(screen.getByText("Very long compact action label").className).toContain("text-xs");
     expect(screen.getByText("Very long compact action label").className).toContain("whitespace-normal");
     expect(screen.getByText("Very long compact action label").className).toContain("break-normal");
     expect(screen.getByText("Readable secondary copy should wrap on compact displays").className).toContain(

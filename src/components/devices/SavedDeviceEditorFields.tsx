@@ -53,7 +53,7 @@ function T9ModeIndicator({
   if (!enabled || !visible || modality !== "key-navigation") return null;
   return (
     <span
-      className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+      className="rounded-full border border-border/70 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground"
       data-testid={testId}
     >
       T9 {mode === "hostname" ? "Hostname" : "Multitap"} · #
@@ -160,7 +160,7 @@ export function SavedDeviceEditorFields({
             visible={activeT9Field === "name"}
           />
           {draft.nameSource === "INFERRED" ? (
-            <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="rounded-full border border-border/70 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Auto
             </span>
           ) : null}

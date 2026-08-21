@@ -541,6 +541,15 @@ test.describe("Home interactions", () => {
     await expect(page.getByTestId("disk-list")).toBeVisible();
     await waitForConnected(page);
 
+    // Drive B and the Soft IEC drive are closed on a first visit; their reset buttons live in the
+    // card body, so open every closed card before reaching for them.
+    await expect(page.getByTestId("drive-card-a")).toBeVisible({ timeout: 20_000 });
+    for (const id of ["disks-section-toggle-drive-b", "disks-section-toggle-drive-soft-iec"]) {
+      const toggle = page.getByTestId(id);
+      if ((await toggle.count()) === 0) continue;
+      if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    }
+
     await page.getByTestId("drive-reset-a").click();
     await page.getByTestId("drive-reset-b").click();
     await page.getByTestId("drive-reset-soft-iec").click();
@@ -726,48 +735,71 @@ test.describe("Home interactions", () => {
     await page.goto("/");
     await applyCompactDisplayProfile(page);
     await waitForConnected(page);
-    await openHomeSection(page, "printers");
-    await openHomeSection(page, "audio");
+    // The compact profile keeps ONE card open at a time, so each section's stacking is checked while
+    // that section is the open one. Opening them all first and measuring afterwards would only ever
+    // see the last one.
+    // Both rows are measured in ONE evaluate, and in document coordinates.
+    // `boundingBox()` is viewport-relative, so scrolling the second element into view between the
+    // two reads makes the comparison meaningless: the first box was captured at a different scroll
+    // offset. That produced a failure showing B "above" A while the screenshots showed them
+    // correctly stacked.
+    const stackedPair = async (firstId: string, secondId: string) => {
+      for (const id of [firstId, secondId]) {
+        const locator = page.getByTestId(id);
+        await locator.scrollIntoViewIfNeeded();
+        await expect(locator).toBeVisible();
+      }
+      return page.evaluate(
+        ([a, b]) => {
+          const documentTop = (element: Element) => {
+            let top = element.getBoundingClientRect().top;
+            for (let node = element.parentElement; node; node = node.parentElement) top += node.scrollTop;
+            return top;
+          };
+          const first = document.querySelector(`[data-testid="${a}"]`) as HTMLElement | null;
+          const second = document.querySelector(`[data-testid="${b}"]`) as HTMLElement | null;
+          if (!first || !second) return null;
+          return {
+            firstTop: documentTop(first),
+            firstHeight: first.getBoundingClientRect().height,
+            secondTop: documentTop(second),
+            firstWidth: first.getBoundingClientRect().width,
+            secondWidth: second.getBoundingClientRect().width,
+          };
+        },
+        [firstId, secondId] as const,
+      );
+    };
 
-    const driveA = page.getByTestId("home-drive-row-a");
-    const driveB = page.getByTestId("home-drive-row-b");
-    const printerToggle = page.getByTestId("home-printer-toggle");
-    const printerBus = page.getByTestId("home-printer-bus");
-    const sidEntry = page.getByTestId("home-sid-entry-socket1");
-    const sidVolume = page.getByTestId("home-sid-volume-socket1");
-    const sidPan = page.getByTestId("home-sid-pan-socket1");
-
-    for (const locator of [driveA, driveB, printerToggle, printerBus, sidEntry, sidVolume, sidPan]) {
+    const boxOf = async (testId: string) => {
+      const locator = page.getByTestId(testId);
       await locator.scrollIntoViewIfNeeded();
       await expect(locator).toBeVisible();
-    }
+      const box = await locator.boundingBox();
+      expect(box).not.toBeNull();
+      return box!;
+    };
 
-    const [driveABox, driveBBox, printerToggleBox, printerBusBox, sidEntryBox, sidVolumeBox, sidPanBox] =
-      await Promise.all([
-        driveA.boundingBox(),
-        driveB.boundingBox(),
-        printerToggle.boundingBox(),
-        printerBus.boundingBox(),
-        sidEntry.boundingBox(),
-        sidVolume.boundingBox(),
-        sidPan.boundingBox(),
-      ]);
+    const expectStacked = async (firstId: string, secondId: string) => {
+      const pair = await stackedPair(firstId, secondId);
+      expect(pair).not.toBeNull();
+      expect(pair!.secondTop).toBeGreaterThanOrEqual(pair!.firstTop + pair!.firstHeight - 1);
+      return pair!;
+    };
 
-    expect(driveABox).not.toBeNull();
-    expect(driveBBox).not.toBeNull();
-    expect(printerToggleBox).not.toBeNull();
-    expect(printerBusBox).not.toBeNull();
-    expect(sidEntryBox).not.toBeNull();
-    expect(sidVolumeBox).not.toBeNull();
-    expect(sidPanBox).not.toBeNull();
+    await openHomeSection(page, "drives");
+    await expectStacked("home-drive-row-a", "home-drive-row-b");
 
-    if (driveABox && driveBBox && printerToggleBox && printerBusBox && sidEntryBox && sidVolumeBox && sidPanBox) {
-      expect(driveBBox.y).toBeGreaterThanOrEqual(driveABox.y + driveABox.height - 1);
-      expect(printerBusBox.y).toBeGreaterThanOrEqual(printerToggleBox.y + printerToggleBox.height - 1);
-      expect(sidPanBox.y).toBeGreaterThanOrEqual(sidVolumeBox.y + sidVolumeBox.height - 1);
-      expect(sidVolumeBox.width).toBeGreaterThan(sidEntryBox.width * 0.55);
-      expect(sidPanBox.width).toBeGreaterThan(sidEntryBox.width * 0.55);
-    }
+    await openHomeSection(page, "printers");
+    await expectStacked("home-printer-toggle", "home-printer-bus");
+
+    await openHomeSection(page, "audio");
+    await expectStacked("home-sid-volume-socket1", "home-sid-pan-socket1");
+    const sidEntryBox = await boxOf("home-sid-entry-socket1");
+    const sidVolumeBox = await boxOf("home-sid-volume-socket1");
+    const sidPanBox = await boxOf("home-sid-pan-socket1");
+    expect(sidVolumeBox.width).toBeGreaterThan(sidEntryBox.width * 0.55);
+    expect(sidPanBox.width).toBeGreaterThan(sidEntryBox.width * 0.55);
   });
 
   test("stateless actions clear focus after click", async ({ page }: { page: Page }) => {

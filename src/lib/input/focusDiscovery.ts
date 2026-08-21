@@ -26,7 +26,7 @@ import {
   GROUP_CONTAINER_SELECTOR,
   SECTION_LABEL_ATTR,
   TABBAR_SCOPE_SELECTOR,
-  compareFocusables,
+  sortIntoReadingOrder,
   discoverInteractiveElements,
   isFocusDisabled,
   isFocusVisible,
@@ -291,11 +291,24 @@ export class FocusDiscoveryEngine {
 
     // Sort the union into reading order, then drop groups that ended up empty and
     // non-interactive (a decorative container with no controls is not a ring stop).
-    const ordered = elements
+    //
+    // Page content and the tab bar are sorted SEPARATELY and concatenated, which is what makes the
+    // tab bar actually last. Sorting the union as one list did not: the tab bar sits outside the
+    // scrolling `main.page-shell`, so under the old viewport-relative comparator each content stop
+    // that had scrolled above the tab bar sorted before it and each one still below it sorted
+    // after, putting the whole tab bar between every one or two content stops. Reading order is
+    // now document-relative, which fixes the content-against-content instability, but content and
+    // the tab bar live in different scroll contexts and are only ordered relative to each other by
+    // the rule stated here and at TABBAR_SELECTOR: the tabs come last.
+    const kept = elements
       .filter((element) => !skipElements.has(element))
       .filter((element) => !ownedByExplicitItem(element))
-      .filter((element) => !isFocusDisabled(element) || groupElements.has(element))
-      .sort(compareFocusables);
+      .filter((element) => !isFocusDisabled(element) || groupElements.has(element));
+    const inTabbar = (element: HTMLElement): boolean => tabbar instanceof HTMLElement && tabbar.contains(element);
+    const ordered = [
+      ...sortIntoReadingOrder(kept.filter((element) => !inTabbar(element))),
+      ...sortIntoReadingOrder(kept.filter(inTabbar)),
+    ];
 
     return ordered
       .map((element) => {

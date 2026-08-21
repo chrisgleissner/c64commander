@@ -261,7 +261,7 @@ function PickerHealthStatusBadge({
         aria-hidden="true"
       >
         <span className="inline-flex min-w-0 max-w-full items-center overflow-hidden whitespace-nowrap leading-none">
-          <span className="truncate text-[11px] font-semibold uppercase tracking-[0.12em] text-foreground">
+          <span className="truncate text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
             {badgeText.leadingLabel}
           </span>
           <span className="shrink-0 whitespace-pre" aria-hidden="true">
@@ -282,7 +282,7 @@ function PickerHealthStatusBadge({
               <span className="shrink-0 whitespace-pre" aria-hidden="true">
                 {" "}
               </span>
-              <span className={cn("shrink-0 text-[11px] font-semibold leading-none", glyphColor)}>
+              <span className={cn("shrink-0 text-xs font-semibold leading-none", glyphColor)}>
                 {badgeText.countLabel}
               </span>
             </>
@@ -292,7 +292,7 @@ function PickerHealthStatusBadge({
               <span className="shrink-0 whitespace-pre" aria-hidden="true">
                 {" "}
               </span>
-              <span className="truncate text-[11px] font-semibold uppercase tracking-[0.12em] text-foreground">
+              <span className="truncate text-xs font-semibold uppercase tracking-[0.12em] text-foreground">
                 {badgeText.trailingLabel}
               </span>
             </>
@@ -565,8 +565,15 @@ export function UnifiedHealthBadge({ className }: Props) {
         }}
         onClick={handleClick}
         className={cn(
-          "app-chrome-badge inline-flex shrink min-w-0 select-none items-center overflow-hidden rounded-md bg-transparent px-0 py-0 min-h-[44px] touch-none",
-          profile === "compact" ? "max-w-[min(48vw,12rem)]" : "max-w-full",
+          "app-chrome-badge inline-flex shrink min-w-0 select-none items-center overflow-hidden rounded-md bg-transparent px-0 py-0 touch-none",
+          // 44px on every profile. A pseudo-element was tried here to keep the pressable area while
+          // letting the header be shorter, but the box a finger and an automated reach check both
+          // measure is this one, so the floor has to be real rather than implied.
+          "min-h-[44px]",
+          // Compact shows the status glyph alone, which without a floor drew a 33px-wide target.
+          // The other profiles show the host name and need `min-w-0` so it can truncate instead of
+          // pushing the title out — they are comfortably past 44px on their own content.
+          profile === "compact" ? "min-w-[44px] justify-center max-w-[min(48vw,12rem)]" : "min-w-0 max-w-full",
           "text-foreground transition-opacity hover:opacity-90 active:opacity-80",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-0",
           className,
@@ -578,15 +585,32 @@ export function UnifiedHealthBadge({ className }: Props) {
           aria-hidden="true"
         >
           <span className="inline-flex min-w-0 max-w-full select-none items-center overflow-hidden whitespace-nowrap leading-none">
-            <span
-              className="truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
-              data-overlay-critical="badge"
-            >
-              {badgeText.leadingLabel}
-            </span>
-            <span className="shrink-0 whitespace-pre" aria-hidden="true">
-              {" "}
-            </span>
+            {/*
+              The host name is dropped on a narrow screen. At 320 px it took 154 px — 48% of the
+              header — to render "192.168.1.148" truncated to "192.168.1…", which names nothing. The
+              glyph is what this badge is for, and the host is on Home's system row and in Settings
+              for anyone who wants it.
+
+              The threshold is viewport width rather than display profile, because what decides
+              whether the host fits is how many pixels the header has to share between the page
+              title, the host and the status word. A 393 px phone is on the medium profile and drew
+              all three truncated at once — "SETTIN…", "192.168.1.…", "HEALT…". Hidden in CSS
+              (`app-chrome-badge-host`) so the breakpoint lives beside the other header rules
+              instead of being duplicated as a width listener here.
+            */}
+            {profile === "compact" ? null : (
+              <>
+                <span
+                  className="app-chrome-badge-host truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+                  data-overlay-critical="badge"
+                >
+                  {badgeText.leadingLabel}
+                </span>
+                <span className="app-chrome-badge-host shrink-0 whitespace-pre" aria-hidden="true">
+                  {" "}
+                </span>
+              </>
+            )}
             <span
               className={cn(
                 "inline-flex h-[1em] w-[1em] shrink-0 items-center justify-center align-middle font-sans text-[1rem] leading-none transform-gpu",
@@ -677,7 +701,7 @@ export function UnifiedHealthBadge({ className }: Props) {
                             {buildSavedDevicePrimaryLabel(device, verified)}
                           </span>
                           {statusLabel ? (
-                            <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                            <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                               {statusLabel}
                             </span>
                           ) : null}

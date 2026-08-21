@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import {
   AppDialog,
   AppDialogBody,
@@ -41,6 +42,9 @@ interface SaveRamDialogProps {
   telnetAvailable?: boolean;
   telnetBusy?: boolean;
   telnetSaveReuDisabledReason?: string | null;
+  /** Where the snapshot will be written, and the control that changes it. Rendered at the foot of
+   * the dialog: it belongs to the save that is about to happen, not to the Home page. */
+  folderRow?: ReactNode;
 }
 
 const buildRangeTestId = (base: string, index: number) => (index === 0 ? base : `${base}-${index}`);
@@ -86,6 +90,7 @@ export function SaveRamDialog({
   telnetAvailable = false,
   telnetBusy = false,
   telnetSaveReuDisabledReason = null,
+  folderRow,
 }: SaveRamDialogProps) {
   const [showCustom, setShowCustom] = useState(false);
   const [customRanges, setCustomRanges] = useState<CustomSnapshotRangeDraft[]>(() => loadCustomSnapshotDrafts());
@@ -250,6 +255,7 @@ export function SaveRamDialog({
               </Button>
             </div>
           )}
+          {folderRow ? <div className="border-t border-border pt-3">{folderRow}</div> : null}
         </AppDialogBody>
 
         <AppDialogFooter>

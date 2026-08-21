@@ -10,6 +10,8 @@ import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Folder, RotateCcw } from "lucide-react";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { driveCardTitleVariants } from "@/lib/drives/driveDevices";
 import { Button } from "@/components/ui/button";
 import { ResponsivePathText } from "@/components/ResponsivePathText";
 import { Input } from "@/components/ui/input";
@@ -1827,7 +1829,7 @@ export const HomeDiskManager = () => {
           title: disk.name,
           filterText: `${disk.name} ${disk.path} ${disk.group ?? ""}`,
           meta: (
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               {groupMeta}
               {configStatusLabel ? <span>{configStatusLabel}</span> : null}
             </div>
@@ -1961,9 +1963,21 @@ export const HomeDiskManager = () => {
                 mountPending,
                 formattedStatus,
               }) => (
-                <div key={key} className="config-card space-y-2" data-testid={`drive-card-${key}`}>
-                  <div className="flex min-w-0 items-baseline justify-between gap-2">
-                    <span className="truncate text-sm font-semibold">{driveLabel}</span>
+                <CollapsibleSection
+                  key={key}
+                  scope="disks"
+                  id={`drive-${key}`}
+                  title={driveLabel}
+                  titleVariants={driveCardTitleVariants(driveLabel)}
+                  icon={HardDrive}
+                  plainIcon
+                  testId={`drive-card-${key}`}
+                  // Only the primary drive is open on a first visit. The others are there when
+                  // they are needed and cost a screen each when they are not.
+                  defaultOpen={key === "a"}
+                  // Power and mount stay outside the body. Whether a drive is on, and whether it
+                  // holds a disk, are the two things worth seeing and changing without opening it.
+                  actions={
                     <div className="flex shrink-0 items-center gap-1.5">
                       <FocusableDiskButton
                         focusId={`disks-drive-${key}-status-toggle`}
@@ -1997,8 +2011,8 @@ export const HomeDiskManager = () => {
                         <Disc className={cn("h-4 w-4", mounted ? "text-success" : "text-muted-foreground")} />
                       </FocusableDiskButton>
                     </div>
-                  </div>
-
+                  }
+                >
                   <div
                     className={cn(
                       "min-w-0 overflow-hidden text-xs text-muted-foreground",
@@ -2095,7 +2109,7 @@ export const HomeDiskManager = () => {
                         />
                       ) : null}
                       {mountedDisk?.group ? (
-                        <span className={cn(pickDiskGroupColor(mountedDisk.group).text, "truncate text-[11px]")}>
+                        <span className={cn(pickDiskGroupColor(mountedDisk.group).text, "truncate text-xs")}>
                           {mountedDisk.group}
                         </span>
                       ) : null}
@@ -2186,13 +2200,22 @@ export const HomeDiskManager = () => {
                       </p>
                     </div>
                   )}
-                </div>
+                </CollapsibleSection>
               ),
             )}
 
-            <div className="config-card space-y-2" data-testid="drive-soft-iec-row">
-              <div className="flex min-w-0 items-baseline justify-between gap-2">
-                <span className="truncate text-sm font-semibold">Soft IEC Drive</span>
+            <CollapsibleSection
+              scope="disks"
+              id="drive-soft-iec"
+              title="Soft IEC Drive"
+              titleVariants={driveCardTitleVariants("Soft IEC")}
+              icon={HardDrive}
+              plainIcon
+              testId="drive-soft-iec-row"
+              // Closed on a first visit, like Drive B: a host-directory drive is set up once and
+              // then left alone, and an open card costs a screen on the smallest supported display.
+              defaultOpen={false}
+              actions={
                 <div className="flex shrink-0 items-center gap-1.5">
                   <FocusableDiskButton
                     focusId="disks-soft-iec-status-toggle"
@@ -2227,8 +2250,8 @@ export const HomeDiskManager = () => {
                     <Disc className={cn("h-4 w-4", softIecMounted ? "text-success" : "text-muted-foreground")} />
                   </FocusableDiskButton>
                 </div>
-              </div>
-
+              }
+            >
               <div
                 className={cn(
                   "min-w-0 overflow-hidden text-xs text-muted-foreground",
@@ -2351,7 +2374,7 @@ export const HomeDiskManager = () => {
                   </p>
                 </div>
               )}
-            </div>
+            </CollapsibleSection>
           </div>
         </section>
 
@@ -2612,7 +2635,7 @@ export const HomeDiskManager = () => {
                       <span className={cn(option.color.text, "max-w-[180px] break-words whitespace-normal")}>
                         {option.name}
                       </span>
-                      <span className="text-[11px] text-muted-foreground">({option.count})</span>
+                      <span className="text-xs text-muted-foreground">({option.count})</span>
                     </Button>
                   ))}
                 </div>

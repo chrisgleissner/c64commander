@@ -178,7 +178,7 @@ export function HomeCpuSpeedSlider({
         <p
           id="home-cpu-speed-probe"
           aria-label="CPU slider probe"
-          className="break-all font-mono text-[11px] leading-tight text-muted-foreground"
+          className="break-all font-mono text-xs leading-tight text-muted-foreground"
           data-testid="home-cpu-speed-probe"
           role="status"
         >

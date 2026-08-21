@@ -107,7 +107,7 @@ const TuneList = ({
             <span className="min-w-0 leading-tight">
               <span className="block truncate text-sm font-medium">{hit.title}</span>
               {hit.author ? <span className="block truncate text-xs text-muted-foreground">{hit.author}</span> : null}
-              <span className="block truncate text-[11px] text-muted-foreground/70">{hit.folder}</span>
+              <span className="block truncate text-xs text-muted-foreground/70">{hit.folder}</span>
             </span>
           </Button>
           {seedable ? (

@@ -8,6 +8,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocketStreamReceiver, createStreamReceiver, type WebSocketLike } from "@/lib/streams/streamReceiver";
+import { addLog } from "@/lib/logging";
 import { AudioMirrorPlayer } from "@/lib/streams/audioPlayer";
 
 class MockSocket implements WebSocketLike {
@@ -22,6 +23,8 @@ class MockSocket implements WebSocketLike {
     this.closed = true;
   }
 }
+
+vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
 describe("streamReceiver — bridge derivation & socket factory", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -87,6 +90,22 @@ describe("streamReceiver — bridge derivation & socket factory", () => {
     const receiver = createStreamReceiver({ name: "audio" });
     // Unsupported: destination is empty and state is error
     expect(receiver.destination).toBe("");
+  });
+
+  it("says WHY it fell back to the unsupported transport", () => {
+    // The fallback is deliberate, but swallowing the construction error left Live View reporting
+    // "error" with nothing anywhere naming which transport failed or why — which is the diagnosis.
+    const logged = vi.mocked(addLog);
+    logged.mockClear();
+    vi.stubGlobal("WebSocket", undefined);
+
+    createStreamReceiver({ name: "audio" });
+
+    const fallback = logged.mock.calls.find(([, message]) => /unsupported transport/i.test(String(message)));
+    expect(fallback).toBeDefined();
+    expect(fallback?.[0]).toBe("warn");
+    expect(fallback?.[2]).toMatchObject({ name: "audio", transport: "websocket-bridge" });
+    expect(String((fallback?.[2] as { error?: unknown })?.error ?? "")).toMatch(/WebSocket unavailable/i);
   });
 });
 

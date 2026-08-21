@@ -212,7 +212,7 @@ export const usePlaylistListItems = ({
         subtitle: buildPlaylistRowSubtitle(item),
         subtitleClassName: "truncate block",
         meta: (
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <FileOriginIcon
               origin={
                 item.request.source === "ultimate"

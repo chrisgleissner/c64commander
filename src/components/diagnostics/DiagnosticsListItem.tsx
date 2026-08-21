@@ -69,7 +69,7 @@ export const DiagnosticsListItem = ({
             <span
               data-testid="diagnostics-severity-glyph"
               className={cn(
-                "inline-flex w-4 items-center justify-center text-[11px] font-semibold leading-none whitespace-nowrap",
+                "inline-flex w-4 items-center justify-center text-xs font-semibold leading-none whitespace-nowrap",
                 severityMeta.colorClass,
               )}
             >

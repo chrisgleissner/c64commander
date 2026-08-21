@@ -305,8 +305,25 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
 
   close(): void {
     this.closed = true;
-    void StreamUdp.close({ name: this.name }).catch(() => {});
-    for (const listener of this.listeners) void listener.then((handle) => handle.remove()).catch(() => {});
+    // Logged, not swallowed. A close that fails leaves the native socket bound to the multicast
+    // group, so the next start binds a second one; with nothing recorded, the only evidence is a
+    // stream that behaves oddly some time later.
+    void StreamUdp.close({ name: this.name }).catch((error: unknown) => {
+      addLog("warn", "Stream receiver: closing the native UDP socket failed", {
+        name: this.name,
+        error: (error as Error)?.message ?? String(error),
+      });
+    });
+    for (const listener of this.listeners) {
+      void listener
+        .then((handle) => handle.remove())
+        .catch((error: unknown) => {
+          addLog("warn", "Stream receiver: removing a native listener failed", {
+            name: this.name,
+            error: (error as Error)?.message ?? String(error),
+          });
+        });
+    }
     if (this.stateHandler) this.stateHandler("closed");
   }
 }
@@ -338,16 +355,27 @@ const defaultSocketFactory = (url: string): WebSocketLike => {
  * socketFactory for tests). Either falls back to an unsupported receiver on construction error.
  */
 export const createStreamReceiver = (options: StreamReceiverOptions): StreamReceiver => {
+  // The fallback is deliberate — a platform without a transport should degrade rather than throw
+  // into the caller — but the REASON has to survive it. Without this, Live View reported "error"
+  // with nothing anywhere saying which constructor failed or why, which is the whole diagnosis.
+  const unsupported = (transport: string, error: unknown): StreamReceiver => {
+    addLog("warn", "Stream receiver unavailable; falling back to the unsupported transport", {
+      name: options.name,
+      transport,
+      error: (error as Error)?.message ?? String(error),
+    });
+    return new UnsupportedStreamReceiver();
+  };
   if (isNativePlatform()) {
     try {
       return new NativeUdpStreamReceiver(options);
-    } catch {
-      return new UnsupportedStreamReceiver();
+    } catch (error) {
+      return unsupported("native-udp", error);
     }
   }
   try {
     return new WebSocketStreamReceiver(options);
-  } catch {
-    return new UnsupportedStreamReceiver();
+  } catch (error) {
+    return unsupported("websocket-bridge", error);
   }
 };

@@ -96,7 +96,7 @@ export function QuickActionCard({
       <span
         className={cn(
           "font-medium max-w-full",
-          compact ? "text-[11px] leading-tight text-center whitespace-normal break-normal" : "text-sm",
+          compact ? "text-xs leading-tight text-center whitespace-normal break-normal" : "text-sm",
         )}
       >
         {label}
@@ -105,7 +105,7 @@ export function QuickActionCard({
         <span
           className={cn(
             "text-muted-foreground max-w-full",
-            compact ? "text-[11px] leading-tight text-center whitespace-normal break-words" : "text-xs",
+            compact ? "text-xs leading-tight text-center whitespace-normal break-words" : "text-xs",
           )}
         >
           {description}

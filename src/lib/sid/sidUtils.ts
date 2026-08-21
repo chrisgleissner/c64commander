@@ -37,6 +37,24 @@ export type SidHeaderMetadata = {
   parserWarnings: string[];
 };
 
+/**
+ * The most subsongs a SID file can declare.
+ *
+ * PSID/RSID hold the count in one 16-bit field, so a corrupt or hostile header can read 65,535
+ * where the format permits at most 256. Nothing downstream bounded it: the Tunes sheet renders one
+ * row per subsong, adding the file to the playlist creates one entry per subsong, and the SSL
+ * sidecar allocates two bytes per subsong against a firmware that reads 512 bytes. Clamping at the
+ * format's own limit keeps all three proportionate to what a real file can contain.
+ */
+export const MAX_SID_SUBSONGS = 256;
+
+/** A subsong count the format actually permits: at least 1, at most {@link MAX_SID_SUBSONGS}. */
+const clampSubsongCount = (songs: number): number => {
+  const floored = Math.floor(songs || 1);
+  if (!Number.isFinite(floored) || floored < 1) return 1;
+  return Math.min(floored, MAX_SID_SUBSONGS);
+};
+
 export type SidTrackSubsong = {
   songNr: number;
   isDefault: boolean;
@@ -127,7 +145,7 @@ export const parseSidHeaderMetadata = (buffer: Uint8Array | ArrayBuffer): SidHea
   const playAddress = view.getUint16(12, false);
   const songsRaw = view.getUint16(14, false);
   const startSongRaw = view.getUint16(16, false);
-  const songs = songsRaw > 0 ? songsRaw : 1;
+  const songs = clampSubsongCount(songsRaw);
   const startSong = startSongRaw > 0 ? Math.min(startSongRaw, songs) : 1;
   const speedBits = view.getUint32(18, false);
 
@@ -191,7 +209,7 @@ export const parseSidHeaderMetadata = (buffer: Uint8Array | ArrayBuffer): SidHea
 };
 
 export const buildSidTrackSubsongs = (songs: number, startSong: number): SidTrackSubsong[] => {
-  const totalSongs = Math.max(1, Math.floor(songs || 1));
+  const totalSongs = clampSubsongCount(songs);
   const defaultSong = Math.min(totalSongs, Math.max(1, Math.floor(startSong || 1)));
   return Array.from({ length: totalSongs }, (_, index) => {
     const songNr = index + 1;
@@ -233,10 +251,15 @@ export const createSslPayload = (
     return encodeBcdDuration(durationMs);
   }
 
-  const songNr = options.songNr ?? 1;
-  if (!Number.isInteger(songNr) || songNr < 1) {
+  const requestedSongNr = options.songNr ?? 1;
+  if (!Number.isInteger(requestedSongNr) || requestedSongNr < 1) {
     throw new Error("Invalid songNr: must be a positive integer");
   }
+  // The firmware's 512-byte read covers exactly MAX_SID_SUBSONGS entries, so a subsong number past
+  // that cannot be addressed however large the sidecar is made — emitting one only uploads bytes the
+  // device will never read. Headers are clamped to the same limit before they reach here; this bounds
+  // the payload for any caller that passes a songNr from somewhere else.
+  const songNr = Math.min(requestedSongNr, MAX_SID_SUBSONGS);
 
   // HARD12-021: the firmware reads up to 512 bytes from the SSL sidecar, where
   // each subsong entry occupies 2 bytes (BCD minutes/seconds) and the entry
@@ -286,8 +309,7 @@ export const getSidSongCount = (buffer: ArrayBuffer) => {
     if (view.byteLength < 18) return 1;
     const magic = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
     if (magic !== "PSID" && magic !== "RSID") return 1;
-    const songs = view.getUint16(14, false);
-    return songs > 0 ? songs : 1;
+    return clampSubsongCount(view.getUint16(14, false));
   } catch (error) {
     const isBuffer = buffer instanceof ArrayBuffer;
     const byteLength = isBuffer ? buffer.byteLength : 0;

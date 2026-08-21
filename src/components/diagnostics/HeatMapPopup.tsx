@@ -219,7 +219,7 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
         </div>
 
         <div className="mb-3 shrink-0 rounded-xl border border-border/70 bg-muted/20 px-3 py-2">
-          <div className="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-muted-foreground">
             <span>Low signal</span>
             <span>High signal</span>
           </div>
@@ -227,7 +227,7 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
             {legendSteps.map((step) => (
               <div
                 key={step}
-                className="flex h-7 items-center justify-center rounded-md border text-[11px] font-semibold"
+                className="flex h-7 items-center justify-center rounded-md border text-xs font-semibold"
                 style={heatCellStyle(step)}
               >
                 {Math.round(step * 100)}
@@ -255,7 +255,7 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
                       style={{ writingMode: "vertical-lr", textOrientation: "mixed", transform: "rotate(180deg)" }}
                       title={col}
                     >
-                      <span className="block max-h-[8rem] overflow-hidden text-[11px] tracking-[0.08em]">{col}</span>
+                      <span className="block max-h-[8rem] overflow-hidden text-xs tracking-[0.08em]">{col}</span>
                     </th>
                   ))}
                 </tr>
@@ -286,7 +286,7 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
                         >
                           <button
                             type="button"
-                            className="flex h-full w-full cursor-pointer items-center justify-center rounded-[inherit] font-mono text-[11px] font-semibold focus:outline-none focus:ring-2 focus:ring-primary/70"
+                            className="flex h-full w-full cursor-pointer items-center justify-center rounded-[inherit] font-mono text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/70"
                             onClick={() => cell && setCellDetail({ cell })}
                             title={cell ? `${cell.rowGroup}/${cell.columnItem}: ${value}` : "—"}
                             aria-label={label}

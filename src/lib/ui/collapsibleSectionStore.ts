@@ -20,6 +20,64 @@ const OPEN_SECTIONS_KEY = "c64u_open_sections";
 const LEGACY_SETTINGS_KEY = "c64u_settings_open_sections";
 const LEGACY_SETTINGS_SCOPE = "settings";
 
+/**
+ * Whether a collapsed card shows its one-line description under the title.
+ *
+ * Off by default. On the smallest supported screen the description is the largest single consumer
+ * of vertical space on a page of collapsed cards: a Settings card header measures 97 CSS px with it
+ * and roughly half that without, and a 320x427 screen only has 218 CSS px of scrollable height — so
+ * turning it off is the difference between two cards on screen and four. The titles already name
+ * what each card is; the description says the same thing in longer words.
+ *
+ * It lives here rather than in `appSettings` because it is a property of this component's own
+ * presentation, and because every page that renders a collapsible card reads it.
+ */
+export const SECTION_DESCRIPTIONS_KEY = "c64u_show_section_descriptions";
+
+/** Broadcast on the same channel the rest of the app's settings use, so open pages update live. */
+const broadcastSectionDescriptions = (value: boolean): void => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent("c64u-app-settings-updated", { detail: { key: SECTION_DESCRIPTIONS_KEY, value } }),
+  );
+};
+
+export const loadShowSectionDescriptions = (): boolean => {
+  if (typeof localStorage === "undefined") return false;
+  return localStorage.getItem(SECTION_DESCRIPTIONS_KEY) === "1";
+};
+
+/**
+ * One window listener for the whole app, fanned out to subscribers.
+ *
+ * Settings alone renders around sixty pieces of secondary text, and every collapsible card reads
+ * this too. Each of them adding its own `c64u-app-settings-updated` listener would put a hundred
+ * listeners on one event on the slowest device the app supports.
+ */
+const descriptionSubscribers = new Set<() => void>();
+let descriptionListenerAttached = false;
+
+export const subscribeShowSectionDescriptions = (onChange: () => void): (() => void) => {
+  descriptionSubscribers.add(onChange);
+  if (!descriptionListenerAttached && typeof window !== "undefined") {
+    descriptionListenerAttached = true;
+    window.addEventListener("c64u-app-settings-updated", (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string }>).detail;
+      if (detail?.key && detail.key !== SECTION_DESCRIPTIONS_KEY) return;
+      for (const subscriber of descriptionSubscribers) subscriber();
+    });
+  }
+  return () => {
+    descriptionSubscribers.delete(onChange);
+  };
+};
+
+export const saveShowSectionDescriptions = (enabled: boolean): void => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(SECTION_DESCRIPTIONS_KEY, enabled ? "1" : "0");
+  broadcastSectionDescriptions(enabled);
+};
+
 const compositeKey = (scope: string, id: string): string => `${scope}:${id}`;
 
 // Explicit per-id open/closed decisions, never mere absence: a plain set of open ids
@@ -89,6 +147,49 @@ export const readSectionStates = (scope: string): Map<string, boolean> => {
     if (key.startsWith(prefix)) states.set(key.slice(prefix.length), open);
   }
   return states;
+};
+
+/**
+ * Fired when a section opens, so its siblings in the same scope can close themselves.
+ *
+ * Only used in the compact display profile — see `CollapsibleSection` for why one card at a time
+ * is the right shape on a 320x427 screen and the wrong one on a tall phone.
+ */
+export const SECTION_OPENED_EVENT = "c64u-collapsible-section-opened";
+
+export interface SectionOpenedDetail {
+  readonly scope: string;
+  readonly id: string;
+}
+
+/**
+ * Asks every card currently on the page to open or close.
+ *
+ * Broadcast rather than scoped: only the current page's cards are mounted, so "every card" and
+ * "every card on this page" are the same set, and the caller (the Quick menu) does not have to know
+ * which scope the page it is sitting on uses.
+ */
+export const SECTIONS_BULK_EVENT = "c64u-collapsible-sections-bulk";
+
+export interface SectionsBulkDetail {
+  readonly open: boolean;
+}
+
+export const requestSectionsBulk = (open: boolean): void => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<SectionsBulkDetail>(SECTIONS_BULK_EVENT, { detail: { open } }));
+};
+
+export const subscribeSectionsBulk = (handler: (open: boolean) => void): (() => void) => {
+  if (typeof window === "undefined") return () => undefined;
+  const listener = (event: Event) => handler(Boolean((event as CustomEvent<SectionsBulkDetail>).detail?.open));
+  window.addEventListener(SECTIONS_BULK_EVENT, listener);
+  return () => window.removeEventListener(SECTIONS_BULK_EVENT, listener);
+};
+
+export const announceSectionOpened = (scope: string, id: string): void => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<SectionOpenedDetail>(SECTION_OPENED_EVENT, { detail: { scope, id } }));
 };
 
 export const writeSectionState = (scope: string, id: string, open: boolean): void => {

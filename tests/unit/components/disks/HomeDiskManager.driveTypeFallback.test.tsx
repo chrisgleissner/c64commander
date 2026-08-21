@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { openAllCards, resetCardMemory } from "../../helpers/cards";
 import { render, screen, within } from "@testing-library/react";
 import { HomeDiskManager } from "@/components/disks/HomeDiskManager";
 
@@ -116,12 +117,15 @@ const driveTypeOptionsFor = (key: string) => {
 
 describe("HomeDiskManager Drive Type fallback (HARD16-011)", () => {
   beforeEach(() => {
+    resetCardMemory();
     vi.clearAllMocks();
     useC64ConnectionMock.status = { isConnected: true, deviceInfo: { unique_id: "test-device" } };
   });
 
   it("offers only the current device value for Drive Type when the option domain is unresolved", () => {
     render(<HomeDiskManager />);
+    // Drive B is closed on a first visit; this test is about a control inside it.
+    openAllCards();
 
     // Empty domains → the model-diverging Drive Type enum must fall back to the
     // current value only (default "1541"), never the fabricated 1541/1571/1581 list.

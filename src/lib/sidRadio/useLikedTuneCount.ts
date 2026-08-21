@@ -24,7 +24,11 @@ export const useLikedTuneCount = (): number => {
   const [count, setCount] = useState<number>(() => getLikedMd5s().length);
 
   useEffect(() => {
-    const refresh = () => setCount(getLikedMd5s().length);
+    let mounted = true;
+    const refresh = () => {
+      if (!mounted) return;
+      setCount(getLikedMd5s().length);
+    };
     refresh();
     const unsubscribe = subscribeRankings(refresh);
     loadRankings()
@@ -34,7 +38,13 @@ export const useLikedTuneCount = (): number => {
           error: (error as Error).message,
         });
       });
-    return unsubscribe;
+    return () => {
+      // The hydration promise outlives an unmount and resolves into `refresh`. React 18 makes the
+      // resulting setState a silent no-op rather than an error, so this is tidiness rather than a
+      // bug fix — but a guard here is cheaper than re-deriving that fact next time someone reads it.
+      mounted = false;
+      unsubscribe();
+    };
   }, []);
 
   return count;

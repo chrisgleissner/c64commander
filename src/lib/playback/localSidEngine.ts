@@ -272,6 +272,20 @@ const nativeAudioBackend = (): NativeLocalAudioBackend | null => {
   return StreamUdp as unknown as NativeLocalAudioBackend;
 };
 
+/**
+ * A gain ramp that could not be scheduled has already been replaced by a direct assignment, so the
+ * listener still hears the right level — but the CLICK the ramp existed to avoid is now audible,
+ * and a fade that silently became a step is exactly the kind of thing that gets blamed on the SID
+ * engine. Logged at debug: it is recoverable, and on a busy AudioContext it can repeat.
+ */
+const reportGainSchedulingFailure = (operation: string, error: unknown): void => {
+  addLog("debug", "Local SID audio: gain ramp could not be scheduled, set directly instead", {
+    service: "local-sid",
+    operation,
+    error: (error as Error)?.message ?? String(error),
+  });
+};
+
 const webAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) => {
   const Ctor =
     typeof AudioContext !== "undefined"
@@ -315,7 +329,8 @@ const webAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) => {
         master.gain.cancelScheduledValues(now);
         master.gain.setValueAtTime(master.gain.value, now);
         master.gain.linearRampToValueAtTime(0.0001, now + ms / 1000);
-      } catch {
+      } catch (error) {
+        reportGainSchedulingFailure("fadeOut", error);
         master.gain.value = 0;
       }
     },
@@ -327,7 +342,8 @@ const webAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) => {
         // buffer is an audible click.
         master.gain.setValueAtTime(master.gain.value, context.currentTime);
         master.gain.linearRampToValueAtTime(clamped, context.currentTime + 0.02);
-      } catch {
+      } catch (error) {
+        reportGainSchedulingFailure("setGain", error);
         master.gain.value = clamped;
       }
     },
@@ -338,7 +354,8 @@ const webAudioSinkFactory: LocalSidAudioSinkFactory = (sampleRate: number) => {
         master.gain.cancelScheduledValues(now);
         master.gain.setValueAtTime(0.0001, now);
         master.gain.linearRampToValueAtTime(target, now + ms / 1000);
-      } catch {
+      } catch (error) {
+        reportGainSchedulingFailure("fadeIn", error);
         master.gain.value = target;
       }
     },
@@ -642,7 +659,10 @@ export class LocalSidEngine {
    * A worker that has stopped answering is not worth keeping.
    */
   private discardWorker(reason: string): void {
-    addLog("warn", "Local SID engine: discarding an unresponsive worker", { service: "local-sid", reason });
+    addLog("warn", "Local SID engine: discarding a worker that cannot be used again", {
+      service: "local-sid",
+      reason,
+    });
     this.worker?.terminate();
     this.worker = null;
     this.moduleReady = false;
@@ -746,19 +766,23 @@ export class LocalSidEngine {
     this.prerenderWorker = null;
   }
 
-  /** Reject the pending load/open and report a playback error on a worker crash. */
+  /**
+   * Reject the pending load/open and report a playback error on a worker crash.
+   *
+   * The crashed thread is discarded as well, exactly as the reply-timeout path does. Rejecting
+   * alone left `this.worker` pointing at a worker that will never answer again, and `ensureWorker`
+   * only builds a new one when that field is null — so the next play posted into the dead worker
+   * and waited out the full 15 s reply timeout, which is the delay these handlers exist to avoid.
+   */
   private failWorker(reason: string): void {
     const error = new Error(reason);
-    if (this.loadPending) {
-      const pending = this.loadPending;
-      this.loadPending = null;
-      pending.reject(error);
-    }
-    if (this.openPending) {
-      const pending = this.openPending;
-      this.openPending = null;
-      pending.reject(error);
-    }
+    const load = this.loadPending;
+    const open = this.openPending;
+    this.openPending = null;
+    // Clears `loadPending`/`loadInFlight` too, so the resolvers are captured first.
+    this.discardWorker(reason);
+    load?.reject(error);
+    open?.reject(error);
     this.callbacks.onError?.(error);
   }
 
@@ -2105,14 +2129,19 @@ export class LocalSidEngine {
       this.warmWorker.addEventListener("message", (event: MessageEvent<LocalSidWorkerToMain>) =>
         this.onWarmMessage(event.data),
       );
+      // Captured, and checked by identity before acting. These listeners outlive the worker they
+      // belong to: a late `error` from a worker that has already been discarded would otherwise
+      // terminate whatever replacement the next warm had built, killing a healthy thread.
+      const warmWorker = this.warmWorker;
       this.warmWorker.addEventListener("error", (event: { message?: string }) => {
         addLog("warn", "Local SID lead-in renderer failed", { service: "local-sid", error: event.message });
-        this.warmWorker = null;
-        this.warmKey = null;
+        if (this.warmWorker === warmWorker) this.discardWarmWorker();
       });
       this.warmWorker.addEventListener("messageerror", () => {
-        this.warmWorker = null;
-        this.warmKey = null;
+        addLog("warn", "Local SID lead-in renderer sent a message that could not be deserialized", {
+          service: "local-sid",
+        });
+        if (this.warmWorker === warmWorker) this.discardWarmWorker();
       });
       this.warmWorker.postMessage({
         type: "load",
@@ -2120,6 +2149,22 @@ export class LocalSidEngine {
       } as LocalSidMainToWorker);
     }
     return this.warmWorker;
+  }
+
+  /**
+   * Drop a lead-in renderer that has failed.
+   *
+   * `terminate()` as well as null: nulling alone left the crashed thread alive while
+   * `ensureWarmWorker` built another on the next warm, so each failure leaked one worker thread.
+   * Draining matches what the reply handlers do — a warm queued behind the failed one is otherwise
+   * left waiting for a completion that can no longer arrive.
+   */
+  private discardWarmWorker(): void {
+    this.warmWorker?.terminate();
+    this.warmWorker = null;
+    this.warmKey = null;
+    this.warmAccumulated = EMPTY_PCM;
+    this.drainPendingWarms();
   }
 
   /**
@@ -2412,6 +2457,14 @@ export class LocalSidEngine {
     // The pre-render thread holds a second WASM instance and would otherwise
     // keep rendering a tune nobody is listening to.
     this.abandonPrerender();
+    // The lead-in renderer is a third thread with its own WASM instance, and nothing else
+    // terminates it: without this every engine teardown (route change, engine change, device
+    // change) left one behind.
+    this.warmWorker?.terminate();
+    this.warmWorker = null;
+    this.warmKey = null;
+    this.warmAccumulated = EMPTY_PCM;
+    this.pendingWarms.clear();
     this.stopWatchdog();
     this.worker?.terminate();
     this.worker = null;

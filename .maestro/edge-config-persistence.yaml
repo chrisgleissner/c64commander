@@ -53,6 +53,24 @@ env:
     end: 50%, 38%
     duration: 400
 - waitForAnimationToEnd
+# The HVSC card is closed on a first visit, and it stays closed until this flow opens it — which is
+# also what the second half checks: what the card remembered survives the restart. `id:` is the HTML
+# id, which CollapsibleSection sets to the same string as the testid.
+- scrollUntilVisible:
+    element: { id: play-section-toggle-hvsc }
+    direction: DOWN
+    speed: 80
+    timeout: ${LONG_TIMEOUT}
+    visibilityPercentage: 50
+    centerElement: true
+- runFlow:
+    when:
+      notVisible:
+        id: hvsc-download
+    commands:
+      - tapOn:
+          id: play-section-toggle-hvsc
+      - waitForAnimationToEnd
 - scrollUntilVisible:
     element: { id: hvsc-download }
     direction: DOWN
@@ -80,6 +98,24 @@ env:
     end: 50%, 38%
     duration: 400
 - waitForAnimationToEnd
+# The HVSC card is closed on a first visit, and it stays closed until this flow opens it — which is
+# also what the second half checks: what the card remembered survives the restart. `id:` is the HTML
+# id, which CollapsibleSection sets to the same string as the testid.
+- scrollUntilVisible:
+    element: { id: play-section-toggle-hvsc }
+    direction: DOWN
+    speed: 80
+    timeout: ${LONG_TIMEOUT}
+    visibilityPercentage: 50
+    centerElement: true
+- runFlow:
+    when:
+      notVisible:
+        id: hvsc-download
+    commands:
+      - tapOn:
+          id: play-section-toggle-hvsc
+      - waitForAnimationToEnd
 - scrollUntilVisible:
     element: { id: hvsc-download }
     direction: DOWN

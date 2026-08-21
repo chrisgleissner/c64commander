@@ -31,6 +31,24 @@ const getLatestDriveRequest = (
   matcher: (req: { method: string; url: string }) => boolean,
 ) => [...requests].reverse().find(matcher);
 
+/**
+ * Opens every drive card.
+ *
+ * Drive B and the Soft IEC drive are closed on a first visit — each is a screen on the smallest
+ * supported display — so a test that reads or drives their controls has to open them. Safe to call
+ * when they are already open, and safe on a page that has not rendered them.
+ */
+const openDriveCards = async (page: Page) => {
+  // Wait for the drives to render first: called straight after `goto` the toggles do not exist
+  // yet, and a count of zero would read as "nothing to open".
+  await expect(page.getByTestId("drive-card-a")).toBeVisible({ timeout: 20_000 });
+  for (const id of ["disks-section-toggle-drive-b", "disks-section-toggle-drive-soft-iec"]) {
+    const toggle = page.getByTestId(id);
+    if ((await toggle.count()) === 0) continue;
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  }
+};
+
 const mountDriveRequest = (requests: Array<{ method: string; url: string }>, drive: "a" | "b") =>
   getLatestDriveRequest(requests, (req) => req.url.startsWith(`/v1/drives/${drive}:mount`) && req.method !== "OPTIONS");
 
@@ -115,8 +133,17 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
-const getDriveCard = (page: Page, label: string) =>
-  page.getByText(label, { exact: true }).locator("..").locator("..").locator("..");
+/**
+ * The drive card, by its own testid rather than by climbing parents from the title text. The
+ * drives render through `CollapsibleSection` now, so the title sits several elements deeper inside
+ * the header button than it used to and a fixed number of `..` hops lands somewhere else.
+ */
+const DRIVE_CARD_TEST_IDS: Record<string, string> = {
+  "Drive A": "drive-card-a",
+  "Drive B": "drive-card-b",
+  "Soft IEC": "drive-soft-iec-row",
+};
+const getDriveCard = (page: Page, label: string) => page.getByTestId(DRIVE_CARD_TEST_IDS[label] ?? label);
 
 const seedDiskLibrary = async (page: Page, disks: SeedDisk[]) => {
   await page.addInitScript(
@@ -215,6 +242,7 @@ test.describe("Disk management", () => {
     "disks render with folder headers and no full paths @layout",
     async ({ page }: { page: Page }, testInfo: TestInfo) => {
       await page.goto("/disks", { waitUntil: "domcontentloaded" });
+      await openDriveCards(page);
       await snap(page, testInfo, "disks-open");
       await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Sample Arcade"), [
         "Disk 1.d64",
@@ -246,6 +274,8 @@ test.describe("Disk management", () => {
     await expect(playFilter).toBeVisible();
 
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+
+    await openDriveCards(page);
     const disksAddButton = page.getByRole("button", {
       name: /Add disks|Add more disks/i,
     });
@@ -270,6 +300,7 @@ test.describe("Disk management", () => {
   test("FTP directory listing shows hierarchy @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enableGoldenTrace(testInfo);
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
     await snap(page, testInfo, "disks-open");
     await openAddItemsDialog(page);
     const dialog = page.getByRole("dialog");
@@ -299,6 +330,8 @@ test.describe("Disk management", () => {
     });
 
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+
+    await openDriveCards(page);
     const driveCard = getDriveCard(page, "Drive A");
     const mountButton = driveCard.getByTestId("drive-mount-toggle-a");
     const powerButton = page.getByTestId("drive-power-toggle-a");
@@ -330,6 +363,7 @@ test.describe("Disk management", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
     await snap(page, testInfo, "disks-open");
     await openAddItemsDialog(page);
     const dialog = page.getByRole("dialog");
@@ -359,6 +393,7 @@ test.describe("Disk management", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
     await snap(page, testInfo, "disks-open");
     await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Sample Arcade"), [
       "Disk 1.d64",
@@ -381,6 +416,7 @@ test.describe("Disk management", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
 
     await expect(page.getByTestId("drive-status-message-soft-iec")).toHaveText(/^(OK|DOS MISMATCH)$/);
     await expect(page.getByTestId("drive-status-raw-soft-iec")).toContainText("73,U64IEC");
@@ -406,6 +442,7 @@ test.describe("Disk management", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
     await snap(page, testInfo, "disks-open");
 
     await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Groupings"), [
@@ -439,6 +476,7 @@ test.describe("Disk management", () => {
   test("mounting ultimate disks uses mount endpoint @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedUltimateSampleArcadeDisks(page);
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
     await snap(page, testInfo, "disks-open");
 
     const diskRow = getDiskRow(page, "Disk 1.d64");
@@ -459,6 +497,7 @@ test.describe("Disk management", () => {
     enableGoldenTrace(testInfo);
     await seedUltimateSampleArcadeDisks(page);
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
 
     const diskRow = getDiskRow(page, "Disk 1.d64");
     await diskRow.getByRole("button", { name: "Mount Disk 1.d64" }).click();
@@ -475,6 +514,8 @@ test.describe("Disk management", () => {
     await lightThemeButton.click();
 
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+
+    await openDriveCards(page);
     const driveCard = getDriveCard(page, "Drive A");
     await expect(driveCard).toContainText("Disk 1.d64");
     await snap(page, testInfo, "mounted-after-settings");
@@ -486,6 +527,7 @@ test.describe("Disk management", () => {
     allowWarnings(testInfo, "Expected mount failure warnings.");
     await seedUltimateSampleArcadeDisks(page);
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
 
     await getDiskRow(page, "Disk 1.d64").getByRole("button", { name: "Mount Disk 1.d64" }).click();
     const mountDialog = page.getByRole("dialog", {
@@ -512,6 +554,7 @@ test.describe("Disk management", () => {
     allowWarnings(testInfo, "Expected mount failure warnings for unreachable device.");
     await seedUltimateSampleArcadeDisks(page);
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
 
     await getDiskRow(page, "Disk 1.d64").getByRole("button", { name: "Mount Disk 1.d64" }).click();
     const mountDialog = page.getByRole("dialog", {
@@ -532,6 +575,7 @@ test.describe("Disk management", () => {
   }: { page: Page }, testInfo: TestInfo) => {
     await seedUltimateSampleArcadeDisks(page);
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
     await snap(page, testInfo, "disks-open");
 
     await getDiskRow(page, "Disk 1.d64").getByRole("button", { name: "Mount Disk 1.d64" }).click();
@@ -551,6 +595,7 @@ test.describe("Disk management", () => {
   test("mount dialog shows a single close button @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedUltimateSampleArcadeDisks(page);
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
     await snap(page, testInfo, "disks-open");
 
     await getDiskRow(page, "Disk 1.d64").getByRole("button", { name: "Mount Disk 1.d64" }).click();
@@ -565,6 +610,7 @@ test.describe("Disk management", () => {
       localStorage.setItem("c64u_list_preview_limit", "1");
     });
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
     await snap(page, testInfo, "disks-open");
     await addLocalFolder(
       page,
@@ -612,6 +658,7 @@ test.describe("Disk management", () => {
 
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
     await snap(page, testInfo, "disks-open");
 
     await page.getByRole("button", { name: "View all" }).click();
@@ -633,7 +680,11 @@ test.describe("Disk management", () => {
       expect(dialogBox.x).toBeLessThanOrEqual(1);
       expect(dialogBox.x + dialogBox.width).toBeGreaterThanOrEqual(viewport.width - 1);
       expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(viewport.width + 1);
-      expect(dialogBox.y).toBeGreaterThanOrEqual(40);
+      // The sheet leaves a gap at the top rather than starting at the very edge of the viewport.
+      // The gap is a rem value, so its exact pixel size moves with the profile's root font size —
+      // the previous `>= 40` was calibrated against a 17px root and failed at 39 on an 18px one,
+      // which said nothing about the layout. Two rem at any supported root is at least 32px.
+      expect(dialogBox.y).toBeGreaterThanOrEqual(32);
       expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(viewport.height);
     }
 
@@ -677,6 +728,7 @@ test.describe("Disk management", () => {
 
   test("disk menu shows size/date and rename works @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
     await snap(page, testInfo, "disks-open");
     await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Sample Arcade"), ["Disk 1.d64"]);
     await snap(page, testInfo, "disks-added");
@@ -694,6 +746,7 @@ test.describe("Disk management", () => {
 
   test("disk list select all removes selected items @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
     await snap(page, testInfo, "disks-open");
     await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Sample Arcade"), [
       "Disk 1.d64",
@@ -724,6 +777,8 @@ test.describe("Disk management", () => {
     await seedDiskLibrary(page, manyDisks);
 
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+
+    await openDriveCards(page);
     await page.getByRole("button", { name: "View all" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
@@ -738,6 +793,7 @@ test.describe("Disk management", () => {
 
   test("disk removal wording is non-destructive @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
     await snap(page, testInfo, "disks-open");
     await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Sample Arcade"), ["Disk 1.d64"]);
 
@@ -751,6 +807,7 @@ test.describe("Disk management", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
     await addLocalFolder(page, path.resolve("playwright/fixtures/disks-local/Sample Arcade"), ["Disk 1.d64"]);
 
     await openDiskMenu(page, "Disk 1.d64");
@@ -767,6 +824,7 @@ test.describe("Disk management", () => {
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
     await openAddItemsDialog(page);
     const dialog = page.getByRole("dialog");
     await clickSourceSelectionButton(dialog, "C64 Ultimate");
@@ -790,6 +848,7 @@ test.describe("Disk management", () => {
   test("importing non-disk files shows warning @layout", async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, "Expected warning for non-disk file imports.");
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+    await openDriveCards(page);
     await snap(page, testInfo, "disks-open");
     await openAddItemsDialog(page);
     const dialog = page.getByRole("dialog");
@@ -814,6 +873,8 @@ test.describe("Disk management", () => {
     await seedUiMocks(page, server.baseUrl);
 
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+
+    await openDriveCards(page);
     await snap(page, testInfo, "disks-open");
     await openAddItemsDialog(page);
     const dialog = page.getByRole("dialog");
@@ -835,6 +896,8 @@ test.describe("Disk management", () => {
     await seedUiMocks(page, server.baseUrl);
 
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
+
+    await openDriveCards(page);
     await snap(page, testInfo, "disks-open");
     await openAddItemsDialog(page);
     const dialog = page.getByRole("dialog");

@@ -166,6 +166,8 @@ import {
   type NotificationVisibility,
   type ScreenOrientationMode,
 } from "@/lib/config/appSettings";
+import { loadShowSectionDescriptions, saveShowSectionDescriptions } from "@/lib/ui/collapsibleSectionStore";
+import { HelperText } from "@/components/ui/HelperText";
 import { applyFullScreenFromSettings } from "@/lib/native/fullScreen";
 import {
   getActiveAutoResolutionContext,
@@ -423,6 +425,7 @@ export default function SettingsPage() {
   const [notificationDurationMs, setNotificationDurationMs] = useState(loadNotificationDurationMs);
   const [screenOrientationMode, setScreenOrientationMode] = useState<ScreenOrientationMode>(loadScreenOrientationMode);
   const [hideStatusBar, setHideStatusBar] = useState(loadHideStatusBar);
+  const [showSectionDescriptions, setShowSectionDescriptions] = useState(loadShowSectionDescriptions);
   const [hideNavigationBar, setHideNavigationBar] = useState(loadHideNavigationBar);
   const [hvscBaseUrlInput, setHvscBaseUrlInput] = useState(() => getHvscBaseUrlOverride() ?? "");
   const [hvscBaseUrlPreview, setHvscBaseUrlPreview] = useState(() => getHvscBaseUrl());
@@ -1005,6 +1008,11 @@ export default function SettingsPage() {
     void applyScreenOrientationMode(mode);
   };
 
+  const commitShowSectionDescriptions = (enabled: boolean) => {
+    setShowSectionDescriptions(enabled);
+    saveShowSectionDescriptions(enabled);
+  };
+
   const commitHideStatusBar = (enabled: boolean) => {
     setHideStatusBar(enabled);
     saveHideStatusBar(enabled);
@@ -1166,7 +1174,9 @@ export default function SettingsPage() {
 
       <PageContainer size="reading">
         <PageStack>
-          <div className="space-y-3" data-testid="settings-top-layout">
+          {/* Compact tightens the space between closed cards: 13 px between 39 px cards is a third
+              of the list's height spent on gaps. */}
+          <div className={cn(isCompactProfile ? "space-y-1.5" : "space-y-3")} data-testid="settings-top-layout">
             {/* 1. Appearance */}
             <SettingsSection
               id="appearance"
@@ -1174,7 +1184,11 @@ export default function SettingsPage() {
               summary="Theme, text size, orientation, full screen"
               icon={Monitor}
             >
-              <div className="grid grid-cols-3 gap-2">
+              {/* Both this group and the display-profile group below contain a button labelled
+                  "Auto", so on their own a screen reader announces "Auto, button" twice with no way
+                  to tell them apart. Naming the GROUP resolves that without renaming the buttons,
+                  whose visible labels are what everyone else reads. */}
+              <div className="grid grid-cols-3 gap-2" role="group" aria-label="Theme">
                 {themeOptions.map((option) => {
                   const Icon = option.icon;
                   const isActive = theme === option.value;
@@ -1229,15 +1243,38 @@ export default function SettingsPage() {
                     );
                   })}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Scales the app&apos;s own text on top of your device&apos;s text size, which it already follows. Use
-                  this only to make the app bigger than the rest of your phone.
-                </p>
+                <HelperText>
+                  Scales the app&apos;s text on top of your device&apos;s own size. Use it only to go bigger than that.
+                </HelperText>
+              </div>
+
+              <div className="space-y-2 rounded-lg border border-border/70 p-3">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Label htmlFor="show-section-descriptions" className="flex min-h-11 items-center font-medium">
+                      Card descriptions
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      Off by default — it costs about half the height of every closed card on a small screen.
+                    </p>
+                  </div>
+                  <Checkbox
+                    id="show-section-descriptions"
+                    data-testid="settings-show-section-descriptions"
+                    checked={showSectionDescriptions}
+                    onCheckedChange={(checked) => commitShowSectionDescriptions(checked === true)}
+                  />
+                </div>
               </div>
 
               <div className="space-y-2 rounded-lg border border-border/70 p-3">
                 <Label className="text-sm font-medium">Display profile</Label>
-                <div className="grid grid-cols-2 gap-2" data-testid="settings-display-profile-override">
+                <div
+                  className="grid grid-cols-2 gap-2"
+                  role="group"
+                  aria-label="Display profile"
+                  data-testid="settings-display-profile-override"
+                >
                   {displayProfileOptions.map((option) => {
                     const isActive = displayProfileOverride === option.value;
                     return (
@@ -1253,10 +1290,12 @@ export default function SettingsPage() {
                     );
                   })}
                 </div>
+                {/* Live state, not an explanation: this reports which profile Auto has resolved to
+                    right now, so it stays visible when descriptions are off. */}
                 <p className="text-xs text-muted-foreground">
-                  Auto currently resolves to {DISPLAY_PROFILE_OVERRIDE_LABELS[autoProfile]}. Use an override to preview
-                  or lock a profile explicitly.
+                  Auto currently resolves to {DISPLAY_PROFILE_OVERRIDE_LABELS[autoProfile]}.
                 </p>
+                <HelperText>Use an override to preview or lock a profile explicitly.</HelperText>
                 <div className="space-y-2 pt-2">
                   <Label className="text-sm font-medium">Screen orientation</Label>
                   <div
@@ -1278,9 +1317,7 @@ export default function SettingsPage() {
                       );
                     })}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Portrait stays upright, Landscape stays wide, Auto follows the phone.
-                  </p>
+                  <HelperText>Portrait stays upright, Landscape stays wide, Auto follows the phone.</HelperText>
                 </div>
                 {isAndroid ? (
                   <div className="space-y-2 pt-2" data-testid="settings-full-screen">
@@ -1290,9 +1327,7 @@ export default function SettingsPage() {
                         <Label htmlFor="full-screen-hide-status-bar" className="flex min-h-11 items-center font-medium">
                           Hide status bar
                         </Label>
-                        <p className="text-xs text-muted-foreground">
-                          Extend the app over the top status bar (clock, battery, signal).
-                        </p>
+                        <HelperText>Extend the app over the top status bar (clock, battery, signal).</HelperText>
                       </div>
                       <Checkbox
                         id="full-screen-hide-status-bar"
@@ -1309,7 +1344,6 @@ export default function SettingsPage() {
                         >
                           Hide navigation bar
                         </Label>
-                        <p className="text-xs text-muted-foreground">Extend the app under the bottom navigation bar.</p>
                       </div>
                       <Checkbox
                         id="full-screen-hide-navigation-bar"
@@ -1336,9 +1370,7 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between gap-3 min-w-0">
                     <div className="min-w-0">
                       <Label className="text-sm font-medium">Saved devices</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Manage devices here. Long press the header badge to switch quickly.
-                      </p>
+                      <HelperText>Manage devices here. Long press the header badge to switch quickly.</HelperText>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <Button
@@ -1399,7 +1431,7 @@ export default function SettingsPage() {
                             </p>
                           </div>
                           {isSelected ? (
-                            <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                            <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                               Selected
                             </span>
                           ) : null}
@@ -1424,19 +1456,19 @@ export default function SettingsPage() {
                     onUseSuggestedAddress={handleUseSuggestedAddress}
                     keypadInput={flags.keypad_input_enabled && isDefaultT9InputEnabled()}
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <HelperText>
                     Currently using: <span className="font-sans break-all">{runtimeDeviceHost}</span>
                     {` · HTTP ${runtimeHttpPort} · FTP ${getStoredFtpPort()} · Telnet ${getStoredTelnetPort()}`}
                     {isDemoActive ? " (Demo mock)" : ""}
-                  </p>
+                  </HelperText>
                   {isDemoActive ? (
-                    <p className="text-xs text-muted-foreground">
+                    <HelperText>
                       {lastProbeSucceededAtMs
                         ? "Real device detected during probe."
                         : lastProbeFailedAtMs
                           ? "No real device detected in recent probe."
                           : "Waiting for initial probe."}
-                    </p>
+                    </HelperText>
                   ) : null}
                 </div>
 
@@ -1506,11 +1538,11 @@ export default function SettingsPage() {
                   {passwordError ? (
                     <p className="text-xs text-destructive">{passwordError}</p>
                   ) : (
-                    <p className="text-xs text-muted-foreground">
+                    <HelperText>
                       {selectedSavedDevice?.hasPassword && !passwordEditing
                         ? "Password saved."
                         : "Only needed if your device uses one."}
-                    </p>
+                    </HelperText>
                   )}
                 </div>
               </div>
@@ -1522,9 +1554,7 @@ export default function SettingsPage() {
                       <Label htmlFor="demo-mode-enabled" className="flex min-h-11 items-center font-medium">
                         Automatic Demo Mode
                       </Label>
-                      <p className="text-xs text-muted-foreground">
-                        Offer the built-in simulated device after real-device discovery fails.
-                      </p>
+                      <HelperText>Offer the built-in simulated device after real-device discovery fails.</HelperText>
                     </div>
                     <Checkbox
                       id="demo-mode-enabled"
@@ -1566,9 +1596,7 @@ export default function SettingsPage() {
                 <div className="flex flex-col gap-3">
                   <div className="min-w-0 space-y-1">
                     <Label className="text-sm font-medium">Device discovery</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Find nearby C64 Ultimate devices. You can still type an address above.
-                    </p>
+                    <HelperText>Find nearby C64 Ultimate devices. You can still type an address above.</HelperText>
                   </div>
                   <Button
                     ref={discoverDevicesFocusRef}
@@ -1616,12 +1644,8 @@ export default function SettingsPage() {
                                 {formatDiscoveredDeviceTitle(candidate)}
                               </p>
                               <p className="truncate text-xs text-muted-foreground">{secondary}</p>
-                              {candidate.requiresPassword ? (
-                                <p className="text-xs text-muted-foreground">Password required</p>
-                              ) : null}
-                              {candidate.alreadySavedDeviceId ? (
-                                <p className="text-xs text-muted-foreground">Already saved</p>
-                              ) : null}
+                              {candidate.requiresPassword ? <HelperText>Password required</HelperText> : null}
+                              {candidate.alreadySavedDeviceId ? <HelperText>Already saved</HelperText> : null}
                             </div>
                             <Button
                               type="button"
@@ -1821,9 +1845,7 @@ export default function SettingsPage() {
                     <Label htmlFor="debug-logging" className="flex min-h-11 items-center font-medium">
                       Enable debug logging
                     </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Emits all debug-level logs for diagnostics, including SAF and REST events.
-                    </p>
+                    <HelperText>Emits all debug-level logs for diagnostics, including SAF and REST events.</HelperText>
                   </div>
                   <Checkbox
                     id="debug-logging"
@@ -1840,9 +1862,7 @@ export default function SettingsPage() {
                   <div className="space-y-2 rounded-lg border border-border/70 p-3">
                     <div className="space-y-1">
                       <p className="text-sm font-semibold">SAF diagnostics</p>
-                      <p className="text-xs text-muted-foreground">
-                        Manual checks for persisted SAF permissions and enumeration.
-                      </p>
+                      <HelperText>Manual checks for persisted SAF permissions and enumeration.</HelperText>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -1883,9 +1903,9 @@ export default function SettingsPage() {
                 <div className="space-y-2 rounded-lg border border-border/70 p-3">
                   <div className="space-y-1">
                     <p className="text-sm font-semibold">Settings transfer</p>
-                    <p className="text-xs text-muted-foreground">
+                    <HelperText>
                       Export or import non-sensitive settings (connection timing, safety presets, and diagnostics).
-                    </p>
+                    </HelperText>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button variant="outline" size="sm" onClick={handleExportSettings}>
@@ -1938,9 +1958,7 @@ export default function SettingsPage() {
                       }
                     }}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Controls how many playlist or disk items are shown before opening View all. Default is 50.
-                  </p>
+                  <HelperText>Items shown before View all. Default 50.</HelperText>
                 </div>
 
                 <div className="flex items-start justify-between gap-3 min-w-0">
@@ -1948,10 +1966,9 @@ export default function SettingsPage() {
                     <Label htmlFor="settings-friendly-sid-names" className="flex min-h-11 items-center font-medium">
                       Friendly SID names
                     </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Shows SID tunes as “Bossa in Do” instead of “Bossa_in_Do_2SID.sid”, badged with the chip count.
-                      Programs, cartridges and disk images keep their file name.
-                    </p>
+                    <HelperText>
+                      Shows SID tunes as “Bossa in Do” instead of the raw filename, badged with chip count.
+                    </HelperText>
                   </div>
                   <Checkbox
                     id="settings-friendly-sid-names"
@@ -1989,10 +2006,10 @@ export default function SettingsPage() {
                       <SelectItem value="dma">DMA</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Classic KERNAL load mounts the disk and runs LOAD"*",8,1. DMA writes the first PRG straight into C64
-                    memory for a faster start; some loaders reject it.
-                  </p>
+                  <HelperText>
+                    KERNAL load mounts the disk and types LOAD&quot;*&quot;,8,1. DMA loads the first PRG directly,
+                    faster, but some loaders reject it.
+                  </HelperText>
                 </div>
 
                 {flags.in_image_search_enabled && (
@@ -2001,10 +2018,7 @@ export default function SettingsPage() {
                       <Label htmlFor="settings-search-inside-disks" className="flex min-h-11 items-center font-medium">
                         Search inside disk images
                       </Label>
-                      <p className="text-xs text-muted-foreground">
-                        When searching media, also match the programs inside .d64/.d71/.d81 images, not just their
-                        filenames.
-                      </p>
+                      <HelperText>Also matches programs inside .d64/.d71/.d81 images, not just filenames.</HelperText>
                     </div>
                     <Checkbox
                       id="settings-search-inside-disks"
@@ -2026,10 +2040,10 @@ export default function SettingsPage() {
                         <Label htmlFor="settings-boot-menu-answer" className="flex min-h-11 items-center font-medium">
                           Answer cartridge boot menu after reset
                         </Label>
-                        <p className="text-xs text-muted-foreground">
+                        <HelperText>
                           Advanced. Presses a key after a Mount &amp; Load reset so a cartridge&apos;s boot menu
                           doesn&apos;t swallow the typed LOAD. Leave off unless you run such a cartridge.
-                        </p>
+                        </HelperText>
                       </div>
                       <Checkbox
                         id="settings-boot-menu-answer"
@@ -2145,11 +2159,10 @@ export default function SettingsPage() {
                           setStreamNetworkBufferMs(loadStreamNetworkBufferMs());
                         }}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Jitter buffer for Live View audio: keeps late, reordered or bursty packets in order and hides
-                        loss instead of clicking. On Android this is a floor — the native pipeline can deepen it further
-                        if needed. Default 60 ms; 0 = lowest latency, least resilient.
-                      </p>
+                      <HelperText>
+                        Smooths late or dropped audio packets. Android may deepen this further. Default 60 ms; 0 =
+                        lowest latency, least resilient.
+                      </HelperText>
                     </div>
                     {isDeveloperModeEnabled ? (
                       <div className="col-span-2 space-y-2">
@@ -2173,14 +2186,10 @@ export default function SettingsPage() {
                             <SelectItem value="ethernet">Always Ethernet</SelectItem>
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">
-                          <strong>Developer preview — not in released firmware yet.</strong> Audio-only C64 sound can
-                          travel over <strong>Wi‑Fi</strong> — handy when the C64 and this device share only a wireless
-                          router — but Wi‑Fi audio and video can&apos;t run together. <strong>Dynamic</strong>{" "}
-                          (recommended) uses Wi‑Fi for audio alone and switches to Ethernet once video joins.{" "}
-                          <strong>Always Wi‑Fi</strong> keeps audio on Wi‑Fi and blocks video.{" "}
-                          <strong>Always Ethernet</strong> never uses Wi‑Fi.
-                        </p>
+                        <HelperText>
+                          <strong>Developer preview — not in released firmware yet.</strong> Wi‑Fi can carry C64 audio,
+                          but not together with video — each option above explains its own trade-off.
+                        </HelperText>
                       </div>
                     ) : null}
                     <div className="col-span-2 flex items-start justify-between gap-3 min-w-0">
@@ -2191,10 +2200,7 @@ export default function SettingsPage() {
                         >
                           Fast video (native assembly)
                         </Label>
-                        <p className="text-xs text-muted-foreground">
-                          Assembles Live View video frames natively for full frame rate (50 fps PAL / 60 fps NTSC).
-                          Leave on; turn off only to compare or troubleshoot. Android only.
-                        </p>
+                        <HelperText>Full frame rate (50 fps PAL / 60 fps NTSC). Leave on; Android only.</HelperText>
                       </div>
                       <Checkbox
                         id="settings-stream-native-assembly"
@@ -2215,11 +2221,10 @@ export default function SettingsPage() {
                         >
                           Input priority (instant joystick)
                         </Label>
-                        <p className="text-xs text-muted-foreground">
-                          Gives joystick, keyboard and mouse priority over the picture: while you&apos;re actively
-                          driving the C64, video briefly drops its frame rate so input lands instantly, then ramps back
-                          up. Leave on; turn off only to compare.
-                        </p>
+                        <HelperText>
+                          While you&apos;re driving the C64, video briefly drops frame rate so input lands instantly.
+                          Leave on.
+                        </HelperText>
                       </div>
                       <Checkbox
                         id="settings-stream-input-priority"
@@ -2240,11 +2245,9 @@ export default function SettingsPage() {
                         >
                           Low-latency audio (native)
                         </Label>
-                        <p className="text-xs text-muted-foreground">
-                          Plays Live View audio through a native low-latency track instead of the browser engine,
-                          cutting keypress-to-sound delay. Leave on; turn off only to compare or troubleshoot. Android
-                          only.
-                        </p>
+                        <HelperText>
+                          Cuts keypress-to-sound delay vs. the browser engine. Leave on; Android only.
+                        </HelperText>
                       </div>
                       <Checkbox
                         id="settings-stream-native-audio"
@@ -2267,10 +2270,9 @@ export default function SettingsPage() {
                     <Label htmlFor="settings-show-autofire" className="flex min-h-11 items-center font-medium">
                       Show Autofire button
                     </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Rarely needed for C64 games, so it&apos;s hidden from the Remote Input joystick and game mode by
-                      default. Turn on to show it.
-                    </p>
+                    <HelperText>
+                      Rarely needed, so it&apos;s hidden by default in Remote Input and Game Mode.
+                    </HelperText>
                   </div>
                   <Checkbox
                     id="settings-show-autofire"
@@ -2297,10 +2299,10 @@ export default function SettingsPage() {
                     aria-label="Autofire rate"
                     data-testid="settings-autofire-rate-slider"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    How many times per second Autofire presses FIRE while held. Also adjustable on the Remote Input
-                    joystick. Default 5/s, range {MIN_AUTOFIRE_RATE_HZ}–{MAX_AUTOFIRE_RATE_HZ}/s.
-                  </p>
+                  <HelperText>
+                    How many times per second FIRE fires while held. Default 5/s, range {MIN_AUTOFIRE_RATE_HZ}–
+                    {MAX_AUTOFIRE_RATE_HZ}/s.
+                  </HelperText>
                 </div>
               </div>
             </SettingsSection>
@@ -2311,11 +2313,25 @@ export default function SettingsPage() {
               key={group.key}
               id={`feature-group-${group.key}`}
               title={group.metadata.label}
+              /*
+               * Shortened rather than truncated when the badge leaves no room: "Experimental
+               * Fe..." names nothing. The word that gets dropped is "Features", which both cards
+               * share and which therefore does no work in telling them apart — "Stable" and
+               * "Experimental" are what a reader is scanning for, and each stays whole for as long
+               * as it can. The accessible name is still the full label.
+               */
+              titleVariants={[
+                group.metadata.label,
+                group.metadata.label.replace(/ Features$/, ""),
+                // "Exp." only for the group whose name it abbreviates. Added unconditionally it
+                // was also the last resort for "Stable Features", which it does not stand for.
+                ...(group.metadata.label.startsWith("Experimental") ? ["Exp."] : []),
+              ].filter((variant, index, all) => all.indexOf(variant) === index)}
               summary={group.metadata.description}
               icon={Cpu}
               testId={`settings-feature-group-${group.key}`}
               badge={
-                <span className="rounded-full border border-border/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                <span className="rounded-full border border-border/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                   {group.features.filter((feature) => feature.value).length}/{group.features.length} on
                 </span>
               }
@@ -2335,12 +2351,12 @@ export default function SettingsPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">{feature.definition.title}</span>
                         {isDeveloperModeEnabled && feature.definition.developer_only ? (
-                          <span className="rounded-full border border-border/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          <span className="rounded-full border border-border/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                             Developer only
                           </span>
                         ) : null}
                       </div>
-                      <p className="text-xs text-muted-foreground">{feature.definition.description}</p>
+                      <HelperText>{feature.definition.description}</HelperText>
                     </div>
                     <Checkbox
                       id={`feature-flag-${feature.id}`}
@@ -2372,10 +2388,7 @@ export default function SettingsPage() {
           {hvscEnabled && (
             <SettingsSection id="hvsc" title="HVSC" summary="Where the SID music collection comes from" icon={Cpu}>
               <div className="space-y-3 text-sm">
-                <p className="text-xs text-muted-foreground">
-                  HVSC visibility follows the Experimental Features registry. Override the archive mirror below to point
-                  downloads at a different source.
-                </p>
+                <HelperText>Override the archive mirror below to use a different source.</HelperText>
 
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">HVSC base URL override</Label>
@@ -2389,9 +2402,9 @@ export default function SettingsPage() {
                     placeholder={hvscBaseUrlPreview}
                     data-testid="hvsc-base-url"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <HelperText>
                     Leave blank to use the default HVSC mirror. Current base URL: {hvscBaseUrlPreview}
-                  </p>
+                  </HelperText>
                 </div>
 
                 <div className="space-y-2">
@@ -2408,15 +2421,14 @@ export default function SettingsPage() {
                     }}
                     data-testid="hvsc-update-check-interval"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Automatic HVSC update checks run from the Play page once HVSC is installed. Minimum interval:{" "}
-                    {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS} day
+                  <HelperText>
+                    Runs from the Play page once HVSC is installed. Minimum {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS} day
                     {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS === 1 ? "" : "s"}, to limit mirror load.
-                  </p>
-                  <p className="text-xs text-muted-foreground">
+                  </HelperText>
+                  <HelperText>
                     Last automatic update check:{" "}
                     {hvscLastUpdateCheckAt ? new Date(hvscLastUpdateCheckAt).toLocaleString() : "Never"}
-                  </p>
+                  </HelperText>
                 </div>
               </div>
             </SettingsSection>
@@ -2432,10 +2444,7 @@ export default function SettingsPage() {
               testId="settings-online-archive"
             >
               <div className="space-y-3">
-                <p className="text-xs text-muted-foreground">
-                  CommoServe availability follows the Experimental Features registry; host and header overrides are
-                  separate settings.
-                </p>
+                <HelperText>Host and header overrides below are independent settings.</HelperText>
 
                 <div className="space-y-2">
                   <Label htmlFor="archive-host-override" className="text-sm font-medium">
@@ -2460,9 +2469,7 @@ export default function SettingsPage() {
                       {archiveHostError}
                     </p>
                   ) : null}
-                  <p className="text-xs text-muted-foreground">
-                    Enter a hostname only. Invalid values fall back to the default archive host immediately.
-                  </p>
+                  <HelperText>Hostname only — an invalid value falls back to the default immediately.</HelperText>
                 </div>
 
                 <div className="space-y-2">
@@ -2557,11 +2564,10 @@ export default function SettingsPage() {
                   <SelectItem value="TROUBLESHOOTING">Troubleshooting (low concurrency, extra logging)</SelectItem>
                 </SelectContent>
               </Select>
-              {autoSafetyDescription ? <p className="text-xs text-muted-foreground">{autoSafetyDescription}</p> : null}
-              <p className="text-xs text-muted-foreground">
-                Mode presets adjust throttling, caching, cooldowns, and backoff behavior. Troubleshooting mode also
-                enables debug logging for richer diagnostics.
-              </p>
+              {autoSafetyDescription ? <HelperText>{autoSafetyDescription}</HelperText> : null}
+              <HelperText>
+                Presets adjust throttling, caching, cooldowns and backoff. Troubleshooting also turns on debug logging.
+              </HelperText>
             </div>
 
             {/* Device settings the app writes are RAM-only unless this is on, so the row has to
@@ -2573,11 +2579,11 @@ export default function SettingsPage() {
                   <Label htmlFor="settings-persist-config-to-flash" className="flex min-h-11 items-center font-medium">
                     Keep device settings after a restart
                   </Label>
-                  <p className="text-xs text-muted-foreground">
+                  <HelperText>
                     Off: a setting you change here reaches the C64 immediately but doesn&apos;t last — the next power-up
                     restores what the C64 had saved. On: the app also writes each change to the C64&apos;s flash, so it
                     survives a power cycle, same as saving from the C64&apos;s own menu.
-                  </p>
+                  </HelperText>
                 </div>
                 <Checkbox
                   id="settings-persist-config-to-flash"
@@ -2606,9 +2612,7 @@ export default function SettingsPage() {
             <div className="rounded-lg border border-border/70 p-3 space-y-4">
               <div className="space-y-1">
                 <Label className="font-medium">Network timing</Label>
-                <p className="text-xs text-muted-foreground">
-                  Tune discovery timing to reduce connection churn or speed up detection.
-                </p>
+                <HelperText>Tune discovery timing to reduce connection churn or speed up detection.</HelperText>
               </div>
 
               <div className="space-y-2">
@@ -2628,7 +2632,7 @@ export default function SettingsPage() {
                     if (event.key === "Enter") commitStartupDiscoveryWindow();
                   }}
                 />
-                <p className="text-xs text-muted-foreground">Default 3s. Range 0.5s–15s.</p>
+                <HelperText>Default 3s. Range 0.5s–15s.</HelperText>
               </div>
 
               <div className="space-y-2">
@@ -2648,7 +2652,7 @@ export default function SettingsPage() {
                     if (event.key === "Enter") commitBackgroundRediscoveryInterval();
                   }}
                 />
-                <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
+                <HelperText>Default 5s. Range 1s–60s.</HelperText>
               </div>
 
               <div className="space-y-2">
@@ -2668,14 +2672,14 @@ export default function SettingsPage() {
                     if (event.key === "Enter") commitProbeTimeout();
                   }}
                 />
-                <p className="text-xs text-muted-foreground">Default 2.5s. Range 0.5s–10s.</p>
+                <HelperText>Default 2.5s. Range 0.5s–10s.</HelperText>
               </div>
             </div>
 
             <div className="rounded-lg border border-border/70 p-3 space-y-4">
               <div className="space-y-2">
                 <Label className="font-medium">Advanced controls</Label>
-                <p className="text-xs text-muted-foreground">Fine-tuned device protection changes apply immediately.</p>
+                <HelperText>Fine-tuned device protection changes apply immediately.</HelperText>
                 <Button
                   variant="outline"
                   className="w-full"
@@ -2710,9 +2714,9 @@ export default function SettingsPage() {
                     if (event.key === "Enter") saveConfigWriteIntervalMs(configWriteIntervalMs);
                   }}
                 />
-                <p className="text-xs text-muted-foreground">
+                <HelperText>
                   Minimum delay between consecutive config write calls. Default {DEFAULT_CONFIG_WRITE_INTERVAL_MS} ms.
-                </p>
+                </HelperText>
               </div>
 
               <div className={profile === "expanded" ? "grid gap-4 grid-cols-2" : "grid gap-4 grid-cols-1"}>
@@ -2758,10 +2762,10 @@ export default function SettingsPage() {
                       )
                     }
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Max simultaneous REST connections to the device. 1 fully serializes requests — safest for firmware
-                    without the Ultimate network-stack fixes (e.g. C64U 1.1.0).
-                  </p>
+                  <HelperText>
+                    Max simultaneous REST connections. 1 is safest for firmware without the network-stack fix (e.g. C64U
+                    1.1.0).
+                  </HelperText>
                 </div>
 
                 <div className="space-y-2">
@@ -3031,20 +3035,17 @@ export default function SettingsPage() {
                       if (event.key === "Enter") saveVolumeSliderPreviewIntervalMs(volumeSliderPreviewIntervalMs);
                     }}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    How often drag previews are sent while device-backed sliders move (CPU, playback volume, SID mixer,
-                    lighting). Default 200 ms, range 100–500 ms.
-                  </p>
+                  <HelperText>
+                    How often drag previews are sent for device-backed sliders (CPU, volume, lighting). Default 200 ms,
+                    range 100–500 ms.
+                  </HelperText>
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-sm">Allow circuit override</Label>
                   {/* A label, so the whole row toggles the checkbox rather than only the
                       16px box, and so the control has an accessible name at all. */}
                   <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-md border border-border/70 p-2">
-                    <span className="text-xs text-muted-foreground">
-                      User-triggered actions can bypass circuit breaker.
-                    </span>
+                    <span className="text-sm font-medium">Allow circuit override</span>
                     <Checkbox
                       aria-label="Allow circuit override"
                       data-testid="settings-allow-circuit-override"
@@ -3088,9 +3089,7 @@ export default function SettingsPage() {
                     <SelectItem value="all">All</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  Tap a notification to open Diagnostics. Swipe to dismiss.
-                </p>
+                <HelperText>Tap a notification to open Diagnostics. Swipe to dismiss.</HelperText>
               </div>
 
               <div className="space-y-2">
@@ -3104,7 +3103,7 @@ export default function SettingsPage() {
                   onValueCommit={([value]) => saveNotificationDurationMs(value)}
                   data-testid="settings-notification-duration-slider"
                 />
-                <p className="text-xs text-muted-foreground">Default 4s. Range 2–8s.</p>
+                <HelperText>Default 4s. Range 2–8s.</HelperText>
               </div>
             </div>
           </SettingsSection>

@@ -197,11 +197,11 @@ export const ArchiveSelectionView = ({
       </div>
 
       {queryPreview ? (
-        <p className="text-[11px] text-muted-foreground" data-testid="archive-query-preview">
+        <p className="text-xs text-muted-foreground" data-testid="archive-query-preview">
           {queryPreview}
         </p>
       ) : (
-        <p className="text-[11px] text-muted-foreground">Enter at least one search term.</p>
+        <p className="text-xs text-muted-foreground">Enter at least one search term.</p>
       )}
 
       {resultRows.length > 0 ? (

@@ -166,6 +166,10 @@ q("tab-home")?.click();await wait(2000);
 const card=q("live-view-card");
 if(!card) return JSON.stringify({error:"the Live View card is not on Home"});
 card.scrollIntoView({block:"center"});await wait(400);
+// Live View is a collapsible card and is closed on a first visit, so the mirror toggles are not
+// in the tree until it is opened. The toggle is a button that says it is not expanded.
+const toggle=card.querySelector('button[aria-expanded="false"][aria-controls]');
+if(toggle){toggle.click();await wait(800);card.scrollIntoView({block:"center"});await wait(400);}
 for(const [id,want] of [["av-audio-toggle",${audio}],["av-video-toggle",${video}]]){
   const b=q(id); if(!b) return JSON.stringify({error:id+" is not on the card"});
   if((b.getAttribute("aria-pressed")==="true")!==want){b.click();await wait(3000);}
@@ -384,8 +388,12 @@ if(!e) return JSON.stringify({error:"the ${label} engine option is not on the pa
 e.click();await wait(1500);
 const items=document.querySelectorAll('[data-testid="playlist-item"]');
 const item=items[${index}]; if(!item) return JSON.stringify({error:"the tune left the playlist"});
-item.click();await wait(1200);
-q("playlist-play")?.click();await wait(4000);
+// Start THIS row, not "the current track". The row Play button calls
+// startPlaylist(playlist, index); the transport play button is a toggle that STOPS when
+// something is already playing, which is why these stages recorded a clock frozen at 0:00.
+const rowPlay=item.querySelector('button[aria-label^="Play "]');
+if(!rowPlay) return JSON.stringify({error:"the row has no Play button"});
+rowPlay.click();await wait(4000);
 return JSON.stringify({engine:q("playback-engine-${engine}")?.getAttribute("aria-pressed"),
   elapsed:q("playback-elapsed")?.innerText??null});})()`);
   if (started.error) throw new Error(started.error);
@@ -431,8 +439,10 @@ const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
 q("playback-engine-local")?.click();await wait(1200);
 const items=document.querySelectorAll('[data-testid="playlist-item"]');
 const item=items[${index}]; if(!item) return JSON.stringify({error:"the tune left the playlist"});
-item.click();await wait(1200);
-q("playlist-play")?.click();await wait(4000);
+// See the note in the sid-remote/sid-local starter: start the row, never the transport toggle.
+const rowPlay=item.querySelector('button[aria-label^="Play "]');
+if(!rowPlay) return JSON.stringify({error:"the row has no Play button"});
+rowPlay.click();await wait(4000);
 return JSON.stringify({elapsed:q("playback-elapsed")?.innerText??null});})()`);
   if (started.error) throw new Error(started.error);
 

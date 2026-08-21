@@ -183,6 +183,11 @@ export const useHvscArchiveSearch = (
   useEffect(
     () => () => {
       if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      // Bump the run counter as well as clearing the debounce, the same way `setQuery` and `clear`
+      // already do. Clearing only the timer left a search already in flight able to pass its own
+      // staleness guard after the sheet had gone and write its results into a hook nobody is
+      // reading — a search over 60,000 songs can easily outlive the sheet that started it.
+      runRef.current += 1;
     },
     [],
   );

@@ -269,7 +269,15 @@ test.describe("Settings connection management", () => {
     await page.goto("/settings");
     await snap(page, testInfo, "settings-open");
 
-    const headings = await page.locator("h2").allTextContents();
+    // The accessible name, not the drawn text. A title that would not fit beside its badge is
+    // drawn in a shorter wording — "Experimental" rather than "Experimental Features" — while the
+    // name a screen reader and the keypad ring announce stays the full one, and that is what this
+    // test is about.
+    const headings = await page
+      .locator("h2")
+      .evaluateAll((nodes) =>
+        nodes.map((node) => node.querySelector("[aria-label]")?.getAttribute("aria-label") ?? node.textContent?.trim()),
+      );
     // The standalone "Config" section was removed with the duplicate
     // Automatic Demo Mode control (HARD9-090); the canonical control lives in
     // the Connection card, so no separate Config heading remains.

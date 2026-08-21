@@ -7,6 +7,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { openAllCards } from "./cards";
 import { saveCoverageFromPage } from "./withCoverage";
 import type { Page, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
@@ -61,6 +62,10 @@ test.describe("Feature flags", () => {
     const toggle = page.getByTestId("feature-flag-hvsc_enabled");
     await expect(toggle).toBeChecked();
     await page.goto("/play");
+    // The HVSC card is closed on a first visit; its controls live in the body. Wait for the card
+    // itself before opening — straight after `goto` there is nothing to open yet.
+    await expect(page.getByTestId("hvsc-controls")).toBeVisible();
+    await openAllCards(page);
     await expect(page.getByRole("button", { name: "Download HVSC" })).toBeVisible();
     await snap(page, testInfo, "hvsc-visible");
 

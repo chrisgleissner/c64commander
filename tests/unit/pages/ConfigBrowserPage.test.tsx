@@ -7,6 +7,7 @@
  */
 
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { closeAllCards, ensureCardOpen } from "../helpers/cards";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -48,7 +49,22 @@ vi.mock("framer-motion", () => {
   }: Record<string, unknown> & { children?: ReactNode }) => <div {...rest}>{children}</div>;
   return {
     AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
-    motion: { div: Motion },
+    // Any element, not just `div`. The page renders through `CollapsibleSection`, which uses
+    // `motion.section` and `motion.span`; a mock that defines only `motion.div` hands React
+    // `undefined` for those and the whole tree fails to render.
+    // Cached per tag. A proxy that builds a new function on every access hands React a new
+    // component type on every render, so React unmounts and remounts the whole subtree each
+    // time — which silently reset state the tests depend on.
+    motion: new Proxy({} as Record<string, unknown>, {
+      get: (target, tag: string) => {
+        if (!target[tag]) {
+          target[tag] = (props: Record<string, unknown> & { children?: ReactNode }) => (
+            <Motion {...props} data-motion-tag={tag} />
+          );
+        }
+        return target[tag];
+      },
+    }),
   };
 });
 
@@ -206,6 +222,11 @@ const setupDefaultMocks = () => {
 afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
+  // The category cards render through `CollapsibleSection`, which remembers which sections a
+  // user opened in localStorage — the same behaviour the Settings cards have. Without clearing
+  // it, one test's open card is restored in the next one and the tests only pass in the order
+  // they happen to run in.
+  localStorage.clear();
 });
 
 describe("ConfigBrowserPage", () => {
@@ -337,7 +358,7 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
 
     const soloSwitch = await screen.findByTestId("audio-mixer-solo-vol-ultisid-1");
     fireEvent.click(soloSwitch);
@@ -378,7 +399,7 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
 
     const soloSwitch = await screen.findByTestId("audio-mixer-solo-vol-ultisid-1");
     fireEvent.click(soloSwitch);
@@ -424,7 +445,7 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
     fireEvent.click(await screen.findByTestId("audio-mixer-solo-vol-ultisid-1"));
 
     await waitFor(() => expect(updateConfigBatch).toHaveBeenCalled());
@@ -490,7 +511,7 @@ describe("ConfigBrowserPage", () => {
 
     const initialRender = renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
     const soloSwitch = await screen.findByTestId("audio-mixer-solo-vol-ultisid-1");
     fireEvent.click(soloSwitch);
     await waitFor(() => expect(updateConfigBatch).toHaveBeenCalledTimes(1));
@@ -504,8 +525,9 @@ describe("ConfigBrowserPage", () => {
 
     initialRender.unmount();
     renderConfigBrowserPage();
-    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
 
+    // No second click: the category cards remember which sections were opened, the same way the
+    // Settings cards do, so "Audio Mixer" is restored open on this second mount.
     expect(await screen.findByTestId("row-vol-ultisid-2")).toHaveAttribute("data-value", "0 dB");
   });
 
@@ -545,7 +567,7 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
     await screen.findByTestId("audio-mixer-solo-vol-ultisid-1");
 
     // Give the mount-time restore effect a chance to run (it fires
@@ -587,7 +609,7 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
     await screen.findByTestId("audio-mixer-solo-vol-ultisid-1");
 
     await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
@@ -616,7 +638,7 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /general/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /general/i }));
     fireEvent.click(await screen.findByRole("button", { name: /update demo option/i }));
 
     await waitFor(() => {
@@ -657,7 +679,7 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /general/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /general/i }));
 
     const rowA = await screen.findByTestId("row-item-a");
     const rowB = await screen.findByTestId("row-item-b");
@@ -698,7 +720,7 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /general/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /general/i }));
 
     const rowA = await screen.findByTestId("row-item-a");
     fireEvent.click(within(rowA).getByRole("button", { name: /update item a/i }));
@@ -757,7 +779,7 @@ describe("ConfigBrowserPage", () => {
         }}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /general/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /general/i }));
     fireEvent.click(screen.getByRole("button", { name: /update demo option/i }));
 
     await waitFor(() => {
@@ -828,7 +850,7 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /clock settings/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /clock settings/i }));
     fireEvent.click(await screen.findByRole("button", { name: /sync clock/i }));
 
     await waitFor(() => {
@@ -894,7 +916,7 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /clock settings/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /clock settings/i }));
     fireEvent.click(await screen.findByRole("button", { name: /sync clock/i }));
 
     await waitFor(() => {
@@ -944,7 +966,7 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /clock settings/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /clock settings/i }));
     fireEvent.click(await screen.findByRole("button", { name: /sync clock/i }));
 
     await waitFor(() => {
@@ -983,7 +1005,7 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
     fireEvent.click(await screen.findByRole("button", { name: /reset/i }));
 
     await waitFor(() => {
@@ -1020,7 +1042,7 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
     fireEvent.click(await screen.findByRole("button", { name: /reset/i }));
 
     await waitFor(() => {
@@ -1056,7 +1078,7 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
     fireEvent.click(await screen.findByRole("button", { name: /reset/i }));
 
     await waitFor(() => {
@@ -1095,7 +1117,7 @@ describe("ConfigBrowserPage", () => {
     }));
 
     renderConfigBrowserPage();
-    fireEvent.click(screen.getByRole("button", { name: /clock settings/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /clock settings/i }));
     fireEvent.click(await screen.findByRole("button", { name: /sync clock/i }));
 
     await waitFor(() => {
@@ -1129,7 +1151,7 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /audio mixer/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /audio mixer/i }));
     fireEvent.click(await screen.findByRole("button", { name: /refresh/i }));
 
     await waitFor(() => {
@@ -1157,7 +1179,7 @@ describe("ConfigBrowserPage", () => {
 
     const firstView = renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /general/i }));
+    ensureCardOpen(screen.getByRole("button", { name: /general/i }));
     expect(document.querySelector(".animate-spin")).toBeTruthy();
     firstView.unmount();
 
@@ -1173,7 +1195,9 @@ describe("ConfigBrowserPage", () => {
 
     renderConfigBrowserPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /general/i }));
+    // No second click: the category cards remember which sections were opened, the same way the
+    // Settings cards do, so "General" is restored open on this second mount. Clicking it here
+    // would close it again.
     expect(await screen.findByText(/no settings available/i)).toBeInTheDocument();
   });
 });
@@ -1214,6 +1238,10 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
 
     renderConfigBrowserPageInFocusRing(focusContext);
 
+    // Start from every category closed. Outside the compact profile a card is open before anyone
+    // touches it, so activating a header collapses it — this test is about the ring reaching one
+    // header and changing only that section, not about which direction it happens to move.
+    closeAllCards();
     focusContext.current?.controller.focus.setCurrent("config-category-clock-settings");
     mockSetConfigExpanded.mockClear();
 
@@ -1258,7 +1286,10 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
 
     renderConfigBrowserPageInFocusRing(focusContext);
 
-    // Expand Audio Mixer, mounting its Reset + Refresh group actions into the ring.
+    // Expand Audio Mixer, mounting its Reset + Refresh group actions into the ring. Closed first:
+    // outside the compact profile a card is open before anyone touches it, and activating its
+    // header would collapse it.
+    closeAllCards();
     focusContext.current?.controller.focus.setCurrent("config-category-audio-mixer");
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     await Promise.resolve();
@@ -1293,6 +1324,7 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
     renderConfigBrowserPageInFocusRing(focusContext);
 
     // Expand Clock Settings, then select its Sync clock action by stable focus id.
+    closeAllCards();
     focusContext.current?.controller.focus.setCurrent("config-category-clock-settings");
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     await Promise.resolve();
@@ -1325,6 +1357,7 @@ describe("ConfigBrowserPage keypad focus ring (C64U Remote)", () => {
     const focusContext = { current: null as FocusNavigationContextValue | null };
     renderConfigBrowserPageInFocusRing(focusContext);
 
+    closeAllCards();
     focusContext.current?.controller.focus.setCurrent("config-category-audio-mixer");
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     await Promise.resolve();

@@ -136,4 +136,39 @@ describe("interstitialStyles", () => {
       process.env.NODE_ENV = originalNodeEnv;
     }
   });
+
+  it("ignores a header that has not laid out yet, rather than putting the sheet over the badge", () => {
+    // A header measured while it is still animating open reports a fraction of its settled size.
+    // Taken at face value that put the sheet 13px from the top of the screen — above the badge it
+    // exists to clear — so the app bar's CSS height is used until the measurement is plausible.
+    const header = document.createElement("div");
+    header.setAttribute("data-testid", "app-bar-row");
+    stubRect(header, { top: 0, left: 0, right: 390, bottom: 24 });
+    document.body.appendChild(header);
+
+    const badge = document.createElement("button");
+    badge.setAttribute("data-testid", "unified-health-badge");
+    stubRect(badge, { top: 8, left: 280, right: 372, bottom: 21 });
+    document.body.appendChild(badge);
+
+    // The badge lane alone would give 21 - 11 = 10.
+    expect(getBadgeSafeZoneBottomPx()).toBe(21);
+    expect(resolveAppSheetTopClearancePx()).toBeGreaterThan(40);
+  });
+
+  it("does not put the sheet across the whole screen when nothing has a position yet", () => {
+    // The zero case, which is what a sheet opening on a page whose header has not been placed
+    // reads: the sheet filled the viewport top to bottom, over everything it exists to clear.
+    const header = document.createElement("div");
+    header.setAttribute("data-testid", "app-bar-row");
+    stubRect(header, { top: 0, left: 0, right: 0, bottom: 0 });
+    document.body.appendChild(header);
+
+    const badge = document.createElement("button");
+    badge.setAttribute("data-testid", "unified-health-badge");
+    stubRect(badge, { top: 0, left: 0, right: 0, bottom: 0 });
+    document.body.appendChild(badge);
+
+    expect(resolveAppSheetTopClearancePx()).toBeGreaterThan(40);
+  });
 });

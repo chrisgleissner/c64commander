@@ -1,24 +1,62 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Radio } from "lucide-react";
 
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 
-vi.mock("framer-motion", () => ({
-  motion: {
-    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-    span: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    section: ({ children, ...props }: any) => <section {...props}>{children}</section>,
-  },
-  AnimatePresence: ({ children }: any) => <>{children}</>,
+vi.mock("framer-motion", async () => {
+  // Everything the factory needs is declared INSIDE it: `vi.mock` is hoisted above module-level
+  // consts, so anything referenced from outside would be in its temporal dead zone when
+  // framer-motion is first imported.
+  const react = await import("react");
+  // The real `motion.div` reports when its height animation settles, which is when the component
+  // scrolls a freshly-expanded section into view. The stand-in reports it on mount, which is the
+  // same moment for a test that does not animate.
+  const MotionDiv = ({ children, onAnimationComplete, ...props }: any) => {
+    react.useEffect(() => {
+      onAnimationComplete?.();
+    }, [onAnimationComplete]);
+    return react.createElement("div", props, children);
+  };
+  // forwardRef, because the component takes a ref on the section to scroll it into view.
+  const MotionSection = react.forwardRef(({ children, ...props }: any, ref: any) =>
+    react.createElement("section", { ...props, ref }, children),
+  );
+  const MotionSpan = ({ children, ...props }: any) => react.createElement("span", props, children);
+  return {
+    motion: { div: MotionDiv, span: MotionSpan, section: MotionSection },
+    AnimatePresence: ({ children }: any) => children,
+  };
+});
+
+let mockProfile: "compact" | "medium" | "expanded" = "medium";
+
+vi.mock("@/hooks/useDisplayProfile", () => ({
+  useDisplayProfile: () => ({ profile: mockProfileRef() }),
 }));
 
+const mockProfileRef = () => mockProfile;
+
 describe("CollapsibleSection", () => {
+  // The stub is installed on the prototype by the scroll tests, and the framer-motion stand-in
+  // calls `onAnimationComplete` on mount — so without restoring it, every later test in this file
+  // would render against a spy left behind by an earlier one.
+  const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+
   beforeEach(() => {
     localStorage.clear();
+    mockProfile = "medium";
   });
 
-  it("renders closed by default and opens on tap, showing the summary either way", () => {
+  afterEach(() => {
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      writable: true,
+      value: originalScrollIntoView,
+    });
+  });
+
+  it("renders closed by default and opens on tap", () => {
     render(
       <CollapsibleSection scope="test" id="audio" title="Audio" summary="Volume and mute per chip" icon={Radio}>
         <p>Channel strip</p>
@@ -26,7 +64,6 @@ describe("CollapsibleSection", () => {
     );
 
     expect(screen.getByText("Audio")).toBeInTheDocument();
-    expect(screen.getByText("Volume and mute per chip")).toBeInTheDocument();
     expect(screen.queryByText("Channel strip")).not.toBeInTheDocument();
     expect(screen.getByTestId("test-section-audio")).toHaveAttribute("data-open", "false");
 
@@ -34,6 +71,129 @@ describe("CollapsibleSection", () => {
 
     expect(screen.getByText("Channel strip")).toBeInTheDocument();
     expect(screen.getByTestId("test-section-audio")).toHaveAttribute("data-open", "true");
+  });
+
+  it("hides the summary by default, and shows it once card descriptions are turned on", () => {
+    // The description is the largest single consumer of vertical space on a page of closed cards:
+    // a Settings card header measures 97 CSS px with it and roughly half that without, against the
+    // 218 CSS px of scrollable height a 320x427 screen has.
+    const { unmount } = render(
+      <CollapsibleSection scope="test" id="audio" title="Audio" summary="Volume and mute per chip" icon={Radio}>
+        <p>Channel strip</p>
+      </CollapsibleSection>,
+    );
+    // Present but visually hidden, not removed: it still names the section for a screen reader, and
+    // it keeps this disclosure button's accessible name stable, which is what stops it colliding
+    // with a same-named button inside the section.
+    const hidden = screen.getByText("Volume and mute per chip");
+    expect(hidden).toHaveClass("sr-only");
+    unmount();
+
+    localStorage.setItem("c64u_show_section_descriptions", "1");
+    render(
+      <CollapsibleSection scope="test" id="audio" title="Audio" summary="Volume and mute per chip" icon={Radio}>
+        <p>Channel strip</p>
+      </CollapsibleSection>,
+    );
+    expect(screen.getByText("Volume and mute per chip")).not.toHaveClass("sr-only");
+  });
+
+  it("scrolls a freshly-expanded section into view without scrolling its header past the top", () => {
+    // Opening a card near the bottom of the list used to leave its body below the fold, which is
+    // worse now that one card is open at a time: the reader taps a title and sees nothing happen.
+    // `block: "nearest"` scrolls the least amount that reveals the card, and aligns the TOP when
+    // the card is taller than the scrollport — so the header of the section just opened stays put.
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      writable: true,
+      value: scrollIntoView,
+    });
+
+    render(
+      <CollapsibleSection scope="test" id="audio" title="Audio" icon={Radio}>
+        <p>Channel strip</p>
+      </CollapsibleSection>,
+    );
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("test-section-toggle-audio"));
+
+    expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: "nearest" }));
+    scrollIntoView.mockClear();
+
+    // Collapsing must not scroll: AnimatePresence reports the exit animation as complete too.
+    fireEvent.click(screen.getByTestId("test-section-toggle-audio"));
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("does not scroll the page when a defaultOpen card simply mounts", () => {
+    // A defaultOpen card reports its open animation complete on MOUNT. Scrolling then moves the
+    // page the moment it loads, before the reader has done anything — measured in a layout spec as
+    // the first content block sitting 201 px above the header's bottom.
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      writable: true,
+      value: scrollIntoView,
+    });
+
+    render(
+      <CollapsibleSection scope="test" id="drives" title="Drives" icon={Radio} defaultOpen>
+        <p>Drive A</p>
+      </CollapsibleSection>,
+    );
+
+    expect(screen.getByText("Drive A")).toBeInTheDocument();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("keeps one card open at a time in the compact profile, and closes the sibling it replaces", () => {
+    // Compact opens one card at a time so the reader keeps the list of titles around whatever is
+    // open. The sibling closes through a window event, and its closed state is persisted so
+    // returning to the page does not re-open every card the reader has ever looked at.
+    mockProfile = "compact";
+    render(
+      <>
+        <CollapsibleSection scope="settings" id="first" title="First" icon={Radio}>
+          <p>First body</p>
+        </CollapsibleSection>
+        <CollapsibleSection scope="settings" id="second" title="Second" icon={Radio}>
+          <p>Second body</p>
+        </CollapsibleSection>
+      </>,
+    );
+
+    fireEvent.click(screen.getByTestId("settings-section-toggle-first"));
+    expect(screen.getByTestId("settings-section-first")).toHaveAttribute("data-open", "true");
+
+    fireEvent.click(screen.getByTestId("settings-section-toggle-second"));
+
+    expect(screen.getByTestId("settings-section-second")).toHaveAttribute("data-open", "true");
+    expect(screen.getByTestId("settings-section-first")).toHaveAttribute("data-open", "false");
+    expect(JSON.parse(localStorage.getItem("c64u_open_sections") ?? "{}")["settings:first"]).toBe(false);
+  });
+
+  it("leaves both cards open outside the compact profile", () => {
+    // A taller screen has room for several bodies at once, and closing one to open another would
+    // just be obstructive there.
+    mockProfile = "medium";
+    render(
+      <>
+        <CollapsibleSection scope="home" id="alpha" title="Alpha" icon={Radio}>
+          <p>Alpha body</p>
+        </CollapsibleSection>
+        <CollapsibleSection scope="home" id="beta" title="Beta" icon={Radio}>
+          <p>Beta body</p>
+        </CollapsibleSection>
+      </>,
+    );
+
+    fireEvent.click(screen.getByTestId("home-section-toggle-alpha"));
+    fireEvent.click(screen.getByTestId("home-section-toggle-beta"));
+
+    expect(screen.getByTestId("home-section-alpha")).toHaveAttribute("data-open", "true");
+    expect(screen.getByTestId("home-section-beta")).toHaveAttribute("data-open", "true");
   });
 
   it("honors defaultOpen on a first visit to a fresh scope", () => {

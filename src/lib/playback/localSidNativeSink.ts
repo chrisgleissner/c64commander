@@ -946,8 +946,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
       claimNativeTrack(this.backend, this, this.serial);
       return Promise.resolve(true);
     }
-    this.opening ??= this.backend
-      .openAudioTrack(settings)
+    this.opening ??= withOpenDeadline(this.backend.openAudioTrack(settings))
       .then(() => {
         this.opened = true;
         openTracks.set(this.backend, signature);
@@ -1191,6 +1190,37 @@ export const nativeLocalAudioAvailable = (): boolean =>
  * an otherwise correct crossfade. A sink that inherits a track opened with the same settings
  * therefore writes straight onto the end of it, and the stream of samples never stops.
  */
+/**
+ * How long the platform gets to open the AudioTrack before the attempt is abandoned.
+ *
+ * `openAudioTrack` is a Capacitor call, and Capacitor delivers a plugin result by evaluating
+ * JavaScript in the page — so a hidden WebView suspends the result indefinitely rather than
+ * failing it. `pump()` awaits `ensureOpen()` inside its `try`, so an open that never settles means
+ * the `finally` that clears `pumping` never runs, and no later pump can start: the tune goes silent
+ * for the rest of the session with the transport still reporting playback. Opening a track is a
+ * millisecond-scale operation, so a deadline this long only ever fires on that stall.
+ */
+const OPEN_TRACK_TIMEOUT_MS = 5000;
+
+/** Reject an open that has not settled within {@link OPEN_TRACK_TIMEOUT_MS}. */
+const withOpenDeadline = <T>(attempt: Promise<T>): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`the platform did not open an AudioTrack within ${OPEN_TRACK_TIMEOUT_MS}ms`)),
+      OPEN_TRACK_TIMEOUT_MS,
+    );
+    attempt.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error as Error);
+      },
+    );
+  });
+
 const openTracks = new WeakMap<object, string>();
 
 const trackOwners = new WeakMap<object, { sink: object; serial: number }>();

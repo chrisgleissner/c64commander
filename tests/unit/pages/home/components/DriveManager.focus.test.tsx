@@ -7,6 +7,7 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
+import { resetCardMemory } from "../../../helpers/cards";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -135,6 +136,7 @@ const renderInRing = (
 
 describe("DriveManager keypad focus ring (C64U Remote)", () => {
   beforeEach(() => {
+    resetCardMemory();
     vi.clearAllMocks();
     resolveConfigValueSpy.mockImplementation(
       (_payload: unknown, _category: string, _itemName: string, fallback: string | number) => fallback,
@@ -182,9 +184,19 @@ describe("DriveManager keypad focus ring (C64U Remote)", () => {
   it("center-activates a focused drive toggle without firing the section reset", () => {
     renderInRing();
 
-    fireEvent.keyDown(document.body, { code: "DpadCenter" }); // enter the ring → section toggle
-    fireEvent.keyDown(document.body, { code: "DpadDown" }); // → reset
-    fireEvent.keyDown(document.body, { code: "DpadDown" }); // → drive A toggle
+    // Walk to drive A's ON/OFF rather than counting presses: each drive is a collapsible card
+    // now, so the ring passes its header too, and a fixed count only records how many items
+    // happened to precede the toggle on the day it was written.
+    fireEvent.keyDown(document.body, { code: "DpadCenter" }); // enter the ring
+    const toggle = screen.getByTestId("home-drive-toggle-a");
+    for (let step = 0; step < 24 && document.activeElement !== toggle; step++) {
+      fireEvent.keyDown(document.body, { code: "DpadDown" });
+      if (document.activeElement?.getAttribute("data-section-label")) {
+        // A card is a focus scope: go into it to reach the controls it holds.
+        fireEvent.keyDown(document.body, { code: "DpadCenter" });
+      }
+    }
+    expect(toggle).toHaveFocus();
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     expect(updateConfigValueSpy).toHaveBeenCalledWith(
       expect.anything(),

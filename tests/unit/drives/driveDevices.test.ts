@@ -26,7 +26,7 @@ describe("drive device normalization", () => {
       "SOFT_IEC_DRIVE",
       "PRINTER",
     ]);
-    expect(result.devices.map((entry) => entry.label)).toEqual(["Drive A", "Drive B", "Soft IEC Drive", "Printer"]);
+    expect(result.devices.map((entry) => entry.label)).toEqual(["Drive A", "Drive B", "Soft IEC", "Printer"]);
   });
 
   it("tolerates unknown devices and missing optional fields", () => {

@@ -47,7 +47,7 @@ const fmtDuration = (durationMs: number): string => {
 function Sparkline({ values, testid, ariaLabel }: { values: number[]; testid: string; ariaLabel: string }) {
   if (values.length < 2) {
     return (
-      <div className="h-6 text-[11px] text-muted-foreground" data-testid={testid}>
+      <div className="h-6 text-xs text-muted-foreground" data-testid={testid}>
         collecting…
       </div>
     );
@@ -72,7 +72,7 @@ function Sparkline({ values, testid, ariaLabel }: { values: number[]; testid: st
 function Stat({ label, value, testid, tone }: { label: string; value: string; testid: string; tone?: "warn" }) {
   return (
     <div className="rounded-md bg-muted/50 px-2 py-1.5 text-center">
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
       <div
         className={cn("text-sm font-semibold tabular-nums", tone === "warn" && "text-destructive")}
         data-testid={`stream-stats-${testid}`}
@@ -182,7 +182,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
         ))}
         {governor.overridden && (
           <span
-            className="ml-1 rounded bg-destructive/15 px-1.5 py-0.5 text-[11px] font-medium text-destructive"
+            className="ml-1 rounded bg-destructive/15 px-1.5 py-0.5 text-xs font-medium text-destructive"
             data-testid="stream-stats-override"
             title={governor.reason}
           >
@@ -216,13 +216,13 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
               and squeezing them cut "Session" off inside its button and set "History"
               as "His" / "tory". */}
           <div className="flex flex-wrap items-center gap-1.5" data-testid="stream-stats-window">
-            <span className="shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">History</span>
+            <span className="shrink-0 text-xs uppercase tracking-wide text-muted-foreground">History</span>
             {WINDOWS.map((w) => (
               <Button
                 key={w.label}
                 size="sm"
                 variant={windowSec === w.sec ? "default" : "outline"}
-                className="h-6 px-2 text-[11px]"
+                className="h-6 px-2 text-xs"
                 onClick={() => setWindowSec(w.sec)}
                 data-testid={`stream-stats-window-${w.label}`}
                 aria-pressed={windowSec === w.sec}
@@ -235,11 +235,11 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
           {/* History charts (§12.3) */}
           <div className={cn("grid gap-3", statColumns("grid-cols-2", "grid-cols-1"))}>
             <div className="text-muted-foreground">
-              <div className="mb-1 text-[11px] uppercase tracking-wide">Presented FPS</div>
+              <div className="mb-1 text-xs uppercase tracking-wide">Presented FPS</div>
               <Sparkline values={fpsSeries} testid="stream-stats-spark-fps" ariaLabel="Presented FPS over the window" />
             </div>
             <div className="text-muted-foreground">
-              <div className="mb-1 text-[11px] uppercase tracking-wide">Audio buffer min (ms)</div>
+              <div className="mb-1 text-xs uppercase tracking-wide">Audio buffer min (ms)</div>
               <Sparkline
                 values={bufferSeries}
                 testid="stream-stats-spark-buffer"
@@ -247,7 +247,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
               />
             </div>
             <div className="text-muted-foreground">
-              <div className="mb-1 text-[11px] uppercase tracking-wide">Loss (pkts+frames/s)</div>
+              <div className="mb-1 text-xs uppercase tracking-wide">Loss (pkts+frames/s)</div>
               <Sparkline
                 values={lossSeries}
                 testid="stream-stats-spark-loss"
@@ -255,7 +255,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
               />
             </div>
             <div className="text-muted-foreground">
-              <div className="mb-1 text-[11px] uppercase tracking-wide">Concealed audio/s</div>
+              <div className="mb-1 text-xs uppercase tracking-wide">Concealed audio/s</div>
               <Sparkline
                 values={concealSeries}
                 testid="stream-stats-spark-conceal"
@@ -263,7 +263,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
               />
             </div>
             <div className={cn("text-muted-foreground", compact ? "col-span-1" : "col-span-2")}>
-              <div className="mb-1 text-[11px] uppercase tracking-wide">Effective video rate (%)</div>
+              <div className="mb-1 text-xs uppercase tracking-wide">Effective video rate (%)</div>
               <Sparkline
                 values={rateSeries}
                 testid="stream-stats-spark-rate"
@@ -274,7 +274,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
 
           {/* Latency / residence — honestly labelled LOCAL pipeline residence */}
           <section data-testid="stream-stats-latency">
-            <div className="mb-1 text-[11px] font-medium">Local pipeline residence</div>
+            <div className="mb-1 text-xs font-medium">Local pipeline residence</div>
             <div className={cn("grid gap-2", statColumns("grid-cols-4", "grid-cols-2"))}>
               <Stat label="Now" value={ms(live.renderResidenceMs)} testid="residence-now" />
               <Stat label="p95" value={ms(summary.residence.p95)} testid="residence-p95" />
@@ -285,7 +285,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
 
           {/* Video presentation-slot accounting (§9.1) */}
           <section data-testid="stream-stats-video">
-            <div className="mb-1 text-[11px] font-medium">Video ({live.standard})</div>
+            <div className="mb-1 text-xs font-medium">Video ({live.standard})</div>
             <div className={cn("grid gap-2", statColumns("grid-cols-3", "grid-cols-2"))}>
               <Stat label="Presented" value={num(live.presented)} testid="presented" />
               <Stat label="Partial" value={num(live.partialConcealed)} testid="partial" />
@@ -293,23 +293,24 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
               <Stat label="Decimated" value={num(live.decimated)} testid="decimated" />
               <Stat label="Backlog" value={num(live.backlogReplacements)} testid="backlog" />
               <Stat label="Lost" value={num(live.framesLost)} testid="frames-lost" />
+              <Stat label="Lost pkts" value={num(live.droppedPackets)} testid="video-dropped-packets" />
             </div>
           </section>
 
           {/* Audio */}
           <section data-testid="stream-stats-audio">
-            <div className="mb-1 text-[11px] font-medium">Audio</div>
+            <div className="mb-1 text-xs font-medium">Audio</div>
             <div className={cn("grid gap-2", statColumns("grid-cols-3", "grid-cols-2"))}>
               <Stat label="Concealed" value={num(live.audioConcealed)} testid="concealed" />
-              <Stat label="Dropped pkts" value={num(live.droppedPackets)} testid="dropped-packets" />
+              <Stat label="Dropped pkts" value={num(live.audioLostPackets)} testid="dropped-packets" />
               <Stat label="Buf min" value={ms(summary.audioBufferMsMin)} testid="audio-buffer-min" />
             </div>
           </section>
 
           {/* Governor */}
           <section data-testid="stream-stats-governor">
-            <div className="mb-1 text-[11px] font-medium">Governor</div>
-            <p className="text-[11px] text-muted-foreground" data-testid="stream-stats-governor-reason">
+            <div className="mb-1 text-xs font-medium">Governor</div>
+            <p className="text-xs text-muted-foreground" data-testid="stream-stats-governor-reason">
               requested <strong>{governor.requested}</strong> · effective{" "}
               <strong>{pct(governor.effectivePercent)}</strong>
               {governor.reason ? ` · ${governor.reason}` : ""}

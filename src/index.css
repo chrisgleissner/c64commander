@@ -55,11 +55,37 @@
      useFocusNavigation `focusRingElement`). */
   --keypad-scroll-margin-top: calc(var(--safe-area-inset-top) + var(--app-bar-height, 72px) + 0.5rem);
   /* Mirrors the `.keypad-guidance-bar` box (keep in sync with that rule): vertical
-     padding (2 x 0.375rem) + text (0.8125rem x 1.15 line-height) + 1px border-top.
-     Centralised here so the scroll margin cannot silently drift from the bar's
-     actual height when the bar's font/padding is tweaked. */
-  --keypad-guidance-bar-height: calc(0.75rem + (0.8125rem * 1.15) + 1px);
+     padding (2 x --keypad-guidance-padding-y) + text (--keypad-guidance-font-size x 1.15
+     line-height) + 1px border-top. Centralised here so the scroll margin cannot silently drift
+     from the bar's actual height when the bar's font/padding is tweaked. */
+  --keypad-guidance-font-size: 0.8125rem;
+  --keypad-guidance-padding-y: 0.375rem;
+  --keypad-guidance-bar-height: calc(
+    (2 * var(--keypad-guidance-padding-y)) + (var(--keypad-guidance-font-size) * 1.15) + 1px
+  );
   --keypad-scroll-margin-bottom: calc(var(--app-tab-bar-frame-height) + var(--keypad-guidance-bar-height) + 0.5rem);
+}
+
+/*
+ * The smallest supported screen gets a tighter frame.
+ *
+ * Measured from Commodore's own Callback 8020 renders, the device's UI spends 49 device px (33 CSS
+ * px) on its status bar and 30 device px (20 CSS px) on its soft-key legend — 12.4% of the panel,
+ * leaving 87.6% for content. The app's own chrome was more than twice that at the bottom alone.
+ * These overrides bring the frame closer to what the handset itself does while keeping every tab
+ * button above the 44 px touch floor, and lift the guidance text to the 14 px floor (0.875rem is
+ * 14.9 px against this profile's 17 px root) while spending less height on it.
+ *
+ * DELTAS ONLY. Every variable these override is declared in the plain `:root` block above, so the
+ * other profiles keep their own values — moving a declaration down here instead of overriding it
+ * leaves it unset elsewhere, which makes any shorthand that references it collapse to its initial
+ * value on those profiles.
+ */
+:root[data-display-profile="compact"] {
+  --app-tab-bar-visual-height: 3rem;
+  --app-tab-bar-nav-padding-y: 0.25rem;
+  --keypad-guidance-font-size: 0.875rem;
+  --keypad-guidance-padding-y: 0.125rem;
 }
 
 :root[data-c64-motion-mode="reduced"] {
@@ -545,8 +571,8 @@ button:focus-visible,
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.375rem 0.75rem;
-  font-size: 0.8125rem;
+  padding: var(--keypad-guidance-padding-y) 0.75rem;
+  font-size: var(--keypad-guidance-font-size);
   line-height: 1.15;
   background: hsl(var(--background) / 0.97);
   border-top: 1px solid hsl(var(--border));
@@ -558,8 +584,17 @@ button:focus-visible,
 .keypad-guidance-breadcrumb {
   display: flex;
   align-items: center;
+  /*
+   * The breadcrumb absorbs all the pressure, and the key legend never does.
+   *
+   * These two compete for one 320 px row. Letting the breadcrumb grow (flex-basis auto) meant a
+   * long one — the health badge's "Connected to 192.168.1.148, system healthy" is a ring stop —
+   * took 146 px and clipped the word "Back" off the left soft key. The keys say what the three
+   * physical keys do right now and are useless clipped; the breadcrumb is context and reads fine
+   * shortened. So: basis 0, shrink freely, truncate.
+   */
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -591,7 +626,63 @@ button:focus-visible,
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  /*
+   * Never shrinks. With the optional shortcut hidden on the smallest screen the legend is bounded
+   * at about 215 px ("Back Exit" + "OK Activate" + "Menu"), which fits 320 px alongside a
+   * truncated breadcrumb — so it does not need to shrink, and must not, because a half-drawn key
+   * name is worse than a shorter breadcrumb.
+   */
   flex: 0 0 auto;
+}
+
+:root[data-display-profile="compact"] .keypad-guidance-keys {
+  gap: 0.375rem;
+}
+
+/*
+ * A narrow screen fits the breadcrumb and three soft keys, and not the optional shortcut as well.
+ * The shortcut is a convenience — the key still works — whereas a legend drawn past the right edge
+ * tells the reader nothing at all.
+ *
+ * The threshold is the viewport width, not the display profile. What decides whether the legend
+ * fits is how many pixels it has, and the legend is sized in rem, so a profile whose root font is
+ * larger needs a wider screen for the same four keys. A 393px phone on the medium profile draws
+ * the legend 7px past the right edge, which is why this is not gated on `compact` alone.
+ */
+@media (max-width: 430px) {
+  .keypad-guidance-key[data-soft="shortcut"] {
+    display: none;
+  }
+}
+
+/*
+ * The header shares its width between the page title, the connection host and the status word. On
+ * a 393 px phone all three were drawn truncated at once, so the host — the one whose truncated
+ * form ("192.168.1.…") carries no information, and which Home and Settings both show in full — is
+ * dropped first. See the comment beside `app-chrome-badge-host` in `UnifiedHealthBadge`.
+ */
+@media (max-width: 430px) {
+  .app-chrome-badge-host {
+    display: none;
+  }
+}
+
+/*
+ * The Quick menu on the smallest supported screen.
+ *
+ * It carries twelve entries — the six pages, the section actions and the high-value actions — and
+ * the dialog's own 24px padding plus its header spent 111 of the 331px available, leaving room for
+ * four of them. The entries themselves stay at the 44px touch floor; only the chrome around them
+ * gives way. Written here rather than as a class on the component because the dialog renders in a
+ * portal, where the display-profile hook does not reach it, and the attribute does.
+ */
+:root[data-display-profile="compact"] [data-testid="keypad-quick-menu"] {
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+:root[data-display-profile="compact"] [data-testid="keypad-quick-menu"] [data-interstitial-header-row="true"] {
+  min-height: 0;
 }
 
 .keypad-guidance-key {
@@ -599,13 +690,17 @@ button:focus-visible,
   align-items: center;
   gap: 0.3rem;
   white-space: nowrap;
+  /* Whole or not at all — see `.keypad-guidance-keys`. */
+  flex: 0 0 auto;
 }
 
 .keypad-guidance-cap {
   display: inline-flex;
   align-items: center;
   padding: 0.05rem 0.35rem;
-  font-size: 0.6875rem;
+  /* The key caps name the physical keys, so they are read as much as the actions beside them and
+     answer to the same 14px floor. They were 0.6875rem = 11.7px at the compact root. */
+  font-size: var(--keypad-guidance-font-size);
   font-weight: 600;
   line-height: 1.3;
   color: hsl(var(--muted-foreground));
@@ -649,14 +744,22 @@ button:focus-visible,
   }
 
   /* Tab labels on the smallest screen.
-     The compact profile renders text-xs at 16px, at which the six labels plus the 44px
-     minimum tab width come to more than the bar can hold at 320px and "Docs" is clipped
-     off the right edge. 0.9rem is 14.4px, which clears the 14px readability floor and
-     brings the row to about 284px against the 304px available, so it fits with room to
-     spare rather than by a few pixels. */
+     Six labels plus the 44px minimum tab width come to more than the bar can hold at 320px, and
+     "Docs" is clipped off the right edge. 0.9rem clears the 14px readability floor and brings the
+     row well inside the width available.
+
+     Keyed off the VIEWPORT as well as the profile. A reader can override the profile to Standard or
+     Large on a 320px screen, and then the bar was sized for a screen they do not have: the labels
+     grew with the larger root and the last tab was drawn past the edge. The screen is what decides
+     whether the labels fit, so the media query is the rule and the profile selector only keeps the
+     behaviour when a wider screen is running the compact profile deliberately. */
+  :root[data-display-profile="compact"] .tab-item-label,
+  .tab-item-label {
+    line-height: 1.15;
+  }
+
   :root[data-display-profile="compact"] .tab-item-label {
     font-size: 0.9rem;
-    line-height: 1.15;
   }
 
   :root[data-display-profile="compact"] :where([class~="text-sm"]) {
@@ -674,9 +777,102 @@ button:focus-visible,
     line-height: 1.95rem;
   }
 
+  /* The app-bar title is the same physical size on compact and medium, so the chrome does not
+     appear to change size as a reader moves between them. That makes this value a FUNCTION of the
+     medium scale: medium renders text-xl at 24px, so compact needs 24 / 16 = 1.5rem to match.
+     `displayProfiles.spec.ts` asserts the two stay within 0.1px of each other, which is what
+     catches this drifting when either profile's sizes change. */
   :root[data-display-profile="compact"] :where(.c64-header[class~="text-xl"]) {
-    font-size: 1.1765rem;
+    font-size: 1.5rem;
+    line-height: 1.65rem;
+  }
+
+  /*
+   * The phone profile's own type scale.
+   *
+   * Two problems made the default Tailwind ramp unreadable here. Its smallest steps landed at
+   * 12.75px and 14.875px against the old 17px root, and 12.75px subtends 16.4 arcminutes at the
+   * 30cm a phone is actually held at — under the ~20' a reader with average eyesight is
+   * comfortable with, and under this repo's own 14px floor. On top of that, 800 of the app's 841
+   * text-size utilities are `text-xs` or `text-sm`, so those two steps carry nearly all the type
+   * and the rest of the ramp is almost unused.
+   *
+   * So the ramp is rebuilt around those two steps rather than scaled uniformly. The root moves to
+   * 18px so that text inherited from it and `text-sm` are the same size — otherwise the two sit
+   * 1px apart and read as a mistake rather than a decision. `text-xs` sits one clear step below at
+   * 16px, which is where the app's secondary and meta text now renders.
+   *
+   *   xs 16px   sm 18px (= root)   base 20px   lg 22px   xl 24px   2xl 27px
+   *
+   * Each step is 9-12.5% above the one before, which is far enough apart to read as deliberate.
+   * The smallest step is 25% larger than it was and the rest are about 20% larger, which is what
+   * the sizes were reviewed against on the device.
+   */
+  :root[data-display-profile="medium"] :where([class~="text-xs"]) {
+    font-size: 0.8889rem;
+    line-height: 1.25rem;
+  }
+
+  :root[data-display-profile="medium"] :where([class~="text-sm"]) {
+    font-size: 1rem;
+    line-height: 1.4rem;
+  }
+
+  :root[data-display-profile="medium"] :where([class~="text-base"]) {
+    font-size: 1.1111rem;
     line-height: 1.5rem;
+  }
+
+  :root[data-display-profile="medium"] :where([class~="text-lg"]) {
+    font-size: 1.2222rem;
+    line-height: 1.6rem;
+  }
+
+  :root[data-display-profile="medium"] :where([class~="text-xl"]) {
+    font-size: 1.3333rem;
+    line-height: 1.7rem;
+  }
+
+  :root[data-display-profile="medium"] :where([class~="text-2xl"]) {
+    font-size: 1.5rem;
+    line-height: 1.85rem;
+  }
+
+  /*
+   * The same shape on the tablet profile, against its 19.5px root: `text-sm` matches the inherited
+   * size and `text-xs` sits one step below it. Its smallest step was 14.6px, above the 14px floor
+   * but only just, and a tablet is held further away than a phone so it subtended less.
+   *
+   *   xs 17.06px   sm 19.5px (= root)   base 21.45px   lg 23.4px   xl 25.35px   2xl 29.25px
+   */
+  :root[data-display-profile="expanded"] :where([class~="text-xs"]) {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  :root[data-display-profile="expanded"] :where([class~="text-sm"]) {
+    font-size: 1rem;
+    line-height: 1.4rem;
+  }
+
+  :root[data-display-profile="expanded"] :where([class~="text-base"]) {
+    font-size: 1.1rem;
+    line-height: 1.5rem;
+  }
+
+  :root[data-display-profile="expanded"] :where([class~="text-lg"]) {
+    font-size: 1.2rem;
+    line-height: 1.6rem;
+  }
+
+  :root[data-display-profile="expanded"] :where([class~="text-xl"]) {
+    font-size: 1.3rem;
+    line-height: 1.7rem;
+  }
+
+  :root[data-display-profile="expanded"] :where([class~="text-2xl"]) {
+    font-size: 1.5rem;
+    line-height: 1.9rem;
   }
 
   /* Custom font families */
@@ -817,6 +1013,13 @@ button:focus-visible,
     display: flex;
     flex-direction: column;
     gap: var(--display-profile-section-gap);
+    /*
+     * Clear the fixed keypad guidance bar, which sits above the tab bar and would otherwise cover
+     * the last rows of the page. Reserved here, on the content, rather than on the `.page-shell`
+     * scroll box — that box must never carry a bottom reservation (see its own comment). The
+     * variable is 0px unless the bar is actually showing, so nothing is spent when it is not.
+     */
+    padding-bottom: var(--keypad-guidance-reserved-height, 0px);
   }
 
   .profile-action-grid {
@@ -889,6 +1092,35 @@ button:focus-visible,
   .tab-item {
     @apply flex min-w-11 shrink-0 flex-col items-center gap-0.5 px-0.5 py-0.5
            text-muted-foreground transition-colors;
+  }
+
+  /* Declared in @layer components, next to `.tab-item` itself. An earlier attempt put this in
+     @layer base, where it never applied: layer order beats source order, so the components-layer
+     `.tab-item` won every time and the bar kept overflowing. */
+  @media (max-width: 380px) {
+    /* Absolute, not rem, throughout this block. It exists for the case where a reader has forced a
+       LARGER profile onto a 320px screen: every rem value here would scale with that profile's
+       bigger root and make the bar wider still, which is the opposite of what the case needs.
+       `min-w-11` at a 19.5px root is 53.6px, and six of those is 322px against a 320px screen — so
+       the last tab was drawn past the edge. 44px is the touch floor and 264px of tabs fits. */
+    .tab-item {
+      min-width: 44px;
+      gap: 2px;
+      padding-left: 2px;
+      padding-right: 2px;
+    }
+
+    /* Qualified with `:root[data-display-profile]` so it outranks the per-profile type scale, which
+       is written as `:root[data-display-profile="..."] :where([class~="text-xs"])`. `.tab-item-label`
+       alone lost to it, and the labels came back at 17.06px on a 320px screen running the tablet
+       profile — the exact case this block exists for. */
+    :root[data-display-profile] .tab-item-label {
+      /* 14px is the readability floor, so this is as small as a tab label is ever allowed to be.
+         Multiplied by the reader's own text-size setting, not fixed at it: this block exists to
+         stop a display profile forced onto a screen it does not fit from widening the bar, and
+         pinning the size outright would also have ignored a reader who asked for Largest text. */
+      font-size: calc(14px * var(--text-scale, 1));
+    }
   }
 
   /* The label stays on one line.

@@ -134,6 +134,7 @@ import {
 import { deriveDeviceCapabilities, detectStreamingFromConfig } from "@/lib/deviceCapabilities";
 import { STREAM_ITEMS } from "@/lib/config/homeStreams";
 import { INLINE_SUMMARY_CONTROL_CLASS } from "@/pages/home/inlineControlStyles";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 
 // HARD18-012b: the Ultimate's entire network stack is down for the whole
 // boot duration after a real power cycle - long enough that, unsuppressed,
@@ -151,6 +152,8 @@ export default function HomePage() {
 }
 
 function HomePageContent() {
+  const { profile } = useDisplayProfile();
+  const isCompactProfile = profile === "compact";
   const { status } = useC64Connection();
   const isActive = status.isConnected;
   const [keyboardLightingRequested, setKeyboardLightingRequested] = useState(true);
@@ -1118,21 +1121,27 @@ function HomePageContent() {
   const displayedReuSizeOptions = isActive ? effectiveReuSizeOptions : [unavailableLabel];
   const displayedUserPortPowerOptions = isActive ? effectiveUserPortPowerOptions : [unavailableLabel];
 
-  const ramDumpFolderCard = (
-    <div className="flex items-center gap-2 text-sm" data-testid="home-ram-folder-row">
-      <span className="text-muted-foreground">RAM folder:</span>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-auto px-0 py-0 text-sm font-medium"
-        onClick={() => void handleSelectRamDumpFolder()}
-        disabled={folderTaskPending || machineTaskBusy}
-        data-testid="ram-dump-folder-trigger"
-      >
-        {folderTaskPending ? "Changing…" : ramDumpFolderLabel}
-      </Button>
-    </div>
-  );
+  const ramDumpFolderCard =
+    (
+      /*
+       * Shown inside the Save RAM and Load RAM dialogs rather than as a Quick Action of its own.
+       * Where the snapshots go is a property of saving and loading them, not a fifth thing to do on
+       * the Home page — and as a card it competed for attention with the actions it only qualifies.
+       */
+      <div className="flex items-center gap-2 text-sm" data-testid="home-ram-folder-row">
+        <span className="shrink-0 text-muted-foreground">RAM folder:</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-auto px-0 py-0 text-sm font-medium"
+          onClick={() => void handleSelectRamDumpFolder()}
+          disabled={folderTaskPending || machineTaskBusy}
+          data-testid="ram-dump-folder-trigger"
+        >
+          {folderTaskPending ? "Changing…" : ramDumpFolderLabel}
+        </Button>
+      </div>
+    );
   const hdmiScanPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "HDMI Scan lines")]);
   const joystickSwapPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "Joystick Swapper")]);
   const serialBusModePending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "Serial Bus Mode")]);
@@ -1227,25 +1236,22 @@ function HomePageContent() {
     <div className={pageShellClassName}>
       <AppBar
         title="Home"
-        leading={
-          <div className="flex min-h-11 items-center gap-2 min-w-0">
-            <img
-              src={variant.assets.public.homeLogoPng}
-              alt={variant.displayName}
-              className="h-9 w-auto rounded-xl shrink-0 object-contain shadow-sm sm:h-11"
-              data-testid="home-header-logo"
-            />
-            <div className="min-w-0 flex items-center">
-              <h1 className="c64-header text-xl leading-none truncate" data-testid="home-header-title">
-                Home
-              </h1>
-            </div>
-          </div>
+        titleTestId="home-header-title"
+        leadingVisual={
+          <img
+            src={variant.assets.public.homeLogoPng}
+            alt={variant.displayName}
+            className="h-9 w-auto shrink-0 rounded-xl object-contain shadow-sm sm:h-11"
+            data-testid="home-header-logo"
+          />
         }
       />
 
       <PageContainer>
-        <PageStack className="gap-4">
+        {/* No gap override on the smallest screen: the profile token is halved there, and a fixed
+            gap-4 spent 16 CSS px between each of thirteen cards — 192 px of a 332 px content area
+            on nothing. */}
+        <PageStack className={isCompactProfile ? undefined : "gap-4"}>
           {/* System Info */}
           <SystemInfo />
 
@@ -1276,17 +1282,14 @@ function HomePageContent() {
             onGameMode={() => void startGameMode()}
             onAction={handleAction}
             telnetBusy={telnet.isBusy}
-            footer={ramSnapshotsEnabled ? ramDumpFolderCard : null}
           />
 
           {liveViewEnabled && (audioMirrorEnabled || videoMirrorEnabled) && deviceCapabilities.supportsStreaming ? (
-            <div data-section-label="Live View">
-              <LiveViewCard
-                audioEnabled={audioMirrorEnabled}
-                videoEnabled={videoMirrorEnabled}
-                showAvSyncTests={avSyncTestsEnabled}
-              />
-            </div>
+            <LiveViewCard
+              audioEnabled={audioMirrorEnabled}
+              videoEnabled={videoMirrorEnabled}
+              showAvSyncTests={avSyncTestsEnabled}
+            />
           ) : null}
 
           <CollapsibleSection
@@ -2009,6 +2012,7 @@ function HomePageContent() {
         telnetAvailable={telnet.isAvailable}
         telnetBusy={telnet.isBusy}
         telnetSaveReuDisabledReason={saveReuDisabledReason}
+        folderRow={ramSnapshotsEnabled ? ramDumpFolderCard : null}
       />
 
       {remoteInputEnabled ? (
@@ -2020,6 +2024,7 @@ function HomePageContent() {
         onOpenChange={setSnapshotManagerOpen}
         snapshots={allSnapshots}
         showReuFilter={reuSnapshotEnabled}
+        folderRow={ramSnapshotsEnabled ? ramDumpFolderCard : null}
         onRestore={(snapshot) => {
           setRestoreTarget(snapshot);
         }}

@@ -106,7 +106,7 @@ const FilterToggle = ({ label, checked, onChange }: FilterToggleProps) => (
 );
 
 const FilterChip = ({ label }: { label: string }) => (
-  <span className="rounded-full border border-border/70 bg-background px-2 py-0.5 text-[11px] font-medium leading-5">
+  <span className="rounded-full border border-border/70 bg-background px-2 py-0.5 text-xs font-medium leading-5">
     {label}
   </span>
 );

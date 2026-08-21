@@ -74,8 +74,7 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
         <div className="min-w-0">
           <Label className="text-sm font-medium">C64 ROMs for on-device playback</Label>
           <p className="text-xs text-muted-foreground">
-            On-device playback uses the C64 ROM images from the Ultimate you are connected to. Without them the accurate
-            emulation cannot sound a note, so tunes fall back to the lighter one.
+            Needed for accurate on-device playback; without them, tunes fall back to the lighter emulation.
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -103,8 +102,7 @@ export const LocalEngineRomsRow = ({ deviceHost }: { deviceHost: string }) => {
             Read them automatically
           </Label>
           <p className="text-xs text-muted-foreground">
-            Fetch the images from the connected machine the first time a tune plays on this device. On by default,
-            because without them the accurate emulation produces nothing at all.
+            Fetches them the first time a tune plays here. On by default — without them, accurate playback is silent.
           </p>
         </div>
         <Switch

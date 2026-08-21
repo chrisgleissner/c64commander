@@ -39,6 +39,8 @@ interface FallbackCategoryBlockProps {
   writeLeaf: (category: string, item: string, value: string | number) => Promise<boolean>;
   /** Extra filter on top of `!claimed` — used to scope items by smart-routing target. */
   accept?: (item: string) => boolean;
+  /** Omit the category heading, for a caller whose card title already carries it. */
+  hideHeading?: boolean;
 }
 
 /**
@@ -55,6 +57,7 @@ export function FallbackCategoryBlock({
   authoritativeValues,
   writeLeaf,
   accept,
+  hideHeading = false,
 }: FallbackCategoryBlockProps) {
   const { data } = useC64Category(category, active, BLOCK_QUERY_OPTIONS);
   const liveItems = useMemo(() => readCategoryItems(data, category), [data, category]);
@@ -68,9 +71,11 @@ export function FallbackCategoryBlock({
 
   return (
     <div data-testid={`config-fallback-category-${category.toLowerCase().replace(/\s+/g, "-")}`}>
-      <h4 className="px-1 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {category}
-      </h4>
+      {hideHeading ? null : (
+        <h4 className="px-1 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {category}
+        </h4>
+      )}
       <div className="divide-y divide-border" data-testid="config-group-list">
         {leftover.map((item) => {
           const overlay = resolveOverlayEntry(category, item);

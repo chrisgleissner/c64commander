@@ -7,6 +7,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { openAllCards } from "./cards";
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -147,11 +148,16 @@ test.describe("UI coverage", () => {
     await page.getByRole("option", { name: /^NTSC$/ }).click();
 
     await page.goto("/config", { waitUntil: "domcontentloaded" });
+    // Open it, rather than toggle it: this is the second visit to /config, and the cards remember
+    // what the user opened — so a plain click would close the one opened a moment ago.
     const audioMixerButton = page.getByTestId("config-category-audio-mixer");
     await expect(audioMixerButton).toBeVisible();
-    await audioMixerButton.click();
+    if ((await audioMixerButton.getAttribute("aria-expanded")) !== "true") await audioMixerButton.click();
     await snap(page, testInfo, "audio-mixer-open");
     const slider = page.getByLabel("Vol UltiSid 1 slider");
+    // Into view first: with the card restored open the page sits at a scroll offset that leaves the
+    // slider half above the top of the viewport, and a click at its centre lands 4px from the edge.
+    await slider.scrollIntoViewIfNeeded();
     const sliderBox = await slider.boundingBox();
     if (sliderBox) {
       await slider.click({
@@ -272,6 +278,8 @@ test.describe("UI coverage", () => {
     await enableHvscDownloads(page);
     await page.goto("/play", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
+    // The HVSC card is closed on a first visit; its controls live in the body.
+    await openAllCards(page);
     await expect(page.getByRole("button", { name: "Download HVSC" })).toBeVisible();
     await snap(page, testInfo, "play-hvsc");
   });

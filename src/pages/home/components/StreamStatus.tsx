@@ -93,7 +93,7 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
                 <div className="flex items-center gap-1">
                   {liveViewControlled ? (
                     <span
-                      className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary"
+                      className="rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary"
                       data-testid={`home-stream-liveview-badge-${entry.key}`}
                     >
                       Live View
@@ -126,7 +126,7 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
               </div>
               {liveViewControlled && (
                 <p
-                  className="mt-1.5 text-[11px] text-muted-foreground"
+                  className="mt-1.5 text-xs text-muted-foreground"
                   data-testid={`home-stream-liveview-note-${entry.key}`}
                 >
                   Live View is receiving this stream into the app. Your configured target resumes when you stop Live
@@ -138,8 +138,8 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
                   <div
                     className={
                       profile === "expanded"
-                        ? "grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2 text-[11px]"
-                        : "grid grid-cols-1 gap-2 text-[11px]"
+                        ? "grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2 text-xs"
+                        : "grid grid-cols-1 gap-2 text-xs"
                     }
                   >
                     <div className="space-y-1">
@@ -176,7 +176,7 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
                     </Button>
                   </div>
                   {streamEditorError && (
-                    <p className="mt-2 text-[11px] text-destructive" data-testid={`home-stream-error-${entry.key}`}>
+                    <p className="mt-2 text-xs text-destructive" data-testid={`home-stream-error-${entry.key}`}>
                       {streamEditorError}
                     </p>
                   )}

@@ -322,7 +322,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
         <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex items-start justify-between gap-2">
           <span
             className={cn(
-              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-white shadow",
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-white shadow",
               adjust ? "bg-amber-500" : "bg-primary",
             )}
             role="status"

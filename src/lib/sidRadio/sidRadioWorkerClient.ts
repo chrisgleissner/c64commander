@@ -79,13 +79,33 @@ export class SidRadioWorkerClient {
       // reaches `message`; without these handlers the pending load/compute would
       // only resolve on the 15 s timeout. Fail fast instead.
       this.worker.addEventListener("error", (event) =>
-        this.failAllPending(`SID Radio worker error: ${event.message || "unknown"}`),
+        this.handleWorkerFailure(`SID Radio worker error: ${event.message || "unknown"}`),
       );
       this.worker.addEventListener("messageerror", () =>
-        this.failAllPending("SID Radio worker message could not be deserialized"),
+        this.handleWorkerFailure("SID Radio worker message could not be deserialized"),
       );
     }
     return this.worker;
+  }
+
+  /**
+   * Fail the callers of a worker that has crashed, and throw the worker away with them.
+   *
+   * Failing the callers alone left `this.worker` pointing at a thread that can never answer again.
+   * `ensureWorker` only builds a new one when that field is null, so every later `load()` and
+   * `compute()` posted into the dead worker and rejected on its own 15 s timeout — the station
+   * never started again until the hook unmounted and called `terminate()`.
+   */
+  private handleWorkerFailure(reason: string): void {
+    this.failAllPending(reason);
+    this.discardWorker();
+  }
+
+  private discardWorker(): void {
+    this.worker?.terminate();
+    this.worker = null;
+    // A resolved memo would otherwise claim the bundle is loaded in a worker that no longer exists.
+    this.loadInFlight = null;
   }
 
   /** Reject every in-flight load/compute so callers fail fast on a worker crash. */
@@ -220,8 +240,6 @@ export class SidRadioWorkerClient {
     // moment of termination (e.g. an unmounting component) would otherwise hang
     // forever, since its promise would neither resolve nor reject (HARD25-003).
     this.failAllPending("SID Radio worker terminated");
-    this.worker?.terminate();
-    this.worker = null;
-    this.loadInFlight = null;
+    this.discardWorker();
   }
 }

@@ -121,7 +121,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     developer_only: false,
     group: "stable",
     title: "Remote Input",
-    description: "Show the Remote Input overlay — a second-screen joystick and keyboard for the C64. Joystick relay is enabled automatically only when the connected device's REST API supports the machine:input endpoint; otherwise keyboard control is offered on its own.",
+    description: "A second-screen joystick and keyboard for the C64. Joystick control needs firmware support; keyboard works regardless.",
   },
   {
     id: "ram_snapshots_enabled",
@@ -157,7 +157,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     developer_only: false,
     group: "experimental",
     title: "Home drive shortcut actions",
-    description: "Show drive shortcut actions on Home (drive reset, Soft IEC turn on/reset/set dir, drive B turn on). Depends on the Telnet interface.",
+    description: "Adds drive shortcuts on Home (reset, Soft IEC, drive B). Depends on the Telnet interface.",
   },
   {
     id: "home_telnet_printer_actions_enabled",
@@ -193,7 +193,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     developer_only: false,
     group: "experimental",
     title: "Keyboard and keypad navigation",
-    description: "Drive the app with a hardware keyboard, remote, or keypad. Arrow/D-pad navigation, activation, and literal hardware-keyboard typing are enabled by default; numeric keypad T9 text entry remains reserved for keypad-first variants.",
+    description: "Drive the app with a hardware keyboard, remote, or keypad. Numeric T9 text entry is reserved for keypad-first variants.",
   },
   {
     id: "launch_safety_enabled",
@@ -202,7 +202,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     developer_only: false,
     group: "stable",
     title: "Launch Safety",
-    description: "Park the configured cartridge around direct-memory launches so a freezer cartridge cannot hijack a Run/Load into its own menu, and optionally answer a cartridge boot menu after a Mount & Load reset. A no-op when no cartridge is configured.",
+    description: "Keeps a freezer cartridge from hijacking Run/Load into its own menu. A no-op without a cartridge configured.",
   },
   {
     id: "disk_explorer_enabled",
@@ -211,7 +211,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     developer_only: false,
     group: "stable",
     title: "Disk Explorer",
-    description: "Look inside a disk image and Run, Load, or Mount & Load any single program from it, instead of only mounting the whole disk.",
+    description: "Run, Load or Mount & Load a single program inside a disk image, not just the whole disk.",
   },
   {
     id: "in_image_search_enabled",
@@ -220,7 +220,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     developer_only: false,
     group: "experimental",
     title: "In-image search",
-    description: "Index and search the programs inside disk images, so a program that only exists inside a .d64/.d71/.d81 becomes findable. Depends on Disk Explorer.",
+    description: "Search finds programs inside .d64/.d71/.d81 images, not just filenames. Depends on Disk Explorer.",
   },
   {
     id: "live_view_enabled",
@@ -229,7 +229,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     developer_only: false,
     group: "stable",
     title: "Live View",
-    description: "Master switch for Live View — see and hear the running machine — everywhere it appears: the Home and Play dashboards and Remote Input game mode. On by default. Turn off to hide all Live View UI on every page. The Audio Mirror and Video Mirror flags below choose which of the two feeds is offered within it.",
+    description: "See and hear the running machine on Home, Play and Remote Input. Audio Mirror and Video Mirror below choose the feeds.",
   },
   {
     id: "av_sync_tests_enabled",
@@ -238,7 +238,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     developer_only: false,
     group: "experimental",
     title: "A/V sync tests",
-    description: "Show the A/V Sync and Tap latency measurement tools inside Live View on Home (audio↔video offset, and press→see/hear round-trip latency). On by default. Requires Live View.",
+    description: "Adds A/V-sync and tap-latency measurement tools to Live View on Home. Requires Live View.",
   },
   {
     id: "audio_mirror_enabled",
@@ -247,7 +247,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     developer_only: false,
     group: "experimental",
     title: "Audio Mirror",
-    description: "Within Live View, offer the audio feed: hear the running machine by receiving the device audio stream in-app, with an optional audio recording.",
+    description: "Hear the running machine's audio in Live View, with optional recording.",
   },
   {
     id: "video_mirror_enabled",
@@ -256,7 +256,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     developer_only: false,
     group: "experimental",
     title: "Video Mirror",
-    description: "Within Live View, offer the video feed: decode and render the device VIC stream to a canvas, with zoom/pan immersive control in Remote Input.",
+    description: "See the running machine's video in Live View, with zoom/pan in Remote Input.",
   },
   {
     id: "new_disk_enabled",

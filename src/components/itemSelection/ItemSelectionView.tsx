@@ -49,7 +49,7 @@ export const ItemSelectionView = ({
     <div className="space-y-3 relative">
       {showLoadingIndicator && (
         <div
-          className="absolute right-3 top-2 z-10 rounded-full bg-muted/80 px-2 py-0.5 text-[11px] text-muted-foreground shadow-sm"
+          className="absolute right-3 top-2 z-10 rounded-full bg-muted/80 px-2 py-0.5 text-xs text-muted-foreground shadow-sm"
           data-testid="ftp-loading"
         >
           Loading…
@@ -147,13 +147,11 @@ export const ItemSelectionView = ({
                   <div className="min-w-0">
                     <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
                     {entry.subtitle ? (
-                      <p className="text-[11px] text-muted-foreground break-words whitespace-normal">
-                        {entry.subtitle}
-                      </p>
+                      <p className="text-xs text-muted-foreground break-words whitespace-normal">{entry.subtitle}</p>
                     ) : null}
                     {entry.detail ? (
                       <p
-                        className="text-[11px] text-muted-foreground/70 break-all whitespace-normal"
+                        className="text-xs text-muted-foreground/70 break-all whitespace-normal"
                         data-testid="source-entry-detail"
                       >
                         {entry.detail}
@@ -167,13 +165,11 @@ export const ItemSelectionView = ({
                   <div className="min-w-0">
                     <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
                     {entry.subtitle ? (
-                      <p className="text-[11px] text-muted-foreground break-words whitespace-normal">
-                        {entry.subtitle}
-                      </p>
+                      <p className="text-xs text-muted-foreground break-words whitespace-normal">{entry.subtitle}</p>
                     ) : null}
                     {entry.detail ? (
                       <p
-                        className="text-[11px] text-muted-foreground/70 break-all whitespace-normal"
+                        className="text-xs text-muted-foreground/70 break-all whitespace-normal"
                         data-testid="source-entry-detail"
                       >
                         {entry.detail}

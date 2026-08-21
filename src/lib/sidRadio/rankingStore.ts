@@ -18,7 +18,7 @@
  * broadcasts every change (§6.4 broadcast pattern).
  */
 
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
 
 export type RankingSignal = "like" | "notForMe";
 
@@ -119,12 +119,31 @@ const resolveBackend = (): "idb" | "ls" => {
   return backend;
 };
 
+/**
+ * Record why the durable store gave up on IndexedDB.
+ *
+ * The fallback to localStorage is deliberate and keeps SID Radio working, but it is a permanent
+ * switch for the session and it changes the storage ceiling from tens of megabytes to about five.
+ * Swallowed, the first sign of it is a quota failure in the FALLBACK some time later, with the
+ * original cause long gone.
+ */
+const fallBackToLocalStorage = (operation: string, error: unknown): void => {
+  if (backend !== "ls") {
+    addLog("warn", "SID Radio rankings: IndexedDB unavailable, falling back to localStorage", {
+      service: "sid-radio",
+      operation,
+      error: (error as Error)?.message ?? String(error),
+    });
+  }
+  backend = "ls";
+};
+
 const durableLoad = async (): Promise<RankingMap> => {
   if (resolveBackend() === "idb") {
     try {
       return await idbLoad();
-    } catch {
-      backend = "ls";
+    } catch (error) {
+      fallBackToLocalStorage("load", error);
     }
   }
   return lsLoad();
@@ -135,8 +154,8 @@ const durableSave = async (map: RankingMap): Promise<void> => {
     try {
       await idbSave(map);
       return;
-    } catch {
-      backend = "ls";
+    } catch (error) {
+      fallBackToLocalStorage("save", error);
     }
   }
   lsSave(map);

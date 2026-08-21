@@ -300,7 +300,14 @@ export const useToneLadderTest = (session: AvMirrorSession = avMirrorSession): T
     unsubscribeFrames.current = null;
   }, []);
 
-  useEffect(() => () => stopListening(), [stopListening]);
+  const mountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+      stopListening();
+    },
+    [stopListening],
+  );
 
   const finish = useCallback(() => {
     stopListening();
@@ -342,6 +349,12 @@ export const useToneLadderTest = (session: AvMirrorSession = avMirrorSession): T
         undefined,
         { filename: "tone-ladder.sid" },
       );
+
+      // The upload is a round trip to the Ultimate, and leaving the panel during it used to let the
+      // continuation below install a fresh audio subscription and an 18 s timeout into a hook that
+      // had already been cleaned up — a live subscription nothing would ever remove. The cleanup
+      // ran before this point, so it cannot undo what happens after it; the check has to be here.
+      if (!mountedRef.current) return;
 
       collecting.current = true;
       // Without a session there is nothing to listen to; the timeout below still fires and grades an

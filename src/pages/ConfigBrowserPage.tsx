@@ -7,6 +7,7 @@
  */
 
 import { useState, useMemo, useEffect, useReducer, useRef, useCallback } from "react";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ChevronDown, Loader2, RefreshCw, FolderOpen } from "lucide-react";
@@ -56,7 +57,7 @@ import {
   type TerminologyOverlay,
 } from "@/lib/config/menuMapping";
 import { MenuPageSection } from "@/pages/config/MenuPageSection";
-import { AdvancedFallbackSection } from "@/pages/config/AdvancedFallbackSection";
+import { UnroutedCategorySections } from "@/pages/config/UnroutedCategorySections";
 
 type ConfigListItem = {
   name: string;
@@ -509,8 +510,16 @@ function CategorySection({
     [applySoloRouting, isAudioMixer, readFreshSoloSnapshot],
   );
 
+  // Only an actual open -> closed transition undoes Solo. A plain "the card is closed" test also
+  // fires on the very first commit, and on any later commit where `restoreSoloRouting` changes
+  // identity while the card is closed. That is wrong on its own terms — nobody closed anything —
+  // and it became visible once the open state started arriving from the card component one commit
+  // after the click, which briefly reads as closed while Solo is on.
+  const wasOpenRef = useRef(isOpen);
   useEffect(() => {
-    if (!isAudioMixer || isOpen) return;
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = isOpen;
+    if (!isAudioMixer || isOpen || !wasOpen) return;
     restoreSoloRouting("close");
   }, [isAudioMixer, isOpen, restoreSoloRouting]);
 
@@ -778,161 +787,124 @@ function CategorySection({
   const sectionId = `config-section-${categoryName.toLowerCase().replace(/\s+/g, "-")}`;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-card border border-border rounded-xl overflow-hidden"
+    <CollapsibleSection
+      scope="config"
+      id={categoryName.toLowerCase().replace(/\s+/g, "-")}
+      title={displayTitle ?? categoryName}
+      summary={groupLabel ?? undefined}
+      icon={FolderOpen}
+      headerRef={categoryHeaderFocusRef}
+      toggleTestId={`config-category-${categoryName.toLowerCase().replace(/\s+/g, "-")}`}
+      bodyId={sectionId}
+      onOpenChange={setIsOpen}
+      onToggleClick={wrapUserEvent(() => undefined, "toggle", "ConfigSection", { title: categoryName }, "ConfigHeader")}
     >
-      <button
-        ref={categoryHeaderFocusRef}
-        onClick={wrapUserEvent(
-          () => setIsOpen(!isOpen),
-          "toggle",
-          "ConfigSection",
-          { title: categoryName },
-          "ConfigHeader",
-        )}
-        className="w-full flex items-center justify-between px-4 py-3 text-left"
-        data-testid={`config-category-${categoryName.toLowerCase().replace(/\s+/g, "-")}`}
-        aria-expanded={isOpen}
-        aria-controls={sectionId}
-      >
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-muted">
-            <FolderOpen className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <div className="flex flex-col">
-            {groupLabel ? (
-              <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{groupLabel}</span>
-            ) : null}
-            <span className="font-medium text-sm">{displayTitle ?? categoryName}</span>
-          </div>
+      <div className="flex items-center justify-between gap-2 py-2" data-testid="config-group-actions">
+        <div className="flex items-center gap-2">
+          {categoryName === "Audio Mixer" && (
+            <Button
+              ref={categoryActionFocusRef}
+              variant="outline"
+              size="sm"
+              onClick={resetAudioMixer}
+              disabled={isResetting || isLoading || items.length === 0}
+              className="text-xs"
+            >
+              Reset
+            </Button>
+          )}
+          {categoryName === "Clock Settings" && (
+            <Button
+              ref={categoryActionFocusRef}
+              variant="outline"
+              size="sm"
+              onClick={handleSyncClock}
+              disabled={isLoading || items.length === 0 || updateConfigBatch.isPending}
+              className="text-xs"
+            >
+              Sync clock
+            </Button>
+          )}
         </div>
-        <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-          <ChevronDown className="h-5 w-5 text-muted-foreground" />
-        </motion.div>
-      </button>
+        <Button ref={refreshFocusRef} variant="ghost" size="sm" onClick={handleRefresh} className="text-xs">
+          <RefreshCw className="h-3 w-3 mr-1" />
+          Refresh
+        </Button>
+      </div>
 
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            id={sectionId}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <div className="border-t border-border px-4 pt-2 pb-3">
-              <div className="flex items-center justify-between gap-2 py-2" data-testid="config-group-actions">
+      {isLoading ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="py-4 text-center text-sm text-muted-foreground">No settings available</div>
+      ) : (
+        <div className="divide-y divide-border" data-testid="config-group-list">
+          {displayItems.map((item) => {
+            const isSidVolume = isAudioMixer && isSidVolumeName(item.name);
+            const isSoloed = isSidVolume && soloState.soloItem === item.name;
+            const isMutedBySolo = isSidVolume && soloState.soloItem && soloState.soloItem !== item.name;
+            const isDhcpStaticField =
+              (categoryName === "Ethernet Settings" || categoryName === "WiFi settings") &&
+              DHCP_STATIC_FIELDS.has(item.name);
+            const isReadOnly = isDhcpEnabled && isDhcpStaticField;
+            const testIdBase = item.name.toLowerCase().replace(/\s+/g, "-");
+            const overlayEntry = overlay ? lookupOverlay(overlay, categoryName, item.name) : undefined;
+            const rowClassName = cn(
+              isSidVolume && "rounded-md px-3",
+              isSoloed && "bg-primary/10",
+              isMutedBySolo && "bg-muted/20",
+            );
+
+            const rightAccessory = isSidVolume ? (
+              <div className="flex items-center gap-3">
+                {isMutedBySolo && <span className="text-xs font-medium text-muted-foreground">Muted</span>}
                 <div className="flex items-center gap-2">
-                  {categoryName === "Audio Mixer" && (
-                    <Button
-                      ref={categoryActionFocusRef}
-                      variant="outline"
-                      size="sm"
-                      onClick={resetAudioMixer}
-                      disabled={isResetting || isLoading || items.length === 0}
-                      className="text-xs"
-                    >
-                      Reset
-                    </Button>
-                  )}
-                  {categoryName === "Clock Settings" && (
-                    <Button
-                      ref={categoryActionFocusRef}
-                      variant="outline"
-                      size="sm"
-                      onClick={handleSyncClock}
-                      disabled={isLoading || items.length === 0 || updateConfigBatch.isPending}
-                      className="text-xs"
-                    >
-                      Sync clock
-                    </Button>
-                  )}
+                  <Label htmlFor={`solo-${item.name}`} className="text-xs uppercase tracking-wide">
+                    Solo
+                  </Label>
+                  <Switch
+                    id={`solo-${item.name}`}
+                    checked={isSoloed}
+                    aria-label={`Solo ${item.name}`}
+                    onCheckedChange={() => dispatchSolo({ type: "toggle", item: item.name })}
+                    disabled={isEditingVolumes}
+                    data-testid={`audio-mixer-solo-${testIdBase}`}
+                  />
                 </div>
-                <Button ref={refreshFocusRef} variant="ghost" size="sm" onClick={handleRefresh} className="text-xs">
-                  <RefreshCw className="h-3 w-3 mr-1" />
-                  Refresh
-                </Button>
               </div>
+            ) : undefined;
 
-              {isLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : items.length === 0 ? (
-                <div className="py-4 text-center text-sm text-muted-foreground">No settings available</div>
-              ) : (
-                <div className="divide-y divide-border" data-testid="config-group-list">
-                  {displayItems.map((item) => {
-                    const isSidVolume = isAudioMixer && isSidVolumeName(item.name);
-                    const isSoloed = isSidVolume && soloState.soloItem === item.name;
-                    const isMutedBySolo = isSidVolume && soloState.soloItem && soloState.soloItem !== item.name;
-                    const isDhcpStaticField =
-                      (categoryName === "Ethernet Settings" || categoryName === "WiFi settings") &&
-                      DHCP_STATIC_FIELDS.has(item.name);
-                    const isReadOnly = isDhcpEnabled && isDhcpStaticField;
-                    const testIdBase = item.name.toLowerCase().replace(/\s+/g, "-");
-                    const overlayEntry = overlay ? lookupOverlay(overlay, categoryName, item.name) : undefined;
-                    const rowClassName = cn(
-                      isSidVolume && "rounded-md px-3",
-                      isSoloed && "bg-primary/10",
-                      isMutedBySolo && "bg-muted/20",
-                    );
-
-                    const rightAccessory = isSidVolume ? (
-                      <div className="flex items-center gap-3">
-                        {isMutedBySolo && <span className="text-[11px] font-medium text-muted-foreground">Muted</span>}
-                        <div className="flex items-center gap-2">
-                          <Label htmlFor={`solo-${item.name}`} className="text-[11px] uppercase tracking-wide">
-                            Solo
-                          </Label>
-                          <Switch
-                            id={`solo-${item.name}`}
-                            checked={isSoloed}
-                            aria-label={`Solo ${item.name}`}
-                            onCheckedChange={() => dispatchSolo({ type: "toggle", item: item.name })}
-                            disabled={isEditingVolumes}
-                            data-testid={`audio-mixer-solo-${testIdBase}`}
-                          />
-                        </div>
-                      </div>
-                    ) : undefined;
-
-                    return (
-                      <ConfigItemRow
-                        key={item.name}
-                        category={categoryName}
-                        name={item.name}
-                        label={overlayEntry?.label}
-                        formatOptionLabel={getMenuValueFormatter(overlayEntry?.formatterId)}
-                        value={item.value}
-                        options={item.options}
-                        details={item.details}
-                        onValueChange={(v) =>
-                          isSidVolume ? handleAudioValueChange(item.name, v) : handleValueChange(item.name, v)
-                        }
-                        // Per-item pending only - setConfig.isPending is the section's
-                        // SHARED mutation state, so keying disablement off it disabled
-                        // every row in the category while any single item's write was
-                        // in flight (spaced by the write throttle), making unrelated
-                        // rows appear dead. See HARD9-085.
-                        isLoading={Boolean(authoritativeValues.pending[canonicalConfigKey(categoryName, item.name)])}
-                        readOnly={isReadOnly}
-                        className={rowClassName}
-                        rightAccessory={rightAccessory}
-                        valueTestId={isSidVolume ? `audio-mixer-value-${testIdBase}` : undefined}
-                        sliderTestId={isSidVolume ? `audio-mixer-slider-${testIdBase}` : undefined}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+            return (
+              <ConfigItemRow
+                key={item.name}
+                category={categoryName}
+                name={item.name}
+                label={overlayEntry?.label}
+                formatOptionLabel={getMenuValueFormatter(overlayEntry?.formatterId)}
+                value={item.value}
+                options={item.options}
+                details={item.details}
+                onValueChange={(v) =>
+                  isSidVolume ? handleAudioValueChange(item.name, v) : handleValueChange(item.name, v)
+                }
+                // Per-item pending only - setConfig.isPending is the section's
+                // SHARED mutation state, so keying disablement off it disabled
+                // every row in the category while any single item's write was
+                // in flight (spaced by the write throttle), making unrelated
+                // rows appear dead. See HARD9-085.
+                isLoading={Boolean(authoritativeValues.pending[canonicalConfigKey(categoryName, item.name)])}
+                readOnly={isReadOnly}
+                className={rowClassName}
+                rightAccessory={rightAccessory}
+                valueTestId={isSidVolume ? `audio-mixer-value-${testIdBase}` : undefined}
+                sliderTestId={isSidVolume ? `audio-mixer-slider-${testIdBase}` : undefined}
+              />
+            );
+          })}
+        </div>
+      )}
+    </CollapsibleSection>
   );
 }
 
@@ -1088,6 +1060,7 @@ export default function ConfigBrowserPage() {
                           groupLabel={entry.groupLabel}
                           hierarchy={hierarchy}
                           family={family}
+                          liveCategories={liveCategories}
                           authoritativeValues={authoritativeValues}
                           markChanged={markChanged}
                           focusOrder={focusOrder}
@@ -1097,8 +1070,8 @@ export default function ConfigBrowserPage() {
                   );
                 })}
                 {residualCategories.length > 0 ? (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                    <AdvancedFallbackSection
+                  <motion.div className="contents" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                    <UnroutedCategorySections
                       categories={residualCategories}
                       hierarchy={hierarchy}
                       family={family}

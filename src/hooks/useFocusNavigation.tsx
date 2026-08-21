@@ -131,6 +131,20 @@ const isNativelyActivatable = (element: Element): boolean => {
 const KEYPAD_SCROLL_ANCHOR_CLASS = "keypad-scroll-anchor";
 let keypadScrollAnchorEl: HTMLElement | null = null;
 
+/**
+ * True when the ring may hand real DOM focus to this element.
+ *
+ * A text field is the one thing the ring must not focus on arrival. Focusing it
+ * makes every later key an editable target, and `isEditableTarget` then returns
+ * from the global handler before any ring navigation runs — so the ring can never
+ * move off the field again. On a keypad-only device with the touchscreen off that
+ * is unescapable. Fields wrapped in a field-row already avoid this by making the
+ * row the ring item and focusing the inner <input> only on an explicit activation;
+ * this makes a bare, unwrapped field behave the same way. The field still receives
+ * the selection highlight, and Enter still focuses it for editing.
+ */
+const acceptsRingFocus = (element: HTMLElement): boolean => !isEditableTarget(element);
+
 const focusRingElement = (element: HTMLElement | null): void => {
   if (!element) return;
   // Keep the focused control fully visible: reserve space for the fixed header
@@ -145,7 +159,17 @@ const focusRingElement = (element: HTMLElement | null): void => {
   }
   element.classList.add(KEYPAD_SCROLL_ANCHOR_CLASS);
   keypadScrollAnchorEl = element;
-  element.focus({ preventScroll: true });
+  if (acceptsRingFocus(element)) {
+    element.focus({ preventScroll: true });
+  } else if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
+    // The ring is not taking DOM focus, so whatever held it before must give it
+    // up. Two things go wrong otherwise. If the previous element was a field, its
+    // editable target keeps swallowing the navigation keys. If it was a button or
+    // link, `isNativelyActivatable` sees a focused control the browser would
+    // activate itself, the ring stands down on Enter, and the key reaches the
+    // element the ring left rather than the one it is on.
+    document.activeElement.blur();
+  }
   element.scrollIntoView({ block: "nearest", inline: "nearest" });
 };
 
@@ -235,6 +259,17 @@ export const FocusNavigationProvider = ({
           onActivate: (item) => {
             const element = engineRef.current?.elementForId(item.id) ?? null;
             if (element && element.contains(document.activeElement)) return;
+            // Activating a bare text field is the explicit "go in" that starts
+            // editing, so it is the one place the field does take real DOM focus.
+            // `focusRingElement` deliberately withholds focus from editables on
+            // arrival (that is what stops the ring being trapped), so focus it
+            // here instead of going through it. A synthetic click would not:
+            // `.click()` does not move focus the way a real pointer press does.
+            if (element && isEditableTarget(element)) {
+              element.focus({ preventScroll: true });
+              element.scrollIntoView({ block: "nearest", inline: "nearest" });
+              return;
+            }
             focusRingElement(element);
           },
           onNavigateBack: () => onNavigateBackRef.current?.(),
@@ -368,7 +403,20 @@ export const FocusNavigationProvider = ({
       const { action } = normalized;
       // Never touch editable targets (the field + its T9 composer own them); and
       // never log them, so typed text is never captured by diagnostics.
-      if (isEditableTarget(event.target)) return;
+      if (isEditableTarget(event.target)) {
+        // One exception: Back and Escape always have to be able to take DOM focus out of a
+        // field. Without it, anything that focuses a text input — an autofocus, a Tab, the ring's
+        // own activation — leaves a keypad-only user with no key that reaches the navigation
+        // handler again.
+        if (action !== "back" && action !== "escape") return;
+        // Unless the field is inside an open dialog or sheet, where that overlay owns the key and
+        // the reader means "close this". Consuming it there left the dialog open with nothing but
+        // a blurred field to show for the press.
+        if (isWithinOpenOverlay(event.target)) return;
+        if (event.target instanceof HTMLElement) event.target.blur();
+        event.preventDefault();
+        return;
+      }
       // While focus is inside an open Radix overlay, that overlay owns the key.
       if (isWithinOpenOverlay(event.target)) return;
       const activeElement = document.activeElement;

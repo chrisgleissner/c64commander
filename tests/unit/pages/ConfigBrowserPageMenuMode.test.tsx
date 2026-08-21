@@ -7,6 +7,12 @@
  */
 
 import { readFileSync } from "node:fs";
+import {
+  FocusNavigationProvider,
+  useFocusNavigationContext,
+  type FocusNavigationContextValue,
+} from "@/hooks/useFocusNavigation";
+import { ensureCardOpen } from "../helpers/cards";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
@@ -38,7 +44,18 @@ vi.mock("framer-motion", () => {
     whileHover: _wh,
     ...rest
   }: Record<string, unknown> & { children?: ReactNode }) => <div {...rest}>{children}</div>;
-  return { AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>, motion: { div: Motion } };
+  return {
+    AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
+    // Any element, not just `div` — the page renders through `CollapsibleSection`, which uses
+    // `motion.section` and `motion.span`. Cached per tag: a proxy that builds a new function on
+    // every access hands React a new component type each render, remounting the whole subtree.
+    motion: new Proxy({} as Record<string, unknown>, {
+      get: (target, tag: string) => {
+        target[tag] ??= (props: Record<string, unknown> & { children?: ReactNode }) => <Motion {...props} />;
+        return target[tag];
+      },
+    }),
+  };
 });
 
 vi.mock("@/components/ThemeProvider", () => ({ useThemeContext: () => ({ theme: "light", setTheme: vi.fn() }) }));
@@ -111,7 +128,12 @@ vi.mock("@/hooks/useC64Connection", () => {
   };
 });
 
-const renderPage = () => {
+const FocusCapture = ({ target }: { target: { current: FocusNavigationContextValue | null } }) => {
+  target.current = useFocusNavigationContext();
+  return null;
+};
+
+const renderPage = (focusContext?: { current: FocusNavigationContextValue | null }) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createMemoryRouter([{ path: "*", element: <ConfigBrowserPage /> }], {
     initialEntries: ["/"],
@@ -119,7 +141,10 @@ const renderPage = () => {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} future={{ v7_startTransition: true, v7_relativeSplatPath: true }} />
+      <FocusNavigationProvider profileId="keypad">
+        {focusContext ? <FocusCapture target={focusContext} /> : null}
+        <RouterProvider router={router} future={{ v7_startTransition: true, v7_relativeSplatPath: true }} />
+      </FocusNavigationProvider>
     </QueryClientProvider>,
   );
 };
@@ -127,6 +152,10 @@ const renderPage = () => {
 beforeEach(() => {
   mockSetConfig.mockReset();
   mockSetConfig.mockResolvedValue({});
+  // The menu pages render through `CollapsibleSection`, which remembers which sections a user
+  // opened — the same behaviour the Settings cards have. Without clearing it, one test's open
+  // page is restored in the next one, whose click then closes it.
+  localStorage.clear();
 });
 
 describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
@@ -138,9 +167,11 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
     expect(screen.getByTestId("config-menu-page-network-services-&-timezone")).toBeInTheDocument();
     // Audio setup group label appears above its child pages (e.g. Audio mixer page).
     expect(screen.getAllByText("Audio setup").length).toBeGreaterThan(0);
-    // Evidence-less leftovers (C64U Model, SoftIEC, Tape, Data Streams) have no menu page,
-    // so the explicitly-labelled residual Advanced (REST-only) section is present (lossless).
-    expect(screen.getByTestId("config-advanced-fallback")).toBeInTheDocument();
+    // A category with no menu page gets a card of its own, named after the category, rather than
+    // sharing one "Advanced (REST-only)" bin with every other homeless category. Nothing is
+    // hidden; what changed is that the reader is told what they are looking at.
+    expect(screen.queryByTestId("config-advanced-fallback")).not.toBeInTheDocument();
+    expect(screen.getByTestId("config-unrouted-softiec-drive-settings")).toBeInTheDocument();
     // The Audio mixer menu page keeps the SPECIALIZED renderer (CategorySection: solo/reset),
     // not the generic MenuPageSection — routed via soleRestCategory(page) === "Audio Mixer".
     expect(screen.getByTestId("config-category-audio-mixer")).toBeInTheDocument();
@@ -149,7 +180,7 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
 
   it("relabels items with the menu label while keeping REST identity for write-back", async () => {
     renderPage();
-    fireEvent.click(screen.getByTestId("config-menu-page-video-setup"));
+    ensureCardOpen(screen.getByTestId("config-menu-page-video-setup"));
     const row = await screen.findByTestId("row-system-mode");
     expect(within(row).getByTestId("row-label")).toHaveTextContent("System mode"); // menu label, not "System Mode"
 
@@ -165,8 +196,8 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
 
   it("shows drive ROM aliases under BOTH Memory & ROMs and Built-in drive A, one REST source", async () => {
     renderPage();
-    fireEvent.click(screen.getByTestId("config-menu-page-memory-&-roms"));
-    fireEvent.click(screen.getByTestId("config-menu-page-built-in-drive-a"));
+    ensureCardOpen(screen.getByTestId("config-menu-page-memory-&-roms"));
+    ensureCardOpen(screen.getByTestId("config-menu-page-built-in-drive-a"));
 
     // The Memory & ROMs › Drive A alias and the Built-in drive A › ROMs primary both
     // render "ROM for 1541 mode" and both write the SAME canonical Drive A Settings source.
@@ -196,7 +227,7 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
 
     // Serial-bus comms (U64 Specific) keyword-route to the Built-in drive A page's Advanced,
     // keeping the canonical {category,item} identity on write.
-    fireEvent.click(screen.getByTestId("config-menu-page-built-in-drive-a"));
+    ensureCardOpen(screen.getByTestId("config-menu-page-built-in-drive-a"));
     const driveAdvanced = await screen.findByTestId("config-page-advanced-built-in-drive-a");
     const serialRow = within(driveAdvanced).getByTestId("row-serial-bus-mode");
     fireEvent.click(within(serialRow).getByText("Update Serial Bus Mode"));
@@ -210,11 +241,11 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
     expect(within(driveAdvanced).queryByTestId("row-tape-playback-rate")).not.toBeInTheDocument();
     expect(within(driveAdvanced).queryByTestId("row-iec-drive")).not.toBeInTheDocument();
 
-    // `C64U Model` (hardware edition, absent from the captured menu) renders in the residual
-    // Advanced (REST-only) section, with canonical write-back preserved.
-    fireEvent.click(screen.getByTestId("config-advanced-fallback-toggle"));
-    const fallback = await screen.findByTestId("config-advanced-fallback");
-    const modelRow = within(fallback).getByTestId("row-c64u-model");
+    // `C64U Model` (hardware edition, absent from the captured menu) renders on a card named for
+    // its own category, with canonical write-back preserved.
+    fireEvent.click(screen.getByTestId("config-unrouted-toggle-u64-specific-settings"));
+    const u64Card = await screen.findByTestId("config-unrouted-u64-specific-settings");
+    const modelRow = within(u64Card).getByTestId("row-c64u-model");
     fireEvent.click(within(modelRow).getByText("Update C64U Model"));
     await waitFor(() => expect(mockSetConfig).toHaveBeenCalledTimes(2));
     expect(mockSetConfig).toHaveBeenLastCalledWith({
@@ -222,8 +253,33 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
       item: "C64U Model",
       value: "updated",
     });
-    // Tape Playback Rate + SoftIEC IEC Drive also surface here (their categories have no page).
-    expect(within(fallback).getByTestId("row-tape-playback-rate")).toBeInTheDocument();
-    expect(within(fallback).getByTestId("row-iec-drive")).toBeInTheDocument();
+
+    // Tape and SoftIEC each get their own card too, rather than sharing one bin: the point of the
+    // change is that a reader is told which subject they are looking at.
+    fireEvent.click(screen.getByTestId("config-unrouted-toggle-tape-settings"));
+    expect(
+      within(await screen.findByTestId("config-unrouted-tape-settings")).getByTestId("row-tape-playback-rate"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("config-unrouted-toggle-softiec-drive-settings"));
+    expect(
+      within(await screen.findByTestId("config-unrouted-softiec-drive-settings")).getByTestId("row-iec-drive"),
+    ).toBeInTheDocument();
+  });
+
+  it("puts a card for an unplaced category in the same keypad ring as the menu pages", () => {
+    // The point of these cards is that nothing is hidden. On the target handset the touchscreen is
+    // off by default, so a card that is not in the ring is hidden from the only reader who cannot
+    // work around it.
+    const focusContext = { current: null as FocusNavigationContextValue | null };
+    renderPage(focusContext);
+
+    for (const id of [
+      "config-menu-page-video-setup",
+      "config-unrouted-softiec-drive-settings",
+      "config-unrouted-tape-settings",
+      "config-unrouted-data-streams",
+    ]) {
+      expect(focusContext.current?.engine.sourceForId(id)).toBe("dom+explicit");
+    }
   });
 });

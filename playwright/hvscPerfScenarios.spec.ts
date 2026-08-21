@@ -253,6 +253,7 @@ const setupReadyHvscPage = async (
   await page.goto("/play");
   await expect(page.getByTestId("hvsc-controls")).toContainText("Installed version");
   await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
+  await openHvscCard(page);
 };
 
 /** Add all available HVSC songs to the playlist and close the dialog. */
@@ -266,6 +267,18 @@ const addAllHvscSongsToPlaylist = async (page: Page) => {
   await dialog.getByTestId("add-items-confirm").click();
   await expect(dialog).toBeHidden();
   return count;
+};
+
+/**
+ * Opens the HVSC card. It is closed on a first visit — a maintenance panel whose archive is
+ * prepared automatically the first time a listener picks HVSC — so a test that drives its
+ * controls has to open it. Safe to call when it is already open.
+ */
+const openHvscCard = async (page: Page) => {
+  const toggle = page.getByTestId("play-section-toggle-hvsc");
+  await expect(toggle).toBeVisible({ timeout: 30_000 });
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
 };
 
 test.describe("HVSC perf scenarios S1-S11", () => {
@@ -317,6 +330,7 @@ test.describe("HVSC perf scenarios S1-S11", () => {
     await seedBaseConfig(page, c64Server.baseUrl, `${hvscServer.baseUrl}/hvsc`);
     await page.goto("/play");
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
+    await openHvscCard(page);
 
     // Wait for HVSC controls to render (gated by feature flag + async load)
     try {
@@ -355,6 +369,7 @@ test.describe("HVSC perf scenarios S1-S11", () => {
     await seedBaseConfig(page, c64Server.baseUrl, `${hvscServer.baseUrl}/hvsc`);
     await page.goto("/play");
     await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: unknown }).__c64uTracing));
+    await openHvscCard(page);
 
     let controlsText = (await page.getByTestId("hvsc-controls").textContent()) ?? "";
     const stopVisible = await page

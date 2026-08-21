@@ -10,7 +10,7 @@ import type { DriveInfo, DrivesResponse } from "@/lib/c64api";
 
 export type DriveDeviceClass = "PHYSICAL_DRIVE_A" | "PHYSICAL_DRIVE_B" | "SOFT_IEC_DRIVE" | "PRINTER";
 
-export type DriveDeviceLabel = "Drive A" | "Drive B" | "Soft IEC Drive" | "Printer";
+export type DriveDeviceLabel = "Drive A" | "Drive B" | "Soft IEC" | "Printer";
 
 export type KnownDriveDevice = {
   class: DriveDeviceClass;
@@ -49,8 +49,22 @@ const DEVICE_CLASS_ORDER: Record<DriveDeviceClass, number> = {
 const DEVICE_CLASS_LABEL: Record<DriveDeviceClass, DriveDeviceLabel> = {
   PHYSICAL_DRIVE_A: "Drive A",
   PHYSICAL_DRIVE_B: "Drive B",
-  SOFT_IEC_DRIVE: "Soft IEC Drive",
+  SOFT_IEC_DRIVE: "Soft IEC",
   PRINTER: "Printer",
+};
+
+/**
+ * The wordings for a drive's card title, longest first, for `FittedText`.
+ *
+ * The full name is used wherever it fits. Where it does not, the card drops to a shorter wording
+ * rather than truncating: under a "Drives" heading "A", "B" and "IEC" are unambiguous, and a title
+ * cut to "Soft IE..." names nothing at all. Everywhere a drive is named on its own — a toast, a
+ * confirmation, an error — keeps the full label, where "A reset" would say nothing.
+ */
+export const driveCardTitleVariants = (label: string): readonly string[] => {
+  if (label === "Soft IEC") return ["Soft IEC Drive", "IEC Drive", "Soft IEC", "IEC"];
+  const short = label.replace(/^Drive /, "");
+  return short === label ? [label] : [label, short];
 };
 
 const normalizeDeviceKey = (value: string) => value.trim().toLowerCase();

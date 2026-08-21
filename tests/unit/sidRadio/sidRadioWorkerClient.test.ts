@@ -166,6 +166,34 @@ describe("SidRadioWorkerClient", () => {
     client.terminate();
   });
 
+  it("starts a station on a fresh worker after a crash, rather than on the dead one", async () => {
+    // Failing the callers is only half the recovery. `ensureWorker` reuses whatever is in `worker`,
+    // so keeping the crashed instance made every later load post into a thread that can no longer
+    // answer and reject on its own 15 s timeout instead.
+    const built: FakeWorker[] = [];
+    const client = new SidRadioWorkerClient(() => {
+      const worker =
+        built.length === 0
+          ? new FakeWorker(() => null) // the first worker never answers; it is about to crash
+          : new FakeWorker((message) =>
+              message.type === "load"
+                ? { type: "ready", stats: buildReadyStats(buildDefaultTinyFixture(), false) }
+                : null,
+            );
+      built.push(worker);
+      return worker as unknown as Worker;
+    });
+
+    const loadP = client.load({ timeoutMs: 60_000 });
+    queueMicrotask(() => built[0].dispatchEvent(new ErrorEvent("error", { message: "worker crashed" })));
+    await expect(loadP).rejects.toThrow(/worker crashed/);
+    expect(built[0].terminated).toBe(true);
+
+    await expect(client.load({ timeoutMs: 60_000 })).resolves.toBeDefined();
+    expect(built).toHaveLength(2);
+    client.terminate();
+  });
+
   it("fails in-flight compute requests when the worker errors", async () => {
     // Load succeeds; a compute is left pending, then the worker crashes.
     const worker = new FakeWorker((message) => {

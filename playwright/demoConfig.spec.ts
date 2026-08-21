@@ -58,7 +58,7 @@ test.describe("Demo config from YAML", () => {
     }
   });
 
-  test("config page shows the C64U menu hierarchy plus the residual Advanced (REST-only) section", async ({
+  test("config page shows the C64U menu hierarchy, and a named card per unplaced category", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {
     await page.goto("/config");
@@ -72,12 +72,12 @@ test.describe("Demo config from YAML", () => {
     await expect(page.getByTestId("config-menu-page-network-services-&-timezone")).toBeVisible();
     // The Audio Mixer page keeps its specialized renderer (header "Audio mixer").
     await expect(page.getByRole("button", { name: "Audio mixer" })).toBeVisible();
-    // Items with no evidence-backed menu home (C64U Model, SoftIEC, Tape, Data Streams)
-    // surface in the explicitly-labelled residual Advanced (REST-only) section — the
-    // device menu does not place them on a page either (lossless, not a junk drawer).
-    await expect(page.getByTestId("config-advanced-fallback")).toBeVisible();
-    await page.getByTestId("config-advanced-fallback-toggle").click();
-    await expect(page.getByTestId("config-fallback-category-tape-settings")).toBeVisible();
+    // A category the device menu does not place on a page gets a card of its own, named after the
+    // category, instead of sharing one "Advanced (REST-only)" bin with every other one. Nothing is
+    // hidden; the reader is told which subject they are looking at.
+    await expect(page.getByTestId("config-advanced-fallback")).toHaveCount(0);
+    await expect(page.getByTestId("config-unrouted-tape-settings")).toBeVisible();
+    await page.getByTestId("config-unrouted-toggle-tape-settings").click();
     await expect(page.getByText("Tape Playback Rate")).toBeVisible();
     await snap(page, testInfo, "menu-hierarchy-visible");
   });

@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useState, type MouseEvent, type SyntheticEvent } from "react";
+import type { ReactNode } from "react";
 import {
   AppSheet,
   AppSheetBody,
@@ -31,6 +32,9 @@ interface SnapshotManagerDialogProps {
   onDelete: (id: string) => void;
   onUpdateLabel: (id: string, label: string) => void;
   showReuFilter?: boolean;
+  /** Where snapshots are read from, and the control that changes it. Rendered at the end of the
+   * list: it belongs to the snapshots being shown, not to the Home page. */
+  folderRow?: ReactNode;
 }
 
 const TYPE_FILTERS: Array<{ value: RestorableSnapshotType | "all"; label: string }> = [
@@ -173,8 +177,8 @@ function SnapshotRow({
             <div
               className={
                 profile === "expanded"
-                  ? "grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2 text-[11px]"
-                  : "grid grid-cols-1 gap-2 text-[11px]"
+                  ? "grid grid-cols-[minmax(0,1fr)_auto_auto] items-end gap-2 text-xs"
+                  : "grid grid-cols-1 gap-2 text-xs"
               }
             >
               <div className="space-y-1">
@@ -247,6 +251,7 @@ export function SnapshotManagerDialog({
   onDelete,
   onUpdateLabel,
   showReuFilter = true,
+  folderRow,
 }: SnapshotManagerDialogProps) {
   const { profile } = useDisplayProfile();
   const [query, setQuery] = useState("");
@@ -328,6 +333,10 @@ export function SnapshotManagerDialog({
                   ))
                 )}
               </div>
+              {/* At the end of the list, not in the fixed block above it. Pinned above the list it
+                  cost a row of snapshots, and on the smallest screen with the on-screen keyboard up
+                  that was the only row there was room for. */}
+              {folderRow ? <div className="mt-3 border-t border-border pt-3">{folderRow}</div> : null}
             </div>
           </AppSheetBody>
         </div>

@@ -7,6 +7,7 @@
  */
 
 import { test, expect, type Page } from "@playwright/test";
+import { openAllCards } from "./cards";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import { saveCoverageFromPage } from "./withCoverage";
@@ -199,6 +200,8 @@ test.describe("Game Mode", () => {
 
     const liveView = page.locator('[data-panel-position="1"]').getByTestId("live-view-card");
     await liveView.scrollIntoViewIfNeeded();
+    // Live View is closed on a first visit; the mirror toggles live in the body.
+    await openAllCards(liveView);
     await liveView.getByTestId("av-video-toggle").click();
 
     await page.keyboard.press("0");

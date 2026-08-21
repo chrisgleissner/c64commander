@@ -1,5 +1,5 @@
 {
-  "disks": ["drives", "disks"],
+  "disks": ["drives", "disks", "drive-a", "drive-b", "iec", "soft-iec"],
   "config": [
     "memory-roms",
     "turbo-boost",
@@ -20,7 +20,10 @@
     "user-interface",
     "built-in-drive-a",
     "built-in-drive-b",
-    "advanced-rest-only"
+    "u64-specific-settings",
+    "softiec-drive-settings",
+    "tape-settings",
+    "data-streams"
   ],
   "home": [
     "system-info-to-ports",
@@ -64,7 +67,9 @@
     "online-archive",
     "stable-features",
     "experimental-features",
-    "sid-radio"
+    "sid-radio",
+    "stable",
+    "experimental"
   ],
   "docs": [
     "getting-started",
@@ -119,6 +124,7 @@
     "save",
     "load",
     "revert",
-    "manage"
+    "manage",
+    "external-resources"
   ]
 }

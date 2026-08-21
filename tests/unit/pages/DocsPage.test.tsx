@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { resetCardMemory } from "../helpers/cards";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import DocsPage from "@/pages/DocsPage";
@@ -31,7 +32,9 @@ const variantRef = vi.hoisted(() => ({
 
 vi.mock("@/generated/variant", () => ({
   get variant() {
-    return { id: variantRef.id, displayName: variantRef.displayName };
+    // `runtime` is part of the real module and is read at import time by app settings, which the
+    // display-profile hook pulls in; a mock without it fails the whole suite on import.
+    return { id: variantRef.id, displayName: variantRef.displayName, runtime: {} };
   },
 }));
 
@@ -67,6 +70,7 @@ vi.mock("@/lib/tracing/userTrace", () => ({
 
 describe("DocsPage", () => {
   beforeEach(() => {
+    resetCardMemory();
     featureFlagsRef.flags = { ...defaultFlags };
     variantRef.id = "c64commander";
     variantRef.displayName = "C64 Commander";
@@ -80,11 +84,10 @@ describe("DocsPage", () => {
     render(<DocsPage />);
 
     expect(screen.getByTestId("docs-app-bar")).toHaveTextContent("Docs");
-    expect(screen.queryByText("Connect in 4 steps:")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Save & Connect/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("docs-toggle-getting-started"));
 
-    expect(screen.getByText("Connect in 4 steps:")).toBeInTheDocument();
     expect(screen.getByText(/Save & Connect/)).toBeInTheDocument();
   });
 
@@ -93,7 +96,11 @@ describe("DocsPage", () => {
 
     fireEvent.click(screen.getByTestId("docs-toggle-diagnostics"));
 
-    expect(screen.getByText(/Closing a deep-linked diagnostics view returns to Settings/)).toBeInTheDocument();
+    expect(screen.getByText(/Device health, app activity and support data/)).toBeInTheDocument();
+
+    // External resources is closed on a first visit: it points at other people's documentation,
+    // read once if at all, and the page's own chapters are what a reader came for.
+    fireEvent.click(screen.getByTestId("docs-section-toggle-external-resources"));
     expect(screen.getByTestId("docs-external-resource-docs")).toHaveAttribute(
       "href",
       "https://1541u-documentation.readthedocs.io/",
@@ -115,73 +122,36 @@ describe("DocsPage", () => {
     expect(screen.queryByTestId("docs-external-resource-c64u-user-guide")).not.toBeInTheDocument();
   });
 
-  it("describes enabled feature-flagged surfaces", () => {
+  /*
+   * The three tests that used to live here asserted that the Docs page grew a bullet for each
+   * enabled feature flag — a list of Home's actions, of Settings' chapters, of Play's steps. That
+   * documentation was removed deliberately: it restated control labels the reader can already see,
+   * and the app ships a full generated manual that says all of it properly. What is left is an
+   * orientation index, so that is what is tested.
+   */
+  it("gives every chapter a short description rather than a procedure", () => {
     render(<DocsPage />);
 
-    fireEvent.click(screen.getByTestId("docs-toggle-play"));
-    fireEvent.click(screen.getByTestId("docs-toggle-home"));
-    fireEvent.click(screen.getByTestId("docs-toggle-settings"));
-
-    expect(screen.getByText(/Choose a source:/)).toHaveTextContent("Local, C64U, HVSC or CommoServe");
-    expect(screen.getByText(/Save RAM/)).toBeInTheDocument();
-    expect(screen.getByTestId("docs-card-settings")).toHaveTextContent("HVSC sets the mirror URL");
-    expect(screen.getByTestId("docs-card-settings")).toHaveTextContent("Online Archive");
-    expect(screen.queryByText(/Power Cycle/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Lighting Studio/)).not.toBeInTheDocument();
+    for (const id of ["getting-started", "home", "play", "disks", "config", "settings", "diagnostics"]) {
+      fireEvent.click(screen.getByTestId(`docs-toggle-${id}`));
+      const card = screen.getByTestId(`docs-card-${id}`);
+      // Something is said...
+      expect(card.textContent?.trim().length ?? 0).toBeGreaterThan(20);
+      // ...and it is not a numbered or bulleted procedure, which belongs in the manual.
+      expect(card.querySelectorAll("li")).toHaveLength(0);
+    }
   });
 
-  it("documents every feature-flagged surface when all flags are enabled", () => {
-    featureFlagsRef.flags = {
-      background_execution_enabled: true,
-      commoserve_enabled: true,
-      demo_mode_enabled: true,
-      home_telnet_clear_ram_reboot_enabled: true,
-      home_telnet_config_actions_enabled: true,
-      home_telnet_drive_actions_enabled: true,
-      home_telnet_power_cycle_enabled: true,
-      home_telnet_printer_actions_enabled: true,
-      home_telnet_reu_snapshot_enabled: true,
-      hvsc_enabled: true,
-      keypad_input_enabled: true,
-      lighting_studio_enabled: true,
-      ram_snapshots_enabled: true,
-    };
-
-    render(<DocsPage />);
-
+  it("mentions Demo Mode only while the flag that offers it is on", () => {
+    featureFlagsRef.flags = { demo_mode_enabled: true };
+    const { unmount } = render(<DocsPage />);
     fireEvent.click(screen.getByTestId("docs-toggle-getting-started"));
-    fireEvent.click(screen.getByTestId("docs-toggle-home"));
-
     expect(screen.getByText(/Automatic Demo Mode/)).toBeInTheDocument();
-    expect(screen.getByText(/Save RAM/)).toBeInTheDocument();
-    expect(screen.getByText(/Power Cycle/)).toBeInTheDocument();
-    expect(screen.getByText(/Reboot \(Clr Mem\)/)).toBeInTheDocument();
-    expect(screen.getByText(/Save REU/)).toBeInTheDocument();
-    expect(screen.getByText(/Telnet shortcuts add device-menu actions/)).toBeInTheDocument();
-    expect(screen.getByText(/Advanced config actions add Save to File/)).toBeInTheDocument();
-    expect(screen.getByText(/Lighting Studio adds Studio/)).toBeInTheDocument();
-  });
+    unmount();
 
-  it("omits documentation for disabled feature-flagged surfaces", () => {
-    featureFlagsRef.flags = {
-      ...defaultFlags,
-      commoserve_enabled: false,
-      hvsc_enabled: false,
-      ram_snapshots_enabled: false,
-    };
-
+    featureFlagsRef.flags = { demo_mode_enabled: false };
     render(<DocsPage />);
-
-    fireEvent.click(screen.getByTestId("docs-toggle-play"));
-    fireEvent.click(screen.getByTestId("docs-toggle-home"));
-    fireEvent.click(screen.getByTestId("docs-toggle-disks"));
-    fireEvent.click(screen.getByTestId("docs-toggle-settings"));
-
-    expect(screen.getByText(/Choose a source:/)).toHaveTextContent("Local or C64U");
-    expect(screen.getByTestId("docs-card-disks")).toHaveTextContent("Local or C64U");
-    expect(screen.queryByText(/Save RAM/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/HVSC/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/CommoServe/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Online Archive/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("docs-toggle-getting-started"));
+    expect(screen.queryByText(/Automatic Demo Mode/)).not.toBeInTheDocument();
   });
 });

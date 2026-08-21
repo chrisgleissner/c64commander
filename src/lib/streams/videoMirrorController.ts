@@ -33,6 +33,7 @@ import { addLog } from "@/lib/logging";
 import { VicStreamAssembler, parseVicHeader } from "./vicStream";
 import { videoStandardForHeight, type VideoStandard } from "./vicDecode";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
+import { StreamArrivalWatchdog } from "./streamArrivalWatchdog";
 
 export type VideoMirrorState = "off" | "connecting" | "live" | "error";
 
@@ -124,6 +125,11 @@ interface PendingFrame {
 
 export class VideoMirrorController {
   private receiver: StreamReceiver | null = null;
+  /** Notices that the multicast video stopped arriving; a bound socket reports nothing when it does. */
+  private readonly arrivalWatchdog = new StreamArrivalWatchdog({
+    now: () => this.now(),
+    onStale: (silentMs) => this.reportStreamWentSilent(silentMs),
+  });
   private assembler = new VicStreamAssembler();
   private snapshot: VideoMirrorSnapshot = {
     state: "off",
@@ -354,9 +360,12 @@ export class VideoMirrorController {
     receiver.onStateChange((connection) => {
       if (connection === "open") {
         this.update({ state: "live" });
+        this.arrivalWatchdog.start();
       } else if (connection === "error") {
+        this.arrivalWatchdog.stop();
         this.update({ state: "error", error: "Lost the video stream connection." });
       } else if (connection === "closed" && this.snapshot.state !== "off") {
+        this.arrivalWatchdog.stop();
         this.update({ state: "off" });
       }
     });
@@ -370,6 +379,7 @@ export class VideoMirrorController {
       // out: close() is fire-and-forget, so a `videoframe` already queued would otherwise push a
       // non-zero fps/framesLost into an off-state snapshot (and the shared session other surfaces read).
       if (this.receiver !== receiver) return;
+      this.arrivalWatchdog.noteArrival();
       this.handleCompletedFrame(frame, height, arrivalMs, droppedPackets, framesLost, present);
     });
     // Push the current governor cadence to the native transport now that the receiver exists (so a
@@ -380,6 +390,7 @@ export class VideoMirrorController {
       // A datagram from a receiver already swapped out by stop()/restart must not mutate the snapshot
       // (nor feed the assembler for the new session), same as the onFrame guard above.
       if (this.receiver !== receiver) return;
+      this.arrivalWatchdog.noteArrival();
       // Stamp each frame with the EARLIEST wire arrival of any of its packets (keyed by the VIC
       // frame number), so cross-frame reordering cannot skew the frame-start time the analyzer uses.
       const header = parseVicHeader(bytes);
@@ -417,6 +428,21 @@ export class VideoMirrorController {
     }
   }
 
+  /**
+   * The stream went quiet while the mirror still believed it was live.
+   *
+   * Reported as an error rather than silently switched off: the picture the user is looking at is
+   * frozen, and "Watching" over a frozen picture is the one outcome that sends them to look at the
+   * C64, the cable and the device instead of at the network.
+   */
+  private reportStreamWentSilent(silentMs: number): void {
+    if (this.snapshot.state !== "live") return;
+    addLog("warn", "Video Mirror: no video arrived for long enough to call the stream lost", {
+      silentMs: Math.round(silentMs),
+    });
+    this.update({ state: "error", error: "The video stream stopped arriving." });
+  }
+
   private resetPresentation(): void {
     this.presentPhase = 0;
     this.frameStartByNum.clear();
@@ -435,6 +461,7 @@ export class VideoMirrorController {
   }
 
   async stop(): Promise<void> {
+    this.arrivalWatchdog.stop();
     try {
       await this.deps.stopStream("video");
     } catch (error) {

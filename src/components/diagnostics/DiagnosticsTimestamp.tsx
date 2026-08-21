@@ -27,7 +27,7 @@ export const DiagnosticsTimestamp = ({ value, className, testId }: Props) => {
       data-testid={testId ?? "diagnostics-timestamp"}
     >
       <span data-testid="diagnostics-timestamp-base">{time}</span>
-      <span className="text-[11px] leading-none" data-testid="diagnostics-timestamp-ms">
+      <span className="text-xs leading-none" data-testid="diagnostics-timestamp-ms">
         .{millis}
       </span>
     </span>

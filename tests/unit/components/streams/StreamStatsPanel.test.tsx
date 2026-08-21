@@ -57,6 +57,7 @@ const snapshot = (
     repeatedFrames: 0,
     framesLost: 0,
     droppedPackets: 0,
+    audioLostPackets: 0,
     standard: "PAL",
     ...live,
   },
@@ -146,6 +147,17 @@ describe("StreamStatsPanel", () => {
     expect(screen.getByTestId("stream-stats-latency")).toHaveTextContent(/Local pipeline residence/i);
     expect(screen.getByTestId("stream-stats-residence-p99")).toHaveTextContent("18 ms");
     expect(screen.getByTestId("stream-stats-presented")).toHaveTextContent("500");
+  });
+
+  it("shows the audio packet loss under Audio, and the video packet loss under Video", () => {
+    // These are two separate multicast streams with separate sequence spaces, and video streaming is
+    // what costs the audio stream its packets — so the Audio readout showing the video counter is not
+    // an approximation, it is the one number that cannot report the fault the panel exists to expose.
+    render(<StreamStatsPanel session={makeFakeSession(snapshot({}, { audioLostPackets: 137, droppedPackets: 4 }))} />);
+    fireEvent.click(screen.getByTestId("stream-stats-toggle"));
+
+    expect(screen.getByTestId("stream-stats-dropped-packets")).toHaveTextContent("137");
+    expect(screen.getByTestId("stream-stats-video-dropped-packets")).toHaveTextContent("4");
   });
 
   it("offers selectable history windows and re-queries the telemetry when one is chosen", () => {

@@ -469,6 +469,9 @@ export function DriveManager({
               pathPending={pathPending}
               isConnected={isConnected}
               testIdSuffix={testIdSuffix}
+              // Only the primary drive is open on a first visit. Drive B and the Soft IEC drive are
+              // there when they are needed and cost a screen each when they are not.
+              defaultOpen={testIdSuffix === "a"}
               focusId={`home-drive-toggle-${testIdSuffix}`}
               focusOrder={310 + index * 10}
               footer={

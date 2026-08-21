@@ -160,6 +160,68 @@ export const isHorizontalKeyOwner = (element: Element | null): boolean =>
 
 const ROW_TOLERANCE_PX = 8;
 
+interface ReadingPosition {
+  readonly top: number;
+  readonly left: number;
+  readonly hasBox: boolean;
+}
+
+/**
+ * Where an element sits in the DOCUMENT, not in the viewport.
+ *
+ * `getBoundingClientRect()` is viewport-relative, and the ring scrolls the page as it moves
+ * (viewport-follows-focus). Ordering by the raw rect therefore re-sorts the ring under the cursor
+ * on every step, and it interleaves scrolling content with anything outside the scroll container:
+ * on a 320x427 screen the page content lives in a `main.page-shell` that scrolls while the tab bar
+ * sits still below it, so each content stop that scrolled above the tab bar sorted before the tabs
+ * and each one still below it sorted after — measured on device as roughly six tab-bar stops for
+ * every one or two content stops.
+ *
+ * Adding each ancestor's `scrollTop`/`scrollLeft` back cancels the scroll exactly: when a container
+ * scrolls by N its descendants' rects drop by N and its own `scrollTop` rises by N.
+ */
+const readingPosition = (element: Element): ReadingPosition => {
+  const rect = element.getBoundingClientRect();
+  let top = rect.top;
+  let left = rect.left;
+  // A viewport-anchored element does not move when the document scrolls, so its rect is ALREADY
+  // its stable position and adding scroll offsets would make it drift — reintroducing, for fixed
+  // elements, exactly the instability this function exists to remove. Accumulation therefore stops
+  // at the first fixed element, itself included.
+  //
+  // `sticky` is deliberately not treated the same way: a sticky element scrolls with its container
+  // until it sticks, so accumulating is right for all of its travel and only approximate while it
+  // is pinned. Nothing in the ring is sticky today.
+  for (
+    let node: Element | null = isViewportAnchored(element) ? null : element.parentElement;
+    node;
+    node = node.parentElement
+  ) {
+    top += node.scrollTop;
+    left += node.scrollLeft;
+    if (isViewportAnchored(node)) break;
+  }
+  return { top, left, hasBox: rect.width > 0 || rect.height > 0 };
+};
+
+/** True when the element is taken out of flow and pinned to the viewport. */
+const isViewportAnchored = (element: Element): boolean => {
+  const view = element.ownerDocument?.defaultView;
+  if (!view?.getComputedStyle) return false;
+  return view.getComputedStyle(element).position === "fixed";
+};
+
+const comparePositions = (a: Element, pa: ReadingPosition, b: Element, pb: ReadingPosition): number => {
+  if (pa.hasBox && pb.hasBox) {
+    if (Math.abs(pa.top - pb.top) > ROW_TOLERANCE_PX) return pa.top - pb.top;
+    if (Math.abs(pa.left - pb.left) > 1) return pa.left - pb.left;
+  }
+  const position = a.compareDocumentPosition(b);
+  if (position & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+  if (position & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+  return 0;
+};
+
 /**
  * Reading-order comparator. DOM order is the basis; when both elements have a
  * real layout box (a real browser, not jsdom) it refines to visual reading order
@@ -167,19 +229,21 @@ const ROW_TOLERANCE_PX = 8;
  * relative to source still traverses the way the user sees it. With no geometry
  * (jsdom / zero-box) it is pure DOM order, keeping unit tests deterministic.
  */
-export const compareFocusables = (a: Element, b: Element): number => {
-  const ra = a.getBoundingClientRect();
-  const rb = b.getBoundingClientRect();
-  const aHasBox = ra.width > 0 || ra.height > 0;
-  const bHasBox = rb.width > 0 || rb.height > 0;
-  if (aHasBox && bHasBox) {
-    if (Math.abs(ra.top - rb.top) > ROW_TOLERANCE_PX) return ra.top - rb.top;
-    if (Math.abs(ra.left - rb.left) > 1) return ra.left - rb.left;
-  }
-  const position = a.compareDocumentPosition(b);
-  if (position & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
-  if (position & Node.DOCUMENT_POSITION_PRECEDING) return 1;
-  return 0;
+export const compareFocusables = (a: Element, b: Element): number =>
+  comparePositions(a, readingPosition(a), b, readingPosition(b));
+
+/**
+ * Sort into reading order, measuring each element once.
+ *
+ * `Array.sort` calls its comparator O(n log n) times and every measurement here reads layout, so
+ * measuring inside the comparator would force a reflow per comparison on a ring that is rebuilt
+ * whenever the DOM changes.
+ */
+export const sortIntoReadingOrder = <T extends Element>(elements: T[]): T[] => {
+  const positions = new Map<Element, ReadingPosition>();
+  for (const element of elements) positions.set(element, readingPosition(element));
+  const at = (element: Element): ReadingPosition => positions.get(element) ?? readingPosition(element);
+  return elements.sort((a, b) => comparePositions(a, at(a), b, at(b)));
 };
 
 export type ActiveScopeKind = "overlay" | "page";
@@ -249,7 +313,7 @@ export const discoverInteractiveElements = (scope: Element, options: DiscoverOpt
     seen.add(candidate);
     result.push(candidate);
   }
-  result.sort(compareFocusables);
+  sortIntoReadingOrder(result);
   return result;
 };
 

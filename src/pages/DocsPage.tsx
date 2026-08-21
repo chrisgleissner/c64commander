@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Fragment, useMemo } from "react";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { ExternalLink, Wifi, Settings, Play, Home, Disc, Sliders, Activity, type LucideIcon } from "lucide-react";
 import { AppBar } from "@/components/AppBar";
@@ -15,7 +15,7 @@ import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeConte
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { getDocsExternalResourceLinks } from "@/lib/docs/externalResources";
-import { SOURCE_EXPLANATIONS, SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
+import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { variant } from "@/generated/variant";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import type { FeatureFlags } from "@/lib/config/featureFlags";
@@ -27,29 +27,7 @@ interface DocSection {
   content: React.ReactNode;
 }
 
-const renderStrongList = (labels: readonly string[]) =>
-  labels.map((label, index) => (
-    <Fragment key={label}>
-      {index === 0 ? "" : index === labels.length - 1 ? " or " : ", "}
-      <strong>{label}</strong>
-    </Fragment>
-  ));
-
-const compactLabels = (labels: Array<string | null>): string[] =>
-  labels.filter((label): label is string => label !== null);
-
 const buildDocSections = (flags: FeatureFlags): DocSection[] => {
-  const playSources = compactLabels([
-    SOURCE_LABELS.local,
-    SOURCE_LABELS.c64u,
-    flags.hvsc_enabled ? SOURCE_LABELS.hvsc : null,
-    flags.commoserve_enabled ? SOURCE_LABELS.commoserve : null,
-  ]);
-  const diskSources = compactLabels([
-    SOURCE_LABELS.local,
-    SOURCE_LABELS.c64u,
-    flags.commoserve_enabled ? SOURCE_LABELS.commoserve : null,
-  ]);
   return [
     {
       id: "getting-started",
@@ -58,25 +36,15 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
       content: (
         <div className="space-y-3 text-sm">
           <p>
-            {variant.displayName} uses REST for control and FTP for files. Keep this device and your{" "}
-            <strong>{SOURCE_LABELS.c64u}</strong> on the same network, with network services enabled on the{" "}
-            {SOURCE_LABELS.c64u}.
+            Keep this device and your <strong>{SOURCE_LABELS.c64u}</strong> on the same network, with its network
+            services enabled.
           </p>
-          <p className="font-medium">Connect in 4 steps:</p>
-          <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-            <li>
-              Open <strong>Settings</strong> → <strong>Connection</strong>.
-            </li>
-            <li>Enter the {SOURCE_LABELS.c64u} hostname or IP address, or use device discovery.</li>
-            <li>Enter the network password if your device uses one.</li>
-            <li>
-              Tap <strong>Save & Connect</strong>.
-            </li>
-          </ol>
           <p className="text-muted-foreground">
-            The header badge shows connection health. Tap it for Diagnostics. Long-press it to switch or edit the active
-            saved device. To scan again, use <strong>Settings</strong> → <strong>Connection</strong> →{" "}
-            <strong>Device discovery</strong>.
+            Add your device in <strong>Settings</strong> → <strong>Connection</strong>, then{" "}
+            <strong>Save & Connect</strong>.
+          </p>
+          <p className="text-muted-foreground">
+            The header badge shows connection health — tap it for Diagnostics, long-press to switch devices.
           </p>
           {flags.demo_mode_enabled ? (
             <p className="text-muted-foreground">
@@ -93,65 +61,9 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
       content: (
         <div className="space-y-3 text-sm">
           <p>
-            Home is the main control page. It brings together system status, machine controls, Quick Config, drives,
-            printers, audio, streams when supported, and config actions.
+            Home is the main control page: status, machine controls, Quick Config, drives, printers, audio and config
+            actions.
           </p>
-          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-            <li>
-              <strong>Reset</strong>, <strong>Reboot</strong>, <strong>Pause/Resume</strong>, and <strong>Menu</strong>{" "}
-              control the running session.
-            </li>
-            {flags.ram_snapshots_enabled ? (
-              <li>
-                <strong>Save RAM</strong> and <strong>Load RAM</strong> capture or restore RAM snapshots.
-              </li>
-            ) : null}
-            <li>
-              <strong>Power Off</strong> appears only on devices that report power-control support.
-            </li>
-            {flags.home_telnet_power_cycle_enabled ? (
-              <li>
-                <strong>Power Cycle</strong> appears when the device supports it and Telnet is available.
-              </li>
-            ) : null}
-            {flags.home_telnet_clear_ram_reboot_enabled ? (
-              <li>
-                <strong>Reboot (Clr Mem)</strong> appears when Telnet can run that device-menu action.
-              </li>
-            ) : null}
-            {flags.home_telnet_reu_snapshot_enabled ? (
-              <li>
-                <strong>Save REU</strong> and REU restore entries appear when native storage and Telnet support them.
-              </li>
-            ) : null}
-            <li>
-              Quick Config edits common CPU, RAM, port, video, interface, and lighting settings. Changes apply
-              immediately.
-            </li>
-            <li>
-              Drive cards show state plus mount, eject, reset, and on/off actions. Printer cards show state and
-              available printer controls.
-            </li>
-            {flags.home_telnet_drive_actions_enabled || flags.home_telnet_printer_actions_enabled ? (
-              <li>
-                Telnet shortcuts add device-menu actions such as Set dir, Turn on, Flush/Eject, and Reset when the
-                connected device supports them.
-              </li>
-            ) : null}
-            <li>
-              The Config section saves to flash, loads from flash, resets to defaults, manages app-stored configs, and
-              reverts unsaved changes.
-            </li>
-            {flags.home_telnet_config_actions_enabled ? (
-              <li>
-                Advanced config actions add Save to File, Load from File, and Clear Flash when native storage and Telnet
-                are available.
-              </li>
-            ) : null}
-            {flags.lighting_studio_enabled ? (
-              <li>Lighting Studio adds Studio, Hold look, and Why this look controls.</li>
-            ) : null}
-          </ul>
         </div>
       ),
     },
@@ -162,39 +74,6 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
       content: (
         <div className="space-y-3 text-sm">
           <p>Play builds and runs your playlist. Supported files: SID, MOD, PRG, CRT, D64, G64, D71, G71, and D81.</p>
-          <p className="font-medium">Add and play files:</p>
-          <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-            <li>
-              Open <strong>Play</strong> and tap <strong>Add items</strong>.
-            </li>
-            <li>Choose a source: {renderStrongList(playSources)}.</li>
-            <li>
-              Source names: <strong>{SOURCE_LABELS.local}</strong> = {SOURCE_EXPLANATIONS.local},{" "}
-              <strong>{SOURCE_LABELS.c64u}</strong> = {SOURCE_EXPLANATIONS.c64u}
-              {flags.hvsc_enabled ? (
-                <>
-                  , <strong>{SOURCE_LABELS.hvsc}</strong> = {SOURCE_EXPLANATIONS.hvsc}
-                </>
-              ) : null}
-              {flags.commoserve_enabled ? (
-                <>
-                  , <strong>{SOURCE_LABELS.commoserve}</strong> = {SOURCE_EXPLANATIONS.commoserve}
-                </>
-              ) : null}
-              .
-            </li>
-            <li>
-              {flags.commoserve_enabled ? "Browse folders or search CommoServe" : "Browse folders"}, select files or
-              folders, then confirm.
-            </li>
-            <li>Start playback from the playlist or a single item.</li>
-          </ol>
-          <p className="font-medium">Playback controls:</p>
-          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-            <li>Use play, pause, stop, previous/next, shuffle, repeat, and View all.</li>
-            <li>For multi-song SID files, choose the song number and see duration when known.</li>
-            <li>Songlengths metadata fills durations when available.</li>
-          </ul>
         </div>
       ),
     },
@@ -205,27 +84,7 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
       content: (
         <div className="space-y-3 text-sm">
           <p>Disks manages drive state and the disk collection used for mounting.</p>
-          <p className="font-medium">Mount disks:</p>
-          <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-            <li>
-              Open <strong>Disks</strong>.
-            </li>
-            <li>
-              In a Drive card header, tap the <strong>disk icon</strong>.
-            </li>
-            <li>Mount a disk from the collection, or add disks first.</li>
-          </ol>
-          <p className="font-medium">Add disks:</p>
-          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-            <li>
-              Tap <strong>Add disks</strong> and pick a source: {renderStrongList(diskSources)}.
-            </li>
-            <li>The picker accepts folders and disk images. Supported disk images: D64, G64, D71, G71, and D81.</li>
-            <li>
-              Use <strong>View all</strong> to search, select, and manage large collections.
-            </li>
-            <li>Disk menus show details, config status, Set group, Rename disk, and Remove actions.</li>
-          </ul>
+          <p className="text-muted-foreground">Supported disk images: D64, G64, D71, G71, D81.</p>
         </div>
       ),
     },
@@ -236,15 +95,6 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
       content: (
         <div className="space-y-3 text-sm">
           <p>Use groups to rotate disks for multi-disk titles.</p>
-          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-            <li>
-              <strong>Set group</strong> assigns a disk to a named rotation group.
-            </li>
-            <li>Drive-row rotate arrows cycle through disks in the mounted disk's group.</li>
-            <li>
-              The drive header <strong>disk icon</strong> opens mount and eject actions.
-            </li>
-          </ul>
         </div>
       ),
     },
@@ -255,18 +105,8 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
       content: (
         <div className="space-y-3 text-sm">
           <p>
-            Config shows the connected {SOURCE_LABELS.c64u} configuration tree. Use search to find settings quickly.
+            Shows the connected {SOURCE_LABELS.c64u}&apos;s full configuration tree — search to find a setting fast.
           </p>
-          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-            <li>Editable controls update the device immediately.</li>
-            <li>
-              To keep changes after restart, use Home → Config → <strong>Save</strong> <span>To flash</span>.
-            </li>
-            <li>
-              Menu-backed settings are grouped into pages. REST-only settings remain visible in advanced sections.
-            </li>
-            <li>Home's Audio Mixer includes SID socket and UltiSID volume controls, with mute and solo.</li>
-          </ul>
         </div>
       ),
     },
@@ -277,45 +117,6 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
       content: (
         <div className="space-y-3 text-sm">
           <p>Settings controls app behavior, connection details, diagnostics, and safety limits.</p>
-          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-            <li>
-              <strong>Appearance</strong> sets theme, display profile, full screen, orientation, and navigation-bar
-              options.
-            </li>
-            <li>
-              <strong>Connection</strong> manages saved devices, host, ports, password, discovery, and Save & Connect.
-            </li>
-            <li>
-              <strong>Diagnostics</strong> opens diagnostics, controls debug logging, and imports or exports
-              non-sensitive settings.
-            </li>
-            <li>
-              <strong>Play and Disk</strong> sets list preview size and disk first-PRG load mode.
-            </li>
-            <li>Feature flags are grouped under Stable Features and Experimental Features.</li>
-            {flags.hvsc_enabled ? (
-              <li>
-                <strong>HVSC</strong> sets the mirror URL override and automatic update-check interval.
-              </li>
-            ) : null}
-            {flags.commoserve_enabled ? (
-              <li>
-                <strong>Online Archive</strong> sets CommoServe host and header overrides, and opens the archive
-                browser.
-              </li>
-            ) : null}
-            <li>
-              <strong>Device Safety</strong> sets concurrency, cache windows, cooldowns, backoff, circuit breaker
-              behavior, and slider preview pacing.
-            </li>
-            <li>
-              <strong>Notifications</strong> controls notification visibility and duration.
-            </li>
-            <li>
-              <strong>About</strong> shows build details, documentation links, open-source licenses, and developer mode
-              status.
-            </li>
-          </ul>
         </div>
       ),
     },
@@ -326,43 +127,7 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
       content: (
         <div className="space-y-3 text-sm">
           <p>
-            Diagnostics shows device health, app activity, and support data. Open it from Settings, the header badge,
-            notifications, or a diagnostics route.
-          </p>
-          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-            <li>
-              <strong>Overview</strong> keeps Problems, Actions, Logs, Errors, and Traces in one place.
-            </li>
-            <li>
-              <strong>Health check detail</strong> shows REST, FTP, CONFIG, RASTER, and JIFFY probes, plus latency
-              percentiles and the overall result. Telnet activity appears when Telnet actions run.
-            </li>
-            <li>Expanded rows show payload details without leaving the sheet.</li>
-            <li>
-              <strong>Actions</strong> summarizes user operations, targets, outcomes, and latency hints.
-            </li>
-            <li>
-              <strong>Traces</strong> lists REST, FTP, and Telnet operations with timing and status.
-            </li>
-            <li>
-              <strong>Logs</strong> captures app and device communication events. <strong>Errors</strong> lists error
-              reports with context.
-            </li>
-            <li>
-              Tools include Config drift, Decision state, Latency, Health history, REST heat map, FTP heat map, and
-              Config heat map. Contributor filters include App, REST, FTP, and Telnet.
-            </li>
-          </ul>
-          <p className="text-muted-foreground">
-            Deep links: <strong>/diagnostics</strong>, <strong>/diagnostics/latency</strong>,{" "}
-            <strong>/diagnostics/history</strong>, <strong>/diagnostics/config-drift</strong>,{" "}
-            <strong>/diagnostics/decision-state</strong>, <strong>/diagnostics/heatmap/rest</strong>,{" "}
-            <strong>/diagnostics/heatmap/ftp</strong>, and <strong>/diagnostics/heatmap/config</strong>. Closing a
-            deep-linked diagnostics view returns to Settings.
-          </p>
-          <p className="text-muted-foreground">
-            Use filters to narrow results. <strong>Run health check</strong> refreshes device status.{" "}
-            <strong>Clear</strong> resets local diagnostics data. <strong>Share</strong> exports a diagnostic bundle.
+            Device health, app activity and support data. Open it from Settings, the header badge, or a notification.
           </p>
         </div>
       ),
@@ -417,17 +182,17 @@ export default function DocsPage() {
             the C64U User Guide, already reachable from Settings -> About, so a whole
             standalone card for one duplicate link is not worth the space. */}
         {variantId !== "c64u-remote" && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: docSections.length * 0.05 }}
-            className="bg-card border border-border rounded-xl p-4 space-y-3"
-            data-testid="docs-external-resources"
+          <CollapsibleSection
+            scope="docs"
+            id="external-resources"
+            title="External resources"
+            summary={`Official device manuals and API references used by ${variant.displayName}.`}
+            icon={ExternalLink}
+            testId="docs-external-resources"
+            // Closed on a first visit: these are references to other people's documentation, read
+            // once if at all, and the page's own chapters are what a reader came for.
+            defaultOpen={false}
           >
-            <h3 className="font-medium">External resources</h3>
-            <p className="text-sm text-muted-foreground">
-              Official device manuals and API references used by {variant.displayName}.
-            </p>
             <div className="space-y-2">
               {externalResourceLinks.map((link) => (
                 <a
@@ -443,7 +208,7 @@ export default function DocsPage() {
                 </a>
               ))}
             </div>
-          </motion.div>
+          </CollapsibleSection>
         )}
       </PageContainer>
     </div>

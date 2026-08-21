@@ -15,6 +15,7 @@ import {
   isHorizontalKeyOwner,
   isNativelyFocusable,
   resolveActiveScope,
+  sortIntoReadingOrder,
 } from "@/lib/input/discovery";
 
 const mount = (html: string): HTMLElement => {
@@ -192,5 +193,94 @@ describe("compareFocusables", () => {
     const b = host.querySelector("#second")!;
     expect(compareFocusables(a, b)).toBeLessThan(0);
     expect(compareFocusables(b, a)).toBeGreaterThan(0);
+  });
+});
+
+describe("sortIntoReadingOrder", () => {
+  /**
+   * jsdom has no layout, so the geometry path is exercised by stubbing each element's rect as a
+   * function of how far its container is scrolled — which is exactly the relationship a real
+   * browser has, and the one the ordering has to be immune to.
+   */
+  const layOut = (element: Element, documentTop: number, scrollTopOf: () => number) => {
+    Object.defineProperty(element, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ top: documentTop - scrollTopOf(), left: 0, width: 100, height: 20 }) as DOMRect,
+    });
+  };
+
+  it("keeps one order however far the scroll container has moved", () => {
+    // The page content scrolls inside `main.page-shell` while the tab bar sits outside it. Ordering
+    // by the raw viewport rect therefore moved the tab bar around inside the content as the user
+    // scrolled: on device that put the whole tab bar between every one or two content stops.
+    const host = mount(`
+      <div id="scroller">
+        <button id="content-top">top</button>
+        <button id="content-bottom">bottom</button>
+      </div>
+      <button id="outside">outside the scroll container</button>
+    `);
+    const scroller = host.querySelector("#scroller") as HTMLElement;
+    let scrolled = 0;
+    Object.defineProperty(scroller, "scrollTop", { configurable: true, get: () => scrolled });
+
+    const top = host.querySelector("#content-top")!;
+    const bottom = host.querySelector("#content-bottom")!;
+    const outside = host.querySelector("#outside")!;
+    layOut(top, 10, () => scrolled);
+    layOut(bottom, 400, () => scrolled);
+    // Outside the scroll container, so its position does not move when the content scrolls.
+    layOut(outside, 200, () => 0);
+
+    const idsAt = (scroll: number) => {
+      scrolled = scroll;
+      return sortIntoReadingOrder([bottom, outside, top]).map((element) => element.id);
+    };
+
+    const unscrolled = idsAt(0);
+    expect(unscrolled).toEqual(["content-top", "outside", "content-bottom"]);
+    expect(idsAt(150)).toEqual(unscrolled);
+    expect(idsAt(390)).toEqual(unscrolled);
+  });
+
+  it("does not drift a position:fixed element as the page scrolls", () => {
+    // A fixed element's rect is already its stable position — it does not move when the document
+    // scrolls — so adding ancestor scroll offsets to it would make its ordering depend on the
+    // scroll offset, which is the instability this ordering exists to remove.
+    // The element that matters is one pinned to the viewport from INSIDE a scrolling container:
+    // that is where the ancestor walk would otherwise add the container's scrollTop to a rect that
+    // never moved.
+    const host = mount(`
+      <div id="scroller">
+        <button id="content">content</button>
+        <button id="pinned">pinned to the viewport</button>
+      </div>
+    `);
+    const scroller = host.querySelector("#scroller") as HTMLElement;
+    let scrolled = 0;
+    Object.defineProperty(scroller, "scrollTop", { configurable: true, get: () => scrolled });
+
+    const content = host.querySelector("#content")!;
+    const pinned = host.querySelector("#pinned") as HTMLElement;
+    // The pinned element sits ABOVE the content, so accumulating the container's scrollTop onto it
+    // pushes it past the content and REVERSES the two — which is the failure this guards.
+    layOut(pinned, 300, () => 0);
+    layOut(content, 400, () => scrolled);
+    pinned.style.position = "fixed";
+
+    const idsAt = (scroll: number) => {
+      scrolled = scroll;
+      return sortIntoReadingOrder([content, pinned]).map((element) => element.id);
+    };
+
+    expect(idsAt(0)).toEqual(["pinned", "content"]);
+    expect(idsAt(200)).toEqual(["pinned", "content"]);
+    expect(idsAt(500)).toEqual(["pinned", "content"]);
+  });
+
+  it("still orders by DOM position when nothing has a layout box", () => {
+    const host = mount(`<button id="one">1</button><button id="two">2</button><button id="three">3</button>`);
+    const [one, two, three] = ["#one", "#two", "#three"].map((selector) => host.querySelector(selector)!);
+    expect(sortIntoReadingOrder([three, one, two]).map((element) => element.id)).toEqual(["one", "two", "three"]);
   });
 });

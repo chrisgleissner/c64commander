@@ -270,12 +270,41 @@ describe("UnifiedHealthBadge", () => {
       const textContent = badge.textContent ?? "";
 
       expect(textContent).toContain("999+");
-      expect(textContent).toMatch(/C64U\s+\S+\s+999\+/);
+      // Compact drops the host label: at 320 px it took 48% of the header to render a truncated IP.
+      // The glyph and the count stay, which is what the badge is for.
+      expect(textContent).toMatch(profile === "compact" ? /\S+\s+999\+/ : /C64U\s+\S+\s+999\+/);
       expect(textContent).not.toContain("1000");
       expect(textContent.match(/999\+/g)).toHaveLength(1);
 
       unmount();
     }
+  });
+
+  it("keeps the 44px touch target on the smallest screen, where the badge is a lone glyph", () => {
+    // Compact renders the glyph alone. An earlier attempt delivered the pressable area with an
+    // absolutely-positioned pseudo-element so the header could be shorter; that is not a target —
+    // the box a finger lands on, and the box any reach check measures, is the element's own.
+    mockState.currentProfile = "compact";
+    mockState.healthState.problemCount = 0;
+    render(<UnifiedHealthBadge />);
+
+    const badge = screen.getByTestId("unified-health-badge");
+    expect(badge.className).toContain("min-h-[44px]");
+    expect(badge.className).toContain("min-w-[44px]");
+  });
+
+  it("drops the host label on the smallest screen, keeping the health glyph", () => {
+    mockState.healthState.problemCount = 0;
+    mockState.currentProfile = "medium";
+    const medium = render(<UnifiedHealthBadge />);
+    expect(screen.getByTestId("unified-health-badge").textContent ?? "").toContain("C64U");
+    medium.unmount();
+
+    mockState.currentProfile = "compact";
+    render(<UnifiedHealthBadge />);
+    const compact = screen.getByTestId("unified-health-badge").textContent ?? "";
+    expect(compact).not.toContain("C64U");
+    expect(compact.trim().length).toBeGreaterThan(0);
   });
 
   it("renders the expanded problem suffix without a separate count span", () => {

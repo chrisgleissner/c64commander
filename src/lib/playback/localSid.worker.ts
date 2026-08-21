@@ -269,9 +269,12 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
           try {
             offline.dispose?.();
           } catch (error) {
-            // Teardown races are the vendored engine's own problem; the
-            // pre-render result is already sent either way.
-            void error;
+            // Teardown races are the vendored engine's own problem, and the pre-render result is
+            // already sent, so this must not become a protocol error. It must not be invisible
+            // either: a dispose that always throws leaks a WASM instance per pre-render. There is
+            // no `addLog` inside a worker (it writes to localStorage on the main thread), so this
+            // goes to the console, where the WebView inspector and a HIL session can both see it.
+            console.warn("Local SID worker: disposing the offline render context failed", error);
           }
         }
         return;
@@ -321,6 +324,10 @@ ctx.onmessage = (event: MessageEvent<LocalSidMainToWorker>) => {
       }
       return handleMessage(message);
     })
-    // Never let a rejection break the chain for subsequent messages.
-    .catch(() => undefined);
+    // Never let a rejection break the chain for subsequent messages. `handleMessage` already
+    // catches everything it can and posts a typed error back, so anything arriving here escaped
+    // that — which is worth seeing rather than discarding, even though the chain must survive it.
+    .catch((error: unknown) => {
+      console.warn("Local SID worker: a queued message rejected outside its own handler", error);
+    });
 };
