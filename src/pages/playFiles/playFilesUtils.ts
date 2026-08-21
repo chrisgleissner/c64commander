@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { formatByteSize, formatDetailDate, UNKNOWN_VALUE } from "@/lib/ui/detailFormat";
 import {
   extractAudioMixerItems as extractAudioMixerItemsFromLib,
   type AudioMixerItem,
@@ -35,28 +36,12 @@ export const formatTime = (ms?: number) => {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 };
 
-export const formatBytes = (value?: number | null) => {
-  if (value === null || value === undefined || value < 0) return "—";
-  const units = ["B", "KB", "MB", "GB"];
-  let size = value;
-  let unitIndex = 0;
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex += 1;
-  }
-  return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
-};
+// A playlist row distinguishes a size it does not know from a file that really
+// is empty: only the first reads "—", and an empty file reads "0 B".
+export const formatBytes = (value?: number | null) =>
+  value === null || value === undefined || !Number.isFinite(value) || value < 0 ? UNKNOWN_VALUE : formatByteSize(value);
 
-export const formatDate = (value?: string | null) => {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-  }).format(date);
-};
+export const formatDate = formatDetailDate;
 
 export const isSongCategory = (category: PlayFileCategory) => category === "sid" || category === "mod";
 
