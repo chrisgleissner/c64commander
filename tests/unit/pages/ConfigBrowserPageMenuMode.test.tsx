@@ -154,9 +154,11 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
     expect(screen.getByTestId("config-menu-page-network-services-&-timezone")).toBeInTheDocument();
     // Audio setup group label appears above its child pages (e.g. Audio mixer page).
     expect(screen.getAllByText("Audio setup").length).toBeGreaterThan(0);
-    // Evidence-less leftovers (C64U Model, SoftIEC, Tape, Data Streams) have no menu page,
-    // so the explicitly-labelled residual Advanced (REST-only) section is present (lossless).
-    expect(screen.getByTestId("config-advanced-fallback")).toBeInTheDocument();
+    // A category with no menu page gets a card of its own, named after the category, rather than
+    // sharing one "Advanced (REST-only)" bin with every other homeless category. Nothing is
+    // hidden; what changed is that the reader is told what they are looking at.
+    expect(screen.queryByTestId("config-advanced-fallback")).not.toBeInTheDocument();
+    expect(screen.getByTestId("config-unrouted-softiec-drive-settings")).toBeInTheDocument();
     // The Audio mixer menu page keeps the SPECIALIZED renderer (CategorySection: solo/reset),
     // not the generic MenuPageSection — routed via soleRestCategory(page) === "Audio Mixer".
     expect(screen.getByTestId("config-category-audio-mixer")).toBeInTheDocument();
@@ -226,11 +228,11 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
     expect(within(driveAdvanced).queryByTestId("row-tape-playback-rate")).not.toBeInTheDocument();
     expect(within(driveAdvanced).queryByTestId("row-iec-drive")).not.toBeInTheDocument();
 
-    // `C64U Model` (hardware edition, absent from the captured menu) renders in the residual
-    // Advanced (REST-only) section, with canonical write-back preserved.
-    fireEvent.click(screen.getByTestId("config-advanced-fallback-toggle"));
-    const fallback = await screen.findByTestId("config-advanced-fallback");
-    const modelRow = within(fallback).getByTestId("row-c64u-model");
+    // `C64U Model` (hardware edition, absent from the captured menu) renders on a card named for
+    // its own category, with canonical write-back preserved.
+    fireEvent.click(screen.getByTestId("config-unrouted-toggle-u64-specific-settings"));
+    const u64Card = await screen.findByTestId("config-unrouted-u64-specific-settings");
+    const modelRow = within(u64Card).getByTestId("row-c64u-model");
     fireEvent.click(within(modelRow).getByText("Update C64U Model"));
     await waitFor(() => expect(mockSetConfig).toHaveBeenCalledTimes(2));
     expect(mockSetConfig).toHaveBeenLastCalledWith({
@@ -238,8 +240,16 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
       item: "C64U Model",
       value: "updated",
     });
-    // Tape Playback Rate + SoftIEC IEC Drive also surface here (their categories have no page).
-    expect(within(fallback).getByTestId("row-tape-playback-rate")).toBeInTheDocument();
-    expect(within(fallback).getByTestId("row-iec-drive")).toBeInTheDocument();
+
+    // Tape and SoftIEC each get their own card too, rather than sharing one bin: the point of the
+    // change is that a reader is told which subject they are looking at.
+    fireEvent.click(screen.getByTestId("config-unrouted-toggle-tape-settings"));
+    expect(
+      within(await screen.findByTestId("config-unrouted-tape-settings")).getByTestId("row-tape-playback-rate"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("config-unrouted-toggle-softiec-drive-settings"));
+    expect(
+      within(await screen.findByTestId("config-unrouted-softiec-drive-settings")).getByTestId("row-iec-drive"),
+    ).toBeInTheDocument();
   });
 });

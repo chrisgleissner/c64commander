@@ -57,7 +57,7 @@ import {
   type TerminologyOverlay,
 } from "@/lib/config/menuMapping";
 import { MenuPageSection } from "@/pages/config/MenuPageSection";
-import { AdvancedFallbackSection } from "@/pages/config/AdvancedFallbackSection";
+import { UnroutedCategorySections } from "@/pages/config/UnroutedCategorySections";
 
 type ConfigListItem = {
   name: string;
@@ -1060,6 +1060,7 @@ export default function ConfigBrowserPage() {
                           groupLabel={entry.groupLabel}
                           hierarchy={hierarchy}
                           family={family}
+                          liveCategories={liveCategories}
                           authoritativeValues={authoritativeValues}
                           markChanged={markChanged}
                           focusOrder={focusOrder}
@@ -1069,8 +1070,8 @@ export default function ConfigBrowserPage() {
                   );
                 })}
                 {residualCategories.length > 0 ? (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                    <AdvancedFallbackSection
+                  <motion.div className="contents" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                    <UnroutedCategorySections
                       categories={residualCategories}
                       hierarchy={hierarchy}
                       family={family}

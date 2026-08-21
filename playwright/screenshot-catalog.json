@@ -20,7 +20,10 @@
     "user-interface",
     "built-in-drive-a",
     "built-in-drive-b",
-    "advanced-rest-only"
+    "u64-specific-settings",
+    "softiec-drive-settings",
+    "tape-settings",
+    "data-streams"
   ],
   "home": [
     "system-info-to-ports",

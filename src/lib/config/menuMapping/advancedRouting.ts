@@ -40,9 +40,22 @@ interface KeywordRule {
   page: string;
 }
 
+/** A whole category whose NAME identifies its page, matched by pattern rather than exact string. */
+interface CategoryPatternRule {
+  pattern: RegExp;
+  page: string;
+}
+
 interface FamilyRouting {
   /** Ordered, category-scoped keyword rules (checked first). */
   keywords: KeywordRule[];
+  /**
+   * Categories whose own name names their page. Not a guess about where a topic belongs: the
+   * category "SID Socket 1: ARMSID" and the page "SID sockets configuration" are the same subject,
+   * and matching by pattern rather than by exact string keeps that true when the chip in the
+   * socket changes the category's name.
+   */
+  categoryPatterns: CategoryPatternRule[];
   /**
    * Home page for a WHOLE category's leftovers (checked after sole-owner). Intentionally
    * empty: a whole-category default is speculative unless a captured menu places the
@@ -63,15 +76,18 @@ const FAMILY_ROUTING: Record<string, FamilyRouting> = {
         page: "Video setup",
       },
       { category: "U64 Specific Settings", pattern: /user ?port/i, page: "Joystick & controllers" },
+      // A mouse is a controller, and the page is where every other input device is configured.
+      { category: "U64 Specific Settings", pattern: /\bmouse\b/i, page: "Joystick & controllers" },
       {
         category: "U64 Specific Settings",
         pattern: /serial bus|parallel cable|burst mode|speeddos|\bdrive\b/i,
         page: "Built-in drive A",
       },
     ],
-    // No whole-category defaults: `C64U Model`, SoftIEC, Tape, and Data Streams are absent
-    // from the captured menu, so they surface in the residual Advanced section rather than
-    // being mis-homed on an unrelated page.
+    categoryPatterns: [{ pattern: /^sid socket \d/i, page: "SID sockets configuration" }],
+    // No whole-category defaults: SoftIEC, Tape and Data Streams are absent from the captured
+    // menu, so rather than being mis-homed on an unrelated page they get a card of their own,
+    // named after the category (see `ConfigBrowserPage`).
     categoryDefaults: {},
   },
 };
@@ -130,6 +146,9 @@ export const routeAdvancedItem = (
   }
   const owner = deriveSoleOwners(hierarchy).get(category);
   if (owner) return owner;
+  if (routing) {
+    for (const rule of routing.categoryPatterns) if (rule.pattern.test(category)) return rule.page;
+  }
   return routing?.categoryDefaults[category] ?? null;
 };
 
@@ -137,7 +156,17 @@ export const routeAdvancedItem = (
  * Categories whose leftover items can land on `pageLabel` (sole-owned, defaulted, or
  * keyword-routed to it). A page fetches these to render its "Advanced" sub-section.
  */
-export const advancedCategoriesForPage = (hierarchy: MenuHierarchy, family: string, pageLabel: string): string[] => {
+export const advancedCategoriesForPage = (
+  hierarchy: MenuHierarchy,
+  family: string,
+  pageLabel: string,
+  /**
+   * The categories the device is actually reporting. Needed for the name-pattern tier: a category
+   * the menu never claims — "SID Socket 1: ARMSID" — appears nowhere in the hierarchy, so it can
+   * only be found by looking at what the device says it has.
+   */
+  liveCategories: readonly string[] = [],
+): string[] => {
   const categories = new Set<string>();
   for (const [category, owner] of deriveSoleOwners(hierarchy)) {
     if (owner === pageLabel) categories.add(category);
@@ -145,6 +174,12 @@ export const advancedCategoriesForPage = (hierarchy: MenuHierarchy, family: stri
   const routing = FAMILY_ROUTING[family];
   if (routing) {
     for (const rule of routing.keywords) if (rule.page === pageLabel) categories.add(rule.category);
+    for (const rule of routing.categoryPatterns) {
+      if (rule.page !== pageLabel) continue;
+      for (const category of [...Object.keys(hierarchy.claimedItemsByCategory), ...liveCategories]) {
+        if (rule.pattern.test(category)) categories.add(category);
+      }
+    }
     for (const [category, page] of Object.entries(routing.categoryDefaults)) {
       if (page === pageLabel) categories.add(category);
     }
@@ -155,7 +190,10 @@ export const advancedCategoriesForPage = (hierarchy: MenuHierarchy, family: stri
 /** True when `category`'s leftover items have a home page (so never hit the residual). */
 const isRoutableCategory = (hierarchy: MenuHierarchy, family: string, category: string): boolean => {
   if (deriveSoleOwners(hierarchy).has(category)) return true;
-  return Boolean(FAMILY_ROUTING[family]?.categoryDefaults[category]);
+  const routing = FAMILY_ROUTING[family];
+  if (!routing) return false;
+  if (routing.categoryPatterns.some((rule) => rule.pattern.test(category))) return true;
+  return Boolean(routing.categoryDefaults[category]);
 };
 
 /**

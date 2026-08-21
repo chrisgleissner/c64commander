@@ -1490,12 +1490,12 @@ const configToggleSlug = (testId: string): string =>
     testId
       .replace(/^config-menu-page-/, "")
       .replace(/^config-category-/, "")
-      .replace(/^config-advanced-fallback-toggle$/, "advanced-rest-only"),
+      .replace(/^config-unrouted-toggle-/, ""),
   );
 
 const captureConfigSections = async (page: Page, testInfo: TestInfo) => {
   const toggles = getActiveMain(page).locator(
-    '[data-testid^="config-menu-page-"], [data-testid^="config-category-"], [data-testid="config-advanced-fallback-toggle"]',
+    '[data-testid^="config-menu-page-"], [data-testid^="config-category-"], [data-testid^="config-unrouted-toggle-"]',
   );
   const count = await toggles.count();
   if (count === 0) return;

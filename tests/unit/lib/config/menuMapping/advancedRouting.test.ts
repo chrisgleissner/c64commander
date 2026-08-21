@@ -108,4 +108,40 @@ describe("advancedRouting — evidence-based placement of unclaimed items", () =
     // Unknown/future category is also residual.
     expect(unroutedCategories(H, "C64U", ["Audio Mixer", "Audio Output Settings"])).toEqual(["Audio Output Settings"]);
   });
+
+  it("sends the mouse settings to the page every other input device is on", () => {
+    // A mouse is a controller. Before this, all six mouse items sat in the residual bin with the
+    // tape rate and the data streams, under a heading that named none of them.
+    for (const item of [
+      "Mouse Mode",
+      "Mouse Sensitivity",
+      "Mouse Acceleration",
+      "Mouse Wheel Sensitivity",
+      "Mouse Wheel Direction",
+      "Menu Mouse Navigation",
+    ]) {
+      expect(routeAdvancedItem(H, "C64U", "U64 Specific Settings", item)).toBe("Joystick & controllers");
+    }
+  });
+
+  it("sends a SID socket's own settings to the SID sockets page, whatever chip is in it", () => {
+    // Matched on the category NAME, not an exact string: the device names the category after the
+    // chip it finds, so "SID Socket 1: ARMSID" today can be "SID Socket 1: 6581" tomorrow.
+    for (const category of ["SID Socket 1: ARMSID", "SID Socket 2: 6581", "SID Socket 1: SwinSID"]) {
+      expect(routeAdvancedItem(H, "C64U", category, "6581 Filter Strength")).toBe("SID sockets configuration");
+      expect(unroutedCategories(H, "C64U", [category])).toEqual([]);
+    }
+    expect(advancedCategoriesForPage(H, "C64U", "SID sockets configuration", ["SID Socket 1: ARMSID"])).toContain(
+      "SID Socket 1: ARMSID",
+    );
+  });
+
+  it("still surfaces a category it has never heard of, rather than dropping it", () => {
+    // The guarantee that matters: routing may improve, but an unknown category must always come
+    // back as unrouted so the page can give it a card of its own. Never hide a setting.
+    expect(routeAdvancedItem(H, "C64U", "Quantum Flux Settings", "Flux Capacitance")).toBeNull();
+    expect(unroutedCategories(H, "C64U", ["Quantum Flux Settings"])).toEqual(["Quantum Flux Settings"]);
+    // Including for a device family this app has no routing table for at all.
+    expect(routeAdvancedItem(H, "SomeFutureFamily", "Anything At All", "An Item")).toBeNull();
+  });
 });

@@ -31,6 +31,8 @@ interface MenuPageSectionProps {
   groupLabel: string | null;
   hierarchy: MenuHierarchy;
   family: string;
+  /** What the device reports it has, for routing a category the menu never names. */
+  liveCategories: readonly string[];
   authoritativeValues: AuthoritativeConfigValueState;
   markChanged: () => void;
   focusOrder: number;
@@ -48,6 +50,7 @@ export function MenuPageSection({
   groupLabel,
   hierarchy,
   family,
+  liveCategories,
   authoritativeValues,
   markChanged,
   focusOrder,
@@ -59,8 +62,8 @@ export function MenuPageSection({
   const blocks = useMemo(() => buildMenuBlocks(page), [page]);
   // Categories whose unclaimed (advanced/REST-only) items smart-route ONTO this page.
   const advancedCategories = useMemo(
-    () => advancedCategoriesForPage(hierarchy, family, page.label),
-    [hierarchy, family, page.label],
+    () => advancedCategoriesForPage(hierarchy, family, page.label, liveCategories),
+    [hierarchy, family, page.label, liveCategories],
   );
   const restCategories = useMemo(
     () =>
