@@ -1121,21 +1121,27 @@ function HomePageContent() {
   const displayedReuSizeOptions = isActive ? effectiveReuSizeOptions : [unavailableLabel];
   const displayedUserPortPowerOptions = isActive ? effectiveUserPortPowerOptions : [unavailableLabel];
 
-  const ramDumpFolderCard = (
-    <div className="flex items-center gap-2 text-sm" data-testid="home-ram-folder-row">
-      <span className="text-muted-foreground">RAM folder:</span>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-auto px-0 py-0 text-sm font-medium"
-        onClick={() => void handleSelectRamDumpFolder()}
-        disabled={folderTaskPending || machineTaskBusy}
-        data-testid="ram-dump-folder-trigger"
-      >
-        {folderTaskPending ? "Changing…" : ramDumpFolderLabel}
-      </Button>
-    </div>
-  );
+  const ramDumpFolderCard =
+    (
+      /*
+       * Shown inside the Save RAM and Load RAM dialogs rather than as a Quick Action of its own.
+       * Where the snapshots go is a property of saving and loading them, not a fifth thing to do on
+       * the Home page — and as a card it competed for attention with the actions it only qualifies.
+       */
+      <div className="flex items-center gap-2 text-sm" data-testid="home-ram-folder-row">
+        <span className="shrink-0 text-muted-foreground">RAM folder:</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-auto px-0 py-0 text-sm font-medium"
+          onClick={() => void handleSelectRamDumpFolder()}
+          disabled={folderTaskPending || machineTaskBusy}
+          data-testid="ram-dump-folder-trigger"
+        >
+          {folderTaskPending ? "Changing…" : ramDumpFolderLabel}
+        </Button>
+      </div>
+    );
   const hdmiScanPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "HDMI Scan lines")]);
   const joystickSwapPending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "Joystick Swapper")]);
   const serialBusModePending = Boolean(configWritePending[buildConfigKey("U64 Specific Settings", "Serial Bus Mode")]);
@@ -1276,7 +1282,6 @@ function HomePageContent() {
             onGameMode={() => void startGameMode()}
             onAction={handleAction}
             telnetBusy={telnet.isBusy}
-            footer={ramSnapshotsEnabled ? ramDumpFolderCard : null}
           />
 
           {liveViewEnabled && (audioMirrorEnabled || videoMirrorEnabled) && deviceCapabilities.supportsStreaming ? (
@@ -2007,6 +2012,7 @@ function HomePageContent() {
         telnetAvailable={telnet.isAvailable}
         telnetBusy={telnet.isBusy}
         telnetSaveReuDisabledReason={saveReuDisabledReason}
+        folderRow={ramSnapshotsEnabled ? ramDumpFolderCard : null}
       />
 
       {remoteInputEnabled ? (
@@ -2018,6 +2024,7 @@ function HomePageContent() {
         onOpenChange={setSnapshotManagerOpen}
         snapshots={allSnapshots}
         showReuFilter={reuSnapshotEnabled}
+        folderRow={ramSnapshotsEnabled ? ramDumpFolderCard : null}
         onRestore={(snapshot) => {
           setRestoreTarget(snapshot);
         }}

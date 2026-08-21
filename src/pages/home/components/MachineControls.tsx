@@ -156,6 +156,16 @@ export function MachineControls({
   // where they are rendered, not of their focusOrder. Extras arrive interleaved,
   // which is what used to scatter the red tiles through the safe ones.
   const safeExtraActions = extraActions.filter((action) => action.variant !== "danger");
+  /*
+   * Remote Input sits beside Game Mode rather than after Pause.
+   *
+   * The two are the same thing at different depths — Game Mode is Remote Input with the joystick
+   * up and the screen mirrored — so a reader looking for one is looking at the other. Coming
+   * through `extraActions` put it after Menu and Pause, which are unrelated machine controls, and
+   * on a four-column grid that placed it on the far side of the row from its pair.
+   */
+  const remoteInputAction = safeExtraActions.find((action) => action.id === "openRemoteInput") ?? null;
+  const otherSafeExtraActions = safeExtraActions.filter((action) => action !== remoteInputAction);
   const destructiveExtraActions = extraActions.filter((action) => action.variant === "danger");
 
   const renderExtraAction = (action: MachineExtraAction, focusOrder: number) => {
@@ -222,6 +232,7 @@ export function MachineControls({
                 disabled={!status.isConnected}
               />
             ) : null}
+            {remoteInputAction ? renderExtraAction(remoteInputAction, 105) : null}
             <QuickActionCard
               icon={Menu}
               label="Menu"
@@ -241,7 +252,7 @@ export function MachineControls({
               disabled={!status.isConnected || effectiveBusy}
               loading={pauseResumePending}
             />
-            {safeExtraActions.map((action, index) => renderExtraAction(action, 130 + index * 2))}
+            {otherSafeExtraActions.map((action, index) => renderExtraAction(action, 130 + index * 2))}
             {ramActionsVisible ? (
               <>
                 <QuickActionCard

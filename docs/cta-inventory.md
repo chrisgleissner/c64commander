@@ -177,13 +177,13 @@ not-connected / empty / single-device).
     - Delete range — button — `save-ram-custom-delete-range-{i}` — R✅ I✅
     - Add range — button — `save-ram-custom-add-range` — R✅ I✅
     - Save custom — button — `save-ram-custom-confirm` — R✅ I✅
+    - RAM folder — button (`...`) — `ram-dump-folder-trigger` — R✅ I✅ — where the snapshot is written; shown at the foot of this dialog and of **Load RAM**, not as a Quick Action of its own
   - Load RAM — button — `home-load-ram` — R✅ I✅ _(flag)_
   - Reset — button (danger) — R✅ I✅ (confirm dialog)
   - Reboot — button (danger) — R✅ I✅ (confirm dialog)
   - Reboot (Clr Mem) — button (danger) — `home-machine-inline-rebootClearMemory` — R✅ I✅ (confirm dialog) _(flag `home_telnet_clear_ram_reboot_enabled`)_
   - Power Cycle — button (danger) — `home-power-cycle` — R✅ I✅ (confirm dialog) _(conditional on device capability)_
   - Power Off — button (danger) — R✅ I✅ (confirm dialog)
-  - RAM dump folder — button (`...`) — `ram-dump-folder-trigger` — R✅ I✅
 - **Quick Config → CPU & RAM** (`home-cpu-summary`)
   - Turbo Control — select — `home-cpu-turbo-control` — R✅ I✅ (verified: opens Off/Manual/C64U Turbo Registers/TurboEnable Bit)
   - CPU Speed — slider — `home-cpu-speed-slider` — R✅ I✅ **(verified end-to-end: keypad Right 1→4 reflected in c64u firmware; Left restored)**

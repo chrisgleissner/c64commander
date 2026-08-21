@@ -224,6 +224,16 @@ const renderWithRouter = (ui: JSX.Element) =>
  * about the collapse itself — CollapsibleSection.test.tsx covers that generically — so every
  * section is opened right after render.
  */
+/**
+ * Opens the Save RAM dialog, which is where the RAM folder row lives.
+ *
+ * Where snapshots are written is a property of saving and loading them, not a Quick Action of its
+ * own, so the row moved into the two dialogs that use it.
+ */
+const openSaveRamDialog = () => {
+  fireEvent.click(screen.getByTestId("home-save-ram"));
+};
+
 const expandAllSections = () => {
   const toggles = screen.queryAllByTestId(/^home-section-toggle-/);
   toggles.forEach((toggle) => {
@@ -1121,6 +1131,7 @@ describe("HomePage SID status", () => {
     expect(screen.getByTestId("home-system-build-time").textContent).toContain("2024-03-20 12:34:00 UTC");
     expect(screen.getByText("Quick Actions")).toBeTruthy();
     expect(screen.queryByTestId("home-drive-summary")).toBeNull();
+    openSaveRamDialog();
     expect(screen.getByTestId("home-ram-folder-row").textContent).toContain("RAM folder:");
     expect(screen.getByTestId("ram-dump-folder-trigger").textContent).toContain("...");
   });
@@ -1284,6 +1295,7 @@ describe("HomePage SID status", () => {
     const machineControls = screen.getByTestId("home-machine-controls");
     expect(within(machineControls).queryByRole("button", { name: /^save ram$/i })).toBeNull();
     expect(within(machineControls).queryByRole("button", { name: /^load ram$/i })).toBeNull();
+    // With the flag off there is no Save RAM dialog to open, so the folder row has nowhere to be.
     expect(screen.queryByTestId("home-ram-folder-row")).toBeNull();
   });
 
@@ -1575,6 +1587,7 @@ describe("HomePage SID status", () => {
 
     renderHomePage();
 
+    openSaveRamDialog();
     expect(screen.getByTestId("ram-dump-folder-trigger").textContent).toContain("Internal storage/C64/dumps");
 
     clearRamDumpFolderConfig();
@@ -1590,6 +1603,7 @@ describe("HomePage SID status", () => {
 
     renderHomePage();
 
+    openSaveRamDialog();
     expect(screen.getByTestId("ram-dump-folder-trigger").textContent).toContain("Pinned/Dumps");
 
     clearRamDumpFolderConfig();
@@ -1599,6 +1613,7 @@ describe("HomePage SID status", () => {
     const selectFolderSpy = vi.spyOn(ramDumpStorage, "selectRamDumpFolder").mockReturnValue(new Promise(() => {}));
 
     renderHomePage();
+    openSaveRamDialog();
     fireEvent.click(screen.getByTestId("ram-dump-folder-trigger"));
 
     await waitFor(() => expect(screen.getByTestId("ram-dump-folder-trigger").textContent).toContain("Changing…"));
@@ -1738,14 +1753,14 @@ describe("HomePage SID status", () => {
     expect(screen.queryByTestId("home-keyboard-lighting-deferred")).toBeNull();
     expect(screen.queryByTestId("home-keyboard-lighting-load")).toBeNull();
 
+    // The RAM folder row is no longer a Quick Action: it is shown inside the Save RAM and Load RAM
+    // dialogs, where the folder it names is about to be used.
     const machineSection = screen.getByTestId("home-machine-controls").closest('[data-section-label="Quick Actions"]');
-    const ramFolderRow = screen.getByTestId("home-ram-folder-row");
     expect(machineSection).toBeTruthy();
-    expect(machineSection?.contains(ramFolderRow)).toBe(true);
-    expect(
-      screen.getByTestId("home-machine-controls").compareDocumentPosition(screen.getByTestId("home-machine-footer")) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).not.toBe(0);
+    // Not opened here: this test is about the order of the cards on the page, and a dialog left
+    // open changes the scroll-lock state a later assertion reads. That the row is inside the
+    // dialog is covered by the RAM-folder tests above.
+    expect(screen.queryByTestId("home-ram-folder-row")).toBeNull();
 
     // Each of these is now its own top-level CollapsibleSection rather than a shared
     // "secondary cards" column, so the order check below runs against the page directly.

@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useState, type MouseEvent, type SyntheticEvent } from "react";
+import type { ReactNode } from "react";
 import {
   AppSheet,
   AppSheetBody,
@@ -31,6 +32,9 @@ interface SnapshotManagerDialogProps {
   onDelete: (id: string) => void;
   onUpdateLabel: (id: string, label: string) => void;
   showReuFilter?: boolean;
+  /** Where snapshots are read from, and the control that changes it. Rendered under the filters:
+   * it belongs to the list being shown, not to the Home page. */
+  folderRow?: ReactNode;
 }
 
 const TYPE_FILTERS: Array<{ value: RestorableSnapshotType | "all"; label: string }> = [
@@ -247,6 +251,7 @@ export function SnapshotManagerDialog({
   onDelete,
   onUpdateLabel,
   showReuFilter = true,
+  folderRow,
 }: SnapshotManagerDialogProps) {
   const { profile } = useDisplayProfile();
   const [query, setQuery] = useState("");
@@ -289,6 +294,8 @@ export function SnapshotManagerDialog({
               onChange={(e) => setQuery(e.target.value)}
               data-testid="snapshot-filter-input"
             />
+
+            {folderRow}
 
             <div className="flex gap-1 flex-wrap" data-testid="snapshot-type-filters">
               {visibleFilters.map(({ value, label }) => (
