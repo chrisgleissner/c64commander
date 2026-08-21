@@ -128,7 +128,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const { deviceRotation, frameRotation, source: rotationSource, pin, clearPin } = useDeviceRotation(open);
 
   const requestSheetOpen = useCallback(() => onOpenChange(true), [onOpenChange]);
-  const { immersive, enterGameMode, exitGameMode, releaseLaunchedStreams } = useRemoteInputGameMode({
+  const { immersive, exitGameMode, releaseLaunchedStreams } = useRemoteInputGameMode({
     open,
     joystickAvailable,
     tierResolved: resolved && !tierLoading,

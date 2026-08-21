@@ -12,9 +12,7 @@ import {
   getC64API,
   updateC64APIConfig,
   DeviceInfo,
-  CategoriesResponse,
   ConfigResponse,
-  DrivesResponse,
   getC64APIConfigSnapshot,
   buildBaseUrlFromDeviceHost,
   normalizeDeviceHost,
@@ -180,7 +178,6 @@ export function useC64Connection() {
   const {
     data: deviceInfo,
     error,
-    isLoading,
     refetch,
   } = useQuery({
     queryKey: infoQueryKey,

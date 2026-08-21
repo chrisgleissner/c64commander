@@ -469,9 +469,6 @@ const normalizeEnvelope = (envelope: PersistedSavedDevicesEnvelope): PersistedSa
   };
 };
 
-const selectedDeviceFromEnvelope = (envelope: PersistedSavedDevicesEnvelope) =>
-  envelope.devices.find((device) => device.id === envelope.selectedDeviceId) ?? envelope.devices[0] ?? null;
-
 const buildSnapshot = (envelope: PersistedSavedDevicesEnvelope): SavedDevicesSnapshot => ({
   selectedDeviceId: envelope.selectedDeviceId,
   devices: envelope.devices,

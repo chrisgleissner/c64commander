@@ -19,7 +19,7 @@ import {
   MAX_BRIDGE_READ_BYTES,
 } from "./hvscFilesystem";
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
-import { addErrorLog, addLog } from "@/lib/logging";
+import { addLog } from "@/lib/logging";
 import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
 import { createHvscCancellationError } from "./hvscCancellation";
 

@@ -162,7 +162,6 @@ export const parseSidHeaderMetadata = (buffer: Uint8Array | ArrayBuffer): SidHea
   const sid3Adress = version >= 4 && view.byteLength >= 124 ? view.getUint8(123) : null;
 
   const sid2Address = sid2Adress !== null ? decodeSidAddressByte(sid2Adress) : null;
-  const sid3Address = sid3Adress !== null ? decodeSidAddressByte(sid3Adress) : null;
 
   const sid2Model = sid2Adress ? decodeSidModel(sid2ModelBits) : null;
   const sid3Model = sid3Adress ? decodeSidModel(sid3ModelBits) : null;

@@ -115,7 +115,6 @@ export const INTERACTIVE_CONTROL_TIMEOUT_MS = 1500;
 export const BACKGROUND_REQUEST_TIMEOUT_MS = 3000;
 // Backwards-compatible aliases (kept until all call sites are migrated).
 const CONTROL_REQUEST_TIMEOUT_MS = INTERACTIVE_CONTROL_TIMEOUT_MS;
-const SCHEDULED_REQUEST_TIMEOUT_MS = BACKGROUND_REQUEST_TIMEOUT_MS;
 const UPLOAD_REQUEST_TIMEOUT_MS = 5000;
 const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
 // Drive mount/eject are heavier firmware ops than a tappable control: real
@@ -128,7 +127,6 @@ const MOUNT_REQUEST_TIMEOUT_MS = 8000;
 const RAM_BLOCK_WRITE_TIMEOUT_MS = 15_000;
 // Formatting a blank image on slow USB media can exceed the normal control budget.
 const DISK_CREATE_REQUEST_TIMEOUT_MS = 30_000;
-const IDLE_RECOVERY_THRESHOLD_MS = 10_000;
 const NETWORK_RETRY_DELAY_MS = 180;
 const SID_UPLOAD_MAX_ATTEMPTS = 3;
 const SID_UPLOAD_RETRYABLE_HTTP_STATUS = new Set([502, 503, 504]);

@@ -1251,8 +1251,6 @@ const claimNativeTrack = (backend: object, sink: object, serial: number): void =
   trackOwners.set(backend, { sink, serial });
 };
 
-const ownsNativeTrack = (backend: object, sink: object): boolean => trackOwners.get(backend)?.sink === sink;
-
 /** Whether a NEWER sink has already begun writing, which is what retires this one. */
 const isSuperseded = (backend: object, serial: number): boolean => {
   const owner = trackOwners.get(backend);

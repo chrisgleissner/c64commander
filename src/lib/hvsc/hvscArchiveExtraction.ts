@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Unzip, UnzipInflate, unzipSync } from "fflate";
+import { Unzip, UnzipInflate } from "fflate";
 import {
   removeScratchTree,
   walkScratchFiles,

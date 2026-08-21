@@ -6,26 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import {
-  adc,
-  assemble,
-  beq,
-  bne,
-  clc,
-  db,
-  dw,
-  jmp,
-  label,
-  lda,
-  ldx,
-  ldy,
-  rti,
-  sta,
-  stx,
-  sty,
-  tsx,
-  txa,
-} from "./assembler";
+import { adc, assemble, beq, bne, clc, db, dw, jmp, label, lda, ldx, ldy, sta, stx, sty, tsx, txa } from "./assembler";
 
 /**
  * The RLI (Ride the Live Interrupt) capture handler.

@@ -10,7 +10,6 @@ import { LocalSidChunkScheduler, type AudioScheduleSink, type AudioScheduleSourc
 import type { LocalSidMainToWorker, LocalSidWorkerToMain, LocalSidOpenedMessage } from "./localSidWorkerProtocol";
 import { toEngineSidModel } from "./localSidWorkerProtocol";
 import { hasCompleteRomSet, loadStoredRoms } from "@/lib/roms/romStore";
-import { Capacitor } from "@capacitor/core";
 import {
   effectiveSidEmulationEngine,
   loadPlaybackCrossfadeMs,

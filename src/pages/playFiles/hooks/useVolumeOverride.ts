@@ -18,7 +18,7 @@ import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getC64API } from "@/lib/c64api";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
-import { isSidVolumeName, resolveAudioMixerMuteValue } from "@/lib/config/audioMixerSolo";
+import { isSidVolumeName } from "@/lib/config/audioMixerSolo";
 import {
   AUDIO_MIXER_MASTER_VOLUME_ITEM,
   AUDIO_MIXER_VOLUME_ITEMS,

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { addErrorLog } from "@/lib/logging";
 import { buildDiskId, createDiskEntry, getDiskName, normalizeDiskPath, type DiskEntry } from "@/lib/disks/diskTypes";
 import { loadDiskLibrary, saveDiskLibrary } from "@/lib/disks/diskStore";

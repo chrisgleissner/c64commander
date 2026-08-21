@@ -19,7 +19,6 @@ import {
   collectSonglengthsSearchPaths,
   isSonglengthsFileName,
 } from "@/lib/sid/songlengthsDiscovery";
-import { getParentPath } from "@/lib/playback/localFileBrowser";
 import { getLocalFilePath, normalizeLocalPath } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import {

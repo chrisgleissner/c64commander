@@ -58,7 +58,6 @@ import {
   subscribeInputModality,
   type DismissibleLayer,
   type FocusDescriptor,
-  type FocusItem,
   type Keymap,
 } from "@/lib/input";
 import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";

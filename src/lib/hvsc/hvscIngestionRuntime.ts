@@ -11,7 +11,6 @@ import { Capacitor } from "@capacitor/core";
 import type {
   HvscCacheStatus,
   HvscFolderListing,
-  HvscIngestionState,
   HvscProgressEvent,
   HvscSong,
   HvscStatus,
@@ -37,7 +36,7 @@ import {
 } from "./hvscFilesystem";
 import { loadHvscState, updateHvscState, isUpdateApplied, markUpdateApplied, type HvscState } from "./hvscStateStore";
 import { invalidateHvscHydration } from "./hvscHydrationControl";
-import { getDefaultHvscStatusSummary, loadHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
+import { getDefaultHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
 import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from "./hvscSongLengthService";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
@@ -75,13 +74,10 @@ import {
   drainNativeProgressListeners,
   formatPathListPreview,
   getHvscIngestionRuntimeState,
-  isIngestionRuntimeActive,
-  recoverStaleIngestionState,
   registerNativeProgressListener,
   removeNativeProgressListener,
   reportCacheStatFailure,
   resetCacheStatFailure,
-  type HvscProgressListenerHandle,
 } from "./hvscIngestionRuntimeSupport";
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
 import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";

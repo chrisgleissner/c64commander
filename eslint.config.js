@@ -43,10 +43,32 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // Deliberately off. This repository's worst recurring failure is an effect
+      // whose dependency is referentially unstable but value-equal: it loops
+      // synchronously, starves the event loop, and surfaces as an indefinite
+      // Vitest hang rather than a failing test (REVIEW.md hazard 1). Completing a
+      // dependency array on the rule's say-so is how that loop gets introduced,
+      // so dependencies here are a deliberate choice, not an oversight.
       "react-hooks/exhaustive-deps": "off",
       "react-refresh/only-export-components": "off",
       "@typescript-eslint/no-unused-vars": "off",
       "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+  {
+    // Shipped code only. An unused binding here is either dead code or a
+    // symptom - something computed and then never applied. Turning this on
+    // found 87, among them a shipped setting whose handler nothing calls and a
+    // config merge whose result was discarded. Prefix a genuinely unused
+    // variable with `_` to say it is unused on purpose.
+    //
+    // Not yet on for tests/, playwright/, c64scope/ and scripts/: they hold 121
+    // more, and 75 of those are `const x = call()` where the call still has to
+    // run, so each needs reading rather than deleting.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/**/*.d.ts"],
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["error", { args: "none", varsIgnorePattern: "^_", caughtErrors: "none" }],
     },
   },
   // Telnet and diagnostics paths must use structured addLog/addErrorLog,

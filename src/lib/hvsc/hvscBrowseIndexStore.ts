@@ -257,13 +257,6 @@ const encodeUtf8Base64 = (value: string) => {
 const hashPath = (value: string) =>
   Math.abs(Array.from(value).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0));
 
-const getParentFolder = (virtualPath: string) => {
-  const normalized = normalizePath(virtualPath);
-  const index = normalized.lastIndexOf("/");
-  if (index <= 0) return "/";
-  return normalized.substring(0, index);
-};
-
 const getFileName = (virtualPath: string) => {
   const normalized = normalizePath(virtualPath);
   const index = normalized.lastIndexOf("/");

@@ -9,8 +9,8 @@
 import { useState, useMemo, useEffect, useReducer, useRef, useCallback } from "react";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
-import { motion, AnimatePresence } from "framer-motion";
-import { Search, ChevronDown, Loader2, RefreshCw, FolderOpen } from "lucide-react";
+import { motion } from "framer-motion";
+import { Search, Loader2, RefreshCw, FolderOpen } from "lucide-react";
 import {
   useC64Categories,
   useC64Category,

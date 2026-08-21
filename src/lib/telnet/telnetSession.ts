@@ -19,8 +19,6 @@ import {
 import { parseTelnetScreen } from "@/lib/telnet/telnetScreenParser";
 import { addLog } from "@/lib/logging";
 
-const LOG_TAG = "TelnetSession";
-
 /** Maximum reconnection attempts */
 const MAX_RECONNECT_RETRIES = 2;
 

@@ -18,7 +18,7 @@ import { recordDeviceGuard, recordTraceError } from "@/lib/tracing/traceSession"
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
-import { AUTOSTART_SEQUENCE, buildAutostartSequence } from "./autostart";
+import { buildAutostartSequence } from "./autostart";
 import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 import {
   formatPlayCategory,

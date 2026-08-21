@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { ReactNode, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   RotateCcw,
   Power,

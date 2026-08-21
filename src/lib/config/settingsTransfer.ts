@@ -40,7 +40,6 @@ import {
   type ScreenOrientationMode,
 } from "@/lib/config/appSettings";
 import {
-  FEATURE_FLAG_IDS,
   featureFlagManager,
   isFeatureFlagStandardUserToggleable,
   isKnownFeatureFlagId,
@@ -123,12 +122,6 @@ export type SettingsExportPayload = {
     discoveryProbeIntervalMs: number;
     allowUserOverrideCircuit: boolean;
   };
-};
-
-type LegacySettingsExportPayload = {
-  version: 1;
-  appSettings: LegacySettingsAppSettingsPayload;
-  deviceSafety: SettingsExportPayload["deviceSafety"];
 };
 
 // Keys that must be present in all settings payloads.

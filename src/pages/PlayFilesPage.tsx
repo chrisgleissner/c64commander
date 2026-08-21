@@ -8,8 +8,7 @@
 
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,7 +28,7 @@ import {
   type AddItemsProgressState,
 } from "@/components/itemSelection/AddItemsProgressOverlay";
 import { ItemSelectionDialog, type SourceGroup } from "@/components/itemSelection/ItemSelectionDialog";
-import { useC64ConfigItems, useC64Connection, useC64UpdateConfigBatch } from "@/hooks/useC64Connection";
+import { useC64Connection } from "@/hooks/useC64Connection";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useListPreviewLimit } from "@/hooks/useListPreviewLimit";
@@ -39,7 +38,6 @@ import { useActionTrace } from "@/hooks/useActionTrace";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { reportUserError } from "@/lib/uiErrors";
-import { getC64API } from "@/lib/c64api";
 import { createLatestIntentWriteLane, type LatestIntentWriteLane } from "@/lib/deviceInteraction/latestIntentWriteLane";
 import type { TraceSourceKind } from "@/lib/tracing/types";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
@@ -62,7 +60,7 @@ import { createStationDurationResolver } from "@/pages/playFiles/stationDuration
 import { Checkbox } from "@/components/ui/checkbox";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { createArchiveSourceLocation } from "@/lib/sourceNavigation/archiveSourceAdapter";
-import { createLocalSourceLocation, resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
+import { createLocalSourceLocation } from "@/lib/sourceNavigation/localSourceAdapter";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { prepareDirectoryInput } from "@/lib/sourceNavigation/localSourcesStore";
 import type { SelectedItem, SourceLocation } from "@/lib/sourceNavigation/types";
@@ -79,7 +77,6 @@ import { resolveTrackDisplayName, type SidChipCount } from "@/lib/playback/sidDi
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { FolderPicker } from "@/lib/native/folderPicker";
-import { redactTreeUri } from "@/lib/native/safUtils";
 import {
   isBackgroundExecutionActive,
   startBackgroundExecution,
@@ -155,7 +152,7 @@ import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
 import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFileSelections";
 import { loadGameModeOnLaunch, shouldEnterGameModeOnLaunch, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { planPlaylistItemRemoval, resolveAutoAdvanceDueAtMsOnDurationChange } from "@/pages/playFiles/playbackGuards";
-import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "@/pages/playFiles/types";
+import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import {
   buildConfigReferenceFromBrowserSelection,
   buildLocalConfigReferenceFromAndroidPicker,
@@ -172,10 +169,7 @@ import {
   CATEGORY_OPTIONS,
   DEFAULT_SONG_DURATION_MS,
   DURATION_SLIDER_STEPS,
-  PLAYBACK_SESSION_KEY,
-  PLAYLIST_STORAGE_PREFIX,
   SHARED_PLAYLIST_STORAGE_KEY,
-  buildPlaylistStorageKey,
   buildPlaylistItemId,
   buildSubsongSwitchItem,
   canAdvanceNext,
@@ -194,7 +188,6 @@ import {
   resolvePickerConfirm,
   parseDurationInput,
   sliderToDurationSeconds,
-  shuffleArray,
 } from "@/pages/playFiles/playFilesUtils";
 import { getSharedLocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { describePendingSeek, type PendingSeekState } from "@/lib/playback/pendingSeekStatus";
@@ -232,9 +225,7 @@ export default function PlayFilesPage() {
     resolve: (choice: "play-without-config" | "cancel") => void;
   };
 
-  const navigate = useNavigate();
   const { status } = useC64Connection();
-  const updateConfigBatch = useC64UpdateConfigBatch();
   const deviceInfoId = status.deviceInfo?.unique_id ?? null;
   const { sources: localSources, addSourceFromPicker } = useLocalSources();
   const [browserOpen, setBrowserOpen] = useState(false);
@@ -381,7 +372,7 @@ export default function PlayFilesPage() {
   // HARD19-026: pass the live hvsc_enabled gate so the hook's background native
   // lifecycle (status/recover/hydration) stays dormant when HVSC is disabled.
   const hvsc = useHvscLibrary(hvscControlsEnabled);
-  const { hvscStatus, hvscRoot, hvscAvailable, buildHvscLocalPlayFile } = hvsc;
+  const { hvscRoot, hvscAvailable, buildHvscLocalPlayFile } = hvsc;
 
   const { localEntriesBySourceId, localSourceTreeUris } = useLocalEntries(localSources);
 
@@ -498,6 +489,9 @@ export default function PlayFilesPage() {
    * the whole point on a handset with no touchscreen. Every condition that keeps it
    * from becoming a surprise lives in `shouldEnterGameModeOnLaunch`.
    */
+  // DEFECT: nothing calls this. Settings → Game Mode → "on launch" therefore never
+  // takes effect. Kept rather than deleted so the fix is a wiring change, not a rewrite.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleUserLaunchedItem = useCallback(
     (item: PlaylistItem) => {
       if (!remoteInputEnabled) return;

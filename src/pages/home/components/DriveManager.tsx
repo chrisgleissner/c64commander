@@ -31,7 +31,7 @@ import { DRIVE_CONTROL_SPECS, DriveControlSpec } from "../constants";
 import { formatDiskDosStatus, type DiskDosStatus } from "@/lib/disks/dosStatusFormatter";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
-import { TELNET_ACTIONS, type TelnetActionId } from "@/lib/telnet/telnetTypes";
+import { type TelnetActionId } from "@/lib/telnet/telnetTypes";
 import type { TelnetActionSupport } from "@/lib/telnet/telnetCapabilityDiscovery";
 
 import { buildBusIdOptions, buildTypeOptions } from "@/lib/drives/driveDevices";

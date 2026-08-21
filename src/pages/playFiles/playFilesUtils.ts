@@ -7,10 +7,7 @@
  */
 
 import { formatByteSize, formatDetailDate, UNKNOWN_VALUE } from "@/lib/ui/detailFormat";
-import {
-  extractAudioMixerItems as extractAudioMixerItemsFromLib,
-  type AudioMixerItem,
-} from "@/lib/config/audioMixerItems";
+import { extractAudioMixerItems as extractAudioMixerItemsFromLib } from "@/lib/config/audioMixerItems";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import { getPlayCategory, type PlayFileCategory } from "@/lib/playback/fileTypes";
 import type { PlaylistItem } from "./types";

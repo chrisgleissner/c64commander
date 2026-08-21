@@ -9,7 +9,6 @@
 import type {
   PlaylistItemRecord,
   PlaylistQueryOptions,
-  PlaylistQuerySort,
   PlaylistQueryResult,
   PlaylistQueryRow,
   TrackRecord,
