@@ -10,12 +10,14 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNo
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 
+import { FittedText } from "@/components/ui/FittedText";
 import { cn } from "@/lib/utils";
 import {
   SECTION_DESCRIPTIONS_KEY,
   SECTION_OPENED_EVENT,
   announceSectionOpened,
   loadShowSectionDescriptions,
+  subscribeSectionsBulk,
   readSectionStates,
   writeSectionState,
   type SectionOpenedDetail,
@@ -29,13 +31,18 @@ export interface CollapsibleSectionProps {
   scope: string;
   id: string;
   title: string;
+  /** Alternative wordings for `title`, longest first, for a title that would otherwise be
+   * truncated in a narrow header. The longest that fits is drawn; the accessible name stays
+   * `title`. Omit for a title that always fits. */
+  titleVariants?: readonly string[];
   /** One line saying what is inside, so the page can be read without opening anything.
    * Omit for a page (like Docs) whose card titles already say enough on their own. */
   summary?: string;
   icon: LucideIcon;
-  /** Opened on a first visit to this scope. Reserved for the section(s) most visits are
-   * actually about - see each page's own call site for why a given section does or does
-   * not set this. */
+  /** Opened on a first visit to this scope, overriding the profile's own default. Set it only
+   * where a section is deliberately secondary (closed on a roomy screen) or deliberately the point
+   * of the page (open on a small one) - see each call site for which it is. Left unset, the
+   * display profile decides: closed on the smallest screen, open where there is room. */
   defaultOpen?: boolean;
   /** Shown beside the title - a count, a state, or a warning that must be visible while closed. */
   badge?: ReactNode;
@@ -90,9 +97,10 @@ export const CollapsibleSection = ({
   scope,
   id,
   title,
+  titleVariants,
   summary,
   icon: Icon,
-  defaultOpen = false,
+  defaultOpen,
   badge,
   headerRef,
   actions,
@@ -106,17 +114,53 @@ export const CollapsibleSection = ({
   onToggleClick,
   children,
 }: CollapsibleSectionProps) => {
+  const { profile } = useDisplayProfile();
+  const singleOpen = profile === "compact";
+
+  /*
+   * Closed on every profile, for now.
+   *
+   * Opening sections by default on the roomier profiles is wanted — on a phone or a tablet there is
+   * room to read down the page, and having to open each section to see what a page holds is
+   * friction the cards were meant to remove. It is not switched on here because of what it does to
+   * keypad navigation: a card is a scope the ring enters with OK, and on a page whose cards are
+   * already open that same OK collapses them instead. Four of the Settings keypad-ring tests fail
+   * on it, and the fix belongs with the ring rather than with the default. Until then, the Quick
+   * menu's "Expand all sections" is how a reader opens a page in one action.
+   */
+  const resolvedDefaultOpen = defaultOpen ?? false;
+
   // Read once, during the first render, not from an effect. From an effect the card renders
   // closed and then opens on the next commit, and a caller mirroring the open state (see
   // `onOpenChange`) sees a false "closed" in between — the Config page's Audio Mixer card treats
   // exactly that as "the card was closed" and undoes an active Solo.
   const [open, setOpen] = useState(() => {
-    // Only override `defaultOpen` if THIS id was explicitly toggled before. An id the user never
-    // touched keeps its own default regardless of what else in the scope was opened or closed
+    // Only override the default if THIS id was explicitly toggled before. An id the user never
+    // touched keeps the default regardless of what else in the scope was opened or closed
     // (see the store's own comment).
     const stored = readSectionStates(scope);
-    return stored.has(id) ? (stored.get(id) ?? defaultOpen) : defaultOpen;
+    return stored.has(id) ? (stored.get(id) ?? resolvedDefaultOpen) : resolvedDefaultOpen;
   });
+
+  /*
+   * Expand all / Collapse all, from the Quick menu.
+   *
+   * A bulk open deliberately does not announce itself, which is what suspends the compact
+   * profile's one-card-at-a-time rule for it: that rule exists to keep the list of titles on
+   * screen around whatever is open, and a reader who asked for every section is overriding it on
+   * purpose. The choice is persisted like any other, so it survives leaving the page.
+   */
+  useEffect(
+    () =>
+      subscribeSectionsBulk((nextOpen) => {
+        setOpen((current) => {
+          if (current === nextOpen) return current;
+          writeSectionState(scope, id, nextOpen);
+          return nextOpen;
+        });
+      }),
+    [scope, id],
+  );
   const [showSummary, setShowSummary] = useState(loadShowSectionDescriptions);
 
   // Off by default, and the setting is read here rather than threaded through every call site
@@ -137,8 +181,6 @@ export const CollapsibleSection = ({
     return () => window.removeEventListener("c64u-app-settings-updated", apply);
   }, []);
 
-  const { profile } = useDisplayProfile();
-  const singleOpen = profile === "compact";
   const sectionRef = useRef<HTMLElement | null>(null);
   /** True only between a user opening this card and the reveal that follows it. */
   const openedByUserRef = useRef(false);
@@ -291,7 +333,13 @@ export const CollapsibleSection = ({
                 "7/11 on" badge measured 64 CSS px against 38 for every other card on the page.
               */}
               <span className="flex min-w-0 items-center gap-2">
-                <h2 className="min-w-0 truncate font-medium">{title}</h2>
+                <h2 className="min-w-0 truncate font-medium">
+                  {titleVariants && titleVariants.length > 0 ? (
+                    <FittedText variants={titleVariants} label={title} />
+                  ) : (
+                    title
+                  )}
+                </h2>
                 {badge ? <span className="shrink-0">{badge}</span> : null}
               </span>
               {summary ? (

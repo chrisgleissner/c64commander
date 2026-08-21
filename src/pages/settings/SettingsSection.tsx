@@ -17,7 +17,11 @@ export interface SettingsSectionProps {
   /** One line saying what is inside, so the page can be read without opening anything. */
   summary: string;
   icon: LucideIcon;
-  /** Opened on a first visit. Reserved for the one section most visits are actually about. */
+  /** Alternative wordings for `title`, longest first, for a title that would otherwise be
+   * truncated beside a badge. */
+  titleVariants?: readonly string[];
+  /** Opened on a first visit, overriding the display profile's own default. Reserved for a
+   * section that is deliberately the point of the page, or deliberately secondary. */
   defaultOpen?: boolean;
   /** Shown beside the title — a count, a state, or a warning that must be visible while closed. */
   badge?: ReactNode;
@@ -40,9 +44,10 @@ export interface SettingsSectionProps {
 export const SettingsSection = ({
   id,
   title,
+  titleVariants,
   summary,
   icon,
-  defaultOpen = false,
+  defaultOpen,
   badge,
   testId,
   children,
@@ -51,6 +56,7 @@ export const SettingsSection = ({
     scope="settings"
     id={id}
     title={title}
+    titleVariants={titleVariants}
     summary={summary}
     icon={icon}
     defaultOpen={defaultOpen}

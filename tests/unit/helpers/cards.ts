@@ -35,3 +35,24 @@ export const openAllCards = (): void => {
 export const resetCardMemory = (): void => {
   localStorage.clear();
 };
+
+/**
+ * Opens one card if it is closed, and leaves it alone if it is not.
+ *
+ * Outside the compact profile a card is open before anyone touches it, so a plain click on its
+ * header closes it. A test that wants to read what is inside asks for it to be open, not for it to
+ * be toggled.
+ */
+export const ensureCardOpen = (toggle: HTMLElement): void => {
+  if (toggle.getAttribute("aria-expanded") !== "true") fireEvent.click(toggle);
+};
+
+/**
+ * Closes every open card in the rendered tree — the mirror of {@link openAllCards}, for a test that
+ * needs to start from a page nobody has opened anything on.
+ */
+export const closeAllCards = (): void => {
+  for (const toggle of document.querySelectorAll<HTMLElement>('button[aria-expanded="true"][aria-controls]')) {
+    fireEvent.click(toggle);
+  }
+};

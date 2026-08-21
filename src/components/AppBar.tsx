@@ -7,6 +7,9 @@
  */
 
 import type { ReactNode } from "react";
+import { MoreVertical } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { requestQuickMenuOpen } from "@/lib/input/keypadCommands";
 import { useLayoutEffect, useRef } from "react";
 import { UnifiedHealthBadge } from "@/components/UnifiedHealthBadge";
 import { AvMirrorLivePip } from "@/components/streams/AvMirrorLivePip";
@@ -112,6 +115,27 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
             )}
           </div>
           <div className="flex items-center gap-1">
+            {/*
+              The Quick menu, in the same place on every page.
+              It already existed for the keypad's Menu key — jump to a page, Game Mode,
+              Diagnostics, Switch device — but nothing on screen could open it, so a reader
+              without a keypad could not reach any of it. This is the same dialog, not a second
+              menu, and it is where the page-level actions (expand/collapse every section, show
+              card descriptions) live rather than spending app-bar width on a button each.
+              Left of the health badge, and separated from it, because the badge opens the device
+              switcher and the two should not be neighbours a thumb can confuse.
+            */}
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-11 shrink-0"
+              aria-label="Quick menu"
+              data-testid="app-bar-quick-menu"
+              onClick={() => requestQuickMenuOpen()}
+            >
+              <MoreVertical className="h-5 w-5 text-muted-foreground" aria-hidden />
+            </Button>
             {/* Live A/V mirror indicator — renders only while a stream is active. */}
             <AvMirrorLivePip />
             {/* §8.1 — Unified badge: sole diagnostic/connectivity element in AppBar */}

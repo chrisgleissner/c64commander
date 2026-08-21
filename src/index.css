@@ -667,6 +667,24 @@ button:focus-visible,
   }
 }
 
+/*
+ * The Quick menu on the smallest supported screen.
+ *
+ * It carries twelve entries — the six pages, the section actions and the high-value actions — and
+ * the dialog's own 24px padding plus its header spent 111 of the 331px available, leaving room for
+ * four of them. The entries themselves stay at the 44px touch floor; only the chrome around them
+ * gives way. Written here rather than as a class on the component because the dialog renders in a
+ * portal, where the display-profile hook does not reach it, and the attribute does.
+ */
+:root[data-display-profile="compact"] [data-testid="keypad-quick-menu"] {
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+:root[data-display-profile="compact"] [data-testid="keypad-quick-menu"] [data-interstitial-header-row="true"] {
+  min-height: 0;
+}
+
 .keypad-guidance-key {
   display: inline-flex;
   align-items: center;

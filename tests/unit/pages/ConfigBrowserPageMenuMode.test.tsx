@@ -7,6 +7,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import { ensureCardOpen } from "../helpers/cards";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
@@ -164,7 +165,7 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
 
   it("relabels items with the menu label while keeping REST identity for write-back", async () => {
     renderPage();
-    fireEvent.click(screen.getByTestId("config-menu-page-video-setup"));
+    ensureCardOpen(screen.getByTestId("config-menu-page-video-setup"));
     const row = await screen.findByTestId("row-system-mode");
     expect(within(row).getByTestId("row-label")).toHaveTextContent("System mode"); // menu label, not "System Mode"
 
@@ -180,8 +181,8 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
 
   it("shows drive ROM aliases under BOTH Memory & ROMs and Built-in drive A, one REST source", async () => {
     renderPage();
-    fireEvent.click(screen.getByTestId("config-menu-page-memory-&-roms"));
-    fireEvent.click(screen.getByTestId("config-menu-page-built-in-drive-a"));
+    ensureCardOpen(screen.getByTestId("config-menu-page-memory-&-roms"));
+    ensureCardOpen(screen.getByTestId("config-menu-page-built-in-drive-a"));
 
     // The Memory & ROMs › Drive A alias and the Built-in drive A › ROMs primary both
     // render "ROM for 1541 mode" and both write the SAME canonical Drive A Settings source.
@@ -211,7 +212,7 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
 
     // Serial-bus comms (U64 Specific) keyword-route to the Built-in drive A page's Advanced,
     // keeping the canonical {category,item} identity on write.
-    fireEvent.click(screen.getByTestId("config-menu-page-built-in-drive-a"));
+    ensureCardOpen(screen.getByTestId("config-menu-page-built-in-drive-a"));
     const driveAdvanced = await screen.findByTestId("config-page-advanced-built-in-drive-a");
     const serialRow = within(driveAdvanced).getByTestId("row-serial-bus-mode");
     fireEvent.click(within(serialRow).getByText("Update Serial Bus Mode"));

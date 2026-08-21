@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,6 +17,12 @@ import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
+import {
+  loadShowSectionDescriptions,
+  requestSectionsBulk,
+  saveShowSectionDescriptions,
+  subscribeShowSectionDescriptions,
+} from "@/lib/ui/collapsibleSectionStore";
 
 /**
  * The keypad Quick Menu — opened by the Menu key when the focused item has no
@@ -41,14 +47,41 @@ export function KeypadQuickMenu() {
 
   const canSwitchDevices = savedDevices.devices.length > 1;
 
+  /*
+   * The section entries only appear on a page that has sections, and the wording is the action the
+   * press performs. "Expand all" shows while anything is still closed, so the entry is the one a
+   * reader who wants to scroll the whole page reaches for; once everything is open it becomes
+   * "Collapse all", which is the way back to reading the page as an index.
+   */
+  const [sectionCounts, setSectionCounts] = useState({ total: 0, closed: 0 });
+  useEffect(() => {
+    if (!open || typeof document === "undefined") return;
+    const cards = document.querySelectorAll("[data-section-label][data-open]");
+    let closed = 0;
+    for (const card of cards) if (card.getAttribute("data-open") === "false") closed += 1;
+    setSectionCounts({ total: cards.length, closed });
+  }, [open]);
+
+  const showDescriptions = useSyncExternalStore(
+    subscribeShowSectionDescriptions,
+    loadShowSectionDescriptions,
+    () => false,
+  );
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-xs" data-testid="keypad-quick-menu">
+      {/*
+        Bounded and scrollable. The menu now carries the page entries, the section actions and the
+        high-value actions; at twelve entries it is taller than the 427px of the smallest supported
+        screen, and an unbounded dialog simply ran off the bottom with no way to reach the last
+        item. The header stays put and the list is what scrolls.
+      */}
+      <DialogContent className="flex max-h-[85dvh] max-w-xs flex-col overflow-hidden" data-testid="keypad-quick-menu">
         <DialogHeader>
           <DialogTitle>Quick menu</DialogTitle>
           <DialogDescription>Jump to a page or open a high-value action.</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-1.5">
+        <div className="-mx-1 grid min-h-0 flex-1 gap-1.5 overflow-y-auto px-1">
           {TAB_ROUTES.map((route) => (
             <Button
               key={route.path}
@@ -71,6 +104,27 @@ export function KeypadQuickMenu() {
             >
               Game Mode
             </Button>
+          ) : null}
+          {sectionCounts.total > 0 ? (
+            <>
+              <Button
+                variant="ghost"
+                className="justify-start"
+                data-testid="keypad-quick-menu-sections-toggle"
+                onClick={() => run(() => requestSectionsBulk(sectionCounts.closed > 0))}
+              >
+                {sectionCounts.closed > 0 ? "Expand all sections" : "Collapse all sections"}
+              </Button>
+              <Button
+                variant="ghost"
+                className="justify-start"
+                data-testid="keypad-quick-menu-section-descriptions"
+                aria-pressed={showDescriptions}
+                onClick={() => run(() => saveShowSectionDescriptions(!showDescriptions))}
+              >
+                {showDescriptions ? "Hide card descriptions" : "Show card descriptions"}
+              </Button>
+            </>
           ) : null}
           <Button
             variant="ghost"

@@ -162,6 +162,31 @@ export interface SectionOpenedDetail {
   readonly id: string;
 }
 
+/**
+ * Asks every card currently on the page to open or close.
+ *
+ * Broadcast rather than scoped: only the current page's cards are mounted, so "every card" and
+ * "every card on this page" are the same set, and the caller (the Quick menu) does not have to know
+ * which scope the page it is sitting on uses.
+ */
+export const SECTIONS_BULK_EVENT = "c64u-collapsible-sections-bulk";
+
+export interface SectionsBulkDetail {
+  readonly open: boolean;
+}
+
+export const requestSectionsBulk = (open: boolean): void => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<SectionsBulkDetail>(SECTIONS_BULK_EVENT, { detail: { open } }));
+};
+
+export const subscribeSectionsBulk = (handler: (open: boolean) => void): (() => void) => {
+  if (typeof window === "undefined") return () => undefined;
+  const listener = (event: Event) => handler(Boolean((event as CustomEvent<SectionsBulkDetail>).detail?.open));
+  window.addEventListener(SECTIONS_BULK_EVENT, listener);
+  return () => window.removeEventListener(SECTIONS_BULK_EVENT, listener);
+};
+
 export const announceSectionOpened = (scope: string, id: string): void => {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent<SectionOpenedDetail>(SECTION_OPENED_EVENT, { detail: { scope, id } }));

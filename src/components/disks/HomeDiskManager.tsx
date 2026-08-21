@@ -2204,7 +2204,9 @@ export const HomeDiskManager = () => {
             <CollapsibleSection
               scope="disks"
               id="drive-soft-iec"
-              title="Soft IEC"
+              title="Soft IEC Drive"
+              // Never truncated: the longest of these that fits is what gets drawn.
+              titleVariants={["Soft IEC Drive", "IEC Drive", "IEC"]}
               icon={HardDrive}
               testId="drive-soft-iec-row"
               // Closed on a first visit, like Drive B: a host-directory drive is set up once and

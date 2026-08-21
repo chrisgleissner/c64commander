@@ -2334,6 +2334,16 @@ export default function SettingsPage() {
               key={group.key}
               id={`feature-group-${group.key}`}
               title={group.metadata.label}
+              /*
+               * Shortened rather than truncated when the badge leaves no room: "Experimental
+               * Fe..." names nothing. The word that gets dropped is "Features", which both cards
+               * share and which therefore does no work in telling them apart — "Stable" and
+               * "Experimental" are what a reader is scanning for, and each stays whole for as long
+               * as it can. The accessible name is still the full label.
+               */
+              titleVariants={[group.metadata.label, group.metadata.label.replace(/ Features$/, ""), "Exp."].filter(
+                (variant, index, all) => all.indexOf(variant) === index,
+              )}
               summary={group.metadata.description}
               icon={Cpu}
               testId={`settings-feature-group-${group.key}`}
