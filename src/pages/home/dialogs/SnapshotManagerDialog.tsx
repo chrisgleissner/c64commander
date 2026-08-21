@@ -32,8 +32,8 @@ interface SnapshotManagerDialogProps {
   onDelete: (id: string) => void;
   onUpdateLabel: (id: string, label: string) => void;
   showReuFilter?: boolean;
-  /** Where snapshots are read from, and the control that changes it. Rendered under the filters:
-   * it belongs to the list being shown, not to the Home page. */
+  /** Where snapshots are read from, and the control that changes it. Rendered at the end of the
+   * list: it belongs to the snapshots being shown, not to the Home page. */
   folderRow?: ReactNode;
 }
 
@@ -295,8 +295,6 @@ export function SnapshotManagerDialog({
               data-testid="snapshot-filter-input"
             />
 
-            {folderRow}
-
             <div className="flex gap-1 flex-wrap" data-testid="snapshot-type-filters">
               {visibleFilters.map(({ value, label }) => (
                 <button
@@ -335,6 +333,10 @@ export function SnapshotManagerDialog({
                   ))
                 )}
               </div>
+              {/* At the end of the list, not in the fixed block above it. Pinned above the list it
+                  cost a row of snapshots, and on the smallest screen with the on-screen keyboard up
+                  that was the only row there was room for. */}
+              {folderRow ? <div className="mt-3 border-t border-border pt-3">{folderRow}</div> : null}
             </div>
           </AppSheetBody>
         </div>
