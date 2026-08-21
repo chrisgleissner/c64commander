@@ -37,7 +37,6 @@ export const requestDeviceSwitcherOpen = (): void => emit(DEVICE_SWITCHER_OPEN_E
 export const subscribeDeviceSwitcherOpen = (handler: () => void): (() => void) =>
   subscribe(DEVICE_SWITCHER_OPEN_EVENT, handler);
 
-/** Ask the Quick Menu to open (keypad Menu key with no item context menu). */
 /**
  * How the Quick menu was opened.
  *
@@ -48,6 +47,7 @@ export const subscribeDeviceSwitcherOpen = (handler: () => void): (() => void) =
  */
 export type QuickMenuSource = "keypad" | "pointer";
 
+/** Ask the Quick Menu to open, saying where the request came from. */
 export const requestQuickMenuOpen = (source: QuickMenuSource = "keypad"): void => emit(QUICK_MENU_OPEN_EVENT, source);
 
 /** Subscribe the Quick Menu to open requests. Returns an unsubscribe. */

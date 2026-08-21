@@ -24,14 +24,6 @@ import {
   subscribeShowSectionDescriptions,
 } from "@/lib/ui/collapsibleSectionStore";
 
-/**
- * The keypad Quick Menu — opened by the Menu key when the focused item has no
- * context menu (wired via {@link subscribeQuickMenuOpen}). It surfaces the same
- * always-reachable high-value actions the dedicated keys provide (jump to a page,
- * Diagnostics, Switch Device) in a discoverable list. Being a Radix dialog it
- * becomes the active focus scope, so it is keypad-navigable with no extra wiring:
- * Up/Down move between entries, OK activates, Back/Esc closes.
- */
 /** The physical key that reaches this entry directly, drawn as the keycap it is. */
 const ShortcutKey = ({ children }: { children: ReactNode }) => (
   <kbd className="inline-flex min-w-6 shrink-0 items-center justify-center rounded border border-border bg-muted px-1 py-0.5 font-sans text-xs font-semibold text-muted-foreground">
@@ -39,6 +31,14 @@ const ShortcutKey = ({ children }: { children: ReactNode }) => (
   </kbd>
 );
 
+/**
+ * The Quick Menu — opened by the keypad's Menu key when the focused item has no context menu, or by
+ * the app bar's own button (wired via {@link subscribeQuickMenuOpen}). It surfaces the
+ * always-reachable high-value actions the dedicated keys provide (jump to a page, Diagnostics,
+ * Switch Device) in a discoverable list, plus the actions that belong to the page it was opened on.
+ * Being a Radix dialog it becomes the active focus scope, so it is keypad-navigable with no extra
+ * wiring: Up/Down move between entries, OK activates, Back/Esc closes.
+ */
 export function KeypadQuickMenu() {
   const navigate = useNavigate();
   const savedDevices = useSavedDevices();
