@@ -7,6 +7,11 @@
  */
 
 import { readFileSync } from "node:fs";
+import {
+  FocusNavigationProvider,
+  useFocusNavigationContext,
+  type FocusNavigationContextValue,
+} from "@/hooks/useFocusNavigation";
 import { ensureCardOpen } from "../helpers/cards";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -123,7 +128,12 @@ vi.mock("@/hooks/useC64Connection", () => {
   };
 });
 
-const renderPage = () => {
+const FocusCapture = ({ target }: { target: { current: FocusNavigationContextValue | null } }) => {
+  target.current = useFocusNavigationContext();
+  return null;
+};
+
+const renderPage = (focusContext?: { current: FocusNavigationContextValue | null }) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const router = createMemoryRouter([{ path: "*", element: <ConfigBrowserPage /> }], {
     initialEntries: ["/"],
@@ -131,7 +141,10 @@ const renderPage = () => {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} future={{ v7_startTransition: true, v7_relativeSplatPath: true }} />
+      <FocusNavigationProvider profileId="keypad">
+        {focusContext ? <FocusCapture target={focusContext} /> : null}
+        <RouterProvider router={router} future={{ v7_startTransition: true, v7_relativeSplatPath: true }} />
+      </FocusNavigationProvider>
     </QueryClientProvider>,
   );
 };
@@ -251,5 +264,22 @@ describe("ConfigBrowserPage — menu hierarchy mode (C64U)", () => {
     expect(
       within(await screen.findByTestId("config-unrouted-softiec-drive-settings")).getByTestId("row-iec-drive"),
     ).toBeInTheDocument();
+  });
+
+  it("puts a card for an unplaced category in the same keypad ring as the menu pages", () => {
+    // The point of these cards is that nothing is hidden. On the target handset the touchscreen is
+    // off by default, so a card that is not in the ring is hidden from the only reader who cannot
+    // work around it.
+    const focusContext = { current: null as FocusNavigationContextValue | null };
+    renderPage(focusContext);
+
+    for (const id of [
+      "config-menu-page-video-setup",
+      "config-unrouted-softiec-drive-settings",
+      "config-unrouted-tape-settings",
+      "config-unrouted-data-streams",
+    ]) {
+      expect(focusContext.current?.engine.sourceForId(id)).toBe("dom+explicit");
+    }
   });
 });

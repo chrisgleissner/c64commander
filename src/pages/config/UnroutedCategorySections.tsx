@@ -10,6 +10,7 @@ import { useState } from "react";
 import { Layers } from "lucide-react";
 
 import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { claimedItemsForCategory, routeAdvancedItem, type MenuHierarchy } from "@/lib/config/menuMapping";
 import type { AuthoritativeConfigValueState } from "@/hooks/useAuthoritativeConfigValueState";
@@ -33,13 +34,14 @@ interface UnroutedCategorySectionsProps {
  * simply an initial capital keeps its own casing, because those are names rather than words:
  * "Data Streams" becomes "Data streams", "SoftIEC Drive Settings" becomes "SoftIEC drive settings".
  */
-const asCardTitle = (category: string): string =>
+export const asCardTitle = (category: string): string =>
   category
     .split(" ")
     .map((word, index) => (index === 0 || !/^[A-Z][a-z]+$/.test(word) ? word : word.toLowerCase()))
     .join(" ");
 
-const slugify = (category: string): string =>
+/** The category as a stable testid/ring-id fragment. */
+export const slugifyCategory = (category: string): string =>
   category
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -91,7 +93,7 @@ function UnroutedCategorySection({
   family,
   authoritativeValues,
   writeLeaf,
-  focusOrder: _focusOrder,
+  focusOrder,
 }: {
   category: string;
   hierarchy: MenuHierarchy;
@@ -101,8 +103,16 @@ function UnroutedCategorySection({
   focusOrder: number;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const slug = slugify(category);
+  const slug = slugifyCategory(category);
   const title = asCardTitle(category);
+  // Registered in the same ring group as the menu-page cards, so a reader with only a keypad
+  // reaches these the same way and in the same order as every other card on the page. Without it
+  // the card is tap-only, which on the target handset means unreachable.
+  const headerFocusRef = useFocusItem<HTMLButtonElement>({
+    id: `config-unrouted-${slug}`,
+    order: focusOrder,
+    group: "config-categories",
+  });
 
   return (
     <CollapsibleSection
@@ -110,6 +120,7 @@ function UnroutedCategorySection({
       id={`unrouted-${slug}`}
       title={title}
       icon={Layers}
+      headerRef={headerFocusRef}
       testId={`config-unrouted-${slug}`}
       toggleTestId={`config-unrouted-toggle-${slug}`}
       bodyId={`config-unrouted-body-${slug}`}

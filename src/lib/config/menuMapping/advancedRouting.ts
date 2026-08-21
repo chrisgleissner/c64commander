@@ -13,7 +13,7 @@
  * "Advanced (REST-only)" section — which is honest, lossless, labelled, and hidden when
  * empty (invariant #7). Items are never lost.
  *
- * Two evidence-based tiers, most-specific first — deliberately small and resilient, not
+ * Three evidence-based tiers, most-specific first — deliberately small and resilient, not
  * a rule engine:
  *  1. **Keyword rules** (per family, category-scoped) — for the one multi-owner
  *     category (`U64 Specific Settings`) whose items split by clear topic (HDMI → Video
@@ -21,6 +21,10 @@
  *  2. **Sole-owner derivation** (data-driven from the hierarchy) — a category claimed
  *     by exactly one menu page sends its leftover items to that page. Stays correct as
  *     the menu evolves and needs zero hand-authoring.
+ *  3. **Category-name patterns** — a category whose own NAME names its page, e.g.
+ *     `SID Socket 1: ARMSID` and the page `SID sockets configuration`. Not a guess about
+ *     where a topic belongs: the two are the same subject. Matched by pattern because the
+ *     device names the category after whichever chip it finds in the socket.
  *
  * There is deliberately NO whole-category "default" tier: placing an entire REST
  * category on a page with no captured-menu evidence (the prior `C64U Model → Video
