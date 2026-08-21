@@ -357,13 +357,12 @@ export const SelectableActionList = ({
    * long list that is several screens of scrollHeight moving under the reader — which also put the
    * alphabet scrollbar's jump target off the row it names.
    */
-  const { profile: listDisplayProfile } = useDisplayProfile();
   const estimatedItemHeight = useMemo(() => {
-    const rootPx = Number.parseFloat(getDisplayProfileLayoutTokens(listDisplayProfile).rootFontSize);
+    const rootPx = Number.parseFloat(getDisplayProfileLayoutTokens(profile).rootFontSize);
     // 7.8 root-font-sizes: a row measured 140px against the phone profile's 18px root. Expressed
     // as a multiple of the root so it follows the profile rather than being re-measured per screen.
     return Math.round(rootPx * 7.8);
-  }, [listDisplayProfile]);
+  }, [profile]);
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const effectiveViewAllItems = viewAllItems ?? items;

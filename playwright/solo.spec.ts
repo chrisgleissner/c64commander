@@ -43,7 +43,12 @@ test.describe("Config page SID solo routing", () => {
 
   const openAudioMixer = async (page: Page) => {
     await page.goto("/config");
-    await page.getByRole("button", { name: "Audio Mixer" }).click();
+    // Open it, rather than toggle it. The Config cards remember what a user opened, the same way
+    // the Settings cards do, so on a second visit the card is already open and a plain click would
+    // close it.
+    const toggle = page.getByRole("button", { name: "Audio Mixer" });
+    await expect(toggle).toBeVisible();
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
   };
 
   const snap = async (page: Page, testInfo: TestInfo, label: string) => {

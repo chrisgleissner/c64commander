@@ -57,7 +57,15 @@ export function LiveViewCard({
           // Stops both streams without opening the card. Mirroring keeps a multicast receiver and
           // an audio track running, so "stop it now" has to be reachable from the closed card —
           // otherwise the only way to stop it is to open the card and find the two toggles.
-          <Button variant="outline" size="sm" onClick={stopAll} data-testid="live-view-stop">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={stopAll}
+            // The word on the button matches every other card's header action; the accessible name
+            // says what this one actually does, which is stop both feeds.
+            aria-label="Stop Live View"
+            data-testid="live-view-stop"
+          >
             Reset
           </Button>
         ) : null

@@ -312,7 +312,7 @@ export const CollapsibleSection = ({
           aria-expanded={open}
           aria-controls={resolvedBodyId}
         >
-          <span className={cn("flex min-w-0 items-center", singleOpen ? "gap-2.5" : "gap-2.5")}>
+          <span className="flex min-w-0 items-center gap-2.5">
             {/*
               Compact drops the tile around the icon and keeps the icon itself. The tile was a 30 px
               box in a 47 px row, so it — not the title — set the height of every closed card, and a

@@ -788,25 +788,6 @@ button:focus-visible,
   }
 
   /*
-   * A compressed type scale for the ordinary phone profile.
-   *
-   * Measured on a Pixel 4 at medium, Home rendered four sizes: 12.75 / 14.875 / 17 / 21.25 px. At a
-   * 30 cm reading distance and this panel's physical pixel (0.1578 mm per CSS px), the smallest of
-   * those subtends 16.4 arcminutes — under the ~20' at which a reader with average corrected sight
-   * reads comfortably, and under the repository's own 14 px floor. Nine elements on one page were
-   * at that size, including the device host in the header.
-   *
-   * The scale is therefore compressed rather than uniformly scaled: the bottom comes up most, the
-   * top barely moves, so the RANGE narrows from 1.67x to 1.59x while nothing is left below the
-   * floor. `xs` and `sm` collapse onto one "small" size — five near-identical steps read as sizes
-   * that are off by a little rather than as a deliberate scale.
-   *
-   *   xs, sm 17px (21.8')   base 19px (24.4')   lg 21px (27.0')   xl 23px   2xl 27px
-   *
-   * Adjacent steps are 9.5-17%, which stays visibly separated. Values are in rem so the reader's
-   * own Text size setting still scales them; the rem figures are against this profile's 17px root.
-   */
-  /*
    * The phone profile's own type scale.
    *
    * Two problems made the default Tailwind ramp unreadable here. Its smallest steps landed at
@@ -858,14 +839,6 @@ button:focus-visible,
   }
 
   /*
-   * The same compression on the tablet profile, against its 19.5px root.
-   *
-   * Its smallest step was 14.6px — above the 14px floor but only just, and a tablet is held further
-   * away, so it subtended less than the phone's. `xs` and `sm` merge here too.
-   *
-   *   xs, sm 17.06px   base 19.5px   lg 21.45px   xl 23.4px   2xl 27.3px
-   */
-  /*
    * The same shape on the tablet profile, against its 19.5px root: `text-sm` matches the inherited
    * size and `text-xs` sits one step below it. Its smallest step was 14.6px, above the 14px floor
    * but only just, and a tablet is held further away than a phone so it subtended less.
@@ -875,6 +848,11 @@ button:focus-visible,
   :root[data-display-profile="expanded"] :where([class~="text-xs"]) {
     font-size: 0.875rem;
     line-height: 1.25rem;
+  }
+
+  :root[data-display-profile="expanded"] :where([class~="text-sm"]) {
+    font-size: 1rem;
+    line-height: 1.4rem;
   }
 
   :root[data-display-profile="expanded"] :where([class~="text-base"]) {
