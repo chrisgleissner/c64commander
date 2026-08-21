@@ -177,8 +177,12 @@ not-connected / empty / single-device).
     - Delete range — button — `save-ram-custom-delete-range-{i}` — R✅ I✅
     - Add range — button — `save-ram-custom-add-range` — R✅ I✅
     - Save custom — button — `save-ram-custom-confirm` — R✅ I✅
-    - RAM folder — button (`...`) — `ram-dump-folder-trigger` — R✅ I✅ — where the snapshot is written; shown at the foot of this dialog and of **Load RAM**, not as a Quick Action of its own
-  - Load RAM — button — `home-load-ram` — R✅ I✅ _(flag)_
+    - RAM folder — button (`...`) — `ram-dump-folder-trigger` — R✅ I✅ — where the snapshot is written; at the foot of this dialog, not a Quick Action of its own
+  - Load RAM — button — `home-load-ram` — R✅ I✅ _(flag)_ — opens the **Snapshot Manager** sheet (`snapshot-manager-dialog`)
+    - Filter snapshots — text — `snapshot-filter-input` — R✅ I✅
+    - Type filters — buttons — `snapshot-filter-type-<type>` — R✅ I✅
+    - Snapshot row — button — `snapshot-row` — R✅ I✅ (restores; carries its own delete and rename)
+    - RAM folder — button (`...`) — `ram-dump-folder-trigger` — R✅ I✅ — the same control as in Save RAM, at the end of the list
   - Reset — button (danger) — R✅ I✅ (confirm dialog)
   - Reboot — button (danger) — R✅ I✅ (confirm dialog)
   - Reboot (Clr Mem) — button (danger) — `home-machine-inline-rebootClearMemory` — R✅ I✅ (confirm dialog) _(flag `home_telnet_clear_ram_reboot_enabled`)_
