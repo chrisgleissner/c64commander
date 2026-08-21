@@ -122,14 +122,14 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
               without a keypad could not reach any of it. This is the same dialog, not a second
               menu, and it is where the page-level actions (expand/collapse every section, show
               card descriptions) live rather than spending app-bar width on a button each.
-              Left of the health badge, and separated from it, because the badge opens the device
-              switcher and the two should not be neighbours a thumb can confuse.
+              Left of the health badge, with a gap of its own beyond the row's, because the badge
+              opens the device switcher and the two should not be neighbours a thumb can confuse.
             */}
 
             <Button
               variant="ghost"
               size="icon"
-              className="size-11 shrink-0"
+              className="size-11 shrink-0 me-1"
               aria-label="Quick menu"
               data-testid="app-bar-quick-menu"
               onClick={() => requestQuickMenuOpen("pointer")}

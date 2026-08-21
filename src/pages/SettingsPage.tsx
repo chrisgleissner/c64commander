@@ -2341,9 +2341,13 @@ export default function SettingsPage() {
                * "Experimental" are what a reader is scanning for, and each stays whole for as long
                * as it can. The accessible name is still the full label.
                */
-              titleVariants={[group.metadata.label, group.metadata.label.replace(/ Features$/, ""), "Exp."].filter(
-                (variant, index, all) => all.indexOf(variant) === index,
-              )}
+              titleVariants={[
+                group.metadata.label,
+                group.metadata.label.replace(/ Features$/, ""),
+                // "Exp." only for the group whose name it abbreviates. Added unconditionally it
+                // was also the last resort for "Stable Features", which it does not stand for.
+                ...(group.metadata.label.startsWith("Experimental") ? ["Exp."] : []),
+              ].filter((variant, index, all) => all.indexOf(variant) === index)}
               summary={group.metadata.description}
               icon={Cpu}
               testId={`settings-feature-group-${group.key}`}

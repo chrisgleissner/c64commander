@@ -352,8 +352,8 @@ export const SelectableActionList = ({
    * Virtuoso's first layout uses this estimate before it has measured a row, and the difference
    * between the estimate and the real height is corrected as a jump in scrollHeight. A row is
    * built from rem-sized text and padding, so a fixed pixel estimate is only right for one profile.
-   * The previous 60px was not right for any of them: a row in the view-all sheet measures 140px on
-   * the phone profile, so more than half of every row's height arrived as a correction, and over a
+   * The previous 60px was not right for any of them: a row in the view-all sheet measures 140px
+   * against the 18px root, so more than half of every row's height arrived as a correction, and over a
    * long list that is several screens of scrollHeight moving under the reader — which also put the
    * alphabet scrollbar's jump target off the row it names.
    */
