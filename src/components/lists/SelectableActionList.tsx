@@ -30,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { PathWrap } from "@/components/PathWrap";
 import { AlphabetScrollbar } from "./AlphabetScrollbar";
+import { getDisplayProfileLayoutTokens } from "@/lib/displayProfiles";
 import { cn } from "@/lib/utils";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
@@ -347,6 +348,23 @@ export const SelectableActionList = ({
   const [uncontrolledFilterText, setUncontrolledFilterText] = useState("");
   const [uncontrolledViewAllFilterText, setUncontrolledViewAllFilterText] = useState("");
   const viewAllScrollRef = useRef<HTMLDivElement>(null);
+  /*
+   * Virtuoso's first layout uses this estimate before it has measured a row, and the difference
+   * between the estimate and the real height is corrected as a jump in scrollHeight. A row is
+   * built from rem-sized text and padding, so a fixed pixel estimate is only right for one profile.
+   * The previous 60px was not right for any of them: a row in the view-all sheet measures 140px on
+   * the phone profile, so more than half of every row's height arrived as a correction, and over a
+   * long list that is several screens of scrollHeight moving under the reader — which also put the
+   * alphabet scrollbar's jump target off the row it names.
+   */
+  const { profile: listDisplayProfile } = useDisplayProfile();
+  const estimatedItemHeight = useMemo(() => {
+    const rootPx = Number.parseFloat(getDisplayProfileLayoutTokens(listDisplayProfile).rootFontSize);
+    // 7.8 root-font-sizes: a row measured 140px against the phone profile's 18px root. Expressed
+    // as a multiple of the root so it follows the profile rather than being re-measured per screen.
+    return Math.round(rootPx * 7.8);
+  }, [listDisplayProfile]);
+
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const effectiveViewAllItems = viewAllItems ?? items;
   const inlineFilterText = filterValue ?? uncontrolledFilterText;
@@ -602,7 +620,7 @@ export const SelectableActionList = ({
                       ref={virtuosoRef}
                       style={{ height: "100%" }}
                       data={viewAllFilteredItems}
-                      defaultItemHeight={60}
+                      defaultItemHeight={estimatedItemHeight}
                       overscan={500}
                       endReached={() => {
                         if (hasMoreViewAllItems) {

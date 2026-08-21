@@ -474,14 +474,26 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
         // Settings-only key this one is never deleted out from under that check, so the
         // guard only fires on a page's genuine first visit to Settings.
         (() => {
-          let ids: unknown = [];
+          let stored: unknown = null;
           try {
-            ids = JSON.parse(localStorage.getItem("c64u_open_sections") ?? "[]");
+            stored = JSON.parse(localStorage.getItem("c64u_open_sections") ?? "null");
           } catch {
-            ids = [];
+            stored = null;
           }
-          const existing = Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : [];
-          if (existing.some((id) => id.startsWith("settings:"))) return;
+          // The store has two shapes and the guard has to read both. A bare array of open ids is
+          // the legacy shape, and what this seed writes; the app itself writes an object of
+          // `{id: open}`, because it has to record an explicit close as well as an open. Reading
+          // only the array shape meant the guard never fired once the app had written, so the seed
+          // overwrote the state on the next navigation and reopened every chapter the test had
+          // just closed — which is precisely what "still closed on the next visit" asserts.
+          const existingEntries: Array<[string, boolean]> = Array.isArray(stored)
+            ? stored.filter((id): id is string => typeof id === "string").map((id) => [id, true])
+            : stored && typeof stored === "object"
+              ? Object.entries(stored as Record<string, unknown>).filter(
+                  (entry): entry is [string, boolean] => typeof entry[1] === "boolean",
+                )
+              : [];
+          if (existingEntries.some(([id]) => id.startsWith("settings:"))) return;
           const settingsIds = [
             "appearance",
             "connection",
@@ -496,7 +508,11 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
             "notifications",
             "about",
           ].map((id) => `settings:${id}`);
-          localStorage.setItem("c64u_open_sections", JSON.stringify([...existing, ...settingsIds]));
+          // Written in the object shape the app uses, so a later read of this key does not have to
+          // guess which shape it is looking at.
+          const seeded: Record<string, boolean> = Object.fromEntries(existingEntries);
+          for (const id of settingsIds) seeded[id] = true;
+          localStorage.setItem("c64u_open_sections", JSON.stringify(seeded));
         })();
         if (seedFeatureFlags) {
           localStorage.setItem("c64u_dev_mode_enabled", "1");

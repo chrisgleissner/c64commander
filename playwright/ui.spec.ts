@@ -7,6 +7,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { openAllCards } from "./cards";
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -272,6 +273,8 @@ test.describe("UI coverage", () => {
     await enableHvscDownloads(page);
     await page.goto("/play", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Play files" })).toBeVisible();
+    // The HVSC card is closed on a first visit; its controls live in the body.
+    await openAllCards(page);
     await expect(page.getByRole("button", { name: "Download HVSC" })).toBeVisible();
     await snap(page, testInfo, "play-hvsc");
   });
