@@ -136,7 +136,7 @@ describe("SidRadioSettingsSection crossfade availability", () => {
     for (const ms of [0, 600, 1500, 3000]) {
       expect(getByTestId(`settings-crossfade-${ms}`)).toBeDisabled();
     }
-    expect(getByText(/single sound chip/i)).toBeInTheDocument();
+    expect(getByText(/one sound chip/i)).toBeInTheDocument();
   });
 
   it("enables them when playback is on this device", async () => {
@@ -212,7 +212,7 @@ describe("SidRadioSettingsSection SID chip", () => {
 
   it("says nothing has been read yet when no machine has answered", () => {
     render(<SidRadioSettingsSection />);
-    expect(screen.getByTestId("settings-sid-chip")).toHaveTextContent(/Nothing has been read yet/i);
+    expect(screen.getByTestId("settings-sid-chip")).toHaveTextContent(/Nothing read yet/i);
   });
 
   it("hides the whole block when on-device playback is switched off", async () => {

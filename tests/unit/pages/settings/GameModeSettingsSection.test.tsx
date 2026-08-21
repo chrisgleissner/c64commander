@@ -151,8 +151,8 @@ describe("choosing between the shipped layouts", () => {
   it("says which keys each preset uses, so the choice can be made without trying it", () => {
     render(<GameModeSettingsSection />);
     const section = screen.getByTestId("settings-game-mode-section");
-    expect(section).toHaveTextContent("the four keys around 8, with 8 as fire");
-    expect(section).toHaveTextContent("2, 4, 6 and 8, with 5 as fire");
+    expect(section).toHaveTextContent("the keys around 8 (8 = fire)");
+    expect(section).toHaveTextContent("2/4/6/8 (5 = fire)");
   });
 });
 

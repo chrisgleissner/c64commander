@@ -1244,8 +1244,7 @@ export default function SettingsPage() {
                   })}
                 </div>
                 <HelperText>
-                  Scales the app&apos;s own text on top of your device&apos;s text size, which it already follows. Use
-                  this only to make the app bigger than the rest of your phone.
+                  Scales the app&apos;s text on top of your device&apos;s own size. Use it only to go bigger than that.
                 </HelperText>
               </div>
 
@@ -1256,8 +1255,7 @@ export default function SettingsPage() {
                       Card descriptions
                     </Label>
                     <p className="text-sm text-muted-foreground">
-                      Show the line under each card title saying what is inside. Off by default: on a small screen it
-                      costs about half the height of every closed card.
+                      Off by default — it costs about half the height of every closed card on a small screen.
                     </p>
                   </div>
                   <Checkbox
@@ -1346,7 +1344,6 @@ export default function SettingsPage() {
                         >
                           Hide navigation bar
                         </Label>
-                        <HelperText>Extend the app under the bottom navigation bar.</HelperText>
                       </div>
                       <Checkbox
                         id="full-screen-hide-navigation-bar"
@@ -1961,9 +1958,7 @@ export default function SettingsPage() {
                       }
                     }}
                   />
-                  <HelperText>
-                    Controls how many playlist or disk items are shown before opening View all. Default is 50.
-                  </HelperText>
+                  <HelperText>Items shown before View all. Default 50.</HelperText>
                 </div>
 
                 <div className="flex items-start justify-between gap-3 min-w-0">
@@ -1972,8 +1967,7 @@ export default function SettingsPage() {
                       Friendly SID names
                     </Label>
                     <HelperText>
-                      Shows SID tunes as “Bossa in Do” instead of “Bossa_in_Do_2SID.sid”, badged with the chip count.
-                      Programs, cartridges and disk images keep their file name.
+                      Shows SID tunes as “Bossa in Do” instead of the raw filename, badged with chip count.
                     </HelperText>
                   </div>
                   <Checkbox
@@ -2013,8 +2007,8 @@ export default function SettingsPage() {
                     </SelectContent>
                   </Select>
                   <HelperText>
-                    Classic KERNAL load mounts the disk and runs LOAD"*",8,1. DMA writes the first PRG straight into C64
-                    memory for a faster start; some loaders reject it.
+                    KERNAL load mounts the disk and types LOAD&quot;*&quot;,8,1. DMA loads the first PRG directly,
+                    faster, but some loaders reject it.
                   </HelperText>
                 </div>
 
@@ -2024,10 +2018,7 @@ export default function SettingsPage() {
                       <Label htmlFor="settings-search-inside-disks" className="flex min-h-11 items-center font-medium">
                         Search inside disk images
                       </Label>
-                      <HelperText>
-                        When searching media, also match the programs inside .d64/.d71/.d81 images, not just their
-                        filenames.
-                      </HelperText>
+                      <HelperText>Also matches programs inside .d64/.d71/.d81 images, not just filenames.</HelperText>
                     </div>
                     <Checkbox
                       id="settings-search-inside-disks"
@@ -2169,9 +2160,8 @@ export default function SettingsPage() {
                         }}
                       />
                       <HelperText>
-                        Jitter buffer for Live View audio: keeps late, reordered or bursty packets in order and hides
-                        loss instead of clicking. On Android this is a floor — the native pipeline can deepen it further
-                        if needed. Default 60 ms; 0 = lowest latency, least resilient.
+                        Smooths late or dropped audio packets. Android may deepen this further. Default 60 ms; 0 =
+                        lowest latency, least resilient.
                       </HelperText>
                     </div>
                     {isDeveloperModeEnabled ? (
@@ -2197,12 +2187,8 @@ export default function SettingsPage() {
                           </SelectContent>
                         </Select>
                         <HelperText>
-                          <strong>Developer preview — not in released firmware yet.</strong> Audio-only C64 sound can
-                          travel over <strong>Wi‑Fi</strong> — handy when the C64 and this device share only a wireless
-                          router — but Wi‑Fi audio and video can&apos;t run together. <strong>Dynamic</strong>{" "}
-                          (recommended) uses Wi‑Fi for audio alone and switches to Ethernet once video joins.{" "}
-                          <strong>Always Wi‑Fi</strong> keeps audio on Wi‑Fi and blocks video.{" "}
-                          <strong>Always Ethernet</strong> never uses Wi‑Fi.
+                          <strong>Developer preview — not in released firmware yet.</strong> Wi‑Fi can carry C64 audio,
+                          but not together with video — each option above explains its own trade-off.
                         </HelperText>
                       </div>
                     ) : null}
@@ -2214,10 +2200,7 @@ export default function SettingsPage() {
                         >
                           Fast video (native assembly)
                         </Label>
-                        <HelperText>
-                          Assembles Live View video frames natively for full frame rate (50 fps PAL / 60 fps NTSC).
-                          Leave on; turn off only to compare or troubleshoot. Android only.
-                        </HelperText>
+                        <HelperText>Full frame rate (50 fps PAL / 60 fps NTSC). Leave on; Android only.</HelperText>
                       </div>
                       <Checkbox
                         id="settings-stream-native-assembly"
@@ -2239,9 +2222,8 @@ export default function SettingsPage() {
                           Input priority (instant joystick)
                         </Label>
                         <HelperText>
-                          Gives joystick, keyboard and mouse priority over the picture: while you&apos;re actively
-                          driving the C64, video briefly drops its frame rate so input lands instantly, then ramps back
-                          up. Leave on; turn off only to compare.
+                          While you&apos;re driving the C64, video briefly drops frame rate so input lands instantly.
+                          Leave on.
                         </HelperText>
                       </div>
                       <Checkbox
@@ -2264,9 +2246,7 @@ export default function SettingsPage() {
                           Low-latency audio (native)
                         </Label>
                         <HelperText>
-                          Plays Live View audio through a native low-latency track instead of the browser engine,
-                          cutting keypress-to-sound delay. Leave on; turn off only to compare or troubleshoot. Android
-                          only.
+                          Cuts keypress-to-sound delay vs. the browser engine. Leave on; Android only.
                         </HelperText>
                       </div>
                       <Checkbox
@@ -2291,8 +2271,7 @@ export default function SettingsPage() {
                       Show Autofire button
                     </Label>
                     <HelperText>
-                      Rarely needed for C64 games, so it&apos;s hidden from the Remote Input joystick and game mode by
-                      default. Turn on to show it.
+                      Rarely needed, so it&apos;s hidden by default in Remote Input and Game Mode.
                     </HelperText>
                   </div>
                   <Checkbox
@@ -2321,8 +2300,8 @@ export default function SettingsPage() {
                     data-testid="settings-autofire-rate-slider"
                   />
                   <HelperText>
-                    How many times per second Autofire presses FIRE while held. Also adjustable on the Remote Input
-                    joystick. Default 5/s, range {MIN_AUTOFIRE_RATE_HZ}–{MAX_AUTOFIRE_RATE_HZ}/s.
+                    How many times per second FIRE fires while held. Default 5/s, range {MIN_AUTOFIRE_RATE_HZ}–
+                    {MAX_AUTOFIRE_RATE_HZ}/s.
                   </HelperText>
                 </div>
               </div>
@@ -2409,10 +2388,7 @@ export default function SettingsPage() {
           {hvscEnabled && (
             <SettingsSection id="hvsc" title="HVSC" summary="Where the SID music collection comes from" icon={Cpu}>
               <div className="space-y-3 text-sm">
-                <HelperText>
-                  HVSC visibility follows the Experimental Features registry. Override the archive mirror below to point
-                  downloads at a different source.
-                </HelperText>
+                <HelperText>Override the archive mirror below to use a different source.</HelperText>
 
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">HVSC base URL override</Label>
@@ -2446,8 +2422,7 @@ export default function SettingsPage() {
                     data-testid="hvsc-update-check-interval"
                   />
                   <HelperText>
-                    Automatic HVSC update checks run from the Play page once HVSC is installed. Minimum interval:{" "}
-                    {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS} day
+                    Runs from the Play page once HVSC is installed. Minimum {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS} day
                     {MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS === 1 ? "" : "s"}, to limit mirror load.
                   </HelperText>
                   <HelperText>
@@ -2469,10 +2444,7 @@ export default function SettingsPage() {
               testId="settings-online-archive"
             >
               <div className="space-y-3">
-                <HelperText>
-                  CommoServe availability follows the Experimental Features registry; host and header overrides are
-                  separate settings.
-                </HelperText>
+                <HelperText>Host and header overrides below are independent settings.</HelperText>
 
                 <div className="space-y-2">
                   <Label htmlFor="archive-host-override" className="text-sm font-medium">
@@ -2497,9 +2469,7 @@ export default function SettingsPage() {
                       {archiveHostError}
                     </p>
                   ) : null}
-                  <HelperText>
-                    Enter a hostname only. Invalid values fall back to the default archive host immediately.
-                  </HelperText>
+                  <HelperText>Hostname only — an invalid value falls back to the default immediately.</HelperText>
                 </div>
 
                 <div className="space-y-2">
@@ -2596,8 +2566,7 @@ export default function SettingsPage() {
               </Select>
               {autoSafetyDescription ? <HelperText>{autoSafetyDescription}</HelperText> : null}
               <HelperText>
-                Mode presets adjust throttling, caching, cooldowns, and backoff behavior. Troubleshooting mode also
-                enables debug logging for richer diagnostics.
+                Presets adjust throttling, caching, cooldowns and backoff. Troubleshooting also turns on debug logging.
               </HelperText>
             </div>
 
@@ -2794,8 +2763,8 @@ export default function SettingsPage() {
                     }
                   />
                   <HelperText>
-                    Max simultaneous REST connections to the device. 1 fully serializes requests — safest for firmware
-                    without the Ultimate network-stack fixes (e.g. C64U 1.1.0).
+                    Max simultaneous REST connections. 1 is safest for firmware without the network-stack fix (e.g. C64U
+                    1.1.0).
                   </HelperText>
                 </div>
 
@@ -3067,19 +3036,16 @@ export default function SettingsPage() {
                     }}
                   />
                   <HelperText>
-                    How often drag previews are sent while device-backed sliders move (CPU, playback volume, SID mixer,
-                    lighting). Default 200 ms, range 100–500 ms.
+                    How often drag previews are sent for device-backed sliders (CPU, volume, lighting). Default 200 ms,
+                    range 100–500 ms.
                   </HelperText>
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-sm">Allow circuit override</Label>
                   {/* A label, so the whole row toggles the checkbox rather than only the
                       16px box, and so the control has an accessible name at all. */}
                   <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-md border border-border/70 p-2">
-                    <span className="text-xs text-muted-foreground">
-                      User-triggered actions can bypass circuit breaker.
-                    </span>
+                    <span className="text-sm font-medium">Allow circuit override</span>
                     <Checkbox
                       aria-label="Allow circuit override"
                       data-testid="settings-allow-circuit-override"

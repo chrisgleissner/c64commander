@@ -146,9 +146,9 @@ export const GameModeSettingsSection = () => {
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          Which physical keys steer the joystick. <strong>Diamond</strong> uses the four keys around 8, with 8 as fire;{" "}
-          <strong>Classic T9</strong> uses 2, 4, 6 and 8, with 5 as fire; <strong>Custom</strong> lets you press your
-          own key per direction. The mapping turns with your device, so you set it up once, in portrait.
+          <strong>Diamond</strong> uses the keys around 8 (8 = fire); <strong>Classic T9</strong> uses 2/4/6/8 (5 =
+          fire); <strong>Custom</strong> lets you press your own key per direction. Set this up in portrait — it turns
+          with the device.
         </p>
       </div>
 
@@ -215,13 +215,9 @@ export const GameModeSettingsSection = () => {
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          Hiding the joystick gives the live picture the whole screen. <strong>Auto</strong> shows it until you steer
-          with a physical key, then hides it until you touch it again. <strong>Visible</strong> always shows it;{" "}
-          <strong>Hidden</strong> hides it as soon as the picture is on. Either way, the toolbar&apos;s{" "}
-          <strong>Hide joystick</strong> / <strong>Show joystick</strong> buttons override this for the game you&apos;re
-          playing. Press <kbd>#</kbd> for RETURN, SPACE, the other quick keys and the Live View switches, <kbd>*</kbd>{" "}
-          to adjust the view, and Back to leave. With the picture off, the joystick stays on screen, so Game mode is
-          never blank.
+          <strong>Auto</strong> shows the joystick until you steer, then hides it; <strong>Visible</strong> always shows
+          it; <strong>Hidden</strong> hides it once the picture is on. Press <kbd>#</kbd> for quick keys, <kbd>*</kbd>{" "}
+          for view, Back to leave.
         </p>
       </div>
 
@@ -231,8 +227,7 @@ export const GameModeSettingsSection = () => {
             Enter Game Mode when a game starts
           </Label>
           <p className="text-xs text-muted-foreground">
-            Launching a program, cartridge or disk image goes straight into Game Mode. Tunes are unaffected, and so is a
-            playlist moving on by itself — only a game you started.
+            Programs, cartridges and disk images enter Game Mode. Tunes and playlist auto-advance are unaffected.
           </p>
         </div>
         <Checkbox

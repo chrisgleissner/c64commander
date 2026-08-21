@@ -150,10 +150,8 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
             Shortest tune to play (seconds)
           </Label>
           <p className="text-xs text-muted-foreground">
-            HVSC holds jingles, sound effects and test tones alongside the music — serving those between real tracks
-            feels broken, so anything shorter is skipped. The station looks further through the similarity graph to
-            compensate, so raising this won&apos;t run a station dry. Default {DEFAULT_SID_RADIO_MIN_SECONDS} seconds; 0
-            plays everything.
+            Skips tracks shorter than this (jingles, effects, etc). Default {DEFAULT_SID_RADIO_MIN_SECONDS}s; 0 plays
+            everything.
           </p>
           <Input
             id="settings-sid-radio-min-seconds-input"
@@ -174,7 +172,7 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
             id="local-engine-enabled"
             testId="settings-local-engine-enabled"
             label="On-device playback engine (experimental)"
-            description="Adds a “Listen on” choice on the Play screen: play on your C64, or here. Playing here needs your own C64 ROMs — add them below."
+            description="Adds a “Listen on” choice on Play: your C64, or here. Needs your own C64 ROMs — add below."
             checked={localEngineEnabled}
             onChange={saveLocalEngineEnabled}
           />
@@ -183,10 +181,8 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
           <div className="space-y-2 rounded-lg border border-border/70 p-3 min-w-0" data-testid="settings-sid-engine">
             <Label className="text-sm font-medium">SID emulation</Label>
             <p className="text-xs text-muted-foreground">
-              <strong>Accurate</strong> models the real SID chip cycle by cycle — closest to a real C64, best for
-              fidelity. <strong>Light</strong> does about a third of the work and still sounds good; most listeners
-              won&apos;t hear the difference, so it suits a slower device or saves battery. Takes effect on the next
-              track.
+              <strong>Accurate</strong> models the chip cycle-by-cycle for best fidelity. <strong>Light</strong> uses
+              about a third the CPU and sounds close. Takes effect next track.
             </p>
             {/* Wraps rather than shrinks: both labels are set nowrap, so on the
                 smallest screen the two buttons squeezed each other and each label was
@@ -220,9 +216,8 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
           <div className="space-y-3 rounded-lg border border-border/70 p-3 min-w-0" data-testid="settings-sid-chip">
             <Label className="text-sm font-medium">SID chip for tunes that do not name one</Label>
             <p className="text-xs text-muted-foreground">
-              The C64 shipped with two sound chips: the older <strong>6581</strong> has a thick, uneven filter; the
-              later <strong>8580</strong> is cleaner and quieter. Most SID files name their chip and always play on it —
-              this only affects the many older files that name none and would otherwise be a guess.
+              <strong>6581</strong> has a thick, uneven filter; <strong>8580</strong> is cleaner and quieter. Most SID
+              files name their chip and always play on it — this is for the ones that do not.
             </p>
             <ToggleRow
               id="sid-chip-from-device"
@@ -230,8 +225,8 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
               label="Match my Commodore 64"
               description={
                 learnedSidModel
-                  ? `Read from your machine while you are connected, so it keeps applying when the machine is off. Last read: ${learnedSidModel}.`
-                  : "Read from your machine while you are connected, so it keeps applying when the machine is off. Nothing has been read yet — the choice below is in use."
+                  ? `Learned once from your machine, then keeps applying even when it's off. Last read: ${learnedSidModel}.`
+                  : "Learned once from your machine, then keeps applying even when it's off. Nothing read yet — using the choice below."
               }
               checked={sidModelFromDevice}
               onChange={(next) => {
@@ -265,8 +260,7 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
             </div>
             <p className="text-xs text-muted-foreground" data-testid="settings-sid-chip-effective">
               Tunes that don&apos;t name a chip play on the <strong>{effectiveSidModel}</strong>. Takes effect next
-              track — the tune now playing isn&apos;t restarted, since resuming your spot would mean re-rendering it
-              from the start.
+              track — the current one keeps playing.
             </p>
           </div>
         ) : null}
@@ -278,14 +272,11 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
             <p className="text-xs text-muted-foreground">
               {crossfadeUnavailable ? (
                 <>
-                  Only available with <strong>Listen on</strong> set to <strong>Local</strong>: crossfading needs two
-                  tunes sounding at once, and the C64 plays one tune, live, on its single sound chip.
+                  Only available with <strong>Listen on</strong> set to <strong>Local</strong> — the C64 has one sound
+                  chip and can&apos;t play two tunes at once.
                 </>
               ) : (
-                <>
-                  Normally one tune stops before the next starts. Turn this up to overlap them instead — the outgoing
-                  tune fades down while the next fades in.
-                </>
+                <>Overlaps the outgoing and incoming tune instead of a hard cut.</>
               )}
             </p>
             <div className="flex flex-wrap gap-2">
