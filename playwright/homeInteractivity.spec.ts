@@ -541,6 +541,13 @@ test.describe("Home interactions", () => {
     await expect(page.getByTestId("disk-list")).toBeVisible();
     await waitForConnected(page);
 
+    // Drive B and the Soft IEC drive are closed on a first visit; their reset buttons live in the
+    // card body, so open every closed card before reaching for them.
+    for (const id of ["disks-section-toggle-drive-b", "disks-section-toggle-drive-soft-iec"]) {
+      const toggle = page.getByTestId(id);
+      if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    }
+
     await page.getByTestId("drive-reset-a").click();
     await page.getByTestId("drive-reset-b").click();
     await page.getByTestId("drive-reset-soft-iec").click();

@@ -239,7 +239,7 @@ export const CollapsibleSection = ({
       data-open={open ? "true" : "false"}
       data-section-label={sectionLabel ?? title}
     >
-      <div className="flex items-center gap-3 pr-2">
+      <div className="flex items-center gap-3 pr-1">
         {/* The clickable toggle stops at the chevron; `actions` sits as a sibling rather
             than inside this button, because an interactive control (e.g. a Reset button)
             cannot nest inside another button without breaking the DOM and the a11y tree. */}
@@ -335,7 +335,8 @@ export const CollapsibleSection = ({
           onClick={toggle}
           tabIndex={-1}
           aria-hidden="true"
-          className="flex h-11 w-8 shrink-0 items-center justify-center"
+          // A real touch target, so 44x44 and not just 44 tall.
+          className="flex size-11 shrink-0 items-center justify-center"
           // Deliberately NOT prefixed with the toggle's testid: callers select every header on a
           // page with a prefix match (`^home-section-toggle-`), and a chevron caught by that
           // selector is clicked as if it were another header — which closes the card the real

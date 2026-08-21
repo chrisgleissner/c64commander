@@ -407,6 +407,10 @@ test.describe("Small screen layout integrity", () => {
     const liveView = page.locator('[data-slot-active="true"]').getByTestId("live-view-card");
     await expect(liveView).toBeVisible({ timeout: 15_000 });
     await liveView.scrollIntoViewIfNeeded();
+    // Live View is closed on a first visit: mirroring is turned on deliberately, and the card
+    // carries a preview, the stream statistics and the A/V measurement tools under it.
+    const liveViewToggle = liveView.getByTestId("home-section-toggle-live-view");
+    if ((await liveViewToggle.getAttribute("aria-expanded")) !== "true") await liveViewToggle.click();
     await liveView.getByTestId("av-video-toggle").click();
     await expect(liveView.getByTestId("stream-stats")).toBeVisible({ timeout: 15_000 });
     await page.waitForTimeout(800);
