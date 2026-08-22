@@ -59,6 +59,32 @@ Checked, so the fix is not aimed at the wrong thing:
 - **The disconnected state itself is good.** With no network the app shows a clear "No C64 found"
   prompt with a host/IP field rather than a blank or stuck screen.
 
+## Partially fixed — what changed, and what is still wrong
+
+**Fixed (layout).** The candidates branch of this dialog was bounded and scrollable
+(`max-h-[min(26rem,60vh)] overflow-y-auto`); the manual-entry form holding `Connect` had **no
+height bound and no scroll container**, so on a short viewport it simply overflowed. The form now
+carries the same treatment its sibling already had. Re-measured on the device at 427x320:
+
+- the form now scrolls (`scrollHeight` 208 > `clientHeight` 192)
+- the host input is **visible when focused** (y=165), where before it was at y=178 and
+  `visible: false` with no way to bring it into view
+- `Connect` measures y=269, bottom 313 inside a 320 viewport, and **TAB now focuses it, visible** —
+  before, it sat at y=285-329 and could not be focused or seen at all
+
+**Still wrong (focus ring).** `Connect` is **not in the d-pad ring order**, even though it is a
+plain enabled `<button>`, is inside the resolved dialog scope, and appears in the ring's own
+discovered set in correct DOM order (close, host input, connect, dismiss). Measured:
+
+- from the host input, `DPAD_DOWN` is **consumed by the text field** — it scrolls the panel
+  (y 165 → 125 → 85 → 45) instead of advancing focus
+- `DPAD_RIGHT` from the input jumps straight to `Not now`, skipping `Connect`
+- from `Not now`, `DPAD_UP` goes to `Close`, again skipping `Connect`
+- only `TAB` reaches it
+
+A Callback 8020 is d-pad and keypad; it has no Tab key. So for the target device this is **still
+blocking**, and the remaining work is in the focus ring, not the layout.
+
 ## Suggested direction
 
 The dialog's footer actions need to stay inside the viewport at 320 px height — e.g. a scrollable

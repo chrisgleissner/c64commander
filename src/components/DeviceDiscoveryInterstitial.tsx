@@ -455,7 +455,12 @@ export function DeviceDiscoveryInterstitial() {
           </div>
         ) : (
           <form
-            className="space-y-3 px-4 py-3 sm:px-6"
+            // Bounded and scrollable, exactly as the candidates list above is. Without this the
+            // form has no height limit, so on a short viewport - a 427x320 landscape handset -
+            // its own Connect button renders below the fold with nothing able to scroll to it,
+            // leaving a keypad user able to reach only "Not now". See
+            // docs/testing/agentic-tests/full-cta-coverage/defects/S2-GAMEMODE-8020-LANDSCAPE-CONNECT-UNREACHABLE.md
+            className="max-h-[min(26rem,60vh)] space-y-3 overflow-y-auto px-4 py-3 sm:px-6"
             data-testid="startup-manual-device-panel"
             onSubmit={(event) => {
               event.preventDefault();
