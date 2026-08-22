@@ -59,8 +59,23 @@ node scripts/generate-test-sid.mjs --hz 1850 --name "Tone-High" --waveform sawto
 # put both on the Ultimate (they live at /MUSICIANS/T/Tone_Test/ on this rig) and add them to the
 # app's playlist, in that order. The playlist must hold NO other track: the Listen-on control the
 # playback stages need is rendered only while a SID is the current item, so a PRG or disk left in
-# the playlist can be current and hide it.
+# the playlist can be current and hide it. Nothing needs to be made current by hand — the gate
+# starts the first tune briefly and pauses it if the control is missing.
 ```
+
+### Two pieces of rig state that look like defects
+
+- **The Ultimate's own master volume.** The app mutes the machine when playback pauses, and the
+  gate pauses between stages, so `Audio Mixer / Vol Master` is often left at `OFF`. `av-clarity`
+  and `av-latency` start their tune over REST rather than through the app, so nothing unmutes it
+  for them and they grade silence — reported as "0 tone bursts found — is the phone audible?",
+  which points at the phone, the microphone and the mirror, none of which is the problem.
+  `preflight` now reads the item, sets it to the item's own default if it is `OFF`, says so in its
+  line, and puts back whatever it found.
+- **A closed section renders nothing.** Home's sections remember being closed, and a closed one has
+  no children in the DOM at all — so a control inside it is absent rather than merely off screen,
+  and a click on it silently does nothing. The joystick harness opens Quick Actions and Live View
+  itself before looking for the Game Mode tile and the Watch switch.
 
 The pitches are far apart and deliberately not an octave — an octave shares harmonics, and one
 tone is then mistaken for the other — and both are where a phone speaker actually works. The

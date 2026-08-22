@@ -124,6 +124,29 @@ const run = async (command, args, { timeoutMs = 600_000, env } = {}) => {
   }
 };
 
+/** The balanced `open`..`close` span starting at `from`, ignoring brackets inside strings. */
+const sliceBalanced = (text, from, open, close) => {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = from; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === open) depth += 1;
+    else if (ch === close) {
+      depth -= 1;
+      if (depth === 0) return text.slice(from, i + 1);
+    }
+  }
+  throw new Error("the grader's JSON never closed");
+};
+
 const js = async (expression) => {
   const { stdout } = await execFileAsync("node", [path.join(REPO, "scripts", "bughunt-cdp.mjs"), "eval", expression], {
     env: { ...process.env, CDP_PORT },
@@ -295,6 +318,8 @@ let audibleSeconds = 0;
 /** The rig as preflight found it, so the run can put it back however it ends. */
 let initialVolume = null;
 let initialMirror = null;
+/** The Ultimate's own master volume, which the app mutes on pause. */
+let initialMasterVolume = null;
 
 /** A stage this gate is supposed to have and does not yet. Never counted as a pass. */
 const pending = (name, what) => {
@@ -367,7 +392,25 @@ return JSON.stringify({titles:[...document.querySelectorAll('[data-testid="playl
         `(playlist now: ${(state.titles ?? []).join(", ") || "empty"})`,
     );
   }
-  if (!state.engine) throw new Error("the Listen-on control is not on the Play page");
+  if (!state.engine) {
+    // The control renders only while a SID is the CURRENT item, and after a fresh install, or
+    // after any stage that launched something else, nothing is current. That is rig state rather
+    // than a defect, and leaving it to be arranged by hand is how three stages sat unrunnable:
+    // every attempt reported a missing control instead of grading anything.
+    const nudged = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
+const rows=document.querySelectorAll('[data-testid="playlist-item"]');
+const play=rows[0]?.querySelector('button[aria-label^="Play "]');
+if(!play) return JSON.stringify({engine:false});
+play.click();await wait(4000);
+q("playlist-pause")?.click();await wait(800);
+return JSON.stringify({engine:!!q("playback-engine-toggle")});})()`);
+    if (!nudged.engine) {
+      throw new Error(
+        "the Listen-on control is not on the Play page, and starting the first tune did not bring it back",
+      );
+    }
+  }
   return state.titles;
 };
 
@@ -378,12 +421,12 @@ return JSON.stringify({titles:[...document.querySelectorAll('[data-testid="playl
  * same tune on the other path" is only a meaningful comparison if both paths were reached the way
  * a user reaches them.
  */
-const gradePlayback = async (engine, label) => {
+const gradePlayback = async (testId, label) => {
   const titles = await readPlaylist();
   const index = titles.indexOf(TONE_TUNES[0].title);
   const started = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
 const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
-const e=q("playback-engine-${engine}");
+const e=q("${testId}");
 if(!e) return JSON.stringify({error:"the ${label} engine option is not on the page"});
 e.click();await wait(1500);
 const items=document.querySelectorAll('[data-testid="playlist-item"]');
@@ -394,7 +437,7 @@ const item=items[${index}]; if(!item) return JSON.stringify({error:"the tune lef
 const rowPlay=item.querySelector('button[aria-label^="Play "]');
 if(!rowPlay) return JSON.stringify({error:"the row has no Play button"});
 rowPlay.click();await wait(4000);
-return JSON.stringify({engine:q("playback-engine-${engine}")?.getAttribute("aria-pressed"),
+return JSON.stringify({engine:q("${testId}")?.getAttribute("aria-pressed"),
   elapsed:q("playback-elapsed")?.innerText??null});})()`);
   if (started.error) throw new Error(started.error);
   if (started.engine !== "true") throw new Error(`the ${label} engine did not take`);
@@ -402,7 +445,7 @@ return JSON.stringify({engine:q("playback-engine-${engine}")?.getAttribute("aria
     throw new Error(`${label}: the transport says playing but the clock has not moved off 0:00`);
   }
 
-  const wav = path.join(TMP, `sid-${engine}.wav`);
+  const wav = path.join(TMP, `sid-${testId}.wav`);
   await recordMic(wav, TONE_SECONDS);
   await js(`(()=>{document.querySelector('[data-testid="playlist-pause"]')?.click();return 1})()`);
 
@@ -432,6 +475,8 @@ return JSON.stringify({engine:q("playback-engine-${engine}")?.getAttribute("aria
  * fired from here while `arecord` is already running rather than before it.
  */
 const gradeCrossfade = async () => {
+  // Both tunes play locally here, so the mirror would only add the Ultimate's own copy.
+  await setMirror({ video: false, audio: false });
   const titles = await readPlaylist();
   const index = titles.indexOf(TONE_TUNES[0].title);
   const started = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
@@ -481,14 +526,44 @@ return JSON.stringify({elapsed:q("playback-elapsed")?.innerText??null});})()`);
   // the first "{" to the last "}" happened to work for a single recording and would have silently
   // mis-parsed the moment a second one was passed; and there is no `recordings` key to fall back
   // on. Take the array and read the one entry that was asked for.
+  // Slicing to the END of stdout only works while the array is the last thing printed. It is not:
+  // the probe writes a human summary after its JSON, and the parse then failed with "unexpected
+  // non-whitespace character after JSON" rather than reporting anything about the join. Read the
+  // array by matching its brackets instead of assuming where the output stops.
   const first = graded.out.indexOf("[");
   if (first < 0) throw new Error(`the grader printed no JSON: ${graded.out.trim().slice(-240)}`);
-  const parsed = JSON.parse(graded.out.slice(first));
+  const parsed = JSON.parse(sliceBalanced(graded.out, first, "[", "]"));
   const report = Array.isArray(parsed) ? parsed[0] : parsed;
   const verdict = report?.verdict;
   if (!verdict) throw new Error(`the grader printed no verdict: ${graded.out.trim().slice(-240)}`);
   if (!/SEAMLESS/i.test(verdict)) throw new Error(`the join graded "${verdict}"`);
   return `join graded "${verdict}"`;
+};
+
+/**
+ * The Ultimate's master volume, and a way to put it back.
+ *
+ * The app mutes the machine when playback pauses, and the gate pauses between stages — so
+ * `av-clarity` and `av-latency`, which start a tune over REST rather than through the app, played
+ * into a muted machine and graded silence. They reported "0 tone bursts found — is the phone
+ * audible?", which sent the search to the phone, the microphone and the mirror in turn, none of
+ * which was the problem. The value is a string chosen from the item's own `values` list, spaces
+ * included, because the firmware rejects anything else.
+ */
+const readMasterVolume = async () => {
+  const response = await fetch(`http://${HOST}/v1/configs/Audio%20Mixer/Vol%20Master`, { headers: authHeaders });
+  if (!response.ok) return null;
+  const body = await response.json();
+  const item = body?.["Audio Mixer"]?.["Vol Master"];
+  return item ? { current: item.current, fallback: item.default ?? " 0 dB" } : null;
+};
+
+const setMasterVolume = async (value) => {
+  const url = `http://${HOST}/v1/configs/Audio%20Mixer/Vol%20Master?value=${encodeURIComponent(value)}`;
+  const response = await fetch(url, { method: "PUT", headers: authHeaders });
+  const body = await response.json().catch(() => ({}));
+  const errors = body?.errors ?? [];
+  if (!response.ok || errors.length) throw new Error(`the Ultimate would not take Vol Master=${value}: ${errors}`);
 };
 
 const preflight = async () => {
@@ -513,9 +588,18 @@ const preflight = async () => {
   // both mean that stage may never be reached — and the phone is then left wherever the gate put it.
   initialVolume = volume.index;
   initialMirror = await readMirror();
+  const master = await readMasterVolume();
+  let masterNote = "";
+  if (master) {
+    initialMasterVolume = master.current;
+    if (master.current === "OFF") {
+      await setMasterVolume(master.fallback);
+      masterNote = `, Ultimate master volume was OFF, set to ${master.fallback.trim()}`;
+    }
+  }
   return (
     `device ${attached.length}, route ${page.route}, speaker volume ${volume.speaker}, ` +
-    `mirror audio=${initialMirror.audio} video=${initialMirror.video}`
+    `mirror audio=${initialMirror.audio} video=${initialMirror.video}${masterNote}`
   );
 };
 
@@ -530,6 +614,7 @@ const restoreRig = async () => {
   try {
     if (initialVolume !== null) await setVolume(initialVolume);
     if (initialMirror !== null) await setMirror(initialMirror);
+    if (initialMasterVolume !== null) await setMasterVolume(initialMasterVolume).catch(() => {});
   } catch (error) {
     console.error(
       `  WARN could not put the rig back as it was found: ` +
@@ -576,6 +661,12 @@ const main = async () => {
 
   // The sender, on the host's own link. Silent: it only listens.
   await stage("wire", false, async () => {
+    // Nothing is on the group unless the Ultimate is sending, and preflight leaves the
+    // mirror however it found it — so this stage asks for the audio feed rather than
+    // inheriting one, and read "0 packets — is the stream running?" when it did not.
+    // Video stays off: this is the audio link's own baseline, and av-clarity is the stage
+    // that puts both feeds on the same Wi-Fi on purpose.
+    await setMirror({ video: false, audio: true });
     const args = [path.join("tools", "hil", "av_stream_flow.py"), "--seconds", "8"];
     if (IFACE) args.push("--iface", IFACE);
     const audio = await run("python3", args);
@@ -638,20 +729,22 @@ const main = async () => {
   // The same tune, rendered two ways, graded by one instrument in one room. The two paths share
   // nothing after the tune is chosen and have sounded materially different before, so they are run
   // back to back rather than at different times.
+  // "Both", not "Remote". Remote means the C64's OWN speakers: choosing it calls stopAudio(),
+  // so nothing reaches the phone and the microphone beside it hears an empty room, which is how
+  // this stage read "nothing was playing" while the transport clock advanced. Both is the option
+  // where the Ultimate renders the tune and the mirror carries it here, which is the path this
+  // stage exists to grade. Neither stage sets the mirror by hand any more: routing the audio is
+  // exactly what the control under test does, and doing it here would hide it getting that wrong.
   await stage("sid-remote", true, async () => {
     await setVolume(TONE_VOLUME);
-    await setMirror({ video: false, audio: true });
     audibleSeconds += TONE_SECONDS;
-    return await gradePlayback("c64", "Remote");
+    return await gradePlayback("playback-listen-both", "Remote");
   });
 
   await stage("sid-local", true, async () => {
     await setVolume(TONE_VOLUME);
-    // The on-device engine does not need the mirror, and leaving it on would put the Ultimate's
-    // copy of the same tone into the room alongside it — one microphone cannot separate them.
-    await setMirror({ video: false, audio: false });
     audibleSeconds += TONE_SECONDS;
-    return await gradePlayback("local", "Local");
+    return await gradePlayback("playback-engine-local", "Local");
   });
 
   await stage("crossfade", true, async () => {

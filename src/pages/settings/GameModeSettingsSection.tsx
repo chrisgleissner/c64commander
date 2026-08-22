@@ -218,8 +218,8 @@ export const GameModeSettingsSection = () => {
         </Select>
         <p className="text-xs text-muted-foreground">
           <strong>Auto</strong> shows the joystick until you steer, then hides it; <strong>Visible</strong> always shows
-          it; <strong>Hidden</strong> hides it once the picture is on. Press <kbd>#</kbd> for quick keys, <kbd>*</kbd>{" "}
-          for view, Back to leave.
+          it; <strong>Hidden</strong> always hides it, and with the picture off the space says how to turn it on. Press{" "}
+          <kbd>#</kbd> for quick keys, <kbd>*</kbd> for view, Back to leave.
         </p>
       </div>
 

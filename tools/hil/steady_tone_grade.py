@@ -79,6 +79,25 @@ DEFAULT_MAX_CENTS = 50.0
 BAND = (300.0, 6000.0)
 
 
+def harmonics_of(freqs: np.ndarray, hz: float) -> np.ndarray:
+    """Bins belonging to the tone's own overtones, which are the tone rather than the room.
+
+    The gate's tunes are generated as a sawtooth on the SID's advice that a triangle at 550 Hz is
+    too quiet to measure. A sawtooth puts energy at every multiple of its pitch, all of it inside
+    the 300-6000 Hz band, and at 550 Hz the second and third overtones measured only 2-3 dB below
+    the fundamental. Counted as noise they made `SNR_MARGIN_DB` unreachable by construction, so a
+    tone whose fundamental was the loudest thing in the room graded as `NO TONE`.
+
+    Only the narrow bins at each multiple are removed, so broadband room noise still counts.
+    """
+    mask = np.zeros_like(freqs, dtype=bool)
+    order = 2
+    while hz * order <= BAND[1]:
+        mask |= np.abs(freqs - hz * order) <= max(15.0, hz * order * 0.03)
+        order += 1
+    return mask
+
+
 def read_wav(path: str) -> tuple[np.ndarray, int]:
     with wave.open(path, "rb") as fh:
         if fh.getsampwidth() != 2:
@@ -117,7 +136,7 @@ def grade(path: str, hz: float) -> dict:
         near = np.abs(freqs - hz) <= max(15.0, hz * 0.06)
         tone_mag[i] = spectrum[near].max() if near.any() else 0.0
         peak_hz[i] = freqs[near][spectrum[near].argmax()] if near.any() else 0.0
-        rest = in_band & ~near
+        rest = in_band & ~near & ~harmonics_of(freqs, hz)
         noise_mag[i] = np.sqrt((spectrum[rest] ** 2).mean()) if rest.any() else 0.0
 
     peak = tone_mag.max()

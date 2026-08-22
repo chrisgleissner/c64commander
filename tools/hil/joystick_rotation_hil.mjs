@@ -315,7 +315,12 @@ return JSON.stringify({label:q("settings-joystick-key-layout")?.innerText,
   stored:localStorage.getItem("c64u_remote_input_joystick_layout")});`),
   );
   if (after.error) throw new Error(after.error);
-  if (after.stored !== layout) throw new Error(`choosing "${label}" stored "${after.stored}"`);
+  // Radix Select fires nothing when the chosen option is already the current one, so choosing
+  // the default writes no key. The setting the app will now use is what the trigger shows.
+  const settled = after.stored ?? null;
+  if (settled !== null && settled !== layout) throw new Error(`choosing "${label}" stored "${settled}"`);
+  if (settled === null && !String(after.label ?? "").includes(label))
+    throw new Error(`choosing "${label}" neither stored a value nor left the control showing it (${after.label})`);
 
   // Back to a page that hosts the sheet, and give it a moment to mount.
   await js(inPage(`q("tab-home")?.click();await wait(2500);return "1";`));

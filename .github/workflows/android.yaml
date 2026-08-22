@@ -918,6 +918,17 @@ jobs:
       - name: Install Python test dependencies
         run: pip install pytest pytest-cov
 
+      # The HIL tools cannot be exercised without a rig, but their pure analysis can: the
+      # tone grader decides whether an audible stage passed, and it graded a real recording
+      # of its own stimulus as silence for as long as nothing checked it.
+      - name: Run HIL analysis tests
+        run: |
+          start=$(date +%s)
+          python3 -m pip install numpy
+          python3 -m pytest tools/hil/tests/
+          end=$(date +%s)
+          echo "- hil analysis tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
       - name: Run agents tests with coverage
         run: |
           start=$(date +%s)
