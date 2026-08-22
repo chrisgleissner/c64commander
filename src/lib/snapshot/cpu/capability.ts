@@ -64,7 +64,7 @@ export const detectSnapshotCapability = async (api: CapabilityApi): Promise<Snap
   try {
     info = await api.getInfo();
     if (hasErrors(info?.errors)) {
-      infoReason = `/v1/info returned errors: ${info!.errors.join(", ")}`;
+      infoReason = `/v1/info returned errors: ${info.errors.join(", ")}`;
       info = null;
     }
   } catch (error) {

@@ -143,21 +143,21 @@ const readLE16 = (bytes: Uint8Array, offset: number) => {
   if (!hasBounds(bytes, offset, 2)) {
     return null;
   }
-  return bytes[offset]! + 256 * bytes[offset + 1]!;
+  return bytes[offset] + 256 * bytes[offset + 1];
 };
 
 const readBE16 = (bytes: Uint8Array, offset: number) => {
   if (!hasBounds(bytes, offset, 2)) {
     return null;
   }
-  return 256 * bytes[offset]! + bytes[offset + 1]!;
+  return 256 * bytes[offset] + bytes[offset + 1];
 };
 
 const readBE32 = (bytes: Uint8Array, offset: number) => {
   if (!hasBounds(bytes, offset, 4)) {
     return null;
   }
-  return bytes[offset]! * 16777216 + bytes[offset + 1]! * 65536 + bytes[offset + 2]! * 256 + bytes[offset + 3]!;
+  return bytes[offset] * 16777216 + bytes[offset + 1] * 65536 + bytes[offset + 2] * 256 + bytes[offset + 3];
 };
 
 const validateD64: Validator = (bytes) => {
@@ -273,7 +273,7 @@ const validateMod: Validator = (bytes) => {
   }
   let maxPattern = 0;
   for (let index = 952; index < 1080; index += 1) {
-    maxPattern = Math.max(maxPattern, bytes[index]!);
+    maxPattern = Math.max(maxPattern, bytes[index]);
   }
   if (maxPattern > 127) {
     return failure("INVALID_PATTERN_TABLE", "mod");

@@ -16,7 +16,6 @@ import { base64ToUint8 } from "@/lib/sid/sidUtils";
 import type { ReuSnapshotFileLocation, ReuSnapshotStorageEntry } from "./reuSnapshotTypes";
 
 const REU_DATA_DIR = "reu-snapshots";
-const REU_MIME_TYPE = "application/octet-stream";
 
 const uint8ToBase64 = (value: Uint8Array) => {
   let binary = "";

@@ -374,6 +374,12 @@ jobs:
   web-build-coverage:
     name: Web | Build (coverage)
     runs-on: ubuntu-latest
+    # The Istanbul-instrumented build forces sourcemaps on and holds the whole
+    # module graph in memory while rendering chunks. It ran within Node's default
+    # heap for a long time, but has been close enough to the limit to fail
+    # intermittently with "JavaScript heap out of memory". The runner has 16 GB.
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
 
     steps:
       - name: Checkout
@@ -423,6 +429,9 @@ jobs:
     env:
       VITE_COVERAGE: "true"
       VITE_ENABLE_TEST_PROBES: "1"
+      # This job rebuilds with coverage instrumentation if the artifact is
+      # missing, so it needs the same heap as web-build-coverage.
+      NODE_OPTIONS: --max-old-space-size=6144
 
     steps:
       - name: Checkout
@@ -908,6 +917,17 @@ jobs:
 
       - name: Install Python test dependencies
         run: pip install pytest pytest-cov
+
+      # The HIL tools cannot be exercised without a rig, but their pure analysis can: the
+      # tone grader decides whether an audible stage passed, and it graded a real recording
+      # of its own stimulus as silence for as long as nothing checked it.
+      - name: Run HIL analysis tests
+        run: |
+          start=$(date +%s)
+          python3 -m pip install numpy
+          python3 -m pytest tools/hil/tests/
+          end=$(date +%s)
+          echo "- hil analysis tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Run agents tests with coverage
         run: |

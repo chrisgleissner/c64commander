@@ -6,26 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import {
-  adc,
-  assemble,
-  beq,
-  bne,
-  clc,
-  db,
-  dw,
-  jmp,
-  label,
-  lda,
-  ldx,
-  ldy,
-  rti,
-  sta,
-  stx,
-  sty,
-  tsx,
-  txa,
-} from "./assembler";
+import { adc, assemble, beq, bne, clc, db, dw, jmp, label, lda, ldx, ldy, sta, stx, sty, tsx, txa } from "./assembler";
 
 /**
  * The RLI (Ride the Live Interrupt) capture handler.
@@ -87,6 +68,54 @@ export const KERNAL_IRQ_FRAME_BYTES = 6;
 export const DEFAULT_SAFE_REGION = 0x033c;
 
 /**
+ * The scratch bytes and flags both handlers park after their code, in this
+ * order. A fresh array each call: `assemble` walks the directives it is given,
+ * and the two handlers are assembled separately.
+ */
+const scratchVariables = () => [
+  label("scrPcl"),
+  db(0),
+  label("scrPch"),
+  db(0),
+  label("scrA"),
+  db(0),
+  label("scrX"),
+  db(0),
+  label("scrY"),
+  db(0),
+  label("scrSp"),
+  db(0),
+  label("scrP"),
+  db(0),
+  label("armed"),
+  db(0),
+  label("captured"),
+  db(0),
+  label("release"),
+  db(0),
+  label("origVec"),
+  dw(0),
+];
+
+/** Absolute addresses of everything in {@link scratchVariables}, for the orchestrator. */
+const buildCaptureLayout = (base: number, symbols: Record<string, number>, bytes: Uint8Array): CaptureLayout => ({
+  base,
+  entry: symbols.entry,
+  scratchPcl: symbols.scrPcl,
+  scratchPch: symbols.scrPch,
+  scratchA: symbols.scrA,
+  scratchX: symbols.scrX,
+  scratchY: symbols.scrY,
+  scratchSp: symbols.scrSp,
+  scratchP: symbols.scrP,
+  armed: symbols.armed,
+  captured: symbols.captured,
+  release: symbols.release,
+  origVec: symbols.origVec,
+  length: bytes.length,
+});
+
+/**
  * Builds the capture handler positioned at `base`. The returned {@link CaptureLayout}
  * gives the orchestrator the absolute addresses of the flags and scratch bytes.
  */
@@ -129,50 +158,12 @@ export const buildCaptureHandler = (base = DEFAULT_SAFE_REGION): CaptureHandler 
       jmp.ind("origVec"), // released: chain to the original handler → transparent resume
 
       // --- data ---
-      label("scrPcl"),
-      db(0),
-      label("scrPch"),
-      db(0),
-      label("scrA"),
-      db(0),
-      label("scrX"),
-      db(0),
-      label("scrY"),
-      db(0),
-      label("scrSp"),
-      db(0),
-      label("scrP"),
-      db(0),
-      label("armed"),
-      db(0),
-      label("captured"),
-      db(0),
-      label("release"),
-      db(0),
-      label("origVec"),
-      dw(0),
+      ...scratchVariables(),
     ],
     base,
   );
 
-  const layout: CaptureLayout = {
-    base,
-    entry: symbols.entry!,
-    scratchPcl: symbols.scrPcl!,
-    scratchPch: symbols.scrPch!,
-    scratchA: symbols.scrA!,
-    scratchX: symbols.scrX!,
-    scratchY: symbols.scrY!,
-    scratchSp: symbols.scrSp!,
-    scratchP: symbols.scrP!,
-    armed: symbols.armed!,
-    captured: symbols.captured!,
-    release: symbols.release!,
-    origVec: symbols.origVec!,
-    length: bytes.length,
-  };
-
-  return { bytes, layout };
+  return { bytes, layout: buildCaptureLayout(base, symbols, bytes) };
 };
 
 /** Number of bytes the IRQ/NMI frame occupies when KERNAL is banked out (CPU pushes P/PCL/PCH only). */
@@ -226,48 +217,10 @@ export const buildRawCaptureHandler = (base = DEFAULT_SAFE_REGION): CaptureHandl
       lda.abs("scrA"),
       jmp.ind("origVec"),
 
-      label("scrPcl"),
-      db(0),
-      label("scrPch"),
-      db(0),
-      label("scrA"),
-      db(0),
-      label("scrX"),
-      db(0),
-      label("scrY"),
-      db(0),
-      label("scrSp"),
-      db(0),
-      label("scrP"),
-      db(0),
-      label("armed"),
-      db(0),
-      label("captured"),
-      db(0),
-      label("release"),
-      db(0),
-      label("origVec"),
-      dw(0),
+      ...scratchVariables(),
     ],
     base,
   );
 
-  const layout: CaptureLayout = {
-    base,
-    entry: symbols.entry!,
-    scratchPcl: symbols.scrPcl!,
-    scratchPch: symbols.scrPch!,
-    scratchA: symbols.scrA!,
-    scratchX: symbols.scrX!,
-    scratchY: symbols.scrY!,
-    scratchSp: symbols.scrSp!,
-    scratchP: symbols.scrP!,
-    armed: symbols.armed!,
-    captured: symbols.captured!,
-    release: symbols.release!,
-    origVec: symbols.origVec!,
-    length: bytes.length,
-  };
-
-  return { bytes, layout };
+  return { bytes, layout: buildCaptureLayout(base, symbols, bytes) };
 };

@@ -407,7 +407,7 @@ const Slider = React.forwardRef<React.ElementRef<typeof SliderPrimitive.Root>, S
           return;
         }
         if (action === "dpadLeft" || action === "dpadRight") {
-          const stepSize = Number.isFinite(step) && step ? (step as number) : 1;
+          const stepSize = Number.isFinite(step) && step ? step : 1;
           const base = keyDraftRef.current ?? displayValue;
           const direction = action === "dpadRight" ? 1 : -1;
           const next = normalizeSliderValue(base + direction * stepSize, min, max);

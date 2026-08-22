@@ -7,7 +7,7 @@
  */
 
 import type { C64API } from "@/lib/c64api";
-import { addErrorLog, addLog } from "@/lib/logging";
+import { addErrorLog } from "@/lib/logging";
 import { checkC64Liveness } from "@/lib/machine/c64Liveness";
 import { createActionContext, getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordDeviceGuard } from "@/lib/tracing/traceSession";

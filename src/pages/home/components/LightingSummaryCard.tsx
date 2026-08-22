@@ -187,10 +187,6 @@ export function LightingSummaryCard({
 
   const fixedColorSliderOptions = fixedColorSelectOptions.length ? fixedColorSelectOptions : [fixedColorValue];
   const fixedColorSliderMax = Math.max(0, fixedColorSliderOptions.length - 1);
-  const fixedColorSliderIndex = Math.max(
-    0,
-    fixedColorSliderOptions.findIndex((option) => option === fixedColorValue),
-  );
   const fixedColorGradient = useMemo(() => {
     const colors = fixedColorSliderOptions.map((option) => getLedColorRgb(option));
     if (colors.length < 2 || colors.some((value) => !value)) return null;

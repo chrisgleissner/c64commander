@@ -6,7 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Unzip, UnzipInflate, unzipSync } from "fflate";
+import { Unzip, UnzipInflate } from "fflate";
+import {
+  removeScratchTree,
+  walkScratchFiles,
+  writeArchiveToScratch,
+  type SevenZipFileSystem,
+  type SevenZipScratchPaths,
+} from "@/lib/archive/sevenZipScratch";
 import { addErrorLog, addLog } from "@/lib/logging";
 
 type SevenZipFactory = (options: { locateFile: (url: string) => string }) => Promise<any> | any;
@@ -164,52 +171,24 @@ export const archiveNameHash = (name: string) => {
 const extractSevenZ = async ({ archiveName, buffer, onEntry, onProgress, onEnumerate }: ExtractArchiveOptions) => {
   const heapBefore = readHeapUsageBytes();
   const module = await getSevenZipModule();
+  const fs = module as SevenZipFileSystem;
   const workingDir = `/work-${archiveNameHash(archiveName)}`;
-  const archivePath = `${workingDir}/${normalizePath(archiveName) || `archive${SEVEN_Z_EXTENSION}`}`;
-  const outputDir = `${workingDir}/out`;
-
-  const cleanupDir = (dir: string) => {
-    const entries = module.FS.readdir(dir);
-    entries.forEach((entry: string) => {
-      if (entry === "." || entry === "..") return;
-      const fullPath = `${dir}/${entry}`;
-      const stat = module.FS.stat(fullPath);
-      if (module.FS.isDir(stat.mode)) {
-        cleanupDir(fullPath);
-        module.FS.rmdir(fullPath);
-      } else {
-        module.FS.unlink(fullPath);
-      }
-    });
+  const paths: SevenZipScratchPaths = {
+    workingDir,
+    outputDir: `${workingDir}/out`,
+    archivePath: `${workingDir}/${normalizePath(archiveName) || `archive${SEVEN_Z_EXTENSION}`}`,
   };
 
   try {
-    module.FS.mkdir(workingDir);
-    module.FS.mkdir(outputDir);
-    const stream = module.FS.open(archivePath, "w+");
-    module.FS.write(stream, buffer, 0, buffer.length);
-    module.FS.close(stream);
+    writeArchiveToScratch(fs, paths, buffer);
 
-    const exitCode = module.callMain(["x", archivePath, `-o${outputDir}`, "-y"]);
+    const exitCode = module.callMain(["x", paths.archivePath, `-o${paths.outputDir}`, "-y"]);
     if (exitCode && exitCode !== 0) {
       throw new Error(`7zip exited with code ${exitCode}`);
     }
 
     const files: Array<{ path: string; fullPath: string }> = [];
-    const walkDir = (dir: string, prefix: string) => {
-      const entries = module.FS.readdir(dir);
-      entries.forEach((entry: string) => {
-        if (entry === "." || entry === "..") return;
-        const fullPath = `${dir}/${entry}`;
-        const stat = module.FS.stat(fullPath);
-        if (module.FS.isDir(stat.mode)) {
-          walkDir(fullPath, `${prefix}${entry}/`);
-        } else {
-          files.push({ path: `${prefix}${entry}`, fullPath });
-        }
-      });
-    };
-    walkDir(outputDir, "");
+    walkScratchFiles(fs, paths.outputDir, (file) => files.push(file));
 
     let processed = 0;
     const total = files.length;
@@ -249,38 +228,7 @@ const extractSevenZ = async ({ archiveName, buffer, onEntry, onProgress, onEnume
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to extract ${archiveName}: ${message}`);
   } finally {
-    try {
-      cleanupDir(outputDir);
-    } catch (error) {
-      addErrorLog("SevenZip cleanup failed", {
-        error: (error as Error).message,
-        step: "cleanupDir",
-      });
-    }
-    try {
-      module.FS.rmdir(outputDir);
-    } catch (error) {
-      addErrorLog("SevenZip cleanup failed", {
-        error: (error as Error).message,
-        step: "rmdir-output",
-      });
-    }
-    try {
-      module.FS.unlink(archivePath);
-    } catch (error) {
-      addErrorLog("SevenZip cleanup failed", {
-        error: (error as Error).message,
-        step: "unlink-archive",
-      });
-    }
-    try {
-      module.FS.rmdir(workingDir);
-    } catch (error) {
-      addErrorLog("SevenZip cleanup failed", {
-        error: (error as Error).message,
-        step: "rmdir-workdir",
-      });
-    }
+    removeScratchTree(fs, paths);
   }
 };
 

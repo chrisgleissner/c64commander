@@ -396,8 +396,8 @@ export function useDeviceBoundSlider<T extends SliderDomainValue>({
       setDefaultPreviewThrottleMs(loadVolumeSliderPreviewIntervalMs());
     };
 
-    window.addEventListener("c64u-app-settings-updated", handler as EventListener);
-    return () => window.removeEventListener("c64u-app-settings-updated", handler as EventListener);
+    window.addEventListener("c64u-app-settings-updated", handler);
+    return () => window.removeEventListener("c64u-app-settings-updated", handler);
   }, []);
 
   useEffect(() => {

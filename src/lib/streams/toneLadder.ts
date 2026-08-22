@@ -100,10 +100,10 @@ export const TONE_LADDER_SLOTS: readonly ToneLadderSlot[] = (() => {
     if (degree < 0) return { index, name: "silence", hz: 0, colour: null, colourName: null };
     const slot = {
       index,
-      name: TONE_LADDER_SCALE_NAMES[degree]!,
-      hz: SCALE_HZ[degree]!,
+      name: TONE_LADDER_SCALE_NAMES[degree],
+      hz: SCALE_HZ[degree],
       colour: colour % C64_COLOUR_NAMES.length,
-      colourName: C64_COLOUR_NAMES[colour % C64_COLOUR_NAMES.length]!,
+      colourName: C64_COLOUR_NAMES[colour % C64_COLOUR_NAMES.length],
     };
     colour += 1;
     return slot;
@@ -202,7 +202,7 @@ const median = (values: number[]): number => {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = sorted.length >> 1;
-  return sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 };
 
 const percentile = (values: number[], fraction: number): number => {
@@ -211,7 +211,7 @@ const percentile = (values: number[], fraction: number): number => {
   const at = (sorted.length - 1) * fraction;
   const low = Math.floor(at);
   const high = Math.ceil(at);
-  return low === high ? sorted[low]! : sorted[low]! + (sorted[high]! - sorted[low]!) * (at - low);
+  return low === high ? sorted[low] : sorted[low] + (sorted[high] - sorted[low]) * (at - low);
 };
 
 /** Interquartile range — the spread that a single outlier cannot inflate. */
@@ -231,7 +231,7 @@ export const centsBetween = (detectedHz: number, expectedHz: number): number =>
  */
 export const detectFundamentalHz = (samples: Float32Array, sampleRate: number): number => {
   if (samples.length < 256) return 0;
-  const lowest = SCALE_HZ[0]!;
+  const lowest = SCALE_HZ[0];
   const powers: { hz: number; power: number }[] = [];
   for (let semitone = -13; semitone <= 25; semitone += 1) {
     const hz = lowest * 2 ** (semitone / 12);
@@ -240,14 +240,14 @@ export const detectFundamentalHz = (samples: Float32Array, sampleRate: number): 
     let s1 = 0;
     let s2 = 0;
     for (let i = 0; i < samples.length; i += 1) {
-      const s0 = samples[i]! + coeff * s1 - s2;
+      const s0 = samples[i] + coeff * s1 - s2;
       s2 = s1;
       s1 = s0;
     }
     powers.push({ hz, power: s1 * s1 + s2 * s2 - coeff * s1 * s2 });
   }
 
-  let best = powers.reduce((a, b) => (b.power > a.power ? b : a), powers[0]!);
+  let best = powers.reduce((a, b) => (b.power > a.power ? b : a), powers[0]);
   // A triangle wave's odd harmonics can out-score the fundamental once a speaker has rolled off the
   // bottom. If half the winning frequency also carries real energy, that is the true fundamental.
   for (let fold = 0; fold < 2; fold += 1) {
@@ -274,7 +274,7 @@ export interface ToneLadderExtras {
 /** How many slots pass between this note's onset and the next note's. */
 const slotsUntilNextNote = (slotIndex: number): number => {
   let span = 1;
-  while (TONE_LADDER_SLOTS[(slotIndex + span) % TONE_LADDER_LOOP_SLOTS]!.hz === 0) span += 1;
+  while (TONE_LADDER_SLOTS[(slotIndex + span) % TONE_LADDER_LOOP_SLOTS].hz === 0) span += 1;
   return span;
 };
 
@@ -285,14 +285,14 @@ const slotsUntilNextNote = (slotIndex: number): number => {
  * start. Cheap: sixteen candidate rotations scored against the pitches actually heard.
  */
 const anchorSlot = (notes: ToneLadderNoteInput[]): number => {
-  let best = TONE_LADDER_NOTES[0]!.index;
+  let best = TONE_LADDER_NOTES[0].index;
   let bestScore = -1;
   for (const candidate of TONE_LADDER_NOTES) {
     let score = 0;
     let slot = candidate.index;
     for (const note of notes) {
-      while (TONE_LADDER_SLOTS[slot % TONE_LADDER_LOOP_SLOTS]!.hz === 0) slot += 1;
-      const expected = TONE_LADDER_SLOTS[slot % TONE_LADDER_LOOP_SLOTS]!.hz;
+      while (TONE_LADDER_SLOTS[slot % TONE_LADDER_LOOP_SLOTS].hz === 0) slot += 1;
+      const expected = TONE_LADDER_SLOTS[slot % TONE_LADDER_LOOP_SLOTS].hz;
       if (Math.abs(centsBetween(note.hz, expected)) <= TONE_LADDER_TOLERANCE_CENTS) score += 1;
       slot += 1;
     }
@@ -347,7 +347,7 @@ const gradeAvSync = (pairs: ColourPairing[]): AvSyncGrade => {
   // Drift is a slope, and a slope needs a baseline long enough to see one. Two points cannot tell a
   // clock mismatch from noise, so it is reported as unknown rather than as zero.
   let driftPpm: number | null = null;
-  const spanMs = offsets[offsets.length - 1]!.atMs - offsets[0]!.atMs;
+  const spanMs = offsets[offsets.length - 1].atMs - offsets[0].atMs;
   if (offsets.length >= 4 && spanMs > TONE_LADDER_LOOP_SECONDS * 500) {
     const meanX = offsets.reduce((sum, o) => sum + o.atMs, 0) / offsets.length;
     const meanY = values.reduce((sum, v) => sum + v, 0) / values.length;
@@ -412,8 +412,8 @@ export const gradeToneLadder = (notes: ToneLadderNoteInput[], extras: ToneLadder
 
   let slot = anchorSlot(notes);
   const graded: ToneLadderNote[] = notes.map((note) => {
-    while (TONE_LADDER_SLOTS[slot % TONE_LADDER_LOOP_SLOTS]!.hz === 0) slot += 1;
-    const reference = TONE_LADDER_SLOTS[slot % TONE_LADDER_LOOP_SLOTS]!;
+    while (TONE_LADDER_SLOTS[slot % TONE_LADDER_LOOP_SLOTS].hz === 0) slot += 1;
+    const reference = TONE_LADDER_SLOTS[slot % TONE_LADDER_LOOP_SLOTS];
     const expectedSeconds = slotsUntilNextNote(slot % TONE_LADDER_LOOP_SLOTS) * TONE_LADDER_SLOT_SECONDS;
     const cents = centsBetween(note.hz, reference.hz);
     slot += 1;

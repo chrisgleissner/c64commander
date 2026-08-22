@@ -45,7 +45,7 @@ const defaultEnvironment = (): MotionRuntimeEnvironment => {
   if (typeof window === "undefined") return {};
   return {
     localStorage: window.localStorage,
-    navigator: window.navigator as MotionRuntimeEnvironment["navigator"],
+    navigator: window.navigator,
     matchMedia: window.matchMedia.bind(window),
     document: window.document,
   };

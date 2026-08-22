@@ -7,7 +7,6 @@
  */
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { ChevronDown, ChevronRight, Filter, MoreHorizontal, Share2, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -41,7 +40,6 @@ import { DismissableLayer } from "@radix-ui/react-dismissable-layer";
 
 import { Button } from "@/components/ui/button";
 import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorFields";
-import { Input } from "@/components/ui/input";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { isDefaultT9InputEnabled } from "@/lib/input/t9Defaults";

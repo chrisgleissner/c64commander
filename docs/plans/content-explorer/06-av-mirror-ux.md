@@ -149,6 +149,29 @@ jitters). Perfect for zooming into the cursor and having the view follow as you 
 manual pan/zoom pauses follow briefly so the user always wins. Cheap: subsampled diff on the
 already-decoded frame, throttled.
 
+### 7.3a Lock on (follow-focus)
+
+Layered on top of §7.3, not an alternative to it. **Press and hold** a point on the picture and
+the app works out which object is under it — by segmenting it out of the local background — and
+keeps the view on that object as it moves, while everything else moves independently. It is
+built for playing a game: the player's own sprite stays in view while enemies do not.
+
+The tracker survives the sprite flashing, being recoloured for good, animating, growing or
+changing form, moving 40px a frame, wrapping round the screen, being briefly hidden, being
+crossed by something identical, and respawning somewhere else entirely. When it genuinely loses
+the subject it says so and hands the view back to §7.3's follow-motion, so the view is never left
+parked on empty background.
+
+A marker (four corner brackets, on by default, Settings → Remote Input → Game Mode) shows which
+object was picked, and the status chip reports the state and releases the lock when tapped.
+
+**No touchscreen is required for any of it.** In Adjust mode the D-pad pans the picture under a
+crosshair fixed at the centre of the view, and the OK key confirms what is under it — or releases
+an existing lock. It turns following on by itself, so it is one key rather than two, and `0`/`5`
+keep Fit as the other way out.
+
+Design, measurements and rejected alternatives: `docs/plans/follow-focus/DESIGN.md`.
+
 ### 7.4 Side-by-side minimap
 
 An optional small **full-frame thumbnail** in a corner of the immersive view showing the
@@ -167,6 +190,8 @@ buttons/typography/spacing. It must read as _"the mirror, but you can zoom"_ —
 ```
 src/lib/streams/mirrorViewport.ts    NEW  pure viewport math (scale/pan/clamp, rect, CSS transform).
 src/lib/streams/motionTracker.ts     NEW  pure activity detection (frame-diff centroid/bbox) for follow.
+src/lib/streams/subjectTracker.ts    NEW  pure object tracking for lock-on (§7.3a): segment, associate, coast.
+src/lib/streams/followCamera.ts      NEW  pure camera smoothing for lock-on: feed-forward, deadzone, snap.
 src/hooks/useMirrorViewport.ts       NEW  viewport state + zoom/pan/fit ops + smart-follow (subscribes to frames).
 src/components/streams/AvMirrorImmersive.tsx  NEW  the maximised zoom/pan surface: mode lock, gestures,
                                                    on-screen controls, minimap, physical-key routing.

@@ -46,10 +46,7 @@ export function useSidData(isConnected: boolean, configOverrides: Record<string,
   );
 
   const sidControlEntries = useMemo(() => {
-    const entries = buildSidControlEntries(
-      audioMixerCategory as Record<string, unknown> | undefined,
-      sidAddressingCategory as Record<string, unknown> | undefined,
-    );
+    const entries = buildSidControlEntries(audioMixerCategory, sidAddressingCategory);
     return entries.map((entry) => {
       const volumeOverride = configOverrides[buildConfigKey("Audio Mixer", entry.volumeItem)];
       const panOverride = configOverrides[buildConfigKey("Audio Mixer", entry.panItem)];

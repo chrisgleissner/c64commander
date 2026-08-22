@@ -7,7 +7,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
 import {
   Wifi,
   Moon,
@@ -31,7 +30,7 @@ import { useC64Connection } from "@/hooks/useC64Connection";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
-import { C64_DEFAULTS, resolveDeviceHostFromStorage } from "@/lib/c64api";
+import { C64_DEFAULTS } from "@/lib/c64api";
 import { buildDeviceHostWithHttpPort, getDeviceHostHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { cn } from "@/lib/utils";
 import { AppBar } from "@/components/AppBar";
@@ -252,11 +251,6 @@ const toPresetLabel = (value: string | null | undefined) => {
   return value.charAt(0) + value.slice(1).toLowerCase();
 };
 
-const isValidConnectionPort = (value: string) => {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 65535;
-};
-
 const isOfflineSwitchResult = (value: unknown): value is { ok: false; error?: string | null; authRequired?: boolean } =>
   typeof value === "object" && value !== null && "ok" in value && (value as { ok?: unknown }).ok === false;
 
@@ -274,7 +268,7 @@ export default function SettingsPage() {
   const { profile } = useDisplayProfile();
   const isCompactProfile = profile === "compact";
   const navigate = useNavigate();
-  const { status, baseUrl, runtimeBaseUrl, deviceHost, updateConfig, refetch } = useC64Connection();
+  const { status, baseUrl, runtimeBaseUrl, deviceHost, updateConfig } = useC64Connection();
   const [textScaleId, setTextScaleIdState] = useState(getTextScaleId);
   const savedDevices = useSavedDevices();
   const switchSavedDevice = useSavedDeviceSwitching();

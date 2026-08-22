@@ -169,7 +169,7 @@ export function AvSyncPanel({ session, className }: AvSyncPanelProps) {
             <div key={field.key} className="rounded-md bg-muted/50 px-2 py-1.5 text-center">
               <div className="text-xs uppercase tracking-wide text-muted-foreground">{field.label}</div>
               <div className="text-sm font-semibold tabular-nums" data-testid={`av-sync-stat-${field.testid}`}>
-                {fmtMs(stats[field.key] as number | null)}
+                {fmtMs(stats[field.key])}
               </div>
             </div>
           ))}

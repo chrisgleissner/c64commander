@@ -116,7 +116,7 @@ export const applyPointerButtonInteraction = (element: HTMLElement) => {
   clearPointerFocus(element);
   if (hasDisabledState(element)) return;
   if (shouldSkipStatelessInteraction(element)) return;
-  setTapFlash(element as InteractiveElement);
+  setTapFlash(element);
 };
 
 export const handlePointerButtonClick = (event: { detail: number; currentTarget: EventTarget | null }) => {
@@ -136,7 +136,7 @@ export const sweepStaleHighlights = (nowMs = Date.now()) => {
   highlighted.forEach((el) => {
     const setAt = Number(el.getAttribute(CTA_HIGHLIGHT_SET_AT_ATTR) ?? "0");
     if (nowMs - setAt >= CTA_HIGHLIGHT_MAX_AGE_MS) {
-      clearTapFlash(el as InteractiveElement);
+      clearTapFlash(el);
     }
   });
 };
@@ -156,7 +156,7 @@ export const registerGlobalButtonInteractionModel = () => {
     if (active === document.body) return;
     const interactive = resolveInteractiveElement(active);
     if (!interactive) return;
-    attemptPendingPointerFocusClear(interactive as InteractiveElement);
+    attemptPendingPointerFocusClear(interactive);
   };
 
   // When the app regains focus or visibility after a native picker / overlay,

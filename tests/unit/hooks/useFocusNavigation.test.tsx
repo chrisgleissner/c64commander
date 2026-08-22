@@ -697,3 +697,62 @@ describe("FocusNavigationProvider global shortcuts", () => {
     expect(openQuickMenu).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * A focused single-line text field used to swallow every navigation key. Outside an
+ * overlay that is survivable — Back/Escape blur the field — but inside a dialog those
+ * belong to the overlay and close it, and the global ring is deliberately inert there.
+ * So a keypad user whose focus landed in a dialog's text field could reach nothing else
+ * in that dialog, including its own primary action. Found on a 427x320 handset, where
+ * the discovery dialog's Connect button became unreachable:
+ * docs/testing/agentic-tests/full-cta-coverage/defects/S2-GAMEMODE-8020-LANDSCAPE-CONNECT-UNREACHABLE.md
+ */
+describe("vertical keys escape a single-line field inside an overlay", () => {
+  const Dialog = () => (
+    <FocusNavigationProvider>
+      <div role="dialog" aria-label="Connect to a device">
+        <input data-testid="host" aria-label="Host or IP" defaultValue="" />
+        <button type="button">Connect</button>
+        <button type="button">Not now</button>
+      </div>
+    </FocusNavigationProvider>
+  );
+
+  it("moves focus off the field on Down instead of trapping the keypad", () => {
+    render(<Dialog />);
+    const host = screen.getByLabelText("Host or IP");
+    host.focus();
+    expect(document.activeElement).toBe(host);
+
+    fireEvent.keyDown(host, { code: "ArrowDown" });
+
+    expect(document.activeElement).toBe(button("Connect"));
+  });
+
+  it("moves back to the field on Up", () => {
+    render(<Dialog />);
+    const host = screen.getByLabelText("Host or IP");
+    host.focus();
+
+    fireEvent.keyDown(host, { code: "ArrowUp" });
+
+    expect(document.activeElement).toBe(button("Not now"));
+  });
+
+  it("leaves a textarea alone, where Up and Down move the caret", () => {
+    render(
+      <FocusNavigationProvider>
+        <div role="dialog" aria-label="Notes">
+          <textarea aria-label="Notes field" />
+          <button type="button">Save</button>
+        </div>
+      </FocusNavigationProvider>,
+    );
+    const notes = screen.getByLabelText("Notes field");
+    notes.focus();
+
+    fireEvent.keyDown(notes, { code: "ArrowDown" });
+
+    expect(document.activeElement).toBe(notes);
+  });
+});

@@ -123,8 +123,8 @@ export const installAsyncContextPropagation = (): void => {
 
   // Patch Promise.prototype.then
   Promise.prototype.then = function <TResult1 = unknown, TResult2 = never>(
-    onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null | undefined,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null | undefined,
+    onfulfilled?: ((value: unknown) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
   ): Promise<TResult1 | TResult2> {
     const capturedCtx = getCurrentActionContext();
     return promiseThen.call(
@@ -136,7 +136,7 @@ export const installAsyncContextPropagation = (): void => {
 
   // Patch Promise.prototype.catch
   Promise.prototype.catch = function <TResult = never>(
-    onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null | undefined,
+    onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null,
   ): Promise<unknown | TResult> {
     const capturedCtx = getCurrentActionContext();
     return promiseCatch.call(this, onrejected ? wrapCallback(onrejected, capturedCtx) : undefined);
@@ -144,7 +144,7 @@ export const installAsyncContextPropagation = (): void => {
 
   // Patch Promise.prototype.finally
   if (promiseFinally) {
-    Promise.prototype.finally = function (onfinally?: (() => void) | null | undefined): Promise<unknown> {
+    Promise.prototype.finally = function (onfinally?: (() => void) | null): Promise<unknown> {
       const capturedCtx = getCurrentActionContext();
       return promiseFinally.call(this, onfinally ? wrapCallback(onfinally, capturedCtx) : undefined);
     };

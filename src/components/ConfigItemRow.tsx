@@ -190,18 +190,6 @@ export function ConfigItemRow({
     return Array.isArray(list) ? list : [];
   }, [fetchedConfig]);
 
-  const mergedDetails = useMemo(() => {
-    if (!fetchedConfig) return details;
-    const min = fetchedConfig.details?.min ?? fetchedConfig.min ?? details?.min;
-    const max = fetchedConfig.details?.max ?? fetchedConfig.max ?? details?.max;
-    const format = fetchedConfig.details?.format ?? fetchedConfig.format ?? details?.format;
-    const presets = fetchedConfig.details?.presets ?? fetchedConfig.presets ?? details?.presets;
-    if (min !== undefined || max !== undefined || format || presets) {
-      return { min, max, format, presets };
-    }
-    return details;
-  }, [fetchedConfig, details]);
-
   const mergedValue = useMemo(() => {
     if (String(value).length > 0) return value;
     if (!fetchedConfig) return value;
@@ -633,14 +621,14 @@ export function ConfigItemRow({
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.preventDefault();
-              (e.currentTarget as HTMLInputElement).blur();
+              e.currentTarget.blur();
               textFrameRef.current?.focus();
               return;
             }
             if (e.key !== "Enter") return;
             if (isReadOnly) return;
             commitTextValue();
-            (e.currentTarget as HTMLInputElement).blur();
+            e.currentTarget.blur();
             textFrameRef.current?.focus();
           }}
           onBlur={() => {

@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { formatByteSize, formatDetailDate, UNKNOWN_VALUE } from "@/lib/ui/detailFormat";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { normalizeDiskPath, type DiskEntry } from "@/lib/disks/diskTypes";
@@ -77,28 +78,13 @@ export const LocationIcon = ({ location }: { location: DiskEntry["location"] }) 
   />
 );
 
-export const formatBytes = (value?: number | null) => {
-  if (!value || value <= 0) return "—";
-  const units = ["B", "KB", "MB", "GB"];
-  let size = value;
-  let unitIndex = 0;
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex += 1;
-  }
-  return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
-};
+// A disk with no usable size reads "—", and so does a disk reporting zero: a
+// disk image is never legitimately empty, so zero here means the size is
+// missing rather than known to be nothing. Asserted by HomeDiskManagerSupport
+// and HomeDiskManager.branches.
+export const formatBytes = (value?: number | null) => (!value || value <= 0 ? UNKNOWN_VALUE : formatByteSize(value));
 
-export const formatDate = (value?: string | null) => {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-  }).format(date);
-};
+export const formatDate = formatDetailDate;
 
 export const resolveSoftIecServiceError = (value?: string | null) => {
   const message = value?.trim();

@@ -27,7 +27,6 @@ export interface RemoteInputGameModeOptions {
 
 export interface RemoteInputGameModeState {
   immersive: boolean;
-  enterGameMode: () => void;
   exitGameMode: () => void;
   /** Stops only the feeds this Game Mode launch started. Call when the sheet closes. */
   releaseLaunchedStreams: () => void;
@@ -116,8 +115,7 @@ export const useRemoteInputGameMode = ({
     if (started.startedAudio) stop("audio", () => session.stopAudio());
   }, [session]);
 
-  const enterGameMode = useCallback(() => setImmersive(true), []);
   const exitGameMode = useCallback(() => setImmersive(false), []);
 
-  return { immersive, enterGameMode, exitGameMode, releaseLaunchedStreams };
+  return { immersive, exitGameMode, releaseLaunchedStreams };
 };

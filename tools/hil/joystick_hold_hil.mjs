@@ -235,7 +235,14 @@ return JSON.stringify({stored:localStorage.getItem("c64u_game_mode_controls_visi
   label:q("settings-game-mode-joystick")?.innerText});`),
   );
   if (after.error) throw new Error(after.error);
-  if (after.stored !== setting) throw new Error(`choosing ${label} stored "${after.stored}"`);
+  // Radix Select fires nothing when the chosen option is already the current one, so
+  // choosing the variant's own default writes no key. What matters is the setting the app
+  // will now use, which is the trigger's own label; storage is checked only when written.
+  const settled = after.stored ?? null;
+  const labelShown = String(after.label ?? "").includes(JOYSTICK_SETTING_LABEL[setting]);
+  if (settled !== null && settled !== setting) throw new Error(`choosing ${label} stored "${settled}"`);
+  if (settled === null && !labelShown)
+    throw new Error(`choosing ${label} neither stored a value nor left the control showing it (${after.label})`);
 
   await js(inPage(`q("tab-home")?.click();await wait(2500);return "1";`));
   return before.was;
@@ -254,6 +261,19 @@ const restoreJoystickSetting = async (was) => {
 };
 
 /**
+ * Open a Home section, because a closed one renders no children at all.
+ *
+ * The sections remember whether they were left closed, so a control inside one is absent
+ * from the DOM rather than merely off screen, and a click on it silently does nothing.
+ */
+const expandHomeSection = async (id) =>
+  js(
+    inPage(`const t=q("home-section-toggle-${id}");
+if(t&&t.getAttribute("aria-expanded")!=="true"){t.click();await wait(1500);}
+return JSON.stringify({expanded:q("home-section-toggle-${id}")?.getAttribute("aria-expanded")});`),
+  );
+
+/**
  * Make sure there is a picture before Game Mode is opened.
  *
  * Everything this script asserts about the on-screen joystick is conditional on one: with the
@@ -262,10 +282,12 @@ const restoreJoystickSetting = async (was) => {
  * a control that was correct to be absent. That is how the first gated run of this script read.
  */
 const ensureWatching = async () => {
+  await js(
+    inPage(`q("remote-input-close")?.click();await wait(600);q("tab-home")?.click();await wait(2000);return "1";`),
+  );
+  await expandHomeSection("live-view");
   const state = await js(
-    inPage(`q("remote-input-close")?.click();await wait(600);
-q("tab-home")?.click();await wait(2000);
-const card=q("live-view-card");
+    inPage(`const card=q("live-view-card");
 if(!card) return JSON.stringify({error:"the Live View card is not on Home; is the mirror flag on?"});
 card.scrollIntoView({block:"center"});await wait(400);
 const v=q("av-video-toggle");
@@ -280,6 +302,10 @@ return JSON.stringify({video:q("av-video-toggle")?.getAttribute("aria-pressed")}
 const openGameMode = async () => {
   await assertPageVisible();
   await ensureWatching();
+  // Quick Actions remembers whether it was left closed, and a closed section renders no
+  // children — so the tile is absent from the DOM rather than merely off screen, and the
+  // click below silently does nothing.
+  await expandHomeSection("quick-actions");
   let state = await readSheet();
   if (!state.sheet || state.gameMode !== "true") {
     await js('(()=>{document.querySelector("[data-testid=home-machine-inline-openGameMode]")?.click();return 1})()');

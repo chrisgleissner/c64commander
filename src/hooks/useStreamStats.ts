@@ -13,7 +13,6 @@ import {
   saveStreamVideoFrameRateMode,
   type StreamVideoFrameRateMode,
 } from "@/lib/config/appSettings";
-import type { FrameRateMode } from "@/lib/streams/streamGovernor";
 import type { TelemetryBucket } from "@/lib/streams/streamTelemetry";
 
 /** Telemetry tick cadence (Hz→ms). 4 Hz keeps Stats live without materially touching streaming cost. */
@@ -37,7 +36,7 @@ export const useStreamStats = (session: AvMirrorSession = avMirrorSession, _tick
   const setFrameRateMode = useCallback(
     (mode: StreamVideoFrameRateMode) => {
       saveStreamVideoFrameRateMode(mode);
-      session.setFrameRateMode(mode as FrameRateMode);
+      session.setFrameRateMode(mode);
       setRequestedMode(mode);
     },
     [session],

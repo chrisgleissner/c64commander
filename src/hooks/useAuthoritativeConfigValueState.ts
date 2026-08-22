@@ -203,7 +203,7 @@ export function useAuthoritativeConfigValueState(options: { equals?: Authoritati
 
   const resolveValue = useCallback(
     <T extends AuthoritativeConfigValue>(key: string, deviceValue: T | undefined, fallback: T): T => {
-      const resolvedDeviceValue = (deviceValue ?? fallback) as T;
+      const resolvedDeviceValue = deviceValue ?? fallback;
       const entry = entries[key];
       if (!entry) return resolvedDeviceValue;
       if (equals(entry.value, resolvedDeviceValue)) {

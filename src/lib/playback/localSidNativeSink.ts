@@ -498,7 +498,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
         this.tail = null;
         return mixedFrames;
       }
-      const from = tail.slices[0] as Int16Array;
+      const from = tail.slices[0];
       // The fade only runs while there is something to fade *into*. Opening the next tune takes a
       // couple of seconds and rendering its first samples takes longer still, and until then this
       // sink writes silence with the tail folded into it. Ramping down during that stretch faded the
@@ -508,7 +508,7 @@ class NativeLocalSidSink implements AudioScheduleSink {
       // slice that carries audio of this tune's own.
       const gain = sliceIsOwnAudio ? 1 - tail.frame / tail.frames : 1;
       for (let ch = 0; ch < 2; ch += 1) {
-        const mixed = (slice[i + ch] as number) + (from[tail.cursor + ch] as number) * gain;
+        const mixed = slice[i + ch] + from[tail.cursor + ch] * gain;
         slice[i + ch] = mixed > 32767 ? 32767 : mixed < -32768 ? -32768 : mixed;
       }
       tail.cursor += 2;
@@ -1216,7 +1216,7 @@ const withOpenDeadline = <T>(attempt: Promise<T>): Promise<T> =>
       },
       (error: unknown) => {
         clearTimeout(timer);
-        reject(error as Error);
+        reject(error);
       },
     );
   });
@@ -1250,8 +1250,6 @@ const claimNativeTrack = (backend: object, sink: object, serial: number): void =
   if (owner && owner.serial > serial) return;
   trackOwners.set(backend, { sink, serial });
 };
-
-const ownsNativeTrack = (backend: object, sink: object): boolean => trackOwners.get(backend)?.sink === sink;
 
 /** Whether a NEWER sink has already begun writing, which is what retires this one. */
 const isSuperseded = (backend: object, serial: number): boolean => {

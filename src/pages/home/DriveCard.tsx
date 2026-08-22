@@ -144,7 +144,7 @@ export function DriveCard({
       {/* Row 1.5: Mounted Path */}
       {(mountedPath !== undefined || pathValue !== undefined) && (
         <div className="flex items-center gap-2 text-xs">
-          <span className="text-muted-foreground whitespace-nowrap">{mountedPathLabel || "Disk"}</span>
+          <span className="shrink-0 text-muted-foreground whitespace-nowrap">{mountedPathLabel || "Disk"}</span>
           <button
             type="button"
             onClick={onMountedPathClick || onPathClick}
@@ -160,10 +160,10 @@ export function DriveCard({
       {/* Row 2: Bus ID and Type */}
       <div className={cn("grid gap-2 text-xs", profile === "compact" ? "grid-cols-1" : "grid-cols-2")}>
         <div className="flex items-center gap-2">
-          <span className="text-muted-foreground whitespace-nowrap">Bus ID</span>
+          <span className="shrink-0 text-muted-foreground whitespace-nowrap">Bus ID</span>
           <Select value={busIdValue} onValueChange={onBusIdChange} disabled={!isConnected || busIdPending}>
             <SelectTrigger
-              className={cn(inlineSelectTriggerClass, "min-h-11 flex-1 justify-start")}
+              className={cn(inlineSelectTriggerClass, "min-h-11 flex-1 justify-start overflow-hidden")}
               data-testid={`home-drive-bus-${testIdSuffix}`}
             >
               <SelectValue placeholder={busIdValue} />
@@ -180,10 +180,10 @@ export function DriveCard({
         <div className={cn("flex items-center gap-2 min-w-0", profile === "compact" ? "justify-start" : "justify-end")}>
           {typeValue !== undefined && (
             <>
-              <span className="text-muted-foreground whitespace-nowrap">Type</span>
+              <span className="shrink-0 text-muted-foreground whitespace-nowrap">Type</span>
               <Select value={typeValue} onValueChange={onTypeChange} disabled={!isConnected || typePending}>
                 <SelectTrigger
-                  className={cn(inlineSelectTriggerClass, "min-h-11 flex-1 justify-start")}
+                  className={cn(inlineSelectTriggerClass, "min-h-11 flex-1 justify-start overflow-hidden")}
                   data-testid={`home-drive-type-${testIdSuffix}`}
                 >
                   <SelectValue placeholder={typeValue} />

@@ -296,9 +296,9 @@ describe("RemoteInputSheet — Game Mode", () => {
       expect(joystick()).toBeInTheDocument();
     });
 
-    it("shows them with the picture off, whatever else says otherwise", () => {
+    it("shows them with the picture off while the setting is auto, because a guess is not worth an empty screen", () => {
       mirrorState.videoState = "off";
-      saveGameModeJoystick("hidden");
+      saveGameModeJoystick("auto");
       render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
       enterGameMode();
       steerWithAKey();
@@ -306,6 +306,28 @@ describe("RemoteInputSheet — Game Mode", () => {
 
       expect(screen.queryByTestId("av-mirror-immersive")).not.toBeInTheDocument();
       expect(joystick()).toBeInTheDocument();
+      expect(screen.queryByTestId("remote-input-no-picture-panel")).not.toBeInTheDocument();
+    });
+
+    // S3-GAMEMODE-8020-JOYSTICK-SHOWN-WITH-NO-PICTURE: the keypad handset ships `hidden`
+    // because it cannot operate a touch control, and Game Mode opens by itself on launch.
+    // The space carries something usable rather than a joystick nobody there can reach.
+    it("honours an explicit hidden with the picture off, and fills the space instead of emptying the sheet", () => {
+      mirrorState.videoState = "off";
+      saveGameModeJoystick("hidden");
+      render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
+      enterGameMode();
+      settleControlSurface();
+
+      expect(screen.queryByTestId("av-mirror-immersive")).not.toBeInTheDocument();
+      expect(joystick()).not.toBeInTheDocument();
+
+      const panel = screen.getByTestId("remote-input-no-picture-panel");
+      expect(panel).toHaveTextContent("The picture is off");
+      // Actionable from a keypad: the switch that brings the picture back, and the keys
+      // that reach the game while it is off.
+      expect(screen.getAllByTestId("av-video-toggle").length).toBeGreaterThan(0);
+      expect(panel.querySelectorAll("button").length).toBeGreaterThan(0);
     });
 
     it("hides it from the start when the setting says hidden", () => {

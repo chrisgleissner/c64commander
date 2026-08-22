@@ -226,7 +226,7 @@ export function PrinterManager({
             )}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground whitespace-nowrap">Bus ID</span>
+              <span className="shrink-0 text-muted-foreground whitespace-nowrap">Bus ID</span>
               <Select
                 value={String(printerBusValue)}
                 onValueChange={(value) =>
@@ -262,7 +262,7 @@ export function PrinterManager({
               .filter((entry) => entry.options.length > 0)
               .map((entry) => (
                 <div key={entry.itemName} className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground whitespace-nowrap">{entry.label}</span>
+                  <span className="shrink-0 text-muted-foreground whitespace-nowrap">{entry.label}</span>
                   <Select
                     value={entry.value}
                     onValueChange={(value) =>

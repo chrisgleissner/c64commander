@@ -171,7 +171,7 @@ export const buildDiagnosticsZipData = (scope: DiagnosticsExportScope, data: unk
   zipSync(buildDiagnosticsZipEntries(scope, data, timestamp) as Parameters<typeof zipSync>[0]);
 
 export const buildDiagnosticsZipBlob = (scope: DiagnosticsExportScope, data: unknown, timestamp: string) =>
-  new Blob([buildDiagnosticsZipData(scope, data, timestamp) as BlobPart], { type: "application/zip" });
+  new Blob([buildDiagnosticsZipData(scope, data, timestamp)], { type: "application/zip" });
 
 const recordDiagnosticsAutomationExport = (result: DiagnosticsAutomationExportResult) => {
   if (typeof window === "undefined") return;
@@ -217,7 +217,7 @@ export const writeDiagnosticsZipForAutomation = async (
     const timestamp = formatDiagnosticsExportTimestamp(date);
     const filename = buildDiagnosticsZipFilename(scope, timestamp);
     const zipData = buildDiagnosticsZipData(scope, data, timestamp);
-    const blob = new Blob([zipData as BlobPart], { type: "application/zip" });
+    const blob = new Blob([zipData], { type: "application/zip" });
     const base64Data = await blobToBase64(blob);
     return await writeDiagnosticsAutomationExport(scope, filename, base64Data, zipData.byteLength);
   } catch (error) {

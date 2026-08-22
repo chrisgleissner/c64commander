@@ -9,7 +9,7 @@
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Folder, RotateCcw } from "lucide-react";
+import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, Folder, RotateCcw } from "lucide-react";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { driveCardTitleVariants } from "@/lib/drives/driveDevices";
 import { Button } from "@/components/ui/button";
@@ -66,7 +66,6 @@ import {
   getMaterializedWorkPath,
   getMaterializedDiskId,
   saveArchiveDiskCopyToLocalFolder,
-  type DiskMountWriteBackDependencies,
   type ArchiveDiskCopyOffer,
 } from "@/lib/disks/diskMount";
 import { ToastAction } from "@/components/ui/toast";
@@ -100,7 +99,6 @@ import type { SelectedItem, SourceEntry, SourceLocation, SourceRecursiveFailure 
 import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
-import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import {
@@ -120,29 +118,20 @@ import {
   useDeviceConfigOptionDomains,
   type DeviceConfigItemRef,
 } from "@/pages/home/hooks/useDeviceConfigOptionDomains";
-import {
-  buildBusIdOptions,
-  buildTypeOptions,
-  normalizeDriveDevices,
-  type DriveDeviceClass,
-} from "@/lib/drives/driveDevices";
+import { buildBusIdOptions, buildTypeOptions, normalizeDriveDevices } from "@/lib/drives/driveDevices";
 import {
   DRIVE_BUS_ID_DEFAULTS,
   DRIVE_BUS_ID_ITEM,
   DRIVE_CONFIG_CATEGORY,
-  DRIVE_DEFAULT_BUS_ID,
-  DRIVE_DEFAULT_TYPE,
   DRIVE_KEYS,
   DRIVE_TYPE_ITEM,
   getCategoryConfigValue,
-  getDriveConfigValue,
   getStatusMessageColorClass,
   INLINE_META_SELECT_CLASS,
   LocationIcon,
   ROW1_CONTROL_CLASS,
   SOFT_IEC_BUS_ID_DEFAULTS,
   SOFT_IEC_CONTROL,
-  SOFT_IEC_DEFAULT_PATH_FALLBACK,
   SOFT_IEC_DEFAULT_PATH_ITEM,
   buildDriveLabel,
   buildDrivePath,
@@ -150,13 +139,11 @@ import {
   formatDate,
   normalizeDirectoryPath,
   parseBusId,
-  parseDriveType,
   resolveDriveBusId,
   resolveDriveStatusRaw,
   resolveDriveType,
   resolveSoftIecServiceError,
   resolveSoftIecDefaultPath,
-  resolveStatusDisplaySeverity,
   type DriveKey,
 } from "@/components/disks/HomeDiskManagerSupport";
 
@@ -897,7 +884,7 @@ export const HomeDiskManager = () => {
           title: targetEnabled ? "Drive powered on" : "Drive powered off",
           description: `${driveLabel} ${targetEnabled ? "enabled" : "disabled"}.`,
         });
-        queryClient.invalidateQueries({ queryKey: ["c64-drives"] });
+        void queryClient.invalidateQueries({ queryKey: ["c64-drives"] });
       } catch (error) {
         setDrivePowerOverride((prev) => {
           const next = { ...prev };
@@ -1846,7 +1833,7 @@ export const HomeDiskManager = () => {
           actionAriaLabel: `Mount ${disk.name}`,
           showSelection: options?.showSelection !== false,
           showMenu: options?.showMenu !== false,
-        } as ActionListItem);
+        });
         return acc;
       }, []);
     },

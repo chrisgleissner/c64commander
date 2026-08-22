@@ -205,9 +205,8 @@ export function useSavedDeviceHealthChecks(
       applySeededState((event as CustomEvent<SavedDeviceHealthSeedState | null>).detail ?? null);
     };
 
-    window.addEventListener(DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT, handleSeededState as EventListener);
-    return () =>
-      window.removeEventListener(DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT, handleSeededState as EventListener);
+    window.addEventListener(DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT, handleSeededState);
+    return () => window.removeEventListener(DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT, handleSeededState);
   }, []);
 
   const noopRefreshAll = useCallback(() => {}, []);
@@ -673,9 +672,8 @@ export function useSavedDeviceHealthChecks(
       setCycle((current) => ({ ...current, running: false }));
     };
 
-    window.addEventListener(SAVED_DEVICE_SWITCH_METRICS_EVENT, handleSavedDeviceSwitchMetrics as EventListener);
-    return () =>
-      window.removeEventListener(SAVED_DEVICE_SWITCH_METRICS_EVENT, handleSavedDeviceSwitchMetrics as EventListener);
+    window.addEventListener(SAVED_DEVICE_SWITCH_METRICS_EVENT, handleSavedDeviceSwitchMetrics);
+    return () => window.removeEventListener(SAVED_DEVICE_SWITCH_METRICS_EVENT, handleSavedDeviceSwitchMetrics);
   }, [cancelAll, context, seededState]);
 
   useEffect(() => {

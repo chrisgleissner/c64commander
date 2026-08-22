@@ -59,6 +59,9 @@ type ManualPasswordTarget = {
   deviceHost: string;
 };
 
+/** Ties the footer's Connect button to the manual-entry form it submits. */
+const MANUAL_FORM_ID = "startup-manual-device-form";
+
 const normalizeHostKey = (host: string) => host.trim().toLowerCase();
 
 const buildManualDeviceId = (host: string, httpPort: number) =>
@@ -370,7 +373,11 @@ export function DeviceDiscoveryInterstitial() {
 
   if (!shouldOffer) return null;
 
-  const dialogTitle = hasCandidates ? "C64 systems found" : "No C64 systems found";
+  // The two titles stay symmetric on the noun and drop "system", which said
+  // nothing the reader needed and wrapped to two lines on the compact profile.
+  // With candidates the dialog is a chooser — every row carries Save and Use — so
+  // the title names the action rather than reporting a count.
+  const dialogTitle = hasCandidates ? "Choose your C64" : "No C64 found";
   const dialogDescription = hasCandidates
     ? "Choose one to control now, save one for later, or enter an address manually in Settings."
     : "Enter your C64 Ultimate host or IP address.";
@@ -451,7 +458,10 @@ export function DeviceDiscoveryInterstitial() {
           </div>
         ) : (
           <form
-            className="space-y-3 px-4 py-3 sm:px-6"
+            // Bounded and scrollable, exactly as the candidates list above is: without a height
+            // limit the panel overflows a short viewport instead of scrolling inside it.
+            id={MANUAL_FORM_ID}
+            className="max-h-[min(26rem,60vh)] space-y-3 overflow-y-auto px-4 py-3 sm:px-6"
             data-testid="startup-manual-device-panel"
             onSubmit={(event) => {
               event.preventDefault();
@@ -495,19 +505,6 @@ export function DeviceDiscoveryInterstitial() {
                 </p>
               )}
             </div>
-            {!manualPasswordTarget ? (
-              <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  disabled={manualBusy}
-                  id="startup-manual-device-connect"
-                  data-testid="startup-manual-device-connect"
-                >
-                  <Wifi className={manualBusy ? "h-4 w-4 animate-pulse" : "h-4 w-4"} />
-                  {manualBusy ? "Checking" : "Connect"}
-                </Button>
-              </div>
-            ) : null}
           </form>
         )}
 
@@ -578,6 +575,24 @@ export function DeviceDiscoveryInterstitial() {
         ) : null}
 
         <DialogFooter>
+          {/* Connect lives in the footer, not inside the form it submits. The footer sits outside
+              that form's scroll container, so the dialog's primary action cannot be pushed below
+              the fold on a short viewport, and it sits beside "Not now" where the focus ring
+              already reaches. `form=` keeps it a submit for the panel above. On a 427x320 handset
+              in landscape it was off screen and unreachable by keypad entirely - see
+              docs/testing/agentic-tests/full-cta-coverage/defects/S2-GAMEMODE-8020-LANDSCAPE-CONNECT-UNREACHABLE.md */}
+          {!hasCandidates && !manualPasswordTarget ? (
+            <Button
+              type="submit"
+              form={MANUAL_FORM_ID}
+              disabled={manualBusy}
+              id="startup-manual-device-connect"
+              data-testid="startup-manual-device-connect"
+            >
+              <Wifi className={manualBusy ? "h-4 w-4 animate-pulse" : "h-4 w-4"} />
+              {manualBusy ? "Checking" : "Connect"}
+            </Button>
+          ) : null}
           {hasCandidates ? (
             <Button
               type="button"

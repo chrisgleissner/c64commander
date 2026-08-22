@@ -116,19 +116,6 @@ const setHasPasswordFlag = (value: boolean) => {
   }
 };
 
-const setCachedPassword = (value: string | null) => {
-  const deviceId = getSelectedDeviceId();
-  cachedPasswordState = {
-    version: 1,
-    legacyDefaultPassword: deviceId ? (cachedPasswordState?.legacyDefaultPassword ?? null) : value,
-    passwordsByDeviceId:
-      deviceId && value
-        ? { ...(cachedPasswordState?.passwordsByDeviceId ?? {}), [deviceId]: value }
-        : (cachedPasswordState?.passwordsByDeviceId ?? {}),
-  };
-  passwordLoaded = true;
-};
-
 export const getCachedPassword = () => {
   if (!passwordLoaded || !cachedPasswordState) return null;
   return resolvePasswordForDevice(cachedPasswordState, getSelectedDeviceId());

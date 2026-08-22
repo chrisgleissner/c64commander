@@ -81,7 +81,7 @@ export const acCouple = (samples: Float32Array, sampleRate: number, fc = HIGHPAS
   let y1 = 0;
   let y2 = 0;
   for (let i = 0; i < samples.length; i += 1) {
-    const x0 = samples[i]!;
+    const x0 = samples[i];
     const y0 = b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
     out[i] = y0;
     x2 = x1;
@@ -95,7 +95,7 @@ export const acCouple = (samples: Float32Array, sampleRate: number, fc = HIGHPAS
 const rms = (samples: Float32Array, from: number, to: number): number => {
   let sum = 0;
   const end = Math.min(to, samples.length);
-  for (let i = from; i < end; i += 1) sum += samples[i]! * samples[i]!;
+  for (let i = from; i < end; i += 1) sum += samples[i] * samples[i];
   return Math.sqrt(sum / Math.max(1, end - from));
 };
 
@@ -138,7 +138,7 @@ export const refineOnsetSeconds = (samples: Float32Array, sampleRate: number, fr
 
   const threshold = after - 6;
   let crossed = guard;
-  while (crossed < steps && levels[crossed]! < threshold) crossed += 1;
+  while (crossed < steps && levels[crossed] < threshold) crossed += 1;
   if (crossed >= steps) return gridSeconds;
   return (start + crossed * hop + span / 2) / sampleRate;
 };
@@ -177,9 +177,9 @@ export const segmentNotes = (raw: Float32Array, sampleRate: number, startedAtMs 
   const onsets: number[] = [];
   for (let i = 3; i < frames; i += 1) {
     if (!active[i]) continue;
-    const previous = Math.max(levels[i - 1]!, levels[i - 2]!, levels[i - 3]!);
-    if (levels[i]! - previous < ONSET_STEP_DB) continue;
-    if (onsets.length && (i - onsets[onsets.length - 1]!) * FRAME_SECONDS <= MIN_NOTE_SECONDS) continue;
+    const previous = Math.max(levels[i - 1], levels[i - 2], levels[i - 3]);
+    if (levels[i] - previous < ONSET_STEP_DB) continue;
+    if (onsets.length && (i - onsets[onsets.length - 1]) * FRAME_SECONDS <= MIN_NOTE_SECONDS) continue;
     let held = 0;
     for (let j = i; j < Math.min(frames, i + sustainFrames); j += 1) if (active[j]) held += 1;
     if (held / Math.min(sustainFrames, frames - i) < 0.6) continue;
@@ -199,7 +199,7 @@ export const segmentNotes = (raw: Float32Array, sampleRate: number, startedAtMs 
         const from = Math.round((runStart + (i - runStart) * 0.2) * frameLength);
         const to = Math.round((runStart + (i - runStart) * 0.8) * frameLength);
         let peak = 0;
-        for (let s = from; s < Math.min(to, samples.length); s += 1) peak = Math.max(peak, Math.abs(samples[s]!));
+        for (let s = from; s < Math.min(to, samples.length); s += 1) peak = Math.max(peak, Math.abs(samples[s]));
         silences.push({ rmsDbfs: dbOf(rms(samples, from, to)), peakDbfs: dbOf(peak) });
       }
       runStart = null;
@@ -209,16 +209,16 @@ export const segmentNotes = (raw: Float32Array, sampleRate: number, startedAtMs 
   const refined = onsets.map((frame) => refineOnsetSeconds(samples, sampleRate, frame));
   const notes: ToneLadderNoteInput[] = [];
   for (let i = 0; i < refined.length - 1; i += 1) {
-    const from = Math.round(refined[i]! * sampleRate);
-    const to = Math.round(refined[i + 1]! * sampleRate);
+    const from = Math.round(refined[i] * sampleRate);
+    const to = Math.round(refined[i + 1] * sampleRate);
     // Middle 60% skips the attack transient and any release tail.
     const inner = samples.subarray(
       from + Math.floor((to - from) * 0.2),
       Math.min(samples.length, from + Math.floor((to - from) * 0.8)),
     );
-    const seconds = refined[i + 1]! - refined[i]!;
+    const seconds = refined[i + 1] - refined[i];
     if (seconds < 0.12) continue;
-    notes.push({ hz: detectFundamentalHz(inner, sampleRate), seconds, atMs: startedAtMs + refined[i]! * 1000 });
+    notes.push({ hz: detectFundamentalHz(inner, sampleRate), seconds, atMs: startedAtMs + refined[i] * 1000 });
   }
   return { notes, silences };
 };
@@ -241,12 +241,12 @@ export const sampleBackgroundColour = (frame: Uint8Array, height: number): numbe
       const pixel = y * VIC_FRAME_WIDTH + x;
       const byteIndex = pixel >> 1;
       if (byteIndex >= frame.length) continue;
-      const byte = frame[byteIndex]!;
-      counts[pixel & 1 ? byte >> 4 : byte & 0x0f]! += 1;
+      const byte = frame[byteIndex];
+      counts[pixel & 1 ? byte >> 4 : byte & 0x0f] += 1;
     }
   }
   let best = 0;
-  for (let i = 1; i < 16; i += 1) if (counts[i]! > counts[best]!) best = i;
+  for (let i = 1; i < 16; i += 1) if (counts[i] > counts[best]) best = i;
   return best;
 };
 
@@ -364,7 +364,7 @@ export const useToneLadderTest = (session: AvMirrorSession = avMirrorSession): T
           if (!collecting.current) return;
           if (audioStartMs.current === null) audioStartMs.current = arrivalMs;
           // Interleaved stereo in; one channel is enough to measure pitch and level.
-          for (let i = 0; i < samples.length; i += 2) captured.current.push(samples[i]! / 32768);
+          for (let i = 0; i < samples.length; i += 2) captured.current.push(samples[i] / 32768);
           if (captured.current.length >= AUDIO_SAMPLE_RATE * CAPTURE_SECONDS) finish();
         }) ?? null;
 

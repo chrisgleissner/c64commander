@@ -1,16 +1,18 @@
 {
   "files": [],
   "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }],
+  // A solution file: `files: []` means it compiles nothing itself, and `tsc -b`
+  // builds each referenced project with that project's own options. What is left
+  // here is what editors and tooling see for a file outside both projects. It
+  // used to set `strictNullChecks: false` and `noImplicitAny: false`, which made
+  // that view laxer than the compiler CI runs - and a type-aware lint rule
+  // resolved through this file reached conclusions `tsconfig.app.json` rejects.
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     },
-    "noImplicitAny": false,
-    "noUnusedParameters": false,
     "skipLibCheck": true,
-    "allowJs": true,
-    "noUnusedLocals": false,
-    "strictNullChecks": false
+    "allowJs": true
   }
 }

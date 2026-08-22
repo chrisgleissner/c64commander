@@ -25,7 +25,7 @@ const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   "/docs": BookOpen,
 };
 
-const tabs = TAB_ROUTES.map((t) => ({ ...t, icon: TAB_ICONS[t.path]! }));
+const tabs = TAB_ROUTES.map((t) => ({ ...t, icon: TAB_ICONS[t.path] }));
 
 /**
  * Base focus order for the bottom tab bar. The keypad focus ring (C64U Remote)

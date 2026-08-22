@@ -89,7 +89,7 @@ export type C64RomValidation = { ok: true; image: C64RomImage } | { ok: false; r
 export function romFingerprint(bytes: Uint8Array): string {
   let hash = 0x811c9dc5;
   for (let i = 0; i < bytes.length; i++) {
-    hash ^= bytes[i]!;
+    hash ^= bytes[i];
     // Multiply mod 2^32 without overflowing the float mantissa.
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
@@ -100,8 +100,8 @@ function countDistinctBytes(bytes: Uint8Array): number {
   const seen = new Uint8Array(256);
   let distinct = 0;
   for (let i = 0; i < bytes.length; i++) {
-    if (seen[bytes[i]!] === 0) {
-      seen[bytes[i]!] = 1;
+    if (seen[bytes[i]] === 0) {
+      seen[bytes[i]] = 1;
       distinct++;
     }
   }
@@ -111,7 +111,7 @@ function countDistinctBytes(bytes: Uint8Array): number {
 function describeKernal(bytes: Uint8Array, fingerprint: string): string {
   const known = KNOWN_FINGERPRINTS[fingerprint];
   if (known) return known;
-  const revision = KERNAL_REVISIONS[bytes[KERNAL_REVISION_OFFSET]!];
+  const revision = KERNAL_REVISIONS[bytes[KERNAL_REVISION_OFFSET]];
   return revision ? `C64 KERNAL ${revision} (unrecognised variant)` : "C64 KERNAL (unrecognised variant)";
 }
 
@@ -130,7 +130,7 @@ export function validateRomImage(kind: C64RomKind, bytes: Uint8Array): C64RomVal
     return { ok: false, reason: `expected ${C64_ROM_BYTES} bytes, got ${bytes.length}` };
   }
 
-  const first = bytes[0]!;
+  const first = bytes[0];
   let uniform = true;
   for (let i = 1; i < bytes.length; i++) {
     if (bytes[i] !== first) {
@@ -153,7 +153,7 @@ export function validateRomImage(kind: C64RomKind, bytes: Uint8Array): C64RomVal
   }
 
   if (kind === "kernal") {
-    const resetVector = bytes[RESET_VECTOR_OFFSET]! | (bytes[RESET_VECTOR_OFFSET + 1]! << 8);
+    const resetVector = bytes[RESET_VECTOR_OFFSET] | (bytes[RESET_VECTOR_OFFSET + 1] << 8);
     if (resetVector < 0xe000) {
       return {
         ok: false,

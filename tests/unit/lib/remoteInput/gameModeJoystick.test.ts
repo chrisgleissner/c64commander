@@ -27,21 +27,30 @@ const SESSIONS: ReadonlyArray<{ keyDriven: boolean; requested: JoystickVisibilit
   { keyDriven: true, requested: null },
 ];
 
-describe("resolveJoystickVisibility — nothing is hidden while there is no picture", () => {
-  it("keeps the joystick with the picture off, on every setting and either way of driving", () => {
-    GAME_MODE_JOYSTICK_SETTINGS.forEach((setting) => {
-      SESSIONS.forEach((session) => {
-        expect(resolveJoystickVisibility({ setting, ...session, videoLive: false })).toBe("visible");
-      });
+describe("resolveJoystickVisibility — with no picture, only a guess is overruled", () => {
+  // `auto` is the app guessing, and a guess is not worth an empty screen.
+  it("keeps the joystick with the picture off while the setting is auto, however the game is driven", () => {
+    SESSIONS.forEach((session) => {
+      expect(resolveJoystickVisibility({ setting: "auto", ...session, videoLive: false })).toBe("visible");
     });
   });
 
-  // Hiding it with no picture to give the space to would empty the sheet: no controls,
-  // and nothing in the space they used to occupy.
-  it("keeps it with the picture off even when hiding was explicitly asked for", () => {
+  // The keypad handset ships `hidden` because it cannot operate a touch control at all,
+  // and Game Mode opens by itself on launch, so ignoring `hidden` here filled its screen
+  // with a joystick nobody could touch. RemoteInputSheet fills the space instead.
+  it("honours an explicit hidden with the picture off", () => {
+    expect(resolveJoystickVisibility({ setting: "hidden", keyDriven: false, requested: null, videoLive: false })).toBe(
+      "hidden",
+    );
     expect(
-      resolveJoystickVisibility({ setting: "hidden", keyDriven: true, requested: "hidden", videoLive: false }),
-    ).toBe("visible");
+      resolveJoystickVisibility({ setting: "auto", keyDriven: false, requested: "hidden", videoLive: false }),
+    ).toBe("hidden");
+  });
+
+  it("honours an explicit visible with the picture off", () => {
+    expect(resolveJoystickVisibility({ setting: "visible", keyDriven: true, requested: null, videoLive: false })).toBe(
+      "visible",
+    );
   });
 });
 

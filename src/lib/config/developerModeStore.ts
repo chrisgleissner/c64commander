@@ -34,6 +34,6 @@ export const subscribeDeveloperMode = (listener: (detail: DevModeEventDetail) =>
   const handler = (event: Event) => {
     listener((event as CustomEvent<DevModeEventDetail>).detail);
   };
-  window.addEventListener(DEV_MODE_EVENT, handler as EventListener);
-  return () => window.removeEventListener(DEV_MODE_EVENT, handler as EventListener);
+  window.addEventListener(DEV_MODE_EVENT, handler);
+  return () => window.removeEventListener(DEV_MODE_EVENT, handler);
 };

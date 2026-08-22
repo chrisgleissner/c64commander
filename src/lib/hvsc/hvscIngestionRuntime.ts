@@ -11,7 +11,6 @@ import { Capacitor } from "@capacitor/core";
 import type {
   HvscCacheStatus,
   HvscFolderListing,
-  HvscIngestionState,
   HvscProgressEvent,
   HvscSong,
   HvscStatus,
@@ -35,9 +34,9 @@ import {
   getHvscCacheDir,
   deleteCachedArchive,
 } from "./hvscFilesystem";
-import { loadHvscState, updateHvscState, isUpdateApplied, markUpdateApplied, type HvscState } from "./hvscStateStore";
+import { loadHvscState, updateHvscState, isUpdateApplied, markUpdateApplied } from "./hvscStateStore";
 import { invalidateHvscHydration } from "./hvscHydrationControl";
-import { getDefaultHvscStatusSummary, loadHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
+import { getDefaultHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
 import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from "./hvscSongLengthService";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
@@ -75,13 +74,10 @@ import {
   drainNativeProgressListeners,
   formatPathListPreview,
   getHvscIngestionRuntimeState,
-  isIngestionRuntimeActive,
-  recoverStaleIngestionState,
   registerNativeProgressListener,
   removeNativeProgressListener,
   reportCacheStatFailure,
   resetCacheStatFailure,
-  type HvscProgressListenerHandle,
 } from "./hvscIngestionRuntimeSupport";
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
 import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
@@ -91,7 +87,7 @@ const runtimeState = getHvscIngestionRuntimeState();
 export { isIngestionRuntimeActive, recoverStaleIngestionState } from "./hvscIngestionRuntimeSupport";
 
 const ensureNotCancelled = (token?: string) => {
-  ensureNotCancelledWith(runtimeState.cancelTokens, token, (patch) => updateHvscState(patch as Partial<HvscState>));
+  ensureNotCancelledWith(runtimeState.cancelTokens, token, (patch) => updateHvscState(patch));
 };
 
 const canUseNativeHvscIngestion = () => {
@@ -277,7 +273,7 @@ export const applyIngestionSuccess = ({
   cancelToken: string;
   cancelTokens: Map<string, { cancelled: boolean }>;
 }) => {
-  ensureNotCancelledWith(cancelTokens, cancelToken, (patch) => updateHvscState(patch as Partial<HvscState>));
+  ensureNotCancelledWith(cancelTokens, cancelToken, (patch) => updateHvscState(patch));
   updateHvscState({
     installedBaselineVersion: baselineInstalled,
     installedVersion: plan.version,

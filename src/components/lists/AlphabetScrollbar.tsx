@@ -68,7 +68,7 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect, o
           typeof CSS !== "undefined" && "escape" in CSS
             ? CSS.escape(targetItem.id)
             : targetItem.id.replace(/"/g, '\\"');
-        const targetRow = container.querySelector(`[data-row-id="${safeId}"]`) as HTMLElement | null;
+        const targetRow = container.querySelector(`[data-row-id="${safeId}"]`);
 
         if (targetRow) {
           targetRow.scrollIntoView({ block: "start", behavior: "smooth" });

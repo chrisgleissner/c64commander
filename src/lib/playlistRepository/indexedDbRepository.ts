@@ -198,7 +198,7 @@ const findOrphanTrackKeys = async (): Promise<string[]> => {
       const keysRequest = store.getAllKeys();
       keysRequest.onerror = () => reject(keysRequest.error ?? new Error("IndexedDB getAllKeys failed"));
       keysRequest.onsuccess = () => {
-        const allKeys = (keysRequest.result as IDBValidKey[]).map((key) => String(key));
+        const allKeys = keysRequest.result.map((key) => String(key));
         const trackKeys = allKeys.filter((key) => key.startsWith(TRACK_KEY_PREFIX));
         if (!trackKeys.length) {
           resolve([]);

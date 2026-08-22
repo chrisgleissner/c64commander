@@ -154,9 +154,14 @@ export const useRemoteInputPhysicalKeys = ({
           break;
         case "digit0":
         case "digit5":
+          mirrorHandle.reset();
+          break;
+        // OK confirms what is under the crosshair, and lets it go again. A handset with no
+        // touchscreen has no long press to make, so this is the whole of follow-focus there —
+        // and it is why `0`/`5` keep Fit rather than sharing the key.
         case "center":
         case "enter":
-          mirrorHandle.reset();
+          mirrorHandle.toggleLock();
           break;
         default:
           handled = false;

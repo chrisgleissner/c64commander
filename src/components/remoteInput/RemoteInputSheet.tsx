@@ -128,7 +128,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const { deviceRotation, frameRotation, source: rotationSource, pin, clearPin } = useDeviceRotation(open);
 
   const requestSheetOpen = useCallback(() => onOpenChange(true), [onOpenChange]);
-  const { immersive, enterGameMode, exitGameMode, releaseLaunchedStreams } = useRemoteInputGameMode({
+  const { immersive, exitGameMode, releaseLaunchedStreams } = useRemoteInputGameMode({
     open,
     joystickAvailable,
     tierResolved: resolved && !tierLoading,
@@ -624,6 +624,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                 onModeChange={(nextMode) => setMirrorAdjust(nextMode === "adjust")}
                 rotation={frameRotation}
                 fill={gameMode}
+                heldJoystickInputs={session.heldJoystickInputs}
                 className={gameMode ? undefined : "mx-4"}
               />
               {/* `#` puts RETURN, SPACE, the other quick keys and the Live View switches over
@@ -667,7 +668,28 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                 // takes the joystick away and the toolbar is the only way back.
                 onPointerInput={() => setKeyDriven(false)}
               />
-            ) : null
+            ) : showMirrorScreen ? null : (
+              /* Hidden joystick and no picture would leave the sheet blank, which is why
+                 the resolver used to ignore `hidden` here. The space carries the reason,
+                 the switch that fixes it and the quick keys instead — all reachable from
+                 a keypad, which the on-screen joystick is not. */
+              <div
+                className="flex min-h-0 flex-1 flex-col justify-center gap-3 px-4"
+                data-testid="remote-input-no-picture-panel"
+              >
+                <p className="text-sm font-medium">The picture is off</p>
+                <p className="text-sm text-muted-foreground">
+                  Game Mode gives the screen to the live picture, and the on-screen joystick is set to Hidden. Turn
+                  Watch on to see the C64. The game still takes your keys either way.
+                </p>
+                {mirrorEnabled ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <AvMirrorControls showAudio={audioMirrorEnabled} showVideo={videoMirrorEnabled} />
+                  </div>
+                ) : null}
+                {quickKeysBar("border-t border-border pt-3")}
+              </div>
+            )
           ) : (
             <TypeKeyboard
               className="min-h-0 flex-1"

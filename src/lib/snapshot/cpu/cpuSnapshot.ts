@@ -133,7 +133,7 @@ export const buildCpuSnapshotMetadata = (
 
 /** Converts decoded snapshot ranges/blocks into the restore engine's range shape. */
 export const toRestoreRanges = (ranges: MemoryRange[], blocks: Uint8Array[]): CpuRestoreRange[] =>
-  ranges.map((r, i) => ({ start: r.start, bytes: blocks[i]! }));
+  ranges.map((r, i) => ({ start: r.start, bytes: blocks[i] }));
 
 /**
  * Restores a decoded CPU snapshot. Requires the metadata to carry a captured CPU

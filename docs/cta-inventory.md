@@ -302,9 +302,11 @@ not-connected / empty / single-device).
 
 **Listen on** — group `playback-engine-toggle` _(flag `c64u_local_engine_enabled`; SID items only)_
 
-- _Connected machine_ — button — `playback-engine-c64` — R✅ I✅ — labelled with the device's own name, falling back to `C64U`
-- Both — button — `playback-listen-both` — R✅ I✅ — **hidden**, not disabled, when the C64's audio cannot reach this device (flags `live_view_enabled` + `audio_mirror_enabled`, and not latched-failed)
+Listed below in the order they are rendered and walked by the focus ring.
+
 - Local — button — `playback-engine-local` — R✅ I✅
+- Remote — button — `playback-engine-c64` — R✅ I✅ — labelled `Remote`, **not** the connected device's name; the header already says which machine is attached, and the wording matches Remote Input
+- Both — button — `playback-listen-both` — R✅ I✅ — **hidden**, not disabled, when the C64's audio cannot reach this device (flags `live_view_enabled` + `audio_mirror_enabled`, and not latched-failed)
 
 **SID Radio** _(flag `c64u_sid_radio_enabled`)_
 
@@ -617,6 +619,12 @@ ordinary focus-ring CTAs in both output modes.
   session; `data-joystick` on `remote-input-sheet` carries the resolved
   visible/hidden state. Distinct from the floating `remote-input-restore-chrome`
   handle, which brings back this toolbar rather than the joystick)_
+- Picture-off panel (inside Game mode) — container —
+  `remote-input-no-picture-panel` — R✅ I✅ _(shown in the joystick's place when the
+  joystick is explicitly Hidden and the picture is off, so the sheet is never blank:
+  it names why the screen is empty and carries the Watch/Listen toggles and the
+  QuickKeysBar, both reachable from a keypad. Not shown while the setting is Auto,
+  which keeps the joystick in that case)_
 - Show controls handle — button — `remote-input-restore-chrome` — R✅ I✅ _(the
   floating top-center "Controls" pull-down that restores the chrome; the ONLY
   affordance shown in collapsed Game mode; the restored chrome puts itself away
@@ -642,7 +650,19 @@ ordinary focus-ring CTAs in both output modes.
     video standard and frame rate, so the row reads e.g. `C64 … PAL 50 fps`)
   - Zoom out / Zoom in / Fit — buttons — `av-immersive-zoom-out`,
     `av-immersive-zoom-in`, `av-immersive-fit` — R✅ I✅
-  - Follow activity — toggle button — `av-immersive-follow` — R✅ I✅ (off by default)
+  - Follow motion — toggle button — `av-immersive-follow` — R✅ I✅ (off by default)
+  - Lock on — press and hold the picture — no testid of its own (the gesture is on
+    `av-mirror-immersive-stage`); while following with nothing locked, the hint
+    `av-immersive-lock-hint` says so
+  - Lock on, no touchscreen — in view-lock Adjust mode the D-pad pans the picture
+    under a fixed crosshair (`av-immersive-lock-aim`) and the OK / D-pad-centre key
+    confirms what is under it, or releases an existing lock. Turns following on by
+    itself, so it is one key rather than two. `0`/`5` keep Fit
+  - Lock state — chip and release button — `av-immersive-lock-status` — R✅ I✅ —
+    reports "Locked on" / "Looking…" / "Lost it" and releases the lock when tapped
+  - Lock marker — `av-immersive-lock-reticle` — not interactive (four corner
+    brackets around the tracked object; Settings → Remote Input → Game Mode →
+    "Mark what the view is following", `settings-follow-marker`, on by default)
   - Fit / Done view-lock — toggle button — `av-immersive-mode-toggle` — R✅ I✅
     — flips physical-key ownership between relaying to the C64 and adjusting the
     view; also reachable via the `*`/Menu physical key and auto-reverts after idle

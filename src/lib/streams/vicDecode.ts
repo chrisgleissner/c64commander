@@ -80,7 +80,7 @@ export const buildPaletteLUT = (
 ): Uint32Array => {
   const lut = new Uint32Array(16);
   for (let i = 0; i < 16; i += 1) {
-    const [r, g, b] = rgb[i]!;
+    const [r, g, b] = rgb[i];
     lut[i] = littleEndian
       ? ((0xff << 24) | (b << 16) | (g << 8) | r) >>> 0
       : ((r << 24) | (g << 16) | (b << 8) | 0xff) >>> 0;

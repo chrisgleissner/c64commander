@@ -48,9 +48,12 @@ import {
 import {
   CONTEXT_MENU_SELECTOR,
   FocusDiscoveryEngine,
+  INTERACTIVE_SELECTOR,
   NavigationController,
   digitForAction,
   getInputModality,
+  isFocusDisabled,
+  isFocusVisible,
   isHorizontalKeyOwner,
   normalizeKeyEvent,
   resolveInputProfile,
@@ -58,7 +61,6 @@ import {
   subscribeInputModality,
   type DismissibleLayer,
   type FocusDescriptor,
-  type FocusItem,
   type Keymap,
 } from "@/lib/input";
 import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";
@@ -111,6 +113,33 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
  */
 const OPEN_OVERLAY_ANCESTOR_SELECTOR =
   '[role="dialog"],[role="alertdialog"],[role="menu"],[role="listbox"],[data-radix-popper-content-wrapper]';
+/** Single-line text fields: Up/Down cannot move the caret, so they are free to move focus. */
+const SINGLE_LINE_TEXT_TYPES = new Set(["text", "search", "url", "tel", "email", "password"]);
+const isSingleLineTextField = (target: EventTarget | null): boolean =>
+  target instanceof HTMLInputElement && SINGLE_LINE_TEXT_TYPES.has(target.type);
+
+/**
+ * Move focus to the next/previous tabbable inside `overlay`, wrapping at the ends.
+ *
+ * The global ring is deliberately inert inside a Radix overlay — that overlay owns the
+ * keyboard (HAZARD 2) — so a keypad has nothing to move focus with in there except Tab,
+ * which a keypad handset does not have. Inside a dialog, Escape is the overlay's own and
+ * closes it, so a text field with focus becomes a dead end: no key reaches anything else.
+ * This walks the overlay's own tab order instead of touching the ring.
+ */
+const stepFocusWithinOverlay = (overlay: Element, from: Element, forward: boolean): boolean => {
+  const tabbables = [...overlay.querySelectorAll<HTMLElement>(INTERACTIVE_SELECTOR)].filter(
+    (element) => isFocusVisible(element) && !isFocusDisabled(element),
+  );
+  if (tabbables.length === 0) return false;
+  const index = tabbables.indexOf(from as HTMLElement);
+  if (index === -1) return false;
+  const next = tabbables[(index + (forward ? 1 : -1) + tabbables.length) % tabbables.length];
+  next.focus();
+  next.scrollIntoView({ block: "nearest" });
+  return true;
+};
+
 const isWithinOpenOverlay = (target: EventTarget | null): boolean =>
   target instanceof Element && target.closest(OPEN_OVERLAY_ANCESTOR_SELECTOR) !== null;
 
@@ -235,9 +264,7 @@ export const FocusNavigationProvider = ({
   const openContextMenuFor = useCallback((element: HTMLElement | null): boolean => {
     if (!element) return false;
     const host = element.closest("[data-key-nav-menu-host]") ?? element;
-    const trigger = element.matches(CONTEXT_MENU_SELECTOR)
-      ? element
-      : (host.querySelector(CONTEXT_MENU_SELECTOR) as HTMLElement | null);
+    const trigger = element.matches(CONTEXT_MENU_SELECTOR) ? element : host.querySelector(CONTEXT_MENU_SELECTOR);
     if (trigger instanceof HTMLElement) {
       trigger.click();
       return true;
@@ -404,6 +431,19 @@ export const FocusNavigationProvider = ({
       // Never touch editable targets (the field + its T9 composer own them); and
       // never log them, so typed text is never captured by diagnostics.
       if (isEditableTarget(event.target)) {
+        // Up/Down inside a SINGLE-LINE field move focus rather than being swallowed. The caret
+        // cannot move vertically there, so the key would otherwise do nothing at all — and inside
+        // an overlay that is a dead end, because the ring is inert there and Escape belongs to the
+        // dialog. A keypad user who landed in the host field of the discovery dialog could reach
+        // nothing else, including its own Connect button. Textareas, selects, contenteditable and
+        // the stepper inputs keep their vertical keys, which do mean something in those.
+        if ((action === "dpadUp" || action === "dpadDown") && isSingleLineTextField(event.target)) {
+          const overlay = (event.target as Element).closest(OPEN_OVERLAY_ANCESTOR_SELECTOR);
+          if (overlay && stepFocusWithinOverlay(overlay, event.target as Element, action === "dpadDown")) {
+            event.preventDefault();
+            return;
+          }
+        }
         // One exception: Back and Escape always have to be able to take DOM focus out of a
         // field. Without it, anything that focuses a text input — an autofocus, a Tab, the ring's
         // own activation — leaves a keypad-only user with no key that reaches the navigation
@@ -698,7 +738,7 @@ export function useFocusItem<T extends HTMLElement = HTMLElement>(options: UseFo
     [id, order, group, parentId, disabled, skip],
   );
 
-  return useDescriptorRegistration(descriptor, elementRef) as RefCallback<T>;
+  return useDescriptorRegistration(descriptor, elementRef);
 }
 
 export interface UseFocusGroupOptions {
@@ -723,5 +763,5 @@ export function useFocusGroup<T extends HTMLElement = HTMLElement>(options: UseF
     () => (id ? { id, kind: "group", label, group: label, order, disabled } : null),
     [id, label, order, disabled],
   );
-  return useDescriptorRegistration(descriptor, elementRef) as RefCallback<T>;
+  return useDescriptorRegistration(descriptor, elementRef);
 }

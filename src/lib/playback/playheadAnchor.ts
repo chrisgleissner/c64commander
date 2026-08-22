@@ -119,7 +119,7 @@ export const resolvePlayheadAnchor = (input: PlayheadAnchorInput): PlayheadAncho
     return { elapsedMs: nowMs - trackStartedAtMs, trackStartedAtMs, drifted: false, driftMs: 0, stalled: false };
   }
 
-  const playheadMs = enginePositionMs as number;
+  const playheadMs = enginePositionMs;
   const driftMs = trackStartedAtMs === null ? 0 : nowMs - trackStartedAtMs - playheadMs;
   const previous = input.previousElapsedMs;
   // Strictly "has not moved". A playhead that is playing advances by about a second per tick, so

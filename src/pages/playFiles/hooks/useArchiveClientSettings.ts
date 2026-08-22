@@ -49,8 +49,8 @@ export function useArchiveClientSettings(): ArchiveClientSettingsState & {
       setSettings(loadArchiveClientSettingsState());
     };
 
-    window.addEventListener("c64u-app-settings-updated", handler as EventListener);
-    return () => window.removeEventListener("c64u-app-settings-updated", handler as EventListener);
+    window.addEventListener("c64u-app-settings-updated", handler);
+    return () => window.removeEventListener("c64u-app-settings-updated", handler);
   }, []);
 
   const archiveConfig = useMemo(

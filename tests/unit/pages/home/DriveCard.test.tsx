@@ -137,4 +137,27 @@ describe("DriveCard", () => {
     render(<DriveCard {...defaultProps} />);
     expect(screen.queryByTestId("drive-footer")).not.toBeInTheDocument();
   });
+
+  /**
+   * The labels beside the controls must not shrink below their own text.
+   *
+   * `src/index.css` gives every flex and grid child `min-width: 0`, which removes the
+   * `min-width: auto` that otherwise stops a flex item shrinking below its content. A label
+   * carrying `whitespace-nowrap` and no `overflow: hidden` then keeps its full text while its
+   * BOX shrinks, and the text spills over the control beside it: on Home the Drives card
+   * rendered "B8s ID" and "T1541pe", the Bus ID and Type values painted on top of their own
+   * labels.
+   *
+   * jsdom computes no layout, so this asserts the class that prevents the shrink rather than
+   * the pixels. It is the exact thing that was missing, and the same guard SidCard already
+   * carried on the labels that never had the fault.
+   */
+  it("keeps the Disk, Bus ID and Type labels from shrinking under their own text", () => {
+    render(<DriveCard {...defaultProps} mountedPath="game.d64" typeValue="1541" typeOptions={["1541", "1571"]} />);
+    for (const text of ["Disk", "Bus ID", "Type"]) {
+      const label = screen.getByText(text);
+      expect(label.className, `the "${text}" label may not shrink below its text`).toContain("shrink-0");
+      expect(label.className).toContain("whitespace-nowrap");
+    }
+  });
 });
