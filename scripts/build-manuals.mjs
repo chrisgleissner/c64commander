@@ -757,7 +757,7 @@ const featureRows = ({ features, variant }) => {
     rows.push([
       "Game Mode",
       "**Home → Quick Actions**, Play (while an item plays), `0`",
-      "The first tile in Quick Actions. Opens the controller with the picture and sound as you last left them.",
+      "The first tile in Quick Actions, labelled **Game**. Opens the controller with the picture and sound as you last left them.",
     ]);
     rows.push([
       "Remote Input",
@@ -1105,9 +1105,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
   //
   // This was briefly hardcoded to "compact" for both, on the reasoning that a reader on a
   // larger screen simply sees more than the picture shows. That is true of the layout but
-  // not of the controls: several labels are shortened at compact - "Game" for "Game Mode",
-  // "RSTOP" for "RUN/STOP" - so the compact pictures name buttons that a medium-profile
-  // reader cannot find.
+  // not of the controls: some labels are shortened at compact - "RSTOP" for "RUN/STOP" -
+  // so the compact pictures name buttons that a medium-profile reader cannot find. (The
+  // Quick Action tiles read "Game" and "Input" on every profile, so they are not an example.)
   //
   // The only images exempt are the ones that exist to demonstrate how the profiles differ.
   // assertSingleDisplayProfile enforces this when the manual is written.
@@ -1197,7 +1197,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Home overview", profile, "home/profiles/{profile}/01-overview.png"),
     "",
-    "Start at the top. The system strip confirms which app build, device, and firmware you are using. Below it, Quick Actions run from the ones you reach for most to the ones you reach for rarely: Game Mode and Remote Input, which sit together as two ways into the same second screen, then Menu, Pause/Resume, the RAM snapshot actions, and then, in their own band, the ones that interrupt whatever the machine is doing — Reset, Reboot, and Power Off where the device supports it. Nothing that stops your C64 sits next to something that does not.",
+    "Start at the top. The system strip confirms which app build, device, and firmware you are using. Below it, Quick Actions run from the ones you reach for most to the ones you reach for rarely: **Game** and **Input**, which sit together as two ways into the same second screen, then Menu, Pause/Resume, the RAM snapshot actions, and then, in their own band, the ones that interrupt whatever the machine is doing — Reset, Reboot, and Power Off where the device supports it. Nothing that stops your C64 sits next to something that does not.",
     "",
     "Two more actions can join that last band: a **Reboot (Clr Mem)** that wipes memory on the way, and **Power Cycle**. Both go through the Telnet menu service rather than the web service, so they start out switched off; turn them on in Settings → Experimental Features once Telnet is enabled on the device.",
     "",
@@ -1225,7 +1225,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     ...(includeFeature(features, "remote_input_enabled")
       ? [
-          "**Game Mode** and **Remote Input** are the second-screen joystick and keyboard for the C64. Both have their own walkthrough in [Remote Input](#remote-input), later in this guide.",
+          "The **Game** and **Input** tiles open the second-screen joystick and keyboard for the C64. Both have their own walkthrough in [Remote Input](#remote-input), later in this guide.",
           "",
         ]
       : []),
@@ -1791,8 +1791,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "Open it from either of two places:",
           "",
-          "- From **Home**, tap **Game Mode** — the first tile in Quick Actions — or **Remote Input** further along the same row.",
-          "- From **Play**, tap **Remote Input** or **Game Mode** while an item is playing.",
+          "- From **Home**, tap **Game** — the first tile in Quick Actions — or **Input** further along the same row. The tiles carry one word each; both open the same second screen, Game Mode set up for playing and Remote Input with everything on show.",
+          "- From **Play**, tap **Remote Input** or **Game Mode** while an item is playing. The Play buttons keep the full names; only the Home tiles are shortened.",
           "",
           "Each place opens its own copy of the controller, so a key you are holding in one never leaks into the other.",
           "",
@@ -1811,7 +1811,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "#### Game Mode",
           "",
-          "**Game Mode** is the app set up for playing: the picture and the sound as you last left them, everything else out of the way, and whichever controls suit how you are driving. It takes one action — the **Game Mode** tile on Home, the **Game Mode** button on Play, or the `0` key from anywhere — and leaves you playing with nothing else to press. Starting a program, a cartridge or a disk can open it for you as well; **Settings → Play and Disk → Enter Game Mode when a game starts** decides.",
+          "**Game Mode** is the app set up for playing: the picture and the sound as you last left them, everything else out of the way, and whichever controls suit how you are driving. It takes one action — the **Game** tile on Home, the **Game Mode** button on Play, or the `0` key from anywhere — and leaves you playing with nothing else to press. Starting a program, a cartridge or a disk can open it for you as well; **Settings → Play and Disk → Enter Game Mode when a game starts** decides.",
           "",
           image("Game Mode", profile, "home/remote-input/profiles/{profile}/02-game-mode.png"),
           "",

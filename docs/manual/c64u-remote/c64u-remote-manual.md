@@ -85,7 +85,7 @@ Home groups the day-to-day controls.
 
 ![Home overview](../../img/app/home/profiles/compact/01-overview.png)
 
-Start at the top. The system strip confirms which app build, device, and firmware you are using. Below it, Quick Actions run from the ones you reach for most to the ones you reach for rarely: Game Mode and Remote Input, which sit together as two ways into the same second screen, then Menu, Pause/Resume, the RAM snapshot actions, and then, in their own band, the ones that interrupt whatever the machine is doing — Reset, Reboot, and Power Off where the device supports it. Nothing that stops your C64 sits next to something that does not.
+Start at the top. The system strip confirms which app build, device, and firmware you are using. Below it, Quick Actions run from the ones you reach for most to the ones you reach for rarely: **Game** and **Input**, which sit together as two ways into the same second screen, then Menu, Pause/Resume, the RAM snapshot actions, and then, in their own band, the ones that interrupt whatever the machine is doing — Reset, Reboot, and Power Off where the device supports it. Nothing that stops your C64 sits next to something that does not.
 
 Two more actions can join that last band: a **Reboot (Clr Mem)** that wipes memory on the way, and **Power Cycle**. Both go through the Telnet menu service rather than the web service, so they start out switched off; turn them on in Settings → Experimental Features once Telnet is enabled on the device.
 
@@ -97,7 +97,7 @@ Which of these start open and which start closed is chosen once, for a first-tim
 
 The remaining cards cover drives, the printer, streams, and **Config actions**. That last one holds **Save**, which writes the current settings into flash on the Commodore 64 Ultimate so they survive a power cycle, along with Load, Reset, Revert, and the app's own named configuration snapshots.
 
-**Game Mode** and **Remote Input** are the second-screen joystick and keyboard for the C64. Both have their own walkthrough in [Remote Input](#remote-input), later in this guide.
+The **Game** and **Input** tiles open the second-screen joystick and keyboard for the C64. Both have their own walkthrough in [Remote Input](#remote-input), later in this guide.
 
 ### Play
 
@@ -598,8 +598,8 @@ Remote Input turns your phone into a second-screen controller for the C64. It is
 
 Open it from either of two places:
 
-- From **Home**, tap **Game Mode** — the first tile in Quick Actions — or **Remote Input** further along the same row.
-- From **Play**, tap **Remote Input** or **Game Mode** while an item is playing.
+- From **Home**, tap **Game** — the first tile in Quick Actions — or **Input** further along the same row. The tiles carry one word each; both open the same second screen, Game Mode set up for playing and Remote Input with everything on show.
+- From **Play**, tap **Remote Input** or **Game Mode** while an item is playing. The Play buttons keep the full names; only the Home tiles are shortened.
 
 Each place opens its own copy of the controller, so a key you are holding in one never leaks into the other.
 
@@ -618,7 +618,7 @@ A quick-keys bar beside the joystick keeps the keys you reach for mid-game one t
 
 #### Game Mode
 
-**Game Mode** is the app set up for playing: the picture and the sound as you last left them, everything else out of the way, and whichever controls suit how you are driving. It takes one action — the **Game Mode** tile on Home, the **Game Mode** button on Play, or the `0` key from anywhere — and leaves you playing with nothing else to press. Starting a program, a cartridge or a disk can open it for you as well; **Settings → Play and Disk → Enter Game Mode when a game starts** decides.
+**Game Mode** is the app set up for playing: the picture and the sound as you last left them, everything else out of the way, and whichever controls suit how you are driving. It takes one action — the **Game** tile on Home, the **Game Mode** button on Play, or the `0` key from anywhere — and leaves you playing with nothing else to press. Starting a program, a cartridge or a disk can open it for you as well; **Settings → Play and Disk → Enter Game Mode when a game starts** decides.
 
 ![Game Mode](../../img/app/home/remote-input/profiles/compact/02-game-mode.png)
 
@@ -895,7 +895,7 @@ Preferred locations are marked first.
 | Power Cycle | **Home → Quick Actions** | On by default. You can turn it off in Settings → Experimental Features. |
 | Clear-RAM reboot | **Home → Quick Actions** | On by default. You can turn it off in Settings → Experimental Features. |
 | Save / Load RAM | **Home → Quick Actions** | On by default. You can turn it off in Settings → Stable Features. |
-| Game Mode | **Home → Quick Actions**, Play (while an item plays), `0` | The first tile in Quick Actions. Opens the controller with the picture and sound as you last left them. |
+| Game Mode | **Home → Quick Actions**, Play (while an item plays), `0` | The first tile in Quick Actions, labelled **Game**. Opens the controller with the picture and sound as you last left them. |
 | Remote Input | **Home → Quick Actions**, Play (while an item plays) | On by default. You can turn it off in Settings → Stable Features. Joystick needs a Commodore 64 Ultimate on firmware 1.2.0 or newer; otherwise only Keys are available. |
 | CPU speed and turbo | **Home → CPU & RAM**, Config | Home is preferred for common changes. |
 | Video mode and scan lines | **Home → Video**, Config | Home is preferred. |

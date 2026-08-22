@@ -45,6 +45,28 @@ Instead:
    keeps is a real content change; one it reverts was drift. If a file you did not intend appears,
    revert it: `git checkout -- docs/img/<path>`.
 
+## Three things that differ without the app changing
+
+A recapture rewrites files whose pixels differ for reasons that have nothing to do with the UI.
+Do not commit those: measured on this branch they were the large majority of the diff.
+
+- **The build identity.** Home's system-info card prints `App <version>`, so every capture taken at
+  a different version differs on that line. It accounted for the biggest single group.
+- **Live counters.** "PAL 29 fps" against "PAL 30 fps", and the byte counts in the Diagnostics
+  connection view.
+- **The machine's own configuration.** SID addressing reading `$D400` against `Unmapped`, a drive
+  showing ON against OFF. These follow whichever Ultimate the capture ran against.
+
+The way to tell: compute where a file changed, not just how much. A diff confined to one text line
+in the header, or to a single value in a table, is one of the three above. A diff that spans a whole
+column, or moves everything below a point, is the UI.
+
+There is a durable fix for the first of the three and it is not done: `VITE_APP_VERSION` is honoured
+by `vite.config.ts` and pins both the version and its label, so capturing with a fixed value would
+stop the corpus churning on every version bump. It is left out here deliberately, because switching
+to a pinned label rewrites every screenshot showing that line once, and this branch was asked to
+keep the diff to what actually changed.
+
 ## Also check
 
 - `tests/unit/readmeScreenshotCoverage.test.ts` — asserts the README's gallery references resolve.
