@@ -63,13 +63,13 @@ Note the IP address under **Wired Network Setup** or **WI-FI Network Setup**. Yo
 
 Start C64 Commander. If no saved device is reachable, it scans the local network for supported devices.
 
-If devices are found:
+If devices are found, the app opens **Choose your C64**:
 
 1. Choose **Use** to connect now.
 2. Choose **Save** to keep the device for later.
 3. If the device is password-protected, enter its network password when asked.
 
-If no devices are found, C64 Commander opens a manual setup prompt.
+If no devices are found, C64 Commander opens **No C64 found**, a manual setup prompt.
 
 Enter a hostname such as `c64u`, `u64`, or `u2`, or an IP address such as `192.168.1.64`, then choose **Connect**. If the device answers but requires a password, the same dialog asks for it before saving and connecting.
 
@@ -865,7 +865,7 @@ Preferred locations are marked first.
 | Feature | Where to find it | Notes |
 | --- | --- | --- |
 | Connect to a device | **Startup discovery**, Settings → Connection | Use startup discovery first. Use Settings for later edits. |
-| Manual host/IP entry | **Startup prompt when no devices are found**, Settings → Connection | Startup prompt is fastest on first run; Settings is best for saved-device maintenance. |
+| Manual host/IP entry | **No C64 found** at startup, Settings → Connection | Startup prompt is fastest on first run; Settings is best for saved-device maintenance. |
 | Network password | **Startup prompt or auth popup**, Settings → Connection | The app asks only when needed. |
 | Switch saved device | **Header badge long-press / `#`**, Settings → Connection | Use Device Switcher for fast switching; Settings for editing. |
 | Menu / Pause / Reset / Reboot | **Home → Quick Actions** | The everyday controls. |

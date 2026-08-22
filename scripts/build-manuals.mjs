@@ -719,7 +719,7 @@ const featureRows = ({ features, variant }) => {
     ],
     [
       "Manual host/IP entry",
-      "**Startup prompt when no devices are found**, Settings → Connection",
+      "**No C64 found** at startup, Settings → Connection",
       "Startup prompt is fastest on first run; Settings is best for saved-device maintenance.",
     ],
     ["Network password", "**Startup prompt or auth popup**, Settings → Connection", "The app asks only when needed."],
@@ -1171,13 +1171,13 @@ export const renderManualMarkdown = ({ variant, features }) => {
       variant,
     )}.`,
     "",
-    "If devices are found:",
+    "If devices are found, the app opens **Choose your C64**:",
     "",
     "1. Choose **Use** to connect now.",
     "2. Choose **Save** to keep the device for later.",
     "3. If the device is password-protected, enter its network password when asked.",
     "",
-    `If no devices are found, ${appName} opens a manual setup prompt.`,
+    `If no devices are found, ${appName} opens **No C64 found**, a manual setup prompt.`,
     "",
     isC64uRemoteVariant(variant)
       ? "Enter a hostname such as `c64u` or an IP address such as `192.168.1.64`, then choose **Connect**. If the Commodore 64 Ultimate answers but requires a password, the same dialog asks for it before saving and connecting."
