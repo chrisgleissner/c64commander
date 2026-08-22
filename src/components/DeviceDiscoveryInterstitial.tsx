@@ -370,7 +370,10 @@ export function DeviceDiscoveryInterstitial() {
 
   if (!shouldOffer) return null;
 
-  const dialogTitle = hasCandidates ? "C64 systems found" : "No C64 systems found";
+  // "C64" rather than "C64 system": the extra word says nothing the reader needs,
+  // and on the compact profile the longer title wrapped to two lines and pushed the
+  // dialog's own controls down.
+  const dialogTitle = hasCandidates ? "C64s found" : "No C64 found";
   const dialogDescription = hasCandidates
     ? "Choose one to control now, save one for later, or enter an address manually in Settings."
     : "Enter your C64 Ultimate host or IP address.";
