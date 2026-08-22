@@ -132,7 +132,9 @@ test.describe("Game Mode", () => {
     const labels = await page
       .locator('[data-panel-position="1"] [data-testid="home-machine-controls"] button')
       .allInnerTexts();
-    expect(labels[0]?.trim()).toBe("Game Mode");
+    // The tile carries one word. What this test is about is its POSITION, so it reads the
+    // label the tile actually prints rather than the feature's full name.
+    expect(labels[0]?.trim()).toBe("Game");
 
     const destructive = ["Reset", "Reboot", "Reboot (Clr Mem)", "Power Cycle", "Power Off"];
     const trimmed = labels.map((label) => label.trim());
