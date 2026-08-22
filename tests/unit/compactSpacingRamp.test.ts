@@ -24,7 +24,7 @@ describe("compact profile spacing ramp", () => {
     expect(rampStart).toBeGreaterThan(-1);
   });
 
-  it("rewrites the four dominant spacing utilities on the compact profile", () => {
+  it("rewrites the eight dominant spacing utilities on the compact profile", () => {
     for (const utility of ["p-4", "p-3", "py-3", "py-4", "gap-3", "gap-4", "space-y-3", "space-y-4"]) {
       expect(ramp, `${utility} is no longer rewritten on compact`).toContain(`[class~="${utility}"]`);
     }
