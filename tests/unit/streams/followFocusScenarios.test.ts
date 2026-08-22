@@ -19,15 +19,30 @@
  * quietly gives up a tenth of the score should fail here.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { evaluateSuite, setInputCueEnabled } from "../../helpers/followFocusEval";
 import { SCENARIO_KINDS } from "../../helpers/gameScenarios";
 
 /** The seeds the search never saw. Changing these invalidates the comparison. */
 const VALIDATION_SEEDS = [101, 102, 103];
 
+// Scoring one suite walks every frame of every synthetic game. Under the coverage build
+// each pass costs several times what it does uninstrumented, and four passes blew the 15 s
+// default in CI while passing locally. Both passes are now computed once, here, and the
+// timeout is raised so the margin does not depend on how fast the runner is.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
+
 describe("follow-focus against synthetic games (held-out seeds)", () => {
   const suite = evaluateSuite(VALIDATION_SEEDS);
+  /** The same suite with the joystick cue off — the path a player with a real joystick gets. */
+  const withoutCue = (() => {
+    setInputCueEnabled(false);
+    try {
+      return evaluateSuite(VALIDATION_SEEDS);
+    } finally {
+      setInputCueEnabled(true);
+    }
+  })();
 
   it("scores at least as well as the tuned result", () => {
     // Measured at the tuned defaults: score 0.51, on-target 0.67, confidently wrong 0.09.
@@ -51,21 +66,13 @@ describe("follow-focus against synthetic games (held-out seeds)", () => {
   it("is no worse for the players who never give it a joystick to read", () => {
     // Most users steer from a real joystick plugged into the C64, so the cue-off path is the one
     // that actually ships to them. It has to be the fitted tracker, unchanged.
-    setInputCueEnabled(false);
-    try {
-      const without = evaluateSuite(VALIDATION_SEEDS);
-      expect(without.score).toBeGreaterThan(0.45);
-      expect(without.onTarget).toBeGreaterThan(0.62);
-    } finally {
-      setInputCueEnabled(true);
-    }
+    expect(withoutCue.score).toBeGreaterThan(0.45);
+    expect(withoutCue.onTarget).toBeGreaterThan(0.62);
   });
 
   it("earns its place on the look-alike case, and costs nothing anywhere else", () => {
-    setInputCueEnabled(false);
-    const without = evaluateSuite(VALIDATION_SEEDS);
-    setInputCueEnabled(true);
-    const withCue = evaluateSuite(VALIDATION_SEEDS);
+    const without = withoutCue;
+    const withCue = suite;
 
     // Measured: 0.5100 -> 0.5110 overall, the whole of it from one swarm seed. The cue is a
     // tie-break between look-alikes, so a large aggregate move would mean it had stopped being
