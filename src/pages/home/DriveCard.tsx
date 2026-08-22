@@ -163,7 +163,7 @@ export function DriveCard({
           <span className="shrink-0 text-muted-foreground whitespace-nowrap">Bus ID</span>
           <Select value={busIdValue} onValueChange={onBusIdChange} disabled={!isConnected || busIdPending}>
             <SelectTrigger
-              className={cn(inlineSelectTriggerClass, "min-h-11 min-w-0 flex-1 justify-start overflow-hidden")}
+              className={cn(inlineSelectTriggerClass, "min-h-11 flex-1 justify-start overflow-hidden")}
               data-testid={`home-drive-bus-${testIdSuffix}`}
             >
               <SelectValue placeholder={busIdValue} />
@@ -183,7 +183,7 @@ export function DriveCard({
               <span className="shrink-0 text-muted-foreground whitespace-nowrap">Type</span>
               <Select value={typeValue} onValueChange={onTypeChange} disabled={!isConnected || typePending}>
                 <SelectTrigger
-                  className={cn(inlineSelectTriggerClass, "min-h-11 min-w-0 flex-1 justify-start overflow-hidden")}
+                  className={cn(inlineSelectTriggerClass, "min-h-11 flex-1 justify-start overflow-hidden")}
                   data-testid={`home-drive-type-${testIdSuffix}`}
                 >
                   <SelectValue placeholder={typeValue} />
