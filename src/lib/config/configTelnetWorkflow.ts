@@ -21,8 +21,9 @@ import { TelnetError } from "@/lib/telnet/telnetTypes";
 const MAX_BROWSER_STEPS = 96;
 const LOAD_SETTINGS_LABEL = "Load Settings";
 
-// The cursor is already at the top of the listing: HOME is sent once before the
-// walk, and entering a directory starts its listing at the top.
+// `findEntry` does not press HOME itself. Its callers have already placed the
+// cursor at the top: `openDirectoryPath` sends HOME before its loop, and
+// entering a directory starts that directory's listing at the top.
 const findEntry = (session: TelnetSessionApi, label: string) =>
   navigateToFileBrowserEntry(session, label, { maxSteps: MAX_BROWSER_STEPS, startAtTop: false });
 
