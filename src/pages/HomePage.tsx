@@ -753,7 +753,8 @@ function HomePageContent() {
       ? [
           {
             id: "openRemoteInput",
-            label: "Remote Input",
+            // One word on the tile, for the reason given in MachineControls.
+            label: "Input",
             icon: Keyboard,
             onSelect: () => setRemoteInputSheetOpen(true),
             disabled: !isActive,

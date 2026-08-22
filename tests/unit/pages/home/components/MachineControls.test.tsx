@@ -149,7 +149,7 @@ describe("MachineControls", () => {
     const labels = Array.from(screen.getByTestId("home-machine-controls").querySelectorAll("button")).map(
       (button) => button.textContent,
     );
-    expect(labels[0]).toBe("Game Mode");
+    expect(labels[0]).toBe("Game");
 
     const destructive = ["Reset", "Reboot", "Reboot (Clr Mem)", "Power Cycle", "Power Off"];
     const firstDestructive = labels.findIndex((label) => destructive.includes(label ?? ""));
@@ -157,18 +157,17 @@ describe("MachineControls", () => {
     expect(firstDestructive).toBeGreaterThan(lastSafe);
   });
 
-  // Quick Actions is two columns wide on the compact profile (320 CSS px across), so each
-  // tile has roughly 150px for its label. The tile keeps its position and its handler; only
-  // the printed label shortens, and only there.
-  it("shortens the Game Mode tile to Game on the compact profile, and only there", () => {
-    const compact = renderAtProfile("compact");
-    const compactTile = screen.getByTestId("home-machine-inline-openGameMode");
-    expect(compactTile).toHaveTextContent("Game");
-    expect(compactTile.textContent).not.toContain("Game Mode");
-    compact.unmount();
-
-    renderAtProfile("medium");
-    expect(screen.getByTestId("home-machine-inline-openGameMode")).toHaveTextContent("Game Mode");
+  // One word on the tile, on every profile. Quick Actions is two columns at 320 CSS px so
+  // "Game Mode" wrapped there, and on a wider profile the second word only repeated what the
+  // icon and the tile's position already say. The tile keeps its position and its handler.
+  it("labels the Game Mode tile Game on every profile", () => {
+    for (const profile of ["compact", "medium", "expanded"] as const) {
+      const view = renderAtProfile(profile);
+      const tile = screen.getByTestId("home-machine-inline-openGameMode");
+      expect(tile).toHaveTextContent("Game");
+      expect(tile.textContent).not.toContain("Game Mode");
+      view.unmount();
+    }
   });
 
   it("renders experimental RAM actions only when requested", () => {

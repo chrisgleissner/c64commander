@@ -242,7 +242,7 @@ export function SidCard({
       <div className={cn("grid gap-2 text-xs", profile === "compact" ? "grid-cols-1" : "grid-cols-3")}>
         {shapingControls.map((control, index) => (
           <div key={index} className="flex items-center gap-2">
-            <span className="text-muted-foreground whitespace-nowrap">{control.label}</span>
+            <span className="shrink-0 text-muted-foreground whitespace-nowrap">{control.label}</span>
             {control.options && control.onChange ? (
               <Select value={control.value} onValueChange={control.onChange} disabled={!isConnected || control.pending}>
                 <SelectTrigger
