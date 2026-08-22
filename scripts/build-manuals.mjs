@@ -1826,6 +1826,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           ),
           "",
           "With the controls out of the way, three keys still reach everything. `#` brings RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again. `*`, or the menu key, changes between driving the C64 and adjusting the view. **Back** leaves. The floating **cog** button at the top of the picture brings the whole toolbar back, and **Show joystick** on that toolbar brings the on-screen joystick back.",
+          "Set the joystick to **Hidden** with the picture switched off and Game Mode has nothing to draw, so the space says so: it tells you the picture is off, and carries the **Watch** and **Listen** switches and the quick keys, all reachable without a touchscreen. The game keeps taking your keys the whole time. Turn **Watch** on and the picture takes the space instead.",
           "",
           "Playing on a television? Turn **Watch** off once and Game Mode will keep opening without the picture — the controls take the space instead, so it is never blank.",
           "",
