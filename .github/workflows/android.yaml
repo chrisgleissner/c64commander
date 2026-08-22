@@ -374,6 +374,12 @@ jobs:
   web-build-coverage:
     name: Web | Build (coverage)
     runs-on: ubuntu-latest
+    # The Istanbul-instrumented build forces sourcemaps on and holds the whole
+    # module graph in memory while rendering chunks. It ran within Node's default
+    # heap for a long time, but has been close enough to the limit to fail
+    # intermittently with "JavaScript heap out of memory". The runner has 16 GB.
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
 
     steps:
       - name: Checkout
@@ -423,6 +429,9 @@ jobs:
     env:
       VITE_COVERAGE: "true"
       VITE_ENABLE_TEST_PROBES: "1"
+      # This job rebuilds with coverage instrumentation if the artifact is
+      # missing, so it needs the same heap as web-build-coverage.
+      NODE_OPTIONS: --max-old-space-size=6144
 
     steps:
       - name: Checkout

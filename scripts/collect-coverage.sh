@@ -14,6 +14,8 @@ npm run test:coverage
 mkdir -p .nyc_output
 
 # 3. Build coverage-instrumented assets for Playwright
+# The instrumented build needs more heap than Node allows by default.
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=6144}"
 echo "==> Building web app for E2E coverage..."
 VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 npm run build
 
