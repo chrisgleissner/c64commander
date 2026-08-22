@@ -82,7 +82,10 @@
  * value on those profiles.
  */
 :root[data-display-profile="compact"] {
-  --app-tab-bar-visual-height: 3rem;
+  /* 45px. Not the bar's height any more — its content is 49.1px — but the frame
+     reservation, which has to stay just above that. Tuned with the `.tab-bar`
+     padding-bottom override at the end of this file; change neither alone. */
+  --app-tab-bar-visual-height: 2.8125rem;
   --app-tab-bar-nav-padding-y: 0.25rem;
   --keypad-guidance-font-size: 0.875rem;
   --keypad-guidance-padding-y: 0.125rem;
@@ -1182,4 +1185,40 @@ button:focus-visible,
   user-select: none !important;
   -webkit-touch-callout: none !important;
   -webkit-tap-highlight-color: transparent !important;
+}
+
+/* The compact profile's spacing ramp, the counterpart to its type ramp above. These
+   utilities were sized for a 393px phone and carry about a fifth of every page's height on
+   a 320x427 screen, so page content goes on one 8px vertical rhythm instead. Column gaps
+   and `px-*` stay: they are separation between targets, not slack.
+   Measurements and rationale: docs/plans/compact-density/FINDINGS.md. */
+:root[data-display-profile="compact"] .page-shell :where([class~="p-4"]) {
+  padding-block: 0.5rem;
+  /* Not lower: 12px is the inset `p-3` and the collapsible card header already use. */
+  padding-inline: 0.75rem;
+}
+
+:root[data-display-profile="compact"] .page-shell :where([class~="p-3"], [class~="py-3"], [class~="py-4"]) {
+  padding-block: 0.5rem;
+}
+
+/* Row gap only. Two controls side by side must keep the separation they had. */
+:root[data-display-profile="compact"] .page-shell :where([class~="gap-3"], [class~="gap-4"]) {
+  row-gap: 0.5rem;
+}
+
+:root[data-display-profile="compact"]
+  .page-shell
+  :where([class~="space-y-3"], [class~="space-y-4"])
+  > :not([hidden])
+  ~ :not([hidden]) {
+  margin-top: 0.5rem;
+}
+
+/* Was 8px under the tab labels against 2px above them, and not the Android navigation
+   inset — that is `--app-tab-bar-safe-area-bottom`, reserved on `.tab-bar-frame`. The
+   compact `--app-tab-bar-visual-height` comes down with it, or the bar shrinks inside a
+   frame still reserving the old height and the dead band moves instead of going. */
+:root[data-display-profile="compact"] .tab-bar {
+  padding-bottom: var(--app-chrome-rail-padding-y);
 }

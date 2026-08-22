@@ -38,6 +38,7 @@ import { buildSoloRoutingUpdates, isSidVolumeName, soloReducer } from "@/lib/con
 import { normalizeConfigItem, type NormalizedConfigItem } from "@/lib/config/normalizeConfigItem";
 import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { updateHasChanges } from "@/lib/config/appConfigStore";
 import { PageContainer, PageStack } from "@/components/layout/PageContainer";
 import {
@@ -993,6 +994,7 @@ export default function ConfigBrowserPage() {
     return liveCategories.filter((cat) => cat.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [liveCategories, searchQuery]);
   const pageShellClassName = usePrimaryPageShellClassName();
+  const { profile } = useDisplayProfile();
 
   return (
     <div className={pageShellClassName}>
@@ -1009,7 +1011,10 @@ export default function ConfigBrowserPage() {
       </AppBar>
 
       <PageContainer size="reading">
-        <PageStack className="gap-3">
+        {/* `gap-3` is a fixed 12px that opts this page out of `--display-profile-section-gap`.
+            Kept where the page was tuned; dropped on compact so it uses the profile's own
+            section gap, the same shape as HomePage's `gap-4` override. */}
+        <PageStack className={profile === "compact" ? undefined : "gap-3"}>
           {!status.isConnected ? (
             <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 text-center">
               <p className="text-sm text-destructive font-medium">Not connected</p>
