@@ -89,49 +89,6 @@ export const runWithActionTrace = async <T>(context: TraceActionContext, fn: () 
 };
 
 /**
- * Run a function within a detached action trace.
- * Used for implicit system actions where we don't want to affect the global state.
- *
- * @param context - The TraceActionContext for this action
- * @param fn - The function to execute
- * @returns The result of fn
- */
-const runWithDetachedActionTrace = async <T>(context: TraceActionContext, fn: () => Promise<T> | T): Promise<T> => {
-  const suppress = shouldSuppressDiagnosticsSideEffects();
-  return runWithActionContext(context, async () => {
-    if (!suppress) {
-      recordActionStart(context);
-    }
-    try {
-      const result = await fn();
-      if (!suppress) {
-        recordActionEnd(context, null);
-      }
-      return result;
-    } catch (error) {
-      const err = error as Error;
-      const classification = classifyError(err);
-      if (suppress && classification.failureClass === "user-cancellation") {
-        throw error;
-      }
-      if (suppress) {
-        await withDiagnosticsTraceOverride(async () => {
-          recordActionStart(context);
-          recordTraceError(context, err, classification);
-          recordActionEnd(context, err);
-        });
-      } else {
-        recordTraceError(context, err, classification);
-        recordActionEnd(context, err);
-      }
-      throw error;
-    } finally {
-      exitCurrentActionContext();
-    }
-  });
-};
-
-/**
  * Run an implicit system action.
  * Used when a REST or FTP operation occurs outside any user action context.
  *
@@ -152,7 +109,9 @@ export const runWithImplicitAction = async <T>(
     componentName: null,
     trigger: trigger ?? null,
   };
-  return runWithDetachedActionTrace(context, () => fn(context));
+  // What makes this action implicit is the `origin: "system"` context above, not
+  // the runner: it records, classifies and exits exactly like a user action.
+  return runWithActionTrace(context, () => fn(context));
 };
 
 /**

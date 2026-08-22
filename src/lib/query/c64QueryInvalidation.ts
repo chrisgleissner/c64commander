@@ -58,6 +58,10 @@ const routePrefixMap: Array<{
   },
 ];
 
+// Kept as its own table rather than derived from `routePrefixMap`. The two differ
+// today in exactly one entry - `/config` omits `c64-all-config` - and deriving one
+// from the other would turn that single deliberate omission into a rule applied to
+// every future route. `c64QueryInvalidation.test.ts` pins the difference instead.
 const savedDeviceSwitchRoutePrefixMap: Array<{
   routePrefix: string;
   prefixes: ReadonlyArray<C64QueryPrefix>;
