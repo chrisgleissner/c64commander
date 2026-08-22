@@ -642,7 +642,19 @@ ordinary focus-ring CTAs in both output modes.
     video standard and frame rate, so the row reads e.g. `C64 … PAL 50 fps`)
   - Zoom out / Zoom in / Fit — buttons — `av-immersive-zoom-out`,
     `av-immersive-zoom-in`, `av-immersive-fit` — R✅ I✅
-  - Follow activity — toggle button — `av-immersive-follow` — R✅ I✅ (off by default)
+  - Follow motion — toggle button — `av-immersive-follow` — R✅ I✅ (off by default)
+  - Lock on — press and hold the picture — no testid of its own (the gesture is on
+    `av-mirror-immersive-stage`); while following with nothing locked, the hint
+    `av-immersive-lock-hint` says so
+  - Lock on, no touchscreen — in view-lock Adjust mode the D-pad pans the picture
+    under a fixed crosshair (`av-immersive-lock-aim`) and the OK / D-pad-centre key
+    confirms what is under it, or releases an existing lock. Turns following on by
+    itself, so it is one key rather than two. `0`/`5` keep Fit
+  - Lock state — chip and release button — `av-immersive-lock-status` — R✅ I✅ —
+    reports "Locked on" / "Looking…" / "Lost it" and releases the lock when tapped
+  - Lock marker — `av-immersive-lock-reticle` — not interactive (four corner
+    brackets around the tracked object; Settings → Remote Input → Game Mode →
+    "Mark what the view is following", `settings-follow-marker`, on by default)
   - Fit / Done view-lock — toggle button — `av-immersive-mode-toggle` — R✅ I✅
     — flips physical-key ownership between relaying to the C64 and adjusting the
     view; also reachable via the `*`/Menu physical key and auto-reverts after idle

@@ -39,6 +39,7 @@ import {
   type GameModeJoystickSetting,
 } from "@/lib/remoteInput/gameModeJoystick";
 import { loadGameModeOnLaunch, saveGameModeOnLaunch } from "@/lib/remoteInput/gameModeLaunch";
+import { loadFollowReticle, saveFollowReticle } from "@/lib/streams/followReticle";
 
 const KEYPAD_KEYMAP = resolveInputProfile("keypad");
 
@@ -80,6 +81,7 @@ export const GameModeSettingsSection = () => {
   const [customBinding, setCustomBinding] = useState<JoystickKeyBinding>(loadCustomBinding);
   const [joystick, setJoystick] = useState<GameModeJoystickSetting>(loadGameModeJoystick);
   const [onLaunch, setOnLaunch] = useState<boolean>(loadGameModeOnLaunch);
+  const [followMarker, setFollowMarker] = useState<boolean>(loadFollowReticle);
   const [capturingSlot, setCapturingSlot] = useState<JoystickSlot | null>(null);
   const [rejection, setRejection] = useState<string | null>(null);
   const capturingSlotRef = useRef<JoystickSlot | null>(null);
@@ -238,6 +240,28 @@ export const GameModeSettingsSection = () => {
             const next = checked === true;
             setOnLaunch(next);
             saveGameModeOnLaunch(next);
+          }}
+        />
+      </div>
+
+      <div className="flex items-start justify-between gap-3 min-w-0">
+        <div className="min-w-0">
+          <Label htmlFor="settings-follow-marker" className="font-medium">
+            Mark what the view is following
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Press and hold your character in the picture and the view stays with it. This draws a marker around it so
+            you can see which one it picked. Turn it off if you would rather have the picture clear.
+          </p>
+        </div>
+        <Checkbox
+          id="settings-follow-marker"
+          data-testid="settings-follow-marker"
+          checked={followMarker}
+          onCheckedChange={(checked) => {
+            const next = checked === true;
+            setFollowMarker(next);
+            saveFollowReticle(next);
           }}
         />
       </div>

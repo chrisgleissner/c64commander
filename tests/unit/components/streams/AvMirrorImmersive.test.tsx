@@ -14,15 +14,24 @@ import { AvMirrorImmersive, type AvMirrorImmersiveHandle } from "@/components/st
 /** Only the fields this component reads; `fps`/`standard` drive the frame-rate readout. */
 type MirrorVideoState = { videoLive: boolean; video: { state: string; fps?: number; standard?: string } };
 
+type MirrorLockState = {
+  state: string;
+  subject: { x: number; y: number; w: number; h: number } | null;
+  confidence: number;
+};
+
 const mirror = vi.hoisted(() => ({
   video: { videoLive: true, video: { state: "live" } } as MirrorVideoState,
   viewport: { scale: 2, cx: 0.5, cy: 0.5 },
+  lock: { state: "idle", subject: null, confidence: 0 } as MirrorLockState,
   ops: {
     zoomBy: vi.fn(),
     panBy: vi.fn(),
     centerOn: vi.fn(),
     setScale: vi.fn(),
     reset: vi.fn(),
+    lockOn: vi.fn(),
+    releaseLock: vi.fn(),
   },
 }));
 
@@ -32,7 +41,7 @@ vi.mock("@/hooks/useAvMirror", () => ({
 }));
 
 vi.mock("@/hooks/useMirrorViewport", () => ({
-  useMirrorViewport: () => ({ viewport: mirror.viewport, ...mirror.ops }),
+  useMirrorViewport: () => ({ viewport: mirror.viewport, lock: mirror.lock, ...mirror.ops }),
 }));
 
 vi.mock("@/components/streams/AvMirrorMinimap", () => ({
@@ -48,11 +57,191 @@ const stubStage = () => {
   return stage;
 };
 
+/**
+ * Follow-focus: the long press that locks the view on to one object, the marker that says which
+ * object it picked, and the two ways back out. The gesture shares a pointer stream with drag-to-pan
+ * and pinch-to-zoom, so most of what is asserted here is what must NOT happen.
+ */
+describe("AvMirrorImmersive — locking on to an object", () => {
+  beforeEach(() => {
+    Object.values(mirror.ops).forEach((fn) => fn.mockReset());
+    mirror.video = { videoLive: true, video: { state: "live" } };
+    mirror.viewport = { scale: 2, cx: 0.5, cy: 0.5 };
+    mirror.lock = { state: "idle", subject: null, confidence: 0 };
+    localStorage.clear();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const holdAt = (stage: HTMLElement, x: number, y: number, ms = 600) => {
+    fireEvent.pointerDown(stage, { pointerId: 1, clientX: x, clientY: y });
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  };
+
+  it("locks on to the point held, in frame coordinates", () => {
+    vi.useFakeTimers();
+    render(<AvMirrorImmersive />);
+    fireEvent.click(screen.getByTestId("av-immersive-follow"));
+    const stage = stubStage();
+
+    holdAt(stage, 192, 136);
+
+    // The stage is the whole 384x272 frame and the viewport is 2x centred, so its middle is the
+    // middle of the frame.
+    expect(mirror.ops.lockOn).toHaveBeenCalledWith(0.5, 0.5);
+  });
+
+  it("does nothing on a long press while the view is not following", () => {
+    vi.useFakeTimers();
+    render(<AvMirrorImmersive />);
+    holdAt(stubStage(), 192, 136);
+    expect(mirror.ops.lockOn).not.toHaveBeenCalled();
+  });
+
+  it("does not fire when the finger drags, so panning still pans", () => {
+    vi.useFakeTimers();
+    render(<AvMirrorImmersive />);
+    fireEvent.click(screen.getByTestId("av-immersive-follow"));
+    const stage = stubStage();
+
+    fireEvent.pointerDown(stage, { pointerId: 1, clientX: 100, clientY: 100 });
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    fireEvent.pointerMove(stage, { pointerId: 1, clientX: 140, clientY: 100 });
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+
+    expect(mirror.ops.panBy).toHaveBeenCalled();
+    expect(mirror.ops.lockOn).not.toHaveBeenCalled();
+  });
+
+  it("does not fire when a second finger arrives, so pinching still zooms", () => {
+    vi.useFakeTimers();
+    render(<AvMirrorImmersive />);
+    fireEvent.click(screen.getByTestId("av-immersive-follow"));
+    const stage = stubStage();
+
+    fireEvent.pointerDown(stage, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerDown(stage, { pointerId: 2, clientX: 200, clientY: 100 });
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+    fireEvent.pointerMove(stage, { pointerId: 2, clientX: 260, clientY: 100 });
+
+    expect(mirror.ops.zoomBy).toHaveBeenCalled();
+    expect(mirror.ops.lockOn).not.toHaveBeenCalled();
+  });
+
+  it("does not fire when the finger lifts before the hold is complete", () => {
+    vi.useFakeTimers();
+    render(<AvMirrorImmersive />);
+    fireEvent.click(screen.getByTestId("av-immersive-follow"));
+    const stage = stubStage();
+
+    fireEvent.pointerDown(stage, { pointerId: 1, clientX: 100, clientY: 100 });
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    fireEvent.pointerUp(stage, { pointerId: 1, clientX: 100, clientY: 100 });
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+
+    expect(mirror.ops.lockOn).not.toHaveBeenCalled();
+  });
+
+  it("tells the user how to lock on while following with nothing locked", () => {
+    render(<AvMirrorImmersive />);
+    expect(screen.queryByTestId("av-immersive-lock-hint")).toBeNull();
+    fireEvent.click(screen.getByTestId("av-immersive-follow"));
+    expect(screen.getByTestId("av-immersive-lock-hint")).toHaveTextContent("Hold on your character");
+  });
+
+  it("marks what it is following, and reports the same state on the root", () => {
+    mirror.lock = { state: "locked", subject: { x: 0.5, y: 0.5, w: 0.05, h: 0.07 }, confidence: 0.9 };
+    render(<AvMirrorImmersive />);
+    fireEvent.click(screen.getByTestId("av-immersive-follow"));
+
+    const reticle = screen.getByTestId("av-immersive-lock-reticle");
+    expect(reticle).toHaveAttribute("data-lock-state", "locked");
+    expect(screen.getByTestId("av-mirror-immersive")).toHaveAttribute("data-lock-state", "locked");
+    // The hint has done its job and is out of the way.
+    expect(screen.queryByTestId("av-immersive-lock-hint")).toBeNull();
+  });
+
+  it("reads the same while coasting, because only the certainty changed", () => {
+    mirror.lock = { state: "coasting", subject: { x: 0.5, y: 0.5, w: 0.05, h: 0.07 }, confidence: 0.3 };
+    render(<AvMirrorImmersive />);
+    fireEvent.click(screen.getByTestId("av-immersive-follow"));
+    expect(screen.getByTestId("av-immersive-lock-status")).toHaveTextContent("Locked on");
+    expect(screen.getByTestId("av-immersive-lock-status")).toHaveAttribute("data-lock-state", "coasting");
+  });
+
+  it("hides the marker when the user has turned it off in Settings", () => {
+    localStorage.setItem("c64u_follow_reticle", "0");
+    mirror.lock = { state: "locked", subject: { x: 0.5, y: 0.5, w: 0.05, h: 0.07 }, confidence: 0.9 };
+    render(<AvMirrorImmersive />);
+    fireEvent.click(screen.getByTestId("av-immersive-follow"));
+
+    expect(screen.queryByTestId("av-immersive-lock-reticle")).toBeNull();
+    // The chip stays: the marker is decoration, the chip is the state and the way out of it.
+    expect(screen.getByTestId("av-immersive-lock-status")).toBeInTheDocument();
+  });
+
+  it("gives the lock up when the chip that reports it is tapped", () => {
+    mirror.lock = { state: "locked", subject: { x: 0.5, y: 0.5, w: 0.05, h: 0.07 }, confidence: 0.9 };
+    render(<AvMirrorImmersive />);
+    fireEvent.click(screen.getByTestId("av-immersive-follow"));
+    fireEvent.click(screen.getByTestId("av-immersive-lock-status"));
+    expect(mirror.ops.releaseLock).toHaveBeenCalledTimes(1);
+  });
+
+  it("locks on to the middle of the view for a handset with no touchscreen", () => {
+    const ref = createRef<AvMirrorImmersiveHandle>();
+    mirror.viewport = { scale: 4, cx: 0.3, cy: 0.7 };
+    render(<AvMirrorImmersive ref={ref} />);
+    // Turns following on as it goes, so the keypad user has one key to know about, not two.
+    act(() => ref.current?.toggleLock());
+    expect(mirror.ops.lockOn).toHaveBeenCalledWith(0.3, 0.7);
+    expect(screen.getByTestId("av-immersive-follow")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("lets the lock go again on the same key, so the way out needs no touchscreen either", () => {
+    const ref = createRef<AvMirrorImmersiveHandle>();
+    mirror.lock = { state: "locked", subject: { x: 0.5, y: 0.5, w: 0.05, h: 0.07 }, confidence: 0.9 };
+    render(<AvMirrorImmersive ref={ref} />);
+    act(() => ref.current?.toggleLock());
+    expect(mirror.ops.releaseLock).toHaveBeenCalledTimes(1);
+    expect(mirror.ops.lockOn).not.toHaveBeenCalled();
+  });
+
+  it("shows an aim in the middle of the picture while adjusting with nothing locked", () => {
+    render(<AvMirrorImmersive />);
+    expect(screen.queryByTestId("av-immersive-lock-aim")).toBeNull();
+    fireEvent.click(screen.getByTestId("av-immersive-mode-toggle"));
+    expect(screen.getByTestId("av-immersive-lock-aim")).toBeInTheDocument();
+    expect(screen.getByTestId("av-immersive-lock-hint")).toHaveTextContent("Line it up, press OK");
+  });
+
+  it("drops the aim once something is locked, because the marker says it better", () => {
+    mirror.lock = { state: "locked", subject: { x: 0.5, y: 0.5, w: 0.05, h: 0.07 }, confidence: 0.9 };
+    render(<AvMirrorImmersive />);
+    fireEvent.click(screen.getByTestId("av-immersive-mode-toggle"));
+    expect(screen.queryByTestId("av-immersive-lock-aim")).toBeNull();
+    expect(screen.getByTestId("av-immersive-lock-reticle")).toBeInTheDocument();
+  });
+});
+
 describe("AvMirrorImmersive", () => {
   beforeEach(() => {
     Object.values(mirror.ops).forEach((fn) => fn.mockReset());
     mirror.video = { videoLive: true, video: { state: "live" } };
     mirror.viewport = { scale: 2, cx: 0.5, cy: 0.5 };
+    mirror.lock = { state: "idle", subject: null, confidence: 0 };
+    localStorage.clear();
   });
   afterEach(() => vi.useRealTimers());
 
@@ -76,8 +265,12 @@ describe("AvMirrorImmersive", () => {
     const chip = screen.getByTestId("av-mirror-mode-chip");
     const fps = screen.getByTestId("av-mirror-immersive-fps");
     expect(fps).toHaveTextContent("PAL 50 fps");
-    // Same parent, in reading order: the row reads "C64 … PAL 50 fps".
-    expect(chip.parentElement).toBe(fps.parentElement);
+    // One row, in reading order: it reads "C64 … PAL 50 fps". Asserted against the row itself
+    // rather than against a shared parent element, because the two status chips on the left are
+    // grouped together and a grouping change is not a layout change.
+    const row = screen.getByTestId("av-mirror-status-row");
+    expect(row).toContainElement(chip);
+    expect(row).toContainElement(fps);
     expect(chip.compareDocumentPosition(fps) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 

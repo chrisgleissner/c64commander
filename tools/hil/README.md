@@ -110,6 +110,40 @@ instead — a rule that means nothing until something checks it against the mach
 
 **The screen is the trap to watch** — see **THE trap: a hidden WebView** above.
 
+## Follow-focus (Live View "lock on")
+
+`follow-lock-demo.asm` is a fake game written to be watched rather than played. Eight hardware
+sprites move over a dotted backdrop; sprite 0 is "the player", and the programme it runs is the
+list of things that break object trackers, one every three seconds:
+
+| Phase | 150 frames each | What it is for |
+| --- | --- | --- |
+| 1 IDLE | drifts one pixel a frame, steady colour | lock on here |
+| 2 WALK | two pixels a frame, vertical wander | ordinary play |
+| 3 FLASH | colour changes every four frames, then keeps a new one | damage, then a power-up |
+| 4 FAST | eight pixels a frame, off one side and back on the other | screen wrap |
+| 5 CROSS | the player and sprite 1 — same shape, same colour — pass through each other | identity swap |
+| 6 HIDE | the player is switched off for 40 frames while it keeps moving | occlusion |
+
+Sprite 1 is a deliberate look-alike: the player's own shape in the player's own colour. **If the
+view comes out of phase 5 following sprite 1, that is the defect the phase exists to find.**
+
+Joystick port 2: **fire** freezes all motion, so the picture can be pressed and held calmly;
+**up** skips to the next phase. State is published in plain RAM at `$C000` (magic, frame and
+phase counters, the player's X/Y/colour/animation/visibility, and counts of crossings, recolours
+and wraps), so a run reads it over `GET /v1/machine:readmem` instead of parsing the display.
+
+`tests/unit/tools/followLockDemo.test.ts` runs the same committed binary in a 6502 interpreter,
+so the machine end is covered in CI. What needs hardware is the picture.
+
+```bash
+# Committed pre-assembled; rebuild it with 64tass after editing the source:
+64tass --cbm-prg -o tools/c64/follow-lock-demo.prg tools/c64/follow-lock-demo.asm
+
+# Then, on the phone: Live View → Game Mode, zoom to about 3x, turn Follow on,
+# and press and hold the player sprite during phase 1.
+```
+
 Rotation is set through the sheet's manual override rather than by turning the phone, because a
 test rig cannot turn a phone. The override is not a test seam — it is the shipped control for a
 player lying down or a handset whose sensor cannot answer — and it sets the same `deviceRotation`

@@ -84,6 +84,115 @@ describe("useMirrorViewport — manual ops", () => {
   });
 });
 
+/** A packed 4bpp frame with a solid square on a flat background — one object, one blob. */
+const sceneFrame = (cx: number, cy: number, colour = 2, background = 6, size = 19): Uint8Array => {
+  const frame = new Uint8Array(PAL_BYTES);
+  frame.fill((background << 4) | background);
+  for (let y = cy - (size - 1) / 2; y <= cy + (size - 1) / 2; y += 1) {
+    for (let x = cx - (size - 1) / 2; x <= cx + (size - 1) / 2; x += 1) {
+      const index = y * 384 + x;
+      const byte = index >> 1;
+      frame[byte] = (index & 1) === 1 ? (frame[byte] & 0x0f) | (colour << 4) : (frame[byte] & 0xf0) | colour;
+    }
+  }
+  return frame;
+};
+
+describe("useMirrorViewport — locking on to an object", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("acquires on the next frame and reports what it locked on to", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    const fake = new FakeSession();
+    const { result } = renderHook(() => useMirrorViewport({ session: asSession(fake), follow: true }));
+
+    expect(result.current.lock.state).toBe("idle");
+    // The hook holds no frame of its own, so the pick is answered by the next one that arrives.
+    act(() => result.current.lockOn(120 / 384, 100 / 272));
+    expect(result.current.lock.state).toBe("idle");
+
+    act(() => fake.emitFrame(sceneFrame(120, 100), 272));
+    expect(result.current.lock.state).toBe("locked");
+    expect((result.current.lock.subject?.x ?? 0) * 384).toBeCloseTo(120, 0);
+    expect(result.current.lock.confidence).toBeGreaterThan(0.8);
+  });
+
+  it("moves the viewport with the object, once zoomed in and past the manual pause", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    const fake = new FakeSession();
+    const { result } = renderHook(() => useMirrorViewport({ session: asSession(fake), follow: true }));
+
+    act(() => result.current.zoomBy(4));
+    act(() => result.current.lockOn(80 / 384, 136 / 272));
+    act(() => fake.emitFrame(sceneFrame(80, 136), 272));
+    expect(result.current.lock.state).toBe("locked");
+
+    // Past the manual pause the zoom started, then walk the object to the right.
+    act(() => vi.setSystemTime(4000));
+    const before = result.current.viewport.cx;
+    for (let step = 1; step <= 24; step += 1) {
+      act(() => {
+        vi.setSystemTime(4000 + step * 60);
+        fake.emitFrame(sceneFrame(80 + step * 6, 136), 272);
+      });
+    }
+    expect(result.current.viewport.cx).toBeGreaterThan(before);
+    expect(result.current.lock.state).toBe("locked");
+  });
+
+  it("refuses a pick on empty background instead of locking on to nothing", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    const fake = new FakeSession();
+    const { result } = renderHook(() => useMirrorViewport({ session: asSession(fake), follow: true }));
+
+    act(() => result.current.lockOn(320 / 384, 220 / 272));
+    act(() => fake.emitFrame(sceneFrame(80, 60), 272));
+    expect(result.current.lock.state).toBe("idle");
+    expect(result.current.lock.subject).toBeNull();
+  });
+
+  it("gives the lock up on release, and on Fit", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    const fake = new FakeSession();
+    const { result } = renderHook(() => useMirrorViewport({ session: asSession(fake), follow: true }));
+
+    act(() => result.current.lockOn(120 / 384, 100 / 272));
+    act(() => fake.emitFrame(sceneFrame(120, 100), 272));
+    expect(result.current.lock.state).toBe("locked");
+
+    act(() => result.current.releaseLock());
+    expect(result.current.lock.state).toBe("idle");
+
+    act(() => result.current.lockOn(120 / 384, 100 / 272));
+    act(() => fake.emitFrame(sceneFrame(120, 100), 272));
+    expect(result.current.lock.state).toBe("locked");
+    // Asking for the whole picture is asking to stop following one thing.
+    act(() => result.current.reset());
+    expect(result.current.lock.state).toBe("idle");
+  });
+
+  it("drops the lock when follow is turned off", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    const fake = new FakeSession();
+    const { result, rerender } = renderHook(
+      (follow: boolean) => useMirrorViewport({ session: asSession(fake), follow }),
+      { initialProps: true },
+    );
+
+    act(() => result.current.lockOn(120 / 384, 100 / 272));
+    act(() => fake.emitFrame(sceneFrame(120, 100), 272));
+    expect(result.current.lock.state).toBe("locked");
+
+    rerender(false);
+    expect(result.current.lock.state).toBe("idle");
+  });
+});
+
 describe("useMirrorViewport — smart follow", () => {
   afterEach(() => vi.useRealTimers());
 

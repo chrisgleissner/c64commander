@@ -9,10 +9,10 @@
 /**
  * An NMOS 6502 interpreter, for tests that need to run a real C64 program.
  *
- * It exists so `tools/c64/joystick-probe.prg` — the program the hardware harnesses
- * upload to a C64 — can be asserted against in CI, where there is no C64. The
- * committed binary is what runs here, so the test covers the artefact that is
- * actually shipped rather than a description of it.
+ * It exists so `tools/c64/joystick-probe.prg` and `tools/c64/follow-lock-demo.prg` —
+ * the programs the hardware harnesses upload to a C64 — can be asserted against in
+ * CI, where there is no C64. The committed binaries are what run here, so the tests
+ * cover the artefacts that are actually shipped rather than a description of them.
  *
  * Scope, deliberately: the documented instruction set with every documented
  * addressing mode, and no cycle accounting. Cycles would only matter for code that
