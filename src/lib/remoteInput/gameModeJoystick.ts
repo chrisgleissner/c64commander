@@ -99,11 +99,12 @@ export interface JoystickVisibilityInput {
 /**
  * Whether the on-screen joystick is drawn in Game Mode.
  *
- * Hiding it is only ever the answer when there is a picture to give the space to, so
- * the picture being off decides this before anything else — otherwise the sheet is
- * left blank, with no control on it and nothing to look at. Past that, an explicit
- * ask this session outranks the standing preference, which outranks the guess `auto`
- * makes from how the game is being played.
+ * An explicit answer decides it; only `auto` consults the picture, where a guess is
+ * overruled rather than leave the screen empty. Checking the picture FIRST ignored an
+ * explicit `hidden`, which on the keypad handset — where that is the shipped default
+ * because the device cannot operate a touch control, and Game Mode now opens by itself
+ * on launch — filled the screen with a joystick nobody could touch and no picture.
+ * `RemoteInputSheet` fills that space instead. S3-GAMEMODE-8020-JOYSTICK-SHOWN-WITH-NO-PICTURE.
  */
 export const resolveJoystickVisibility = ({
   setting,
@@ -111,8 +112,8 @@ export const resolveJoystickVisibility = ({
   requested,
   videoLive,
 }: JoystickVisibilityInput): JoystickVisibility => {
-  if (!videoLive) return "visible";
   if (requested !== null) return requested;
   if (setting !== "auto") return setting;
+  if (!videoLive) return "visible";
   return keyDriven ? "hidden" : "visible";
 };

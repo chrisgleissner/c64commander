@@ -619,6 +619,12 @@ ordinary focus-ring CTAs in both output modes.
   session; `data-joystick` on `remote-input-sheet` carries the resolved
   visible/hidden state. Distinct from the floating `remote-input-restore-chrome`
   handle, which brings back this toolbar rather than the joystick)_
+- Picture-off panel (inside Game mode) — container —
+  `remote-input-no-picture-panel` — R✅ I✅ _(shown in the joystick's place when the
+  joystick is explicitly Hidden and the picture is off, so the sheet is never blank:
+  it names why the screen is empty and carries the Watch/Listen toggles and the
+  QuickKeysBar, both reachable from a keypad. Not shown while the setting is Auto,
+  which keeps the joystick in that case)_
 - Show controls handle — button — `remote-input-restore-chrome` — R✅ I✅ _(the
   floating top-center "Controls" pull-down that restores the chrome; the ONLY
   affordance shown in collapsed Game mode; the restored chrome puts itself away

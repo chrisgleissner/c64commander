@@ -48,6 +48,23 @@ This matters more than it used to, because Game Mode now opens **by itself** whe
 launched (that setting is on by default in this edition), so the state is reached without the user
 ever choosing it.
 
+> ## FIXED (2026-08-22)
+>
+> `resolveJoystickVisibility` now consults the picture only when the setting is `auto`. An explicit
+> answer — the standing setting, or the toolbar ask this session — decides it whether or not there
+> is a picture. `auto` still keeps the joystick with the picture off, because that branch is the app
+> guessing and a guess is not worth an empty screen.
+>
+> The empty-sheet objection below is answered rather than traded away. In the one state that used to
+> produce it — joystick explicitly Hidden, picture off — `RemoteInputSheet` renders
+> `remote-input-no-picture-panel` in the joystick's place: a line saying the picture is off and why,
+> the Watch/Listen toggles that turn it back on, and the QuickKeysBar. All of it is reachable from a
+> keypad, which the on-screen joystick is not, and the game still takes physical keys throughout.
+>
+> Tests: `tests/unit/lib/remoteInput/gameModeJoystick.test.ts` and
+> `tests/unit/components/remoteInput/RemoteInputSheet.gameMode.test.tsx`. Restoring the old rule
+> order makes one test in each file fail.
+
 ## Why this is not simply a bug to invert
 
 The `!videoLive` rule is deliberate and unit-tested. From
