@@ -302,9 +302,11 @@ not-connected / empty / single-device).
 
 **Listen on** — group `playback-engine-toggle` _(flag `c64u_local_engine_enabled`; SID items only)_
 
-- _Connected machine_ — button — `playback-engine-c64` — R✅ I✅ — labelled with the device's own name, falling back to `C64U`
-- Both — button — `playback-listen-both` — R✅ I✅ — **hidden**, not disabled, when the C64's audio cannot reach this device (flags `live_view_enabled` + `audio_mirror_enabled`, and not latched-failed)
+Listed below in the order they are rendered and walked by the focus ring.
+
 - Local — button — `playback-engine-local` — R✅ I✅
+- Remote — button — `playback-engine-c64` — R✅ I✅ — labelled `Remote`, **not** the connected device's name; the header already says which machine is attached, and the wording matches Remote Input
+- Both — button — `playback-listen-both` — R✅ I✅ — **hidden**, not disabled, when the C64's audio cannot reach this device (flags `live_view_enabled` + `audio_mirror_enabled`, and not latched-failed)
 
 **SID Radio** _(flag `c64u_sid_radio_enabled`)_
 
