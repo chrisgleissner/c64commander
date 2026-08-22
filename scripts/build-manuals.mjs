@@ -1704,6 +1704,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "Move around it however suits you. On a touchscreen, **pinch** to zoom, **drag** to slide the picture about, and **double-tap** to jump straight in on a spot — a second double-tap fits the whole screen back on. A small map in the corner shows which part you are looking at; drag its rectangle to leap somewhere else in an instant. Switch on **Follow** and the view drifts along on its own to wherever the action is — a lovely way to keep the cursor in sight as you type.",
                 "",
+                "**Lock on** goes one better while you are playing. Follow on its own drifts toward whatever moved, which is the wrong thing in a game where everything moves at once. Press and hold your character instead — or, with no touchscreen, line the crosshair at the middle of the view up on it with the direction keys and press **OK** — and the view stays with that one character while enemies move around it. It survives the character flashing, changing colour, animating, moving fast, wrapping round the screen edge, and being hidden for a moment. The status line reads **Hold on your character** until something is locked, then **Locked on**. Tap that, ask for the whole screen back, or press **OK** again to let go, and the view returns to ordinary following rather than sitting on empty background.",
+                "",
                 image(
                   "The immersive screen in Remote Input",
                   profile,
