@@ -175,6 +175,40 @@ describe("useMirrorViewport — locking on to an object", () => {
     expect(result.current.lock.state).toBe("idle");
   });
 
+  it("feeds the player's own joystick to the tracker, and works without it", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    const fake = new FakeSession();
+    // The cue is optional in both directions: it must be safe to pass a held set from the very
+    // first render, and safe never to pass one at all.
+    const { result, rerender } = renderHook(
+      (held: Set<string>) =>
+        useMirrorViewport({
+          session: asSession(fake),
+          follow: true,
+          heldJoystickInputs: held as ReadonlySet<never>,
+        }),
+      { initialProps: new Set<string>() },
+    );
+
+    act(() => result.current.lockOn(120 / 384, 100 / 272));
+    act(() => fake.emitFrame(sceneFrame(120, 100), 272));
+    expect(result.current.lock.state).toBe("locked");
+
+    // Hold right, and walk the object right — the case the cue is for.
+    rerender(new Set(["right"]));
+    let x = 120;
+    for (let step = 1; step <= 20; step += 1) {
+      act(() => {
+        vi.setSystemTime(1000 + step * 60);
+        x += 4;
+        fake.emitFrame(sceneFrame(x, 100), 272);
+      });
+    }
+    expect(result.current.lock.state).toBe("locked");
+    expect((result.current.lock.subject?.x ?? 0) * 384).toBeCloseTo(x, -1);
+  });
+
   it("drops the lock when follow is turned off", () => {
     vi.useFakeTimers();
     vi.setSystemTime(1000);

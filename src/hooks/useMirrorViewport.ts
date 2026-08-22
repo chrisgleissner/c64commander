@@ -21,6 +21,8 @@ import {
 import { MotionTracker } from "@/lib/streams/motionTracker";
 import { SubjectTracker, type LockState, type TrackedSubject } from "@/lib/streams/subjectTracker";
 import { advanceFollowCamera } from "@/lib/streams/followCamera";
+import { InputAffinity, joystickVector } from "@/lib/streams/inputAffinity";
+import type { HeldJoystickInputs } from "@/lib/remoteInput/joystickHeldSet";
 
 const FOLLOW_EASE = 0.28;
 const FOLLOW_MIN_INTERVAL_MS = 80; // cap follow re-centres to ~12/s
@@ -59,6 +61,12 @@ const sameLock = (a: MirrorLock, b: MirrorLock): boolean => {
 export interface UseMirrorViewportOptions {
   session?: AvMirrorSession;
   follow?: boolean;
+  /**
+   * What the app is currently asserting on the joystick, when it is the app the player is
+   * steering with. Optional in every sense: without it the tracker behaves exactly as it was
+   * fitted, and with it the cue only ever breaks ties between candidates that already qualify.
+   */
+  heldJoystickInputs?: HeldJoystickInputs;
 }
 
 /**
@@ -70,7 +78,11 @@ export interface UseMirrorViewportOptions {
  * All the math is delegated to the pure `mirrorViewport` / `motionTracker` / `subjectTracker`
  * / `followCamera` modules.
  */
-export const useMirrorViewport = ({ session = avMirrorSession, follow = false }: UseMirrorViewportOptions = {}) => {
+export const useMirrorViewport = ({
+  session = avMirrorSession,
+  follow = false,
+  heldJoystickInputs,
+}: UseMirrorViewportOptions = {}) => {
   const [viewport, setViewport] = useState<Viewport>(FIT_VIEWPORT);
   const viewportRef = useRef(viewport);
   viewportRef.current = viewport;
@@ -88,6 +100,23 @@ export const useMirrorViewport = ({ session = avMirrorSession, follow = false }:
   const nextIntervalRef = useRef(FOLLOW_MIN_INTERVAL_MS);
   const cameraRef = useRef({ x: 0.5, y: 0.5 });
   const lostAtRef = useRef(0);
+  const affinityRef = useRef<InputAffinity | null>(null);
+
+  // Every change of the held set is one assertion, timed. "Nothing held" is recorded too: it
+  // ends the previous direction's coverage instead of letting it run on and claim motion the
+  // player never asked for.
+  useEffect(() => {
+    const affinity = affinityRef.current;
+    if (!affinity) return;
+    const held = heldJoystickInputs;
+    const vector = joystickVector({
+      up: held?.has("up"),
+      down: held?.has("down"),
+      left: held?.has("left"),
+      right: held?.has("right"),
+    });
+    affinity.assert(vector.dx, vector.dy, Date.now());
+  }, [heldJoystickInputs]);
 
   const markManual = () => {
     manualPauseUntilRef.current = Date.now() + MANUAL_FOLLOW_PAUSE_MS;
@@ -139,14 +168,17 @@ export const useMirrorViewport = ({ session = avMirrorSession, follow = false }:
     if (!follow) {
       trackerRef.current = null;
       subjectRef.current = null;
+      affinityRef.current = null;
       pendingLockRef.current = null;
       setLock((current) => (current.state === "idle" ? current : IDLE_LOCK));
       return;
     }
     const motion = new MotionTracker();
     const subject = new SubjectTracker();
+    const affinity = new InputAffinity();
     trackerRef.current = motion;
     subjectRef.current = subject;
+    affinityRef.current = affinity;
 
     const publish = (next: MirrorLock) => {
       setLock((current) => (sameLock(current, next) ? current : next));
@@ -170,6 +202,9 @@ export const useMirrorViewport = ({ session = avMirrorSession, follow = false }:
       if (pending) {
         pendingLockRef.current = null;
         const acquired = subject.acquire(frame, VIC_FRAME_WIDTH, height, pending.x, pending.y);
+        // A new lock is a new question: whether the LAST subject answered the stick says nothing
+        // about whether this one does.
+        affinity.reset();
         lastTickRef.current = now;
         nextIntervalRef.current = acquired.nextIntervalMs;
         cameraRef.current = { x: viewportRef.current.cx, y: viewportRef.current.cy };
@@ -187,8 +222,16 @@ export const useMirrorViewport = ({ session = avMirrorSession, follow = false }:
 
       if (now - lastTickRef.current < nextIntervalRef.current) return;
       const dtMs = now - lastTickRef.current;
+      const expected = affinity.expected(lastTickRef.current, now);
       lastTickRef.current = now;
-      const result = subject.update(frame, VIC_FRAME_WIDTH, height, dtMs);
+      const result = subject.update(frame, VIC_FRAME_WIDTH, height, dtMs, {
+        expected,
+        scale: affinity.bonusScale,
+      });
+      // Fed only from an accepted measurement, so what it learns is how the GAME answered the
+      // stick rather than how the tracker guessed. A game that answers with a rotation, a menu or
+      // a scrolling world drives the bonus back to zero by itself.
+      if (result.measured) affinity.observe(result.measured.dx, result.measured.dy, dtMs, expected);
       nextIntervalRef.current = result.nextIntervalMs;
       publish({ state: result.state, subject: result.subject, confidence: result.confidence });
 
@@ -221,6 +264,7 @@ export const useMirrorViewport = ({ session = avMirrorSession, follow = false }:
       unsubscribe();
       trackerRef.current = null;
       subjectRef.current = null;
+      affinityRef.current = null;
     };
   }, [follow, session]);
 

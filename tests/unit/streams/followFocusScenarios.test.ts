@@ -20,7 +20,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { evaluateSuite } from "../../helpers/followFocusEval";
+import { evaluateSuite, setInputCueEnabled } from "../../helpers/followFocusEval";
 import { SCENARIO_KINDS } from "../../helpers/gameScenarios";
 
 /** The seeds the search never saw. Changing these invalidates the comparison. */
@@ -46,6 +46,40 @@ describe("follow-focus against synthetic games (held-out seeds)", () => {
     // 25 Hz locked, 50 Hz while recovering. A change that buys accuracy by tracking every frame
     // has moved cost onto the JS thread that shares it with decode and the UI.
     expect(suite.updatesPerSecond).toBeLessThan(40);
+  });
+
+  it("is no worse for the players who never give it a joystick to read", () => {
+    // Most users steer from a real joystick plugged into the C64, so the cue-off path is the one
+    // that actually ships to them. It has to be the fitted tracker, unchanged.
+    setInputCueEnabled(false);
+    try {
+      const without = evaluateSuite(VALIDATION_SEEDS);
+      expect(without.score).toBeGreaterThan(0.45);
+      expect(without.onTarget).toBeGreaterThan(0.62);
+    } finally {
+      setInputCueEnabled(true);
+    }
+  });
+
+  it("earns its place on the look-alike case, and costs nothing anywhere else", () => {
+    setInputCueEnabled(false);
+    const without = evaluateSuite(VALIDATION_SEEDS);
+    setInputCueEnabled(true);
+    const withCue = evaluateSuite(VALIDATION_SEEDS);
+
+    // Measured: 0.5100 -> 0.5110 overall, the whole of it from one swarm seed. The cue is a
+    // tie-break between look-alikes, so a large aggregate move would mean it had stopped being
+    // one and started overriding the fitted scorer.
+    expect(withCue.score).toBeGreaterThanOrEqual(without.score - 0.005);
+    expect(Math.abs(withCue.score - without.score)).toBeLessThan(0.05);
+
+    const swarmGain = withCue.scenarios
+      .filter((scenario) => scenario.name.startsWith("swarm#"))
+      .reduce((sum, scenario, index) => {
+        const base = without.scenarios.filter((s) => s.name.startsWith("swarm#"))[index];
+        return sum + (scenario.onTarget - base.onTarget);
+      }, 0);
+    expect(swarmGain).toBeGreaterThan(0);
   });
 
   it("covers every scenario, so a kind cannot be dropped without the gate noticing", () => {

@@ -292,19 +292,20 @@ score regresses, so the tuning is a committed result rather than a note about on
 Measured on the host (Node 24, x86), `npx vitest bench tests/benchmarks/followFocus.bench.ts
 --project unit-node --run`:
 
-|                                            | mean         | p99        |
-| ------------------------------------------ | ------------ | ---------- |
-| tracker tick, locked (region scan)         | **0.091 ms** | 0.164 ms   |
-| tracker tick, searching (whole-frame scan) | 0.112 ms     | 0.156 ms   |
-| tracker tick, a real synthetic scene       | 0.031 ms     | 0.051 ms   |
-| acquire (one long press)                   | 0.124 ms     | 0.221 ms   |
-| camera advance                             | 0.0002 ms    | 0.0005 ms  |
-| _motion tracker tick, for comparison_      | _0.060 ms_   | _0.096 ms_ |
+|                                            | mean        | p99        |
+| ------------------------------------------ | ----------- | ---------- |
+| tracker tick, locked (region scan)         | **0.10 ms** | 0.18 ms    |
+| tracker tick, searching (whole-frame scan) | 0.13 ms     | 0.21 ms    |
+| tracker tick, a real synthetic scene       | 0.031 ms    | 0.051 ms   |
+| acquire (one long press)                   | 0.124 ms    | 0.221 ms   |
+| camera advance                             | 0.0002 ms   | 0.0005 ms  |
+| _motion tracker tick, for comparison_      | _0.060 ms_  | _0.096 ms_ |
 
 The comparison line is the point: **a follow-focus tick costs about as much as one tick of the
 follow-motion it extends**, and that already ships. Across the scenario suite the tracker asked
-for 34 ticks per second on average, so 34 × 0.091 ms ≈ **3.1 ms per second of video, 0.31% of one
-core** on the host. A Pixel 4 running this in a WebView is roughly four to six times slower on
+for 34 ticks per second on average, so 34 × 0.10 ms ≈ **3.5 ms per second of video, 0.35% of one
+core** on the host. (Measured with another agent's test suite running on the same machine; the
+fastest observed tick was 0.077 ms, so treat the mean as an upper bound.) A Pixel 4 running this in a WebView is roughly four to six times slower on
 typed-array work, which puts it near 1.5%, and a low-end keypad handset near 3-4%. **These are
 host figures; the on-device number is one of the things the hardware session is for.**
 
@@ -378,38 +379,50 @@ The audience is C64 enthusiasts, many in their fifties and sixties, on screens a
 The long press cancels on a drag of more than 12 px and on a second finger, so drag-to-pan and
 pinch-to-zoom are untouched; each of those is a test.
 
-## 10. Designed, not yet built
+## 10. The weak cue, and what is still open
 
-### Using the player's own joystick and key presses
+### Using the player's own joystick and key presses — built, and deliberately weak
 
-If the user steers with the app's on-screen joystick, the app knows what it asserted, and
+When the player steers with the app's own joystick, the app knows what it asserted, and
 correlating that with each candidate's displacement is a _causal_ cue no image analysis can
 provide. It is the same idea as motion-correlation selection (Vidal et al., _Pursuits_, UbiComp
 2013): identify the object whose trajectory matches a known control signal.
 
-It cannot be more than a weak prior, for more reasons than are obvious:
+It can only ever be a weak prior, for more reasons than are obvious:
 
-- The user may be driving the machine from a real joystick or keyboard plugged into the C64, in
-  which case there is no signal at all.
+- The player may be driving the machine from a real joystick or keyboard plugged into the C64,
+  in which case there is no signal at all. This is the common case, not the exception.
 - Sprites keep moving without input — momentum, knockback, auto-scroll, cutscenes, demo mode.
 - Input reaches the machine through a network relay and then through the game's own logic, so
   the lag is tens to hundreds of milliseconds and varies.
 - "Right" often does not mean "move right". It rotates in _Asteroids_, accelerates in a racer,
   and does nothing at all in a menu.
 - **In a side-scroller it anti-correlates.** Pressing right frequently holds the player at the
-  centre of the screen and scrolls the world leftwards instead, so the naive correlation points
-  at the background.
+  centre of the screen and scrolls the world leftwards instead, so a naive correlation points
+  straight at the background.
 
-So the design is: maintain a short history of asserted directions; maintain an online estimate of
-whether _this_ game has actually responded positionally to input; and use the cue only as a
-tie-break bonus, capped at a weight that cannot outvote position and appearance, and driven to
-zero automatically when the running correlation is weak or negative. A weak cue with an adaptive
-reliability weight is the standard treatment, and the self-gating is what makes it safe in the
-scrolling and real-joystick cases.
+So `inputAffinity.ts` keeps a short ring buffer of asserted directions and a running estimate of
+whether _this_ game answers them positionally, and three rules keep it safe:
 
-The wiring point exists: `RemoteInputSheet` already holds `session.heldJoystickInputs` and
-renders `AvMirrorImmersive`. It was left out of this change because a scoring term that nothing
-feeds cannot be validated, and validating it needs the hardware rig.
+1. **It only ranks; it never accepts.** The cue is a bonus on the ordering of candidates that
+   have already cleared the fitted thresholds. It cannot let through anything the scorer
+   rejected, which is what keeps the fitted defaults valid without re-fitting them.
+2. **It learns only from accepted measurements**, so what it estimates is the game's response
+   rather than the tracker's own guesswork.
+3. **It gates itself.** A game that answers the stick with a rotation, a menu or a scrolling
+   world produces no agreement, and the bonus goes to zero on its own. Nothing asserted, no cue.
+
+Measured on the held-out seeds, cue off against cue on: score 0.5100 → 0.5110, on-target 0.673 →
+0.675. Exactly one scenario moved by more than 0.02, and it was a `swarm` seed — the five
+identical look-alikes — which went from 0.891 to 0.950 on-target. **That is the whole result,
+and it is the right shape**: inert almost everywhere, a small gain precisely where it was aimed.
+A large aggregate move would have meant it had stopped being a tie-break and started overriding
+the scorer.
+
+Two caveats worth keeping in view. The synthetic input model asserts a clean sign-of-motion with
+a fixed lag, which is kinder than a real relay. And the scenarios model only three policies —
+responsive, none (`shooter`), and inverted (`scroller`). Whether the self-gating works against a
+real game is a hardware question.
 
 ### Identifying the player without being told
 
@@ -447,6 +460,7 @@ Everything above was measured on synthetic frames on a desktop. Three things can
 src/lib/streams/subjectTracker.ts    NEW  the tracker: segmentation, association, state machine.
 src/lib/streams/followCamera.ts      NEW  camera smoothing: feed-forward, deadzone, cap, snap.
 src/lib/streams/followReticle.ts     NEW  the "mark what the view is following" setting.
+src/lib/streams/inputAffinity.ts     NEW  the player's own joystick as a self-gating tie-break cue.
 src/hooks/useMirrorViewport.ts       MOD  lockOn/releaseLock, the tick loop, the fallback to follow-motion.
 src/components/streams/AvMirrorImmersive.tsx  MOD  long press, marker, status chip, hint, lockCentre.
 src/pages/settings/GameModeSettingsSection.tsx  MOD  the marker setting.

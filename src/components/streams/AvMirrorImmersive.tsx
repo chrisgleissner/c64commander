@@ -23,6 +23,7 @@ import { useMirrorViewport } from "@/hooks/useMirrorViewport";
 import { viewportRect, type Viewport } from "@/lib/streams/mirrorViewport";
 import type { MirrorLock } from "@/hooks/useMirrorViewport";
 import type { LockState } from "@/lib/streams/subjectTracker";
+import type { HeldJoystickInputs } from "@/lib/remoteInput/joystickHeldSet";
 import { loadFollowReticle, subscribeFollowReticle } from "@/lib/streams/followReticle";
 import { fitStageSize, unrotateDelta, unrotatePoint } from "@/lib/remoteInput/deviceRotation";
 import type { DeviceRotation } from "@/lib/remoteInput/joystickKeyBindings";
@@ -62,6 +63,12 @@ export interface AvMirrorImmersiveProps {
   rotation?: DeviceRotation;
   /** Take all the height available instead of sizing to the frame's aspect. */
   fill?: boolean;
+  /**
+   * What the app is asserting on the joystick right now, when the player is steering with the
+   * app rather than with something plugged into the C64. Used only to break ties between
+   * look-alike objects, and only once the game has been shown to answer the stick at all.
+   */
+  heldJoystickInputs?: HeldJoystickInputs;
   className?: string;
 }
 
@@ -139,7 +146,7 @@ const haptic = () => {
  * using them is looking at the phone rather than at the game.
  */
 export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImmersiveProps>(function AvMirrorImmersive(
-  { session, onModeChange, rotation = 0, fill = false, className },
+  { session, onModeChange, rotation = 0, fill = false, heldJoystickInputs, className },
   ref,
 ) {
   const { videoLive, video } = useAvMirror(session);
@@ -147,6 +154,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
   const { viewport, lock, zoomBy, panBy, centerOn, reset, lockOn, releaseLock } = useMirrorViewport({
     session,
     follow,
+    heldJoystickInputs,
   });
   const [mode, setModeState] = useState<MirrorInputMode>("drive");
   const [controlsVisible, setControlsVisible] = useState(true);

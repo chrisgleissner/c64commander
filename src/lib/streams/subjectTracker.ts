@@ -16,10 +16,12 @@
  * that flashes or is recoloured is still detected. Colour only scores the association.
  *
  * Frames are packed 4bpp VIC frames (two pixels per byte: low nibble = left pixel, high nibble
- * = right). Everything here is integer/float math over typed arrays: no DOM, no React, no
- * imports. Working buffers are allocated once and reused, so a steady-state tick allocates
- * only the handful of small candidate objects it scores.
+ * = right). Everything here is integer/float math over typed arrays: no DOM, no React, and the
+ * only import is one equally pure sibling module. Working buffers are allocated once and reused,
+ * so a steady-state tick allocates only the handful of small candidate objects it scores.
  */
+
+import { affinityOf, type ExpectedMotion } from "@/lib/streams/inputAffinity";
 
 export type LockState = "idle" | "locked" | "coasting" | "searching" | "lost";
 
@@ -40,6 +42,26 @@ export interface SubjectTrackResult {
   confidence: number;
   /** How long the caller should wait before the next {@link SubjectTracker.update}. */
   nextIntervalMs: number;
+  /**
+   * How far the subject was measured to have moved this tick, in pixels, or null on a tick with
+   * no accepted measurement. This is what the caller feeds back to {@link InputAffinity.observe}:
+   * only an accepted measurement is evidence about how the game answers the stick.
+   */
+  measured: { dx: number; dy: number } | null;
+}
+
+/**
+ * What the player's own input says about this tick, for {@link SubjectTracker.update}.
+ *
+ * Supplying it is optional and omitting it changes nothing: the cue is applied to the RANKING of
+ * candidates only, never to whether one is accepted, so it can break a tie between look-alikes
+ * that already qualify but can never let through a candidate the fitted scorer rejected. That is
+ * what keeps the thresholds in `DEFAULTS` valid without re-fitting them.
+ */
+export interface InputCue {
+  expected: ExpectedMotion;
+  /** The largest bonus the cue may add, already scaled by its own running reliability. */
+  scale: number;
 }
 
 /** A detected blob, in pixels, with a 16-bin palette histogram of counts. */
@@ -388,6 +410,10 @@ export class SubjectTracker {
   private missMs = 0;
   private emptyMs = 0;
   private searchLatched = false;
+  /** The displacement accepted on the current tick, republished by {@link result}. */
+  private measuredDx = 0;
+  private measuredDy = 0;
+  private hasMeasured = false;
 
   private frameWidth = 0;
   private frameHeight = 0;
@@ -449,6 +475,7 @@ export class SubjectTracker {
     this.emptyMs = 0;
     this.searchLatched = false;
     this.hasGlobalHist = false;
+    this.hasMeasured = false;
   }
 
   /**
@@ -518,12 +545,19 @@ export class SubjectTracker {
     this.missMs = 0;
     this.emptyMs = 0;
     this.searchLatched = false;
+    this.hasMeasured = false;
     return this.result();
   }
 
-  /** Advance the target by `dtMs` of elapsed time and re-associate it with the new frame. */
-  update(frame: Uint8Array, width: number, height: number, dtMs: number): SubjectTrackResult {
+  /**
+   * Advance the target by `dtMs` of elapsed time and re-associate it with the new frame.
+   *
+   * `cue` is the player's own input, and is optional in both senses: passing nothing gives the
+   * tracker exactly as it was fitted, and passing a cue whose reliability is zero does the same.
+   */
+  update(frame: Uint8Array, width: number, height: number, dtMs: number, cue?: InputCue): SubjectTrackResult {
     const model = this.model;
+    this.hasMeasured = false;
     if (!model) return this.result();
     this.ensure(width, height);
 
@@ -539,6 +573,8 @@ export class SubjectTracker {
     }
     const searching = this.lockState === "searching" || sceneCut;
     const speed = Math.sqrt(model.vx * model.vx + model.vy * model.vy);
+    const previousX = model.x;
+    const previousY = model.y;
     const predictedX = wrapCoord(model.x + model.vx * dtSec, width);
     const predictedY = wrapCoord(model.y + model.vy * dtSec, height);
 
@@ -575,8 +611,11 @@ export class SubjectTracker {
     // Searching means the subject has been missing long enough that the prediction is a guess
     // and the implied velocity of anything that turns up is meaningless. So a re-acquisition is
     // decided on looks alone, with position only breaking ties, and has to clear a higher bar.
-    const rank = (score: CandidateScore): number =>
-      searching ? score.appearance + 0.05 * score.position : score.total;
+    const rank = (score: CandidateScore, bonus: number): number =>
+      (searching ? score.appearance + 0.05 * score.position : score.total) + bonus;
+    // Zero unless the app is driving the machine AND this game has been answering the stick, so
+    // the whole cue costs one comparison on every tick where either is untrue.
+    const cueScale = cue && cue.expected.weight > 0 && cue.scale > 0 ? cue.scale : 0;
     const areaFloor = Math.max(CANDIDATE_AREA_FLOOR_PX, model.area * CANDIDATE_AREA_MIN_RATIO);
     const areaCeiling = model.area * CANDIDATE_AREA_MAX_RATIO;
     let bestIndex = -1;
@@ -586,6 +625,7 @@ export class SubjectTracker {
     let runnerUp = 0;
     let previousBest = 0;
     let inGate = 0;
+    let bestBonus = 0;
 
     for (let s = 0; s < this.comp.count; s += 1) {
       const cellCount = this.comp.area[s];
@@ -606,11 +646,18 @@ export class SubjectTracker {
         hist: this.comp.hist.subarray(s * HIST_BINS, s * HIST_BINS + HIST_BINS),
       };
       const matched = this.scoreAgainstBank(blob, model, context, searching);
-      if (!best || rank(matched.score) > rank(best)) {
+      // Which way this blob would have to have travelled to be the subject — judged against what
+      // the player actually asked for, one machine lag ago.
+      const bonus =
+        cueScale > 0 && cue
+          ? cueScale * affinityOf(wrapDelta(cx, model.x, width), wrapDelta(cy, model.y, height), cue.expected)
+          : 0;
+      if (!best || rank(matched.score, bonus) > rank(best, bestBonus)) {
         best = matched.score;
         bestSlot = matched.slot;
         bestIndex = s;
         bestBlob = blob;
+        bestBonus = bonus;
         runnerUp = previousBest;
       }
       previousBest = matched.score.total > previousBest ? matched.score.total : previousBest;
@@ -646,6 +693,11 @@ export class SubjectTracker {
       }
       model.activeSlot = bestSlot;
       model.ageMs += dtMs;
+      // Only a clean accept is evidence about how the game answers the stick. A merge, a coast
+      // or a newly learned look are all ticks where the displacement means something else.
+      this.measuredDx = wrapDelta(bestBlob.x, previousX, width);
+      this.measuredDy = wrapDelta(bestBlob.y, previousY, height);
+      this.hasMeasured = true;
       this.adopt(model, bestBlob, bestIndex, bestSlot);
       model.confidence += (best.total - model.confidence) * (1 - Math.exp(-dtMs / CONFIDENCE_RISE_MS));
       this.missMs = 0;
@@ -860,11 +912,13 @@ export class SubjectTracker {
         : state === "coasting" || state === "searching"
           ? this.o.activeIntervalMs
           : this.o.idleIntervalMs;
-    if (!model) return { state, subject: null, confidence: 0, nextIntervalMs };
+    const measured = this.hasMeasured ? { dx: this.measuredDx, dy: this.measuredDy } : null;
+    if (!model) return { state, subject: null, confidence: 0, nextIntervalMs, measured };
     return {
       state,
       confidence: clamp01(model.confidence),
       nextIntervalMs,
+      measured,
       subject: {
         x: model.x / this.frameWidth,
         y: model.y / this.frameHeight,

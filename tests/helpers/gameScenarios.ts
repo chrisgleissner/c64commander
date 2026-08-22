@@ -36,6 +36,16 @@ export const SCENARIO_KINDS: readonly ScenarioKind[] = [
   "grow",
 ];
 
+/**
+ * How the game answers the app's joystick, for evaluating the input-affinity cue.
+ *
+ * - `responsive` — the ordinary case: the player moves the way the stick was pushed, one machine
+ *   lag later, and the app is not asserting anything on every frame.
+ * - `none` — the player is using a real joystick plugged into the C64, so the app asserts nothing.
+ * - `inverted` — a side-scroller: what the stick asks for and what moves on screen disagree.
+ */
+export type InputPolicy = "responsive" | "none" | "inverted";
+
 export interface ScenarioTruth {
   /** Centre of the player's sprite, in pixels. */
   x: number;
@@ -55,6 +65,12 @@ export interface Scenario {
   pick: { x: number; y: number };
   render(index: number): Uint8Array;
   truth(index: number): ScenarioTruth;
+  /**
+   * What the app would have been asserting on this frame, in screen axes. `(0,0)` means the
+   * player was not touching the stick — which is most of what a real session looks like, and is
+   * the case the cue has to cost nothing in.
+   */
+  input(index: number): { dx: number; dy: number };
 }
 
 type Shape = "box" | "boxBig" | "walkA" | "walkB" | "blob";
@@ -88,6 +104,8 @@ interface FrameState {
   scrollX: number;
   actors: Actor[];
   teleported: boolean;
+  /** What the app would have been asserting on the stick on this frame, in screen axes. */
+  input: { dx: number; dy: number };
 }
 
 const WALK_A = [
@@ -247,6 +265,11 @@ export const buildScenario = (kind: ScenarioKind, seed: number, frameCount = 240
   let room = 0;
   let scrollX = 0;
   let colour = playerColour;
+  let previousX = px;
+  let previousY = py;
+  // A scrolling game is the case where the stick and the sprite genuinely disagree; a shooter is
+  // the one a player is most likely to be driving from a real joystick. Every other kind answers.
+  const inputPolicy: InputPolicy = kind === "scroller" ? "inverted" : kind === "shooter" ? "none" : "responsive";
 
   const decoys: Actor[] = [];
   for (let i = 0; i < decoyCount; i += 1) {
@@ -336,7 +359,24 @@ export const buildScenario = (kind: ScenarioKind, seed: number, frameCount = 240
       actors.push({ x: decoy.x, y, colour: decoy.colour, shape, visible: true });
     }
 
-    states.push({ room, scrollX, actors, teleported });
+    // The assertion that would have CAUSED this frame's motion arrives one machine lag earlier,
+    // so it is recorded against the frame that earned it and the tracker's own lag window lines
+    // the two back up. `none` is a player on a real joystick plugged into the C64: the app
+    // asserts nothing and the cue must cost nothing. `inverted` is a side-scroller, where the
+    // stick and the sprite disagree because the world moves instead.
+    const stepX = px - previousX;
+    const stepY = py - previousY;
+    const sign = (value: number) => (value > 0.4 ? 1 : value < -0.4 ? -1 : 0);
+    const asserted =
+      inputPolicy === "none" || teleported || !visible
+        ? { dx: 0, dy: 0 }
+        : inputPolicy === "inverted"
+          ? { dx: -sign(stepX), dy: -sign(stepY) }
+          : { dx: sign(stepX), dy: sign(stepY) };
+    previousX = px;
+    previousY = py;
+
+    states.push({ room, scrollX, actors, teleported, input: asserted });
   }
 
   const buffer = createFrame(0);
@@ -365,6 +405,9 @@ export const buildScenario = (kind: ScenarioKind, seed: number, frameCount = 240
         fillRect(buffer, Math.round(block.x + state.scrollX), block.y, block.w, block.h, block.colour);
       }
       return buffer;
+    },
+    input(index: number): { dx: number; dy: number } {
+      return states[Math.max(0, Math.min(frameCount - 1, index))].input;
     },
     truth(index: number): ScenarioTruth {
       const state = states[Math.max(0, Math.min(frameCount - 1, index))];

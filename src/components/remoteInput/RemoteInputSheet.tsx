@@ -624,6 +624,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                 onModeChange={(nextMode) => setMirrorAdjust(nextMode === "adjust")}
                 rotation={frameRotation}
                 fill={gameMode}
+                heldJoystickInputs={session.heldJoystickInputs}
                 className={gameMode ? undefined : "mx-4"}
               />
               {/* `#` puts RETURN, SPACE, the other quick keys and the Live View switches over

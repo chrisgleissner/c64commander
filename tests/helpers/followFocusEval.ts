@@ -20,6 +20,7 @@
  */
 
 import { SubjectTracker, wrapDelta, type SubjectTrackerOptions } from "@/lib/streams/subjectTracker";
+import { InputAffinity } from "@/lib/streams/inputAffinity";
 import { FRAME_HEIGHT, FRAME_WIDTH } from "./vicFrames";
 import { buildSuite, type Scenario } from "./gameScenarios";
 
@@ -60,8 +61,25 @@ const COST_WEIGHT = 0.05;
 
 const RELOCK_CAP = 120; // 2.4s — past this the view never arrived
 
+let inputCueEnabled = true;
+
+/**
+ * A/B switch for the input-affinity cue. It exists so the cue can be shown to earn its place
+ * against the same scenarios rather than assumed to, and so a regression test can pin the
+ * tracker's behaviour with the cue off — which is what every user without the app's joystick
+ * in their hands actually gets.
+ */
+export const setInputCueEnabled = (enabled: boolean): void => {
+  inputCueEnabled = enabled;
+};
+
 export const evaluateScenario = (scenario: Scenario, options?: SubjectTrackerOptions): ScenarioScore => {
   const tracker = new SubjectTracker(options);
+  // The scenario publishes what the app would have been asserting on each frame, so the cue is
+  // scored the way it will be used: driven from real assertions, learning from accepted
+  // measurements only, and worth nothing in the scenarios where the game does not answer.
+  const affinity = new InputAffinity();
+  const cueOn = inputCueEnabled;
   tracker.acquire(
     scenario.render(0),
     FRAME_WIDTH,
@@ -83,11 +101,19 @@ export const evaluateScenario = (scenario: Scenario, options?: SubjectTrackerOpt
 
   for (let index = 1; index < scenario.frameCount; index += 1) {
     const truth = scenario.truth(index);
+    const asserted = scenario.input(index);
+    affinity.assert(asserted.dx, asserted.dy, index * FRAME_MS);
     elapsedMs += FRAME_MS;
     // The tracker says how often it wants to run and the app honours it, so the score is of the
     // tracker AS DEPLOYED rather than of a per-frame version nobody ships.
     if (elapsedMs >= nextIntervalMs) {
-      const result = tracker.update(scenario.render(index), FRAME_WIDTH, FRAME_HEIGHT, elapsedMs);
+      const nowMs = index * FRAME_MS;
+      const expected = affinity.expected(nowMs - elapsedMs, nowMs);
+      const result = tracker.update(scenario.render(index), FRAME_WIDTH, FRAME_HEIGHT, elapsedMs, {
+        expected,
+        scale: cueOn ? affinity.bonusScale : 0,
+      });
+      if (result.measured) affinity.observe(result.measured.dx, result.measured.dy, elapsedMs, expected);
       updates += 1;
       nextIntervalMs = result.nextIntervalMs;
       elapsedMs = 0;
