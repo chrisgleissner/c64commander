@@ -24,9 +24,14 @@ Measured at the phone's speaker with the room microphone, same phone, same volum
 Tone-Low (steady note), Listen on -> Local     peak -75.5 to -80.7 dBFS   tone present 3-7%   (silence)
 Tone-Low (steady note), Listen on -> Both      peak -36 dBFS              tone present 100%   (clean)
 barcode.sid (multi-note), Listen on -> Local   peak -31.6 dBFS            plays
+"Dawnfall" (Oxyron, 1996), Listen on -> Local  peak -30.9 dBFS            plays
 ```
 
-The third line is the control: the on-device engine is working, on this phone, in this session.
+The last two lines are the controls: the on-device engine is working, on this phone, in this
+session. "Dawnfall" matters more than `barcode.sid`, because it is an ordinary tune from the
+CommoServe archive rather than another generated one -- downloaded through the app, rendered on the
+phone, and measured with rich content across the 300-6000 Hz band. **No real tune is affected by
+this defect**; only the single-held-note SIDs the merge gate generates for itself.
 
 ## What was ruled out
 
@@ -47,6 +52,8 @@ Also ruled out, by direct measurement rather than reasoning:
 - **The Ultimate's master volume is not involved.** `barcode.sid` played locally at -31.6 dBFS while
   `Audio Mixer / Vol Master` was `OFF`.
 - **The phone is audible.** `sid-remote` grades the same tune through the mirror at 100% presence.
+- **Ordinary tunes are unaffected.** A CommoServe tune played on the same engine, in the same
+  minute, measured -30.9 dBFS at the microphone.
 
 ## Why it is not fixed here
 
