@@ -489,9 +489,6 @@ export default function PlayFilesPage() {
    * the whole point on a handset with no touchscreen. Every condition that keeps it
    * from becoming a surprise lives in `shouldEnterGameModeOnLaunch`.
    */
-  // DEFECT: nothing calls this. Settings → Game Mode → "on launch" therefore never
-  // takes effect. Kept rather than deleted so the fix is a wiring change, not a rewrite.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleUserLaunchedItem = useCallback(
     (item: PlaylistItem) => {
       if (!remoteInputEnabled) return;
@@ -593,6 +590,7 @@ export default function PlayFilesPage() {
     resumingFromPauseRef,
     ensureUnmuted,
     resolveUnavailableConfigDecision,
+    onUserLaunchedItem: handleUserLaunchedItem,
   });
   const handleNextRef = useRef(handleNext);
   useEffect(() => {
