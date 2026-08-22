@@ -59,7 +59,22 @@ Checked, so the fix is not aimed at the wrong thing:
 - **The disconnected state itself is good.** With no network the app shows a clear "No C64 found"
   prompt with a host/IP field rather than a blank or stuck screen.
 
-## Partially fixed — what changed, and what is still wrong
+> ## FIXED (2026-08-22) — verified on the device at 427x320
+>
+> Two causes, both fixed. **Layout:** the manual-entry form had no height bound or scroll
+> container, and `Connect` lived inside it, so it was pushed below the fold. `Connect` now sits in
+> the `DialogFooter`, outside that scroll container, tied to the form by `form=`; it renders at
+> y=247 `visible: true` where it used to be at y=285-329 and invisible. **Focus:** a focused
+> single-line text field swallowed every navigation key, and inside an overlay Back/Escape belong
+> to the dialog while the global ring is deliberately inert, so the autofocused host field was a
+> dead end. `Up`/`Down` now step the overlay's own tab order out of a single-line field.
+>
+> End-to-end on the handset: the app autofocuses the host field, one `DPAD_DOWN` moves to
+> `Connect` (visible), `OK` submits, and the attempt reports "Host unreachable" — correct, the
+> phone's Wi-Fi was off. Regression tests in `tests/unit/hooks/useFocusNavigation.test.tsx`;
+> removing the production change makes two of them fail.
+
+## How it was diagnosed — what changed, and what was still wrong after the first attempt
 
 **Fixed (layout).** The candidates branch of this dialog was bounded and scrollable
 (`max-h-[min(26rem,60vh)] overflow-y-auto`); the manual-entry form holding `Connect` had **no

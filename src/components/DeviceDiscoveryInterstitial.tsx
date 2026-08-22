@@ -59,6 +59,9 @@ type ManualPasswordTarget = {
   deviceHost: string;
 };
 
+/** Ties the footer's Connect button to the manual-entry form it submits. */
+const MANUAL_FORM_ID = "startup-manual-device-form";
+
 const normalizeHostKey = (host: string) => host.trim().toLowerCase();
 
 const buildManualDeviceId = (host: string, httpPort: number) =>
@@ -455,11 +458,9 @@ export function DeviceDiscoveryInterstitial() {
           </div>
         ) : (
           <form
-            // Bounded and scrollable, exactly as the candidates list above is. Without this the
-            // form has no height limit, so on a short viewport - a 427x320 landscape handset -
-            // its own Connect button renders below the fold with nothing able to scroll to it,
-            // leaving a keypad user able to reach only "Not now". See
-            // docs/testing/agentic-tests/full-cta-coverage/defects/S2-GAMEMODE-8020-LANDSCAPE-CONNECT-UNREACHABLE.md
+            // Bounded and scrollable, exactly as the candidates list above is: without a height
+            // limit the panel overflows a short viewport instead of scrolling inside it.
+            id={MANUAL_FORM_ID}
             className="max-h-[min(26rem,60vh)] space-y-3 overflow-y-auto px-4 py-3 sm:px-6"
             data-testid="startup-manual-device-panel"
             onSubmit={(event) => {
@@ -504,19 +505,6 @@ export function DeviceDiscoveryInterstitial() {
                 </p>
               )}
             </div>
-            {!manualPasswordTarget ? (
-              <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  disabled={manualBusy}
-                  id="startup-manual-device-connect"
-                  data-testid="startup-manual-device-connect"
-                >
-                  <Wifi className={manualBusy ? "h-4 w-4 animate-pulse" : "h-4 w-4"} />
-                  {manualBusy ? "Checking" : "Connect"}
-                </Button>
-              </div>
-            ) : null}
           </form>
         )}
 
@@ -587,6 +575,24 @@ export function DeviceDiscoveryInterstitial() {
         ) : null}
 
         <DialogFooter>
+          {/* Connect lives in the footer, not inside the form it submits. The footer sits outside
+              that form's scroll container, so the dialog's primary action cannot be pushed below
+              the fold on a short viewport, and it sits beside "Not now" where the focus ring
+              already reaches. `form=` keeps it a submit for the panel above. On a 427x320 handset
+              in landscape it was off screen and unreachable by keypad entirely - see
+              docs/testing/agentic-tests/full-cta-coverage/defects/S2-GAMEMODE-8020-LANDSCAPE-CONNECT-UNREACHABLE.md */}
+          {!hasCandidates && !manualPasswordTarget ? (
+            <Button
+              type="submit"
+              form={MANUAL_FORM_ID}
+              disabled={manualBusy}
+              id="startup-manual-device-connect"
+              data-testid="startup-manual-device-connect"
+            >
+              <Wifi className={manualBusy ? "h-4 w-4 animate-pulse" : "h-4 w-4"} />
+              {manualBusy ? "Checking" : "Connect"}
+            </Button>
+          ) : null}
           {hasCandidates ? (
             <Button
               type="button"
