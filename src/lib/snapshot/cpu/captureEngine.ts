@@ -92,7 +92,7 @@ const readScratch = async (api: CaptureCpuApi, layout: CaptureLayout): Promise<C
   // The 7 scratch bytes are contiguous: pcl, pch, a, x, y, sp, p (see capturePayload).
   const block = await api.readMemory(toHexAddress(layout.scratchPcl), 7);
   const [pcl, pch, a, x, y, sp, p] = block;
-  return { pc: (pch! << 8) | pcl!, a: a!, x: x!, y: y!, sp: sp!, p: p! };
+  return { pc: (pch << 8) | pcl, a: a, x: x, y: y, sp: sp, p: p };
 };
 
 type PendingPatch = { vectorAddr: number; irqVector: Uint8Array; savedRegion: Uint8Array; base: number };

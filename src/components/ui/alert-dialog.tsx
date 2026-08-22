@@ -175,7 +175,7 @@ const AlertDialogHeader = ({
   return (
     <div
       className={cn("shrink-0 border-b border-border bg-background text-left", className)}
-      style={{ ...ALERT_DIALOG_HEADER_STYLE, ...((style as React.CSSProperties | undefined) ?? {}) }}
+      style={{ ...ALERT_DIALOG_HEADER_STYLE, ...(style ?? {}) }}
       {...props}
     >
       <div className="flex min-h-10 items-center gap-3" data-interstitial-header-row="true">

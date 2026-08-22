@@ -330,7 +330,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       abortController.abort();
     };
     if (typeof window !== "undefined") {
-      window.addEventListener("c64u-connection-change", handleConnectionChange as EventListener);
+      window.addEventListener("c64u-connection-change", handleConnectionChange);
     }
     markPlaylistRepositoryPhase(playlistStorageKey, "SCANNING", {
       expectedCount: playlistSnapshotRef.current.length,
@@ -834,7 +834,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             sizeBytes: meta?.sizeBytes ?? null,
             modifiedAt: meta?.modifiedAt ?? null,
           });
-          registerSelectedFile(selectedFiles[selectedFiles.length - 1]!);
+          registerSelectedFile(selectedFiles[selectedFiles.length - 1]);
           updateProgress(1);
         }
       }
@@ -1208,7 +1208,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       return false;
     } finally {
       if (typeof window !== "undefined") {
-        window.removeEventListener("c64u-connection-change", handleConnectionChange as EventListener);
+        window.removeEventListener("c64u-connection-change", handleConnectionChange);
       }
       if (addItemsAbortControllerRef?.current === abortController) {
         addItemsAbortControllerRef.current = null;

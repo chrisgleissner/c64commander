@@ -90,8 +90,11 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
       data-display-profile={profile}
       data-app-chrome-family="primary"
     >
+      {/* Gap between the title row and a page's own header row (the Config search field). On
+          the smallest screen this header is already the largest piece of fixed chrome —
+          105px of a 427px screen on Config, against 49px elsewhere. */}
       <div
-        className={cn("app-shell-container", children ? "space-y-3" : "space-y-0")}
+        className={cn("app-shell-container", children ? (isCompact ? "space-y-2" : "space-y-3") : "space-y-0")}
         style={{
           paddingTop: "var(--app-chrome-rail-padding-y)",
           paddingBottom: "var(--app-chrome-rail-padding-y)",

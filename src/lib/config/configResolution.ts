@@ -56,7 +56,7 @@ export const resolvePlaybackConfig = ({
   const exactCandidates = resolvedCandidates.filter((candidate) => candidate.strategy === "exact-name");
   if (exactCandidates.length === 1) {
     return {
-      configRef: exactCandidates[0]!.ref,
+      configRef: exactCandidates[0].ref,
       configOrigin: "auto-exact",
       configCandidates: resolvedCandidates,
       configOverrides: overrides ?? null,
@@ -66,7 +66,7 @@ export const resolvePlaybackConfig = ({
   const directoryCandidates = resolvedCandidates.filter((candidate) => candidate.strategy === "directory");
   if (exactCandidates.length === 0 && directoryCandidates.length === 1) {
     return {
-      configRef: directoryCandidates[0]!.ref,
+      configRef: directoryCandidates[0].ref,
       configOrigin: "auto-directory",
       configCandidates: resolvedCandidates,
       configOverrides: overrides ?? null,

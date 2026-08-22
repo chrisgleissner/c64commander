@@ -12,9 +12,7 @@ import {
   getC64API,
   updateC64APIConfig,
   DeviceInfo,
-  CategoriesResponse,
   ConfigResponse,
-  DrivesResponse,
   getC64APIConfigSnapshot,
   buildBaseUrlFromDeviceHost,
   normalizeDeviceHost,
@@ -180,7 +178,6 @@ export function useC64Connection() {
   const {
     data: deviceInfo,
     error,
-    isLoading,
     refetch,
   } = useQuery({
     queryKey: infoQueryKey,
@@ -323,10 +320,10 @@ export function useC64Connection() {
       rateLimitedInfoRefetch();
     };
 
-    window.addEventListener("c64u-connection-change", handler as EventListener);
+    window.addEventListener("c64u-connection-change", handler);
     return () => {
       isMounted = false;
-      window.removeEventListener("c64u-connection-change", handler as EventListener);
+      window.removeEventListener("c64u-connection-change", handler);
     };
   }, [queryClient, rateLimitedInfoRefetch]);
 
@@ -371,7 +368,7 @@ export function useC64Connection() {
       isDemo: connection.state === "DEMO_ACTIVE",
       deviceType: connection.state === "REAL_CONNECTED" ? "real" : connection.state === "DEMO_ACTIVE" ? "demo" : null,
       isConnecting: connection.state === "DISCOVERING",
-      error: error ? (error as Error).message : null,
+      error: error ? error.message : null,
       deviceInfo: effectiveDeviceInfo,
     }),
     [connection.state, effectiveDeviceInfo, error],
@@ -469,7 +466,7 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
   const placeholderData = (() => {
     if (!snapshot?.data?.[category]) return undefined;
     const categoryPayload = snapshot.data[category] as Record<string, unknown>;
-    const categoryBlock = (categoryPayload as Record<string, unknown>)[category] ?? categoryPayload;
+    const categoryBlock = categoryPayload[category] ?? categoryPayload;
     const itemsBlock = (categoryBlock as { items?: Record<string, unknown> }).items ?? categoryBlock;
     if (!itemsBlock || typeof itemsBlock !== "object") return undefined;
     const selected: Record<string, unknown> = {};
@@ -554,15 +551,15 @@ export function useC64SetConfig() {
       return api.setConfigValue(category, item, value);
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: ["c64-category", variables.category],
       });
-      queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
+      void queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
       // Home reads exclusively through c64-config-items/c64-config-item, not
       // c64-category/c64-all-config - without this, Home stays stale up to
       // the 30s staleTime after a Config-page write. See HARD9-017.
-      queryClient.invalidateQueries({ queryKey: ["c64-config-items", variables.category] });
-      queryClient.invalidateQueries({ queryKey: ["c64-config-item", variables.category] });
+      void queryClient.invalidateQueries({ queryKey: ["c64-config-items", variables.category] });
+      void queryClient.invalidateQueries({ queryKey: ["c64-config-item", variables.category] });
       updateHasChanges(getActiveBaseUrl(), true);
     },
   });
@@ -589,14 +586,14 @@ export function useC64UpdateConfigBatch() {
         updateHasChanges(getActiveBaseUrl(), true);
         return;
       }
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: ["c64-category", variables.category],
       });
-      queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
+      void queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
       // See HARD9-017: Home reads through c64-config-items/c64-config-item,
       // which c64-category/c64-all-config invalidation does not reach.
-      queryClient.invalidateQueries({ queryKey: ["c64-config-items", variables.category] });
-      queryClient.invalidateQueries({ queryKey: ["c64-config-item", variables.category] });
+      void queryClient.invalidateQueries({ queryKey: ["c64-config-items", variables.category] });
+      void queryClient.invalidateQueries({ queryKey: ["c64-config-item", variables.category] });
       updateHasChanges(getActiveBaseUrl(), true);
     },
   });
@@ -668,7 +665,7 @@ export function useC64MachineControl() {
       mutationFn: () => api.machineReboot(),
       onSuccess: () => {
         setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: ["c64"] });
+          void queryClient.invalidateQueries({ queryKey: ["c64"] });
         }, 3000);
       },
     }),
@@ -690,30 +687,30 @@ export function useC64MachineControl() {
     loadConfig: useMutation({
       mutationFn: () => api.loadConfig(),
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["c64-category"] });
-        queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
+        void queryClient.invalidateQueries({ queryKey: ["c64-category"] });
+        void queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
         // HARD18-010: Home/Disks/Play read exclusively through
         // c64-config-items/c64-config-item (see HARD9-017 above on the
         // single-item/batch mutations) - without this, a whole-config
         // "Load from flash" left those pages showing pre-load values for
         // up to the 30s staleTime.
-        queryClient.invalidateQueries({ queryKey: ["c64-config-items"] });
-        queryClient.invalidateQueries({ queryKey: ["c64-config-item"] });
+        void queryClient.invalidateQueries({ queryKey: ["c64-config-items"] });
+        void queryClient.invalidateQueries({ queryKey: ["c64-config-item"] });
         updateHasChanges(getActiveBaseUrl(), true);
       },
     }),
     resetConfig: useMutation({
       mutationFn: () => api.resetConfig(),
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["c64-category"] });
-        queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
+        void queryClient.invalidateQueries({ queryKey: ["c64-category"] });
+        void queryClient.invalidateQueries({ queryKey: ["c64-all-config"] });
         // HARD18-010: same per-item invalidation as loadConfig above, plus
         // c64-info/c64-drives since "Reset to default" can change device
         // identity/capability-affecting settings and drive state.
-        queryClient.invalidateQueries({ queryKey: ["c64-config-items"] });
-        queryClient.invalidateQueries({ queryKey: ["c64-config-item"] });
-        queryClient.invalidateQueries({ queryKey: ["c64-info"] });
-        queryClient.invalidateQueries({ queryKey: ["c64-drives"] });
+        void queryClient.invalidateQueries({ queryKey: ["c64-config-items"] });
+        void queryClient.invalidateQueries({ queryKey: ["c64-config-item"] });
+        void queryClient.invalidateQueries({ queryKey: ["c64-info"] });
+        void queryClient.invalidateQueries({ queryKey: ["c64-drives"] });
         updateHasChanges(getActiveBaseUrl(), true);
       },
     }),

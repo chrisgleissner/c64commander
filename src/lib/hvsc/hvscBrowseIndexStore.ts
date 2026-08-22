@@ -257,13 +257,6 @@ const encodeUtf8Base64 = (value: string) => {
 const hashPath = (value: string) =>
   Math.abs(Array.from(value).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0));
 
-const getParentFolder = (virtualPath: string) => {
-  const normalized = normalizePath(virtualPath);
-  const index = normalized.lastIndexOf("/");
-  if (index <= 0) return "/";
-  return normalized.substring(0, index);
-};
-
 const getFileName = (virtualPath: string) => {
   const normalized = normalizePath(virtualPath);
   const index = normalized.lastIndexOf("/");
@@ -1099,12 +1092,12 @@ export const searchSongsFromBrowseIndex = (
 
     // The common case for a broad query: worse than everything already held, rejected on one
     // integer comparison.
-    if (best.length >= keep && compareRanked(candidate, best[best.length - 1]!) >= 0) continue;
+    if (best.length >= keep && compareRanked(candidate, best[best.length - 1]) >= 0) continue;
     let low = 0;
     let high = best.length;
     while (low < high) {
       const mid = (low + high) >>> 1;
-      if (compareRanked(candidate, best[mid]!) < 0) high = mid;
+      if (compareRanked(candidate, best[mid]) < 0) high = mid;
       else low = mid + 1;
     }
     best.splice(low, 0, candidate);

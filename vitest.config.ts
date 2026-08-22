@@ -43,6 +43,9 @@ const nodeTestGlobs = [
   // Runs a committed C64 binary in a 6502 interpreter; it reads the file off disk
   // and needs no DOM.
   "tests/unit/tools/**",
+  // Scores the follow-focus tracker over whole synthetic games. Pure array math with no DOM,
+  // and heavy enough that the jsdom environment's overhead is worth not paying.
+  "tests/unit/streams/followFocusScenarios.test.ts",
 ];
 
 export default defineConfig({

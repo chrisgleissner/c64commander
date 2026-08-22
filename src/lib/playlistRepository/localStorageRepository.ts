@@ -150,7 +150,7 @@ const safeReadState = (): PersistedState => {
       writeRecoveryArtifact("incompatible-schema", raw, { version });
       return defaultState();
     }
-    return migrateState(parsed as Record<string, unknown>);
+    return migrateState(parsed);
   } catch (error) {
     addLog("warn", "Failed to parse localStorage playlist repository state. Resetting repository state.", {
       storageKey: STORAGE_KEY,

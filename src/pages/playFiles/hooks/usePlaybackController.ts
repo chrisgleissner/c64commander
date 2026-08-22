@@ -81,7 +81,6 @@ import {
 } from "@/lib/playback/playbackEngineRouting";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
-import { resolveSidMutedVolumeOption } from "@/lib/config/sidVolumeControl";
 import {
   applyConfigFileReference,
   ensureConfigFileReferenceAccessible,

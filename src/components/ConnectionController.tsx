@@ -286,8 +286,8 @@ export function ConnectionController() {
       });
     }
 
-    window.addEventListener("c64u-connection-change", handler as EventListener);
-    return () => window.removeEventListener("c64u-connection-change", handler as EventListener);
+    window.addEventListener("c64u-connection-change", handler);
+    return () => window.removeEventListener("c64u-connection-change", handler);
   }, []);
 
   useEffect(() => {
@@ -301,8 +301,8 @@ export function ConnectionController() {
       setBackgroundScheduleVersion((previous) => previous + 1);
     };
 
-    window.addEventListener("c64u-app-settings-updated", handler as EventListener);
-    return () => window.removeEventListener("c64u-app-settings-updated", handler as EventListener);
+    window.addEventListener("c64u-app-settings-updated", handler);
+    return () => window.removeEventListener("c64u-app-settings-updated", handler);
   }, []);
 
   return null;

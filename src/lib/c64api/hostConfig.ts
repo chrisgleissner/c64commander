@@ -163,7 +163,7 @@ const isSavedDevicesEnvelopeUserConfigured = (raw: string | null) => {
     if (devices.length === 0) return false;
     if (devices.length > 1 || parsed.hasEverHadMultipleDevices === true) return true;
 
-    const device = devices[0]!;
+    const device = devices[0];
     const host = typeof device.host === "string" ? normalizeDeviceHost(device.host) : DEFAULT_DEVICE_HOST;
     const httpPort = typeof device.httpPort === "number" ? device.httpPort : DEFAULT_HTTP_PORT;
     const nameSource = typeof device.nameSource === "string" ? device.nameSource : "";

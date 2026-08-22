@@ -7,7 +7,7 @@
  */
 
 import React from "react";
-import { Copy, Info, MapPinned, PauseCircle, Pin, PinOff, PlayCircle, Save, Sparkles, Trash2 } from "lucide-react";
+import { Copy, Info, MapPinned, Pin, PinOff, Save, Sparkles, Trash2 } from "lucide-react";
 import {
   AppSheet,
   AppSheetBody,
@@ -832,7 +832,6 @@ export function LightingStudioDialog() {
     deviceLocationStatus,
     circadianState,
     manualLockEnabled,
-    lockCurrentLook,
     unlockCurrentLook,
     markManualLightingChange,
     isActiveProfileModified,

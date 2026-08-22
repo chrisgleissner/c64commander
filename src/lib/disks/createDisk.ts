@@ -55,6 +55,7 @@ const normalizeFolder = (folder: string) => {
     if (segment === "." || segment === "..") {
       throw new Error(`Invalid folder "${folder}": path traversal ("${segment}") is not allowed.`);
     }
+
     // eslint-disable-next-line no-control-regex
     if (/[\u0000-\u001f\\]/.test(segment)) {
       throw new Error(`Invalid folder "${folder}": contains an unsupported character.`);

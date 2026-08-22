@@ -23,7 +23,6 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import {
   getHvscSongFromBrowseIndex,
-  loadHvscBrowseIndexSnapshot,
   saveHvscBrowseIndexSnapshot,
   verifyHvscBrowseIndexIntegrity,
   type HvscBrowseIndexSnapshot,

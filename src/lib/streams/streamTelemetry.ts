@@ -123,7 +123,7 @@ const percentile = (sortedAsc: number[], p: number): number => {
 /** Aggregate a group of one-second buckets into one coarse bucket (means, plus min/max extremes). */
 const aggregateBuckets = (group: TelemetryBucket[]): TelemetryBucket => {
   const n = group.length || 1;
-  const mean = (key: keyof TelemetryBucket) => group.reduce((s, b) => s + (b[key] as number), 0) / n;
+  const mean = (key: keyof TelemetryBucket) => group.reduce((s, b) => s + b[key], 0) / n;
   return {
     sec: group[0].sec,
     fpsAvg: mean("fpsAvg"),

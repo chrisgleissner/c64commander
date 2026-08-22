@@ -58,6 +58,10 @@ const routePrefixMap: Array<{
   },
 ];
 
+// Kept as its own table rather than derived from `routePrefixMap`. The two differ
+// today in exactly one entry - `/config` omits `c64-all-config` - and deriving one
+// from the other would turn that single deliberate omission into a rule applied to
+// every future route. `c64QueryInvalidation.test.ts` pins the difference instead.
 const savedDeviceSwitchRoutePrefixMap: Array<{
   routePrefix: string;
   prefixes: ReadonlyArray<C64QueryPrefix>;
@@ -94,13 +98,13 @@ const lastVisibilityResumeInvalidationAtMs = new Map<C64QueryPrefix, number>();
 
 const invalidateByPrefix = (queryClient: QueryClient, prefixes: ReadonlyArray<C64QueryPrefix>) => {
   uniquePrefixes(prefixes).forEach((prefix) => {
-    queryClient.invalidateQueries({ queryKey: [prefix] });
+    void queryClient.invalidateQueries({ queryKey: [prefix] });
   });
 };
 
 const refetchActiveByPrefix = (queryClient: QueryClient, prefixes: ReadonlyArray<C64QueryPrefix>) => {
   uniquePrefixes(prefixes).forEach((prefix) => {
-    queryClient.refetchQueries({ queryKey: [prefix], type: "active" });
+    void queryClient.refetchQueries({ queryKey: [prefix], type: "active" });
   });
 };
 
@@ -124,7 +128,7 @@ export const invalidateForVisibilityResume = (queryClient: QueryClient, pathname
     ) {
       return;
     }
-    queryClient.invalidateQueries({ queryKey: [prefix] });
+    void queryClient.invalidateQueries({ queryKey: [prefix] });
     lastVisibilityResumeInvalidationAtMs.set(prefix, now);
   });
 };

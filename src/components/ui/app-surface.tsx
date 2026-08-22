@@ -147,7 +147,7 @@ function renderAppSurfaceHeader(
       className={cn("shrink-0 border-b border-border bg-background", className)}
       style={{
         ...APP_INTERSTITIAL_HEADER_STYLE,
-        ...((style as React.CSSProperties | undefined) ?? {}),
+        ...(style ?? {}),
       }}
       {...rest}
     >
@@ -205,7 +205,7 @@ const AppSheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive
     const layer = useRegisterInterstitial("sheet", isOpen);
     const contentStyle = {
       ...positionedStyle,
-      ...((style as React.CSSProperties | undefined) ?? {}),
+      ...(style ?? {}),
       "--app-sheet-bottom-clearance": APP_SHEET_BOTTOM_CLEARANCE,
       zIndex: layer?.surfaceZIndex ?? INTERSTITIAL_Z_INDEX.surface,
     } as React.CSSProperties;

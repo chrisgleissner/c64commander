@@ -145,7 +145,7 @@ describe("DeviceDiscoveryInterstitial", () => {
   it("shows automatic startup discovery results while the app is offline", () => {
     renderDialog();
 
-    expect(screen.getByText("C64 systems found")).toBeInTheDocument();
+    expect(screen.getByText("Choose your C64")).toBeInTheDocument();
     expect(screen.getByText("Ultimate 64 Elite · u64")).toBeInTheDocument();
     expect(screen.getByText("192.168.1.13 · fw 3.14e · ID 38C1BA")).toBeInTheDocument();
     expect(screen.getByTestId("startup-use-discovered-device-id:38c1ba")).toBeInTheDocument();
@@ -156,7 +156,7 @@ describe("DeviceDiscoveryInterstitial", () => {
 
     renderDialog();
 
-    expect(screen.getByText("C64 systems found")).toBeInTheDocument();
+    expect(screen.getByText("Choose your C64")).toBeInTheDocument();
     expect(screen.getByTestId("startup-use-discovered-device-id:38c1ba")).toBeInTheDocument();
   });
 
@@ -173,7 +173,7 @@ describe("DeviceDiscoveryInterstitial", () => {
 
     renderDialog();
 
-    expect(screen.getByText("No C64 systems found")).toBeInTheDocument();
+    expect(screen.getByText("No C64 found")).toBeInTheDocument();
     expect(screen.getByTestId("startup-manual-device-panel")).toBeInTheDocument();
     expect(screen.getByTestId("startup-manual-device-host-input")).toBeInTheDocument();
     expect(screen.getByTestId("startup-manual-device-connect")).toHaveTextContent("Connect");
@@ -510,16 +510,16 @@ describe("DeviceDiscoveryInterstitial", () => {
 
     fireEvent.click(screen.getByTestId("startup-device-discovery-open-settings"));
 
-    expect(screen.queryByText("C64 systems found")).not.toBeInTheDocument();
+    expect(screen.queryByText("Choose your C64")).not.toBeInTheDocument();
   });
 
   it("dismisses on dialog close (Escape)", () => {
     renderDialog();
-    expect(screen.getByText("C64 systems found")).toBeInTheDocument();
+    expect(screen.getByText("Choose your C64")).toBeInTheDocument();
 
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
 
-    expect(screen.queryByText("C64 systems found")).not.toBeInTheDocument();
+    expect(screen.queryByText("Choose your C64")).not.toBeInTheDocument();
   });
 
   it("acknowledges the discovery results into the shared store when dismissed with Not now (HARD19-028)", () => {

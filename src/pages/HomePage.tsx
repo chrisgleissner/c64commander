@@ -55,7 +55,6 @@ import { useAppConfigState } from "@/hooks/useAppConfigState";
 import { useHomeActions } from "./home/hooks/useHomeActions";
 import { useSharedConfigActions } from "./home/hooks/ConfigActionsContext";
 import { ConfigActionsProvider } from "./home/hooks/ConfigActionsContext";
-import { buildSidSilenceTargets, silenceSidTargets } from "@/lib/sid/sidSilence";
 import { createConfigWorkflow } from "@/lib/config/configWorkflow";
 import {
   applyRemoteConfigFromPath,
@@ -107,9 +106,7 @@ import { normalizeOptionToken } from "./home/utils/uiLogic";
 import { buildConfigKey, readItemOptions, resolveConfigDisplayValue } from "./home/utils/HomeConfigUtils";
 
 import { CollapsibleSection } from "@/components/CollapsibleSection";
-import { SectionHeader } from "@/components/SectionHeader";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
-import { cn } from "@/lib/utils";
 import { PageContainer, PageStack, ProfileActionGrid } from "@/components/layout/PageContainer";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { useLightingStudio } from "@/hooks/useLightingStudio";
@@ -208,7 +205,7 @@ function HomePageContent() {
     product: status.deviceInfo?.product,
     firmwareVersion: status.deviceInfo?.firmware_version,
     coreVersion: status.deviceInfo?.core_version,
-    streamEndpointsAdvertised: detectStreamingFromConfig(dataStreamsCategory as Record<string, unknown> | undefined),
+    streamEndpointsAdvertised: detectStreamingFromConfig(dataStreamsCategory),
   });
 
   const {

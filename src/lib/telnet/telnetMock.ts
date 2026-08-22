@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { TelnetTransport, MenuFixture, ScreenCell } from "@/lib/telnet/telnetTypes";
-import { DEFAULT_MENU_FIXTURE, TELNET_SCREEN_WIDTH, TELNET_SCREEN_HEIGHT, TelnetError } from "@/lib/telnet/telnetTypes";
+import type { TelnetTransport, MenuFixture } from "@/lib/telnet/telnetTypes";
+import { DEFAULT_MENU_FIXTURE, TELNET_SCREEN_HEIGHT, TelnetError } from "@/lib/telnet/telnetTypes";
 
 /** Mock configuration */
 export interface TelnetMockOptions {
@@ -250,7 +250,6 @@ export class TelnetMock implements TelnetTransport {
     const menuWidth = 22;
     const menuLeft = 2;
     const menuTop = 3;
-    const menuHeight = categories.length + 2; // border top + items + border bottom
 
     // Switch to alternate charset for border drawing
     parts.push("\x1b(0");
@@ -303,7 +302,6 @@ export class TelnetMock implements TelnetTransport {
     if (actions.length === 0) return;
 
     const subWidth = 22;
-    const subHeight = actions.length + 2;
 
     // Switch to alternate charset
     parts.push("\x1b(0");

@@ -182,7 +182,7 @@ const DialogHeader = ({
   return (
     <div
       className={cn("shrink-0 border-b border-border bg-background text-left", className)}
-      style={{ ...DIALOG_HEADER_STYLE, ...((style as React.CSSProperties | undefined) ?? {}) }}
+      style={{ ...DIALOG_HEADER_STYLE, ...(style ?? {}) }}
       {...props}
     >
       <div className="flex min-h-10 items-center gap-3" data-interstitial-header-row="true">

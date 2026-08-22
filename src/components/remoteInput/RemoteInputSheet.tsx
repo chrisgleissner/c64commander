@@ -128,7 +128,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
   const { deviceRotation, frameRotation, source: rotationSource, pin, clearPin } = useDeviceRotation(open);
 
   const requestSheetOpen = useCallback(() => onOpenChange(true), [onOpenChange]);
-  const { immersive, enterGameMode, exitGameMode, releaseLaunchedStreams } = useRemoteInputGameMode({
+  const { immersive, exitGameMode, releaseLaunchedStreams } = useRemoteInputGameMode({
     open,
     joystickAvailable,
     tierResolved: resolved && !tierLoading,
@@ -624,6 +624,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                 onModeChange={(nextMode) => setMirrorAdjust(nextMode === "adjust")}
                 rotation={frameRotation}
                 fill={gameMode}
+                heldJoystickInputs={session.heldJoystickInputs}
                 className={gameMode ? undefined : "mx-4"}
               />
               {/* `#` puts RETURN, SPACE, the other quick keys and the Live View switches over

@@ -196,7 +196,7 @@ export const loadRankings = async (): Promise<void> => {
 };
 
 const persist = async (): Promise<void> => {
-  await durableSave(Object.fromEntries(cache) as RankingMap);
+  await durableSave(Object.fromEntries(cache));
   broadcast();
 };
 

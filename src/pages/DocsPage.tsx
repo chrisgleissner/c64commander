@@ -12,6 +12,7 @@ import { ExternalLink, Wifi, Settings, Play, Home, Disc, Sliders, Activity, type
 import { AppBar } from "@/components/AppBar";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { getDocsExternalResourceLinks } from "@/lib/docs/externalResources";
@@ -154,6 +155,7 @@ function DocSectionCard({ section }: { section: DocSection }) {
 
 export default function DocsPage() {
   const pageShellClassName = usePrimaryPageShellClassName();
+  const { profile } = useDisplayProfile();
   const { flags } = useFeatureFlags();
   const docSections = useMemo(() => buildDocSections(flags), [flags]);
   const externalResourceLinks = getDocsExternalResourceLinks();
@@ -166,7 +168,10 @@ export default function DocsPage() {
     <div className={pageShellClassName}>
       <AppBar title="Docs" />
 
-      <PageContainer className="py-6 space-y-4">
+      {/* `py-6` overrides `.page-shell`'s own profile padding and `space-y-4` fixes the card
+          gap at 16px, so this is the one page that opts out of the profile spacing. Both are
+          kept where the page was tuned; on compact the profile's padding applies again. */}
+      <PageContainer className={profile === "compact" ? "space-y-2" : "py-6 space-y-4"}>
         {docSections.map((section, index) => (
           <motion.div
             key={section.id}

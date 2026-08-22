@@ -431,7 +431,7 @@ const createInitialEnvelope = (): PersistedSavedDevicesEnvelope => {
   if (debugBootstrapDevices) {
     return {
       version: 1,
-      selectedDeviceId: debugBootstrapDevices[0]!.id,
+      selectedDeviceId: debugBootstrapDevices[0].id,
       devices: debugBootstrapDevices,
       summaries: {},
       summaryLru: [],
@@ -468,9 +468,6 @@ const normalizeEnvelope = (envelope: PersistedSavedDevicesEnvelope): PersistedSa
     hasEverHadMultipleDevices: envelope.hasEverHadMultipleDevices || envelope.devices.length > 1,
   };
 };
-
-const selectedDeviceFromEnvelope = (envelope: PersistedSavedDevicesEnvelope) =>
-  envelope.devices.find((device) => device.id === envelope.selectedDeviceId) ?? envelope.devices[0] ?? null;
 
 const buildSnapshot = (envelope: PersistedSavedDevicesEnvelope): SavedDevicesSnapshot => ({
   selectedDeviceId: envelope.selectedDeviceId,
@@ -820,7 +817,7 @@ export const updateSavedDevice = (deviceId: string, update: Partial<Omit<SavedDe
       summaries: clearSummary
         ? {
             ...envelope.summaries,
-            [deviceId]: resetSavedDeviceSummaryVerification(envelope.summaries[deviceId]!),
+            [deviceId]: resetSavedDeviceSummaryVerification(envelope.summaries[deviceId]),
           }
         : envelope.summaries,
     };
@@ -867,7 +864,7 @@ export const updateSelectedSavedDeviceConnection = (update: {
       summaries: clearSummary
         ? {
             ...envelope.summaries,
-            [selectedDeviceId]: resetSavedDeviceSummaryVerification(envelope.summaries[selectedDeviceId]!),
+            [selectedDeviceId]: resetSavedDeviceSummaryVerification(envelope.summaries[selectedDeviceId]),
           }
         : envelope.summaries,
     };

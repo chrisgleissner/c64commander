@@ -115,7 +115,6 @@ export const INTERACTIVE_CONTROL_TIMEOUT_MS = 1500;
 export const BACKGROUND_REQUEST_TIMEOUT_MS = 3000;
 // Backwards-compatible aliases (kept until all call sites are migrated).
 const CONTROL_REQUEST_TIMEOUT_MS = INTERACTIVE_CONTROL_TIMEOUT_MS;
-const SCHEDULED_REQUEST_TIMEOUT_MS = BACKGROUND_REQUEST_TIMEOUT_MS;
 const UPLOAD_REQUEST_TIMEOUT_MS = 5000;
 const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
 // Drive mount/eject are heavier firmware ops than a tappable control: real
@@ -128,7 +127,6 @@ const MOUNT_REQUEST_TIMEOUT_MS = 8000;
 const RAM_BLOCK_WRITE_TIMEOUT_MS = 15_000;
 // Formatting a blank image on slow USB media can exceed the normal control budget.
 const DISK_CREATE_REQUEST_TIMEOUT_MS = 30_000;
-const IDLE_RECOVERY_THRESHOLD_MS = 10_000;
 const NETWORK_RETRY_DELAY_MS = 180;
 const SID_UPLOAD_MAX_ATTEMPTS = 3;
 const SID_UPLOAD_RETRYABLE_HTTP_STATUS = new Set([502, 503, 504]);
@@ -393,7 +391,7 @@ const decodeNativeBase64ToArrayBuffer = (value: unknown): ArrayBuffer => {
       const decoded = atob(value);
       return Uint8Array.from(decoded, (char) => char.charCodeAt(0)).buffer;
     }
-    return Uint8Array.from(Buffer.from(value, "base64")).buffer as ArrayBuffer;
+    return Uint8Array.from(Buffer.from(value, "base64")).buffer;
   }
   return new ArrayBuffer(0);
 };
@@ -449,7 +447,7 @@ const capacitorHttpDeviceFetch = async (
   }
 
   const responseHeaders = new Headers();
-  for (const [key, value] of Object.entries((native.headers ?? {}) as Record<string, string>)) {
+  for (const [key, value] of Object.entries(native.headers ?? {})) {
     if (value != null) responseHeaders.set(key, String(value));
   }
   const status = native.status;
@@ -496,7 +494,7 @@ const getHeaderValue = (headers: HeadersInit | undefined, name: string): string 
     const match = headers.find(([key]) => key.toLowerCase() === name.toLowerCase());
     return match?.[1] ?? null;
   }
-  const record = headers as Record<string, string>;
+  const record = headers;
   const direct = record[name];
   if (typeof direct === "string") return direct;
   const ciKey = Object.keys(record).find((key) => key.toLowerCase() === name.toLowerCase());
@@ -1971,7 +1969,7 @@ export class C64API {
       .finally(() => {
         this.inFlightReadRequests.delete(readRequestKey);
       });
-    this.inFlightReadRequests.set(readRequestKey, sharedPromise as Promise<unknown>);
+    this.inFlightReadRequests.set(readRequestKey, sharedPromise);
     return awaitPromiseWithAbortSignal(sharedPromise, requestSignal);
   }
 
@@ -2230,7 +2228,7 @@ export class C64API {
           items: {},
         },
         errors: [],
-      } as ConfigResponse;
+      };
     }
 
     const skipItemEnrichment = options.__c64uSkipItemEnrichment === true;
@@ -2285,7 +2283,7 @@ export class C64API {
             items: {},
           },
           errors: [],
-        } as ConfigResponse;
+        };
       }
 
       if (isDeviceNotReadyRequestGate(categoryErrorMessage)) {
@@ -2333,7 +2331,7 @@ export class C64API {
         items: mergedItems,
       },
       errors: [],
-    } as ConfigResponse;
+    };
   }
 
   async setConfigValue(
@@ -2364,7 +2362,7 @@ export class C64API {
         ...options,
       }),
     );
-    this.assertConfigWriteAccepted(response as { errors?: string[] }, { category, item, value: resolvedValue });
+    this.assertConfigWriteAccepted(response, { category, item, value: resolvedValue });
     this.setCachedConfigValue(category, item, resolvedValue);
     // The device has now EFFECTUATED this value but has not written it to flash — that needs a
     // separate `save_to_flash`, which is what this arms. Only after the write was accepted: a
@@ -2380,26 +2378,26 @@ export class C64API {
   // user's tuning silently vanished on the next power-up. Assert like every other
   // config write so a rejection reaches the error path.
   async saveConfig(options: C64ReadRequestOptions = {}): Promise<{ errors: string[] }> {
-    const response = (await scheduleConfigWrite(() =>
-      this.request("/v1/configs:save_to_flash", { method: "PUT", ...options }),
-    )) as { errors: string[] };
+    const response = await scheduleConfigWrite(() =>
+      this.request<{ errors: string[] }>("/v1/configs:save_to_flash", { method: "PUT", ...options }),
+    );
     this.assertConfigWriteAccepted(response, { category: "flash-save" });
     notePersistedToFlash();
     return response;
   }
 
   async loadConfig(options: C64ReadRequestOptions = {}): Promise<{ errors: string[] }> {
-    const response = (await scheduleConfigWrite(() =>
-      this.request("/v1/configs:load_from_flash", { method: "PUT", ...options }),
-    )) as { errors: string[] };
+    const response = await scheduleConfigWrite(() =>
+      this.request<{ errors: string[] }>("/v1/configs:load_from_flash", { method: "PUT", ...options }),
+    );
     this.assertConfigWriteAccepted(response, { category: "flash-load" });
     return response;
   }
 
   async resetConfig(options: C64ReadRequestOptions = {}): Promise<{ errors: string[] }> {
-    const response = (await scheduleConfigWrite(() =>
-      this.request("/v1/configs:reset_to_default", { method: "PUT", ...options }),
-    )) as { errors: string[] };
+    const response = await scheduleConfigWrite(() =>
+      this.request<{ errors: string[] }>("/v1/configs:reset_to_default", { method: "PUT", ...options }),
+    );
     this.assertConfigWriteAccepted(response, { category: "reset-defaults" });
     return response;
   }
@@ -2481,52 +2479,39 @@ export class C64API {
   }
 
   // Machine control endpoints
-  async machineReset(): Promise<{ errors: string[] }> {
-    return this.request("/v1/machine:reset", {
+  // The machine control verbs are fire-and-forget: the firmware acts on the PUT
+  // and its reply body carries nothing worth inspecting, so success-body
+  // inspection is skipped for all of them alike.
+  private machineAction(verb: string): Promise<{ errors: string[] }> {
+    return this.request(`/v1/machine:${verb}`, {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
       __c64uSkipSuccessBodyInspection: true,
     });
+  }
+
+  async machineReset(): Promise<{ errors: string[] }> {
+    return this.machineAction("reset");
   }
 
   async machineReboot(): Promise<{ errors: string[] }> {
-    return this.request("/v1/machine:reboot", {
-      method: "PUT",
-      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
-      __c64uSkipSuccessBodyInspection: true,
-    });
+    return this.machineAction("reboot");
   }
 
   async machinePause(): Promise<{ errors: string[] }> {
-    return this.request("/v1/machine:pause", {
-      method: "PUT",
-      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
-      __c64uSkipSuccessBodyInspection: true,
-    });
+    return this.machineAction("pause");
   }
 
   async machineResume(): Promise<{ errors: string[] }> {
-    return this.request("/v1/machine:resume", {
-      method: "PUT",
-      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
-      __c64uSkipSuccessBodyInspection: true,
-    });
+    return this.machineAction("resume");
   }
 
   async machinePowerOff(): Promise<{ errors: string[] }> {
-    return this.request("/v1/machine:poweroff", {
-      method: "PUT",
-      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
-      __c64uSkipSuccessBodyInspection: true,
-    });
+    return this.machineAction("poweroff");
   }
 
   async machineMenuButton(): Promise<{ errors: string[] }> {
-    return this.request("/v1/machine:menu_button", {
-      method: "PUT",
-      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
-      __c64uSkipSuccessBodyInspection: true,
-    });
+    return this.machineAction("menu_button");
   }
 
   async getMachineInputState(options: C64ReadRequestOptions = {}): Promise<MachineInputStateResponse> {
@@ -2728,50 +2713,37 @@ export class C64API {
     return response;
   }
 
-  async mountDriveUpload(
-    drive: "a" | "b",
-    image: Blob,
-    type?: string,
-    mode?: "readwrite" | "readonly" | "unlinked",
-    metadata: UploadValidationMetadata = {},
-    options: C64ReadRequestOptions = {},
+  // The shape every binary-upload endpoint shares: resolve the filename and
+  // validate the bytes, POST them as one octet-stream body, log the REST call
+  // whether or not it got that far, then parse. Callers supply what differs and
+  // assert the parsed body themselves, because a drive mount and a runner
+  // report a refusal differently.
+  private async postBinaryUpload(
+    file: Blob,
+    spec: {
+      path: string;
+      operation: string;
+      expectedType?: SupportedC64FileType;
+      resolveFilename: () => string;
+      failureLogMessage: string;
+      onPayloadReady?: (upload: { headers: Record<string, string>; body: ArrayBuffer }, baseUrl: string) => void;
+    },
+    options: C64ReadRequestOptions,
   ): Promise<{ errors: string[] }> {
-    let path = `/v1/drives/${drive}:mount`;
-    if (type || mode) {
-      const params = new URLSearchParams();
-      if (type) params.set("type", type);
-      if (mode) params.set("mode", mode);
-      path = `${path}?${params.toString()}`;
-    }
-
+    const { path } = spec;
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     let status: number | "error" = "error";
     const method = "POST";
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
-      const upload = await this.buildBinaryUploadRequest(image, {
-        filename: metadata.filename ?? extractUploadFilename(image, `disk.${type ?? "img"}`),
-        operation: "DRIVE_MOUNT_UPLOAD",
+      const upload = await this.buildBinaryUploadRequest(file, {
+        filename: spec.resolveFilename(),
+        operation: spec.operation,
         endpoint: path,
-        expectedType: resolveDiskUploadType(type),
+        expectedType: spec.expectedType,
       });
-      addLog("debug", "Drive mount upload payload ready", {
-        drive,
-        type: type ?? null,
-        mode: mode ?? null,
-        baseUrl,
-        deviceHost: this.deviceHost,
-        fingerprint: buildBinaryFingerprint(new Uint8Array(upload.body)),
-      });
-      addLog("debug", "Drive mount upload payload prepared", {
-        drive,
-        type: type ?? null,
-        mode: mode ?? null,
-        sizeBytes: typeof image?.size === "number" ? image.size : null,
-        baseUrl,
-        deviceHost: this.deviceHost,
-      });
+      spec.onPayloadReady?.(upload, baseUrl);
       response = await this.fetchWithTimeout(
         `${baseUrl}${path}`,
         {
@@ -2791,7 +2763,7 @@ export class C64API {
     if (!response.ok) {
       const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
       addErrorLog(
-        "Drive mount upload failed",
+        spec.failureLogMessage,
         buildErrorLogDetails(error, {
           status: response.status,
           statusText: response.statusText,
@@ -2800,9 +2772,56 @@ export class C64API {
       throw error;
     }
 
-    const result = await this.parseResponseJson<{ errors: string[] }>(response, path, {
+    return this.parseResponseJson<{ errors: string[] }>(response, path, {
       allowNonJsonSuccess: true,
     });
+  }
+
+  async mountDriveUpload(
+    drive: "a" | "b",
+    image: Blob,
+    type?: string,
+    mode?: "readwrite" | "readonly" | "unlinked",
+    metadata: UploadValidationMetadata = {},
+    options: C64ReadRequestOptions = {},
+  ): Promise<{ errors: string[] }> {
+    let path = `/v1/drives/${drive}:mount`;
+    if (type || mode) {
+      const params = new URLSearchParams();
+      if (type) params.set("type", type);
+      if (mode) params.set("mode", mode);
+      path = `${path}?${params.toString()}`;
+    }
+
+    const result = await this.postBinaryUpload(
+      image,
+      {
+        path,
+        operation: "DRIVE_MOUNT_UPLOAD",
+        expectedType: resolveDiskUploadType(type),
+        resolveFilename: () => metadata.filename ?? extractUploadFilename(image, `disk.${type ?? "img"}`),
+        failureLogMessage: "Drive mount upload failed",
+        onPayloadReady: (upload, baseUrl) => {
+          addLog("debug", "Drive mount upload payload ready", {
+            drive,
+            type: type ?? null,
+            mode: mode ?? null,
+            baseUrl,
+            deviceHost: this.deviceHost,
+            fingerprint: buildBinaryFingerprint(new Uint8Array(upload.body)),
+          });
+          addLog("debug", "Drive mount upload payload prepared", {
+            drive,
+            type: type ?? null,
+            mode: mode ?? null,
+            sizeBytes: typeof image?.size === "number" ? image.size : null,
+            baseUrl,
+            deviceHost: this.deviceHost,
+          });
+        },
+      },
+      options,
+    );
     this.assertDriveWriteAccepted(result, "mount", drive);
     return result;
   }
@@ -2968,50 +2987,17 @@ export class C64API {
     metadata: UploadValidationMetadata = {},
     options: C64ReadRequestOptions = {},
   ): Promise<{ errors: string[] }> {
-    const path = "/v1/runners:modplay";
-    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-    let status: number | "error" = "error";
-    const method = "POST";
-    let response: Response;
-    try {
-      const baseUrl = this.getBaseUrl();
-      const upload = await this.buildBinaryUploadRequest(modFile, {
-        filename: metadata.filename ?? extractUploadFilename(modFile, "track.mod"),
+    const parsed = await this.postBinaryUpload(
+      modFile,
+      {
+        path: "/v1/runners:modplay",
         operation: "MOD_PLAY_UPLOAD",
-        endpoint: path,
         expectedType: "mod",
-      });
-      response = await this.fetchWithTimeout(
-        `${baseUrl}${path}`,
-        {
-          method,
-          headers: upload.headers,
-          body: upload.body,
-          signal: options.signal,
-          __c64uIntent: options.__c64uIntent,
-        },
-        options.timeoutMs ?? UPLOAD_REQUEST_TIMEOUT_MS,
-      );
-      status = response.status;
-    } finally {
-      this.logRestCall(method, path, status, startedAt);
-    }
-
-    if (!response.ok) {
-      const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
-      addErrorLog(
-        "MOD upload failed",
-        buildErrorLogDetails(error, {
-          status: response.status,
-          statusText: response.statusText,
-        }),
-      );
-      throw error;
-    }
-
-    const parsed = await this.parseResponseJson<{ errors: string[] }>(response, path, {
-      allowNonJsonSuccess: true,
-    });
+        resolveFilename: () => metadata.filename ?? extractUploadFilename(modFile, "track.mod"),
+        failureLogMessage: "MOD upload failed",
+      },
+      options,
+    );
     this.assertActionAccepted(parsed, "MOD upload playback");
     return parsed;
   }
@@ -3030,50 +3016,17 @@ export class C64API {
     metadata: UploadValidationMetadata = {},
     options: C64ReadRequestOptions = {},
   ): Promise<{ errors: string[] }> {
-    const path = "/v1/runners:run_prg";
-    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-    let status: number | "error" = "error";
-    const method = "POST";
-    let response: Response;
-    try {
-      const baseUrl = this.getBaseUrl();
-      const upload = await this.buildBinaryUploadRequest(prgFile, {
-        filename: metadata.filename ?? extractUploadFilename(prgFile, "program.prg"),
+    const parsed = await this.postBinaryUpload(
+      prgFile,
+      {
+        path: "/v1/runners:run_prg",
         operation: "PRG_RUN_UPLOAD",
-        endpoint: path,
         expectedType: "prg",
-      });
-      response = await this.fetchWithTimeout(
-        `${baseUrl}${path}`,
-        {
-          method,
-          headers: upload.headers,
-          body: upload.body,
-          signal: options.signal,
-          __c64uIntent: options.__c64uIntent,
-        },
-        options.timeoutMs ?? UPLOAD_REQUEST_TIMEOUT_MS,
-      );
-      status = response.status;
-    } finally {
-      this.logRestCall(method, path, status, startedAt);
-    }
-
-    if (!response.ok) {
-      const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
-      addErrorLog(
-        "PRG upload failed",
-        buildErrorLogDetails(error, {
-          status: response.status,
-          statusText: response.statusText,
-        }),
-      );
-      throw error;
-    }
-
-    const parsed = await this.parseResponseJson<{ errors: string[] }>(response, path, {
-      allowNonJsonSuccess: true,
-    });
+        resolveFilename: () => metadata.filename ?? extractUploadFilename(prgFile, "program.prg"),
+        failureLogMessage: "PRG upload failed",
+      },
+      options,
+    );
     this.assertActionAccepted(parsed, "PRG upload run");
     return parsed;
   }
@@ -3092,50 +3045,17 @@ export class C64API {
     metadata: UploadValidationMetadata = {},
     options: C64ReadRequestOptions = {},
   ): Promise<{ errors: string[] }> {
-    const path = "/v1/runners:load_prg";
-    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-    let status: number | "error" = "error";
-    const method = "POST";
-    let response: Response;
-    try {
-      const baseUrl = this.getBaseUrl();
-      const upload = await this.buildBinaryUploadRequest(prgFile, {
-        filename: metadata.filename ?? extractUploadFilename(prgFile, "program.prg"),
+    const parsed = await this.postBinaryUpload(
+      prgFile,
+      {
+        path: "/v1/runners:load_prg",
         operation: "PRG_LOAD_UPLOAD",
-        endpoint: path,
         expectedType: "prg",
-      });
-      response = await this.fetchWithTimeout(
-        `${baseUrl}${path}`,
-        {
-          method,
-          headers: upload.headers,
-          body: upload.body,
-          signal: options.signal,
-          __c64uIntent: options.__c64uIntent,
-        },
-        options.timeoutMs ?? UPLOAD_REQUEST_TIMEOUT_MS,
-      );
-      status = response.status;
-    } finally {
-      this.logRestCall(method, path, status, startedAt);
-    }
-
-    if (!response.ok) {
-      const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
-      addErrorLog(
-        "PRG upload failed",
-        buildErrorLogDetails(error, {
-          status: response.status,
-          statusText: response.statusText,
-        }),
-      );
-      throw error;
-    }
-
-    const parsed = await this.parseResponseJson<{ errors: string[] }>(response, path, {
-      allowNonJsonSuccess: true,
-    });
+        resolveFilename: () => metadata.filename ?? extractUploadFilename(prgFile, "program.prg"),
+        failureLogMessage: "PRG upload failed",
+      },
+      options,
+    );
     this.assertActionAccepted(parsed, "PRG upload load");
     return parsed;
   }
@@ -3173,51 +3093,17 @@ export class C64API {
     metadata: UploadValidationMetadata = {},
     options: C64ReadRequestOptions = {},
   ): Promise<{ errors: string[] }> {
-    const path = "/v1/runners:run_crt";
-    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
-    let status: number | "error" = "error";
-    const method = "POST";
-    let response: Response;
-    try {
-      const baseUrl = this.getBaseUrl();
-      const filename = requireUploadFilename(crtFile, metadata, "CRT_RUN_UPLOAD");
-      const upload = await this.buildBinaryUploadRequest(crtFile, {
-        filename,
+    const parsed = await this.postBinaryUpload(
+      crtFile,
+      {
+        path: "/v1/runners:run_crt",
         operation: "CRT_RUN_UPLOAD",
-        endpoint: path,
         expectedType: "crt",
-      });
-      response = await this.fetchWithTimeout(
-        `${baseUrl}${path}`,
-        {
-          method,
-          headers: upload.headers,
-          body: upload.body,
-          signal: options.signal,
-          __c64uIntent: options.__c64uIntent,
-        },
-        options.timeoutMs ?? UPLOAD_REQUEST_TIMEOUT_MS,
-      );
-      status = response.status;
-    } finally {
-      this.logRestCall(method, path, status, startedAt);
-    }
-
-    if (!response.ok) {
-      const error = new Error(buildHttpErrorMessage(response.status, response.statusText));
-      addErrorLog(
-        "CRT upload failed",
-        buildErrorLogDetails(error, {
-          status: response.status,
-          statusText: response.statusText,
-        }),
-      );
-      throw error;
-    }
-
-    const parsed = await this.parseResponseJson<{ errors: string[] }>(response, path, {
-      allowNonJsonSuccess: true,
-    });
+        resolveFilename: () => requireUploadFilename(crtFile, metadata, "CRT_RUN_UPLOAD"),
+        failureLogMessage: "CRT upload failed",
+      },
+      options,
+    );
     this.assertActionAccepted(parsed, "CRT upload run");
     return parsed;
   }

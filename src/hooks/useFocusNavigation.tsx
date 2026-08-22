@@ -58,7 +58,6 @@ import {
   subscribeInputModality,
   type DismissibleLayer,
   type FocusDescriptor,
-  type FocusItem,
   type Keymap,
 } from "@/lib/input";
 import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";
@@ -235,9 +234,7 @@ export const FocusNavigationProvider = ({
   const openContextMenuFor = useCallback((element: HTMLElement | null): boolean => {
     if (!element) return false;
     const host = element.closest("[data-key-nav-menu-host]") ?? element;
-    const trigger = element.matches(CONTEXT_MENU_SELECTOR)
-      ? element
-      : (host.querySelector(CONTEXT_MENU_SELECTOR) as HTMLElement | null);
+    const trigger = element.matches(CONTEXT_MENU_SELECTOR) ? element : host.querySelector(CONTEXT_MENU_SELECTOR);
     if (trigger instanceof HTMLElement) {
       trigger.click();
       return true;
@@ -698,7 +695,7 @@ export function useFocusItem<T extends HTMLElement = HTMLElement>(options: UseFo
     [id, order, group, parentId, disabled, skip],
   );
 
-  return useDescriptorRegistration(descriptor, elementRef) as RefCallback<T>;
+  return useDescriptorRegistration(descriptor, elementRef);
 }
 
 export interface UseFocusGroupOptions {
@@ -723,5 +720,5 @@ export function useFocusGroup<T extends HTMLElement = HTMLElement>(options: UseF
     () => (id ? { id, kind: "group", label, group: label, order, disabled } : null),
     [id, label, order, disabled],
   );
-  return useDescriptorRegistration(descriptor, elementRef) as RefCallback<T>;
+  return useDescriptorRegistration(descriptor, elementRef);
 }

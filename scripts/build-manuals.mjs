@@ -719,7 +719,7 @@ const featureRows = ({ features, variant }) => {
     ],
     [
       "Manual host/IP entry",
-      "**Startup prompt when no devices are found**, Settings → Connection",
+      "**No C64 found** at startup, Settings → Connection",
       "Startup prompt is fastest on first run; Settings is best for saved-device maintenance.",
     ],
     ["Network password", "**Startup prompt or auth popup**, Settings → Connection", "The app asks only when needed."],
@@ -912,7 +912,7 @@ const featureRows = ({ features, variant }) => {
   if (includeFeature(features, "hvsc_enabled")) {
     rows.push([
       "HVSC preparation",
-      "**Play → Add items**, panel at the foot of Play",
+      "**Play → Add items**, card at the foot of Play",
       `${featureAvailability(features.hvsc_enabled)} Settings → HVSC holds the mirror and the update check.`,
     ]);
     rows.push([
@@ -941,9 +941,11 @@ const featureRows = ({ features, variant }) => {
 
   rows.push(
     [
-      "Display profile, theme, text size, orientation",
+      "Display profile, theme, text size, card descriptions, orientation",
       "**Settings → Appearance**",
-      "Screenshots in this manual use the compact profile, the smallest screen the app supports.",
+      isC64uRemoteVariant(variant)
+        ? "Screenshots in this manual use the compact profile, the smallest screen the app supports."
+        : "Screenshots in this manual use the medium profile.",
     ],
     [
       "Settings transfer (export and import)",
@@ -1014,7 +1016,7 @@ const renderKeyboardReference = ({ features, variant }) => {
     table(
       ["Key", "What it does"],
       [
-        ["Up / Down", "Move through the current page, card, list, or dialog."],
+        ["Up / Down", "Move through the current page, card, list, or dialog in reading order; the tab bar comes last."],
         ["Left / Right", "Adjust sliders, tabs, and segmented controls. Otherwise move to a nearby control."],
         ["OK / Center / Enter", "Enter a group, open a select, press a button, or toggle a switch."],
         ["Back / Escape", "Close the top dialog, leave a field, leave a group, or go back."],
@@ -1083,7 +1085,9 @@ const renderKeyboardReference = ({ features, variant }) => {
     "",
     "#### Quick Menu",
     "",
-    "Press Menu when the selected control has no menu of its own. The Quick Menu offers page jumps, Game Mode, Diagnostics, and the Device Switcher when more than one device is saved.",
+    "There are two ways in, and each offers what that way in calls for. Press **Menu** when the selected control has no menu of its own: the Quick Menu then lists the six pages, each with the number key that reaches it directly, followed by Game Mode on `0`, Diagnostics on `*`, and the Device Switcher on `#` when more than one device is saved. Tap the three-dot **Quick Menu** button instead — every page carries one in the top bar, beside the health badge — and the page jumps are left out, since the tab bar is already in front of you; what is left is the actions for the page you are on.",
+    "",
+    "On a page built from cards, both ways in also offer **Expand all sections**, **Collapse all sections**, and **Show card descriptions**. Both section entries are always listed, so the one you want is in the same place every time; whichever of the two would do nothing is shown but unavailable.",
   );
 
   return sections.join("\n");
@@ -1167,13 +1171,13 @@ export const renderManualMarkdown = ({ variant, features }) => {
       variant,
     )}.`,
     "",
-    "If devices are found:",
+    "If devices are found, the app opens **Choose your C64**:",
     "",
     "1. Choose **Use** to connect now.",
     "2. Choose **Save** to keep the device for later.",
     "3. If the device is password-protected, enter its network password when asked.",
     "",
-    `If no devices are found, ${appName} opens a manual setup prompt.`,
+    `If no devices are found, ${appName} opens **No C64 found**, a manual setup prompt.`,
     "",
     isC64uRemoteVariant(variant)
       ? "Enter a hostname such as `c64u` or an IP address such as `192.168.1.64`, then choose **Connect**. If the Commodore 64 Ultimate answers but requires a password, the same dialog asks for it before saving and connecting."
@@ -1193,13 +1197,13 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Home overview", profile, "home/profiles/{profile}/01-overview.png"),
     "",
-    "Start at the top. The system strip confirms which app build, device, and firmware you are using. Below it, Quick Actions run from the ones you reach for most to the ones you reach for rarely: Game Mode, Menu, Pause/Resume, Remote Input, the RAM snapshot actions, and then, in their own band, the ones that interrupt whatever the machine is doing — Reset, Reboot, and Power Off where the device supports it. Nothing that stops your C64 sits next to something that does not.",
+    "Start at the top. The system strip confirms which app build, device, and firmware you are using. Below it, Quick Actions run from the ones you reach for most to the ones you reach for rarely: Game Mode and Remote Input, which sit together as two ways into the same second screen, then Menu, Pause/Resume, the RAM snapshot actions, and then, in their own band, the ones that interrupt whatever the machine is doing — Reset, Reboot, and Power Off where the device supports it. Nothing that stops your C64 sits next to something that does not.",
     "",
     "Two more actions can join that last band: a **Reboot (Clr Mem)** that wipes memory on the way, and **Power Cycle**. Both go through the Telnet menu service rather than the web service, so they start out switched off; turn them on in Settings → Experimental Features once Telnet is enabled on the device.",
     "",
     ...(includeFeature(features, "audio_mirror_enabled") || includeFeature(features, "video_mirror_enabled")
       ? [
-          "Directly below sits **Live View**, which brings the sound and the picture of the running machine into the app. It has a chapter of its own later on.",
+          "Directly below sits **Live View**, which brings the sound and the picture of the running machine into the app. It is a card like the ones below it and starts closed, so tap its header to reach the switches inside; while it is playing, a **Reset** in that header stops both feeds without opening it. It has a chapter of its own later on.",
           "",
         ]
       : []),
@@ -1213,7 +1217,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
         : ", on a machine that has them, so does **Lighting**, for the case and keyboard lights"
     }.`,
     "",
-    "Which of these start open and which start closed is chosen once, for a first-time visit, in favor of the cards most people touch every session; every card is closed or opened the same way, by tapping its header, and the app remembers what you left open from then on — a card you never use can stay out of the way, and one you always want stays exactly where you put it. Everything here is in Config as well; these cards just save you the search.",
+    "Which of these start open and which start closed is chosen once, for a first-time visit, in favor of the cards most people touch every session; every card is closed or opened the same way, by tapping its header, and the app remembers what you left open from then on — a card you never use can stay out of the way, and one you always want stays exactly where you put it. On the compact display profile, where there is the least room, opening one card closes the others, so the list of titles stays on screen around whatever is open. **Expand all sections** and **Collapse all sections** in the Quick Menu do the whole page at once. Everything here is in Config as well; these cards just save you the search.",
     "",
     `The remaining cards cover drives, the printer, streams, and **Config actions**. That last one holds **Save**, which writes the current settings into flash on ${targetDeviceShortName(
       variant,
@@ -1271,7 +1275,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Disks overview", profile, "disks/profiles/{profile}/01-overview.png"),
     "",
-    "The page has three drive cards — **Drive A**, **Drive B**, and a **Soft IEC** drive that reads loose files straight from a folder rather than from a disk image. Each card turns its drive on or off, sets its bus ID and type, mounts and ejects, and resets. Below them, **Add disks** builds a collection from the sources you have.",
+    "The page has three drive cards — **Drive A**, **Drive B**, and a **Soft IEC** drive that reads loose files straight from a folder rather than from a disk image. Each card turns its drive on or off, sets its bus ID and type, mounts and ejects, and resets. Power and the mounted disk stay on the card header, so whether a drive is on and whether it holds a disk can both be seen and changed without opening the card. **Drive A** starts open and the other two start closed. Below them, **Add disks** builds a collection from the sources you have.",
     "",
     image("Disk collection view", profile, "disks/profiles/{profile}/02-view-all.png"),
     "",
@@ -1291,7 +1295,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Config overview", profile, "config/profiles/{profile}/01-overview.png"),
     "",
-    "Search for a category, open it, and edit the rows directly. Each item gets the control that suits it — a slider, a select, a checkbox, a text field, or a masked field for a password.",
+    "Search for a category, open it, and edit the rows directly. Each item gets the control that suits it — a slider, a select, a checkbox, a text field, or a masked field for a password. Every category the device reports has a card of its own, named after that category, and the app remembers which cards you left open.",
     "",
     "A change goes to the device the moment you make it. Most take effect at once; a few, the cartridge choice among them, are stored now and take effect at the next reset.",
     "",
@@ -1315,9 +1319,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "**Connection** also holds your saved devices: their name, host, HTTP, FTP and Telnet ports, and network password. Saving checks that the web service answers before the device is kept; FTP and Telnet are stored as given and are tested by a health check.",
     "",
-    "**Appearance** is local to the app and never touches your C64. It sets the theme, the text size, the display profile, whether the app runs full screen, and whether it follows the phone's rotation or stays in portrait or landscape.",
+    "**Appearance** is local to the app and never touches your C64. It sets the theme, the text size, the display profile, card descriptions, whether the app runs full screen, and whether it follows the phone's rotation or stays in portrait or landscape.",
     "",
-    "**Text size** enlarges every part of the app, in four steps from **Default** to **Largest**. Reach for it when the app is harder to read than you would like; the display profile beside it changes the layout rather than the type.",
+    "**Text size** enlarges every part of the app, in four steps from **Default** to **Largest**. Reach for it when the app is harder to read than you would like; the display profile beside it changes the layout rather than the type. At the largest sizes the tab bar along the bottom scrolls sideways rather than pushing a tab off the edge, so every page stays reachable.",
+    "",
+    "**Card descriptions** is the one-line summary under each card's title, on every page built from cards. It starts off, because on a small screen it costs about half the height of every closed card; turn it on if you would rather read what a card holds than remember it. The Quick Menu switches the same thing on and off without leaving the page you are on.",
     "",
     `**Diagnostics** opens the diagnostics panel, switches debug logging on, and — this is where it lives, despite the name — carries **Settings transfer**. That exports your app settings, feature switches and device-safety tuning to a file you can import onto another ${appDeviceName(
       variant,
@@ -1671,7 +1677,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "Your C64 can send its own sound and picture out across your network, and Live View brings them straight back into the app — so you can hear a tune or watch the screen without wiring up a speaker or a second television.",
           "",
-          "It is one shared session. Start it in a single place and it keeps playing wherever you go; there is never a second copy fighting for the same stream. You will find it just below the Quick Actions on **Home**, with two switches:",
+          "It is one shared session. Start it in a single place and it keeps playing wherever you go; there is never a second copy fighting for the same stream. You will find it just below the Quick Actions on **Home**, as a card that starts closed; tap its header to open it. Inside are two switches:",
           "",
           ...(includeFeature(features, "audio_mirror_enabled")
             ? [
@@ -1685,6 +1691,10 @@ export const renderManualMarkdown = ({ variant, features }) => {
             : []),
           "",
           image("Live View on Home", profile, "home/content-explorer/profiles/{profile}/01-live-view.png"),
+          "",
+          `While the sound or the picture is playing, a **Reset** appears in the card's header and stops both of them, so the mirror can be turned off without opening the card again. And if what you started stops reaching ${appDeviceSubject(
+            variant,
+          )} — the network drops out, or the machine is switched off — Live View reports that the stream stopped arriving, rather than leaving a frozen picture under a switch that still reads as playing.`,
           "",
           ...(includeFeature(features, "video_mirror_enabled")
             ? [
@@ -1744,7 +1754,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "- **Auto** plays every frame it can, eases off when your device is under strain, and climbs back to full speed as soon as there is room to spare. Leave it here.",
                 "- **100%**, **50%**, and **25%** cap the picture at the full rate, half, or a quarter of what the C64 is sending. A lower setting is gentler on the battery and on older phones and leaves more headroom for the game you are driving. Even at a manual cap the app will still drop below it for a moment if that is what it takes to keep the sound perfect — the sound always comes first.",
                 "",
-                "**Stats** also shows, at a glance and over the last few minutes, how the stream is doing: the picture's frame rate, how full the audio buffer is, any packets lost on the network and how they were smoothed over, and the app's own load. Open or close it as you like — it is built to be light enough that watching it costs the stream nothing. If you ever need to send in a report, **Export diagnostics** saves all of it as a small file.",
+                "**Stats** also shows, at a glance and over the last few minutes, how the stream is doing: the picture's frame rate, how full the audio buffer is, any packets lost on the network and how they were smoothed over, and the app's own load. The sound and the picture cross the network as two separate streams, so **More** counts their losses apart: **Dropped pkts** under **Audio**, and **Lost pkts** under **Video**. Open or close it as you like — it is built to be light enough that watching it costs the stream nothing. If you ever need to send in a report, **Export diagnostics** saves all of it as a small file.",
                 "",
                 "#### Checking the sound and picture yourself",
                 "",
@@ -1886,7 +1896,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     `- **C64U** — files on ${targetDeviceShortName(variant)}, reached over FTP.`,
     ...(includeFeature(features, "hvsc_enabled")
       ? [
-          "- **HVSC** — the High Voltage SID Collection, the definitive archive of C64 music. Choose it once from **Add items** and it fetches and indexes itself; a panel at the foot of the Play page shows how far it has got, and lets you start, stop or reset it by hand. After that the app watches for updates on its own, and **Settings → HVSC** holds the mirror it downloads from and how often it looks. Browsing then shows song lengths and the tunes inside each file.",
+          "- **HVSC** — the High Voltage SID Collection, the definitive archive of C64 music. Choose it once from **Add items** and it fetches and indexes itself; a card at the foot of the Play page — closed until you open it — shows how far it has got, and lets you start, stop or reset it by hand. After that the app watches for updates on its own, and **Settings → HVSC** holds the mirror it downloads from and how often it looks. Browsing then shows song lengths and the tunes inside each file.",
         ]
       : []),
     ...(includeFeature(features, "commoserve_enabled")

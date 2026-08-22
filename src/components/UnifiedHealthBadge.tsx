@@ -72,16 +72,6 @@ const parseIsoTimestamp = (value: string | null) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
-const resolveDeviceHealthLabel = (
-  snapshot: ReturnType<typeof useSavedDeviceHealthChecks>["byDeviceId"][string] | undefined,
-) => {
-  if (!snapshot) return "Pending";
-  if (snapshot.running) return "Checking";
-  if (snapshot.error) return "Check failed";
-  if (!snapshot.latestResult) return "Pending";
-  return snapshot.latestResult.overallHealth === "Unavailable" ? "Offline" : snapshot.latestResult.overallHealth;
-};
-
 const resolveDeviceSwitchStatusFromHealth = (
   snapshot: ReturnType<typeof useSavedDeviceHealthChecks>["byDeviceId"][string] | undefined,
 ): DeviceSwitchStatus | null => {

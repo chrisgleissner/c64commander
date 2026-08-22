@@ -89,7 +89,7 @@ export function createActionExecutor(
       );
     }
 
-    const resolvedTarget = resolvedTargets?.[action.id as keyof typeof resolvedTargets];
+    const resolvedTarget = resolvedTargets?.[action.id];
     const menuPath: MenuPath = resolvedTarget
       ? [resolvedTarget.categoryLabel, resolvedTarget.actionLabel]
       : action.menuPath;

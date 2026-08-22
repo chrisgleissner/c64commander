@@ -341,7 +341,7 @@ const assignReservedColumns = (model: HealthTimelineModel, widthPx: number): Map
   highSeveritySegments.forEach((segment, index) => {
     const centerRatio = ((segment.startMs + segment.endMs) / 2 - model.windowStartMs) / model.durationMs;
     const preferred = Math.round(centerRatio * (widthPx - 1));
-    const minAllowed = index === 0 ? 0 : (assignments.get(highSeveritySegments[index - 1]!.id) ?? -1) + 1;
+    const minAllowed = index === 0 ? 0 : (assignments.get(highSeveritySegments[index - 1].id) ?? -1) + 1;
     const maxAllowed = widthPx - 1 - (highSeveritySegments.length - index - 1);
     const boundedPreferred = Math.max(0, Math.min(widthPx - 1, preferred));
     const chosen =
@@ -375,7 +375,7 @@ const buildSelectionForColumn = (
   }
 
   if (column.sourceSegments.length === 1) {
-    const segment = column.sourceSegments[0]!;
+    const segment = column.sourceSegments[0];
     const events = uniqueEventsForSegments([segment]);
     return {
       kind: "segment",

@@ -207,8 +207,8 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       setSwipeNavigationEnabled(loadEnableSwipeNavigation());
     };
 
-    window.addEventListener("c64u-app-settings-updated", handleSettingsUpdate as EventListener);
-    return () => window.removeEventListener("c64u-app-settings-updated", handleSettingsUpdate as EventListener);
+    window.addEventListener("c64u-app-settings-updated", handleSettingsUpdate);
+    return () => window.removeEventListener("c64u-app-settings-updated", handleSettingsUpdate);
   }, []);
 
   useLayoutEffect(() => {

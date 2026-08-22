@@ -21,8 +21,8 @@ export const useListPreviewLimit = () => {
         setLimitState(getListPreviewLimit());
       }
     };
-    window.addEventListener("c64u-ui-preferences-changed", handler as EventListener);
-    return () => window.removeEventListener("c64u-ui-preferences-changed", handler as EventListener);
+    window.addEventListener("c64u-ui-preferences-changed", handler);
+    return () => window.removeEventListener("c64u-ui-preferences-changed", handler);
   }, []);
 
   const setLimit = useCallback((value: number) => {

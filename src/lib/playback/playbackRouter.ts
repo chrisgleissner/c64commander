@@ -18,7 +18,7 @@ import { recordDeviceGuard, recordTraceError } from "@/lib/tracing/traceSession"
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
-import { AUTOSTART_SEQUENCE, buildAutostartSequence } from "./autostart";
+import { buildAutostartSequence } from "./autostart";
 import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
 import {
   formatPlayCategory,
@@ -37,7 +37,7 @@ import {
 } from "@/lib/savedDevices/deviceBoundOrigin";
 import { base64ToUint8, createSslPayload } from "@/lib/sid/sidUtils";
 import { loadDiskAutostartMode, type DiskAutostartMode } from "@/lib/config/appSettings";
-import { loadFirstDiskPrgViaDma, type DiskImageType } from "./diskFirstPrg";
+import { loadFirstDiskPrgViaDma } from "./diskFirstPrg";
 import { withCartridgeParked } from "./launchSafety";
 
 export type PlaySource = "local" | "ultimate" | "hvsc" | "commoserve";
@@ -206,7 +206,7 @@ const ensureDiskAutoplayDriveReady = async (
   // so they reflect the new power/mode instead of a stale cached value. Best
   // effort — no registered client during very early startup.
   if (didMutateDrive) {
-    getRegisteredQueryClient()?.invalidateQueries({ queryKey: ["c64-drives"] });
+    void getRegisteredQueryClient()?.invalidateQueries({ queryKey: ["c64-drives"] });
   }
 
   return typeof driveInfo?.bus_id === "number" ? driveInfo.bus_id : 8;
@@ -641,7 +641,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           // Launch Safety (capability B): first-PRG DMA autostart is a direct-memory
           // launch — park a configured cartridge around it. Mount & Load (the kernal
           // injection branches below) is drive-backed and is not parked here.
-          await withCartridgeParked(api, () => loadFirstDiskPrgViaDma(api, image, diskType as DiskImageType));
+          await withCartridgeParked(api, () => loadFirstDiskPrgViaDma(api, image, diskType));
         } else if (
           diskAutostartMode === "dma" &&
           plan.source === "local" &&
@@ -655,7 +655,7 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
           try {
             const blob = await resolveLocalDiskBlob(diskEntry);
             const image = new Uint8Array(await blob.arrayBuffer());
-            await withCartridgeParked(api, () => loadFirstDiskPrgViaDma(api, image, diskType as DiskImageType));
+            await withCartridgeParked(api, () => loadFirstDiskPrgViaDma(api, image, diskType));
           } catch (error) {
             addLog("warn", "DMA disk autostart fallback to injection", {
               path: plan.path,

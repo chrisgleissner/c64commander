@@ -125,7 +125,7 @@ const appendEvent = <T extends Record<string, unknown>>(
     data: {
       ...data,
       ...contextFields,
-    } as TraceEvent<T>["data"],
+    },
   };
   events.push(event);
   const size = estimateEventSize(event);
@@ -583,8 +583,8 @@ export const recordTelnetOperation = (
 ) => {
   const { target, reason } = resolveBackendTarget(null);
   emitBackendDecision(action.origin, action.correlationId, target, reason);
-  const redactedRequestPayload = redactPayload(payload.requestPayload ?? null) as TelnetTraceRequestPayload | null;
-  const redactedResponsePayload = redactPayload(payload.responsePayload ?? null) as TelnetTraceResponsePayload | null;
+  const redactedRequestPayload = redactPayload(payload.requestPayload ?? null);
+  const redactedResponsePayload = redactPayload(payload.responsePayload ?? null);
   const requestPayloadPreview = redactedRequestPayload
     ? sanitizePayloadPreview(buildPayloadPreviewFromJson(redactedRequestPayload), payload.requestPayload ?? null)
     : null;

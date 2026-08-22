@@ -370,7 +370,11 @@ export function DeviceDiscoveryInterstitial() {
 
   if (!shouldOffer) return null;
 
-  const dialogTitle = hasCandidates ? "C64 systems found" : "No C64 systems found";
+  // The two titles stay symmetric on the noun and drop "system", which said
+  // nothing the reader needed and wrapped to two lines on the compact profile.
+  // With candidates the dialog is a chooser — every row carries Save and Use — so
+  // the title names the action rather than reporting a count.
+  const dialogTitle = hasCandidates ? "Choose your C64" : "No C64 found";
   const dialogDescription = hasCandidates
     ? "Choose one to control now, save one for later, or enter an address manually in Settings."
     : "Enter your C64 Ultimate host or IP address.";
@@ -451,7 +455,12 @@ export function DeviceDiscoveryInterstitial() {
           </div>
         ) : (
           <form
-            className="space-y-3 px-4 py-3 sm:px-6"
+            // Bounded and scrollable, exactly as the candidates list above is. Without this the
+            // form has no height limit, so on a short viewport - a 427x320 landscape handset -
+            // its own Connect button renders below the fold with nothing able to scroll to it,
+            // leaving a keypad user able to reach only "Not now". See
+            // docs/testing/agentic-tests/full-cta-coverage/defects/S2-GAMEMODE-8020-LANDSCAPE-CONNECT-UNREACHABLE.md
+            className="max-h-[min(26rem,60vh)] space-y-3 overflow-y-auto px-4 py-3 sm:px-6"
             data-testid="startup-manual-device-panel"
             onSubmit={(event) => {
               event.preventDefault();

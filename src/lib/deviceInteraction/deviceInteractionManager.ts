@@ -138,7 +138,7 @@ const isTestEnv = () => {
     return false;
   }
   if (typeof import.meta !== "undefined") {
-    const env = (import.meta as ImportMeta).env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
+    const env = import.meta.env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
     if (env?.VITE_ENABLE_TEST_PROBES === "1") return true;
   }
   if (typeof window !== "undefined") {
@@ -872,7 +872,7 @@ export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () 
 
   if (usesSharedReadState && policy.key) {
     restInflight.set(policy.key, {
-      promise: scheduledPromise as Promise<unknown>,
+      promise: scheduledPromise,
       generation: restInflightGeneration,
     });
   }
@@ -1053,7 +1053,7 @@ export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () =>
     run: scheduleTask,
   });
 
-  if (canCoalesce) ftpInflight.set(key, scheduledPromise as Promise<unknown>);
+  if (canCoalesce) ftpInflight.set(key, scheduledPromise);
   try {
     return await scheduledPromise;
   } finally {

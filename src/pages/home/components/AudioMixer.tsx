@@ -144,20 +144,10 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
   const ultiSid2ProfileSelectValue = ultiSid2ProfileValue;
 
   const sidDetectedSocket1 = String(
-    resolveConfigValue(
-      sidSocketsCategory as Record<string, unknown> | undefined,
-      "SID Sockets Configuration",
-      "SID Detected Socket 1",
-      "None",
-    ),
+    resolveConfigValue(sidSocketsCategory, "SID Sockets Configuration", "SID Detected Socket 1", "None"),
   );
   const sidDetectedSocket2 = String(
-    resolveConfigValue(
-      sidSocketsCategory as Record<string, unknown> | undefined,
-      "SID Sockets Configuration",
-      "SID Detected Socket 2",
-      "None",
-    ),
+    resolveConfigValue(sidSocketsCategory, "SID Sockets Configuration", "SID Detected Socket 2", "None"),
   );
 
   const sidEnablement = useMemo(
@@ -185,12 +175,7 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
   const masterVolumeValue = String(
     masterVolumeOverride !== undefined
       ? masterVolumeOverride
-      : resolveConfigValue(
-          audioMixerCategory as Record<string, unknown> | undefined,
-          "Audio Mixer",
-          AUDIO_MIXER_MASTER_VOLUME_ITEM,
-          "",
-        ),
+      : resolveConfigValue(audioMixerCategory, "Audio Mixer", AUDIO_MIXER_MASTER_VOLUME_ITEM, ""),
   );
   const masterVolumeOptions = readItemOptions(
     audioMixerCategory as Record<string, unknown> | undefined,
@@ -447,14 +432,7 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
 
             shapingControls.push({
               label: "Reson",
-              value: String(
-                resolveConfigValue(
-                  ultiSidCategory as Record<string, unknown> | undefined,
-                  "UltiSID Configuration",
-                  resonanceItem,
-                  "—",
-                ),
-              ),
+              value: String(resolveConfigValue(ultiSidCategory, "UltiSID Configuration", resonanceItem, "—")),
               options: readItemOptions(
                 ultiSidCategory as Record<string, unknown> | undefined,
                 "UltiSID Configuration",
@@ -472,14 +450,7 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
             });
             shapingControls.push({
               label: "Wave",
-              value: String(
-                resolveConfigValue(
-                  ultiSidCategory as Record<string, unknown> | undefined,
-                  "UltiSID Configuration",
-                  waveformItem,
-                  "—",
-                ),
-              ),
+              value: String(resolveConfigValue(ultiSidCategory, "UltiSID Configuration", waveformItem, "—")),
               options: readItemOptions(
                 ultiSidCategory as Record<string, unknown> | undefined,
                 "UltiSID Configuration",
@@ -497,14 +468,7 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
             });
             shapingControls.push({
               label: "Digis",
-              value: String(
-                resolveConfigValue(
-                  ultiSidCategory as Record<string, unknown> | undefined,
-                  "UltiSID Configuration",
-                  digisItem,
-                  "—",
-                ),
-              ),
+              value: String(resolveConfigValue(ultiSidCategory, "UltiSID Configuration", digisItem, "—")),
               options: readItemOptions(
                 ultiSidCategory as Record<string, unknown> | undefined,
                 "UltiSID Configuration",
@@ -527,14 +491,7 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
 
             shapingControls.push({
               label: "Resistor",
-              value: String(
-                resolveConfigValue(
-                  sidSocketsCategory as Record<string, unknown> | undefined,
-                  "SID Sockets Configuration",
-                  resistorItem,
-                  "—",
-                ),
-              ),
+              value: String(resolveConfigValue(sidSocketsCategory, "SID Sockets Configuration", resistorItem, "—")),
               options: readItemOptions(
                 sidSocketsCategory as Record<string, unknown> | undefined,
                 "SID Sockets Configuration",
@@ -552,14 +509,7 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
             });
             shapingControls.push({
               label: "Cap",
-              value: String(
-                resolveConfigValue(
-                  sidSocketsCategory as Record<string, unknown> | undefined,
-                  "SID Sockets Configuration",
-                  capacitorItem,
-                  "—",
-                ),
-              ),
+              value: String(resolveConfigValue(sidSocketsCategory, "SID Sockets Configuration", capacitorItem, "—")),
               options: readItemOptions(
                 sidSocketsCategory as Record<string, unknown> | undefined,
                 "SID Sockets Configuration",
