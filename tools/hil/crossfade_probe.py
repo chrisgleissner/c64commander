@@ -10,12 +10,13 @@ Generate the two tunes with `scripts/generate-test-sid.mjs`, put them next to ea
 playlist, start the first, and record while you skip to the second.
 
     node scripts/generate-test-sid.mjs --hz 550  --name "XF Low"  --out /tmp/xf-low.sid
-    node scripts/generate-test-sid.mjs --hz 1850 --name "XF High" --out /tmp/xf-high.sid
+    node scripts/generate-test-sid.mjs --hz 900 --name "XF High" --out /tmp/xf-high.sid
     arecord -D "$MIC" -f S16_LE -r 44100 -c 1 -d 8 /tmp/xf.wav &   # then press Next
     python3 tools/hil/crossfade_probe.py /tmp/xf.wav
 
 Pick pitches your speaker actually reproduces and that are not octaves apart: an octave shares
-harmonics, so one tone can be mistaken for the other. 550 Hz and 1850 Hz work on a phone speaker.
+harmonics, so one tone can be mistaken for the other. 550 Hz and 900 Hz work on a phone speaker, and
+are quiet enough on the ear to sit beside for a minute — the high tone was 1850 Hz and was not.
 
 Levels are compared against each tone's OWN peak, never a shared threshold. The two tones do not
 reach the microphone equally — speaker response, distance and the room all differ — and a shared
@@ -292,7 +293,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("recordings", nargs="*", help="WAV files, each holding one track change")
     parser.add_argument("--low-hz", type=float, default=550.0, help="pitch of the outgoing tune")
-    parser.add_argument("--high-hz", type=float, default=1850.0, help="pitch of the incoming tune")
+    parser.add_argument("--high-hz", type=float, default=900.0, help="pitch of the incoming tune")
     parser.add_argument("--verbose", action="store_true", help="print every analysis window, to stderr")
     parser.add_argument("--json", action="store_true", help="machine-readable output")
     parser.add_argument("--self-test", action="store_true", help="grade known patterns and check the verdicts")

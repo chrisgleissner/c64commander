@@ -6,12 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Check, Loader2, Monitor } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 
 import type { VicPalette } from "@/generated/vicPalettes";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { PaletteSwatchStrip } from "@/components/palette/PaletteSwatchStrip";
 import { Label } from "@/components/ui/label";
 import { addLog } from "@/lib/logging";
@@ -36,7 +35,7 @@ const TARGET_LABELS: Record<PaletteTarget, string> = {
 };
 
 function TargetToggle({ value, onChange }: { value: PaletteTarget; onChange: (next: PaletteTarget) => void }) {
-  const option = (target: PaletteTarget, icon: React.ReactNode, testId: string) => {
+  const option = (target: PaletteTarget, testId: string) => {
     const active = value === target;
     return (
       <Button
@@ -47,28 +46,28 @@ function TargetToggle({ value, onChange }: { value: PaletteTarget; onChange: (ne
         data-testid={testId}
         aria-pressed={active}
         onClick={() => onChange(target)}
-        className="gap-1.5"
+        // `px-1` rather than the size variant's `px-3`: the grid column decides the width, so the
+        // padding only sets a minimum. `min-w-0` is deliberately NOT set — `buttonVariants` carries
+        // the 44px `min-w-11` target-size floor and this must not drop below it.
+        className="px-1"
       >
-        {icon}
         {TARGET_LABELS[target]}
       </Button>
     );
   };
 
   return (
-    // Label above, buttons in a wrapping row — the same shape as "Listen on" for a tune, because it
-    // is the same question about a different sense. Local, Remote, Both reads as a progression from
-    // this device outwards.
+    // Label above, options in an equal-width grid — the same shape as "Listen on" for a tune,
+    // because it is the same question about a different sense, and Local, Remote, Both reads as a
+    // progression from this device outwards. The grid is what stops the row taking a second line at
+    // 320 CSS px, where this column is 262px and three wrapping buttons need 305px; the origin icons
+    // went for the same reason. Measured in docs/plans/segmented-control/PROPOSAL.md.
     <div role="group" aria-label="Show on" data-testid="screen-colors-target" className="space-y-1.5">
       <Label className="text-xs font-medium text-muted-foreground">Show on</Label>
-      <div className="flex flex-wrap gap-2">
-        {option("local", <FileOriginIcon origin="local" className="h-3.5 w-3.5" label="" />, "screen-colors-local")}
-        {option(
-          "remote",
-          <FileOriginIcon origin="ultimate" className="h-3.5 w-3.5" label="" />,
-          "screen-colors-remote",
-        )}
-        {option("both", <Monitor className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />, "screen-colors-both")}
+      <div className="grid grid-cols-3 gap-2">
+        {option("local", "screen-colors-local")}
+        {option("remote", "screen-colors-remote")}
+        {option("both", "screen-colors-both")}
       </div>
       <p className="text-xs text-muted-foreground" data-testid="screen-colors-target-hint">
         {value === "local"

@@ -203,7 +203,7 @@ not-connected / empty / single-device).
 - **Quick Config → Video** (`home-video-summary`)
   - Screen colors — button — `home-video-screen-colors` — R✅ I✅ — first in the card, because it is the one row here people actually change; opens the **Screen colors sheet** (below) _(needs no device connection: the app's own palette is a local rendering choice, so the row stays usable while the rest of the card is disabled. The 16-swatch strip beneath it, `home-video-screen-colors-preview`, is display-only)_
   - **Screen colors sheet** (`screen-colors-*`, opened by `home-video-screen-colors`)
-    - Show on: Local / Remote / Both — button ×3 — `screen-colors-local` / `screen-colors-remote` / `screen-colors-both` — R✅ I✅ _(group `screen-colors-target`; the same shape as the Play page's **Listen on**. Local paints this device's Live View only, Remote changes what the C64 itself draws, Both does each; `screen-colors-target-hint` states which, display-only)_
+    - Show on: Local / Remote / Both — button ×3 — `screen-colors-local` / `screen-colors-remote` / `screen-colors-both` — R✅ I✅ _(group `screen-colors-target`; the same shape as the Play page's **Listen on**. Local paints this device's Live View only, Remote changes what the C64 itself draws, Both does each; `screen-colors-target-hint` states which, display-only. Laid out as an equal-width three-column grid rather than a wrapping row, so it holds one line on the compact profile — the column there is 262 CSS px and three wrapping buttons need 305; the origin icons are omitted because a third of that row cannot fit icon plus label)_
     - Follow the C64 — button — `screen-colors-follow-device` — R✅ I✅ _(Live View paints whatever palette the machine is set to, so the phone and the television match)_
     - Per-palette choice — button ×N — `screen-colors-palette-<id>` — R✅ I✅ `[the row being applied is disabled while its upload is in flight]` — the nine bundled VICE palettes (`cool`, `default`, `inverted`, `monochrome`, `muted`, `neonblast`, `night`, `vibrant`, `warm`), plus one row per `.vpl` already installed on the connected machine (`screen-colors-device-palettes`), read from the device's own preset list
     - Close — button — `screen-colors-close` — R✅ I✅
@@ -300,7 +300,7 @@ not-connected / empty / single-device).
 - Progress bar (seek) — button — `playback-progress-seek` — R✅ I✅ — tap or drag to jump within the tune; **also operable without a pointer**: `ArrowLeft`/`ArrowRight` step ±2%. Rendered only for audio this device renders (see _Listen on_ below); on the C64 route the bar is a plain indicator (`playback-progress`) and not focusable, because the machine plays the SID on its own chip and cannot be scrubbed.
 - Previous / Next **held** — scrub — same `playlist-prev|next` buttons — R✅ I✅ — a hold scrubs the current tune instead of changing track (local playback only); a tap still skips.
 
-**Listen on** — group `playback-engine-toggle` _(flag `c64u_local_engine_enabled`; SID items only)_
+**Listen on** — group `playback-engine-toggle` _(flag `c64u_local_engine_enabled`; SID items only)_ — an equal-width grid, three columns normally and two while **Both** is hidden, so the row holds one line on the compact profile; no origin icons, because a third of that row cannot fit icon plus label.
 
 Listed below in the order they are rendered and walked by the focus ring.
 

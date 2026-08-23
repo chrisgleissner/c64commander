@@ -236,7 +236,15 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
           const channels = offline.getChannels();
           // Rendered in slices so progress can be reported and the worker stays
           // responsive to a cancel; one giant renderSeconds() would block it.
+          //
+          // The pause between slices keeps this off the tune the listener is actually hearing. A
+          // Pixel 4 has four cores and this renders many times faster than real time, so left to
+          // run flat out it holds a core for the whole tune. It is not the whole story — the
+          // dropout this was written for was mostly the main thread's O(n^2) chunk accumulation,
+          // fixed in `localSidEngine` — but yielding costs the pre-render wall-clock it has to
+          // spare, since nobody is waiting for it.
           const slice = 5;
+          const yieldBetweenSlicesMs = 120;
           let done = 0;
           while (done < message.seconds) {
             const want = Math.min(slice, message.seconds - done);
@@ -249,6 +257,7 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
               pcm.buffer,
             ]);
             ctx.postMessage({ type: "prerender-progress", id: message.id, fraction: done / message.seconds });
+            if (done < message.seconds) await new Promise((resolve) => setTimeout(resolve, yieldBetweenSlicesMs));
           }
           // No PCM here any more — the slices carried it. This just says the tune is complete, which
           // is what lets the cache stop treating it as a partial.

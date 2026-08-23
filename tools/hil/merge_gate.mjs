@@ -301,13 +301,19 @@ export const gradeClarityOutput = (text) => {
  * pitches are far apart and not an octave (an octave shares harmonics, and one tone is then
  * mistaken for the other), and both are where a phone speaker actually works.
  *
+ * The high tone was 1850 Hz and is now 900. This runs next to somebody for a minute at a time, and
+ * a sustained sawtooth up there is genuinely unpleasant to sit beside — reason enough on its own.
+ * The graders lose nothing: 550 and 900 are a ratio of 1.64, so neither is an octave, a fifth or a
+ * fourth of the other, and 550's second harmonic at 1100 Hz stays clear of the +-6% window the
+ * pitch check draws around 900 (846-954 Hz).
+ *
  * They have to be on the Ultimate and in the app's playlist before the gate runs; see
  * docs/testing/hil-merge-gate.md. The stages check and say so rather than grading whatever
  * happens to be queued, because grading an unknown tune is how a green run means nothing.
  */
 const TONE_TUNES = [
   { title: "Tone-Low", hz: 550 },
-  { title: "Tone-High", hz: 1850 },
+  { title: "Tone-High", hz: 900 },
 ];
 const TONE_SECONDS = 10;
 
@@ -450,17 +456,38 @@ const item=items[${index}]; if(!item) return JSON.stringify({error:"the tune lef
 // something is already playing, which is why these stages recorded a clock frozen at 0:00.
 const rowPlay=item.querySelector('button[aria-label^="Play "]');
 if(!rowPlay) return JSON.stringify({error:"the row has no Play button"});
+// What the clock read for the PREVIOUS tune. Sampled before the click because the display keeps
+// showing it for about half a second afterwards, and a wait that stops at "anything but 0:00"
+// stops on that stale value. Measured on a Pixel 4, the clock reads 0:13 (the old position),
+// then 0:00 for roughly two seconds while the tune starts, and only then counts.
+const staleElapsed=q("playback-elapsed")?.innerText??null;
 rowPlay.click();
-// Wait for the clock to move rather than sampling once at a fixed delay. Opening the on-device
-// engine takes about 1.6 s on a Pixel 4 from cold, and this stage now runs after a machine reset,
-// so a single 4 s sample read 0:00 and failed a tune that was about to play perfectly.
-for(let i=0;i<40 && (q("playback-elapsed")?.innerText??"0:00")==="0:00";i++) await wait(300);
+// So wait for a reading that is neither the old tune's nor a standing 0:00. That is the first
+// second of THIS tune, and it cannot be satisfied by either thing that is not it.
+for(let i=0;i<50;i++){
+  const now=q("playback-elapsed")?.innerText??"0:00";
+  if(now!=="0:00" && now!==staleElapsed) break;
+  await wait(300);
+}
+// Then let the sound reach the speaker. The clock starts when playback is SCHEDULED; the sink
+// still has its buffer to fill, and the microphone is on the far side of that. Recording the
+// moment the clock moved put a 250-300 ms hole at the very start of every take — located in the
+// gate's own recording at 0.00-0.30 s, with the remaining 9.7 s clean. That is the rig's own
+// latency, not a defect in the tune.
+await wait(700);
+// Two readings a second apart, because "it is playing" is a clock that ADVANCES, and one sample
+// at one instant cannot tell that from a clock parked at 0:00.
+const first=q("playback-elapsed")?.innerText??null;
+await wait(1100);
+const second=q("playback-elapsed")?.innerText??null;
 return JSON.stringify({engine:q("${testId}")?.getAttribute("aria-pressed"),
-  elapsed:q("playback-elapsed")?.innerText??null});})()`);
+  elapsed:second, advancing:first!==second});})()`);
   if (started.error) throw new Error(started.error);
   if (started.engine !== "true") throw new Error(`the ${label} engine did not take`);
-  if (started.elapsed === "0:00") {
-    throw new Error(`${label}: the transport says playing but the clock has not moved off 0:00`);
+  if (!started.advancing) {
+    throw new Error(
+      `${label}: the transport says playing but the clock is not advancing (stuck at ${started.elapsed})`,
+    );
   }
 
   const wav = path.join(TMP, `sid-${testId}.wav`);

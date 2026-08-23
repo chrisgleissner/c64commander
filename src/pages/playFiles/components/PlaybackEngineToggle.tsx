@@ -7,11 +7,9 @@
  */
 
 import { useState } from "react";
-import { Volume2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { cn } from "@/lib/utils";
 import { addLog } from "@/lib/logging";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
@@ -40,10 +38,11 @@ import { saveMirrorC64Audio } from "@/lib/config/appSettings";
  * next track. "Local" deliberately does not touch it: it answers a different question, and the
  * C64 route should be as it was left when playback returns to it.
  *
- * Naming and icons come from `sourceTerms` and `FileOriginIcon`, the same pair
- * the "Choose source" dialog, the playlist rows and the disks list use. This
- * control used to invent both — a lucide chip glyph and the word "C64" — so one
- * machine appeared under three names and two icons within a single app.
+ * Naming follows `sourceTerms`, as the "Choose source" dialog, the playlist rows and the
+ * disks list do; this control used to invent its own word and its own glyph, so one machine
+ * appeared under three names and two icons. The origin icons are deliberately absent now: a
+ * third of this row at 320 CSS px cannot hold icon plus label. If one ever returns here it is
+ * `FileOriginIcon`, never a lucide stand-in.
  */
 type ListenTarget = "c64" | "both" | "local";
 
@@ -103,7 +102,7 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
     });
   };
 
-  const option = (value: ListenTarget, icon: React.ReactNode, title: string, testId: string) => {
+  const option = (value: ListenTarget, title: string, testId: string) => {
     const active = selected === value;
     return (
       <Button
@@ -114,20 +113,22 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
         data-testid={testId}
         aria-pressed={active}
         onClick={() => select(value)}
-        className="gap-1.5"
+        // `px-1` rather than the size variant's `px-3`: the grid column decides the width, so
+        // the padding only sets a minimum, and `px-3` puts "Remote" over a third of a 320px row.
+        // `min-w-0` is deliberately NOT set — `buttonVariants` carries the 44px `min-w-11` floor.
+        className="px-1"
       >
-        {icon}
         {title}
       </Button>
     );
   };
 
   return (
-    // Label ABOVE the buttons, and the buttons in a wrapping row — the same
-    // shape as the SID emulation selector in Settings, which is the identical
-    // interaction. Inline the label competes for width with three options; a
-    // wrapping row degrades to a second line on a narrow screen instead of
-    // truncating, and single-word titles keep the block two lines tall.
+    // Label above, options in an equal-width grid sized to how many are actually rendered.
+    // A wrapping row cost a whole second line at 320 CSS px — three buttons need 305px of a
+    // 278px column — making a 44px control 96px tall on the screen with the least room. Equal
+    // columns hold one line and weight the options equally, which is what they are.
+    // Measured in docs/plans/segmented-control/PROPOSAL.md.
     <div
       role="group"
       aria-label="Listen on"
@@ -135,31 +136,14 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
       className={cn("space-y-1.5 min-w-0", className)}
     >
       <Label className="text-xs font-medium text-muted-foreground">Listen on</Label>
-      <div className="flex flex-wrap gap-2">
+      <div className={cn("grid gap-2", canStreamBack ? "grid-cols-3" : "grid-cols-2")}>
         {/* Local, Remote, Both — in that order, so the row reads as a progression from this device
             outwards to both. "Remote" rather than the device's name or host: the header already says
             which device is connected, repeating it here spent the row's width on something already on
             screen, and the wording now matches Remote Input. */}
-        {option(
-          "local",
-          <FileOriginIcon origin="local" className="h-3.5 w-3.5" label="" />,
-          "Local",
-          "playback-engine-local",
-        )}
-        {option(
-          "c64",
-          <FileOriginIcon origin="ultimate" className="h-3.5 w-3.5" label="" />,
-          "Remote",
-          "playback-engine-c64",
-        )}
-        {canStreamBack
-          ? option(
-              "both",
-              <Volume2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />,
-              "Both",
-              "playback-listen-both",
-            )
-          : null}
+        {option("local", "Local", "playback-engine-local")}
+        {option("c64", "Remote", "playback-engine-c64")}
+        {canStreamBack ? option("both", "Both", "playback-listen-both") : null}
       </div>
     </div>
   );
