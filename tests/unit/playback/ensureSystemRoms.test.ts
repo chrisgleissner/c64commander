@@ -67,11 +67,20 @@ describe("reading the C64 ROMs without being asked", () => {
 describe("which emulation actually runs", () => {
   beforeEach(() => localStorage.clear());
 
-  it("falls back to the kernal-free emulation when the ROMs are missing", () => {
-    // reSIDfp initialises a tune and then never advances it without the real images. SIDLite carries
-    // its own playback, so it is audible where the accurate one is not.
+  it("keeps the chosen emulation when the ROMs are missing", () => {
+    // This used to return SIDLite, on the reasoning that "reSIDfp initialises a tune and then never
+    // advances it without the real images" and that "SIDLite carries its own playback". Both are
+    // false. SIDLite is a SID *chip* model plugged into the same libsidplayfp C64 -- no CPU, no
+    // memory map, no ROM substitute -- and the two WASM builds differ by one compiler flag.
+    //
+    // Measured on libsidplayfp-wasm 1.0.1 with null images: reSIDfp renders `tone-ladder.sid` with
+    // a per-second RMS of -22.8, -23.0, -23.0, -23.0, -24.1, -22.2, -23.0, -23.1 dB across eight
+    // seconds. That is a tune advancing through its notes, not a drone.
+    //
+    // So the ROM state says nothing about which chip model to use, and swapping it silently gave a
+    // listener whose ROM capture had not succeeded a different timbre with no way to know why.
     saveSidEmulationEngine("residfp");
-    expect(effectiveSidEmulationEngine(false)).toBe("sidlite");
+    expect(effectiveSidEmulationEngine(false)).toBe("residfp");
   });
 
   it("uses the chosen emulation once the ROMs are there", () => {

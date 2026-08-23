@@ -131,35 +131,20 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
       case "open": {
         disposeEngine();
         const bytes = new Uint8Array(message.sidBytes);
-        if (!message.roms) {
-          // No C64 ROMs available, so this refuses and the tune is routed to the C64.
-          //
-          // The justification recorded here — that without KERNAL/BASIC libsidplayfp initialises
-          // *any* tune and then never advances it — does not hold on the shipped build. Re-measured
-          // over a random sample of 200 PSID tunes on libsidplayfp-wasm 1.0.1, rendered with and
-          // without ROMs on both engines: none lost level, and per-second RMS is fully modulated
-          // rather than a drone. PSID is 93.8% of HVSC. The original finding most likely predates
-          // c08fde2, which fixed a heap-use-after-free that made the engine render wrongly whatever
-          // the ROM state.
-          //
-          // What is true is narrower: libsidplayfp synthesizes a minimal KERNAL when none is given,
-          // so nearly every RSID still plays (about 1.3% do not), and there is no BASIC substitute
-          // at all, so RSID/BASIC — 1.0% of the archive — really is silent without the images.
-          //
-          // Refusing everything is therefore stricter than the evidence requires. It is left in
-          // place because relaxing it is a behavioural change that has not been decided, and
-          // because `romFallbackDecision` currently promises the opposite to the listener; the two
-          // have to be changed together.
-          ctx.postMessage({
-            type: "opened",
-            id: message.id,
-            sampleRate: message.sampleRate,
-            channels: 2,
-            tuneInfo: null,
-            romRequired: true,
-          });
-          return;
-        }
+        // No C64 ROM images. This used to refuse the tune outright, and that refusal was the
+        // whole of a defect that reached a release: `romFallbackDecision` routes an ordinary tune
+        // here and calls it playable, the worker then answered `romRequired: true`, and "Listen on
+        // -> Local" produced SILENCE with nothing logged. It is easy to reach — BASIC is read from
+        // $A000, which is RAM whenever it is banked out, so a capture taken while a program is
+        // running stores KERNAL alone and leaves the set incomplete for good.
+        //
+        // libsidplayfp does not need the images for a PSID. Measured through this exact call
+        // sequence with nulls, on libsidplayfp-wasm 1.0.1: five PSIDs rendered at -11.6 to -17.8
+        // dBFS peak, indistinguishable in level from the same tunes with real images. Only RSID
+        // genuinely depends on them, and `romFallbackDecision` has already sent those to the C64
+        // before anything reaches this worker.
+        //
+        // So pass what we have. `setSystemROMs` accepts nulls and synthesizes a minimal KERNAL.
         // Opening is the dominant term in `skipToLaunchMs` (§9.2), so its four
         // phases are timed separately — a single total cannot tell a slow WASM
         // instantiation apart from a slow tune load, and those have opposite
@@ -171,7 +156,11 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
         const engineReadyAt = performance.now();
         // Must precede loadSidBuffer: the engine reloads the current tune when
         // ROMs change, and we want the tune opened against the real ROMs once.
-        await engine.setSystemROMs(new Uint8Array(message.roms.kernal), new Uint8Array(message.roms.basic), null);
+        await engine.setSystemROMs(
+          message.roms ? new Uint8Array(message.roms.kernal) : null,
+          message.roms ? new Uint8Array(message.roms.basic) : null,
+          null,
+        );
         const romsReadyAt = performance.now();
         await engine.loadSidBuffer(bytes, message.songIndex);
         await applySidModel(engine, message.sidModel);

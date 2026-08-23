@@ -681,12 +681,15 @@ export const saveLocalEngineAutoRoms = (enabled: boolean) => writeBoolean(LOCAL_
  * the tunes that need ROMs are the *same tunes* on both engines (SIDLite 97, reSIDfp 98, intersection
  * 97). Needing ROMs is a property of the tune, not of the engine.
  *
- * So this returns SIDLite when the images are missing only because it is cheaper, not because it can
- * play anything the accurate model cannot. The preference is untouched — as soon as the images
- * arrive, the next worker uses them.
+ * It used to return SIDLite whenever the images were missing — cheaper, but a different SID model,
+ * so a listener whose ROM capture had not succeeded got a different timbre and was never told why.
+ * Since needing the images is a property of the tune rather than of the engine, the ROM state says
+ * nothing about which chip model to use, and the preference is now honoured either way.
+ *
+ * `romsAvailable` is kept in the signature: callers pass what they know, and it documents at every
+ * call site that the question was considered. It no longer changes the answer.
  */
-export const effectiveSidEmulationEngine = (romsAvailable: boolean): SidEmulationEngine =>
-  romsAvailable ? loadSidEmulationEngine() : "sidlite";
+export const effectiveSidEmulationEngine = (_romsAvailable: boolean): SidEmulationEngine => loadSidEmulationEngine();
 
 export const loadSidEmulationEngine = (): SidEmulationEngine =>
   readRawString(SID_EMULATION_ENGINE_KEY) === "sidlite" ? "sidlite" : DEFAULT_SID_EMULATION_ENGINE;

@@ -22,18 +22,26 @@ import { hasCompleteRomSet } from "@/lib/roms/romStore";
  * produced under settings the listener has since moved away from — and a lead-in cached under the
  * old ones hands over to live rendering under the new ones part-way through a track.
  *
- * Two things do:
+ * Three things do:
  *
  *  - the fallback SID chip, for a tune whose header does not name one;
  *  - the emulation itself. reSIDfp and SIDLite do not sound alike — that difference is the whole
- *    reason the accurate one is preferred — and which is in use is not fixed for a session: it
- *    follows a Settings control, and it drops to SIDLite on its own when the ROMs are missing.
+ *    reason the accurate one is preferred — and which is in use follows a Settings control;
+ *  - whether the C64 ROM images were available. This used to ride in on the emulation, because a
+ *    missing set silently forced SIDLite; it no longer does, so it is named here in its own right.
+ *    It still matters: a PSID that calls a KERNAL routine renders differently against the real
+ *    images than against the minimal KERNAL libsidplayfp synthesizes, and the images can arrive
+ *    part-way through a session, so a render made before they did must not be served after.
  *
  * Entries keyed to settings the listener has left are simply never read again and fall out of the
  * LRU window.
  */
-export const buildRenderedTuneKey = (itemId: string, tuneIndex: number): string =>
-  `${itemId}#${tuneIndex}@${resolveLocalSidModel()}/${effectiveSidEmulationEngine(hasCompleteRomSet())}`;
+export const buildRenderedTuneKey = (itemId: string, tuneIndex: number): string => {
+  const romsAvailable = hasCompleteRomSet();
+  return `${itemId}#${tuneIndex}@${resolveLocalSidModel()}/${effectiveSidEmulationEngine(romsAvailable)}${
+    romsAvailable ? "" : "/noroms"
+  }`;
+};
 
 /**
  * A rolling cache of fully-rendered tunes, so seeking is instant.
