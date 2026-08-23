@@ -215,13 +215,19 @@ const handleMessage = async (message: LocalSidMainToWorker): Promise<void> => {
         // render the future would fast-forward what the listener is hearing.
         const Ctor = await ensureModule();
         const bytes = new Uint8Array(message.sidBytes);
-        if (!message.roms) {
-          ctx.postMessage({ type: "error", id: message.id, code: "prerender", message: "ROMs required" });
-          return;
-        }
         const offline = new Ctor({ sampleRate: message.sampleRate, stereo: true, engine: requestedEmulation });
         try {
-          await offline.setSystemROMs(new Uint8Array(message.roms.kernal), new Uint8Array(message.roms.basic), null);
+          // Nulls when there are no images, for the same reason the `open` branch above takes them:
+          // libsidplayfp synthesizes a minimal KERNAL and a PSID renders identically either way.
+          // Refusing here meant the pre-render and lead-in caches were empty for anyone whose ROM
+          // capture had not succeeded, so every seek re-rendered from the start and every skip
+          // opened from cold — silently, because a refused pre-render is not something the listener
+          // is told about.
+          await offline.setSystemROMs(
+            message.roms ? new Uint8Array(message.roms.kernal) : null,
+            message.roms ? new Uint8Array(message.roms.basic) : null,
+            null,
+          );
           await offline.loadSidBuffer(bytes, message.songIndex);
           // Same chip as the playing engine, or the cached render and the live render of one tune
           // would be two different performances with an audible seam between them.

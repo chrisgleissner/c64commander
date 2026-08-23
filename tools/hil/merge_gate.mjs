@@ -208,14 +208,23 @@ return JSON.stringify({audio:q("av-audio-toggle")?.getAttribute("aria-pressed"),
 };
 
 /**
- * Put the C64 back to a silent BASIC prompt, so nothing plays while nothing is measuring.
+ * Leave the ROOM silent, so nothing plays while nothing is measuring.
  *
- * A failure here is reported rather than swallowed, and loudly: it means the machine is still
- * making a sound in someone's room, and it means the next audible stage is grading a stimulus on
- * top of whatever the last one left running. The run continues — a stage that cannot silence the
- * C64 is not a reason to abandon the stages that do not need it — but the reason is on the record.
+ * Two sources, and resetting the C64 only covers one of them. On-device playback renders on the
+ * PHONE, so a stage that ended with a tune playing there — or that failed before its own pause —
+ * left it playing through every stage that followed. Measured: with the phone still playing the
+ * 550 Hz tone, a "room noise" recording read -16.1 dBFS RMS with 549.7 Hz as its loudest content,
+ * and the crossfade grader answered "INCONCLUSIVE — the low tone is only 1.0x its own noise" on a
+ * join that had graded SEAMLESS minutes earlier.
+ *
+ * A failure here is reported rather than swallowed, and loudly: it means something is still making
+ * a sound in someone's room, and it means the next audible stage is grading a stimulus on top of
+ * it. The run continues — a stage that cannot silence the rig is not a reason to abandon the
+ * stages that do not need it — but the reason is on the record.
  */
 const silenceC64 = async () => {
+  // The phone first: it is the source a machine reset cannot reach.
+  await js(`(()=>{document.querySelector('[data-testid="playlist-pause"]')?.click();return 1})()`).catch(() => {});
   try {
     const response = await fetch(`http://${HOST}/v1/machine:reset`, { method: "PUT", headers: authHeaders });
     if (!response.ok) throw new Error(`machine:reset -> HTTP ${response.status}`);
@@ -344,7 +353,12 @@ const stage = async (name, audible, body) => {
     results.push({ name, status: "fail", detail: String(error.message ?? error) });
     console.error(`  FAIL ${error.message ?? error}`);
   }
-  if (audible) await silenceC64();
+  // After EVERY stage, not only the audible ones. `input` loads a probe program and leaves it
+  // running, and the stages after it then measured on top of it: `av-clarity` read "0 tone bursts
+  // found" and `sid-remote` read an empty room in a full run, while both passed on their own
+  // minutes earlier on the same rig. A stage has to start from a known machine, and the only thing
+  // that guarantees that is resetting after whatever ran last, whether or not it made a sound.
+  await silenceC64();
 };
 
 /** Grade one number out of a tool's output, so a stage fails on the value rather than the exit code. */
@@ -436,7 +450,11 @@ const item=items[${index}]; if(!item) return JSON.stringify({error:"the tune lef
 // something is already playing, which is why these stages recorded a clock frozen at 0:00.
 const rowPlay=item.querySelector('button[aria-label^="Play "]');
 if(!rowPlay) return JSON.stringify({error:"the row has no Play button"});
-rowPlay.click();await wait(4000);
+rowPlay.click();
+// Wait for the clock to move rather than sampling once at a fixed delay. Opening the on-device
+// engine takes about 1.6 s on a Pixel 4 from cold, and this stage now runs after a machine reset,
+// so a single 4 s sample read 0:00 and failed a tune that was about to play perfectly.
+for(let i=0;i<40 && (q("playback-elapsed")?.innerText??"0:00")==="0:00";i++) await wait(300);
 return JSON.stringify({engine:q("${testId}")?.getAttribute("aria-pressed"),
   elapsed:q("playback-elapsed")?.innerText??null});})()`);
   if (started.error) throw new Error(started.error);
@@ -538,6 +556,28 @@ return JSON.stringify({elapsed:q("playback-elapsed")?.innerText??null});})()`);
   if (!verdict) throw new Error(`the grader printed no verdict: ${graded.out.trim().slice(-240)}`);
   if (!/SEAMLESS/i.test(verdict)) throw new Error(`the join graded "${verdict}"`);
   return `join graded "${verdict}"`;
+};
+
+/**
+ * The app's crossfade length, and a way to put it back.
+ *
+ * The `crossfade` stage grades the join between two tunes and its grader passes only on
+ * SEAMLESS, which by definition needs an instant where both are audible. The app ships with
+ * crossfade at 0 ms — a hard cut — so the stage was grading a feature nobody had turned on and
+ * could not pass on a default install however well the app behaved. It asks for one now, and puts
+ * the setting back afterwards like every other piece of rig state.
+ */
+const CROSSFADE_TEST_MS = 2000;
+
+const readCrossfadeMs = async () => {
+  const value = await js('(()=>JSON.stringify({ms:localStorage.getItem("c64u_playback_crossfade_ms")}))()');
+  return typeof value === "object" ? value.ms : null;
+};
+
+const setCrossfadeMs = async (ms) => {
+  await js(
+    `(()=>{${ms === null ? 'localStorage.removeItem("c64u_playback_crossfade_ms")' : `localStorage.setItem("c64u_playback_crossfade_ms",${JSON.stringify(String(ms))})`};return 1})()`,
+  );
 };
 
 /**
@@ -751,7 +791,13 @@ const main = async () => {
     await setVolume(TONE_VOLUME);
     await setMirror({ video: false, audio: false });
     audibleSeconds += CROSSFADE_SECONDS;
-    return await gradeCrossfade();
+    const previousCrossfade = await readCrossfadeMs();
+    await setCrossfadeMs(CROSSFADE_TEST_MS);
+    try {
+      return await gradeCrossfade();
+    } finally {
+      await setCrossfadeMs(previousCrossfade);
+    }
   });
 
   await restoreRig();

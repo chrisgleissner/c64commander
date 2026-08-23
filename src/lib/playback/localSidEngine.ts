@@ -2067,8 +2067,8 @@ export class LocalSidEngine {
    */
   warmLeadIn(key: string, sidBytes: ArrayBuffer, songIndex: number, seconds: number): void {
     if (this.renderCache.has(key) || seconds <= 0) return;
+    // No ROM guard, for the reason given on `prerender`.
     const roms = loadStoredRoms();
-    if (!roms.kernal || !roms.basic) return;
     // One at a time on this thread, but never behind the playing tune's render — that is the point of
     // having a second thread. A warm still in flight is left alone rather than cancelled: the listener
     // is more likely to skip forwards, which is warmed first.
@@ -2087,7 +2087,10 @@ export class LocalSidEngine {
         songIndex,
         seconds,
         sampleRate: this.requestedSampleRate,
-        roms: { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer },
+        roms:
+          roms.kernal && roms.basic
+            ? { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer }
+            : undefined,
         sidModel: toEngineSidModel(resolveLocalSidModel()),
       },
       [sidBytes],
@@ -2316,8 +2319,9 @@ export class LocalSidEngine {
     // seek can find it.
     this.currentKey = key;
     if (this.renderCache.has(key) || !this.worker || seconds <= 0) return;
+    // No ROM guard. The worker renders a PSID with null images, so refusing here only emptied the
+    // cache for anyone whose ROM capture had not succeeded — every seek re-rendered from the start.
     const roms = loadStoredRoms();
-    if (!roms.kernal || !roms.basic) return;
     // A pre-render still running for a previous tune is now dead weight, and
     // its worker would render it to the end before touching this one. Killing
     // the thread stops that work immediately rather than queueing behind it.
@@ -2326,8 +2330,8 @@ export class LocalSidEngine {
     this.prerenderKey = key;
     this.prerenderFraction = 0;
     this.prerenderAccumulated = EMPTY_PCM;
-    const kernal = roms.kernal.slice().buffer;
-    const basic = roms.basic.slice().buffer;
+    const romPayload =
+      roms.kernal && roms.basic ? { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer } : undefined;
     this.ensurePrerenderWorker().postMessage(
       {
         type: "prerender",
@@ -2336,10 +2340,10 @@ export class LocalSidEngine {
         songIndex,
         sampleRate: this.requestedSampleRate,
         seconds,
-        roms: { kernal, basic },
+        roms: romPayload,
         sidModel: toEngineSidModel(resolveLocalSidModel()),
       },
-      [sidBytes, kernal, basic],
+      romPayload ? [sidBytes, romPayload.kernal, romPayload.basic] : [sidBytes],
     );
   }
 
