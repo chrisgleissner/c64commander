@@ -69,15 +69,18 @@ describe("device naming and iconography", () => {
     expect(LOCAL_DEVICE_LABEL).toBe(SOURCE_LABELS.local);
   });
 
-  it("draws both devices with the shared source icons", () => {
+  it("draws no icon at all on the listen-target row", () => {
+    // Amended deliberately, and narrowed rather than deleted. The row is now an equal-width grid so
+    // it holds one line at 320 CSS px, and a third of that row cannot fit an icon beside its label —
+    // "Remote" overflowed its column by 9.4px (docs/plans/segmented-control/PROPOSAL.md §3a). What
+    // the original guard existed for still stands: no lucide stand-in may appear here for a device
+    // that already has canonical artwork, so the row must carry no icon of either kind.
     render(<PlaybackEngineToggle />);
 
-    // FileOriginIcon renders the canonical artwork; a lucide glyph here would be
-    // a second icon for a device that already has one.
-    const c64Icon = within(screen.getByTestId("playback-engine-c64")).getByTestId("file-origin-icon");
-    const localIcon = within(screen.getByTestId("playback-engine-local")).getByTestId("file-origin-icon");
-    expect(c64Icon.querySelector("img")?.getAttribute("src")).toContain("c64u-icon.svg");
-    expect(localIcon.querySelector("img")?.getAttribute("src")).toContain("device-icon.svg");
+    const row = screen.getByTestId("playback-engine-toggle");
+    expect(within(row).queryByTestId("file-origin-icon")).toBeNull();
+    expect(row.querySelector("svg")).toBeNull();
+    expect(row.querySelector("img")).toBeNull();
   });
 
   it("resolves the connected label the same way wherever it is asked", () => {

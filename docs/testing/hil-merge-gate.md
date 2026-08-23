@@ -55,7 +55,7 @@ playlist before the gate runs:
 # The --name must be exactly Tone-Low and Tone-High: the stages find the tunes by the title
 # stored in the SID header (TONE_TUNES in tools/hil/merge_gate.mjs), not by file name.
 node scripts/generate-test-sid.mjs --hz 550  --name "Tone-Low"  --waveform sawtooth --volume 15 --out /tmp/tone-low.sid
-node scripts/generate-test-sid.mjs --hz 1850 --name "Tone-High" --waveform sawtooth --volume 15 --out /tmp/tone-high.sid
+node scripts/generate-test-sid.mjs --hz 900  --name "Tone-High" --waveform sawtooth --volume 15 --out /tmp/tone-high.sid
 # put both on the Ultimate (they live at /MUSICIANS/T/Tone_Test/ on this rig) and add them to the
 # app's playlist, in that order. The playlist must hold NO other track: the Listen-on control the
 # playback stages need is rendered only while a SID is the current item, so a PRG or disk left in
@@ -80,6 +80,14 @@ node scripts/generate-test-sid.mjs --hz 1850 --name "Tone-High" --waveform sawto
 The pitches are far apart and deliberately not an octave — an octave shares harmonics, and one
 tone is then mistaken for the other — and both are where a phone speaker actually works. The
 stages check the playlist first and name what is missing rather than grading something else.
+
+The high tone was 1850 Hz until it was lowered to 900. This gate runs next to somebody for a minute
+at a time and a sustained sawtooth at 1850 Hz is unpleasant to sit beside, which is reason enough on
+its own. Nothing is lost by it: 550 and 900 are a ratio of 1.64, so neither is an octave, a fifth or
+a fourth of the other, and 550's second harmonic at 1100 Hz stays clear of the ±6% window the pitch
+check draws around 900 Hz (846–954 Hz). **If you have older Tone-High files on an Ultimate,
+regenerate them** — the stages find the tunes by the title in the SID header, so an 1850 Hz file
+still called Tone-High will be graded at 900 Hz and read as silence.
 
 Generate them **loud**: `--waveform sawtooth --volume 15`. The generator defaults to a triangle at
 volume 4 of 15, which is the quietest and most harmonically bare thing a SID can produce, and at

@@ -138,7 +138,11 @@ describe("buildRenderedTuneKey", () => {
     expect(buildRenderedTuneKey("item", 0)).not.toBe(accurate);
   });
 
-  it("separates a render made without the ROMs, which is SIDLite whatever the setting says", () => {
+  // The ROM state used to ride in on the emulation, because a missing set silently forced SIDLite.
+  // It no longer does, so the key names it directly -- a PSID that calls a KERNAL routine renders
+  // differently against the real images than against the minimal one libsidplayfp synthesizes, and
+  // the images can arrive part-way through a session.
+  it("separates a render made without the ROMs", () => {
     localStorage.setItem("c64u_sid_emulation_engine", "residfp");
     const withRoms = buildRenderedTuneKey("item", 0);
     romsPresent.value = false;

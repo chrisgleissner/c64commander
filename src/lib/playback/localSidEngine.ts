@@ -539,7 +539,17 @@ export class LocalSidEngine {
   /** Set while the running pre-render is only a lead-in, not the whole tune. */
   private prerenderPartialSeconds: number | null = null;
   /** Slices of the running pre-render, accumulated so the cache can grow as it goes. */
+  /**
+   * The pre-render's destination, allocated once for the whole tune.
+   *
+   * This was an `Int16Array` reallocated and fully copied on every chunk, which is O(n^2) in the
+   * number of chunks: a three-minute tune at 48 kHz stereo copied about 1.6 GB over its length, on
+   * the thread that also schedules audio. Measured on the merge gate, a steady tone came back with
+   * a 250 ms dropout. Writing each chunk into a buffer sized up front is O(n), and the cache is
+   * handed a `subarray` view of the filled prefix rather than a fresh copy.
+   */
   private prerenderAccumulated: Int16Array = EMPTY_PCM;
+  private prerenderFilled = 0;
   /**
    * A second offline renderer, for the tracks either side of the one playing.
    *
@@ -1015,10 +1025,23 @@ export class LocalSidEngine {
         // what makes a seek into the part already rendered instant instead of waiting for the whole
         // tune, and it is what the progress bar's pre-render fill reads.
         if (message.id !== this.prerenderId || !this.prerenderKey) return;
-        const grown = new Int16Array(this.prerenderAccumulated.length + message.pcm.length);
-        grown.set(this.prerenderAccumulated, 0);
-        grown.set(message.pcm, this.prerenderAccumulated.length);
-        this.prerenderAccumulated = grown;
+        // Size the destination from what the worker was asked to render. A render that overruns
+        // the estimate grows the buffer once rather than failing — the estimate comes from a
+        // declared duration and can be short.
+        const needed = this.prerenderFilled + message.pcm.length;
+        if (this.prerenderAccumulated.length < needed) {
+          // `Math.max` with a non-finite estimate is non-finite, and `new Int16Array(NaN)` is an
+          // array of length ZERO — which then throws "offset is out of bounds" on the very next
+          // write. A chunk that does not carry a usable rate or channel count sizes to what this
+          // write needs and nothing more.
+          const planned = Math.ceil(message.seconds * message.sampleRate * message.channels);
+          const sized = new Int16Array(Number.isFinite(planned) ? Math.max(planned, needed) : needed);
+          sized.set(this.prerenderAccumulated.subarray(0, this.prerenderFilled), 0);
+          this.prerenderAccumulated = sized;
+        }
+        this.prerenderAccumulated.set(message.pcm, this.prerenderFilled);
+        this.prerenderFilled += message.pcm.length;
+        const grown = this.prerenderAccumulated.subarray(0, this.prerenderFilled);
         // A seek is waiting on this: hand playback the buffer the moment coverage reaches the target,
         // rather than leaving it silent while a second render of the same audio catches up.
         //
@@ -1088,8 +1111,10 @@ export class LocalSidEngine {
         // running off its end really is the end of the tune.
         const partial = this.prerenderPartialSeconds !== null;
         this.prerenderPartialSeconds = null;
-        const pcm = this.prerenderAccumulated;
+        // Copied so a cache entry never pins a buffer larger than the audio it holds.
+        const pcm = this.prerenderAccumulated.subarray(0, this.prerenderFilled).slice();
         this.prerenderAccumulated = EMPTY_PCM;
+        this.prerenderFilled = 0;
         queueMicrotask(() => this.drainPendingWarms());
         if (pcm.length > 0) {
           this.renderCache.set(this.prerenderKey, {
@@ -2067,8 +2092,8 @@ export class LocalSidEngine {
    */
   warmLeadIn(key: string, sidBytes: ArrayBuffer, songIndex: number, seconds: number): void {
     if (this.renderCache.has(key) || seconds <= 0) return;
+    // No ROM guard, for the reason given on `prerender`.
     const roms = loadStoredRoms();
-    if (!roms.kernal || !roms.basic) return;
     // One at a time on this thread, but never behind the playing tune's render — that is the point of
     // having a second thread. A warm still in flight is left alone rather than cancelled: the listener
     // is more likely to skip forwards, which is warmed first.
@@ -2087,7 +2112,10 @@ export class LocalSidEngine {
         songIndex,
         seconds,
         sampleRate: this.requestedSampleRate,
-        roms: { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer },
+        roms:
+          roms.kernal && roms.basic
+            ? { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer }
+            : undefined,
         sidModel: toEngineSidModel(resolveLocalSidModel()),
       },
       [sidBytes],
@@ -2316,8 +2344,9 @@ export class LocalSidEngine {
     // seek can find it.
     this.currentKey = key;
     if (this.renderCache.has(key) || !this.worker || seconds <= 0) return;
+    // No ROM guard. The worker renders a PSID with null images, so refusing here only emptied the
+    // cache for anyone whose ROM capture had not succeeded — every seek re-rendered from the start.
     const roms = loadStoredRoms();
-    if (!roms.kernal || !roms.basic) return;
     // A pre-render still running for a previous tune is now dead weight, and
     // its worker would render it to the end before touching this one. Killing
     // the thread stops that work immediately rather than queueing behind it.
@@ -2326,8 +2355,9 @@ export class LocalSidEngine {
     this.prerenderKey = key;
     this.prerenderFraction = 0;
     this.prerenderAccumulated = EMPTY_PCM;
-    const kernal = roms.kernal.slice().buffer;
-    const basic = roms.basic.slice().buffer;
+    this.prerenderFilled = 0;
+    const romPayload =
+      roms.kernal && roms.basic ? { kernal: roms.kernal.slice().buffer, basic: roms.basic.slice().buffer } : undefined;
     this.ensurePrerenderWorker().postMessage(
       {
         type: "prerender",
@@ -2336,10 +2366,10 @@ export class LocalSidEngine {
         songIndex,
         sampleRate: this.requestedSampleRate,
         seconds,
-        roms: { kernal, basic },
+        roms: romPayload,
         sidModel: toEngineSidModel(resolveLocalSidModel()),
       },
-      [sidBytes, kernal, basic],
+      romPayload ? [sidBytes, romPayload.kernal, romPayload.basic] : [sidBytes],
     );
   }
 

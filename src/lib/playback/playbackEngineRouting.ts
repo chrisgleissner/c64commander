@@ -87,17 +87,18 @@ export function shouldAttemptLocalEngine(input: EngineRouteInput): boolean {
  * There is no BASIC substitute at all, so every RSID/BASIC tune — 1.0% of the archive — is silent
  * without the images, on either engine.
  *
- * The routing below is therefore more conservative than it needs to be for the 93.8% case. Changing
- * it is a behavioural decision that has not been taken, so it is left as it is and documented here.
+ * The worker has since been changed to match: it opens a tune with null images rather than refusing
+ * one, so the branch below now delivers what it says. Before that it did not, and the gap was a
+ * defect that shipped — an ordinary tune routed here played nothing at all.
  */
 export function romFallbackDecision(romRequired: boolean, romsAvailable = true): PreRouteDecision {
   // An RSID drives the C64's KERNAL to make its sound, so no emulation without the real images can
   // play it — that one genuinely belongs on the C64.
   if (romRequired) return { route: "c64", notice: "rom-on-c64" };
-  // An ordinary tune does not need the images at all — see the correction above. Note that this
-  // branch cannot currently deliver what its notice promises: the worker refuses to open anything
-  // when no ROMs are supplied (`localSid.worker.ts`), so "rom-lite-engine" routes to `local` and
-  // then produces nothing. Whichever way that is resolved, the notice and the worker have to agree.
+  // An ordinary tune does not need the images at all — see the correction above — so it plays here
+  // either way. The notice is still worth showing once when they are missing: a rare PSID calls a
+  // KERNAL routine and `detectRomRequired` cannot see that from the header, and the images are
+  // being read in the background, so the listener has a reason for anything that sounds wrong.
   return romsAvailable ? { route: "local", notice: null } : { route: "local", notice: "rom-lite-engine" };
 }
 
@@ -109,6 +110,7 @@ export const ENGINE_FALLBACK_MESSAGES: Record<EngineFallbackNotice, string> = {
     "you're connected to. Until then, this plays on the C64.",
   "local-unavailable": "On-device playback isn't available here, so this plays on the C64.",
   "rom-lite-engine":
-    "Playing with the lighter SID emulation: the accurate one needs the C64\u2019s ROMs, which are " +
-    "being read from the machine you\u2019re connected to. The next tune will use them.",
+    "Playing without the C64\u2019s ROMs \u2014 they\u2019re being read from the machine you\u2019re " +
+    "connected to. Ordinary tunes sound the same either way; only the few that use the C64\u2019s own " +
+    "routines need them.",
 };
