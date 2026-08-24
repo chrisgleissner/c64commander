@@ -441,6 +441,20 @@ export const FocusNavigationProvider = ({
     const handleKeyDown = (event: KeyboardEvent) => {
       const normalized = normalizeKeyEvent(event, keymap);
       const { action } = normalized;
+      // Destructive toasts persist until dismissed (ERROR_POLICY §4) and render in their own
+      // portal, so the keypad ring never reaches them: on a keypad-only device (no Tab, no touch)
+      // an error toast covered the screen with no key able to dismiss it. Reuse the toast's own
+      // tap handler (dismiss + open Diagnostics), but let an open dialog win. The Pixel 4 hardware
+      // Back key arrives as {key:"Escape",code:"",keyCode:0}, matching no declared "back" binding.
+      const isDeviceBackButton = event.key === "Escape" && event.code === "" && event.keyCode === 0;
+      if ((action === "back" || isDeviceBackButton) && !document.querySelector(OPEN_OVERLAY_ANCESTOR_SELECTOR)) {
+        const toast = document.querySelector<HTMLElement>('[data-testid="app-toast"]');
+        if (toast) {
+          toast.click();
+          event.preventDefault();
+          return;
+        }
+      }
       // Never touch editable targets (the field + its T9 composer own them); and
       // never log them, so typed text is never captured by diagnostics.
       if (isEditableTarget(event.target)) {
