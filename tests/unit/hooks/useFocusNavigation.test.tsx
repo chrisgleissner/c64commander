@@ -756,3 +756,58 @@ describe("vertical keys escape a single-line field inside an overlay", () => {
     expect(document.activeElement).toBe(notes);
   });
 });
+
+/**
+ * A plain Radix dialog is "inert" to the global ring by design (HAZARD 2) — the overlay
+ * owns the keyboard. Radix answers that with its own Tab focus trap, but a keypad handset
+ * has no Tab key, only Up/Down. Before this fix, Up/Down on a non-field target inside an
+ * overlay hit the same `isWithinOpenOverlay` bail as everything else, so a dialog whose
+ * first focus lands on its own non-tabbable content wrapper — every plain Radix
+ * DialogContent, before any field or button takes focus — was a dead end: nothing but
+ * Back/Escape could be reached. Demo Mode's "Continue in Demo Mode" button was exactly
+ * this case on a keypad-only handset profile.
+ */
+describe("vertical keys walk a dialog's own tab order for non-field targets", () => {
+  const Dialog = () => (
+    <FocusNavigationProvider>
+      <div role="dialog" aria-label="Demo Mode">
+        <button type="button">Close</button>
+        <button type="button">Retry connection</button>
+        <button type="button">Continue in Demo Mode</button>
+      </div>
+    </FocusNavigationProvider>
+  );
+
+  it("reaches the first control on Down when nothing in the dialog is focused yet", () => {
+    render(<Dialog />);
+    // Radix autofocuses the dialog's content wrapper on open, not a real control — so the
+    // keydown target is the dialog itself, not one of its buttons.
+    fireEvent.keyDown(screen.getByRole("dialog"), { code: "ArrowDown" });
+
+    expect(document.activeElement).toBe(button("Close"));
+  });
+
+  it("reaches the last control on Up when nothing in the dialog is focused yet", () => {
+    render(<Dialog />);
+    fireEvent.keyDown(screen.getByRole("dialog"), { code: "ArrowUp" });
+
+    expect(document.activeElement).toBe(button("Continue in Demo Mode"));
+  });
+
+  it("cycles forward through every control and wraps", () => {
+    render(<Dialog />);
+    const dialog = screen.getByRole("dialog");
+
+    fireEvent.keyDown(dialog, { code: "ArrowDown" });
+    expect(document.activeElement).toBe(button("Close"));
+
+    fireEvent.keyDown(button("Close"), { code: "ArrowDown" });
+    expect(document.activeElement).toBe(button("Retry connection"));
+
+    fireEvent.keyDown(button("Retry connection"), { code: "ArrowDown" });
+    expect(document.activeElement).toBe(button("Continue in Demo Mode"));
+
+    fireEvent.keyDown(button("Continue in Demo Mode"), { code: "ArrowDown" });
+    expect(document.activeElement).toBe(button("Close"));
+  });
+});

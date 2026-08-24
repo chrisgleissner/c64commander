@@ -113,6 +113,14 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
  */
 const OPEN_OVERLAY_ANCESTOR_SELECTOR =
   '[role="dialog"],[role="alertdialog"],[role="menu"],[role="listbox"],[data-radix-popper-content-wrapper]';
+/**
+ * The subset of `OPEN_OVERLAY_ANCESTOR_SELECTOR` that has no native Up/Down of its own.
+ * A menu/listbox/popper (a Select's dropdown, a context menu) already drives Up/Down itself —
+ * Radix moves its own highlighted option — so walking the DOM tab order there too would add a
+ * second, DOM-focus-based cursor fighting the first. A plain dialog/alert-dialog has no such
+ * built-in cursor; Radix gives it only a Tab focus trap, which a keypad handset cannot use.
+ */
+const DIALOG_ANCESTOR_SELECTOR = '[role="dialog"],[role="alertdialog"]';
 /** Single-line text fields: Up/Down cannot move the caret, so they are free to move focus. */
 const SINGLE_LINE_TEXT_TYPES = new Set(["text", "search", "url", "tel", "email", "password"]);
 const isSingleLineTextField = (target: EventTarget | null): boolean =>
@@ -133,8 +141,13 @@ const stepFocusWithinOverlay = (overlay: Element, from: Element, forward: boolea
   );
   if (tabbables.length === 0) return false;
   const index = tabbables.indexOf(from as HTMLElement);
-  if (index === -1) return false;
-  const next = tabbables[(index + (forward ? 1 : -1) + tabbables.length) % tabbables.length];
+  // `from` is not itself tabbable right after a Radix dialog opens — it autofocuses its
+  // content wrapper (tabIndex -1), not a real control. Land on the first/last tabbable
+  // instead of failing, so the very first press already reaches something.
+  const next =
+    index === -1
+      ? tabbables[forward ? 0 : tabbables.length - 1]
+      : tabbables[(index + (forward ? 1 : -1) + tabbables.length) % tabbables.length];
   next.focus();
   next.scrollIntoView({ block: "nearest" });
   return true;
@@ -457,7 +470,26 @@ export const FocusNavigationProvider = ({
         event.preventDefault();
         return;
       }
-      // While focus is inside an open Radix overlay, that overlay owns the key.
+      // While focus is inside an open Radix overlay, that overlay owns the key. Up/Down inside
+      // a plain dialog/alert-dialog are the exception: Radix's own focus trap there only
+      // answers to Tab, which a keypad handset does not have, so without this a dialog whose
+      // first focus lands on a non-tabbable wrapper (every plain Radix DialogContent) is a
+      // dead end for a keypad-only reader — Escape/Back can close it, but nothing can reach
+      // its buttons. Same overlay-tab-order walk the editable-field case above already uses.
+      // Menus/listboxes/poppers are deliberately excluded: Radix already drives Up/Down inside
+      // those itself (a Select's own option highlighting), and re-walking them here would
+      // fight that with a second, DOM-focus-based cursor.
+      if (action === "dpadUp" || action === "dpadDown") {
+        const overlay = event.target instanceof Element ? event.target.closest(DIALOG_ANCESTOR_SELECTOR) : null;
+        if (overlay) {
+          const from = document.activeElement instanceof Element ? document.activeElement : (event.target as Element);
+          if (stepFocusWithinOverlay(overlay, from, action === "dpadDown")) {
+            event.preventDefault();
+            return;
+          }
+          return;
+        }
+      }
       if (isWithinOpenOverlay(event.target)) return;
       const activeElement = document.activeElement;
       // Left/Right belong to a focused value control (slider / tabs / segmented /
