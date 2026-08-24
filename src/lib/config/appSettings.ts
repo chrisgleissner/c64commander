@@ -52,6 +52,7 @@ const STREAM_NATIVE_VIDEO_ASSEMBLY_KEY = "c64u_stream_native_video_assembly";
 const STREAM_NATIVE_AUDIO_KEY = "c64u_stream_native_audio";
 const STREAM_VIDEO_FRAME_RATE_MODE_KEY = "c64u_stream_video_frame_rate_mode";
 const STREAM_INPUT_PRIORITY_KEY = "c64u_stream_input_priority";
+const STREAM_VIDEO_BADGES_KEY = "c64u_stream_video_badges";
 const STREAM_AUDIO_ROUTE_KEY = "c64u_stream_audio_route";
 const VIC_PALETTE_KEY = "c64u_vic_palette";
 const PALETTE_TARGET_KEY = "c64u_palette_target";
@@ -458,6 +459,18 @@ export const loadStreamInputPriority = () => readBoolean(STREAM_INPUT_PRIORITY_K
 export const saveStreamInputPriority = (enabled: boolean) => writeBoolean(STREAM_INPUT_PRIORITY_KEY, enabled);
 
 /**
+ * Live View **video badges** — the "PAL 50 fps" readout drawn over the C64 picture, and the
+ * matching one in the immersive Remote Input view. On by default, because knowing the video
+ * standard and the frame rate the app is actually presenting is the fastest way to see that
+ * the stream is healthy. Off leaves the picture unobstructed for watching or for a screenshot.
+ */
+export const DEFAULT_STREAM_VIDEO_BADGES = true;
+
+export const loadStreamVideoBadges = () => readBoolean(STREAM_VIDEO_BADGES_KEY, DEFAULT_STREAM_VIDEO_BADGES);
+
+export const saveStreamVideoBadges = (enabled: boolean) => writeBoolean(STREAM_VIDEO_BADGES_KEY, enabled);
+
+/**
  * Live View **audio route** — how Listen-only audio reaches the app (firmware
  * PR #732 `wifi=true`). The firmware can send **audio-only** over Wi‑Fi, which
  * never coexists with video, so this only governs audio-without-video:
@@ -857,6 +870,7 @@ export const APP_SETTINGS_KEYS = {
   LOCAL_SID_MODEL_KEY,
   LOCAL_SID_MODEL_FROM_DEVICE_KEY,
   LEARNED_DEVICE_SID_MODEL_KEY,
+  STREAM_VIDEO_BADGES_KEY,
   VIC_PALETTE_KEY,
   PALETTE_TARGET_KEY,
   PERSIST_CONFIG_TO_FLASH_KEY,

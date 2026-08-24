@@ -139,6 +139,8 @@ import {
   saveStreamNetworkBufferMs,
   loadStreamInputPriority,
   saveStreamInputPriority,
+  loadStreamVideoBadges,
+  saveStreamVideoBadges,
   loadStreamNativeVideoAssembly,
   saveStreamNativeVideoAssembly,
   loadStreamNativeAudio,
@@ -377,6 +379,7 @@ export default function SettingsPage() {
   const [streamNetworkBufferMs, setStreamNetworkBufferMs] = useState<number>(loadStreamNetworkBufferMs);
   const [streamNativeVideoAssembly, setStreamNativeVideoAssembly] = useState<boolean>(loadStreamNativeVideoAssembly);
   const [streamInputPriority, setStreamInputPriority] = useState<boolean>(loadStreamInputPriority);
+  const [streamVideoBadges, setStreamVideoBadges] = useState<boolean>(loadStreamVideoBadges);
   const [streamNativeAudio, setStreamNativeAudio] = useState<boolean>(loadStreamNativeAudio);
   const [streamAudioRoute, setStreamAudioRoute] = useState<StreamAudioRoute>(loadStreamAudioRoute);
   const [volumeSliderPreviewIntervalMs, setVolumeSliderPreviewIntervalMs] = useState(
@@ -2204,6 +2207,30 @@ export default function SettingsPage() {
                           const next = checked === true;
                           setStreamNativeVideoAssembly(next);
                           saveStreamNativeVideoAssembly(next);
+                        }}
+                      />
+                    </div>
+                    <div className="col-span-2 flex items-start justify-between gap-3 min-w-0">
+                      <div className="min-w-0">
+                        <Label
+                          htmlFor="settings-stream-video-badges"
+                          className="flex min-h-11 items-center font-medium"
+                        >
+                          Show video standard and frame rate
+                        </Label>
+                        <HelperText>
+                          Draws &ldquo;PAL 50 fps&rdquo; over the picture in Live View and Remote Input. Turn off for an
+                          unobstructed screen.
+                        </HelperText>
+                      </div>
+                      <Checkbox
+                        id="settings-stream-video-badges"
+                        data-testid="settings-stream-video-badges"
+                        checked={streamVideoBadges}
+                        onCheckedChange={(checked) => {
+                          const next = checked === true;
+                          setStreamVideoBadges(next);
+                          saveStreamVideoBadges(next);
                         }}
                       />
                     </div>

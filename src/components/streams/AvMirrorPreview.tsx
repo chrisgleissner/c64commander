@@ -9,6 +9,7 @@
 import { useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useAvMirror, useAvMirrorCanvas } from "@/hooks/useAvMirror";
+import { useStreamVideoBadges } from "@/hooks/useStreamVideoBadges";
 import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
 
 export type AvMirrorPreviewSize = "check" | "immersive";
@@ -27,6 +28,7 @@ export interface AvMirrorPreviewProps {
  */
 export function AvMirrorPreview({ size = "check", session, className }: AvMirrorPreviewProps) {
   const { videoLive, video } = useAvMirror(session);
+  const showBadges = useStreamVideoBadges();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   useAvMirrorCanvas(canvasRef, session);
 
@@ -53,7 +55,7 @@ export function AvMirrorPreview({ size = "check", session, className }: AvMirror
           {overlay}
         </div>
       )}
-      {videoLive && video.fps > 0 && (
+      {showBadges && videoLive && video.fps > 0 && (
         <span
           className="absolute right-1 top-1 rounded bg-black/60 px-1 text-xs leading-tight text-white/80"
           data-testid="av-mirror-fps"
