@@ -811,3 +811,81 @@ describe("vertical keys walk a dialog's own tab order for non-field targets", ()
     expect(document.activeElement).toBe(button("Close"));
   });
 });
+
+/*
+ * Destructive toasts persist until dismissed (ERROR_POLICY §4), render in their own portal
+ * outside the keypad ring's reach, and have no Tab-reachable close button — only a touch
+ * swipe/tap dismisses one (`components/ui/toaster.tsx` `ToastItem.handleClick`). On a Pixel 4
+ * emulating a keypad-only profile, an error toast survived 19 minutes of further navigation
+ * because no key, Back included, could reach it.
+ */
+describe("Back dismisses a persistent error toast the keypad ring cannot otherwise reach", () => {
+  const Toast = ({ onDismiss }: { onDismiss: () => void }) => (
+    <li data-testid="app-toast" tabIndex={0} onClick={onDismiss}>
+      Playback next failed
+    </li>
+  );
+
+  it("clicks the toast (dismiss + open Diagnostics, same as a tap) on Back", () => {
+    const onDismiss = vi.fn();
+    render(
+      <FocusNavigationProvider profileId="keypad">
+        <Toast onDismiss={onDismiss} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "GoBack" });
+
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("also dismisses on the device's own physical Back key ({key:'Escape',code:'',keyCode:0} — none of the keymap's declared back bindings match that on their own)", () => {
+    const onDismiss = vi.fn();
+    render(
+      <FocusNavigationProvider profileId="keypad">
+        <Toast onDismiss={onDismiss} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { key: "Escape", code: "", keyCode: 0 });
+
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves a real external keyboard's Escape key alone (a proper code:'Escape' is not the device's quirked signature)", () => {
+    const onDismiss = vi.fn();
+    render(
+      <FocusNavigationProvider profileId="keypad">
+        <Toast onDismiss={onDismiss} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { key: "Escape", code: "Escape", keyCode: 27 });
+
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("defers to an open dialog instead — the dialog is what the user is actively closing", () => {
+    const onDismiss = vi.fn();
+    const onNavigateBack = vi.fn();
+    render(
+      <FocusNavigationProvider profileId="keypad" onNavigateBack={onNavigateBack}>
+        <Toast onDismiss={onDismiss} />
+        <div role="dialog" aria-label="Settings" />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "GoBack" });
+
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("falls through to normal Back handling when no toast is showing", () => {
+    const onNavigateBack = vi.fn();
+    render(<FocusNavigationProvider profileId="keypad" onNavigateBack={onNavigateBack} />);
+
+    fireEvent.keyDown(document.body, { code: "GoBack" });
+
+    expect(onNavigateBack).toHaveBeenCalledTimes(1);
+  });
+});
