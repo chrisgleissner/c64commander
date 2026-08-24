@@ -11,6 +11,7 @@ import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import { disableTraceAssertions } from "./traceUtils";
 import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
+import { applyDisplayProfileViewport } from "./displayProfileViewportUtils";
 import { TAB_ROUTES } from "../src/lib/navigation/tabRoutes";
 import { auditSmallScreenLayout, formatDefects, type LayoutDefect } from "./smallScreenLayoutAudit";
 
@@ -421,5 +422,16 @@ test.describe("Small screen layout integrity", () => {
     await liveView.getByTestId("stream-stats-toggle").click();
     await page.waitForTimeout(500);
     await auditAndAssert(page, "Live View stats (detailed view)");
+
+    // The stats grid is the one surface in the app that gets *tighter* as the screen gets
+    // wider: the compact profile gives it two columns, the medium profile four. At 393px
+    // that leaves each label a 48px box, where "UNDERRUNS" needed 104px and spilled out of
+    // the card. Every other test in this file is pinned to 320px, so nothing measured the
+    // width where the panel is actually at its narrowest per column.
+    for (const profileId of ["medium", "expanded"] as const) {
+      await applyDisplayProfileViewport(page, profileId);
+      await page.waitForTimeout(500);
+      await auditAndAssert(page, `Live View stats (detailed view, ${profileId} profile)`);
+    }
   });
 });
