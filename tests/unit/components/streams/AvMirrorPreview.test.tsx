@@ -6,9 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AvMirrorPreview } from "@/components/streams/AvMirrorPreview";
+import { APP_SETTINGS_KEYS, saveStreamVideoBadges } from "@/lib/config/appSettings";
 
 const mirror = vi.hoisted(() => ({
   canvasHook: vi.fn(),
@@ -24,6 +25,7 @@ describe("AvMirrorPreview", () => {
   beforeEach(() => {
     mirror.canvasHook.mockReset();
     mirror.state = { videoLive: false, video: { state: "off", fps: 0 } };
+    localStorage.removeItem(APP_SETTINGS_KEYS.STREAM_VIDEO_BADGES_KEY);
   });
 
   it("shows a 'Not watching' overlay and binds the canvas when off", () => {
@@ -58,6 +60,28 @@ describe("AvMirrorPreview", () => {
 
   it("omits the fps badge when live but fps is still 0", () => {
     mirror.state = { videoLive: true, video: { state: "live", fps: 0 } };
+    render(<AvMirrorPreview />);
+    expect(screen.queryByTestId("av-mirror-fps")).toBeNull();
+  });
+
+  // The badge sits on top of the C64 picture, so a viewer has to be able to clear it. It is on
+  // with nothing stored, which is what a first run sees.
+  it("omits the badge once the setting is turned off, and restores it when turned back on", () => {
+    mirror.state = { videoLive: true, video: { state: "live", fps: 50, standard: "PAL" } };
+    render(<AvMirrorPreview />);
+    expect(screen.getByTestId("av-mirror-fps")).toHaveTextContent("PAL 50 fps");
+
+    // No re-render and no reload: the component follows the settings event on its own.
+    act(() => saveStreamVideoBadges(false));
+    expect(screen.queryByTestId("av-mirror-fps")).toBeNull();
+
+    act(() => saveStreamVideoBadges(true));
+    expect(screen.getByTestId("av-mirror-fps")).toHaveTextContent("PAL 50 fps");
+  });
+
+  it("keeps the badge hidden across a fresh mount once the setting is off", () => {
+    saveStreamVideoBadges(false);
+    mirror.state = { videoLive: true, video: { state: "live", fps: 50, standard: "PAL" } };
     render(<AvMirrorPreview />);
     expect(screen.queryByTestId("av-mirror-fps")).toBeNull();
   });

@@ -69,10 +69,15 @@ function Sparkline({ values, testid, ariaLabel }: { values: number[]; testid: st
   );
 }
 
+/**
+ * Title case, not uppercase: the medium profile's four-column grid leaves a 48px label box, where
+ * "UNDERRUNS" measured 104px and spilled out of the card. Dropping `uppercase tracking-wide` alone
+ * leaves "Underruns" at 80px, so long labels are split: "Audio Buf" and "Under Runs" each fit 48px.
+ */
 function Stat({ label, value, testid, tone }: { label: string; value: string; testid: string; tone?: "warn" }) {
   return (
-    <div className="rounded-md bg-muted/50 px-2 py-1.5 text-center">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+    <div className="rounded-md bg-muted/50 px-1 py-1.5 text-center">
+      <div className="text-xs text-muted-foreground">{label}</div>
       <div
         className={cn("text-sm font-semibold tabular-nums", tone === "warn" && "text-destructive")}
         data-testid={`stream-stats-${testid}`}
@@ -106,9 +111,9 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
   const { profile } = useDisplayProfile();
   // On a 320px screen the panel has about 250px of content width. Four columns give
   // each stat 55px, which is not enough for a single word: "Underruns" needs 99px and
-  // was cut off at the right-hand edge of the card, and "100%" under Rate needs 56px
-  // and had nowhere to break. Halving the column count on the smallest screen gives
-  // every label and value room to be read whole.
+  // "100%" under Rate needs 56px with nowhere to break. Halving the column count on the
+  // smallest screen gives every label and value room to be read whole. Four columns still
+  // apply at 393px, where the label box is only 48px — see the Stat label note above.
   const compact = profile === "compact";
   const statColumns = (wide: string, narrow: string) => (compact ? narrow : wide);
 
@@ -196,13 +201,13 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
         <Stat label="FPS" value={num(live.fps)} testid="fps" />
         <Stat label="Rate" value={pct(governor.effectivePercent)} testid="rate" />
         <Stat
-          label="Audio buf"
+          label="Audio Buf"
           value={ms(live.audioBufferMs)}
           testid="audio-buffer"
           tone={live.audioBufferMs > 0 && live.audioBufferMs < 30 ? "warn" : undefined}
         />
         <Stat
-          label="Underruns"
+          label="Under Runs"
           value={num(live.audioUnderruns)}
           testid="underruns"
           tone={live.audioUnderruns > 0 ? "warn" : undefined}
@@ -216,7 +221,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
               and squeezing them cut "Session" off inside its button and set "History"
               as "His" / "tory". */}
           <div className="flex flex-wrap items-center gap-1.5" data-testid="stream-stats-window">
-            <span className="shrink-0 text-xs uppercase tracking-wide text-muted-foreground">History</span>
+            <span className="shrink-0 text-xs text-muted-foreground">History</span>
             {WINDOWS.map((w) => (
               <Button
                 key={w.label}
@@ -235,11 +240,11 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
           {/* History charts (§12.3) */}
           <div className={cn("grid gap-3", statColumns("grid-cols-2", "grid-cols-1"))}>
             <div className="text-muted-foreground">
-              <div className="mb-1 text-xs uppercase tracking-wide">Presented FPS</div>
+              <div className="mb-1 text-xs">Presented FPS</div>
               <Sparkline values={fpsSeries} testid="stream-stats-spark-fps" ariaLabel="Presented FPS over the window" />
             </div>
             <div className="text-muted-foreground">
-              <div className="mb-1 text-xs uppercase tracking-wide">Audio buffer min (ms)</div>
+              <div className="mb-1 text-xs">Audio buffer min (ms)</div>
               <Sparkline
                 values={bufferSeries}
                 testid="stream-stats-spark-buffer"
@@ -247,7 +252,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
               />
             </div>
             <div className="text-muted-foreground">
-              <div className="mb-1 text-xs uppercase tracking-wide">Loss (pkts+frames/s)</div>
+              <div className="mb-1 text-xs">Loss (pkts+frames/s)</div>
               <Sparkline
                 values={lossSeries}
                 testid="stream-stats-spark-loss"
@@ -255,7 +260,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
               />
             </div>
             <div className="text-muted-foreground">
-              <div className="mb-1 text-xs uppercase tracking-wide">Concealed audio/s</div>
+              <div className="mb-1 text-xs">Concealed audio/s</div>
               <Sparkline
                 values={concealSeries}
                 testid="stream-stats-spark-conceal"
@@ -263,7 +268,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
               />
             </div>
             <div className={cn("text-muted-foreground", compact ? "col-span-1" : "col-span-2")}>
-              <div className="mb-1 text-xs uppercase tracking-wide">Effective video rate (%)</div>
+              <div className="mb-1 text-xs">Effective video rate (%)</div>
               <Sparkline
                 values={rateSeries}
                 testid="stream-stats-spark-rate"
@@ -286,7 +291,11 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
           {/* Video presentation-slot accounting (§9.1) */}
           <section data-testid="stream-stats-video">
             <div className="mb-1 text-xs font-medium">Video ({live.standard})</div>
-            <div className={cn("grid gap-2", statColumns("grid-cols-3", "grid-cols-2"))}>
+            {/* Two columns at every profile: a third column leaves a 73px label box at the medium
+                profile, and "Presented", "Decimated" and "Concealed" need 81px there. Shortening
+                them would desync these tiles from the sparkline captions above, which name the
+                same quantities in full. */}
+            <div className="grid grid-cols-2 gap-2">
               <Stat label="Presented" value={num(live.presented)} testid="presented" />
               <Stat label="Partial" value={num(live.partialConcealed)} testid="partial" />
               <Stat label="Repeated" value={num(live.repeatedFrames)} testid="repeated" />
@@ -300,7 +309,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
           {/* Audio */}
           <section data-testid="stream-stats-audio">
             <div className="mb-1 text-xs font-medium">Audio</div>
-            <div className={cn("grid gap-2", statColumns("grid-cols-3", "grid-cols-2"))}>
+            <div className="grid grid-cols-2 gap-2">
               <Stat label="Concealed" value={num(live.audioConcealed)} testid="concealed" />
               <Stat label="Dropped pkts" value={num(live.audioLostPackets)} testid="dropped-packets" />
               <Stat label="Buf min" value={ms(summary.audioBufferMsMin)} testid="audio-buffer-min" />

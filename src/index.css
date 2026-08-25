@@ -1150,6 +1150,31 @@ button:focus-visible,
 }
 
 @layer utilities {
+  /* Button labels wrap on the smallest screen.
+     The base button style is `whitespace-nowrap` with a fixed `h-11`, so a label wider than its
+     button was drawn past the edge and clipped. At 320px the app's own Text size setting scales
+     every label with the root, and at Largest "Reset to mode defaults" needed 257px against a
+     218px button. Here a label may wrap and the button grows to hold it; `min-h-11` still keeps
+     the 44px touch target, so a one-line button is exactly as tall as before.
+     Keyed off `min-h-11`, which the shared `Button` carries as its 44px WCAG 2.5.5 target size.
+     That is exactly the set for which `height: auto` is safe: the floor holds the button at 44px
+     when one line is all it needs. A raw `<button>` sized by an explicit `size-11` and no floor —
+     the section header chevrons — would otherwise collapse to the height of its icon.
+     In @layer utilities, not @layer base: layer order beats specificity, and the `whitespace-
+     nowrap` and `h-11` this overrides are themselves utilities. `.tab-item` is excluded because
+     the tab bar sizes and scrolls itself (see `.tab-item` in @layer components). */
+  :root[data-display-profile="compact"] button[class~="min-h-11"]:not(.tab-item) {
+    white-space: normal;
+    /* Wrap at spaces only. The global rule above is `overflow-wrap: anywhere`, which breaks
+       inside a word as readily as between two, and a one-word label in a segmented toggle
+       ("Local", "Joystick", "Stick") is narrow enough that it did: allowing wrapping without
+       this split them mid-word. A single word that still will not fit is reported by the
+       `clipped` check instead, where the answer is to give the control room. */
+    overflow-wrap: normal;
+    word-break: normal;
+    height: auto;
+  }
+
   /* C64 scanline effect for headers */
   .scanlines {
     background: repeating-linear-gradient(

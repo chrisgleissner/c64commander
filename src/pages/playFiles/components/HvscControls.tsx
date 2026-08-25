@@ -129,9 +129,13 @@ export const HvscControls = ({
       // that most visits to the Play page have no reason to open.
       defaultOpen={false}
     >
-      <div className="flex items-center justify-between gap-2">
+      {/* Wraps, and the status column keeps a floor. The buttons beside it are `shrink-0`, so
+          when the app's own Text size setting widens them the status column was the only thing
+          left to give: at Large it was squeezed to 36px and `overflow-wrap: anywhere` split
+          "Status:" after "Stat". With a floor the buttons drop to their own line instead. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         {/* The installed version is the card's summary line, so it is not repeated here. */}
-        <div className="min-w-0">
+        <div className="min-w-[10rem] flex-1">
           {hvscInstalledVersion ? null : (
             <p className="text-xs text-muted-foreground">
               HVSC will be prepared automatically the first time you choose Add items -&gt; HVSC.
@@ -140,7 +144,10 @@ export const HvscControls = ({
           <p className="text-xs text-muted-foreground">Status: {hvscPreparationStatusLabel}</p>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+        {/* Not `shrink-0`: at the largest Text size the three labels grow with the root, and a
+            group that cannot narrow ran past the right edge of the card. It may wrap internally
+            and, with the row above wrapping too, take a line of its own. */}
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
           {/* "Download" and "Ingest", not "Download HVSC" and "Ingest HVSC". The heading two
               lines above says HVSC and nothing else in this block does anything else, so the
               repeat bought nothing and cost the width: on a 320px screen "Download HVSC" ran

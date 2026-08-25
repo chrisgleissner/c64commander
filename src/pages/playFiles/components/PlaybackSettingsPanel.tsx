@@ -83,8 +83,11 @@ export const PlaybackSettingsPanel = ({
 
       <div className="space-y-2">
         <p className="text-xs text-muted-foreground">Songlengths file</p>
-        <div className="flex items-start gap-2 rounded-lg border border-border bg-card p-2">
-          <div className="min-w-0 flex-1 space-y-1">
+        {/* Wraps, and the text column keeps a floor: the button beside it is sized to its own
+            label, and at the largest Text size it left "Not selected." a line narrower than the
+            word "selected." itself. */}
+        <div className="flex flex-wrap items-start gap-2 rounded-lg border border-border bg-card p-2">
+          <div className="min-w-[9rem] flex-1 space-y-1">
             {songlengthsPath ? (
               <ResponsivePathText
                 path={songlengthsPath}

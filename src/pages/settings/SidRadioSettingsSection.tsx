@@ -57,8 +57,11 @@ type ToggleRowProps = {
 };
 
 const ToggleRow = ({ id, testId, label, description, checked, onChange }: ToggleRowProps) => (
-  <div className="flex items-start justify-between gap-3 rounded-lg border border-border/70 p-3 min-w-0">
-    <div className="min-w-0">
+  // Wraps, and the text column keeps a floor. At the largest Text size on a 320px screen the
+  // checkbox beside it left "(experimental)" a line narrower than the word, so it was split
+  // mid-word. With a floor the checkbox drops to its own line instead.
+  <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border/70 p-3 min-w-0">
+    <div className="min-w-[9rem] flex-1">
       {/* min-h-11 gives the label the 44px target size. Pressing it toggles the
           checkbox, so the label is what the user aims at, not the small box. */}
       <Label htmlFor={id} className="flex min-h-11 items-center font-medium">
@@ -332,8 +335,8 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
         ) : null}
 
         {/* Kept visible: ranking is a feature people use, so undoing it is not a developer concern. */}
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-border/70 p-3 min-w-0">
-          <div className="min-w-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 p-3 min-w-0">
+          <div className="min-w-[9rem] flex-1">
             <Label className="text-sm font-medium">Clear my rankings</Label>
             <p className="text-xs text-muted-foreground">Remove every ♥ / ✕ you have given.</p>
           </div>

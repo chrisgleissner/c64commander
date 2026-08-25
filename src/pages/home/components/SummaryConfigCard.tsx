@@ -156,7 +156,10 @@ export function SummaryConfigControlRow({
             whole row of highlight to see rather than a couple of characters. */}
         <SelectTrigger
           ref={focusRef}
-          className={cn(selectTriggerClassName, "min-h-11 w-full justify-between gap-2")}
+          // `flex-wrap`: the label sits on the same line as the value only while both fit. At the
+          // largest Text size on a 320px screen "Analog" needed 134px against a 78px line and was
+          // split after "Analo". Wrapping puts the value on its own line instead.
+          className={cn(selectTriggerClassName, "min-h-11 w-full flex-wrap justify-between gap-2")}
           data-testid={testId}
         >
           <span className="text-muted-foreground">{label}</span>

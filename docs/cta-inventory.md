@@ -466,7 +466,11 @@ past it to anything below.
   frame assembly, A/B / escape-hatch toggle — native builds only)_ ; Input
   priority (instant joystick) — switch — `settings-stream-input-priority` —
   R✅ I✅ _(default on; sheds video briefly while the user is actively driving so
-  joystick/keyboard/mouse input reaches the C64 instantly)_ ; Low-latency audio
+  joystick/keyboard/mouse input reaches the C64 instantly)_ ; Show video standard
+  and frame rate — switch — `settings-stream-video-badges` — R✅ I✅ _(default on;
+  draws the "PAL 50 fps" readout over the picture in both the Home Live View
+  preview and the immersive Remote Input view; off leaves the picture clear)_ ;
+  Low-latency audio
   (native) — switch — `settings-stream-native-audio` — R✅ I✅ _(default on; plays
   Live View audio through a native low-latency track — Android only)_ ; Audio
   streaming route — select — `settings-stream-audio-route` — R✅ I✅ _(default

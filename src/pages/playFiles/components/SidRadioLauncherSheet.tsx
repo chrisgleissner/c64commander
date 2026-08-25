@@ -137,7 +137,10 @@ export const SidRadioLauncherSheet = ({
                   key={tile.bit}
                   type="button"
                   variant="outline"
-                  className="h-auto flex-col items-start gap-0.5 whitespace-normal py-2 text-left"
+                  // `px-2` rather than the button default `px-4`: two columns at 320px leave each
+                  // tile a 108px content box, and "Experimental" is 113px, so the global
+                  // `overflow-wrap: anywhere` in `index.css` split it after "Experiment".
+                  className="h-auto flex-col items-start gap-0.5 whitespace-normal px-2 py-2 text-left"
                   data-testid={`sid-radio-style-${tile.bit}`}
                   disabled={!populated}
                   onClick={() => {

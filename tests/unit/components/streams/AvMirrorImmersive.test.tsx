@@ -10,6 +10,7 @@ import { createRef } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AvMirrorImmersive, type AvMirrorImmersiveHandle } from "@/components/streams/AvMirrorImmersive";
+import { saveStreamVideoBadges } from "@/lib/config/appSettings";
 
 /** Only the fields this component reads; `fps`/`standard` drive the frame-rate readout. */
 type MirrorVideoState = { videoLive: boolean; video: { state: string; fps?: number; standard?: string } };
@@ -272,6 +273,19 @@ describe("AvMirrorImmersive", () => {
     expect(row).toContainElement(chip);
     expect(row).toContainElement(fps);
     expect(chip.compareDocumentPosition(fps) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  // The immersive view fills the screen, so its badge is the one most in the way. The setting
+  // clears both it and the Home preview's; the default is on.
+  it("drops the frame-rate readout when the video badge setting is off", () => {
+    mirror.video = { videoLive: true, video: { state: "live", fps: 50, standard: "PAL" } };
+    render(<AvMirrorImmersive />);
+    expect(screen.getByTestId("av-mirror-immersive-fps")).toHaveTextContent("PAL 50 fps");
+
+    act(() => saveStreamVideoBadges(false));
+    expect(screen.queryByTestId("av-mirror-immersive-fps")).toBeNull();
+    // The rest of the status row is untouched: only the readout goes.
+    expect(screen.getByTestId("av-mirror-mode-chip")).toBeInTheDocument();
   });
 
   it("shows a 'Not watching' overlay and no controls when video is off", () => {

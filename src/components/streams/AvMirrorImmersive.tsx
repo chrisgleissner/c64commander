@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAvMirror, useAvMirrorCanvas } from "@/hooks/useAvMirror";
 import { useMirrorViewport } from "@/hooks/useMirrorViewport";
+import { useStreamVideoBadges } from "@/hooks/useStreamVideoBadges";
 import { viewportRect, type Viewport } from "@/lib/streams/mirrorViewport";
 import type { MirrorLock } from "@/hooks/useMirrorViewport";
 import type { LockState } from "@/lib/streams/subjectTracker";
@@ -150,6 +151,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
   ref,
 ) {
   const { videoLive, video } = useAvMirror(session);
+  const showBadges = useStreamVideoBadges();
   const [follow, setFollow] = useState(false);
   const { viewport, lock, zoomBy, panBy, centerOn, reset, lockOn, releaseLock } = useMirrorViewport({
     session,
@@ -489,7 +491,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
               </button>
             )}
           </span>
-          {videoLive && video.fps > 0 && (
+          {showBadges && videoLive && video.fps > 0 && (
             <span
               className="rounded bg-black/60 px-1.5 py-0.5 text-xs leading-tight text-white/80"
               data-testid="av-mirror-immersive-fps"
