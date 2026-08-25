@@ -148,10 +148,10 @@ describe("CollapsibleSection", () => {
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
-  it("keeps one card open at a time in the compact profile, and closes the sibling it replaces", () => {
-    // Compact opens one card at a time so the reader keeps the list of titles around whatever is
-    // open. The sibling closes through a window event, and its closed state is persisted so
-    // returning to the page does not re-open every card the reader has ever looked at.
+  it("leaves a sibling open when a second card is opened on the compact profile", () => {
+    // How many cards are open is the reader's choice on every profile, including this one. The
+    // compact profile used to close the sibling and persist it closed, which meant a reader who
+    // wanted two cards open to compare them could not have it, and the closure outlived the visit.
     mockProfile = "compact";
     render(
       <>
@@ -170,8 +170,9 @@ describe("CollapsibleSection", () => {
     fireEvent.click(screen.getByTestId("settings-section-toggle-second"));
 
     expect(screen.getByTestId("settings-section-second")).toHaveAttribute("data-open", "true");
-    expect(screen.getByTestId("settings-section-first")).toHaveAttribute("data-open", "false");
-    expect(JSON.parse(localStorage.getItem("c64u_open_sections") ?? "{}")["settings:first"]).toBe(false);
+    expect(screen.getByTestId("settings-section-first")).toHaveAttribute("data-open", "true");
+    // Nothing was persisted as closed on the reader's behalf.
+    expect(JSON.parse(localStorage.getItem("c64u_open_sections") ?? "{}")["settings:first"]).toBe(true);
   });
 
   it("leaves both cards open outside the compact profile", () => {

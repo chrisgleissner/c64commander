@@ -302,7 +302,7 @@ export function LightingSummaryCard({
     >
       <p className="text-xs font-semibold text-primary uppercase tracking-wider">{sectionLabel}</p>
       <div className="space-y-2 text-xs">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-muted-foreground">Mode</span>
           <Select
             value={modeSelectValue}
@@ -348,7 +348,7 @@ export function LightingSummaryCard({
           />
         ) : null}
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-muted-foreground">Pattern</span>
           <Select
             value={patternSelectValue}
@@ -375,7 +375,7 @@ export function LightingSummaryCard({
           </Select>
         </div>
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-muted-foreground">Color</span>
           <Select
             value={fixedColorSelectValue}
@@ -441,7 +441,7 @@ export function LightingSummaryCard({
           data-testid={`${testIdPrefix}-color-slider`}
         />
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-muted-foreground">Brightness</span>
           <span className="text-xs font-semibold text-foreground" data-testid={`${testIdPrefix}-intensity-value`}>
             {/* The one numeric field on this card, and it needs the same three states as the
@@ -468,7 +468,7 @@ export function LightingSummaryCard({
           data-testid={`${testIdPrefix}-intensity-slider`}
         />
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-muted-foreground">Tint</span>
           <Select
             value={tintSelectValue}
@@ -490,7 +490,7 @@ export function LightingSummaryCard({
           </Select>
         </div>
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-muted-foreground">SID Select</span>
           <Select
             value={sidSelectSelectValue}

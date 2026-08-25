@@ -14,13 +14,11 @@ import { FittedText } from "@/components/ui/FittedText";
 import { cn } from "@/lib/utils";
 import {
   SECTION_DESCRIPTIONS_KEY,
-  SECTION_OPENED_EVENT,
   announceSectionOpened,
   loadShowSectionDescriptions,
   subscribeSectionsBulk,
   readSectionStates,
   writeSectionState,
-  type SectionOpenedDetail,
 } from "@/lib/ui/collapsibleSectionStore";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 
@@ -119,7 +117,9 @@ export const CollapsibleSection = ({
   children,
 }: CollapsibleSectionProps) => {
   const { profile } = useDisplayProfile();
-  const singleOpen = profile === "compact";
+  // Drives the tighter padding and type below. It no longer closes anything: see the note where
+  // the accordion effect used to be.
+  const compact = profile === "compact";
 
   /*
    * Closed on every profile, for now.
@@ -232,34 +232,19 @@ export const CollapsibleSection = ({
     [scope, id, onToggle, onToggleClick],
   );
 
-  /**
-   * One card open at a time, in the compact profile only.
+  /*
+   * How many cards are open is the reader's choice, on every profile.
    *
-   * A 320x427 screen has 218 CSS px of scrollable height. With every card free to stay open,
-   * Settings measured 2796 px of scroll — nearly thirteen screens — and a reader part-way down it
-   * can see one card's body and nothing else, with no sense of where they are in the list. Closing
-   * the siblings keeps the whole list of titles on screen around whatever is open. On a taller
-   * screen there is room for several bodies at once and closing them would just be obstructive, so
-   * this is not applied outside compact.
+   * The compact profile used to force one at a time: a 320x427 screen has 218 CSS px of
+   * scrollable height, and with every card free to stay open Settings measured 2796 px of
+   * scroll. Closing the siblings kept the list of titles on screen around whatever was open.
    *
-   * The open card is NOT re-opened when the profile changes; only an explicit toggle opens one.
+   * It is gone because it took the choice away. A reader who wants two cards side by side to
+   * compare them, or every card open to read straight down the page, could not have it: opening
+   * the second closed the first, and the state was persisted so the closure outlived the visit.
+   * Long pages are what scrolling is for. `announceSectionOpened` still fires, so anything else
+   * that wants to know a card opened still hears it.
    */
-  useEffect(() => {
-    if (!singleOpen || typeof window === "undefined") return undefined;
-    const onOther = (event: Event) => {
-      const detail = (event as CustomEvent<SectionOpenedDetail>).detail;
-      if (!detail || detail.scope !== scope || detail.id === id) return;
-      setOpen((current) => {
-        if (!current) return current;
-        // Persisted as well as closed, so returning to the page does not re-open every card the
-        // reader has ever looked at.
-        writeSectionState(scope, id, false);
-        return false;
-      });
-    };
-    window.addEventListener(SECTION_OPENED_EVENT, onOther);
-    return () => window.removeEventListener(SECTION_OPENED_EVENT, onOther);
-  }, [singleOpen, scope, id]);
 
   // Mirrors `open` out to a caller that needs it, from an effect so every path that changes
   // it is covered — the user's click, the restore on mount, and the accordion close.
@@ -307,7 +292,7 @@ export const CollapsibleSection = ({
             // p-2 tile each closed card cost 67.5 CSS px on the phone profile against 27 px of
             // actual text. py-2 around a p-1.5 tile holds the row at 54 px, still above the 44 px
             // touch floor, and gives back most of a screen over the length of the page.
-            singleOpen ? "min-h-11 gap-2 px-3 py-1.5" : "min-h-11 gap-2.5 px-4 py-2",
+            compact ? "min-h-11 gap-2 px-3 py-1.5" : "min-h-11 gap-2.5 px-4 py-2",
           )}
           // The accessibility tree exposes the HTML id, not data-testid, so this is what
           // makes the header addressable from outside the browser.
@@ -323,9 +308,9 @@ export const CollapsibleSection = ({
               320x427 screen has 218 px of scrollable height to spend. The icon still carries the
               scanning cue; the box around it was decoration.
             */}
-            <span className={cn(singleOpen || plainIcon ? "shrink-0" : "rounded-lg bg-primary/10 p-1.5")}>
+            <span className={cn(compact || plainIcon ? "shrink-0" : "rounded-lg bg-primary/10 p-1.5")}>
               <Icon
-                className={cn("text-primary", singleOpen || plainIcon ? "h-[1.125rem] w-[1.125rem]" : "h-5 w-5")}
+                className={cn("text-primary", compact || plainIcon ? "h-[1.125rem] w-[1.125rem]" : "h-5 w-5")}
                 aria-hidden
               />
             </span>
@@ -370,7 +355,7 @@ export const CollapsibleSection = ({
                 <span
                   className={cn(
                     "leading-snug text-muted-foreground",
-                    showSummary ? (singleOpen ? "text-sm" : "text-xs") : "sr-only",
+                    showSummary ? (compact ? "text-sm" : "text-xs") : "sr-only",
                   )}
                 >
                   {summary}
@@ -422,7 +407,7 @@ export const CollapsibleSection = ({
             transition={{ duration: 0.2 }}
             onAnimationComplete={revealExpanded}
           >
-            <div className={cn("border-t border-border", singleOpen ? "space-y-3 px-3 py-3" : "space-y-4 px-4 py-4")}>
+            <div className={cn("border-t border-border", compact ? "space-y-3 px-3 py-3" : "space-y-4 px-4 py-4")}>
               {children}
             </div>
           </motion.div>

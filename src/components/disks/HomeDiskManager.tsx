@@ -2023,7 +2023,7 @@ export const HomeDiskManager = () => {
                       disabled={!status.isConnected || configPending}
                     >
                       <SelectTrigger
-                        className={cn(INLINE_META_SELECT_CLASS, "w-[76px] min-w-[76px]")}
+                        className={cn(INLINE_META_SELECT_CLASS, "w-[4.75rem] min-w-[4.75rem]")}
                         aria-label={`${driveLabel} Bus ID`}
                         data-testid={`drive-bus-select-${key}`}
                       >
@@ -2259,7 +2259,7 @@ export const HomeDiskManager = () => {
                   disabled={!status.isConnected || softIecConfigPending}
                 >
                   <SelectTrigger
-                    className={cn(INLINE_META_SELECT_CLASS, "w-[76px] min-w-[76px]")}
+                    className={cn(INLINE_META_SELECT_CLASS, "w-[4.75rem] min-w-[4.75rem]")}
                     data-testid="drive-bus-select-soft-iec"
                   >
                     <SelectValue />

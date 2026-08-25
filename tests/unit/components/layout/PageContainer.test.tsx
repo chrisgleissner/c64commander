@@ -31,6 +31,8 @@ describe("profile layout primitives", () => {
     );
 
     expect(screen.getByTestId("container-child").closest("section")).toHaveStyle({ width: "100%", maxWidth: "100%" });
+    // An explicit `minItemWidth` is a caller saying exactly how wide a track must be, so the
+    // count stays fixed and the value is used as given.
     expect(screen.getByTestId("grid")).toHaveStyle({ gridTemplateColumns: "repeat(5, minmax(12rem, 1fr))" });
   });
 
@@ -49,7 +51,10 @@ describe("profile layout primitives", () => {
 
     const grid = screen.getByTestId("grid");
     expect(grid).toHaveAttribute("data-profile", "compact");
-    expect(grid).toHaveStyle({ gridTemplateColumns: "repeat(2, minmax(0px, 1fr))" });
+    // At the default Text size the count is exactly what the profile asks for.
+    expect(grid).toHaveStyle({
+      gridTemplateColumns: "repeat(2, minmax(0px, 1fr))",
+    });
   });
 
   it("keeps default and reading containers bounded and leaves split sections single-column outside expanded", () => {
@@ -83,6 +88,25 @@ describe("profile layout primitives", () => {
     expect(screen.getByTestId("medium-grid")).toHaveStyle({ gridTemplateColumns: "repeat(3, minmax(0px, 1fr))" });
     expect(screen.getByTestId("compact-split")).toHaveAttribute("data-profile", "medium");
     expect(screen.getByTestId("compact-split").style.gridTemplateColumns).toBe("");
+  });
+
+  it("keeps the requested column count when nothing has been measured", () => {
+    // jsdom reports a zero-width grid and has no ResizeObserver, so the measured path never
+    // narrows anything here; the requested count is what is rendered. The narrowing itself is
+    // covered where it can actually be measured, in smallScreenLayoutIntegrity.spec.ts, which
+    // asserts that no label is ever wider than its own box.
+    localStorage.clear();
+    setViewportWidth(360);
+
+    render(
+      <DisplayProfileProvider>
+        <ProfileActionGrid compactColumns={2} mediumColumns={4} testId="grid">
+          <div>One</div>
+        </ProfileActionGrid>
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("grid")).toHaveStyle({ gridTemplateColumns: "repeat(2, minmax(0px, 1fr))" });
   });
 
   it("switches the split section into expanded mode on wide widths", () => {

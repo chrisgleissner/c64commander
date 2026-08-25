@@ -186,7 +186,10 @@ export function SidCard({
 
       {/* Row 2: Identity and Address */}
       <div className="grid grid-cols-2 gap-2 text-xs">
-        <div className="flex items-center gap-2">
+        {/* Wraps: the label beside it is `shrink-0`, so when the row is too narrow the value is the
+            only thing that can give. At the largest Text size "None" needed 61px against a 53px
+            line and was split mid-word. Wrapping drops the value to its own line instead. */}
+        <div className="flex flex-wrap items-center gap-2">
           {/* shrink-0: the label cannot wrap, so a flex row that shrinks it clips the text.
               CI measured "Address" needing 68px in a 66px box on all four sockets. Let the
               Select absorb the shrink instead; it truncates cleanly, a bare label does not. */}
