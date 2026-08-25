@@ -79,10 +79,11 @@ export function MenuBlock({ block, active, authoritativeValues, writeLeaf }: Men
 
   return (
     <div data-testid={block.title ? `config-subsection-${block.title.toLowerCase().replace(/\s+/g, "-")}` : undefined}>
+      {/* The heading is not uppercase with `tracking-wide`: that styling is most of a heading's
+          width, and at the largest Text size "Time Synchronization" needed 275px against a 258px
+          box and was clipped. Title case fits. */}
       {block.title ? (
-        <h4 className="px-1 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {block.title}
-        </h4>
+        <h4 className="px-1 pb-1 pt-3 text-xs font-semibold text-muted-foreground">{block.title}</h4>
       ) : null}
       <div className="divide-y divide-border" data-testid="config-group-list">
         {resolved.map((leaf) => {

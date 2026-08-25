@@ -71,24 +71,31 @@ export function ProfileActionGrid({
   const { profile, tokens } = useDisplayProfile();
   const columns = profile === "compact" ? compactColumns : profile === "expanded" ? expandedColumns : mediumColumns;
   /*
-   * The column count is what the design asks for, not a promise the grid can always keep.
+   * The compact profile's grid adapts; the others keep the exact column count they had.
    *
-   * This used to be `repeat(<columns>, minmax(<floor>, 1fr))`, and on the compact profile the
-   * floor is `0px`, so the tracks had no lower bound at all: as the app's own Text size setting
-   * scaled every label with the root, the tiles stayed exactly as wide and their labels ran past
-   * them. "Manage" needed 93px in an 89px tile, and three of Home's machine controls needed 47-54px
-   * in 45px. A one-word label cannot wrap out of that, so it was simply clipped.
+   * The tracks used to be `repeat(<columns>, minmax(<floor>, 1fr))`. On the compact profile that
+   * floor is the `actionGridMinWidth` token, which is `0px`, so the tracks had no lower bound at
+   * all: as the app's own Text size setting scaled every label with the root, the tiles stayed
+   * exactly as wide and their labels ran past them. "Manage" needed 93px in an 89px tile. A
+   * one-word label cannot wrap out of that, so it was clipped.
    *
-   * `auto-fit` with a floor lets the row drop to fewer, wider columns instead. The floor is the
-   * larger of a rem value — which grows with the text scale, and is what forces the drop — and the
-   * width the requested column count would give, which keeps the intended layout at the default
-   * text size rather than reflowing every grid in the app.
+   * There, `auto-fit` with a rem floor lets the row drop to fewer, wider columns instead. The
+   * floor is the larger of that rem value, which grows with the text scale and is what forces the
+   * drop, and the width the requested count would give, which keeps two columns at the default
+   * text size rather than reflowing the page for everyone.
+   *
+   * It is NOT applied to the other profiles. Their `actionGridMinWidth` is a design minimum wider
+   * than a single column at those widths — 9rem against roughly 80px per column at the medium
+   * profile — so the same expression would take `medium` from four columns to two immediately,
+   * which `displayProfiles.spec.ts` pins and which nothing here is trying to change.
    */
   const gap = tokens.actionGridGap;
   const requested = `calc((100% - ${columns - 1} * ${gap}) / ${columns})`;
-  const floor = minItemWidth ?? (tokens.actionGridMinWidth === "0px" ? "7rem" : tokens.actionGridMinWidth);
   const style: CSSProperties = {
-    gridTemplateColumns: `repeat(auto-fit, minmax(min(max(${floor}, ${requested}), 100%), 1fr))`,
+    gridTemplateColumns:
+      profile === "compact" && !minItemWidth
+        ? `repeat(auto-fit, minmax(min(max(7rem, ${requested}), 100%), 1fr))`
+        : `repeat(${columns}, minmax(${minItemWidth ?? tokens.actionGridMinWidth}, 1fr))`,
   };
   return (
     <ProfileActionGridDensityContext.Provider value={cardDensity}>
