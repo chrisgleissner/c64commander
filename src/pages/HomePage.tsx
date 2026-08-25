@@ -1870,7 +1870,6 @@ function HomePageContent() {
               <QuickActionCard
                 icon={RotateCcw}
                 label="Revert"
-                description="Changes"
                 dataTestId="home-config-revert-changes"
                 focusId="home-config-revert-changes"
                 focusOrder={650}

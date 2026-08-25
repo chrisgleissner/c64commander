@@ -74,7 +74,10 @@ export function QuickActionCard({
       data-testid={dataTestId}
       className={cn(
         "quick-action",
-        compact ? "gap-1.5 p-2.5 min-h-[86px]" : null,
+        // `px-1.5`, not the `p-2.5` this used to be on both axes: horizontal padding is width the
+        // label could have had, and at the largest Text size "Manage" needed 93px against an 89px
+        // box. The vertical padding is unchanged.
+        compact ? "gap-1.5 px-1.5 py-2.5 min-h-[86px]" : null,
         variantClasses[variant],
         disabled ? "opacity-50 cursor-not-allowed" : null,
         className,
