@@ -107,7 +107,7 @@ export function MenuBlock({ block, active, authoritativeValues, writeLeaf }: Men
         {block.menuOnly.map((entry) => (
           <div
             key={`menu-only-${entry.label}`}
-            className="flex items-center justify-between py-3 opacity-60"
+            className="flex flex-wrap items-center justify-between gap-x-2 py-3 opacity-60"
             data-testid="config-menu-only"
           >
             <span className="text-sm">{entry.label}</span>

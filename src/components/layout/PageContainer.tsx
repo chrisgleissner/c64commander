@@ -70,8 +70,25 @@ export function ProfileActionGrid({
 }: ProfileActionGridProps) {
   const { profile, tokens } = useDisplayProfile();
   const columns = profile === "compact" ? compactColumns : profile === "expanded" ? expandedColumns : mediumColumns;
+  /*
+   * The column count is what the design asks for, not a promise the grid can always keep.
+   *
+   * This used to be `repeat(<columns>, minmax(<floor>, 1fr))`, and on the compact profile the
+   * floor is `0px`, so the tracks had no lower bound at all: as the app's own Text size setting
+   * scaled every label with the root, the tiles stayed exactly as wide and their labels ran past
+   * them. "Manage" needed 93px in an 89px tile, and three of Home's machine controls needed 47-54px
+   * in 45px. A one-word label cannot wrap out of that, so it was simply clipped.
+   *
+   * `auto-fit` with a floor lets the row drop to fewer, wider columns instead. The floor is the
+   * larger of a rem value — which grows with the text scale, and is what forces the drop — and the
+   * width the requested column count would give, which keeps the intended layout at the default
+   * text size rather than reflowing every grid in the app.
+   */
+  const gap = tokens.actionGridGap;
+  const requested = `calc((100% - ${columns - 1} * ${gap}) / ${columns})`;
+  const floor = minItemWidth ?? (tokens.actionGridMinWidth === "0px" ? "7rem" : tokens.actionGridMinWidth);
   const style: CSSProperties = {
-    gridTemplateColumns: `repeat(${columns}, minmax(${minItemWidth ?? tokens.actionGridMinWidth}, 1fr))`,
+    gridTemplateColumns: `repeat(auto-fit, minmax(min(max(${floor}, ${requested}), 100%), 1fr))`,
   };
   return (
     <ProfileActionGridDensityContext.Provider value={cardDensity}>

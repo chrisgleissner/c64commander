@@ -31,7 +31,12 @@ describe("profile layout primitives", () => {
     );
 
     expect(screen.getByTestId("container-child").closest("section")).toHaveStyle({ width: "100%", maxWidth: "100%" });
-    expect(screen.getByTestId("grid")).toHaveStyle({ gridTemplateColumns: "repeat(5, minmax(12rem, 1fr))" });
+    // `auto-fit` with a floor, not a fixed count: the requested count is what the design asks
+    // for at the default text size, and the rem floor is what makes the row drop to fewer, wider
+    // columns once the reader's Text size makes the labels outgrow it.
+    expect(screen.getByTestId("grid")).toHaveStyle({
+      gridTemplateColumns: "repeat(auto-fit, minmax(min(max(12rem, calc((100% - 4 * 0.875rem) / 5)), 100%), 1fr))",
+    });
   });
 
   it("uses the compact action grid column count on narrow widths", () => {
@@ -49,7 +54,11 @@ describe("profile layout primitives", () => {
 
     const grid = screen.getByTestId("grid");
     expect(grid).toHaveAttribute("data-profile", "compact");
-    expect(grid).toHaveStyle({ gridTemplateColumns: "repeat(2, minmax(0px, 1fr))" });
+    // The compact profile's own token is `0px`, which gave the tracks no lower bound at all and
+    // is what let a tile be narrower than its one-word label. A 7rem floor stands in for it.
+    expect(grid).toHaveStyle({
+      gridTemplateColumns: "repeat(auto-fit, minmax(min(max(7rem, calc((100% - 1 * 0.625rem) / 2)), 100%), 1fr))",
+    });
   });
 
   it("keeps default and reading containers bounded and leaves split sections single-column outside expanded", () => {
@@ -80,7 +89,9 @@ describe("profile layout primitives", () => {
     expect(screen.getByText("Default").closest("section")).toHaveStyle({ maxWidth: "960px" });
     expect(screen.getByTestId("reading-child").closest("section")).toHaveStyle({ maxWidth: "960px" });
     expect(container.querySelector(".custom-stack")).not.toBeNull();
-    expect(screen.getByTestId("medium-grid")).toHaveStyle({ gridTemplateColumns: "repeat(3, minmax(0px, 1fr))" });
+    expect(screen.getByTestId("medium-grid")).toHaveStyle({
+      gridTemplateColumns: "repeat(auto-fit, minmax(min(max(7rem, calc((100% - 2 * 0.75rem) / 3)), 100%), 1fr))",
+    });
     expect(screen.getByTestId("compact-split")).toHaveAttribute("data-profile", "medium");
     expect(screen.getByTestId("compact-split").style.gridTemplateColumns).toBe("");
   });
