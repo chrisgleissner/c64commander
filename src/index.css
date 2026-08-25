@@ -1156,10 +1156,14 @@ button:focus-visible,
      every label with the root, and at Largest "Reset to mode defaults" needed 257px against a
      218px button. Here a label may wrap and the button grows to hold it; `min-h-11` still keeps
      the 44px touch target, so a one-line button is exactly as tall as before.
+     Keyed off `min-h-11`, which the shared `Button` carries as its 44px WCAG 2.5.5 target size.
+     That is exactly the set for which `height: auto` is safe: the floor holds the button at 44px
+     when one line is all it needs. A raw `<button>` sized by an explicit `size-11` and no floor —
+     the section header chevrons — would otherwise collapse to the height of its icon.
      In @layer utilities, not @layer base: layer order beats specificity, and the `whitespace-
      nowrap` and `h-11` this overrides are themselves utilities. `.tab-item` is excluded because
      the tab bar sizes and scrolls itself (see `.tab-item` in @layer components). */
-  :root[data-display-profile="compact"] button:not(.tab-item) {
+  :root[data-display-profile="compact"] button[class~="min-h-11"]:not(.tab-item) {
     white-space: normal;
     /* Wrap at spaces only. The global rule above is `overflow-wrap: anywhere`, which breaks
        inside a word as readily as between two, and a one-word label in a segmented toggle
