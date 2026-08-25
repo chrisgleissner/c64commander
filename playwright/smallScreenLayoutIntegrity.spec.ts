@@ -146,14 +146,15 @@ const seedListContent = async (page: Page) => {
   });
 };
 
-const setup = async (page: Page, baseUrl: string, options: { developerMode?: boolean } = {}) => {
+const setup = async (page: Page, baseUrl: string, options: { developerMode?: boolean; textScale?: string } = {}) => {
   await seedUiMocks(page, baseUrl);
   await page.addInitScript(
-    ({ developerMode }) => {
+    ({ developerMode, textScale }) => {
       localStorage.setItem("c64u_display_profile_override", "compact");
+      localStorage.setItem("c64u_text_scale", textScale);
       if (developerMode) localStorage.setItem("c64u_dev_mode_enabled", "1");
     },
-    { developerMode: options.developerMode ?? false },
+    { developerMode: options.developerMode ?? false, textScale: options.textScale ?? "default" },
   );
   await seedListContent(page);
   await page.setViewportSize(compactViewport);
@@ -181,6 +182,26 @@ test.describe("Small screen layout integrity", () => {
 
       await expandAllSections(page.locator('[data-slot-active="true"]'), page);
       await auditAndAssert(page, `${route.label} (every section open)`);
+    });
+
+    /**
+     * The same 320px screen with the app's own Text size turned up to Largest, which multiplies
+     * every `rem` by 1.5. That combination is a real one — the setting exists precisely for a
+     * small screen — and it is where this kind of defect appears first: a label that fits at the
+     * default size stops fitting, and `overflow-wrap: anywhere` in `index.css` then splits it
+     * mid-word rather than letting it run over. Largest is the only scale tested because it is
+     * the extreme: every defect found at Large or Larger was also present here.
+     */
+    test(`${route.label} text fits the smallest supported screen at the largest text size @layout`, async ({
+      page,
+    }) => {
+      await setup(page, server.baseUrl, { textScale: "largest" });
+      await page.goto(route.path, { waitUntil: "domcontentloaded" });
+      await settle(page);
+      await auditAndAssert(page, `${route.label} at Largest text size (as it loads)`);
+
+      await expandAllSections(page.locator('[data-slot-active="true"]'), page);
+      await auditAndAssert(page, `${route.label} at Largest text size (every section open)`);
     });
 
     test(`${route.label} text fits the smallest supported screen in developer mode @layout`, async ({ page }) => {

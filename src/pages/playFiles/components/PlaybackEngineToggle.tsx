@@ -136,7 +136,11 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
       className={cn("space-y-1.5 min-w-0", className)}
     >
       <Label className="text-xs font-medium text-muted-foreground">Listen on</Label>
-      <div className={cn("grid gap-2", canStreamBack ? "grid-cols-3" : "grid-cols-2")}>
+      {/* `auto-fit` rather than a fixed column count: each option is one word, so it cannot wrap
+          out of a track that is too narrow for it. At the largest Text size on a 320px screen
+          "Remote" needed 88px against a 78px track and was clipped. With a track floor the row
+          drops to fewer columns instead, and each option keeps its whole label. */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(6rem,1fr))] gap-2">
         {/* Local, Remote, Both — in that order, so the row reads as a progression from this device
             outwards to both. "Remote" rather than the device's name or host: the header already says
             which device is connected, repeating it here spent the row's width on something already on

@@ -97,6 +97,24 @@ export const auditSmallScreenLayout = async (page: Page, options: LayoutAuditOpt
       return rect.width > 0 && rect.height > 0;
     };
 
+    /**
+     * The visually-hidden pattern: a 1px box with its content clipped away, kept in the tree
+     * only so a screen reader still reads it. Radix's own announcers (the toast live region,
+     * for one) apply it with inline styles rather than this app's `.sr-only` class, and their
+     * text is always "clipped" by construction, so measuring them reports a defect that no
+     * user can see.
+     */
+    const isVisuallyHidden = (element: Element): boolean => {
+      let node: Element | null = element;
+      for (let hops = 0; node && hops < 6; hops += 1) {
+        const style = window.getComputedStyle(node);
+        const clipped = style.clip === "rect(0px, 0px, 0px, 0px)" || style.clipPath === "inset(50%)";
+        if (clipped && style.position === "absolute") return true;
+        node = node.parentElement;
+      }
+      return false;
+    };
+
     /** True for anything the user cannot currently see or reach. */
     const isHiddenSurface = (element: Element): boolean => {
       if (element.closest("[inert]")) return true;
@@ -104,6 +122,7 @@ export const auditSmallScreenLayout = async (page: Page, options: LayoutAuditOpt
       if (element.closest("[hidden]")) return true;
       // Screen-reader-only text is deliberately clipped to a 1px box.
       if (element.closest(".sr-only")) return true;
+      if (isVisuallyHidden(element)) return true;
       return isIgnored(element);
     };
 
@@ -221,6 +240,22 @@ export const auditSmallScreenLayout = async (page: Page, options: LayoutAuditOpt
       return null;
     };
 
+    /**
+     * A container that scrolls horizontally puts its content past the viewport on purpose, and
+     * the reader reaches it by scrolling. The tab bar is the case that matters here: at the
+     * largest Text size its six labels are wider than 320px by design, and
+     * `smallScreenLayoutIntegrity.spec.ts` asserts separately that they stay reachable.
+     */
+    const scrollsHorizontally = (element: HTMLElement): boolean => {
+      let node: HTMLElement | null = element.parentElement;
+      while (node && node !== document.body) {
+        const overflowX = window.getComputedStyle(node).overflowX;
+        if (overflowX === "auto" || overflowX === "scroll") return true;
+        node = node.parentElement;
+      }
+      return false;
+    };
+
     for (const { element, text, rect } of leaves) {
       // Painted rectangles, so text an ancestor has already cut off is not reported a
       // second time here as being off the screen.
@@ -228,7 +263,7 @@ export const auditSmallScreenLayout = async (page: Page, options: LayoutAuditOpt
       const paintedRight = painted.length > 0 ? Math.max(...painted.map((r) => r.right)) : rect.right;
       const paintedLeft = painted.length > 0 ? Math.min(...painted.map((r) => r.left)) : rect.left;
 
-      if (paintedRight > window.innerWidth + TOL) {
+      if (paintedRight > window.innerWidth + TOL && !scrollsHorizontally(element)) {
         record(
           "outside-viewport",
           element,

@@ -757,12 +757,16 @@ export const PlaybackControlsCard = ({
           <span className="sr-only" aria-live="polite" data-testid="playback-pending-announcement">
             {pendingAnnouncement}
           </span>
+          {/* Wraps, and each counter stays whole. At the largest Text size the two counters no
+              longer fit one row, and the break landed inside the duration itself: an em dash is a
+              break opportunity, so "—:—" was drawn as "—:" then "—". Stacking them keeps each
+              reading as one value. */}
           <div
-            className="flex items-center justify-between text-xs text-muted-foreground"
+            className="flex flex-wrap items-center justify-between gap-x-3 text-xs text-muted-foreground"
             data-testid="playback-counters"
           >
-            <span>Total: {totalLabel}</span>
-            <span>Remaining: {remainingTotalLabel}</span>
+            <span className="whitespace-nowrap">Total: {totalLabel}</span>
+            <span className="whitespace-nowrap">Remaining: {remainingTotalLabel}</span>
           </div>
         </div>
         {volumeControls}

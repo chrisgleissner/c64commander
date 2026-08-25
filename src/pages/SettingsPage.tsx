@@ -1185,7 +1185,13 @@ export default function SettingsPage() {
                   "Auto", so on their own a screen reader announces "Auto, button" twice with no way
                   to tell them apart. Naming the GROUP resolves that without renaming the buttons,
                   whose visible labels are what everyone else reads. */}
-              <div className="grid grid-cols-3 gap-2" role="group" aria-label="Theme">
+              {/* Three columns leave a 52px line at 320px, and "Light" is 64px at the largest
+                  Text size. One column on the compact profile. */}
+              <div
+                className={cn("grid gap-2", profile === "compact" ? "grid-cols-1" : "grid-cols-3")}
+                role="group"
+                aria-label="Theme"
+              >
                 {themeOptions.map((option) => {
                   const Icon = option.icon;
                   const isActive = theme === option.value;
@@ -1220,7 +1226,13 @@ export default function SettingsPage() {
 
               <div className="space-y-2 rounded-lg border border-border/70 p-3">
                 <Label className="text-sm font-medium">Text size</Label>
-                <div className="grid grid-cols-2 gap-2" data-testid="settings-text-size">
+                {/* One column on the compact profile, for the same reason as Display profile
+                    above: two columns leave a 66px line at 320px, and this control is the one
+                    that makes the text larger, so its own labels are the first to outgrow it. */}
+                <div
+                  className={cn("grid gap-2", profile === "compact" ? "grid-cols-1" : "grid-cols-2")}
+                  data-testid="settings-text-size"
+                >
                   {TEXT_SCALE_OPTIONS.map((option) => {
                     const isActive = textScaleId === option.id;
                     return (
@@ -1266,8 +1278,12 @@ export default function SettingsPage() {
 
               <div className="space-y-2 rounded-lg border border-border/70 p-3">
                 <Label className="text-sm font-medium">Display profile</Label>
+                {/* One column on the compact profile. Two columns leave an 87px line at 320px, and
+                    the app's own Text size setting scales the label with it: at Large, "Standard"
+                    alone is 90px, so `overflow-wrap: anywhere` split it after "Standar". No label
+                    wrap can help, because the single longest word already exceeds the line. */}
                 <div
-                  className="grid grid-cols-2 gap-2"
+                  className={cn("grid gap-2", profile === "compact" ? "grid-cols-1" : "grid-cols-2")}
                   role="group"
                   aria-label="Display profile"
                   data-testid="settings-display-profile-override"
@@ -1296,7 +1312,13 @@ export default function SettingsPage() {
                 <div className="space-y-2 pt-2">
                   <Label className="text-sm font-medium">Screen orientation</Label>
                   <div
-                    className="grid grid-cols-[repeat(auto-fit,minmax(5.75rem,1fr))] gap-2"
+                    // 5.75rem is a fixed track floor, so at the largest Text size the labels
+                    // outgrew it: "Landscape" needed 109px in a track sized for smaller type.
+                    // One column on the compact profile, like the two choosers above.
+                    className={cn(
+                      "grid gap-2",
+                      profile === "compact" ? "grid-cols-1" : "grid-cols-[repeat(auto-fit,minmax(5.75rem,1fr))]",
+                    )}
                     data-testid="settings-screen-orientation-mode"
                   >
                     {screenOrientationOptions.map((option) => {
@@ -1319,8 +1341,8 @@ export default function SettingsPage() {
                 {isAndroid ? (
                   <div className="space-y-2 pt-2" data-testid="settings-full-screen">
                     <Label className="text-sm font-medium">Full screen</Label>
-                    <div className="flex items-start justify-between gap-3 min-w-0">
-                      <div className="min-w-0">
+                    <div className="flex items-start justify-between gap-3 flex-wrap min-w-0">
+                      <div className="min-w-[9rem] flex-1">
                         <Label htmlFor="full-screen-hide-status-bar" className="flex min-h-11 items-center font-medium">
                           Hide status bar
                         </Label>
@@ -1333,8 +1355,8 @@ export default function SettingsPage() {
                         onCheckedChange={(checked) => commitHideStatusBar(checked === true)}
                       />
                     </div>
-                    <div className="flex items-start justify-between gap-3 min-w-0">
-                      <div className="min-w-0">
+                    <div className="flex items-start justify-between gap-3 flex-wrap min-w-0">
+                      <div className="min-w-[9rem] flex-1">
                         <Label
                           htmlFor="full-screen-hide-navigation-bar"
                           className="flex min-h-11 items-center font-medium"
@@ -1364,8 +1386,8 @@ export default function SettingsPage() {
             >
               <div className="space-y-3">
                 <div className="space-y-2 rounded-lg border border-border/70 p-3">
-                  <div className="flex items-center justify-between gap-3 min-w-0">
-                    <div className="min-w-0">
+                  <div className="flex items-center justify-between gap-3 flex-wrap min-w-0">
+                    <div className="min-w-[9rem] flex-1">
                       <Label className="text-sm font-medium">Saved devices</Label>
                       <HelperText>Manage devices here. Long press the header badge to switch quickly.</HelperText>
                     </div>
@@ -1958,8 +1980,8 @@ export default function SettingsPage() {
                   <HelperText>Items shown before View all. Default 50.</HelperText>
                 </div>
 
-                <div className="flex items-start justify-between gap-3 min-w-0">
-                  <div className="min-w-0">
+                <div className="flex items-start justify-between gap-3 flex-wrap min-w-0">
+                  <div className="min-w-[9rem] flex-1">
                     <Label htmlFor="settings-friendly-sid-names" className="flex min-h-11 items-center font-medium">
                       Friendly SID names
                     </Label>
@@ -2010,8 +2032,8 @@ export default function SettingsPage() {
                 </div>
 
                 {flags.in_image_search_enabled && (
-                  <div className="flex items-start justify-between gap-3 min-w-0">
-                    <div className="min-w-0">
+                  <div className="flex items-start justify-between gap-3 flex-wrap min-w-0">
+                    <div className="min-w-[9rem] flex-1">
                       <Label htmlFor="settings-search-inside-disks" className="flex min-h-11 items-center font-medium">
                         Search inside disk images
                       </Label>
@@ -2032,8 +2054,8 @@ export default function SettingsPage() {
 
                 {flags.launch_safety_enabled && (
                   <div className="space-y-3 rounded-md border border-border p-3" data-testid="settings-launch-safety">
-                    <div className="flex items-start justify-between gap-3 min-w-0">
-                      <div className="min-w-0">
+                    <div className="flex items-start justify-between gap-3 flex-wrap min-w-0">
+                      <div className="min-w-[9rem] flex-1">
                         <Label htmlFor="settings-boot-menu-answer" className="flex min-h-11 items-center font-medium">
                           Answer cartridge boot menu after reset
                         </Label>
@@ -2286,8 +2308,8 @@ export default function SettingsPage() {
 
                 <GameModeSettingsSection />
 
-                <div className="flex items-start justify-between gap-3 min-w-0">
-                  <div className="min-w-0">
+                <div className="flex items-start justify-between gap-3 flex-wrap min-w-0">
+                  <div className="min-w-[9rem] flex-1">
                     <Label htmlFor="settings-show-autofire" className="flex min-h-11 items-center font-medium">
                       Show Autofire button
                     </Label>
@@ -2595,8 +2617,8 @@ export default function SettingsPage() {
                 say what each state means, and — because the on state can persist a setting that
                 leaves the machine hard to use — how to boot past a bad one. */}
             <div className="rounded-lg border border-border/70 p-3 space-y-2">
-              <div className="flex items-start justify-between gap-3 min-w-0">
-                <div className="min-w-0">
+              <div className="flex items-start justify-between gap-3 flex-wrap min-w-0">
+                <div className="min-w-[9rem] flex-1">
                   <Label htmlFor="settings-persist-config-to-flash" className="flex min-h-11 items-center font-medium">
                     Keep device settings after a restart
                   </Label>
@@ -3152,15 +3174,17 @@ export default function SettingsPage() {
                 }
               }}
             >
+              {/* Wraps: at the largest Text size "Version" alone needed 96px against the 87px
+                  line the value left it, and was split after "Versio". */}
               {buildInfoRows.map((row) => (
-                <div key={row.testId} className="flex items-start justify-between gap-3">
+                <div key={row.testId} className="flex flex-wrap items-start justify-between gap-x-3">
                   <span className="text-muted-foreground">{row.label}</span>
                   <span className="font-semibold text-right break-words" data-testid={row.testId}>
                     {row.value}
                   </span>
                 </div>
               ))}
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-x-3">
                 <span className="text-muted-foreground">REST API</span>
                 <span className="font-semibold">v0.1</span>
               </div>
