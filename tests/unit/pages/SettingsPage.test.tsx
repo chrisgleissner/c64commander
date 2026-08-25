@@ -1722,9 +1722,12 @@ describe("SettingsPage", () => {
     });
 
     renderSettingsPageWithDisplayProfileProvider();
-    // The compact profile keeps one card open at a time, so opening every section in turn leaves
-    // the last one open rather than all of them. Open the one this test is about.
-    fireEvent.click(screen.getByTestId("settings-section-toggle-appearance"));
+    // Open Appearance only if it is not already open. Every profile now leaves it to the reader
+    // how many cards are open, so the shared setup may already have opened this one; clicking
+    // regardless would close it and hide the line this test is about.
+    if (screen.getByTestId("settings-section-appearance").getAttribute("data-open") !== "true") {
+      fireEvent.click(screen.getByTestId("settings-section-toggle-appearance"));
+    }
 
     expect(screen.getByText(/Auto currently resolves to Small display\./i)).toBeInTheDocument();
 
