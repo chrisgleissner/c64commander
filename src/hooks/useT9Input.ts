@@ -104,7 +104,30 @@ export const useT9Input = ({
   const keymap = useMemo(() => resolveInputProfile(profileId), [profileId]);
   const stateRef = useRef<T9State>(createT9State({ text: value, mode: initialMode }));
   const lastEmittedRef = useRef<string>(value);
+  const previousValueRef = useRef<string>(value);
   const [mode, setModeState] = useState<T9Mode>(initialMode);
+
+  /*
+   * Adopt an outside edit when the value actually changes, not when a keystroke arrives.
+   *
+   * This used to reconcile inside `onKeyDown`, comparing the `value` prop against the composer's
+   * own text. `setValue` is a React state update, so between two quick keystrokes the prop still
+   * holds the previous text: the composer saw its own lag as somebody else's edit and reset itself
+   * to the stale value, throwing away the character it had just composed. Typing at a keyboard's
+   * pace hid it, because a render landed between keys. Entering "127.0.0.1" as fast as a test
+   * harness types left "127.0" in the field.
+   *
+   * Comparing here instead means an outside edit is recognised by the prop CHANGING, which only
+   * happens once the parent has really applied something — and a change that merely echoes what
+   * this composer emitted is not an outside edit at all.
+   */
+  if (value !== previousValueRef.current) {
+    if (value !== lastEmittedRef.current) {
+      stateRef.current = setText(stateRef.current, value);
+      lastEmittedRef.current = value;
+    }
+    previousValueRef.current = value;
+  }
 
   const onKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -113,12 +136,6 @@ export const useT9Input = ({
       if (action === null || !FIELD_COMPOSER_ACTIONS.has(action)) {
         // Not a composer key — let focus nav / form submit / native typing run.
         return;
-      }
-
-      // Reconcile with an external change (parent sanitized the value, or the
-      // user typed via the soft keyboard) before composing the next character.
-      if (value !== stateRef.current.text && value !== lastEmittedRef.current) {
-        stateRef.current = setText(stateRef.current, value);
       }
 
       event.preventDefault();
