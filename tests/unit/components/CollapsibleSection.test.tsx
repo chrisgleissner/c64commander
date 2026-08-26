@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Radio } from "lucide-react";
 
@@ -386,5 +386,25 @@ describe("CollapsibleSection", () => {
 
     expect(screen.getByRole("heading", { name: "Stable Features" })).toBeInTheDocument();
     expect(screen.getByText("8/8 on")).toBeInTheDocument();
+  });
+  it("renders the body element only while the section is open", async () => {
+    // The showcase walk decides whether to tap a section header by asking whether the body
+    // element is present: tapping opens a shut section and shuts an open one, so an
+    // unconditional tap closes whatever happened to be open already. That guard is only sound
+    // while a collapsed section has no body element at all - a body that is merely hidden or
+    // zero-height still answers "present" and the walk would tap sections closed.
+    render(
+      <CollapsibleSection scope="home" id="cpu-ram" title="CPU & RAM" icon={Radio}>
+        <p>Badline Timing</p>
+      </CollapsibleSection>,
+    );
+
+    expect(document.getElementById("home-section-body-cpu-ram")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("home-section-toggle-cpu-ram"));
+    await waitFor(() => expect(document.getElementById("home-section-body-cpu-ram")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("home-section-toggle-cpu-ram"));
+    await waitFor(() => expect(document.getElementById("home-section-body-cpu-ram")).toBeNull());
   });
 });
