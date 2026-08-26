@@ -40,6 +40,66 @@ const createDriver = (options: Omit<UseT9InputOptions, "value" | "setValue">) =>
 };
 
 describe("useT9Input", () => {
+  it("keeps every character when keys arrive faster than the parent re-renders", () => {
+    // `setValue` is a React state update, so between two quick keystrokes the `value` prop still
+    // holds the previous text. The composer used to read that lag as somebody else's edit and
+    // reset itself to the stale value, losing the character it had just composed. Entering
+    // "127.0.0.1" this quickly left "127.0" in the field on the device.
+    //
+    // The driver above re-renders after every press, which is why this went unnoticed: a render
+    // between keys hides it entirely. Here nothing re-renders until the end, which is what a fast
+    // input source actually looks like.
+    let now = 1000;
+    const state = { value: "" };
+    const view = renderHook((p: UseT9InputOptions) => useT9Input(p), {
+      initialProps: {
+        enabled: true,
+        mode: "hostname",
+        now: () => now,
+        value: state.value,
+        setValue: (next: string) => (state.value = next),
+      } as UseT9InputOptions,
+    });
+
+    const pressWithoutRender = (init: KeyInit) => {
+      now += 1;
+      act(() => view.result.current.onKeyDown(makeEvent(init)));
+    };
+
+    [1, 2, 7].forEach((d) => pressWithoutRender({ code: `Digit${d}`, key: String(d) }));
+    pressWithoutRender({ key: "*", code: "NumpadMultiply" });
+    pressWithoutRender({ code: "Digit0", key: "0" });
+    pressWithoutRender({ key: "*", code: "NumpadMultiply" });
+    pressWithoutRender({ code: "Digit0", key: "0" });
+    pressWithoutRender({ key: "*", code: "NumpadMultiply" });
+    pressWithoutRender({ code: "Digit1", key: "1" });
+
+    expect(state.value).toBe("127.0.0.1");
+  });
+
+  it("still adopts an edit the parent really makes", () => {
+    // The reconcile exists for a reason: a parent that sanitises the value, or a soft keyboard
+    // typing into the same field, must not be overwritten by the composer's own idea of the text.
+    let now = 1000;
+    const { state, view, press } = createDriver({ mode: "hostname", now: () => now });
+    press({ code: "Digit1", key: "1" });
+    expect(state.value).toBe("1");
+
+    // Somebody else replaces the contents.
+    state.value = "c64u";
+    view.rerender({
+      enabled: true,
+      mode: "hostname",
+      now: () => now,
+      value: state.value,
+      setValue: (next: string) => (state.value = next),
+    } as UseT9InputOptions);
+
+    now += 1;
+    press({ code: "Digit2", key: "2" });
+    expect(state.value).toBe("c64u2");
+  });
+
   it("enters an IPv4 address in hostname mode using only keypad events", () => {
     let now = 1000;
     const { state, press } = createDriver({ mode: "hostname", now: () => now });
