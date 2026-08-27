@@ -6,7 +6,9 @@
   --c64-motion-duration-scale: 1;
   --modal-backdrop-duration: 150ms;
   --interstitial-radius: 20px;
-  --interstitial-shadow: 0 28px 64px hsl(var(--foreground) / 0.24);
+  /* Black, like --shadow-1/2/3: --foreground turns this into a white halo around every dialog and
+     sheet under a dark palette, while the rest of the elevation ramp still casts a dark shadow. */
+  --interstitial-shadow: 0 28px 64px rgb(0 0 0 / 0.24);
   --display-profile-viewport-width: 100vw;
   --display-profile-viewport-height: 100dvh;
   --display-profile-root-font-size: 16px;

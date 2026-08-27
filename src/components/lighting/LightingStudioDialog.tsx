@@ -461,8 +461,11 @@ function LightingDeviceMockup({
   const caseBleedIntoKeyboardAlpha = caseOverlayAlpha * LIGHTING_PREVIEW_CASE_BLEED_INTO_KEYBOARD_FACTOR;
   const caseSelected = selectedSurface === "case";
   const keyboardSelected = keyboardSupported && selectedSurface === "keyboard";
-  const caseStroke = caseSelected ? "hsl(var(--ring) / 0.88)" : "hsl(var(--border) / 0.18)";
-  const keyboardStroke = keyboardSelected ? "hsl(var(--ring) / 0.84)" : "hsl(var(--border) / 0.22)";
+  // --media-on-scrim, not --ring/--border: this stage stays dark in every theme and style, so the
+  // strokes must too. Bound to --ring, the selected outline dropped to 1.7-2.0:1 against the stage
+  // in all five light palettes, and full-sun light's black --border was invisible on it.
+  const caseStroke = caseSelected ? "hsl(var(--media-on-scrim) / 0.88)" : "hsl(var(--media-on-scrim) / 0.18)";
+  const keyboardStroke = keyboardSelected ? "hsl(var(--media-on-scrim) / 0.84)" : "hsl(var(--media-on-scrim) / 0.22)";
   const mainKeyboardBounds = boundsInset(C64_PREVIEW_LAYOUT.keyboardMain.bounds);
   const functionKeyboardBounds = C64_PREVIEW_LAYOUT.keyboardFunction
     ? boundsInset(C64_PREVIEW_LAYOUT.keyboardFunction.bounds)
@@ -507,7 +510,7 @@ function LightingDeviceMockup({
         </div>
       </div>
 
-      <div className="overflow-visible rounded-[28px] border border-border/60 bg-[radial-gradient(circle_at_top,_hsl(var(--card)/0.07),_transparent_58%),linear-gradient(180deg,hsl(var(--lighting-stage-1)/0.96),hsl(var(--lighting-stage-2)/0.94))] px-3 py-5 sm:p-5">
+      <div className="overflow-visible rounded-[28px] border border-border/60 bg-[radial-gradient(circle_at_top,_hsl(var(--media-on-scrim)/0.07),_transparent_58%),linear-gradient(180deg,hsl(var(--lighting-stage-1)/0.96),hsl(var(--lighting-stage-2)/0.94))] px-3 py-5 sm:p-5">
         <div className="mx-auto w-full max-w-[34rem] overflow-visible px-2 pb-2 pt-2">
           <svg
             viewBox="0 0 1000 620"
