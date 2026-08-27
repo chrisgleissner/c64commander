@@ -39,10 +39,8 @@ if (!DEFAULT_STYLE) {
  * Resolves the persisted style id + theme setting + OS colour-scheme preference into the concrete
  * (styleId, mode) pair the app should render, per spec.md section 7.1.
  *
- * `storedStyleId` must already be a concrete style id, not the "Match my device" sentinel — that
- * sentinel is resolved to a concrete id by `resolveMatchMyDeviceStyleId` (spec.md section 7.4)
- * before this function ever sees it, keeping this function's test surface exactly the 12 styles x
- * 3 theme settings x 2 system preferences = 72 pure cases the feature's test suite covers.
+ * `storedStyleId` must already be a concrete style id: `resolveMatchMyDeviceStyleId` turns the
+ * "Match my device" sentinel into one before this function ever sees it.
  */
 export const resolveAppearance = ({
   storedStyleId,

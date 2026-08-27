@@ -270,7 +270,7 @@ Configure connections, appearance, diagnostics, playback, HVSC, and device safet
 
 Seven curated colour styles sit on top of the existing Light/Dark theme, under **Settings > Appearance > Style**: Modem Grey (the default), Breadbin Beige, Petrol Teal, Neon Pop, Amber Glow, Vault Black, and Full Sun. Five come in both light and dark; two (Amber Glow, Vault Black) are dark only, and clamp the Theme control when selected. **Match my device** follows your C64 Ultimate's own Color Scheme setting instead, read once on connect and reachable again with **Refresh connection** in Settings — it never polls.
 
-A style changes colour, corner rounding, and edge weight only. It never changes layout, spacing, or type size, and it never recolours anything that shows what the real hardware looks like — LED colours, VIC palette swatches, and the device preview in Lighting Studio stay exactly as they are.
+A style changes colour, corner rounding, and shading only. It never changes layout, spacing, or type size, and it never recolours anything that shows what the real hardware looks like — LED colours, VIC palette swatches, and the device preview in Lighting Studio stay exactly as they are.
 
 <table>
   <tr>

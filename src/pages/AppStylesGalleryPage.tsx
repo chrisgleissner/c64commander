@@ -60,21 +60,13 @@ import { APP_STYLES, DEFAULT_APP_STYLE_ID, type AppStyleMode } from "@/generated
 import { HEALTH_TIMELINE_STATE_COLORS } from "@/lib/diagnostics/healthHistoryTimeline";
 
 /**
- * Developer-only style gallery (spec.md docs/plans/appearance-styles/spec.md section 11), gated
- * behind the app_styles_gallery_enabled feature flag. Mounts the *shipped* components — not
- * copies — grouped into the sections spec.md lists, so a palette change can be reviewed as a
- * picture instead of a diff of hex values, and the gallery cannot drift from the real app.
+ * Developer-only style gallery (spec.md section 11), gated behind the app_styles_gallery_enabled
+ * feature flag. Mounts the *shipped* components, not copies, so the gallery cannot drift from the
+ * real app. `?style=` and `?mode=` force one palette for a screenshot run by writing the same
+ * data-app-style attribute and .dark class the app uses, restoring both on unmount.
  *
- * `?style=` and `?mode=` force a specific palette for a screenshot run to address directly,
- * overriding the app's own resolved appearance (which the AppStyleProvider still owns everywhere
- * else) by writing the same data-app-style attribute and .dark class this page's own preview
- * needs, and restoring whatever was there on unmount.
- *
- * One deviation from spec.md section 11's "data" row: "table" is not shown.
- * src/components/ui/table.tsx was deleted in Phase 2 as a dead shadcn primitive (zero imports
- * anywhere in src/, confirmed before this feature touched it) — there is no shipped Table
- * component left to mount, and inventing one only for this gallery would violate D8's
- * "mounts the real components, not copies".
+ * "table" is absent from the data section: src/components/ui/table.tsx was deleted in Phase 2 as
+ * a dead primitive, and inventing one only for the gallery would break the no-copies rule.
  */
 
 const SAMPLE_LIST_ITEMS: ActionListItem[] = [

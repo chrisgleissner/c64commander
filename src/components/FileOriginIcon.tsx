@@ -19,12 +19,11 @@ type FileOriginIconProps = {
 };
 
 /**
- * The C64U ("breadbin") and local-device glyphs, inlined rather than loaded through <img>.
- * Both use stroke="currentColor" so they follow the surrounding text colour like every other
- * icon in the app; that only works for markup actually in the DOM. Loaded through <img> (as
- * these were before) an SVG is an opaque image resource — currentColor cannot resolve against
- * anything, and the old dark:invert dark:brightness-0 hack was working around exactly that,
- * imprecisely, and in a way that broke under any non-neutral appearance style.
+ * The C64U ("breadbin") and local-device glyphs, inlined rather than loaded through <img>, so that
+ * stroke="currentColor" follows the surrounding text colour like every other icon in the app. An
+ * SVG behind <img> is an opaque image resource where currentColor cannot resolve, which is what
+ * the previous dark:invert dark:brightness-0 hack worked around — imprecisely, and in a way that
+ * broke under any non-neutral appearance style.
  */
 const C64uGlyph = () => (
   <svg

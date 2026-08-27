@@ -234,13 +234,10 @@ test.describe("UI coverage", () => {
     });
 
     // The origin glyph is inlined SVG with stroke="currentColor" (FileOriginIcon.tsx), so it
-    // follows the resolved --foreground token like any other icon in the app, rather than the
-    // old dark:invert dark:brightness-0 filter hack this test used to assert on. A filter never
-    // applied to an <img>'s cross-origin-opaque pixels correctly in the first place — this is a
-    // properties test of the real mechanism, not of a workaround for it.
-    // stroke="currentColor" paints with the element's resolved `color`, so reading `color`
-    // directly proves the same thing `stroke` would without depending on this browser's support
-    // for querying the SVG `stroke` shorthand as a computed CSS property.
+    // follows the resolved --foreground token instead of the old dark:invert filter hack, which
+    // never applied to an <img>'s opaque pixels correctly. currentColor paints with the element's
+    // resolved `color`, so reading `color` proves the same thing `stroke` would without relying
+    // on the browser exposing the SVG `stroke` shorthand as a computed property.
     const strokeColor = (icon: ReturnType<Page["getByTestId"]>) =>
       icon.evaluate((el) => getComputedStyle(el.querySelector("svg") ?? el).color);
 
@@ -261,9 +258,14 @@ test.describe("UI coverage", () => {
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
     const diskIcon = page.getByTestId("file-origin-icon").first();
     await expect(diskIcon).toBeVisible();
-    const diskStroke = await strokeColor(diskIcon);
-    expect(diskStroke).not.toBe("");
+    const diskDarkStroke = await strokeColor(diskIcon);
     await snap(page, testInfo, "disk-icons-dark");
+
+    // The same proof on the Disks page, whose glyph sits on a different text token than the Play
+    // page's: it tracks the theme here too, so the colour comes from the cascade rather than from
+    // a filter that happened to be applied on one page.
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect.poll(() => strokeColor(diskIcon)).not.toBe(diskDarkStroke);
   });
 
   test("home page shows resolved version", async ({ page }: { page: Page }, testInfo: TestInfo) => {

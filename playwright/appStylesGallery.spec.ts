@@ -16,22 +16,13 @@ import { registerScreenshotSections, sanitizeSegment } from "./screenshotCatalog
 import { APP_STYLES, type AppStyleMode } from "../src/generated/appStyles";
 
 /**
- * The style gallery (spec.md docs/plans/appearance-styles/spec.md section 11): one screenshot per
- * (style, mode, section), walking all 12 generated palettes across the 9 sections
- * `/dev/styles` renders, written to docs/img/app/styles/<style-id>-<mode>-<section>.png.
+ * The style gallery (spec.md section 11): one screenshot per (style, mode, section) across all 12
+ * palettes and the 9 sections `/dev/styles` renders, written to
+ * docs/img/app/styles/<style-id>-<mode>-<section>.png.
  *
- * Deliberately does not reuse screenshots.spec.ts's capture machinery (its HEAD-blob pixel dedupe
- * is built for an existing, slowly-evolving 273-file corpus; every one of these 108 files is new
- * on first run and would never dedupe-match anyway) or its @screenshots tag (excluded from
- * npm run test:e2e — see playwright/screenshots.spec.ts's own header - since this is a fixed,
- * bounded gallery meant to run on demand, not part of the routine screenshot regeneration pass).
- *
- * One test per (style, mode) rather than one per (style, mode, section): 12 page loads producing
- * 9 PNGs each, not 108 separate page loads. Video recording is left at the project default
- * (playwright.config.ts's `video: "on"`) rather than fought with meta.videoExpected or a
- * `screenshots--` testId prefix — scripts/validate-playwright-evidence.mjs only requires *some*
- * evidence exemption when a test folder does not already contain exactly one video.webm, and a
- * normal test with default recording already produces exactly that.
+ * It does not reuse screenshots.spec.ts's capture machinery or its @screenshots tag: that pipeline
+ * is built around pixel-deduping an evolving 273-file corpus, while this is a fixed, bounded
+ * gallery run on demand. One test per (style, mode) keeps it to 12 page loads, not 108.
  */
 
 const SCREENSHOT_ROOT = path.resolve("docs/img/app/styles");

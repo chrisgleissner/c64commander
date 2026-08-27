@@ -440,10 +440,11 @@ If intent is unclear, the UX is incorrect.
 
 Colour, corner radius, elevation and edge weight are a selectable appearance style layered on top
 of layout, not decisions a component makes for itself. See
-`docs/internals/appearance-styles.md` for the full contract.
+`docs/internals/appearance-styles.md` for the full contract, including which of those tokens are
+compiled but not yet consumed by any component.
 
 - New UI must use the existing CSS custom properties (`--card`, `--primary`, `--radius-panel`,
-  `--shadow-1/2/3`, the `edge`/`shadow-edge` utility, etc.), never a raw Tailwind palette utility
+  `--shadow-1/2/3`, the `shadow-edge` utility, etc.), never a raw Tailwind palette utility
   (`bg-slate-100`), a hex literal, or a stock `rounded-*`/`shadow-*` class.
 - Corner radius, elevation and edge weight may vary by style; layout, spacing and type scale must
   not — a style change must never move a box.

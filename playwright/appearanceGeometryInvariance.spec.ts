@@ -13,38 +13,22 @@ import { disableTraceAssertions } from "./traceUtils";
 import { APP_STYLES, type AppStyleMode } from "../src/generated/appStyles";
 
 /**
- * Proves the claim spec.md section 10 calls "load-bearing": switching appearance style changes
- * zero geometry. Every other layout, ergonomics, overflow, clipping and target-size spec in this
- * suite runs on the default style only; they stay valid for all twelve palettes exactly because
- * this spec exists and passes. See smallScreenErgonomics.spec.ts:39-41 for the cross-reference in
- * the other direction, and docs/plans/appearance-styles/plan.md section "Phase 7" for why this was
- * written before the Phase 2 radius/shadow/edge sweep rather than after it: it is the regression
- * net that sweep runs against, not a report card on it afterwards.
+ * Proves spec.md section 10's load-bearing claim: switching appearance style changes zero
+ * geometry. Every other layout, ergonomics and target-size spec runs on the default style only,
+ * and stays valid for all twelve palettes because this one passes.
  *
- * Method: capture a baseline of every visible [data-testid] element's getBoundingClientRect() with
- * no data-app-style attribute set (today's un-styled default), then, without reloading, set
- * data-app-style and toggle the .dark class directly for each of the 12 generated palettes in
- * turn, re-snapshotting after each. Equality is exact - no tolerance - because a style is only
- * permitted to touch colour, corner radius, edge treatment, elevation and the focus-ring
- * treatment's rendering (spec.md section 5, decision D2), none of which spec.md decision D10
- * allows to move a box: radius and shadow are paint-only, and the edge is always an inset
- * box-shadow or outline, never border-width. If this test goes red, the fix is to find the token
- * that moved a box, not to add a tolerance (docs/plans/appearance-styles/prompt.md, "When you are
- * unsure").
+ * Equality is exact, with no tolerance, because radius and shadow are paint-only and the edge is
+ * an inset box-shadow, never border-width (decision D10). A red run means finding the token that
+ * moved a box, not adding a tolerance.
  */
 
 type Snapshot = Record<string, { x: number; y: number; width: number; height: number }>;
 
 /**
  * Bounding rects for every visible [data-testid], keyed by "testid#n" (n = occurrence index in DOM
- * order) so repeated testids in a list disambiguate the same way on every capture, as long as
- * nothing is added, removed or reordered between captures - true here, since only CSS custom
- * properties change.
- *
- * The hidden-subtree predicate is copied from playwright/smallScreenLayoutAudit.ts's
- * isHiddenSurface (lines ~107-127 there): it runs inside page.evaluate, so it cannot be imported
- * across the Node/browser boundary and is duplicated here rather than shared, the same way every
- * other page.evaluate-based spec in this suite keeps its own copy.
+ * order) so repeated testids disambiguate identically on every capture. The hidden-subtree
+ * predicate is a copy of smallScreenLayoutAudit.ts's isHiddenSurface: it runs inside
+ * page.evaluate, so it cannot be imported across the Node/browser boundary.
  */
 const captureTestIdRects = (page: Page): Promise<Snapshot> =>
   page.evaluate(() => {
@@ -123,15 +107,10 @@ const VIEWPORTS: ReadonlyArray<{ label: string; width: number; height: number }>
 
 /**
  * Exact pixel comparisons cannot tolerate the sub-pixel drift a still-swapping web font or a
- * still-running CSS transition leaves behind between one capture and the next. Mirrors the
- * determinism steps `screenshots.spec.ts`'s `waitForStableRender` already established are
- * necessary (readyState, networkidle, fonts, no running animations, a few settled frames) -
- * duplicated rather than imported, per that file's own "leave exactly as it is" status in
- * plan.md's Phase 7 (every layout-audit spec in this suite keeps its own local copy of small
- * page.evaluate-scoped helpers, since they cannot cross the Node/browser boundary). One fix on
- * top of that precedent: `document.fonts.ready` is a Promise, so it must be returned from
- * page.evaluate and actually awaited, not read as a value inside waitForFunction, where a Promise
- * reference is truthy on the very first poll and the wait becomes a no-op.
+ * running transition leaves between captures, so this mirrors screenshots.spec.ts's
+ * waitForStableRender steps. `document.fonts.ready` is returned from page.evaluate and awaited:
+ * read inside waitForFunction instead, the Promise reference is truthy on the first poll and the
+ * wait becomes a no-op.
  */
 const settle = async (page: Page) => {
   await page.waitForLoadState("domcontentloaded");

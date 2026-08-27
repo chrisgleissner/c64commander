@@ -193,7 +193,7 @@ If the device is hard to reach, start in **Connection**. If it answers but feels
 
 **Appearance** is local to the app and never touches your C64. It sets the theme, the style, the text size, the display profile, card descriptions, whether the app runs full screen, and whether it follows the phone's rotation or stays in portrait or landscape.
 
-**Style** is a set of colours, corner rounding and edge weight — a look, layered on top of **Theme**, which stays the light-or-dark switch. Pick one directly, or choose **Match my device** to follow the Color Scheme your C64 Ultimate is already set to; that reads the device once when you connect, not continuously, and falls back with a note if it can't be read yet. A few styles come in one shade only, in which case Theme is disabled and Settings says why.
+**Style** is a set of colours, corner rounding and shading — a look, layered on top of **Theme**, which stays the light-or-dark switch. Pick one directly, or choose **Match my device** to follow the Color Scheme your C64 Ultimate is already set to; that reads the device once when you connect, not continuously, and falls back with a note if it can't be read yet. A few styles come in one shade only, in which case Theme is disabled and Settings says why.
 
 **Text size** enlarges every part of the app, in four steps from **Default** to **Largest**. Reach for it when the app is harder to read than you would like; the display profile beside it changes the layout rather than the type. At the largest sizes the tab bar along the bottom scrolls sideways rather than pushing a tab off the edge, so every page stays reachable.
 

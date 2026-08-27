@@ -16,16 +16,12 @@ const CONFIG_CATEGORY = "User Interface Settings";
 const CONFIG_ITEM = "Color Scheme";
 
 /**
- * The Ultimate's own `Color Scheme` setting, read **on connect and on manual refresh only, never
- * on a poll** (spec.md docs/plans/appearance-styles/spec.md section 7.4, decision D4: the
- * device's network stack is fragile under load, and repainting mid-task is worse than being a
- * few seconds stale). This hook owns the "on connect" trigger; the "on manual refresh" trigger is
- * the caller's job — Settings page's existing "Refresh connection" action calls the returned
- * `refresh` alongside its own reconnect, so this file adds no new refresh affordance of its own.
+ * The Ultimate's own `Color Scheme` setting, read on connect and on manual refresh only, never on
+ * a poll (spec.md section 7.4, decision D4: the device's network stack is fragile under load).
+ * This hook owns the connect trigger; Settings' "Refresh connection" calls the returned `refresh`.
  *
- * Returns null before the first successful read, on disconnect, or when the item is absent or
- * unreadable on this firmware — "Match my device" then falls back to the compiled default and
- * says so, per spec.md section 7.4's "unknown / unreachable" row.
+ * Returns null before the first successful read, on disconnect, or when the item is unreadable on
+ * this firmware — "Match my device" then falls back to the compiled default and says so.
  */
 export function useDeviceColorScheme() {
   const {
