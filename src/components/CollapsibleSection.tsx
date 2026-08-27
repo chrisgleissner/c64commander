@@ -52,7 +52,8 @@ export interface CollapsibleSectionProps {
    * collapsible. */
   actions?: ReactNode;
   /** Draw the icon without its tinted tile. For a card whose header already carries controls, the
-   * tile is decoration that costs the title about 46 CSS px of the row. */
+   * tile is decoration that costs the title about 46 CSS px of the row. Defaults to on whenever
+   * `actions` are present, because that is exactly the row that cannot spare them. */
   plainIcon?: boolean;
   /** Extra classes on the card root, for a caller that has to place the card itself. */
   className?: string;
@@ -105,7 +106,7 @@ export const CollapsibleSection = ({
   badge,
   headerRef,
   actions,
-  plainIcon = false,
+  plainIcon,
   className,
   testId,
   toggleTestId,
@@ -120,6 +121,10 @@ export const CollapsibleSection = ({
   // Drives the tighter padding and type below. It no longer closes anything: see the note where
   // the accordion effect used to be.
   const compact = profile === "compact";
+  // A header carrying controls has no room for the icon's tinted tile: measured on a 392 px screen
+  // at the Larger text size, the tile plus its padding took 47 of the 156 px the toggle had, which
+  // left "Drives" 48 px for 66 px of text. The icon alone still carries the scanning cue.
+  const showPlainIcon = plainIcon ?? actions != null;
 
   /*
    * Closed on every profile, for now.
@@ -279,7 +284,12 @@ export const CollapsibleSection = ({
           ref={headerRef}
           onClick={toggle}
           className={cn(
-            "flex min-w-0 flex-1 items-center justify-between text-left",
+            // flex-auto, not flex-1: with a basis of 0 this button grows into whatever the actions
+            // and the chevron leave, so the title absorbed the whole deficit and was truncated to
+            // nothing while a sibling "Reset" kept its full width — "Live View" was drawn as "L…"
+            // in 35 px on a 392 px screen. A content basis makes the row over-constrained instead,
+            // so every item shrinks by its own factor and the title keeps its text.
+            "flex min-w-0 flex-auto items-center justify-between text-left",
             // Compact trims the header's own padding and gaps. Tuned for a 393 px screen, the
             // original px-4/py-3/gap-3 spent about 12 CSS px per card that a 320x427 screen with
             // 218 px of scrollable height cannot spare — roughly one extra card on screen.
@@ -292,7 +302,10 @@ export const CollapsibleSection = ({
             // p-2 tile each closed card cost 67.5 CSS px on the phone profile against 27 px of
             // actual text. py-2 around a p-1.5 tile holds the row at 54 px, still above the 44 px
             // touch floor, and gives back most of a screen over the length of the page.
-            compact ? "min-h-11 gap-2 px-3 py-1.5" : "min-h-11 gap-2.5 px-4 py-2",
+            // A header carrying controls also gives up the wider gutter, for the same reason it gives
+            // up the icon tile: px-4 is 47 CSS px of the row at the Larger text size, which is more
+            // than "Printers" needs to be drawn in full.
+            compact || showPlainIcon ? "min-h-11 gap-2 px-3 py-1.5" : "min-h-11 gap-2.5 px-4 py-2",
           )}
           // The accessibility tree exposes the HTML id, not data-testid, so this is what
           // makes the header addressable from outside the browser.
@@ -308,9 +321,9 @@ export const CollapsibleSection = ({
               320x427 screen has 218 px of scrollable height to spend. The icon still carries the
               scanning cue; the box around it was decoration.
             */}
-            <span className={cn(compact || plainIcon ? "shrink-0" : "rounded-lg bg-primary/10 p-1.5")}>
+            <span className={cn(compact || showPlainIcon ? "shrink-0" : "rounded-lg bg-primary/10 p-1.5")}>
               <Icon
-                className={cn("text-primary", compact || plainIcon ? "h-[1.125rem] w-[1.125rem]" : "h-5 w-5")}
+                className={cn("text-primary", compact || showPlainIcon ? "h-[1.125rem] w-[1.125rem]" : "h-5 w-5")}
                 aria-hidden
               />
             </span>
