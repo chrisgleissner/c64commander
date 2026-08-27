@@ -192,6 +192,28 @@ describe("compile-styles", () => {
       writeFileSync(tsOutputPath, 'id: "test-style",\nid: "old-style",\n', "utf8");
       expect(() => loadConfig({ yamlPath, tsOutputPath })).not.toThrow();
     });
+
+    it("accepts a device_scheme_map pointing at declared styles", () => {
+      const dir = createTempDir();
+      const raw = validConfig();
+      raw.device_scheme_map = { "Ultimate Black": "test-style" };
+      const yamlPath = writeYaml(dir, raw);
+      expect(() => loadConfig({ yamlPath, tsOutputPath: path.join(dir, "a.ts") })).not.toThrow();
+    });
+
+    it("rejects a device_scheme_map entry pointing at an undeclared style", () => {
+      const dir = createTempDir();
+      const raw = validConfig();
+      raw.device_scheme_map = { "Ultimate Black": "no-such-style" };
+      const yamlPath = writeYaml(dir, raw);
+      expect(() => loadConfig({ yamlPath, tsOutputPath: path.join(dir, "a.ts") })).toThrow(/is not a declared style/);
+    });
+
+    it("is fine with no device_scheme_map at all", () => {
+      const dir = createTempDir();
+      const yamlPath = writeYaml(dir, validConfig());
+      expect(() => loadConfig({ yamlPath, tsOutputPath: path.join(dir, "a.ts") })).not.toThrow();
+    });
   });
 
   describe("renderTs / renderCss", () => {
@@ -202,6 +224,19 @@ describe("compile-styles", () => {
       expect(output).toContain('id: "test-style",');
       expect(output).toContain('export const DEFAULT_APP_STYLE_ID = "test-style";');
       expect(output).toContain("export const APP_STYLES");
+      expect(output).toContain("export const DEVICE_SCHEME_TO_STYLE_ID");
+    });
+
+    it("emits an empty device-scheme map when none is declared", () => {
+      const output = renderTs(validConfig());
+      expect(output).toContain("export const DEVICE_SCHEME_TO_STYLE_ID: Readonly<Record<string, string>> = {}");
+    });
+
+    it("emits declared device-scheme entries", () => {
+      const config = validConfig();
+      config.device_scheme_map = { "Ultimate Black": "test-style" };
+      const output = renderTs(config);
+      expect(output).toContain('"Ultimate Black": "test-style"');
     });
 
     it("emits one CSS rule per declared mode, using html[data-app-style] selectors", () => {

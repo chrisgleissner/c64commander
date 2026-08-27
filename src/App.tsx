@@ -16,6 +16,7 @@ import { registerQueryClient } from "@/lib/query/queryClientRegistry";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import React, { Suspense, lazy, useEffect, useMemo } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { AppStyleProvider } from "@/components/AppStyleProvider";
 import { TabBar } from "@/components/TabBar";
 import { ConnectionController } from "@/components/ConnectionController";
 import { AvMirrorGovernorDriver } from "@/components/streams/AvMirrorGovernorDriver";
@@ -340,19 +341,21 @@ const AppRoutes = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
-      <DisplayProfileProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <FeatureFlagsProvider>
-            <RefreshControlProvider>
-              <AppErrorBoundary>
-                <StartupLaunchCoordinator />
-              </AppErrorBoundary>
-            </RefreshControlProvider>
-          </FeatureFlagsProvider>
-        </TooltipProvider>
-      </DisplayProfileProvider>
+      <AppStyleProvider>
+        <DisplayProfileProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <FeatureFlagsProvider>
+              <RefreshControlProvider>
+                <AppErrorBoundary>
+                  <StartupLaunchCoordinator />
+                </AppErrorBoundary>
+              </RefreshControlProvider>
+            </FeatureFlagsProvider>
+          </TooltipProvider>
+        </DisplayProfileProvider>
+      </AppStyleProvider>
     </ThemeProvider>
   </QueryClientProvider>
 );

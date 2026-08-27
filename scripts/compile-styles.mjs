@@ -273,6 +273,16 @@ export const loadConfig = ({ yamlPath = DEFAULT_SOURCE_PATH, tsOutputPath = DEFA
     validateStyle(id, style);
   }
 
+  if (config.device_scheme_map !== undefined) {
+    requireMapping(config.device_scheme_map, "device_scheme_map");
+    for (const [scheme, styleId] of Object.entries(config.device_scheme_map)) {
+      requireNonEmptyString(scheme, "device_scheme_map key");
+      if (!config.styles[styleId]) {
+        fail(`device_scheme_map[${JSON.stringify(scheme)}] = ${JSON.stringify(styleId)} is not a declared style`);
+      }
+    }
+  }
+
   checkNoSilentRetirement(config, readPreviousStyleIds(tsOutputPath));
 
   return config;
@@ -374,6 +384,13 @@ ${styleEntries}
 
 /** The style every app installs with, and the fallback for an unknown stored id (spec.md section 7.1). */
 export const DEFAULT_APP_STYLE_ID = ${JSON.stringify(config.default_style)};
+
+/** "Match my device" (spec.md section 7.4): the Ultimate's own Color Scheme name -> app style id. */
+export const DEVICE_SCHEME_TO_STYLE_ID: Readonly<Record<string, string>> = ${JSON.stringify(
+    config.device_scheme_map ?? {},
+    null,
+    2,
+  )};
 `;
 };
 

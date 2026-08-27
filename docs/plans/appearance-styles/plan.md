@@ -296,19 +296,59 @@ Do these in the order below; each clears the largest remaining group.
 
 ## Phase 4 — Runtime
 
-- [ ] Add a style hook and provider as a **sibling** of `useTheme`, not a widening of it. Use a new
+- [x] Add a style hook and provider as a **sibling** of `useTheme`, not a widening of it. Use a new
       localStorage key beside `c64u_theme`, following `c64u_display_profile_override`. This leaves
       the 18 existing tests in `tests/unit/hooks/useTheme.test.ts` and
       `tests/unit/components/ThemeProvider.test.tsx` untouched.
-- [ ] Implement `resolveAppearance()` per `spec.md` §7.1, including the dark-only clamp and the
+      `src/hooks/useAppStyle.ts` + `src/components/AppStyleProvider.tsx`, storage key
+      `c64u_app_style`. Verified the 18 existing tests are still green, unmodified.
+      One real design problem found and solved: `useTheme`'s own effect unconditionally sets the
+      `.dark`/`.light` class from the *raw* theme setting, with no knowledge of a style's
+      single-mode clamp, and — because passive effects fire child-before-ancestor — its effect
+      (owned by the `ThemeProvider` ancestor) can run *after* `AppStyleProvider`'s and silently win
+      the class back. Fixed with a `MutationObserver` in `useAppStyle` that re-asserts the clamp
+      whenever anything changes the class, making it self-healing instead of depending on effect
+      ordering. Covered directly:
+      `tests/unit/hooks/useAppStyle.test.tsx`'s "re-asserts the dark-only clamp if something else
+      removes the .dark class afterwards" simulates exactly this race and passes.
+- [x] Implement `resolveAppearance()` per `spec.md` §7.1, including the dark-only clamp and the
       unknown-id fallback. This is the highest-value unit test in the feature: 12 styles x 3 theme
       settings x 2 system preferences = 72 pure cases.
-- [ ] Write `data-app-style` on `<html>` alongside the existing `light` / `dark` class.
-- [ ] Make `syncNativeSystemBarAppearance` (`src/lib/native/safeArea.ts:122`) derive icon polarity
+      `src/lib/appStyles/resolveAppearance.ts` + `tests/unit/lib/appStyles/resolveAppearance.test.ts`
+      (51 cases: the full 7-style x 3-theme x 2-system-pref = 42 matrix, plus dedicated dark-only
+      clamp and unknown-id/null-id cases — spec's "12" reads as palette count, not style count;
+      resolveAppearance takes a style id, of which there are 7, so the matrix is 42, not 72, and
+      the surrounding clamp/fallback cases bring real coverage past that number anyway).
+      resolveAppearance takes an already-concrete style id, never the "Match my device" sentinel —
+      that sentinel is resolved to a concrete id (or null) by a separate pure function,
+      `resolveMatchMyDeviceStyleId` in `src/lib/appStyles/matchMyDevice.ts`, composed in by
+      `useAppStyle` before calling `resolveAppearance`. Per D4/§7.4 ("put the mapping table in the
+      YAML, not in code"), extended `styles/appearance-styles.yaml` and `compile-styles.mjs` with a
+      `device_scheme_map` block, compiled into a new `DEVICE_SCHEME_TO_STYLE_ID` export in
+      `appStyles.ts`, validated at compile time (every mapped id must be a declared style) and unit
+      tested (`compileStyles.test.ts`, `matchMyDevice.test.ts`).
+- [x] Write `data-app-style` on `<html>` alongside the existing `light` / `dark` class.
+- [x] Make `syncNativeSystemBarAppearance` (`src/lib/native/safeArea.ts:122`) derive icon polarity
       from the **luminance of the resolved background**, not from `resolvedTheme === "light"`.
       This is the only place a style can produce an unreadable system bar.
-- [ ] Update `<meta name="theme-color">` at runtime when the style changes. Leave the build-time
+      Added `src/lib/appStyles/colorMath.ts` (the browser-runtime counterpart to
+      `compile-styles.mjs`'s WCAG luminance math — kept separate because the compiler's Node
+      dependencies, `js-yaml` and `prettier`, do not belong in the shipped bundle). The function's
+      signature changed from `(resolvedTheme: "light" | "dark")` to no arguments at all: it now
+      reads the live `--background` custom property directly, since by the time either caller
+      (`useTheme` on a theme change, `useAppStyle` on a style change) invokes it, the DOM already
+      reflects the fully resolved (and, for a dark-only style, clamped) state — the argument was
+      redundant once the read moved to the DOM. Updated `useTheme.ts`'s call site (not its tests,
+      which never asserted on the argument) and rewrote the 4 tests in
+      `tests/unit/lib/native/safeArea.systemBars.test.ts`, which did assert on it, to set the
+      resolved `--background` inline on `document.documentElement.style` before calling — plus 2
+      new cases: a dark-only style's background under the light theme setting, and no
+      `--background` resolvable at all (defaults to light bars rather than guessing dark).
+- [x] Update `<meta name="theme-color">` at runtime when the style changes. Leave the build-time
       value in `index.html:14` and the manifest as brand colours.
+      Done inside `useAppStyle`'s existing system-bar effect (same dependency: the resolved style,
+      not the theme) — reads the live `--background` and writes it straight into the meta tag as
+      `hsl(...)`, since `theme-color` accepts any valid CSS colour string.
 
 ## Phase 5 — The picker and Match my device
 

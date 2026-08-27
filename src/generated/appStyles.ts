@@ -368,3 +368,13 @@ export const APP_STYLES: readonly AppStyle[] = [
 
 /** The style every app installs with, and the fallback for an unknown stored id (spec.md section 7.1). */
 export const DEFAULT_APP_STYLE_ID = "modem-grey";
+
+/** "Match my device" (spec.md section 7.4): the Ultimate's own Color Scheme name -> app style id. */
+export const DEVICE_SCHEME_TO_STYLE_ID: Readonly<Record<string, string>> = {
+  "Ultimate Black": "vault-black",
+  "Commodore Blue": "modem-grey",
+  "Commodore 1": "modem-grey",
+  "Commodore 2": "modem-grey",
+  "Commodore 3": "modem-grey",
+  "C128 Style": "petrol-teal",
+};
