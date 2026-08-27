@@ -26,7 +26,13 @@ import path from "node:path";
 
 const SRC_DIR = path.resolve("src");
 const MIN_ARBITRARY_PX = 11;
-const PATTERN = /text-\[(\d+(?:\.\d+)?)px\]/g;
+/*
+ * rem and em are matched as well as px, and converted at the 16px root the compact profile
+ * itself uses: `text-[0.65rem]` is 10.4px and has to fail for the same reason `text-[10px]`
+ * does. Only checking px let exactly that value ship and be caught by a Playwright shard.
+ */
+const PATTERN = /text-\[(\d+(?:\.\d+)?)(px|rem|em)\]/g;
+const PX_PER_REM = 16;
 const EXTENSIONS = new Set([".ts", ".tsx", ".css"]);
 
 const walk = (dir) => {
@@ -48,7 +54,7 @@ for (const file of walk(SRC_DIR)) {
   const source = readFileSync(file, "utf8");
   source.split("\n").forEach((line, index) => {
     for (const match of line.matchAll(PATTERN)) {
-      const px = Number.parseFloat(match[1]);
+      const px = match[2] === "px" ? Number.parseFloat(match[1]) : Number.parseFloat(match[1]) * PX_PER_REM;
       if (px < MIN_ARBITRARY_PX) {
         violations.push({
           file: path.relative(process.cwd(), file),

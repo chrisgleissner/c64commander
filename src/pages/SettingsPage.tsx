@@ -253,6 +253,26 @@ const resolveAppStyleSwatchColors = (style: AppStyle, preferredMode: AppStyleMod
   return mode === "dark" ? style.dark?.colors : style.light?.colors;
 };
 
+const AppStyleSwatch = ({ colors }: { colors: AppStyleColors }) => (
+  <span className="flex shrink-0 items-center gap-1" aria-hidden="true">
+    {[colors.background, colors.primary, colors.accent].map((hsl, index) => (
+      <span
+        key={index}
+        className="h-4 w-4 rounded-full border border-border/60"
+        style={{ backgroundColor: `hsl(${hsl})` }}
+      />
+    ))}
+  </span>
+);
+
+/**
+ * Shared by every Style row. `flex-wrap` is load-bearing: at the largest Text size on a 320px
+ * screen the name and the swatch together exceed the row, and without it the name box shrinks
+ * below the width of its own longest word and clips it.
+ */
+const APP_STYLE_ROW_CLASS =
+  "h-auto w-full flex-wrap justify-between gap-x-3 gap-y-1 whitespace-normal px-3 py-2 text-left";
+
 const DEVICE_PRODUCT_DISPLAY_LABELS = {
   C64U: "C64U",
   U64: "U64",
@@ -291,7 +311,6 @@ export default function SettingsPage() {
   const deviceDiscovery = useDeviceDiscovery();
   const { theme, setTheme, resolvedTheme } = useThemeContext();
   const {
-    storedStyleId,
     setStyleId,
     isMatchMyDevice,
     matchedDeviceStyleId,
@@ -1276,7 +1295,10 @@ export default function SettingsPage() {
                     profile, for that reason — not only on compact. */}
                 <div className="grid grid-cols-1 gap-2" role="group" aria-label="Style">
                   {appStyles.map((style) => {
-                    const isActive = !isMatchMyDevice && storedStyleId === style.id;
+                    // resolvedStyleId, not storedStyleId: on a fresh install nothing is stored yet
+                    // and the compiled default is what is actually on screen, so it is the row that
+                    // must read as selected.
+                    const isActive = !isMatchMyDevice && resolvedStyleId === style.id;
                     // Preview each style under the theme the user has actually set, clamped to
                     // whichever mode that style declares — the same rule resolveAppearance uses,
                     // so the swatch never lies about what selecting the row would produce.
@@ -1286,33 +1308,26 @@ export default function SettingsPage() {
                         key={style.id}
                         type="button"
                         variant={isActive ? "default" : "outline"}
+                        aria-pressed={isActive}
                         onClick={() => setStyleId(style.id)}
-                        className="h-auto w-full justify-between gap-3 whitespace-normal px-3 py-2 text-left"
+                        className={APP_STYLE_ROW_CLASS}
                         data-testid={`settings-app-style-${style.id}`}
                       >
                         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                          {/* break-normal overrides the global overflow-wrap: anywhere (src/index.css),
-                              which wrapped a name one character per line on a real device (min-width: 0
-                              + a shrink-0 badge). flex-wrap lets the badge drop to its own line instead
-                              of overlapping the name, which break-normal alone did not prevent. */}
+                          {/* break-normal overrides the global overflow-wrap: anywhere
+                              (src/index.css), which otherwise wraps a name one character per line
+                              inside this min-width: 0 box. */}
                           <span className="break-normal text-sm font-medium">{style.name}</span>
                           {style.modes.length === 1 ? (
-                            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
+                            /* text-[11px] is the smallest size the compact profile compensates
+                               (to 0.9rem); anything smaller falls below the 14px legibility floor
+                               on a 320px screen. */
+                            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                               Dark only
                             </span>
                           ) : null}
                         </span>
-                        {swatchColors ? (
-                          <span className="flex shrink-0 items-center gap-1" aria-hidden="true">
-                            {[swatchColors.background, swatchColors.primary, swatchColors.accent].map((hsl, index) => (
-                              <span
-                                key={index}
-                                className="h-4 w-4 rounded-full border border-border/60"
-                                style={{ backgroundColor: `hsl(${hsl})` }}
-                              />
-                            ))}
-                          </span>
-                        ) : null}
+                        {swatchColors ? <AppStyleSwatch colors={swatchColors} /> : null}
                       </Button>
                     );
                   })}
@@ -1327,21 +1342,14 @@ export default function SettingsPage() {
                       <Button
                         type="button"
                         variant={isMatchMyDevice ? "default" : "outline"}
+                        aria-pressed={isMatchMyDevice}
                         onClick={() => setStyleId(MATCH_MY_DEVICE_SENTINEL)}
-                        className="h-auto w-full justify-between gap-3 whitespace-normal px-3 py-2 text-left"
+                        className={APP_STYLE_ROW_CLASS}
                         data-testid="settings-app-style-match-my-device"
                       >
-                        <span className="text-sm font-medium">Match my device</span>
+                        <span className="break-normal text-sm font-medium">Match my device</span>
                         {swatchColors ? (
-                          <span className="flex shrink-0 items-center gap-1" aria-hidden="true">
-                            {[swatchColors.background, swatchColors.primary, swatchColors.accent].map((hsl, index) => (
-                              <span
-                                key={index}
-                                className="h-4 w-4 rounded-full border border-border/60"
-                                style={{ backgroundColor: `hsl(${hsl})` }}
-                              />
-                            ))}
-                          </span>
+                          <AppStyleSwatch colors={swatchColors} />
                         ) : (
                           <span className="shrink-0 text-xs text-muted-foreground">?</span>
                         )}

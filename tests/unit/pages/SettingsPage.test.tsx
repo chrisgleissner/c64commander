@@ -1767,6 +1767,17 @@ describe("SettingsPage", () => {
       expect(screen.getByTestId("settings-app-style-modem-grey")).not.toHaveClass("bg-primary");
     });
 
+    it("highlights the resolved default style when nothing has been stored yet", () => {
+      // Fresh install: no stored id, so the compiled default is what is on screen and the row
+      // for it has to read as selected rather than leaving the whole group looking unset.
+      appStyleStateRef.current.storedStyleId = null;
+      appStyleStateRef.current.styleId = "modem-grey";
+      renderSettingsPage();
+
+      expect(screen.getByTestId("settings-app-style-modem-grey")).toHaveClass("bg-primary");
+      expect(screen.getByTestId("settings-app-style-petrol-teal")).not.toHaveClass("bg-primary");
+    });
+
     it("calls setStyleId when a style row is clicked", () => {
       renderSettingsPage();
 
