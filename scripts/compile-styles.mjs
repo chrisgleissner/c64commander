@@ -74,6 +74,8 @@ const CONTRAST_GATES = [
   /* --muted-surface is also compiled to --secondary, which carries --secondary-foreground text. */
   ["foreground", "muted-surface", 4.5, "foreground/muted-surface"],
   ["muted-foreground", "card", 4.5, "muted-foreground/card"],
+  /* text-muted-foreground on bg-muted is a live pairing: chips, kbd hints, the "Dark only" badge. */
+  ["muted-foreground", "muted-surface", 4.5, "muted-foreground/muted-surface"],
   ["primary-foreground", "primary", 4.5, "primary-foreground/primary"],
   /*
    * --accent is a fill under --accent-foreground on shipped chrome (dropdown/select focus rows,

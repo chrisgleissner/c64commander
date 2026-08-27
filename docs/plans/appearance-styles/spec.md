@@ -523,6 +523,7 @@ currently pass all of these.
 | `foreground` / `background`                     | 4.5:1   | AA body text                                          |
 | `foreground` / `muted-surface`                  | 4.5:1   | `muted-surface` also compiles to `--secondary`         |
 | `muted-foreground` / `card`                     | 4.5:1   | Secondary text is still read, not decoration          |
+| `muted-foreground` / `muted-surface`            | 4.5:1   | Chips and badges put that text on the recessed surface |
 | `primary-foreground` / `primary`                | 4.5:1   | Label on the main action                              |
 | `destructive-foreground` / `destructive`        | 4.5:1   | Caught white-on-light-red at 2.5:1 in the first draft |
 | `accent-foreground` / `accent`                   | 4.5:1   | Caught near-white on a bright accent at 1.2:1 in review |

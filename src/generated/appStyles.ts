@@ -177,7 +177,7 @@ export const APP_STYLES: readonly AppStyle[] = [
         card: "172.5 44.4% 96.5%",
         "muted-surface": "175.2 30.1% 83.7%",
         foreground: "177.9 50% 11%",
-        "muted-foreground": "177 21.7% 36.1%",
+        "muted-foreground": "177 21.7% 33%",
         primary: "178.1 77.4% 24.3%",
         "primary-foreground": "0 0% 100%",
         accent: "14 72.9% 44.9%",
