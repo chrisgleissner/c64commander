@@ -382,6 +382,16 @@ Two names changed as a result:
 **Still unchecked**, and to be cleared before release: national registers outside EUIPO and USPTO
 (DE, GB, IT, JP and others were not swept), and the contents of the 47.
 
+An automated attempt to sweep DE (DPMA), GB (UKIPO), IT (UIBM) and JP (JPO) on 2026-08-27 could not
+complete: DPMA's public search is a JS single-page app that returns no results without executing
+client-side JavaScript, UKIPO's search returns HTTP 403 to non-browser requests, TMview's API
+endpoint reset the connection, and WIPO's Global Brand Database is gated behind a client-side
+CAPTCHA. A general web search for each of the 7 exact names alongside "trademark" surfaced no live
+identical mark in any jurisdiction, but that has no legal weight — it only means nothing is
+prominent enough to be indexed under the exact phrase. This item needs a human with direct or paid
+register access (or a browser-driving tool that can clear the CAPTCHA/JS gates), not automation, and
+remains open before release.
+
 The exposure is contained by design: a name is one YAML field. Style **ids** are the persisted
 setting value and are stable identifiers — they must not be renamed once shipped, so a naming
 change costs a string, not a migration.

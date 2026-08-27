@@ -551,16 +551,42 @@ the drift job runs in parallel. Roughly **+1.5 min on a 32 min pipeline**, and a
 
 ## Phase 8 — Documentation
 
-- [ ] Add an internals note describing the style contract, the token list and the compiler, in the
+- [x] Add an internals note describing the style contract, the token list and the compiler, in the
       shape of `docs/internals/display-profiles.md`.
-- [ ] Update the manual's Appearance section. `docs/manual/**/*.md` is **generated** by
+      Added `docs/internals/appearance-styles.md`, sectioned like `display-profiles.md` (Scope,
+      Goals, the contract, compiler, runtime model, gates, geometry invariance, the gallery, and
+      what stays untouched). Points at `spec.md` for the design rationale it deliberately does not
+      repeat, rather than duplicating it.
+- [x] Update the manual's Appearance section. `docs/manual/**/*.md` is **generated** by
       `scripts/build-manuals.mjs` — edit the source, not the output.
-- [ ] Note in `docs/ux-guidelines.md` that new UI must use tokens, never raw Tailwind palette
+      Edited the source strings in `scripts/build-manuals.mjs`: the Appearance chapter prose gained
+      a **Style** paragraph (what it is, "Match my device", the dark-only clamp), the feature-
+      location table's Appearance row gained "style" to its list, and two back-of-book index terms
+      were added ("Match my device", "style, appearance"). Regenerated both variants via
+      `npm run manuals:build`; diffed the output to confirm only the intended paragraphs changed.
+- [x] Note in `docs/ux-guidelines.md` that new UI must use tokens, never raw Tailwind palette
       utilities, and point at the gallery route as the way to check it.
+      Added an "Appearance and Tokens" section, placed beside the existing "Consistency Rules": new
+      UI must use the existing custom properties, never a raw Tailwind palette utility, hex literal,
+      or stock `rounded-*`/`shadow-*`; corner radius/elevation/edge may vary by style but layout may
+      not; check a change at `/dev/styles`; domain data (LED colours, VIC swatches, device-preview
+      materials) is exempt and must not follow the style.
 - [ ] **Clear the residual naming item in `spec.md` §6.4 before release.** EUIPO and USPTO have been
       searched; national registers (DE, GB, IT, JP and others) have not. Sweep those for each style
       `name:`. Changing a name is a one-field YAML edit — changing an `id` is not, so ids must be
       final before the first release that persists them.
+      **Attempted, could not complete.** DE (DPMA) is a JS single-page app that returns no results
+      without executing client-side JavaScript; GB (UKIPO) returns HTTP 403 to non-browser requests;
+      TMview's API endpoint reset the connection; WIPO's Global Brand Database (a path to JP) is
+      gated behind a client-side CAPTCHA. None of the four registers were actually queryable through
+      this environment's tools. A general web search for each of the 7 exact names alongside
+      "trademark" found no live identical mark in any jurisdiction, but that carries no legal
+      weight — it only means nothing is prominent enough to be indexed under the exact phrase.
+      Documented the attempt and the specific blockers in `spec.md` §6.4 rather than marking this
+      cleared. **This remains open before release** and needs a human with direct or paid register
+      access, not further automation from this environment. It does not block this PR: style ids
+      (the persisted, hard-to-change value) are unaffected either way, and a name is a one-field
+      YAML edit if a later manual check finds a conflict.
 
 ## Phase 9 — Real-device HIL verification (Pixel 4)
 

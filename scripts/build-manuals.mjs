@@ -941,7 +941,7 @@ const featureRows = ({ features, variant }) => {
 
   rows.push(
     [
-      "Display profile, theme, text size, card descriptions, orientation",
+      "Display profile, theme, style, text size, card descriptions, orientation",
       "**Settings → Appearance**",
       isC64uRemoteVariant(variant)
         ? "Screenshots in this manual use the compact profile, the smallest screen the app supports."
@@ -1319,7 +1319,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "**Connection** also holds your saved devices: their name, host, HTTP, FTP and Telnet ports, and network password. Saving checks that the web service answers before the device is kept; FTP and Telnet are stored as given and are tested by a health check.",
     "",
-    "**Appearance** is local to the app and never touches your C64. It sets the theme, the text size, the display profile, card descriptions, whether the app runs full screen, and whether it follows the phone's rotation or stays in portrait or landscape.",
+    "**Appearance** is local to the app and never touches your C64. It sets the theme, the style, the text size, the display profile, card descriptions, whether the app runs full screen, and whether it follows the phone's rotation or stays in portrait or landscape.",
+    "",
+    "**Style** is a set of colours, corner rounding and edge weight — a look, layered on top of **Theme**, which stays the light-or-dark switch. Pick one directly, or choose **Match my device** to follow the Color Scheme your C64 Ultimate is already set to; that reads the device once when you connect, not continuously, and falls back with a note if it can't be read yet. A few styles come in one shade only, in which case Theme is disabled and Settings says why.",
     "",
     "**Text size** enlarges every part of the app, in four steps from **Default** to **Largest**. Reach for it when the app is harder to read than you would like; the display profile beside it changes the layout rather than the type. At the largest sizes the tab bar along the bottom scrolls sideways rather than pushing a tab off the edge, so every page stays reachable.",
     "",
@@ -2444,6 +2446,7 @@ const INDEX_TERMS = [
   { term: "Live View", match: ["### Live View", "Live View"] },
   { term: "Local files", match: ["**Local**"] },
   { term: "MOD files", match: ["MOD"] },
+  { term: "Match my device", match: ["**Match my device**"] },
   { term: "moods", see: "SID Radio" },
   { term: "network password", match: ["network password"] },
   { term: "Notifications", match: ["**Notifications**"] },
@@ -2481,6 +2484,7 @@ const INDEX_TERMS = [
   { term: "sources, file", match: ["File Sources"] },
   { term: "Stats", match: ["**Stats**"] },
   { term: "STIL notes", see: "tunes, names of" },
+  { term: "style, appearance", match: ["**Style**"] },
   { term: "streams", match: ["### Streams", "**Home → Streams**"] },
   { term: "T9 text entry", match: ["T9 Text Entry", "T9 mode"] },
   { term: "Telnet", match: ["Telnet Remote Menu Service", "Telnet"] },
