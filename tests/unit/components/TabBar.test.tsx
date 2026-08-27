@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
@@ -17,6 +17,50 @@ const LocationProbe = () => {
 };
 
 describe("TabBar", () => {
+  /*
+   * Six labels do not fit 320 CSS px at the larger Text sizes, so the bar scrolls and "Docs", the
+   * last tab, is the one drawn past the edge. Scrolling alone left the tab for the page you are on
+   * off screen whenever the page was reached any other way — the Quick menu, a deep link, or the
+   * keypad — so the selected tab is scrolled into view. jsdom reports no layout, so the overflow is
+   * simulated: the guard is that a bar which does NOT overflow is left alone.
+   */
+  it("scrolls the selected tab into view when the bar overflows", () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    const widths = { scrollWidth: 600, clientWidth: 320 };
+    Object.defineProperty(HTMLElement.prototype, "scrollWidth", { configurable: true, get: () => widths.scrollWidth });
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => widths.clientWidth });
+
+    render(
+      <MemoryRouter initialEntries={["/docs"]}>
+        <TabBar />
+      </MemoryRouter>,
+    );
+
+    expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ inline: "nearest" }));
+  });
+
+  it("leaves the bar alone when every tab already fits", () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    Object.defineProperty(HTMLElement.prototype, "scrollWidth", { configurable: true, get: () => 300 });
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 320 });
+
+    render(
+      <MemoryRouter initialEntries={["/docs"]}>
+        <TabBar />
+      </MemoryRouter>,
+    );
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
   it("exposes tab labels as accessibility labels", () => {
     render(
       <MemoryRouter initialEntries={["/"]}>

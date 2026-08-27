@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useEffect, useRef } from "react";
 import { Home, Sliders, Settings, BookOpen, Play, Disc } from "lucide-react";
 import { useLocation, useNavigate, type NavigateFunction } from "react-router-dom";
 import { useInterstitialActive } from "@/components/ui/interstitial-state";
@@ -42,15 +43,23 @@ function TabBarButton({
   order,
   isActive,
   navigate,
+  activeRef,
 }: {
   readonly tab: Tab;
   readonly order: number;
   readonly isActive: boolean;
   readonly navigate: NavigateFunction;
+  readonly activeRef?: React.RefObject<HTMLButtonElement>;
 }) {
   const Icon = tab.icon;
   const tabId = `tab-${tab.label.toLowerCase().replace(/\s+/g, "-")}`;
-  const focusRef = useFocusItem<HTMLButtonElement>({ id: tabId, order, group: "primary-tabs" });
+  const keypadRef = useFocusItem<HTMLButtonElement>({ id: tabId, order, group: "primary-tabs" });
+  // The keypad ring owns one ref; the bar needs the active node too, to scroll it into view.
+  const focusRef = (node: HTMLButtonElement | null) => {
+    if (typeof keypadRef === "function") keypadRef(node);
+    else if (keypadRef) (keypadRef as React.MutableRefObject<HTMLButtonElement | null>).current = node;
+    if (isActive && activeRef) (activeRef as React.MutableRefObject<HTMLButtonElement | null>).current = node;
+  };
 
   return (
     <button
@@ -103,6 +112,26 @@ export function TabBar() {
   const location = useLocation();
   const navigate = useNavigate();
   const interstitialActive = useInterstitialActive();
+  const navRef = useRef<HTMLElement>(null);
+  const activeTabRef = useRef<HTMLButtonElement>(null);
+
+  /*
+   * Keep the selected tab on screen.
+   *
+   * The bar scrolls (`overflow-x-auto` in index.css) because six labels do not fit 320 CSS px at
+   * the larger Text sizes — "Docs", the last one, is the one drawn past the edge. Scrolling alone
+   * is not enough: a page reached any other way (the Quick menu, a deep link, the keypad) left the
+   * bar wherever it happened to be, so the tab for the page you are on could be the one off screen.
+   * `inline: "nearest"` moves it the minimum distance, so a tab already visible does not jog.
+   */
+  useEffect(() => {
+    const nav = navRef.current;
+    const active = activeTabRef.current;
+    if (!nav || !active) return;
+    if (nav.scrollWidth <= nav.clientWidth + 1) return;
+    const reduced = document.documentElement.dataset.c64MotionMode === "reduced";
+    active.scrollIntoView({ inline: "nearest", block: "nearest", behavior: reduced ? "auto" : "smooth" });
+  }, [location.pathname]);
 
   return (
     <div
@@ -114,6 +143,7 @@ export function TabBar() {
       data-interstitial-active={interstitialActive ? "true" : "false"}
     >
       <nav
+        ref={navRef}
         className="tab-bar app-chrome-rail app-chrome-rail-bottom bg-background"
         data-app-chrome-family="primary"
         data-focus-scope="tabbar"
@@ -125,6 +155,7 @@ export function TabBar() {
             order={TAB_FOCUS_ORDER_BASE + index}
             isActive={tabIndexForPath(location.pathname) === tabIndexForPath(tab.path)}
             navigate={navigate}
+            activeRef={activeTabRef}
           />
         ))}
       </nav>
