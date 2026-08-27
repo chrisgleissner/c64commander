@@ -126,5 +126,16 @@
     "revert",
     "manage",
     "external-resources"
+  ],
+  "styles": [
+    "app-bar",
+    "cards",
+    "buttons",
+    "focus-and-selection",
+    "inputs",
+    "feedback",
+    "overlays",
+    "navigation",
+    "data"
   ]
 }

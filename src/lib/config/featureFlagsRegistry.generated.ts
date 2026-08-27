@@ -35,7 +35,8 @@ export type FeatureFlagId =
   | "av_sync_tests_enabled"
   | "audio_mirror_enabled"
   | "video_mirror_enabled"
-  | "new_disk_enabled";
+  | "new_disk_enabled"
+  | "app_styles_gallery_enabled";
 
 export type FeatureFlagGroupKey = keyof typeof FEATURE_FLAG_GROUPS;
 
@@ -266,6 +267,15 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     group: "stable",
     title: "New disk",
     description: "Create a formatted blank disk image (D64/D71/D81/DNP) on the device.",
+  },
+  {
+    id: "app_styles_gallery_enabled",
+    enabled: false,
+    visible_to_user: false,
+    developer_only: true,
+    group: "experimental",
+    title: "Appearance Style Gallery",
+    description: "Show the /dev/styles route: every widget under every appearance style, for reviewing a palette change as a picture.",
   },
 ] as const;
 

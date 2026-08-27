@@ -29,7 +29,7 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
-import { FeatureFlagsProvider, useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { FeatureFlagsProvider, useFeatureFlag, useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { FocusNavigationProvider, type KeypadShortcutHandlers } from "@/hooks/useFocusNavigation";
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
@@ -78,6 +78,7 @@ import {
 } from "@/lib/startup/launchSequence";
 
 const NotFound = lazy(() => import("./pages/NotFound"));
+const AppStylesGalleryPage = lazy(() => import("./pages/AppStylesGalleryPage"));
 
 export const shouldBundleCoverageProbeModules = () =>
   import.meta.env.VITE_ENABLE_TEST_PROBES === "1" || !import.meta.env.PROD;
@@ -289,6 +290,7 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
 const AppRoutes = () => {
   const coverageProbeEnabled = shouldEnableCoverageProbe();
   const { CoverageProbePage, DeviceSwitchLabPage, TestHeartbeat } = getCoverageProbeModules();
+  const { value: appStylesGalleryEnabled } = useFeatureFlag("app_styles_gallery_enabled");
   return (
     <BrowserRouter>
       <LightingStudioProvider>
@@ -327,6 +329,7 @@ const AppRoutes = () => {
                 {coverageProbeEnabled && DeviceSwitchLabPage ? (
                   <Route path="/__device-switch__" element={<DeviceSwitchLabPage />} />
                 ) : null}
+                {appStylesGalleryEnabled ? <Route path="/dev/styles" element={<AppStylesGalleryPage />} /> : null}
                 <Route path="*" element={<NotFoundForUnknownPaths />} />
               </Routes>
             </Suspense>

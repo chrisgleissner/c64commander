@@ -398,15 +398,64 @@ Do these in the order below; each clears the largest remaining group.
 
 ## Phase 6 — The style gallery
 
-- [ ] Add a developer-only `/dev/styles` route behind the existing developer-only feature-flag
+- [x] Add a developer-only `/dev/styles` route behind the existing developer-only feature-flag
       mechanism, rendering the real components in the sections listed in `spec.md` §11. It must
       import the shipped components, not copies.
-- [ ] Accept `?style=` and `?mode=` so a screenshot run can address one palette directly.
-- [ ] Add one Playwright spec walking 7 styles x 2 modes x N sections, writing
+      Added `app_styles_gallery_enabled` to `src/lib/config/feature-flags.yaml`
+      (`developer_only: true`, `visible_to_user: false`, `group: experimental`), regenerated
+      `featureFlagsRegistry.generated.ts`, and — because `src/generated/variant.ts` carries its own
+      narrower type for the feature-flags overlay object and does not auto-widen — also regenerated
+      `src/generated/variant.ts`/`variant.json` and `web/server/src/variant.generated.ts` via
+      `node scripts/generate-variant.mjs`; without that step `variant.featureFlags[id]` failed to
+      typecheck. `src/pages/AppStylesGalleryPage.tsx` is new, lazy-imported and route-gated in
+      `src/App.tsx` exactly like every other page. It renders nine sections (app-bar, cards, buttons,
+      focus-and-selection, inputs, feedback, overlays, navigation, data) built from the real shipped
+      components — Button, Card, Badge, Progress, Alert, HelperText, Input, Checkbox, RadioGroup,
+      Switch, Slider, InputOTP, Select, Dialog, AlertDialog, Sheet, Popover, Tooltip, Tabs,
+      Breadcrumb, Pagination, SelectableActionList, a recharts line chart reading `--chart-1`/
+      `--chart-2`, and the `HEALTH_TIMELINE_STATE_COLORS` swatches — not copies. One documented
+      deviation from §11: the "table" widget is omitted from the data section because
+      `src/components/ui/table.tsx` was deleted in Phase 2 as a confirmed-dead shadcn primitive; there
+      is no shipped table component left to exercise.
+      A throwaway Playwright screenshot during development caught a real bug before it ever reached
+      the committed spec: Dialog, AlertDialog and Sheet all defaulted to `useState(true)` (open), so
+      all three rendered simultaneously and buried the rest of the page under three stacked
+      full-screen backdrops. Fixed by defaulting all three to closed, with only their trigger buttons
+      shown until interacted with.
+- [x] Accept `?style=` and `?mode=` so a screenshot run can address one palette directly.
+      Read via `useSearchParams()`, resolved against `APP_STYLES`/`DEFAULT_APP_STYLE_ID`, and applied
+      directly to `document.documentElement` (`data-app-style` plus the `.dark`/`.light` class) in a
+      `useEffect` that restores the page's prior state on cleanup — the same mechanism `AppStyleProvider`
+      uses at the app root, duplicated here deliberately so the gallery can force a palette independently
+      of whatever style the running app session actually has selected.
+- [x] Add one Playwright spec walking 7 styles x 2 modes x N sections, writing
       `docs/img/app/styles/<style-id>-<mode>-<section>.png`. Set `meta.videoExpected = false` or use
       the `screenshots--` test-id prefix, or `scripts/validate-playwright-evidence.mjs:138-140` will
       fail the run demanding a `video.webm`. Register slugs through
       `playwright/screenshotCatalog.ts:44` so ordering is stable.
+      `playwright/appStylesGallery.spec.ts` is new: one test per (style, mode) — 12 tests, matching
+      the 12 generated palettes, each producing the 9 section screenshots in a single page load rather
+      than 108 separate loads. Traced `generateTestId` in `playwright/testIdUtils.ts` to confirm the
+      `screenshots--` prefix the evidence validator special-cases is derived from the spec file's own
+      basename, not attachable to an arbitrarily-named file without colliding with the existing
+      `screenshots.spec.ts`; used the simpler route instead and left video recording at the project
+      default (`video: "on"` in `playwright.config.ts`), which already produces exactly the one
+      `video.webm` per test folder the validator requires — no special-casing needed. Slugs are
+      registered through `registerScreenshotSections("styles", …)` in a `beforeAll`, same as every
+      other screenshot spec.
+      Ran the full 12-test suite: all 12 passed, producing 108 PNGs (7.9M total) under
+      `docs/img/app/styles/`. This is a separate, fixed-size gallery, not an addition to the existing
+      273-file screenshot corpus — the corpus itself is untouched. Visually spot-checked several
+      renditions (`modem-grey-light-buttons`, `modem-grey-dark-data`, `full-sun-light-buttons`): all
+      showed correctly tokenized, real components; a fixed-position tab bar overlapping the very
+      bottom edge of the last ("data") section's screenshot was noted and accepted as a cosmetic,
+      dev-only-tool issue not worth further scroll-margin engineering.
+      The new gallery PNGs are captured at a viewport (500x1200) sized to fit each section's content,
+      not one of the four device profiles `tests/unit/playwright/screenshotViewportBudget.test.ts`
+      checks the app corpus against. Added `"styles/"` to that test's existing
+      `NON_APP_CAPTURE_PREFIXES` exemption list (previously only `launch/auth-challenge/`, real
+      handset framebuffer grabs) rather than widening the device-profile check itself — these are
+      developer reference images of a palette, not documentation of an app screen size.
 
 ## Phase 7 — Tests
 
