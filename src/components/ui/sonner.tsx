@@ -6,17 +6,18 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useTheme } from "next-themes";
 import { Toaster as Sonner, toast } from "sonner";
+
+import { useThemeContext } from "@/components/ThemeProvider";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme();
+  const { resolvedTheme } = useThemeContext();
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={resolvedTheme}
       className="toaster group"
       toastOptions={{
         classNames: {

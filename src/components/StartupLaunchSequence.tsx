@@ -33,6 +33,8 @@ export function StartupLaunchSequence({
 }) {
   const { profile } = useDisplayProfile();
   const launchSequenceStyle = {
+    // Brand-locked, not style-aware: this runs before storage is read, so no
+    // appearance style can be resolved yet. See spec.md section 7.3.
     backgroundColor: variant.theme.backgroundColor,
     "--startup-launch-copy-width": PROFILE_COPY_WIDTH[profile],
     "--startup-launch-fade-in-ms": `${timings.fadeInMs}ms`,

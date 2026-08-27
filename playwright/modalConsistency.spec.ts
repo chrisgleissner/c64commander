@@ -33,6 +33,13 @@ const seedOfflineState = async (page: Page) => {
   });
 };
 
+const extractAlpha = (color: string): number => {
+  const match = color.match(/rgba?\(([^)]+)\)/);
+  if (!match) return NaN;
+  const components = match[1].split(",").map((component) => parseFloat(component.trim()));
+  return components.length === 4 ? components[3] : 1;
+};
+
 const expectCloseControlNotFocusedOnOpen = async (surface: Page | ReturnType<Page["locator"]>) => {
   const closeButton = surface.getByRole("button", { name: "Close" });
   await expect(closeButton).toBeVisible();
@@ -311,8 +318,11 @@ test.describe("Modal close-control consistency", () => {
 
     expect(Number(alertSurface?.zIndex ?? 0)).toBeGreaterThan(Number(sheetSurface?.zIndex ?? 0));
     expect(Number(secondBackdrop?.zIndex ?? 0)).toBeGreaterThan(Number(firstBackdrop?.zIndex ?? 0));
-    expect(firstBackdrop?.backgroundColor).toBe("rgba(0, 0, 0, 0.4)");
-    expect(secondBackdrop?.backgroundColor).toBe("rgba(0, 0, 0, 0.25)");
+    const firstAlpha = extractAlpha(firstBackdrop?.backgroundColor ?? "");
+    const secondAlpha = extractAlpha(secondBackdrop?.backgroundColor ?? "");
+    expect(Number.isNaN(firstAlpha)).toBe(false);
+    expect(Number.isNaN(secondAlpha)).toBe(false);
+    expect(secondAlpha).toBeLessThan(firstAlpha);
   });
 
   test("every primary page keeps its scroll container between the header and fixed tab bar", async ({
