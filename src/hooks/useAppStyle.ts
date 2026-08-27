@@ -19,14 +19,11 @@ const THEME_COLOR_META_SELECTOR = 'meta[name="theme-color"]';
 const readStoredStyleId = (): string | null => localStorage.getItem(APP_STYLE_STORAGE_KEY);
 
 /**
- * Style axis (spec.md docs/plans/appearance-styles/spec.md), a **sibling** of useTheme rather
- * than a widening of it: a separate localStorage key (following the precedent of
- * c64u_display_profile_override), so useTheme and its 18 existing tests are untouched.
+ * Style axis (spec.md), a sibling of useTheme rather than a widening of it: a separate
+ * localStorage key, so useTheme and its existing tests are untouched.
  *
- * `deviceColorScheme` is the Ultimate's own `Color Scheme` setting name, read on connect and on
- * manual refresh only (never polled — spec.md section 7.4, decision D4). Pass null when it has
- * never been probed this session; the "Match my device" choice then falls back to the compiled
- * default and stays that way until a probe succeeds, without ever guessing.
+ * `deviceColorScheme` is the Ultimate's own `Color Scheme` name. Pass null when it has never been
+ * probed this session; "Match my device" then falls back to the compiled default, never a guess.
  */
 export function useAppStyle(deviceColorScheme: string | null) {
   const { theme, resolvedTheme } = useThemeContext();
@@ -66,12 +63,10 @@ export function useAppStyle(deviceColorScheme: string | null) {
     document.documentElement.setAttribute("data-app-style", resolved.styleId);
   }, [resolved.styleId]);
 
-  // The `.dark` class has another writer: useTheme's own effect sets it unconditionally from the
-  // *raw* theme setting on every theme change, with no knowledge of a style's single-mode clamp.
-  // Effects run in commit order (descendants before the ThemeProvider ancestor whose useTheme
-  // call owns that effect), so a plain effect here can lose a race and have its clamp overwritten
-  // moments later. A MutationObserver makes the clamp self-healing against whichever effect (or
-  // anything else) touches the class, instead of depending on effect ordering at all.
+  // The `.dark` class has another writer: useTheme's effect sets it from the *raw* theme setting,
+  // with no knowledge of a style's single-mode clamp, and it runs after this one (ancestor effects
+  // run last). A MutationObserver makes the clamp self-healing against that writer instead of
+  // depending on effect ordering.
   useEffect(() => {
     if (!resolved.themeClamped) return;
     const shouldHaveDark = resolved.mode === "dark";
@@ -87,15 +82,22 @@ export function useAppStyle(deviceColorScheme: string | null) {
     return () => observer.disconnect();
   }, [resolved.mode, resolved.themeClamped]);
 
-  // Native system bar + web theme-color both key off the *resolved* background, which a style
-  // change can move independent of any theme change, so this must re-run on either.
+  // Native system bar + web theme-color both read the *computed* --background, which only settles
+  // once both writers of the `.dark` class have run. Re-syncing on every class/attribute change,
+  // rather than on the React deps alone, is what keeps them from being left one theme behind.
   useEffect(() => {
-    void syncNativeSystemBarAppearance();
-    const meta = document.querySelector<HTMLMetaElement>(THEME_COLOR_META_SELECTOR);
-    if (meta) {
-      const backgroundHsl = getComputedStyle(document.documentElement).getPropertyValue("--background").trim();
-      if (backgroundHsl) meta.content = `hsl(${backgroundHsl})`;
-    }
+    const syncChrome = () => {
+      void syncNativeSystemBarAppearance();
+      const meta = document.querySelector<HTMLMetaElement>(THEME_COLOR_META_SELECTOR);
+      if (meta) {
+        const backgroundHsl = getComputedStyle(document.documentElement).getPropertyValue("--background").trim();
+        if (backgroundHsl) meta.content = `hsl(${backgroundHsl})`;
+      }
+    };
+    syncChrome();
+    const observer = new MutationObserver(syncChrome);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-app-style"] });
+    return () => observer.disconnect();
   }, [resolved.styleId, resolved.mode]);
 
   return {

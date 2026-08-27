@@ -49,6 +49,7 @@ describe("useAppStyle", () => {
     localStorage.clear();
     document.documentElement.removeAttribute("data-app-style");
     document.documentElement.classList.remove("light", "dark");
+    document.documentElement.style.removeProperty("--background");
     vi.clearAllMocks();
   });
 
@@ -118,6 +119,28 @@ describe("useAppStyle", () => {
     it("calls syncNativeSystemBarAppearance when the resolved style changes", () => {
       localStorage.setItem(APP_STYLE_STORAGE_KEY, bothModesStyle.id);
       renderHook(() => useAppStyle(null));
+      expect(syncNativeSystemBarAppearance).toHaveBeenCalled();
+    });
+
+    it("re-reads --background when another writer changes the .dark class after this effect ran", async () => {
+      localStorage.setItem(APP_STYLE_STORAGE_KEY, bothModesStyle.id);
+      document.documentElement.style.setProperty("--background", "10 20% 30%");
+      renderHook(() => useAppStyle(null));
+      const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+      expect(meta?.content).toBe("hsl(10 20% 30%)");
+      syncNativeSystemBarAppearance.mockClear();
+
+      // useTheme owns the ThemeProvider ancestor, so its effect runs after this hook's and is what
+      // actually moves --background. Without observing that mutation both the tag and the native
+      // system bar stay on the previous theme's background.
+      act(() => {
+        document.documentElement.style.setProperty("--background", "200 50% 8%");
+        document.documentElement.classList.add("dark");
+      });
+
+      await vi.waitFor(() => {
+        expect(meta?.content).toBe("hsl(200 50% 8%)");
+      });
       expect(syncNativeSystemBarAppearance).toHaveBeenCalled();
     });
   });
