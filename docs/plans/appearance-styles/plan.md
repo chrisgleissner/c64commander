@@ -352,17 +352,49 @@ Do these in the order below; each clears the largest remaining group.
 
 ## Phase 5 — The picker and Match my device
 
-- [ ] Add the Style group to the Appearance card in `src/pages/SettingsPage.tsx` (the section begins
+- [x] Add the Style group to the Appearance card in `src/pages/SettingsPage.tsx` (the section begins
       at `:1177`). Full-width rows, each with the style name, a live three-colour swatch, and a
       dark-only marker where it applies. Follow the existing button-grid pattern used by Text size
       and Display profile, including their compact-profile single-column rule.
-- [ ] Disable the Theme row when a dark-only style is selected, and say why. Do not hide it —
+      Rows are single-column at **every** profile, not only compact: each carries a name, an
+      optional "Dark only" badge and a 3-swatch (background/primary/accent) preview, which needs
+      more width than Text size's 2-column grid leaves at 320px, so the "compact-profile
+      single-column rule" is honoured by making it the only rule rather than a special case.
+      The swatch previews each style under the theme the user has actually set (light/dark,
+      clamped to whichever mode that style declares) via `resolveAppStyleSwatchColors`, so it
+      never shows a mode the row wouldn't actually produce if clicked. Visually verified end to
+      end with a throwaway Playwright screenshot (not committed): confirmed the whole chain —
+      compiled CSS (Phase 3) through the DOM wiring (Phase 4) through this picker — actually
+      repaints the live app (header, tab bar, buttons, not just the swatches) when a row is
+      clicked, in both light and a dark-only style (vault-black).
+- [x] Disable the Theme row when a dark-only style is selected, and say why. Do not hide it —
       a control that vanishes is harder to understand than one that explains itself.
-- [ ] Add the "Match my device" entry, stored as its own sentinel value rather than as the style it
+      Uses a plain `<p>`, not the existing `HelperText` component: `HelperText` hides itself on
+      the compact profile unless "Card descriptions" is toggled on, which would make this
+      disclosure invisible by default specifically on the keypad-first compact device this rule
+      matters most for. Same reasoning applied to the Match-my-device fallback message below.
+- [x] Add the "Match my device" entry, stored as its own sentinel value rather than as the style it
       currently resolves to. Read the device scheme on connect and on manual refresh only; never
       poll. Put the mapping table in the YAML, not in code.
-- [ ] Handle the disconnected and unknown-scheme cases visibly: fall back to the compiled default
+      The mapping table landed in Phase 4 (`device_scheme_map` in
+      `styles/appearance-styles.yaml`). This phase wires the second read trigger: Settings'
+      existing `handleRefreshConnection` now also calls `refreshDeviceColorScheme()` after
+      `discoverConnection("manual")` succeeds, alongside (not instead of) the connect-time read
+      `useDeviceColorScheme` already owns.
+- [x] Handle the disconnected and unknown-scheme cases visibly: fall back to the compiled default
       and say so in the row's helper text.
+      `matchedDeviceStyleId === null` (never probed, disconnected, or an unrecognised scheme name)
+      renders "The device hasn't reported a Color Scheme yet — using \<default style\> until it
+      connects or you refresh the connection." instead of silently resolving to the default with
+      no explanation.
+      Added 11 tests to `tests/unit/pages/SettingsPage.test.tsx`: every style row renders, the
+      dark-only badge appears on exactly the right styles, row selection calls `setStyleId`
+      (including the sentinel for Match my device), the Theme row disables with the exact
+      explanatory text when clamped and stays enabled otherwise, both Match-my-device outcomes
+      (matched / unprobed) render their expected text, and the manual-refresh action calls
+      `refreshDeviceColorScheme` only when the refresh actually lands connected. One pre-existing
+      test needed scoping, not rewriting: a loose `/dark/i` button-name query became ambiguous
+      once "Dark only" badge text existed in the same section.
 
 ## Phase 6 — The style gallery
 
