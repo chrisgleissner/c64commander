@@ -36,14 +36,19 @@ A style is exactly two generated CSS blocks (`html[data-app-style="<id>"]` and
 The complete emitted set is the fifteen colour tokens each palette declares (`--background`,
 `--card`, `--muted`, `--foreground`, `--muted-foreground`, `--primary`, `--primary-foreground`,
 `--accent`, `--accent-foreground`, `--border`, `--ring`, `--success`, `--warning`, `--destructive`,
-`--destructive-foreground`), plus `--input` (compiled from `--border`), `--radius`, `--edge-width`,
-`--ring-style` and, for `vault-black` only, `--app-bar-band`.
+`--destructive-foreground`), plus `--radius`, `--edge-width`, `--ring-style` and, for `vault-black`
+only, `--app-bar-band`.
 
-The remaining token groups in `src/index.css` — `--secondary`, `--popover`, `--card-foreground`,
-and the media/key/category/chart/diag groups — are theme-level, declared once for light and once
-for dark, and no style overrides them. A token that a style changes must bring its own paired
-foreground with it: leaving `--accent-foreground` theme-level while `--accent` varied per style
-put near-white text on a bright accent at 1.2:1 in every dark palette.
+Six more custom properties are derived from those, not authored, because §5.1 gives them the same
+role as the token they copy: `--input` from `--border`, `--popover` from `--card`,
+`--card-foreground` and `--popover-foreground` from `--foreground`, and `--secondary` /
+`--secondary-foreground` from `--muted` / `--foreground`.
+
+The remaining token groups in `src/index.css` — the media, key, category, chart and diag groups —
+are theme-level, declared once for light and once for dark, and no style overrides them. A token a
+style changes must bring its paired foreground with it: leaving `--accent-foreground` theme-level
+while `--accent` varied per style put near-white text on a bright accent at 1.2:1 in every dark
+palette.
 `docs/plans/appearance-styles/spec.md` §5.1 has the full table with each token's role.
 
 ## 4. What a Style May Never Do

@@ -281,6 +281,19 @@ describe("compile-styles", () => {
       expect(output).toContain(`--border: ${borderValue};`);
       expect(output).toContain(`--input: ${borderValue};`);
     });
+
+    it("derives the surface tokens that share a role with an authored one", () => {
+      // Without these, dropdowns, selects, tooltips, progress tracks and secondary buttons keep
+      // the base theme's colours under every style, because nothing else redeclares them.
+      const config = validConfig();
+      const output = renderCss(config);
+      const { card, foreground, "muted-surface": mutedSurface } = config.styles["test-style"].light.colors;
+      expect(output).toContain(`--popover: ${card};`);
+      expect(output).toContain(`--card-foreground: ${foreground};`);
+      expect(output).toContain(`--popover-foreground: ${foreground};`);
+      expect(output).toContain(`--secondary: ${mutedSurface};`);
+      expect(output).toContain(`--secondary-foreground: ${foreground};`);
+    });
   });
 
   describe("countPalettes", () => {

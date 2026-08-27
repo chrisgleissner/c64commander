@@ -521,6 +521,7 @@ currently pass all of these.
 | ----------------------------------------------- | ------- | ----------------------------------------------------- |
 | `foreground` / `card`                           | 4.5:1   | WCAG 2.1 AA body text                                 |
 | `foreground` / `background`                     | 4.5:1   | AA body text                                          |
+| `foreground` / `muted-surface`                  | 4.5:1   | `muted-surface` also compiles to `--secondary`         |
 | `muted-foreground` / `card`                     | 4.5:1   | Secondary text is still read, not decoration          |
 | `primary-foreground` / `primary`                | 4.5:1   | Label on the main action                              |
 | `destructive-foreground` / `destructive`        | 4.5:1   | Caught white-on-light-red at 2.5:1 in the first draft |

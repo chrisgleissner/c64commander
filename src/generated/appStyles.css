@@ -34,6 +34,11 @@ html[data-app-style="modem-grey"] {
   --destructive: 3.6 66.7% 44.7%;
   --destructive-foreground: 0 0% 100%;
   --input: 220 20% 82.4%;
+  --card-foreground: 222.4 24.6% 13.5%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.4 24.6% 13.5%;
+  --secondary: 222.9 22.6% 93.9%;
+  --secondary-foreground: 222.4 24.6% 13.5%;
 }
 
 html[data-app-style="modem-grey"].dark {
@@ -56,6 +61,11 @@ html[data-app-style="modem-grey"].dark {
   --destructive: 5.2 78.8% 68.6%;
   --destructive-foreground: 8.6 36.8% 7.5%;
   --input: 221.5 17.6% 29%;
+  --card-foreground: 223.6 29.7% 92.7%;
+  --popover: 227.1 21.2% 12.9%;
+  --popover-foreground: 223.6 29.7% 92.7%;
+  --secondary: 226.7 20.5% 17.3%;
+  --secondary-foreground: 223.6 29.7% 92.7%;
 }
 
 html[data-app-style="breadbin-beige"] {
@@ -78,6 +88,11 @@ html[data-app-style="breadbin-beige"] {
   --destructive: 4.2 64.4% 39.6%;
   --destructive-foreground: 0 0% 100%;
   --input: 40.4 28% 63.5%;
+  --card-foreground: 38.2 31.4% 13.7%;
+  --popover: 42.4 54.8% 93.9%;
+  --popover-foreground: 38.2 31.4% 13.7%;
+  --secondary: 41.2 37.2% 83.1%;
+  --secondary-foreground: 38.2 31.4% 13.7%;
 }
 
 html[data-app-style="breadbin-beige"].dark {
@@ -100,6 +115,11 @@ html[data-app-style="breadbin-beige"].dark {
   --destructive: 5.9 66% 70%;
   --destructive-foreground: 8.6 36.8% 7.5%;
   --input: 38 21.7% 27.1%;
+  --card-foreground: 40 50.8% 87.3%;
+  --popover: 40 18.8% 12.5%;
+  --popover-foreground: 40 50.8% 87.3%;
+  --secondary: 38.8 20% 16.7%;
+  --secondary-foreground: 40 50.8% 87.3%;
 }
 
 html[data-app-style="petrol-teal"] {
@@ -122,6 +142,11 @@ html[data-app-style="petrol-teal"] {
   --destructive: 3.8 65% 42.5%;
   --destructive-foreground: 0 0% 100%;
   --input: 175.4 24.5% 68.8%;
+  --card-foreground: 177.9 50% 11%;
+  --popover: 172.5 44.4% 96.5%;
+  --popover-foreground: 177.9 50% 11%;
+  --secondary: 175.2 30.1% 83.7%;
+  --secondary-foreground: 177.9 50% 11%;
 }
 
 html[data-app-style="petrol-teal"].dark {
@@ -144,6 +169,11 @@ html[data-app-style="petrol-teal"].dark {
   --destructive: 6.5 86.6% 70.8%;
   --destructive-foreground: 12 48.4% 6.1%;
   --input: 174.4 38% 27.8%;
+  --card-foreground: 174.3 42.9% 90.4%;
+  --popover: 176.1 50.8% 12%;
+  --popover-foreground: 174.3 42.9% 90.4%;
+  --secondary: 175.3 46.3% 16.1%;
+  --secondary-foreground: 174.3 42.9% 90.4%;
 }
 
 html[data-app-style="neon-pop"] {
@@ -166,6 +196,11 @@ html[data-app-style="neon-pop"] {
   --destructive: 356.2 70.7% 44.1%;
   --destructive-foreground: 0 0% 100%;
   --input: 220 28.4% 81.4%;
+  --card-foreground: 224.3 36.5% 12.4%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 224.3 36.5% 12.4%;
+  --secondary: 221.5 41.9% 93.9%;
+  --secondary-foreground: 224.3 36.5% 12.4%;
 }
 
 html[data-app-style="neon-pop"].dark {
@@ -188,6 +223,11 @@ html[data-app-style="neon-pop"].dark {
   --destructive: 0 100% 71%;
   --destructive-foreground: 0 52.9% 6.7%;
   --input: 263 32.9% 28%;
+  --card-foreground: 264.5 100% 95.7%;
+  --popover: 257.1 44.7% 9.2%;
+  --popover-foreground: 264.5 100% 95.7%;
+  --secondary: 257.4 43.7% 13.9%;
+  --secondary-foreground: 264.5 100% 95.7%;
 }
 
 html[data-app-style="amber-glow"].dark {
@@ -210,6 +250,11 @@ html[data-app-style="amber-glow"].dark {
   --destructive: 5.9 100% 67.8%;
   --destructive-foreground: 11.4 72.4% 5.7%;
   --input: 36 51% 19.2%;
+  --card-foreground: 36 53.6% 89%;
+  --popover: 38.2 37.9% 5.7%;
+  --popover-foreground: 36 53.6% 89%;
+  --secondary: 34.3 30.4% 9%;
+  --secondary-foreground: 36 53.6% 89%;
 }
 
 html[data-app-style="vault-black"].dark {
@@ -232,6 +277,11 @@ html[data-app-style="vault-black"].dark {
   --destructive: 5.4 58.7% 59.2%;
   --destructive-foreground: 7.5 47.1% 6.7%;
   --input: 240 8.1% 31.6%;
+  --card-foreground: 240 9.1% 80.6%;
+  --popover: 240 12% 4.9%;
+  --popover-foreground: 240 9.1% 80.6%;
+  --secondary: 240 11.5% 10.2%;
+  --secondary-foreground: 240 9.1% 80.6%;
   --app-bar-band: linear-gradient(90deg, #4b4fa8 0 46%, #9a3a2e 46% 100%);
 }
 
@@ -255,6 +305,11 @@ html[data-app-style="full-sun"] {
   --destructive: 0 100% 32.4%;
   --destructive-foreground: 0 0% 100%;
   --input: 0 0% 0%;
+  --card-foreground: 0 0% 0%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 0%;
+  --secondary: 0 0% 93.7%;
+  --secondary-foreground: 0 0% 0%;
 }
 
 html[data-app-style="full-sun"].dark {
@@ -277,4 +332,9 @@ html[data-app-style="full-sun"].dark {
   --destructive: 0 100% 71%;
   --destructive-foreground: 0 52.9% 6.7%;
   --input: 0 0% 100%;
+  --card-foreground: 0 0% 100%;
+  --popover: 0 0% 0%;
+  --popover-foreground: 0 0% 100%;
+  --secondary: 0 0% 7.8%;
+  --secondary-foreground: 0 0% 100%;
 }

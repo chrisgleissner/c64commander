@@ -71,6 +71,8 @@ const HSL_TRIPLE_PATTERN = /^\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%$/;
 const CONTRAST_GATES = [
   ["foreground", "card", 4.5, "foreground/card"],
   ["foreground", "background", 4.5, "foreground/background"],
+  /* --muted-surface is also compiled to --secondary, which carries --secondary-foreground text. */
+  ["foreground", "muted-surface", 4.5, "foreground/muted-surface"],
   ["muted-foreground", "card", 4.5, "muted-foreground/card"],
   ["primary-foreground", "primary", 4.5, "primary-foreground/primary"],
   /*
@@ -403,7 +405,18 @@ const cssVarLines = (block, indent) => {
     `${pad}--edge-width: ${EDGE_WIDTH_PX[block.edge]}px;`,
     `${pad}--ring-style: ${block.ring_style};`,
     colorLines,
+    /*
+     * Derived, not authored: spec.md section 5.1 gives these the same roles as the tokens they
+     * copy (--popover is a raised surface like --card, --muted is the recessed "secondary button
+     * fill, progress track"). Leaving them out of the emitted set left every dropdown, select,
+     * tooltip, progress track and secondary button on the base indigo theme under all 12 palettes.
+     */
     `${pad}--input: ${block.colors.border};`,
+    `${pad}--card-foreground: ${block.colors.foreground};`,
+    `${pad}--popover: ${block.colors.card};`,
+    `${pad}--popover-foreground: ${block.colors.foreground};`,
+    `${pad}--secondary: ${block.colors["muted-surface"]};`,
+    `${pad}--secondary-foreground: ${block.colors.foreground};`,
   ];
   if (block.app_bar_band !== undefined) {
     lines.push(`${pad}--app-bar-band: ${block.app_bar_band};`);

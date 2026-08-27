@@ -20,6 +20,7 @@ import { APP_STYLES, type AppStyleColors, type AppStyleMode } from "@/generated/
 const CONTRAST_GATES: readonly [keyof AppStyleColors, keyof AppStyleColors, number][] = [
   ["foreground", "card", 4.5],
   ["foreground", "background", 4.5],
+  ["foreground", "muted-surface", 4.5],
   ["muted-foreground", "card", 4.5],
   ["primary-foreground", "primary", 4.5],
   ["accent-foreground", "accent", 4.5],
