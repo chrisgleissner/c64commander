@@ -410,13 +410,13 @@ Your C64 will play any of it, and so will your phone or tablet for most tunes. T
 
 #### Where the music plays
 
-When a SID tune is playing, the Play page offers **Listen on**. You have a choice of machine:
+When a SID tune is playing, the Play page shows an **output button** beside the volume slider, marked with the destination the sound is going to. Press it to choose:
 
-- **Local** — your phone or tablet plays the tune itself. Your C64 need not even be switched on.
-- **Remote** — your C64 plays it, through its own SID chip.
+- **Here** — your phone or tablet plays the tune itself. Your C64 need not even be switched on.
+- **C64** — your C64 plays it, through its own SID chip.
 - **Both** — your C64 plays it and also sends the sound across your network, so you hear it in both places.
 
-**Both** is offered when Live View and its audio are switched on, and it takes itself away again if your C64 declines to send the sound. The sound leaves the machine over its **Ethernet** connection, so a C64 that is only on Wi-Fi cannot supply it. **Listen on** appears for SID tunes alone — programs and disks always run on the C64, because that is the only machine that can run them.
+**Both** is offered when Live View and its audio are switched on, and it takes itself away again if your C64 declines to send the sound. The sound leaves the machine over its **Ethernet** connection, so a C64 that is only on Wi-Fi cannot supply it. The output button appears for SID tunes alone — programs and disks always run on the C64, because that is the only machine that can run them.
 
 To play music on its own, your phone or tablet needs a copy of two programs built into every C64: the **KERNAL** and **BASIC** ROMs. Many tunes call into them, and without them those tunes start and then play nothing. The ROMs are under copyright and cannot be shipped with an app, so C64 Commander reads them from your own machine — by itself, the first time you play a tune here while the C64 is connected. There is nothing to set up. The copies stay on your phone or tablet, and are never uploaded, never shared, and never included in a diagnostics report. Read them only from a machine that is yours, or that you have permission to use.
 
@@ -432,7 +432,7 @@ These apply to tunes playing on your phone or tablet. On the C64 the buttons ste
 
 **Volume** and **Mute** follow whichever machine is sounding: playing here, they change this tune alone and leave your ringer and notifications as they were; playing on the C64, they move the machine’s own mixer. Your phone or tablet will either play a tune itself or play the sound sent from your C64, never both at once — whichever you start last takes over.
 
-The rest is under **Settings → SID Radio**. **Crossfade** overlaps one tune into the next, both audible while the first fades away: **Off** for a clean cut, or **Short** (0.6s), **Medium** (1.5s), **Long** (3s), or **Longest** (4s). It starts at Off. Only your phone or tablet can sound two tunes at once, so the control is grayed out while **Listen on** is set to the C64.
+The rest is under **Settings → SID Radio**. **Crossfade** overlaps one tune into the next, both audible while the first fades away: **Off** for a clean cut, or **Short** (0.6s), **Medium** (1.5s), **Long** (3s), or **Longest** (4s). It starts at Off. Only your phone or tablet can sound two tunes at once, so the control is grayed out while the output is set to the C64.
 
 There are two versions of the SID chip — the **6581** and the **8580** — and music written for one sounds a little different on the other. Most files say which the composer used, and those always play on the chip they name. For the many older files that say nothing, turn on **Match my Commodore 64** and the app reads the chip out of your own machine; **Otherwise use** picks between 6581 and 8580 for when it has not read one yet. A line underneath tells you which is in use at the moment.
 

@@ -175,7 +175,7 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
             id="local-engine-enabled"
             testId="settings-local-engine-enabled"
             label="On-device playback engine (experimental)"
-            description="Adds a “Listen on” choice on Play: your C64, or here. Needs your own C64 ROMs — add below."
+            description="Adds an output choice on Play: your C64, or here. Needs your own C64 ROMs — add below."
             checked={localEngineEnabled}
             onChange={saveLocalEngineEnabled}
           />
@@ -275,8 +275,8 @@ export const SidRadioSettingsSection = ({ developerMode = false }: SidRadioSetti
             <p className="text-xs text-muted-foreground">
               {crossfadeUnavailable ? (
                 <>
-                  Only available with <strong>Listen on</strong> set to <strong>Local</strong> — the C64 has one sound
-                  chip and can&apos;t play two tunes at once.
+                  Only available with the Play page's output set to <strong>Here</strong> — the C64 has one sound chip
+                  and can&apos;t play two tunes at once.
                 </>
               ) : (
                 <>Overlaps the outgoing and incoming tune instead of a hard cut.</>
