@@ -352,6 +352,7 @@ const stage = async (name, audible, body) => {
   console.log(`\n=== ${name} ===`);
   const startedAt = Date.now();
   try {
+    if (audible) await ensureMachineAudible();
     const detail = await body();
     results.push({ name, status: "pass", detail: detail ?? "", seconds: (Date.now() - startedAt) / 1000 });
     console.log(`  PASS ${detail ?? ""}`);
@@ -631,6 +632,21 @@ const setMasterVolume = async (value) => {
   const body = await response.json().catch(() => ({}));
   const errors = body?.errors ?? [];
   if (!response.ok || errors.length) throw new Error(`the Ultimate would not take Vol Master=${value}: ${errors}`);
+};
+
+/**
+ * Un-mute the machine before an audible stage.
+ *
+ * Preflight already does this once, but it does not survive the run: the app mutes the machine
+ * every time playback pauses and the gate pauses between stages, so `crossfade` graded silence
+ * after `sid-local` had run, and a `--only` list that omits preflight graded silence throughout.
+ * Whatever was found first is still what `restoreRig` puts back.
+ */
+const ensureMachineAudible = async () => {
+  const master = await readMasterVolume().catch(() => null);
+  if (!master || master.current !== "OFF") return;
+  if (initialMasterVolume === null) initialMasterVolume = master.current;
+  await setMasterVolume(master.fallback);
 };
 
 const preflight = async () => {
