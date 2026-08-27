@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
 import { TabBar } from "@/components/TabBar";
@@ -24,41 +24,44 @@ describe("TabBar", () => {
    * keypad — so the selected tab is scrolled into view. jsdom reports no layout, so the overflow is
    * simulated: the guard is that a bar which does NOT overflow is left alone.
    */
-  it("scrolls the selected tab into view when the bar overflows", () => {
-    const scrollIntoView = vi.fn();
-    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+  const stubBarGeometry = ({ overflows, tabRight }: { overflows: boolean; tabRight: number }) => {
+    Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
       configurable: true,
-      value: scrollIntoView,
+      get: () => (overflows ? 600 : 300),
     });
-    const widths = { scrollWidth: 600, clientWidth: 320 };
-    Object.defineProperty(HTMLElement.prototype, "scrollWidth", { configurable: true, get: () => widths.scrollWidth });
-    Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => widths.clientWidth });
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 320 });
+    HTMLElement.prototype.getBoundingClientRect = function stub(this: HTMLElement) {
+      const isNav = this.tagName === "NAV";
+      const right = isNav ? 320 : tabRight;
+      return { left: 0, right, top: 0, bottom: 0, width: right, height: 0, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    };
+  };
+
+  it("scrolls a selected tab that sits past the right edge back into view", async () => {
+    stubBarGeometry({ overflows: true, tabRight: 371 });
 
     render(
       <MemoryRouter initialEntries={["/docs"]}>
         <TabBar />
       </MemoryRouter>,
     );
-
-    expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ inline: "nearest" }));
+    const nav = document.querySelector("nav.tab-bar") as HTMLElement;
+    await waitFor(() => expect(nav.scrollLeft).toBeGreaterThan(0));
+    // 371 - 320 past the edge, plus the 12px sliver that shows the row keeps going.
+    expect(nav.scrollLeft).toBe(63);
   });
 
-  it("leaves the bar alone when every tab already fits", () => {
-    const scrollIntoView = vi.fn();
-    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
-      configurable: true,
-      value: scrollIntoView,
-    });
-    Object.defineProperty(HTMLElement.prototype, "scrollWidth", { configurable: true, get: () => 300 });
-    Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 320 });
+  it("leaves the bar alone when every tab already fits", async () => {
+    stubBarGeometry({ overflows: false, tabRight: 300 });
 
     render(
       <MemoryRouter initialEntries={["/docs"]}>
         <TabBar />
       </MemoryRouter>,
     );
-
-    expect(scrollIntoView).not.toHaveBeenCalled();
+    const nav = document.querySelector("nav.tab-bar") as HTMLElement;
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    expect(nav.scrollLeft).toBe(0);
   });
 
   it("exposes tab labels as accessibility labels", () => {

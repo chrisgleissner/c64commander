@@ -128,9 +128,22 @@ export function TabBar() {
     const nav = navRef.current;
     const active = activeTabRef.current;
     if (!nav || !active) return;
-    if (nav.scrollWidth <= nav.clientWidth + 1) return;
-    const reduced = document.documentElement.dataset.c64MotionMode === "reduced";
-    active.scrollIntoView({ inline: "nearest", block: "nearest", behavior: reduced ? "auto" : "smooth" });
+    // One frame, so the bar has been laid out for the route that just became active.
+    const raf = requestAnimationFrame(() => {
+      if (nav.scrollWidth <= nav.clientWidth + 1) return;
+      const bar = nav.getBoundingClientRect();
+      const tab = active.getBoundingClientRect();
+      // Explicit arithmetic rather than scrollIntoView: the bar is `justify-around`, and with the
+      // free space distributed around the items `scrollIntoView({inline:"nearest"})` stopped 9 px
+      // in and left the last tab still off screen. GAP keeps a sliver of the neighbour visible, so
+      // the row reads as scrollable rather than as if it simply ends there.
+      const GAP = 12;
+      const overRight = tab.right - bar.right;
+      const overLeft = bar.left - tab.left;
+      if (overRight > 0) nav.scrollLeft += overRight + GAP;
+      else if (overLeft > 0) nav.scrollLeft -= overLeft + GAP;
+    });
+    return () => cancelAnimationFrame(raf);
   }, [location.pathname]);
 
   return (
