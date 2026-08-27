@@ -1,3 +1,9 @@
+/**
+ * Runs on the default appearance style only; see appearanceGeometryInvariance.spec.ts, which proves
+ * switching style changes zero geometry so this layout coverage holds for all twelve generated
+ * palettes.
+ */
+
 import { expect, test } from "@playwright/test";
 import type { Locator, Page, TestInfo } from "@playwright/test";
 

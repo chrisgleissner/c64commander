@@ -30,6 +30,10 @@ import { TAB_ROUTES } from "../src/lib/navigation/tabRoutes";
  * the screen, the more the ring has to scroll to bring the next control into view, and
  * a control the ring can select but never scroll on screen is not reachable in any way
  * that matters.
+ *
+ * Runs on the default appearance style only, and is style-agnostic by construction anyway: reach
+ * and scroll depend on box geometry, not colour, and appearanceGeometryInvariance.spec.ts proves
+ * switching style changes zero geometry, so this holds for all twelve generated palettes.
  */
 
 /** True when the element is inside the visible viewport, not merely in the DOM. */

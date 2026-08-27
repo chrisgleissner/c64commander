@@ -18,6 +18,9 @@
  * This sweep turns every feature flag on, so the surfaces that only appear behind one are
  * drawn and measured too. It reuses the same audit as the layout spec rather than
  * measuring differently.
+ *
+ * Runs on the default appearance style only; see appearanceGeometryInvariance.spec.ts, which proves
+ * switching style changes zero geometry so this coverage holds for all twelve generated palettes.
  */
 import { expect, test } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";

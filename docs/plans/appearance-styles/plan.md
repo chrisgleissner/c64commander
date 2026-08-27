@@ -75,7 +75,7 @@ that changes appearance in patches.
       `scrim`, `media`). Verified all 19 new utility classes compile via a throwaway
       `npx tailwindcss` probe build before removing it.
 - [x] Add an `edge` utility that renders the style's edge as `box-shadow: inset 0 0 0
-      var(--edge-width)`, per decision D10. Nothing may set `border-width` from a style.
+    var(--edge-width)`, per decision D10. Nothing may set `border-width` from a style.
       Added as `boxShadow.edge` (`shadow-edge`), defaulting to `hsl(var(--border))`; the handful of
       Phase-2 sites that need a non-default edge colour (e.g. `border-primary`, `border-transparent`)
       will use Tailwind's arbitrary-value syntax rather than growing this token surface for one-off
@@ -172,7 +172,7 @@ Do these in the order below; each clears the largest remaining group.
       behaviour (stable/valid color selection), not literal class strings.
       `src/lib/remoteInput/keyTone.ts` needed more care than "onto destructive/warning" implies.
       Its `danger`/`caution` cases carry an explicit `dark:` override (red-400/amber-300 instead of
-      the `--destructive`/`--warning` tokens) *because* the base tokens fail contrast for this
+      the `--destructive`/`--warning` tokens) _because_ the base tokens fail contrast for this
       specific use — measured 2.33:1 for `--destructive` against the `variant="secondary"` button
       surface these keys render on (needs 4.5:1). Raising `--destructive`'s dark lightness enough
       to fix that (to ~68% L) drops white-on-`--destructive` (e.g. a delete button) to 2.99:1,
@@ -208,7 +208,7 @@ Do these in the order below; each clears the largest remaining group.
       `:207`, `:208`, `:683`, unchanged. Those describe the user's hardware, and recolouring them
       makes the preview lie.
       One addition beyond the plan: the stage panel gradient and drop shadow are a deliberately
-      dark "photography stage" backdrop behind the device preview, in *every* app theme — using
+      dark "photography stage" backdrop behind the device preview, in _every_ app theme — using
       `--foreground`/`--background` directly would invert it to a light backdrop specifically in
       dark app theme (since `--foreground` is light there), which is the opposite of the intended
       look and would work against the feature's own design. Added two small, explicitly
@@ -261,7 +261,7 @@ Do these in the order below; each clears the largest remaining group.
       `generated file is out of date: <path>\n  run: <command>`, exit 1, never write in check mode.
       Also mirrored `compile-feature-flags.mjs`'s parameterized-path + `isDirectInvocation()` shape
       (not `compile-palettes.mjs`'s bare `main()`), specifically so `compileStyles({ yamlPath,
-      tsOutputPath, cssOutputPath, check })` is unit-testable against a temp directory.
+    tsOutputPath, cssOutputPath, check })` is unit-testable against a temp directory.
       Two data-model notes for reviewers: (1) `muted-surface` in the YAML/Appendix-A vocabulary
       compiles to the pre-existing `--muted` custom property, not a new `--muted-surface` — the
       repo already used `--muted`. (2) Appendix A's per-style palette declares 14 colour tokens,
@@ -303,9 +303,9 @@ Do these in the order below; each clears the largest remaining group.
       `src/hooks/useAppStyle.ts` + `src/components/AppStyleProvider.tsx`, storage key
       `c64u_app_style`. Verified the 18 existing tests are still green, unmodified.
       One real design problem found and solved: `useTheme`'s own effect unconditionally sets the
-      `.dark`/`.light` class from the *raw* theme setting, with no knowledge of a style's
+      `.dark`/`.light` class from the _raw_ theme setting, with no knowledge of a style's
       single-mode clamp, and — because passive effects fire child-before-ancestor — its effect
-      (owned by the `ThemeProvider` ancestor) can run *after* `AppStyleProvider`'s and silently win
+      (owned by the `ThemeProvider` ancestor) can run _after_ `AppStyleProvider`'s and silently win
       the class back. Fixed with a `MutationObserver` in `useAppStyle` that re-asserts the clamp
       whenever anything changes the class, making it self-healing instead of depending on effect
       ordering. Covered directly:
@@ -475,7 +475,12 @@ a browser, and the wiring is style-independent, so it is proved once.
       as `tests/unit/lib/appStyles/structural.test.ts` (54 cases): also asserts `edgeWidthPx`
       matches D10 (1 for hairline/gloss, 2 for heavy) and that only `vault-black` declares
       `appBarBand`.
-- [ ] Appearance resolution — the 72 pure cases from phase 4.
+- [x] Appearance resolution — the pure cases from phase 4.
+      Written in Phase 4 as `tests/unit/lib/appStyles/resolveAppearance.test.ts` (51 cases total).
+      The matrix itself is 42, not the 72 estimated here at planning time: 7 declared styles x 3
+      theme settings (light/dark/system) x 2 system-preference values, which is what `APP_STYLES`
+      actually contains, not a number assumed before the styles existed. The remaining 9 cases cover
+      the dark-only clamp and unknown-id fallback rules from `spec.md` §7.1 explicitly.
 - [x] **Geometry invariance**, per `spec.md` §10. `playwright/appearanceGeometryInvariance.spec.ts`:
       two routes (Home, Settings) x two display profiles (compact 320x426, medium 393x727) x all
       12 generated palettes, applied in-page via `data-app-style` + the `.dark` class with no
@@ -494,9 +499,9 @@ a browser, and the wiring is style-independent, so it is proved once.
       y≈10000) between the baseline capture and every later palette capture. Root cause was a
       still-swapping web font, not a style token — `screenshots.spec.ts`'s own settle routine
       already worked around a related bug: it calls `page.waitForFunction(() => document.fonts
-      ?.ready ?? true)`, but a `Promise` reference is truthy on the very first poll, so that wait
+    ?.ready ?? true)`, but a `Promise` reference is truthy on the very first poll, so that wait
       is a no-op there. This spec instead does `await page.evaluate(() => document.fonts?.ready ??
-      Promise.resolve())`, which actually awaits the promise, plus the same no-running-animations
+    Promise.resolve())`, which actually awaits the promise, plus the same no-running-animations
       and settled-frames checks `waitForStableRender` uses. Duplicated rather than imported,
       matching this suite's own convention of each spec keeping its own copy of small
       `page.evaluate`-scoped helpers (`screenshots.spec.ts` itself is on the "leave exactly as it
@@ -509,20 +514,36 @@ a browser, and the wiring is style-independent, so it is proved once.
 `layoutOverflow.spec.ts`, `keypadInput.spec.ts`, `keypadOnlyNavigation.spec.ts`,
 `buttonHighlightProof.spec.ts`.
 
-- [ ] Write the justification into the header comment of the geometry-invariance spec and
+- [x] Write the justification into the header comment of the geometry-invariance spec and
       cross-reference it from those files, in the style `smallScreenErgonomics.spec.ts:33-37`
       already uses. Once "switching style changes zero geometry" is proven, re-running every layout
       and ergonomics assertion twelve times re-proves the same theorem. The keypad specs are already
       style-agnostic by construction: not one of them reads a colour, `box-shadow` or `outline` —
       they assert on `data-key-selected`, `data-c64-tap-flash` and `data-c64-persistent-active`.
-- [ ] Decide `playwright/accessibility.spec.ts`. It currently filters axe results to
+      `appearanceGeometryInvariance.spec.ts`'s header already carried this justification (written in
+      the earlier geometry-invariance commit); what was missing was the other direction. Added a
+      short cross-reference paragraph to the header (or, for the four files with no existing header
+      comment — `buttonHighlightProof.spec.ts`, `displayProfiles.spec.ts`, `layoutOverflow.spec.ts`,
+      `screenshots.spec.ts` — a new one) in each of the ten listed files, and corrected the
+      geometry-invariance spec's own `smallScreenErgonomics.spec.ts:33-37` line reference to
+      `:39-41` since the new paragraph shifted it.
+- [x] Decide `playwright/accessibility.spec.ts`. It currently filters axe results to
       `impact === "critical"` and tolerates up to 5, but axe's `color-contrast` rule is
       `impact: "serious"` — so contrast is computed and thrown away. Either tighten it to `serious`
       on the default style, or state in a comment that the vitest gate is now the contrast
       authority. Do not leave both weak.
-- [ ] Do **not** multiply the screenshot corpus. 273 tracked PNGs x 12 would be 3,276 files and
+      Kept the filter at `critical`, not tightened to `serious`, and documented why: `serious` would
+      add a second, weaker contrast check (one route, one palette) on top of
+      `tests/unit/lib/appStyles/contrast.test.ts`'s exact-WCAG-ratio gate over all 12 palettes with
+      zero tolerance, while also picking up unrelated `serious` rules (landmark/heading order, etc.)
+      this test was never scoped to police. The comment names the vitest test as the contrast
+      authority.
+- [x] Do **not** multiply the screenshot corpus. 273 tracked PNGs x 12 would be 3,276 files and
       about 580 MB, and the existing pixel-dedupe in `screenshots.spec.ts:1211-1310` would never
       fire, because every pixel changes for every style.
+      Confirmed: `git diff --stat` for the Phase 6 commit touched zero files under the pre-existing
+      screenshot corpus paths (e.g. `docs/img/app/home/`, `docs/img/app/play/`); all 108 new files
+      landed under the separate `docs/img/app/styles/` directory the gallery spec owns.
 
 **Expected CI delta:** the vitest work is unmeasurable inside the 1663 s unit job; geometry
 invariance adds about 90 s to one e2e shard; the gallery adds about 50 s to the screenshots job;
@@ -540,6 +561,31 @@ the drift job runs in parallel. Roughly **+1.5 min on a 32 min pipeline**, and a
       searched; national registers (DE, GB, IT, JP and others) have not. Sweep those for each style
       `name:`. Changing a name is a one-field YAML edit — changing an `id` is not, so ids must be
       final before the first release that persists them.
+
+## Phase 9 — Real-device HIL verification (Pixel 4)
+
+Everything above is proved in a headless/mocked Playwright browser context. This phase re-checks the
+same claim — every style renders correctly and stays readable — on a real handset, since a headless
+Chromium context cannot catch a device-specific rendering artifact (font substitution, GPU
+compositing, a real display panel's actual contrast).
+
+- [ ] Install the app on the Pixel 4 and, for a representative spread of the 12 generated palettes
+      (at minimum: the default style, one hairline-edge light style, one heavy-edge style, and both
+      dark-only styles — vault-black and one other), walk the primary screens (Home, Play, Disks,
+      Settings, Remote Input) and the `/dev/styles` gallery route.
+- [ ] Take real on-device screenshots of each combination.
+- [ ] Assess each screenshot for readability (text contrast and size against the real panel, not a
+      simulated one), consistent layout (nothing clipped, overlapping or misaligned relative to the
+      Playwright-captured reference), and any device-specific rendering artifact a headless browser
+      would not surface.
+- [ ] Record findings — pass/fail per screen x style, with the screenshot as evidence — and fix
+      anything a real device shows that the simulated suite did not catch.
+- [ ] Verify "Match my device" against a real C64U on the network, not a mock: set the C64U's own
+      Color Scheme config item to each of its supported values in turn, connect the app, select
+      "Match my device" in Settings, and confirm the app resolves to the mapped style on connect
+      without polling (the row should update only on connect and on manual refresh, per `spec.md`
+      §7.2). Also verify the disconnected/unrecognised-scheme fallback message against the real
+      device by disconnecting and reconnecting.
 
 ---
 

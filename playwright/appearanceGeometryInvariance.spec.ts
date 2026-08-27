@@ -16,7 +16,7 @@ import { APP_STYLES, type AppStyleMode } from "../src/generated/appStyles";
  * Proves the claim spec.md section 10 calls "load-bearing": switching appearance style changes
  * zero geometry. Every other layout, ergonomics, overflow, clipping and target-size spec in this
  * suite runs on the default style only; they stay valid for all twelve palettes exactly because
- * this spec exists and passes. See smallScreenErgonomics.spec.ts:33-37 for the cross-reference in
+ * this spec exists and passes. See smallScreenErgonomics.spec.ts:39-41 for the cross-reference in
  * the other direction, and docs/plans/appearance-styles/plan.md section "Phase 7" for why this was
  * written before the Phase 2 radius/shadow/edge sweep rather than after it: it is the regression
  * net that sweep runs against, not a report card on it afterwards.

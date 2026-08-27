@@ -1,3 +1,10 @@
+/**
+ * Runs on the default appearance style only, and is style-agnostic by construction anyway: it
+ * asserts on `data-c64-tap-flash` and `data-c64-persistent-active`, never a colour, `box-shadow`
+ * or `outline`. See appearanceGeometryInvariance.spec.ts for the geometry proof that covers every
+ * other assertion in this file across all twelve generated palettes.
+ */
+
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { CTA_HIGHLIGHT_MIN_EXPECTED_MS } from "../src/lib/ui/buttonInteraction";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
