@@ -17,10 +17,10 @@ Control and manage a Commodore 64 Ultimate from Android, iOS, or a self-hosted w
 - **Playlists and SID Radio**: Play programs and SID music from local files, device storage, HVSC, or CommoServe.
 - **Remote Input and Live View**: Use an on-screen joystick or keyboard, and stream audio or video from the running machine.
 - **Disk tools**: Mount images, manage multi-disk collections, inspect image contents, and create blank disks.
-- **Appearance styles**: Seven colour styles on top of the Light/Dark theme, or match your C64 Ultimate's own Color Scheme.
 - **Configuration**: Browse and edit the complete C64 Ultimate configuration.
 - **Diagnostics**: Review connection health, activity, traces, and latency.
 - **Multiple devices**: Save several devices, check their health, and switch between them.
+- **Appearance styles**: Seven colour styles on top of the Light/Dark theme, or match your C64 Ultimate's own Color Scheme.
 
 ## Getting Started
 
