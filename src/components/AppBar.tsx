@@ -111,7 +111,15 @@ export function AppBar({ title, subtitle: _subtitle, leading, leadingVisual, tit
             {leading ?? (
               <div className={cn("flex min-w-0 items-center gap-2", isCompact ? "min-h-0" : "min-h-11")}>
                 {leadingVisual}
-                <h1 className="c64-header truncate text-xl leading-none" data-testid={titleTestId}>
+                {/*
+                  Wraps to a second line rather than being cut. At the largest text size the title
+                  renders at 36 CSS px — index.css pins compact to the medium size on purpose, and
+                  `displayProfiles.spec.ts` asserts the two match — so "Play files" needed 197 px of
+                  the 172 the row can give it. Shrinking the type would break that invariant, so the
+                  title takes a second line on the few pages and sizes where one is not enough; at
+                  the default text size every title still fits on one.
+                */}
+                <h1 className="c64-header line-clamp-2 break-words text-xl leading-tight" data-testid={titleTestId}>
                   {title}
                 </h1>
               </div>

@@ -1601,13 +1601,31 @@ export default function SettingsPage() {
                           }}
                           data-testid={`settings-device-row-${device.id}`}
                         >
+                          {/*
+                            Name on the first line, address on the second, and neither truncated.
+                            One line of "C64U · 192.168.1.148" needs 230 CSS px against the 184 the
+                            row has on a 320 px screen, and a device whose name IS its host was
+                            drawn as "C64U · c64u" in 47 px — a string that repeats itself and then
+                            cuts the half that identifies the machine. The product code is dropped
+                            on compact (the row is already under a C64U heading) and the host is
+                            omitted when the name is the host, so the second line carries only what
+                            the first does not already say.
+                          */}
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-foreground">
+                            <p className="line-clamp-2 break-words text-sm font-medium text-foreground">
                               {buildSavedDevicePrimaryLabel(device)}
                             </p>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {productCode} · {device.host}
-                            </p>
+                            {(() => {
+                              const name = buildSavedDevicePrimaryLabel(device).trim().toLowerCase();
+                              const host = device.host.trim();
+                              const detail = host.toLowerCase() === name ? "" : host;
+                              const secondary = isCompactProfile
+                                ? detail
+                                : [productCode, detail].filter(Boolean).join(" · ");
+                              return secondary ? (
+                                <p className="break-all text-xs text-muted-foreground">{secondary}</p>
+                              ) : null;
+                            })()}
                           </div>
                           {isSelected ? (
                             <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-xs font-medium text-muted-foreground">

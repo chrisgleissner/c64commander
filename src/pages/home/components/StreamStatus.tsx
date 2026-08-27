@@ -84,7 +84,10 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
                       : entry.label.toUpperCase()}
                   </span>
                   <span
-                    className="font-semibold text-foreground truncate"
+                    // Wraps rather than truncating: this row carries a fixed label and two buttons,
+                    // so the address is left 83 CSS px of the 128 it needs on a 320 px screen, and
+                    // a multicast endpoint cut to "239.0.1." identifies nothing.
+                    className="min-w-0 break-all font-semibold text-foreground"
                     data-testid={`home-stream-endpoint-display-${entry.key}`}
                   >
                     {buildStreamEndpointLabel(draft.ip, draft.port)}

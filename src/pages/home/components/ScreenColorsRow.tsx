@@ -62,9 +62,10 @@ export function ScreenColorsRow({
       >
         <span className="shrink-0 text-muted-foreground">Screen colors</span>
         <span className="flex min-w-0 items-center gap-1">
-          {/* Truncates rather than wraps: the sheet shows the name in full, and on this row the
-              swatches underneath are what identifies the palette anyway. */}
-          <span className="truncate text-foreground">{palette.name}</span>
+          {/* Wraps to a second line rather than truncating. The sheet does show the name in full,
+              but on the 320 px screen at the largest text size even "Default" was cut (77 px of
+              text in a 71 px box), and a palette name cut to "Defaul…" reads as a defect. */}
+          <span className="line-clamp-2 break-words text-foreground">{palette.name}</span>
           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         </span>
       </button>
