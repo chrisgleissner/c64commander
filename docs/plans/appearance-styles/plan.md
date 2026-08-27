@@ -769,11 +769,26 @@ others' findings, ran against the full branch diff in parallel with the HIL pass
 
 ## Definition of done
 
-1. Seven styles selectable; twelve palettes; two dark-only styles clamp the Theme row and explain it.
-2. Every palette passes every gate in `spec.md` §9 at compile time and in vitest.
-3. The geometry-invariance test passes with exact equality on two routes at two display profiles.
-4. `styles:check` fails on drift, in CI and not only locally.
-5. The gallery renders every widget listed in `spec.md` §11 and its screenshots are committed.
-6. No raw Tailwind palette utility, hex literal, or stock `rounded-*`/`shadow-*` remains in shipped
-   app chrome. The 21 domain-data sites are unchanged.
-7. "Match my device" maps all six device scheme names, falls back visibly, and never polls.
+1. [x] Seven styles selectable; twelve palettes; two dark-only styles clamp the Theme row and
+       explain it. Verified in Settings on a real Pixel 4 (Phase 9) and in
+       `tests/unit/lib/appStyles/resolveAppearance.test.ts`.
+2. [x] Every palette passes every gate in `spec.md` §9 at compile time and in vitest.
+       `compile-styles.mjs` enforces it at build time; `tests/unit/lib/appStyles/contrast.test.ts`
+       re-proves it over the generated table so a hand-edit cannot bypass the build-time gate.
+3. [x] The geometry-invariance test passes with exact equality on two routes at two display
+       profiles. `playwright/appearanceGeometryInvariance.spec.ts`, 8/8 passing, re-verified after
+       every subsequent phase touched shared chrome.
+4. [x] `styles:check` fails on drift, in CI and not only locally. Wired into `npm run lint` and the
+       `styles` job in `.github/workflows/android.yaml`.
+5. [x] The gallery renders every widget listed in `spec.md` §11 and its screenshots are committed.
+       `playwright/appStylesGallery.spec.ts`, 108 PNGs under `docs/img/app/styles/`, regenerated
+       once after a real defect was found and fixed in the gallery page's own background handling
+       (Phase 9).
+6. [x] No raw Tailwind palette utility, hex literal, or stock `rounded-*`/`shadow-*` remains in
+       shipped app chrome. The 21 domain-data sites are unchanged. Confirmed by an independent
+       adversarial review of the full diff (Phase 9); the one real miss it found
+       (`AvMirrorImmersive.tsx`'s orphaned mode-colour classes) is fixed.
+7. [x] "Match my device" maps all six device scheme names, falls back visibly, and never polls.
+       Verified against a real C64U's live REST config (Phase 9): the mapping, the fallback
+       message and both non-polling triggers are all correct; a live resolved match could not be
+       confirmed only because the Pixel 4 test device had no active network route in that session.
