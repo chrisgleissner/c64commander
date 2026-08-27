@@ -33,11 +33,18 @@ the rationale, only the contract.
 A style is exactly two generated CSS blocks (`html[data-app-style="<id>"]` and
 `html[data-app-style="<id>"].dark`) that redeclare a fixed set of custom properties. Nothing else.
 
-Colour tokens (`--background`, `--card`, `--muted`, `--foreground`, `--primary`, `--secondary`,
-`--accent`, `--border`, `--ring`, the semantic-state pairs, and the media/key/category/chart/diag
-groups) and shape/elevation tokens (`--radius-panel`, `--edge-width`, `--shadow-1/2/3`,
-`--ring-style`, `--app-bar-band`) are the complete list. `docs/plans/appearance-styles/spec.md` §5.1
-has the full table with each token's role.
+The complete emitted set is the fifteen colour tokens each palette declares (`--background`,
+`--card`, `--muted`, `--foreground`, `--muted-foreground`, `--primary`, `--primary-foreground`,
+`--accent`, `--accent-foreground`, `--border`, `--ring`, `--success`, `--warning`, `--destructive`,
+`--destructive-foreground`), plus `--input` (compiled from `--border`), `--radius`, `--edge-width`,
+`--ring-style` and, for `vault-black` only, `--app-bar-band`.
+
+The remaining token groups in `src/index.css` — `--secondary`, `--popover`, `--card-foreground`,
+and the media/key/category/chart/diag groups — are theme-level, declared once for light and once
+for dark, and no style overrides them. A token that a style changes must bring its own paired
+foreground with it: leaving `--accent-foreground` theme-level while `--accent` varied per style
+put near-white text on a bright accent at 1.2:1 in every dark palette.
+`docs/plans/appearance-styles/spec.md` §5.1 has the full table with each token's role.
 
 ## 4. What a Style May Never Do
 
@@ -48,8 +55,8 @@ Set or influence: any `margin`, `padding`, `gap`, `width`, `height`, `min-*`, `m
 The one exception, applied app-wide rather than per style, is `font-variant-numeric: tabular-nums`
 on numeric readouts — it cannot change advance width in either direction, so it cannot break §6.
 
-**Edge weight is never `border-width`.** `--edge-width` (1px or 2px) is always rendered as an inset
-`box-shadow` or `outline`, through the `shadow-edge` Tailwind utility
+**Edge weight is never `border-width`.** `--edge-width` (1px or 2px) may only ever be rendered as
+an inset `box-shadow` or `outline`, through the `shadow-edge` Tailwind utility
 (`tailwind.config.ts`, `boxShadow.edge`). A style that changed `border-width` would move a box by
 the width delta on every side that has content, which is exactly the geometry §6 forbids. A fixed-
 size, empty-content decorative element (for example a reticle corner bracket) is the one case where
@@ -58,10 +65,21 @@ element with no content and a fixed size cannot move anything, so it is not a st
 not be wired to `--edge-width`.
 
 **The focus ring is never derived from `--border`.** On the Callback 8020 the touchscreen is off by
-default and the ring is the pointer. `--ring` is declared separately in every palette, gated at
+default and the ring is the pointer. `--ring` is declared separately in every palette and gated at
 ≥3:1 against both the surface behind it and the fill of the control it wraps (WCAG 2.1 SC 1.4.11 /
-2.4.11), and `--ring-style` (`solid` | `inverse` | `glow`) chooses the treatment per style — a line,
-a glow, or an inverted control, never a change in the control's own size.
+2.4.11).
+
+### Tokens compiled but not yet consumed
+
+`--edge-width`, `--ring-style` and `--app-bar-band` are validated by the compiler and emitted into
+every palette, but no shipped component reads them yet, so the `edge` and `ring_style` values in
+`styles/appearance-styles.yaml` and `vault-black`'s `app_bar_band` currently have no effect on
+screen. The Phase 2 sweep deliberately left the 2px sites on fixed `shadow-[inset_0_0_0_2px_…]`
+values rather than binding them to `--edge-width`, because at that point the styles were not yet
+selectable and binding them would have changed those controls' weight under `full-sun`
+(`docs/plans/appearance-styles/plan.md`, Phase 2). Wiring the three axes up is follow-up work: it
+is a visual change to shipped chrome and needs its own gallery review, so it was not folded into
+the change that made styles selectable.
 
 ## 5. Source Format and Compiler
 

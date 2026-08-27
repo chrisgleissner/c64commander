@@ -46,6 +46,7 @@ const validColors = () => ({
   primary: "228 40% 40%",
   "primary-foreground": "0 0% 100%",
   accent: "228 40% 40%",
+  "accent-foreground": "0 0% 100%",
   border: "0 0% 60%",
   ring: "228 60% 30%",
   success: "150 60% 25%",
@@ -225,6 +226,22 @@ describe("compile-styles", () => {
       expect(output).toContain('export const DEFAULT_APP_STYLE_ID = "test-style";');
       expect(output).toContain("export const APP_STYLES");
       expect(output).toContain("export const DEVICE_SCHEME_TO_STYLE_ID");
+    });
+
+    it("declares AppStyleColors from the same key set the validator requires", () => {
+      // The interface used to be written out by hand next to REQUIRED_COLOR_KEYS. Adding a token
+      // to one and not the other left the committed appStyles.ts failing typecheck while every
+      // unit test still passed, so the emitted type is derived from that list instead.
+      const output = renderTs(validConfig());
+      const interfaceBody = output.slice(
+        output.indexOf("export interface AppStyleColors {"),
+        output.indexOf("export interface AppStyleModeTokens"),
+      );
+      for (const key of Object.keys(validColors())) {
+        const property = /^[a-z][a-zA-Z0-9]*$/.test(key) ? key : JSON.stringify(key);
+        expect(interfaceBody).toContain(`readonly ${property}: string;`);
+      }
+      expect(interfaceBody.match(/readonly /g)).toHaveLength(Object.keys(validColors()).length);
     });
 
     it("emits an empty device-scheme map when none is declared", () => {

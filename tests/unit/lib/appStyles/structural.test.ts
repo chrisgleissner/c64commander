@@ -18,6 +18,7 @@ const REQUIRED_COLOR_KEYS: readonly (keyof AppStyleColors)[] = [
   "primary",
   "primary-foreground",
   "accent",
+  "accent-foreground",
   "border",
   "ring",
   "success",

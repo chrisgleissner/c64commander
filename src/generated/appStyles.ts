@@ -26,6 +26,7 @@ export interface AppStyleColors {
   readonly primary: string;
   readonly "primary-foreground": string;
   readonly accent: string;
+  readonly "accent-foreground": string;
   readonly border: string;
   readonly ring: string;
   readonly success: string;
@@ -38,10 +39,10 @@ export interface AppStyleModeTokens {
   /** Base corner radius, e.g. "12px". --radius-panel derives from this at runtime. */
   readonly radius: string;
   readonly edge: AppStyleEdge;
-  /** D10: the edge is never rendered as border-width. 1 for hairline/gloss, 2 for heavy. */
+  /** D10: the edge may only ever be rendered as an inset shadow. 1 for hairline/gloss, 2 for heavy. */
   readonly edgeWidthPx: number;
   readonly ringStyle: AppStyleRingStyle;
-  /** Only vault-black declares this: a gradient painted into the app bar's existing border-image. */
+  /** Only vault-black declares this: a gradient for the app bar's existing border-image. */
   readonly appBarBand?: string;
   readonly colors: AppStyleColors;
 }
@@ -76,6 +77,7 @@ export const APP_STYLES: readonly AppStyle[] = [
         primary: "226.6 38.8% 47.5%",
         "primary-foreground": "0 0% 100%",
         accent: "226.9 40.8% 41.8%",
+        "accent-foreground": "0 0% 100%",
         border: "220 20% 82.4%",
         ring: "226.3 49.1% 33.1%",
         success: "150.7 60.5% 29.8%",
@@ -98,6 +100,7 @@ export const APP_STYLES: readonly AppStyle[] = [
         primary: "228.4 55% 68.6%",
         "primary-foreground": "228 29.4% 6.7%",
         accent: "228.9 60% 73.5%",
+        "accent-foreground": "228 29.4% 6.7%",
         border: "221.5 17.6% 29%",
         ring: "228.2 70.3% 80.2%",
         success: "147.7 52% 55.9%",
@@ -126,6 +129,7 @@ export const APP_STYLES: readonly AppStyle[] = [
         primary: "226.7 60.5% 46.7%",
         "primary-foreground": "0 0% 100%",
         accent: "22.3 71.6% 41.4%",
+        "accent-foreground": "0 0% 100%",
         border: "40.4 28% 63.5%",
         ring: "227 66.5% 33.9%",
         success: "131 39% 30.2%",
@@ -148,6 +152,7 @@ export const APP_STYLES: readonly AppStyle[] = [
         primary: "227.1 77.3% 74.1%",
         "primary-foreground": "45 28.6% 5.5%",
         accent: "25.1 70.5% 58.8%",
+        "accent-foreground": "45 28.6% 5.5%",
         border: "38 21.7% 27.1%",
         ring: "227.6 100% 82.9%",
         success: "131.5 41.9% 63.5%",
@@ -176,6 +181,7 @@ export const APP_STYLES: readonly AppStyle[] = [
         primary: "178.1 77.4% 24.3%",
         "primary-foreground": "0 0% 100%",
         accent: "14 72.9% 44.9%",
+        "accent-foreground": "0 0% 100%",
         border: "175.4 24.5% 68.8%",
         ring: "178.4 90.5% 16.5%",
         success: "145 60.9% 27.1%",
@@ -198,6 +204,7 @@ export const APP_STYLES: readonly AppStyle[] = [
         primary: "175.8 50.4% 49.8%",
         "primary-foreground": "176.7 69.2% 5.1%",
         accent: "16.9 100% 68%",
+        "accent-foreground": "176.7 69.2% 5.1%",
         border: "174.4 38% 27.8%",
         ring: "175 70.4% 66.9%",
         success: "146.7 54.8% 57.5%",
@@ -226,6 +233,7 @@ export const APP_STYLES: readonly AppStyle[] = [
         primary: "329.5 88.3% 40.2%",
         "primary-foreground": "0 0% 100%",
         accent: "189.7 100% 28%",
+        "accent-foreground": "0 0% 100%",
         border: "220 28.4% 81.4%",
         ring: "329.4 100% 28%",
         success: "165 79.4% 26.7%",
@@ -248,6 +256,7 @@ export const APP_STYLES: readonly AppStyle[] = [
         primary: "330.3 100% 58.8%",
         "primary-foreground": "275 60% 3.9%",
         accent: "177.6 81.1% 52.2%",
+        "accent-foreground": "275 60% 3.9%",
         border: "263 32.9% 28%",
         ring: "328.9 100% 73.9%",
         success: "151.8 76.9% 61%",
@@ -276,6 +285,7 @@ export const APP_STYLES: readonly AppStyle[] = [
         primary: "32.4 100% 58.6%",
         "primary-foreground": "31.8 73.9% 4.5%",
         accent: "45.9 100% 62.4%",
+        "accent-foreground": "31.8 73.9% 4.5%",
         border: "36 51% 19.2%",
         ring: "35.2 100% 63.9%",
         success: "99.4 55% 62.5%",
@@ -305,6 +315,7 @@ export const APP_STYLES: readonly AppStyle[] = [
         primary: "0 0% 100%",
         "primary-foreground": "240 24.1% 5.7%",
         accent: "225.6 34.2% 57.1%",
+        "accent-foreground": "240 24.1% 5.7%",
         border: "240 8.1% 31.6%",
         ring: "0 0% 100%",
         success: "139.4 42.9% 56.1%",
@@ -333,6 +344,7 @@ export const APP_STYLES: readonly AppStyle[] = [
         primary: "0 0% 0%",
         "primary-foreground": "0 0% 100%",
         accent: "225 100% 40%",
+        "accent-foreground": "0 0% 100%",
         border: "0 0% 0%",
         ring: "225 100% 40%",
         success: "140.4 100% 18.4%",
@@ -355,6 +367,7 @@ export const APP_STYLES: readonly AppStyle[] = [
         primary: "0 0% 100%",
         "primary-foreground": "0 0% 0%",
         accent: "54.1 100% 50%",
+        "accent-foreground": "0 0% 0%",
         border: "0 0% 100%",
         ring: "54.1 100% 50%",
         success: "140 67.5% 62.5%",

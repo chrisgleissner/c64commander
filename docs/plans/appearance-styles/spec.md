@@ -524,6 +524,7 @@ currently pass all of these.
 | `muted-foreground` / `card`                     | 4.5:1   | Secondary text is still read, not decoration          |
 | `primary-foreground` / `primary`                | 4.5:1   | Label on the main action                              |
 | `destructive-foreground` / `destructive`        | 4.5:1   | Caught white-on-light-red at 2.5:1 in the first draft |
+| `accent-foreground` / `accent`                   | 4.5:1   | Caught near-white on a bright accent at 1.2:1 in review |
 | `primary` / `card`                              | 3:1     | AA non-text contrast for the action's own fill        |
 | `success` / `warning` / `destructive` vs `card` | 4.5:1   | These carry text, not just colour                     |
 | **`ring` / `card`**                             | **3:1** | SC 1.4.11. The ring is the pointer on a keypad device |

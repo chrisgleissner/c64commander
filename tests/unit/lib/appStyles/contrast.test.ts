@@ -22,6 +22,7 @@ const CONTRAST_GATES: readonly [keyof AppStyleColors, keyof AppStyleColors, numb
   ["foreground", "background", 4.5],
   ["muted-foreground", "card", 4.5],
   ["primary-foreground", "primary", 4.5],
+  ["accent-foreground", "accent", 4.5],
   ["destructive-foreground", "destructive", 4.5],
   ["primary", "card", 3],
   ["success", "card", 4.5],
