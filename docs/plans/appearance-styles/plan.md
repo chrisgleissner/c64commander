@@ -249,10 +249,31 @@ a browser, and the wiring is style-independent, so it is proved once.
       matches D10 (1 for hairline/gloss, 2 for heavy) and that only `vault-black` declares
       `appBarBand`.
 - [ ] Appearance resolution — the 72 pure cases from phase 4.
-- [ ] **Geometry invariance**, per `spec.md` §10. One Playwright spec, two routes, two display
-      profiles, twelve palettes applied in-page with no reload. Exact equality, no tolerance.
-      Build the snapshot on the `page.evaluate` body at `playwright/layoutMetadata.ts:50-73` and
-      the hidden-subtree filter at `playwright/smallScreenLayoutAudit.ts:119-127`. About 90 s.
+- [x] **Geometry invariance**, per `spec.md` §10. `playwright/appearanceGeometryInvariance.spec.ts`:
+      two routes (Home, Settings) x two display profiles (compact 320x426, medium 393x727) x all
+      12 generated palettes, applied in-page via `data-app-style` + the `.dark` class with no
+      reload. Exact equality, no tolerance — `toEqual` on every visible `[data-testid]`'s
+      `getBoundingClientRect()`, keyed by occurrence index so repeated testids in a list still
+      disambiguate correctly.
+      Written and run **before** the Phase 2 sweep, per the sequencing note below, so it is the
+      regression net that sweep runs against rather than a report card on it afterwards. Passes
+      today (before Phase 2 has touched a single call site) for the reason D10 predicts: radius,
+      shadow and edge are paint-only properties that cannot move a box, so switching
+      `data-app-style` right now, with zero sites migrated, already proves zero drift — it becomes
+      the sweep's safety net precisely because nothing has to change about the test itself as
+      Phase 2 lands.
+      One real bug found and fixed while writing this: the first run failed on all 4 cases with a
+      small, monotonically-growing vertical drift (sub-pixel near the top of Settings, ~0.5px by
+      y≈10000) between the baseline capture and every later palette capture. Root cause was a
+      still-swapping web font, not a style token — `screenshots.spec.ts`'s own settle routine
+      already worked around a related bug: it calls `page.waitForFunction(() => document.fonts
+      ?.ready ?? true)`, but a `Promise` reference is truthy on the very first poll, so that wait
+      is a no-op there. This spec instead does `await page.evaluate(() => document.fonts?.ready ??
+      Promise.resolve())`, which actually awaits the promise, plus the same no-running-animations
+      and settled-frames checks `waitForStableRender` uses. Duplicated rather than imported,
+      matching this suite's own convention of each spec keeping its own copy of small
+      `page.evaluate`-scoped helpers (`screenshots.spec.ts` itself is on the "leave exactly as it
+      is" list below and was not touched).
 
 **On the default style only — leave exactly as they are:**
 
