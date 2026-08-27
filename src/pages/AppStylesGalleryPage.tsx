@@ -373,6 +373,13 @@ export default function AppStylesGalleryPage() {
             listTestId="gallery-list"
             rowTestId="gallery-list-row"
           />
+          {/* Above the chart, not below it: the section is taller than the viewport and the
+              screenshot is clipped to it, so anything after the chart never reaches the corpus. */}
+          <div className="flex h-6 overflow-hidden rounded-md border border-border" data-testid="gallery-diag-timeline">
+            {Object.entries(HEALTH_TIMELINE_STATE_COLORS).map(([state, color]) => (
+              <div key={state} className="flex-1" style={{ backgroundColor: color }} title={state} />
+            ))}
+          </div>
           <div className="h-48 rounded-md border border-border p-2" data-testid="gallery-chart">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={SAMPLE_CHART_DATA}>
@@ -383,11 +390,6 @@ export default function AppStylesGalleryPage() {
                 <Line type="monotone" dataKey="b" stroke="hsl(var(--chart-2))" dot={false} />
               </LineChart>
             </ResponsiveContainer>
-          </div>
-          <div className="flex h-6 overflow-hidden rounded-md border border-border" data-testid="gallery-diag-timeline">
-            {Object.entries(HEALTH_TIMELINE_STATE_COLORS).map(([state, color]) => (
-              <div key={state} className="flex-1" style={{ backgroundColor: color }} title={state} />
-            ))}
           </div>
         </GallerySection>
       </div>

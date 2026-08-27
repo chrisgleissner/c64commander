@@ -15,7 +15,10 @@ export const HEALTH_TIMELINE_STATE_COLORS: Record<HealthState, string> = {
   Healthy: "hsl(var(--success))",
   Degraded: "hsl(var(--warning))",
   Unhealthy: "hsl(var(--destructive))",
-  Idle: "hsl(var(--muted))",
+  // --border, not --muted: the timeline track is bg-background, and --muted sits within 1.4:1 of
+  // it in every palette, which left Idle segments all but invisible. --border is the quiet-but-
+  // present tone and is gated against the surface behind it.
+  Idle: "hsl(var(--border))",
   Unavailable: "hsl(var(--muted-foreground))",
 };
 
