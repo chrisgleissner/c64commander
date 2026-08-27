@@ -174,7 +174,7 @@
     --app-bar-height: 72px;
 
     /* Shape and elevation (spec.md docs/plans/appearance-styles/spec.md section 5.1) */
-    --radius-panel: 1rem;
+    --radius-panel: calc(var(--radius) + 4px);
     --edge-width: 1px;
     --shadow-1:
       0 1px 2px 0 rgb(0 0 0 / 0.06),

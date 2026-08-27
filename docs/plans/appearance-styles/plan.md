@@ -144,23 +144,49 @@ Do these in the order below; each clears the largest remaining group.
 
 ## Phase 3 — Source format, compiler, drift gate
 
-- [ ] Create `styles/appearance-styles.yaml` from the draft in `spec.md` Appendix A.
-- [ ] Write `scripts/compile-styles.mjs`, emitting `src/generated/appStyles.ts` and
+- [x] Create `styles/appearance-styles.yaml` from the draft in `spec.md` Appendix A. Extracted
+      programmatically from the peer-session-validated Appendix A fenced block (post-rename:
+      `neon-pop`/`full-sun`) rather than hand-retyped, then diffed byte-for-byte against the
+      extraction to rule out transcription error.
+- [x] Write `scripts/compile-styles.mjs`, emitting `src/generated/appStyles.ts` and
       `src/generated/appStyles.css`. Copy the `--check` contract from
       `scripts/compile-palettes.mjs:153-160` and `scripts/generate-variant.mjs:940-955` exactly:
       deterministic render to a string, Prettier-format before comparing, whole-file compare,
       `generated file is out of date: <path>\n  run: <command>`, exit 1, never write in check mode.
-- [ ] Enforce the six compile-time invariants in `spec.md` §8, including the contrast gates and the
-      rule that `--ring` never equals `--border`.
-- [ ] Import `appStyles.css` from `src/index.css` after the base `:root` / `.dark` blocks.
-- [ ] Add `styles:build` and `styles:check` to `package.json`, and add `styles:check` to the `lint`
+      Also mirrored `compile-feature-flags.mjs`'s parameterized-path + `isDirectInvocation()` shape
+      (not `compile-palettes.mjs`'s bare `main()`), specifically so `compileStyles({ yamlPath,
+      tsOutputPath, cssOutputPath, check })` is unit-testable against a temp directory.
+      Two data-model notes for reviewers: (1) `muted-surface` in the YAML/Appendix-A vocabulary
+      compiles to the pre-existing `--muted` custom property, not a new `--muted-surface` — the
+      repo already used `--muted`. (2) Appendix A's per-style palette declares 14 colour tokens,
+      not the full inventory in spec.md §5.1's table; the rest (`--interstitial-scrim`, `--media-*`,
+      `--key-*`, `--category-*`, `--chart-*`, `--diag-*`) are Phase 1's app-wide tokens and
+      deliberately do not vary per style — consistent with Phase 1 being a separate, non-YAML-driven
+      addition. `--input` is compiled to mirror `--border` per style, matching the pre-existing
+      repo-wide `--input === --border` convention. `--radius-panel` is not re-emitted per style; it
+      already derives from `--radius` via `calc()` (Phase 1), corrected there for this reason.
+      `edge: gloss` compiles to the same `--edge-width: 1px` as `hairline` — spec §5.1 only commits
+      `--edge-width` to 1px/2px; the richer "gloss" highlight idiom neon-pop's provenance describes
+      is not gated by any binding requirement and is left for a follow-up rather than invented here.
+- [x] Enforce the six compile-time invariants in `spec.md` §8, including the contrast gates and the
+      rule that `--ring` never equals `--border`. All 12 palettes passed on the first compile.
+- [x] Import `appStyles.css` from `src/index.css` after the base `:root` / `.dark` blocks.
+      **Deviation, with reason:** `postcss.config.js` has no `postcss-import` plugin, so a same-file
+      `@import` placed after other rules is dropped by the CSS spec's "imports must lead" rule —
+      it would silently do nothing. Imported as a second Vite/JS-level `import` in `src/main.tsx`
+      instead, right after `import "./index.css"`. Cascade order turns out not to matter anyway:
+      each generated `html[data-app-style="x"]` selector already outranks bare `:root`/`.dark` by
+      specificity (it adds both a type selector and an attribute selector), which is the same
+      "without `!important`" property spec.md §7.1 asked for.
+- [x] Add `styles:build` and `styles:check` to `package.json`, and add `styles:check` to the `lint`
       chain.
-- [ ] **Add a CI drift job.** `npm run lint` is not run by any GitHub workflow — grepping
-      `.github/workflows/` finds only `npm run typecheck`. Model a `Styles | Generation + drift` job
-      on the existing `Notices | Generation + drift` job at `.github/workflows/android.yaml:90-136`,
-      or the gate will only ever fail on developer machines.
-- [ ] Add `tests/unit/scripts/compileStyles.test.ts`. Every sibling compiler has one; note that
-      `compile-palettes.mjs` does **not**, and do not copy that gap.
+- [x] **Add a CI drift job.** `npm run lint` is not run by any GitHub workflow — grepping
+      `.github/workflows/` finds only `npm run typecheck`. Modeled `Styles | Generation + drift` job
+      on the existing `Notices | Generation + drift` job at `.github/workflows/android.yaml:90-136`.
+- [x] Add `tests/unit/scripts/compileStyles.test.ts`. Every sibling compiler has one; note that
+      `compile-palettes.mjs` does **not**, and do not copy that gap. 28 tests, covering
+      `contrastRatio`, `validateStyle`'s rejections, `loadConfig` (including the retired-id check),
+      `renderTs`/`renderCss` shape, and `compileStyles`'s write/idempotent/`--check` behaviour.
 
 ## Phase 4 — Runtime
 
@@ -212,10 +238,16 @@ a browser, and the wiring is style-independent, so it is proved once.
 
 **On all 12 palettes:**
 
-- [ ] `tests/unit/lib/appStyles/contrast.test.ts` — every pair and minimum in `spec.md` §9, over the
-      generated table. 12 palettes x ~10 pairs, under 50 ms. This is the real contrast gate.
-- [ ] Structural completeness — every palette declares every token the stylesheet references; ids
-      are kebab-case and stable; exactly the declared modes have colour blocks.
+- [x] `tests/unit/lib/appStyles/contrast.test.ts` — every pair and minimum in `spec.md` §9, over the
+      generated table. 12 palettes x 12 pairs, under 50 ms. This is the real contrast gate.
+      Written in Phase 3 (imports `contrastRatio` straight from `compile-styles.mjs`, so the same
+      WCAG math is exercised whether or not the YAML changed — guards a hand-edit of the generated
+      file, which is the one thing compile-time validation cannot see).
+- [x] Structural completeness — every palette declares every token the stylesheet references; ids
+      are kebab-case and stable; exactly the declared modes have colour blocks. Written in Phase 3
+      as `tests/unit/lib/appStyles/structural.test.ts` (54 cases): also asserts `edgeWidthPx`
+      matches D10 (1 for hairline/gloss, 2 for heavy) and that only `vault-black` declares
+      `appBarBand`.
 - [ ] Appearance resolution — the 72 pure cases from phase 4.
 - [ ] **Geometry invariance**, per `spec.md` §10. One Playwright spec, two routes, two display
       profiles, twelve palettes applied in-page with no reload. Exact equality, no tolerance.
