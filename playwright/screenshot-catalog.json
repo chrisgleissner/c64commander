@@ -1,5 +1,5 @@
 {
-  "disks": ["drives", "disks", "drive-a", "drive-b", "iec", "soft-iec"],
+  "disks": ["drives", "disks", "drive-a", "drive-b", "iec", "soft-iec", "soft-iec-drive"],
   "config": [
     "memory-roms",
     "turbo-boost",
