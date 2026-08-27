@@ -1248,7 +1248,10 @@ export default function SettingsPage() {
                       )}
                     >
                       <Icon className={`h-6 w-6 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
-                      <span className={`text-sm ${isActive ? "font-medium" : ""}`}>{option.label}</span>
+                      {/* break-normal here too: the global :where(span) rule (src/index.css) matches
+                          this span directly, so the button's own break-normal above does not cascade
+                          to it — a real device wrapped "Light" as "Ligh"/"t" without this. */}
+                      <span className={`break-normal text-sm ${isActive ? "font-medium" : ""}`}>{option.label}</span>
                     </Button>
                   );
                 })}
@@ -1287,8 +1290,12 @@ export default function SettingsPage() {
                         className="h-auto w-full justify-between gap-3 whitespace-normal px-3 py-2 text-left"
                         data-testid={`settings-app-style-${style.id}`}
                       >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span className="text-sm font-medium">{style.name}</span>
+                        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                          {/* break-normal overrides the global overflow-wrap: anywhere (src/index.css),
+                              which wrapped a name one character per line on a real device (min-width: 0
+                              + a shrink-0 badge). flex-wrap lets the badge drop to its own line instead
+                              of overlapping the name, which break-normal alone did not prevent. */}
+                          <span className="break-normal text-sm font-medium">{style.name}</span>
                           {style.modes.length === 1 ? (
                             <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
                               Dark only

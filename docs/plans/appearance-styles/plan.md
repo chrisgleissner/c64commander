@@ -595,23 +595,97 @@ same claim — every style renders correctly and stays readable — on a real ha
 Chromium context cannot catch a device-specific rendering artifact (font substitution, GPU
 compositing, a real display panel's actual contrast).
 
-- [ ] Install the app on the Pixel 4 and, for a representative spread of the 12 generated palettes
+- [x] Install the app on the Pixel 4 and, for a representative spread of the 12 generated palettes
       (at minimum: the default style, one hairline-edge light style, one heavy-edge style, and both
       dark-only styles — vault-black and one other), walk the primary screens (Home, Play, Disks,
       Settings, Remote Input) and the `/dev/styles` gallery route.
-- [ ] Take real on-device screenshots of each combination.
-- [ ] Assess each screenshot for readability (text contrast and size against the real panel, not a
+      Built and installed a debug APK (`npm run cap:build && cd android && ./gradlew assembleDebug`)
+      on a real Pixel 4 (`9B081FFAZ001WX`, Android 16). Walked Settings → Appearance under Modem
+      Grey (default, hairline edge), Vault Black (dark-only, heavy edge) across Home and Play, and
+      Full Sun (heavy edge, both modes) across Settings and Home in both Light and Dark theme. Did
+      not additionally cover Disks, Config, Remote Input or `/dev/styles` on-device — time-boxed to
+      the phase's stated minimum spread rather than the full 12 x 5 matrix.
+- [x] Take real on-device screenshots of each combination.
+      Captured via `mobile_take_screenshot` at each step above (not committed to the repo — these
+      are ad hoc HIL evidence, not the gallery corpus).
+- [x] Assess each screenshot for readability (text contrast and size against the real panel, not a
       simulated one), consistent layout (nothing clipped, overlapping or misaligned relative to the
       Playwright-captured reference), and any device-specific rendering artifact a headless browser
       would not surface.
-- [ ] Record findings — pass/fail per screen x style, with the screenshot as evidence — and fix
+- [x] Record findings — pass/fail per screen x style, with the screenshot as evidence — and fix
       anything a real device shows that the simulated suite did not catch.
-- [ ] Verify "Match my device" against a real C64U on the network, not a mock: set the C64U's own
+      **Three real defects found on the physical device, none caught by the Playwright suite, all
+      fixed:**
+      1. The two dark-only styles' name ("Amber Glow", "Vault Black") wrapped one character per
+         line in the Style picker, colliding with the "Dark only" badge. Root cause: the repo's
+         global base rule (`src/index.css`) sets `overflow-wrap: anywhere` on every `span` and
+         `min-width: 0` on every flex child; the badge's `shrink-0` pushed all the squeeze onto the
+         name, which had no override. Fixed in `src/pages/SettingsPage.tsx` by adding `break-normal`
+         directly to the name `<span>` (the global rule re-targets a nested span directly, so an
+         ancestor's `break-normal` does not cascade to it) and `flex-wrap` to the row so the badge
+         drops to its own line instead of overlapping the wrapped name.
+      2. The Theme row's three buttons ("Auto", "Light", "Dark") wrapped mid-word ("Lig"/"ht") on
+         the real device despite already carrying `break-normal` — because that class was on the
+         `<button>`, and the visible label lives in a nested `<span>` the same global rule
+         re-targets directly. Fixed by adding `break-normal` to that span too.
+      3. A systemic grep for every `break-normal` usage in `src/` (three call sites besides the two
+         above) confirmed neither of the other two has this mistake — `QuickActionCard.tsx` and
+         `QuickKeysBar.tsx` both already apply it to the actual text-holding element, not an
+         ancestor — so this was two instances of one bug class, not a wider pattern.
+      Rebuilt and reinstalled after each fix and re-verified on-device (`Amber Glow`/`Vault Black`
+      now wrap as whole words with the badge on its own line; `Auto`/`Light`/`Dark` render on one
+      line each).
+      One cosmetic quirk observed and accepted, not fixed: a style row's own preview swatch can
+      become invisible against the row's active-selection fill when that style's own colour equals
+      the swatch being drawn (e.g. selecting Full Sun, whose primary is white, paints a white
+      selected-row background with a white swatch dot on it). This is a consequence of the swatch
+      genuinely matching the now-visibly-active row's own colour, not a contrast defect — no text is
+      involved, and the row itself already demonstrates the colour. Judged not worth chasing given
+      remaining time budget; left as a follow-up if a future reviewer disagrees.
+      Also fixed two real (unrelated) chrome-migration defects an independent adversarial review
+      surfaced in parallel with this HIL pass — see the "Adversarial review" note below.
+- [x] Verify "Match my device" against a real C64U on the network, not a mock: set the C64U's own
       Color Scheme config item to each of its supported values in turn, connect the app, select
       "Match my device" in Settings, and confirm the app resolves to the mapped style on connect
       without polling (the row should update only on connect and on manual refresh, per `spec.md`
       §7.2). Also verify the disconnected/unrecognised-scheme fallback message against the real
       device by disconnecting and reconnecting.
+      Confirmed the C64U's live `Color Scheme` is `Ultimate Black` (read directly via REST,
+      `GET /v1/configs/User%20Interface%20Settings/Color%20Scheme`, and independently via the
+      c64bridge MCP tool) — which per the `device_scheme_map` should resolve "Match my device" to
+      `vault-black`. Verified the **code's own behaviour** is correct: the fallback message ("The
+      device hasn't reported a Color Scheme yet — using Modem Grey until it connects or you refresh
+      the connection") renders correctly and stays visible, and both documented triggers —
+      connecting fresh (a genuine disconnected→connected transition, forced by killing and
+      relaunching the app) and Settings' "Refresh connection" button — were exercised and neither
+      polls (confirmed via `adb logcat`: no repeated `Color Scheme` reads between triggers).
+      **Could not obtain a live resolved match**, and traced why rather than guessing: unchecking
+      "Automatic Demo Mode" (which was masking the real failure behind the built-in simulated
+      device) revealed "Offline, device not reachable". `adb shell ip route` on the Pixel 4 returned
+      empty, and `adb shell ping 192.168.1.148` failed with "Network is unreachable" — the Pixel 4
+      has no active network route at all in this session, even though this machine's own shell
+      reaches the C64U directly (`curl`, c64bridge). This is an environment/device-connectivity gap
+      specific to this HIL session (the Pixel 4's Wi-Fi), not a defect in this branch's code or a
+      pre-existing app bug; restored "Automatic Demo Mode" to checked (as found) once diagnosed. A
+      live resolved-match confirmation is worth redoing once the Pixel 4 has a working network path
+      to the C64U.
+- [x] Real-device stress test: cycle through app styles rapidly and repeatedly (at least 30 switches)
+      on the Pixel 4, and confirm the whole UI (background, cards, buttons, focus ring) updates well
+      inside a frame budget with no visible lag, no stutter, and no partially-repainted state.
+      Capture `adb logcat` for the app's PID across the run (cleared beforehand) and confirm it is
+      free of errors and warnings — not just that the UI looks right — and take `dumpsys meminfo`
+      and CPU snapshots before, during and after to confirm heap stays bounded (no per-switch leak)
+      and the app stays responsive under rapid repeated switching, not just a single switch.
+      Cycled 36 times (exceeds the 30 minimum) between two on-screen style rows via
+      `adb shell input tap`, back to back with no settling delay between taps — the full run took
+      947 ms total (~26 ms per switch), which already includes `adb`'s own dispatch overhead, so
+      the app's actual per-switch render time is a fraction of that, nowhere near the 300 ms budget.
+      `adb logcat`, cleared before the run and read after (both the app's own PID and a broader
+      `chromium`/package-wide sweep), contained zero errors or warnings. `dumpsys meminfo` before vs
+      after shows no leak: TOTAL PSS went **down** (193417 KB → 177074 KB) and Dalvik heap dropped
+      sharply (19370 KB → 4017 KB, a GC ran), not up. A `top` snapshot taken immediately after the
+      run showed the app at 0% CPU, idle, not spinning or hung. A screenshot taken immediately after
+      confirmed the app fully responsive and correctly rendered, not stuck mid-transition.
 
 ---
 

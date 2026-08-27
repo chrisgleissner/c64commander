@@ -409,12 +409,15 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-lg shadow-[inset_0_0_0_2px_hsl(var(--border))] bg-media-letterbox transition-colors",
+        "relative overflow-hidden rounded-lg bg-media-letterbox transition-colors",
         // shrink-0 keeps the measured height inside the Remote Input flex column, which
         // would otherwise collapse the mirror to its borders. Filling instead gives the
         // picture every pixel the sheet body is not using.
         fill ? "min-h-0 flex-1" : "shrink-0",
-        adjust ? "border-amber-400" : "border-primary",
+        // Edge colour signals the input mode (blue "C64" = driving the machine, amber "View" =
+        // adjusting the view), not the style token: previously a border-color utility with no
+        // border-width to apply to, a no-op left behind when D10 moved edges to box-shadow.
+        adjust ? "shadow-[inset_0_0_0_2px_theme(colors.amber.400)]" : "shadow-[inset_0_0_0_2px_hsl(var(--primary))]",
         className,
       )}
       data-testid="av-mirror-immersive"
