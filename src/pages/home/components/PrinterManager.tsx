@@ -204,7 +204,7 @@ export function PrinterManager({
       }
     >
       <div className="space-y-2" data-testid="home-printer-group">
-        <div className="bg-card border border-border rounded-xl p-3 space-y-2">
+        <div className="bg-card border border-border rounded-panel p-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-semibold text-primary uppercase tracking-wide">Printer</p>
             <Button

@@ -75,7 +75,7 @@ export function SummaryConfigCard({
     <div
       ref={focusRef}
       className={
-        hideTitle ? "space-y-2 outline-none" : "bg-card border border-border rounded-xl p-3 space-y-2 outline-none"
+        hideTitle ? "space-y-2 outline-none" : "bg-card border border-border rounded-panel p-3 space-y-2 outline-none"
       }
       data-section-label={sectionLabel}
       data-testid={testId}

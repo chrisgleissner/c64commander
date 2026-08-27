@@ -159,7 +159,7 @@ export function ConnectionActionsRegion({
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="flex w-full items-center justify-between gap-2 rounded px-1 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="flex w-full items-center justify-between gap-2 rounded-sm px-1 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
           aria-expanded={expanded}
           data-testid="connection-actions-toggle"
         >
@@ -235,7 +235,7 @@ export function ConnectionActionsRegion({
             )}
 
             {switcherOpen && (
-              <div className="space-y-2 rounded border border-border p-2" data-testid="switch-device-form">
+              <div className="space-y-2 rounded-sm border border-border p-2" data-testid="switch-device-form">
                 {/* §8.2 — Host and port inputs */}
                 <div className="flex items-center gap-2">
                   <div className="flex-1 min-w-0">
@@ -283,7 +283,7 @@ export function ConnectionActionsRegion({
                           setHostInput(t.host);
                           void handleConnect(t.host, String(DEFAULT_PORT));
                         }}
-                        className="px-2 py-0.5 text-xs font-mono rounded border border-border hover:border-primary/60 transition-colors disabled:opacity-50"
+                        className="px-2 py-0.5 text-xs font-mono rounded-sm border border-border hover:border-primary/60 transition-colors disabled:opacity-50"
                         data-testid={`recent-target-${t.host}`}
                       >
                         {t.modelLabel ? `${t.host} · ${t.modelLabel}` : t.host}

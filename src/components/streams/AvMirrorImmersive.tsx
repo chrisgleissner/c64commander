@@ -409,7 +409,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-lg border-2 bg-black transition-colors",
+        "relative overflow-hidden rounded-lg shadow-[inset_0_0_0_2px_hsl(var(--border))] bg-media-letterbox transition-colors",
         // shrink-0 keeps the measured height inside the Remote Input flex column, which
         // would otherwise collapse the mirror to its borders. Filling instead gives the
         // picture every pixel the sheet body is not using.
@@ -446,7 +446,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
           <span className="flex items-center gap-1">
             <span
               className={cn(
-                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-white shadow",
+                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-media-on-scrim shadow",
                 adjust ? "bg-amber-500" : "bg-primary",
               )}
               role="status"
@@ -462,7 +462,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
                 result. It disappears the moment there is a lock to report instead. */}
             {(follow || adjust) && !lockLabel && controlsVisible && (
               <span
-                className="inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-xs text-white/90 shadow"
+                className="inline-flex items-center gap-1 rounded-full bg-media-scrim/60 px-2 py-0.5 text-xs text-media-on-scrim/90 shadow"
                 data-testid="av-immersive-lock-hint"
               >
                 <Crosshair className="h-3 w-3" aria-hidden="true" />
@@ -475,7 +475,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
               <button
                 type="button"
                 className={cn(
-                  "pointer-events-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-white shadow",
+                  "pointer-events-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-media-on-scrim shadow",
                   lock.state === "locked" ? "bg-emerald-600" : "bg-amber-500",
                 )}
                 aria-label={`${lockLabel} on an object. Tap to go back to following motion.`}
@@ -493,7 +493,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
           </span>
           {showBadges && videoLive && video.fps > 0 && (
             <span
-              className="rounded bg-black/60 px-1.5 py-0.5 text-xs leading-tight text-white/80"
+              className="rounded-sm bg-media-scrim/60 px-1.5 py-0.5 text-xs leading-tight text-media-on-scrim/80"
               data-testid="av-mirror-immersive-fps"
             >
               {video.standard ?? "PAL"} {video.fps} fps
@@ -534,10 +534,10 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
               className="pointer-events-none absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2"
               data-testid="av-immersive-lock-aim"
             >
-              <span className="absolute left-1/2 top-0 h-2.5 w-0.5 -translate-x-1/2 bg-white/90 shadow" />
-              <span className="absolute bottom-0 left-1/2 h-2.5 w-0.5 -translate-x-1/2 bg-white/90 shadow" />
-              <span className="absolute left-0 top-1/2 h-0.5 w-2.5 -translate-y-1/2 bg-white/90 shadow" />
-              <span className="absolute right-0 top-1/2 h-0.5 w-2.5 -translate-y-1/2 bg-white/90 shadow" />
+              <span className="absolute left-1/2 top-0 h-2.5 w-0.5 -translate-x-1/2 bg-media-reticle/90 shadow" />
+              <span className="absolute bottom-0 left-1/2 h-2.5 w-0.5 -translate-x-1/2 bg-media-reticle/90 shadow" />
+              <span className="absolute left-0 top-1/2 h-0.5 w-2.5 -translate-y-1/2 bg-media-reticle/90 shadow" />
+              <span className="absolute right-0 top-1/2 h-0.5 w-2.5 -translate-y-1/2 bg-media-reticle/90 shadow" />
             </div>
           )}
           {reticle && (
@@ -559,7 +559,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
                   className={cn(
                     // A dark drop shadow, because every colour in this marker is also a colour
                     // the game can paint behind it — the C64 has sixteen and uses all of them.
-                    "absolute h-1/3 w-1/3 drop-shadow-[0_0_2px_rgba(0,0,0,0.9)] transition-colors",
+                    "absolute h-1/3 w-1/3 drop-shadow-[0_0_2px_hsl(var(--media-scrim)/0.9)] transition-colors",
                     corner.className,
                     lock.state === "locked" ? "border-emerald-400" : "border-amber-400",
                   )}
@@ -572,7 +572,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
       </div>
 
       {!videoLive && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-sm text-white/70">
+        <div className="absolute inset-0 flex items-center justify-center bg-media-scrim/70 text-sm text-media-on-scrim/70">
           {video.state === "connecting"
             ? "Connecting…"
             : video.state === "error"
@@ -590,13 +590,13 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
       {/* Auto-hiding control cluster. */}
       {videoLive && (controlsVisible || adjust) && (
         <div
-          className="absolute bottom-2 right-2 z-10 flex items-center gap-1 rounded-full bg-black/55 p-1 backdrop-blur"
+          className="absolute bottom-2 right-2 z-10 flex items-center gap-1 rounded-full bg-media-scrim/55 p-1 backdrop-blur"
           data-testid="av-mirror-immersive-controls"
         >
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 text-white hover:bg-white/15"
+            className="h-8 w-8 text-media-on-scrim hover:bg-media-on-scrim/15"
             aria-label="Zoom out"
             onClick={() => zoomBy(1 / ZOOM_STEP)}
             data-testid="av-immersive-zoom-out"
@@ -606,7 +606,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 text-white hover:bg-white/15"
+            className="h-8 w-8 text-media-on-scrim hover:bg-media-on-scrim/15"
             aria-label="Zoom in"
             onClick={() => zoomBy(ZOOM_STEP)}
             data-testid="av-immersive-zoom-in"
@@ -616,7 +616,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 text-white hover:bg-white/15"
+            className="h-8 w-8 text-media-on-scrim hover:bg-media-on-scrim/15"
             aria-label="Fit to screen"
             onClick={reset}
             data-testid="av-immersive-fit"
@@ -626,7 +626,7 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
           <Button
             size="icon"
             variant={follow ? "default" : "ghost"}
-            className={cn("h-8 w-8", follow ? "" : "text-white hover:bg-white/15")}
+            className={cn("h-8 w-8", follow ? "" : "text-media-on-scrim hover:bg-media-on-scrim/15")}
             aria-label="Follow motion"
             aria-pressed={follow}
             title={follow ? "Following motion — press and hold the picture to lock on" : "Follow motion"}

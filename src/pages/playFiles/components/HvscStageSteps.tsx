@@ -68,11 +68,14 @@ export const HvscStageSteps = ({
               />
               <span
                 className={cn(
-                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs font-semibold transition-colors",
-                  step.status === "done" && "border-primary bg-primary text-primary-foreground",
-                  step.status === "active" && "border-primary bg-background text-primary",
-                  step.status === "pending" && "border-border bg-background text-muted-foreground",
-                  step.status === "failed" && "border-destructive bg-destructive text-destructive-foreground",
+                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors",
+                  step.status === "done" &&
+                    "shadow-[inset_0_0_0_2px_hsl(var(--primary))] bg-primary text-primary-foreground",
+                  step.status === "active" && "shadow-[inset_0_0_0_2px_hsl(var(--primary))] bg-background text-primary",
+                  step.status === "pending" &&
+                    "shadow-[inset_0_0_0_2px_hsl(var(--border))] bg-background text-muted-foreground",
+                  step.status === "failed" &&
+                    "shadow-[inset_0_0_0_2px_hsl(var(--destructive))] bg-destructive text-destructive-foreground",
                 )}
               >
                 {step.status === "done" ? (

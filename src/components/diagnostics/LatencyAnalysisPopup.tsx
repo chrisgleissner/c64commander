@@ -301,7 +301,7 @@ export function LatencyAnalysisPopup({ open, onClose }: Props) {
           </div>
 
           <div
-            className="mt-3 grid grid-cols-2 gap-3 rounded-2xl border border-border/70 bg-card p-3 text-sm sm:grid-cols-4"
+            className="mt-3 grid grid-cols-2 gap-3 rounded-panel border border-border/70 bg-card p-3 text-sm sm:grid-cols-4"
             data-testid="latency-summary-metrics"
           >
             <div>
@@ -324,7 +324,7 @@ export function LatencyAnalysisPopup({ open, onClose }: Props) {
 
           {isEmpty ? (
             <div className="flex flex-1 items-center justify-center py-4">
-              <div className="flex min-h-40 w-full max-w-xl flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/70 bg-muted/15 px-5 py-6 text-center">
+              <div className="flex min-h-40 w-full max-w-xl flex-col items-center justify-center gap-2 rounded-panel border border-dashed border-border/70 bg-muted/15 px-5 py-6 text-center">
                 <BarChart2 className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-foreground">
@@ -340,7 +340,7 @@ export function LatencyAnalysisPopup({ open, onClose }: Props) {
             </div>
           ) : (
             <div
-              className="mt-3 min-h-0 flex-1 rounded-2xl border border-border/70 bg-card p-3"
+              className="mt-3 min-h-0 flex-1 rounded-panel border border-border/70 bg-card p-3"
               data-testid="latency-chart-panel"
             >
               <ResponsiveContainer width="100%" height={240}>
@@ -360,7 +360,7 @@ export function LatencyAnalysisPopup({ open, onClose }: Props) {
                     content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null;
                       return (
-                        <div className="rounded border bg-popover px-2 py-1.5 text-xs shadow-md">
+                        <div className="rounded-sm border bg-popover px-2 py-1.5 text-xs shadow-elev-2">
                           <p className="mb-1 font-medium">
                             {typeof label === "string" ? formatDiagnosticsTimestamp(label) : label}
                           </p>

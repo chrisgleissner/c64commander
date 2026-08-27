@@ -36,7 +36,7 @@ export const SidChipBadge = ({ chipCount, className }: SidChipBadgeProps) => (
     aria-label={sidChipBadgeDescription(chipCount)}
     title={sidChipBadgeDescription(chipCount)}
     className={cn(
-      "inline-flex shrink-0 items-center rounded bg-primary/10 px-1.5 py-0.5 text-xs font-semibold leading-none tracking-wide text-primary",
+      "inline-flex shrink-0 items-center rounded-sm bg-primary/10 px-1.5 py-0.5 text-xs font-semibold leading-none tracking-wide text-primary",
       className,
     )}
   >

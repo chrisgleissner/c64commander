@@ -11,28 +11,32 @@ import { describe, expect, it } from "vitest";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
 
 describe("FileOriginIcon", () => {
-  it("renders the ultimate icon as image", () => {
+  it("renders the ultimate icon as an inline svg using currentColor", () => {
     render(<FileOriginIcon origin="ultimate" />);
     const icon = screen.getByTestId("file-origin-icon");
-    const image = icon.querySelector("img");
+    const glyph = icon.querySelector("svg");
     expect(icon.tagName).toBe("SPAN");
     expect(icon).toHaveAttribute("aria-label", "C64U file");
     expect(icon).toHaveAttribute("role", "img");
-    expect(icon).toHaveAttribute("class", expect.stringContaining("dark:invert"));
-    expect(image).not.toBeNull();
-    expect(image).toHaveAttribute("alt", "");
-    expect(image).toHaveAttribute("aria-hidden", "true");
-    expect(image).toHaveAttribute("class", expect.not.stringContaining("dark:invert"));
+    // Inline, not <img>: currentColor can only resolve against text colour when the SVG is
+    // actually in the DOM, which is also why dark:invert dark:brightness-0 is gone — an inline
+    // stroke="currentColor" glyph follows the surrounding text colour on its own.
+    expect(icon.querySelector("img")).toBeNull();
+    expect(icon).not.toHaveAttribute("class", expect.stringContaining("dark:invert"));
+    expect(glyph).not.toBeNull();
+    expect(glyph).toHaveAttribute("stroke", "currentColor");
   });
 
-  it("renders the local icon as image", () => {
+  it("renders the local icon as an inline svg using currentColor", () => {
     render(<FileOriginIcon origin="local" />);
     const icon = screen.getByTestId("file-origin-icon");
-    const image = icon.querySelector("img");
+    const glyph = icon.querySelector("svg");
     expect(icon.tagName).toBe("SPAN");
     expect(icon).toHaveAttribute("aria-label", "Local file");
     expect(icon).toHaveAttribute("role", "img");
-    expect(image).not.toBeNull();
+    expect(icon.querySelector("img")).toBeNull();
+    expect(glyph).not.toBeNull();
+    expect(glyph).toHaveAttribute("stroke", "currentColor");
   });
 
   it("renders the hvsc icon as music notes symbol ♫", () => {

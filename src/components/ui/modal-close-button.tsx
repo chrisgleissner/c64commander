@@ -15,7 +15,7 @@ export const CloseControl = React.forwardRef<HTMLButtonElement, React.ButtonHTML
       ref={ref}
       type="button"
       className={cn(
-        "inline-flex h-10 w-10 shrink-0 items-center justify-center self-center border-0 bg-transparent p-0 text-[1.75rem] font-normal leading-none text-foreground/80 shadow-none transition-colors hover:bg-transparent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none",
+        "inline-flex h-10 w-10 shrink-0 items-center justify-center self-center bg-transparent p-0 text-[1.75rem] font-normal leading-none text-foreground/80 shadow-none transition-colors hover:bg-transparent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none",
         className,
       )}
       {...props}

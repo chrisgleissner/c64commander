@@ -220,7 +220,7 @@ export const HvscControls = ({
 
         {hvscPreparationErrorReason ? <p className="text-destructive">{hvscPreparationErrorReason}</p> : null}
         {hvscSonglengthSyntaxErrors > 0 ? (
-          <p className="text-amber-700 dark:text-amber-400">
+          <p className="text-warning">
             {hvscSonglengthSyntaxErrors} songlength entries had syntax errors and were ignored.
           </p>
         ) : null}

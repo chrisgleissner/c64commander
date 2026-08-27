@@ -111,7 +111,7 @@ export function ConfigDriftView({ onBack }: Props) {
                   {items.map((item) => (
                     <div
                       key={`${item.category}/${item.item}`}
-                      className="rounded border border-border px-2 py-1 text-xs space-y-0.5"
+                      className="rounded-sm border border-border px-2 py-1 text-xs space-y-0.5"
                     >
                       <p className="font-medium">{item.item}</p>
                       <div className="flex items-start gap-2 text-muted-foreground font-mono">

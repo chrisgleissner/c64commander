@@ -20,7 +20,7 @@ export function DeviceSwitchLabLauncher() {
       onClick={handleClick}
       data-testid="switch-lab-launcher"
       aria-label={open ? "Close Switch Lab" : "Open Switch Lab"}
-      className="fixed bottom-4 left-4 z-[2147483646] rounded-full border border-emerald-700/70 bg-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-black shadow-lg shadow-emerald-950/25"
+      className="fixed bottom-4 left-4 z-[2147483646] rounded-full border border-emerald-700/70 bg-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-black shadow-elev-2 shadow-emerald-950/25"
     >
       {open ? "Close Lab" : "Switch Lab"}
     </button>

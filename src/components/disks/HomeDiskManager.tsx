@@ -2371,7 +2371,7 @@ export const HomeDiskManager = () => {
             Disks
           </h3>
 
-          <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+          <div className="bg-card border border-border rounded-panel p-4 space-y-4">
             <SelectableActionList
               title="Disk list"
               selectionLabel="items"

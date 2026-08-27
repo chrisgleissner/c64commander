@@ -297,7 +297,7 @@ export default function DeviceSwitchLabPage() {
       className="fixed inset-0 z-[2147483645] overflow-auto bg-slate-950/92 px-4 py-6 text-slate-50"
       data-testid="device-switch-lab-page"
     >
-      <div className="mx-auto max-w-5xl space-y-6 rounded-3xl border border-white/10 bg-slate-900/95 p-5 shadow-2xl shadow-black/40">
+      <div className="mx-auto max-w-5xl space-y-6 rounded-panel border border-white/10 bg-slate-900/95 p-5 shadow-elev-3 shadow-black/40">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">Device Switch Lab</p>
@@ -323,7 +323,7 @@ export default function DeviceSwitchLabPage() {
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-          <section className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+          <section className="space-y-4 rounded-panel border border-white/10 bg-black/20 p-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="space-y-2 text-sm" htmlFor="switch-lab-from-device">
                 <span className="font-medium text-slate-200">From device</span>
@@ -333,7 +333,7 @@ export default function DeviceSwitchLabPage() {
                   value={fromDeviceId}
                   disabled={running}
                   onChange={(event) => setFromDeviceId(event.target.value)}
-                  className="w-full rounded-xl border border-white/15 bg-slate-950 px-3 py-2 text-sm text-slate-50"
+                  className="w-full rounded-panel border border-white/15 bg-slate-950 px-3 py-2 text-sm text-slate-50"
                 >
                   {devices.map((device) => (
                     <option key={device.id} value={device.id}>
@@ -350,7 +350,7 @@ export default function DeviceSwitchLabPage() {
                   value={toDeviceId}
                   disabled={running}
                   onChange={(event) => setToDeviceId(event.target.value)}
-                  className="w-full rounded-xl border border-white/15 bg-slate-950 px-3 py-2 text-sm text-slate-50"
+                  className="w-full rounded-panel border border-white/15 bg-slate-950 px-3 py-2 text-sm text-slate-50"
                 >
                   {devices.map((device) => (
                     <option key={device.id} value={device.id}>
@@ -373,7 +373,7 @@ export default function DeviceSwitchLabPage() {
                   value={iterations}
                   disabled={running}
                   onChange={(event) => setIterations(Math.max(1, Number(event.target.value) || DEFAULT_ITERATIONS))}
-                  className="w-full rounded-xl border border-white/15 bg-slate-950 px-3 py-2 text-sm text-slate-50"
+                  className="w-full rounded-panel border border-white/15 bg-slate-950 px-3 py-2 text-sm text-slate-50"
                 />
               </label>
               <label className="space-y-2 text-sm" htmlFor="switch-lab-delay-ms">
@@ -389,7 +389,7 @@ export default function DeviceSwitchLabPage() {
                   onChange={(event) =>
                     setInterSwitchDelayMs(Math.max(0, Number(event.target.value) || DEFAULT_DELAY_MS))
                   }
-                  className="w-full rounded-xl border border-white/15 bg-slate-950 px-3 py-2 text-sm text-slate-50"
+                  className="w-full rounded-panel border border-white/15 bg-slate-950 px-3 py-2 text-sm text-slate-50"
                 />
               </label>
             </div>
@@ -421,7 +421,7 @@ export default function DeviceSwitchLabPage() {
 
             <div
               data-testid="switch-lab-status"
-              className="rounded-2xl border border-white/10 bg-slate-950/60 p-3 text-sm text-slate-200"
+              className="rounded-panel border border-white/10 bg-slate-950/60 p-3 text-sm text-slate-200"
             >
               <p>
                 Current selected device: <strong>{savedDevices.selectedDeviceId || "none"}</strong>
@@ -434,30 +434,30 @@ export default function DeviceSwitchLabPage() {
             </div>
           </section>
 
-          <section className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+          <section className="space-y-4 rounded-panel border border-white/10 bg-black/20 p-4">
             <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">Latency summary</h2>
             <dl className="grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-3">
+              <div className="rounded-panel border border-white/10 bg-slate-950/70 p-3">
                 <dt className="text-slate-400">Transitions</dt>
                 <dd className="text-xl font-semibold">{summary.count}</dd>
               </div>
-              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-3">
+              <div className="rounded-panel border border-white/10 bg-slate-950/70 p-3">
                 <dt className="text-slate-400">Failures</dt>
                 <dd className="text-xl font-semibold text-rose-300">{summary.failureCount}</dd>
               </div>
-              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-3">
+              <div className="rounded-panel border border-white/10 bg-slate-950/70 p-3">
                 <dt className="text-slate-400">p50</dt>
                 <dd className="text-xl font-semibold">{summary.p50DurationMs ?? "-"}ms</dd>
               </div>
-              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-3">
+              <div className="rounded-panel border border-white/10 bg-slate-950/70 p-3">
                 <dt className="text-slate-400">p90</dt>
                 <dd className="text-xl font-semibold">{summary.p90DurationMs ?? "-"}ms</dd>
               </div>
-              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-3">
+              <div className="rounded-panel border border-white/10 bg-slate-950/70 p-3">
                 <dt className="text-slate-400">Max</dt>
                 <dd className="text-xl font-semibold">{summary.maxDurationMs ?? "-"}ms</dd>
               </div>
-              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-3">
+              <div className="rounded-panel border border-white/10 bg-slate-950/70 p-3">
                 <dt className="text-slate-400">Average</dt>
                 <dd className="text-xl font-semibold">{summary.averageDurationMs ?? "-"}ms</dd>
               </div>
@@ -465,22 +465,22 @@ export default function DeviceSwitchLabPage() {
           </section>
         </div>
 
-        <section className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4">
+        <section className="space-y-3 rounded-panel border border-white/10 bg-black/20 p-4">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">Structured result</h2>
             <span className="text-xs text-slate-400">Also emitted as C64_SWITCH_LAB_RESULT in console/logcat</span>
           </div>
           <pre
             data-testid="switch-lab-result-json"
-            className="max-h-64 overflow-auto rounded-2xl border border-white/10 bg-slate-950/80 p-3 text-xs text-slate-200"
+            className="max-h-64 overflow-auto rounded-panel border border-white/10 bg-slate-950/80 p-3 text-xs text-slate-200"
           >
             {JSON.stringify(result, null, 2)}
           </pre>
         </section>
 
-        <section className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4">
+        <section className="space-y-3 rounded-panel border border-white/10 bg-black/20 p-4">
           <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">Attempts</h2>
-          <div className="overflow-auto rounded-2xl border border-white/10">
+          <div className="overflow-auto rounded-panel border border-white/10">
             <table className="min-w-full divide-y divide-white/10 text-sm">
               <thead className="bg-slate-950/90 text-left text-slate-400">
                 <tr>

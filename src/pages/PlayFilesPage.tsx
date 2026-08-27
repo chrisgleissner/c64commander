@@ -2424,7 +2424,7 @@ export default function PlayFilesPage() {
           ) : null}
           <ProfileSplitSection minColumnWidth="22rem" testId="play-primary-layout">
             <div
-              className="bg-card border border-border rounded-xl p-4 space-y-4"
+              className="bg-card border border-border rounded-panel p-4 space-y-4"
               data-section-label="Playback controls"
               data-testid="play-section-playback"
             >

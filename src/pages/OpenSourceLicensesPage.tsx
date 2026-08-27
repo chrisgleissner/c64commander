@@ -168,7 +168,7 @@ const renderInlineText = (value: string) => {
       nodes.push(
         <code
           key={`code-${keyIndex}`}
-          className="break-all whitespace-pre-wrap rounded bg-muted px-1 py-0.5 text-[0.85em]"
+          className="break-all whitespace-pre-wrap rounded-sm bg-muted px-1 py-0.5 text-[0.85em]"
         >
           {codeMatch[1]}
         </code>,
@@ -269,7 +269,7 @@ export default function OpenSourceLicensesPage() {
       className="fixed inset-0 z-[1100] overflow-hidden bg-background/96 backdrop-blur-sm supports-[backdrop-filter]:bg-background/88"
     >
       <div className="mx-auto flex h-full w-full max-w-6xl min-w-0 flex-col px-3 py-3 sm:px-6 sm:py-4">
-        <div className="mb-3 flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+        <div className="mb-3 flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-panel border border-border bg-card px-4 py-3">
           <div className="min-w-0 flex-1">
             <h1 className="break-words text-lg font-semibold">Open source licenses</h1>
             <p className="break-words text-sm text-muted-foreground">Rendered from bundled `THIRD_PARTY_NOTICES.md`.</p>
@@ -286,7 +286,7 @@ export default function OpenSourceLicensesPage() {
           </StatefulButton>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card">
+        <div className="min-h-0 flex-1 overflow-hidden rounded-panel border border-border bg-card">
           <div
             data-testid="open-source-licenses-scroll"
             className="h-full w-full overflow-y-auto overflow-x-hidden overscroll-contain [-webkit-overflow-scrolling:touch]"
@@ -371,7 +371,7 @@ export default function OpenSourceLicensesPage() {
                               <article
                                 key={`t-${blockIndex}-row-${rowIndex}`}
                                 data-testid="open-source-license-card"
-                                className="rounded-xl border border-border/70 bg-muted/20 p-4 [contain-intrinsic-size:180px] [content-visibility:auto]"
+                                className="rounded-panel border border-border/70 bg-muted/20 p-4 [contain-intrinsic-size:180px] [content-visibility:auto]"
                               >
                                 <div className="flex flex-wrap items-start gap-2">
                                   <div className="min-w-0 flex-1">
@@ -402,7 +402,7 @@ export default function OpenSourceLicensesPage() {
                     }
 
                     return (
-                      <div key={`t-${blockIndex}`} className="overflow-x-auto rounded-xl border border-border/70">
+                      <div key={`t-${blockIndex}`} className="overflow-x-auto rounded-panel border border-border/70">
                         <table className="min-w-full border-collapse text-sm">
                           <thead className="bg-muted/40 text-left">
                             <tr>

@@ -25,7 +25,7 @@ export const INTERSTITIAL_Z_INDEX = {
 export const STANDARD_DIM_OPACITY = 0.4;
 export const SECONDARY_DIM_OPACITY = 0.25;
 export const TERTIARY_DIM_OPACITY = 0.15;
-export const APP_INTERSTITIAL_BACKDROP_CLASSNAME = "bg-black";
+export const APP_INTERSTITIAL_BACKDROP_CLASSNAME = "bg-scrim";
 
 const INTERSTITIAL_LAYER_Z_STEP = 20;
 const INTERSTITIAL_SURFACE_Z_OFFSET = 10;
@@ -48,7 +48,7 @@ export const resolveInterstitialSurfaceZIndex = (depth: number): number =>
   resolveInterstitialBackdropZIndex(depth) + INTERSTITIAL_SURFACE_Z_OFFSET;
 
 export const resolveInterstitialBackdropStyle = (depth: number): CSSProperties => ({
-  backgroundColor: `rgb(0 0 0 / ${resolveInterstitialBackdropOpacity(depth)})`,
+  backgroundColor: `hsl(var(--interstitial-scrim) / ${resolveInterstitialBackdropOpacity(depth)})`,
   zIndex: resolveInterstitialBackdropZIndex(depth),
 });
 

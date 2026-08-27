@@ -204,7 +204,9 @@ test.describe("UI coverage", () => {
     await snap(page, testInfo, "disks-open");
   });
 
-  test("source indicator icons invert in dark mode", async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test("source indicator icons follow the surrounding text colour in dark mode", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       localStorage.setItem("c64u_theme", "system");
       const playlist = {
@@ -231,24 +233,36 @@ test.describe("UI coverage", () => {
       );
     });
 
+    // The origin glyph is inlined SVG with stroke="currentColor" (FileOriginIcon.tsx), so it
+    // follows the resolved --foreground token like any other icon in the app, rather than the
+    // old dark:invert dark:brightness-0 filter hack this test used to assert on. A filter never
+    // applied to an <img>'s cross-origin-opaque pixels correctly in the first place — this is a
+    // properties test of the real mechanism, not of a workaround for it.
+    // stroke="currentColor" paints with the element's resolved `color`, so reading `color`
+    // directly proves the same thing `stroke` would without depending on this browser's support
+    // for querying the SVG `stroke` shorthand as a computed CSS property.
+    const strokeColor = (icon: ReturnType<Page["getByTestId"]>) =>
+      icon.evaluate((el) => getComputedStyle(el.querySelector("svg") ?? el).color);
+
     await page.emulateMedia({ colorScheme: "light" });
     await page.goto("/play", { waitUntil: "domcontentloaded" });
     const playIcon = page.getByTestId("file-origin-icon").first();
     await expect(playIcon).toBeVisible();
-    const lightFilter = await playIcon.evaluate((el) => getComputedStyle(el).filter);
+    const lightStroke = await strokeColor(playIcon);
+    expect(lightStroke).not.toBe("");
     await snap(page, testInfo, "play-icons-light");
 
     await page.emulateMedia({ colorScheme: "dark" });
-    await expect.poll(async () => playIcon.evaluate((el) => getComputedStyle(el).filter)).not.toBe(lightFilter);
-    const darkFilter = await playIcon.evaluate((el) => getComputedStyle(el).filter);
-    expect(darkFilter).not.toBe("none");
+    await expect.poll(() => strokeColor(playIcon)).not.toBe(lightStroke);
+    const darkStroke = await strokeColor(playIcon);
+    expect(darkStroke).not.toBe("");
     await snap(page, testInfo, "play-icons-dark");
 
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
     const diskIcon = page.getByTestId("file-origin-icon").first();
     await expect(diskIcon).toBeVisible();
-    const diskFilter = await diskIcon.evaluate((el) => getComputedStyle(el).filter);
-    expect(diskFilter).not.toBe("none");
+    const diskStroke = await strokeColor(diskIcon);
+    expect(diskStroke).not.toBe("");
     await snap(page, testInfo, "disk-icons-dark");
   });
 

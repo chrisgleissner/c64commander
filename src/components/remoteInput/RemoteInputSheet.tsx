@@ -488,7 +488,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
             aria-label="Show controls"
             title="Show controls"
             onClick={chrome.show}
-            className="absolute left-1/2 top-1 z-30 flex min-h-11 min-w-11 -translate-x-1/2 items-center justify-center rounded-full bg-black/55 text-white/90 shadow backdrop-blur transition-colors hover:bg-black/70"
+            className="absolute left-1/2 top-1 z-30 flex min-h-11 min-w-11 -translate-x-1/2 items-center justify-center rounded-full bg-media-scrim/55 text-media-on-scrim/90 shadow backdrop-blur transition-colors hover:bg-media-scrim/70"
           >
             <Settings2 className="h-5 w-5" />
           </button>
@@ -597,7 +597,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
               >
                 <AvMirrorControls showAudio={audioMirrorEnabled} showVideo={videoMirrorEnabled} />
                 {mirrorAdjust ? (
-                  <span className="text-xs font-medium text-amber-500" data-testid="remote-input-mirror-adjust-hint">
+                  <span className="text-xs font-medium text-warning" data-testid="remote-input-mirror-adjust-hint">
                     Physical keys adjust the view
                   </span>
                 ) : null}
@@ -632,7 +632,7 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
                   touchscreen and no on-screen controls. */}
               {gameMode && quickKeysOverlay.visible ? (
                 <div
-                  className="absolute inset-x-0 bottom-0 z-20 flex flex-col gap-2 bg-black/70 px-2 pb-2 pt-1 backdrop-blur"
+                  className="absolute inset-x-0 bottom-0 z-20 flex flex-col gap-2 bg-media-scrim/70 px-2 pb-2 pt-1 backdrop-blur"
                   data-testid="remote-input-quick-keys-toggle"
                   {...quickKeysOverlay.keepAliveProps}
                 >

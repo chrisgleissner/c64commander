@@ -1435,9 +1435,9 @@ describe("SettingsPage", () => {
     expect(aboutIndex).toBeGreaterThan(deviceSafetyIndex);
     expect(aboutIndex).toBe(headings.length - 1);
 
-    const connectionSection = screen.getByRole("heading", { name: "Connection" }).closest(".rounded-xl");
+    const connectionSection = screen.getByRole("heading", { name: "Connection" }).closest(".rounded-panel");
     const configHeading = screen.queryByRole("heading", { name: "Config" });
-    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-panel");
 
     expect(connectionSection).toBeTruthy();
     expect(configHeading).toBeNull();
@@ -2078,7 +2078,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-panel");
     expect(deviceSafetySection).toBeTruthy();
     const trigger = within(deviceSafetySection as HTMLElement).getByRole("combobox");
     fireEvent.change(trigger, { target: { value: "RELAXED" } });
@@ -2117,7 +2117,7 @@ describe("SettingsPage", () => {
 
       renderSettingsPage();
 
-      const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+      const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-panel");
       expect(deviceSafetySection).toBeTruthy();
 
       const options = within(deviceSafetySection as HTMLElement).getAllByRole("option");
@@ -2140,7 +2140,7 @@ describe("SettingsPage", () => {
     try {
       renderSettingsPage();
 
-      const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+      const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-panel");
       expect(deviceSafetySection).toBeTruthy();
       const trigger = within(deviceSafetySection as HTMLElement).getByRole("combobox");
       fireEvent.change(trigger, { target: { value: "CONSERVATIVE" } });
@@ -2350,7 +2350,7 @@ describe("SettingsPage", () => {
   it("enables debug logging when switching to troubleshooting mode", () => {
     renderSettingsPage();
 
-    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-panel");
     expect(deviceSafetySection).toBeTruthy();
     const trigger = within(deviceSafetySection as HTMLElement).getByRole("combobox");
     fireEvent.change(trigger, { target: { value: "TROUBLESHOOTING" } });
@@ -2361,7 +2361,7 @@ describe("SettingsPage", () => {
   it("shows the actual Config write spacing default in Device Safety advanced controls", () => {
     renderSettingsPage();
 
-    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-panel");
 
     expect(deviceSafetySection).toBeTruthy();
     const configWriteInput = within(deviceSafetySection as HTMLElement).getByLabelText("Config write spacing (ms)");

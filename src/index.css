@@ -6,7 +6,7 @@
   --c64-motion-duration-scale: 1;
   --modal-backdrop-duration: 150ms;
   --interstitial-radius: 20px;
-  --interstitial-shadow: 0 28px 64px rgba(15, 23, 42, 0.24);
+  --interstitial-shadow: 0 28px 64px hsl(var(--foreground) / 0.24);
   --display-profile-viewport-width: 100vw;
   --display-profile-viewport-height: 100dvh;
   --display-profile-root-font-size: 16px;
@@ -194,6 +194,12 @@
     --media-on-scrim: 0 0% 100%;
     --media-letterbox: 0 0% 0%;
     --media-reticle: 0 0% 100%;
+
+    /* Lighting Studio's presentation stage (src/components/lighting/LightingStudioDialog.tsx):
+       a deliberately dark backdrop the device preview sits on, like a photography stage, in
+       every app theme and style — --foreground/--background would invert it in dark mode. */
+    --lighting-stage-1: 222.2 47.4% 11.2%;
+    --lighting-stage-2: 228.6 84% 4.9%;
 
     /* Remote-input key tones (src/lib/remoteInput/keyTone.ts) */
     --key-character-surface: 204 100% 97.1%;

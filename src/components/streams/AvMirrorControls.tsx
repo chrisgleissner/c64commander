@@ -18,10 +18,7 @@ import { saveMirrorC64Audio, saveMirrorC64Video } from "@/lib/config/appSettings
 export const LiveDot = ({ className }: { className?: string }) => (
   <span
     aria-hidden
-    className={cn(
-      "inline-block h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_2px] shadow-emerald-500/30",
-      className,
-    )}
+    className={cn("inline-block h-2 w-2 rounded-full bg-success shadow-[0_0_0_2px] shadow-success/30", className)}
   />
 );
 

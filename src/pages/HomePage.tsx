@@ -1239,7 +1239,7 @@ function HomePageContent() {
           <img
             src={variant.assets.public.homeLogoPng}
             alt={variant.displayName}
-            className="h-9 w-auto shrink-0 rounded-xl object-contain shadow-sm sm:h-11"
+            className="h-9 w-auto shrink-0 rounded-panel object-contain shadow-elev-1 sm:h-11"
             data-testid="home-header-logo"
           />
         }
@@ -1935,7 +1935,7 @@ function HomePageContent() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/10 p-4"
+              className="flex items-start gap-2 rounded-panel border border-destructive/20 bg-destructive/10 p-4"
               data-testid="config-fetch-error"
             >
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
@@ -1953,7 +1953,7 @@ function HomePageContent() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 text-center"
+              className="bg-destructive/10 border border-destructive/20 rounded-panel p-4 text-center"
             >
               <p className="text-sm text-destructive font-medium">Unable to connect to C64U</p>
               <p className="text-xs text-muted-foreground mt-1">Check your connection settings</p>

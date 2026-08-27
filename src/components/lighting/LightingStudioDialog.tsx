@@ -273,7 +273,7 @@ function SurfaceEditor({
 
   return (
     <div
-      className={cn("space-y-3 rounded-xl border border-border/60 bg-card/60 p-3", compact && "space-y-2.5")}
+      className={cn("space-y-3 rounded-panel border border-border/60 bg-card/60 p-3", compact && "space-y-2.5")}
       data-testid={`lighting-editor-${surface}`}
     >
       <div className="flex items-center justify-between">
@@ -461,8 +461,8 @@ function LightingDeviceMockup({
   const caseBleedIntoKeyboardAlpha = caseOverlayAlpha * LIGHTING_PREVIEW_CASE_BLEED_INTO_KEYBOARD_FACTOR;
   const caseSelected = selectedSurface === "case";
   const keyboardSelected = keyboardSupported && selectedSurface === "keyboard";
-  const caseStroke = caseSelected ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.18)";
-  const keyboardStroke = keyboardSelected ? "rgba(255,255,255,0.84)" : "rgba(255,255,255,0.22)";
+  const caseStroke = caseSelected ? "hsl(var(--ring) / 0.88)" : "hsl(var(--border) / 0.18)";
+  const keyboardStroke = keyboardSelected ? "hsl(var(--ring) / 0.84)" : "hsl(var(--border) / 0.22)";
   const mainKeyboardBounds = boundsInset(C64_PREVIEW_LAYOUT.keyboardMain.bounds);
   const functionKeyboardBounds = C64_PREVIEW_LAYOUT.keyboardFunction
     ? boundsInset(C64_PREVIEW_LAYOUT.keyboardFunction.bounds)
@@ -475,7 +475,7 @@ function LightingDeviceMockup({
 
   return (
     <div
-      className="space-y-3 overflow-visible rounded-2xl border border-border/60 bg-card/70 p-4"
+      className="space-y-3 overflow-visible rounded-panel border border-border/60 bg-card/70 p-4"
       data-testid="lighting-device-mockup"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -507,11 +507,11 @@ function LightingDeviceMockup({
         </div>
       </div>
 
-      <div className="overflow-visible rounded-[28px] border border-border/60 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.07),_transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.94))] px-3 py-5 sm:p-5">
+      <div className="overflow-visible rounded-[28px] border border-border/60 bg-[radial-gradient(circle_at_top,_hsl(var(--card)/0.07),_transparent_58%),linear-gradient(180deg,hsl(var(--lighting-stage-1)/0.96),hsl(var(--lighting-stage-2)/0.94))] px-3 py-5 sm:p-5">
         <div className="mx-auto w-full max-w-[34rem] overflow-visible px-2 pb-2 pt-2">
           <svg
             viewBox="0 0 1000 620"
-            className="h-auto w-full overflow-visible drop-shadow-[0_28px_48px_rgba(15,23,42,0.52)]"
+            className="h-auto w-full overflow-visible drop-shadow-[0_28px_48px_hsl(var(--lighting-stage-1)/0.52)]"
             aria-label="Commodore 64 lighting preview"
           >
             <ellipse
@@ -522,7 +522,7 @@ function LightingDeviceMockup({
               fill={toRgba(caseRgb, caseGlowAlpha * 0.36)}
               data-testid="lighting-mockup-case-glow"
             />
-            <ellipse cx="500" cy="560" rx="286" ry="18" fill="rgba(15,23,42,0.35)" />
+            <ellipse cx="500" cy="560" rx="286" ry="18" fill="hsl(var(--lighting-stage-1) / 0.35)" />
 
             <g id="c64-root" transform={LIGHTING_PREVIEW_TRANSFORM}>
               <g id="case-shell">
@@ -712,7 +712,7 @@ function LightingDeviceMockup({
                 type="button"
                 onClick={() => onSelectSurface(surface)}
                 className={cn(
-                  "rounded-xl border p-3 text-left transition",
+                  "rounded-panel border p-3 text-left transition",
                   selectedSurface === surface ? "border-primary bg-primary/5" : "border-border/60 bg-background/70",
                 )}
                 data-testid={`lighting-device-summary-${surface}`}
@@ -1066,7 +1066,7 @@ export function LightingStudioDialog() {
                             key={profileEntry.id}
                             type="button"
                             className={cn(
-                              "rounded-xl border p-3 text-left transition-colors",
+                              "rounded-panel border p-3 text-left transition-colors",
                               selectedProfileId === profileEntry.id
                                 ? "border-primary bg-primary/5"
                                 : "border-border/60 bg-card/60",
@@ -1101,7 +1101,7 @@ export function LightingStudioDialog() {
                     </div>
 
                     <div
-                      className="min-w-0 rounded-xl border border-border/60 bg-card/60 p-3"
+                      className="min-w-0 rounded-panel border border-border/60 bg-card/60 p-3"
                       data-testid="lighting-profile-detail-card"
                     >
                       <h4 className="font-medium">{selectedProfile?.name ?? "Select a profile"}</h4>
@@ -1239,7 +1239,7 @@ export function LightingStudioDialog() {
                         />
                       ) : (
                         <div
-                          className="rounded-xl border border-dashed border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground"
+                          className="rounded-panel border border-dashed border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground"
                           data-testid="lighting-keyboard-unsupported"
                         >
                           Keyboard lighting is unavailable on this device.
@@ -1259,7 +1259,7 @@ export function LightingStudioDialog() {
                     ) : null}
                   </div>
 
-                  <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
+                  <div className="space-y-3 rounded-panel border border-border/60 bg-card/60 p-3">
                     <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
                       <div>
                         <p className="font-medium">Connection sentinel</p>
@@ -1312,7 +1312,7 @@ export function LightingStudioDialog() {
                     </div>
                   </div>
 
-                  <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
+                  <div className="space-y-3 rounded-panel border border-border/60 bg-card/60 p-3">
                     <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
                       <div>
                         <p className="font-medium">Quiet Launch</p>
@@ -1361,7 +1361,7 @@ export function LightingStudioDialog() {
                     </div>
                   </div>
 
-                  <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
+                  <div className="space-y-3 rounded-panel border border-border/60 bg-card/60 p-3">
                     <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
                       <div>
                         <p className="font-medium">Source identity map</p>
@@ -1418,7 +1418,7 @@ export function LightingStudioDialog() {
                     </div>
                   </div>
 
-                  <div className="space-y-3 rounded-xl border border-border/60 bg-card/60 p-3">
+                  <div className="space-y-3 rounded-panel border border-border/60 bg-card/60 p-3">
                     <div className={cn("flex gap-3", narrow ? "flex-wrap" : "items-center justify-between")}>
                       <div>
                         <p className="font-medium">Circadian palette</p>

@@ -154,7 +154,7 @@ export function SidCard({
 
   return (
     <div
-      className={cn("bg-card border border-border rounded-xl p-3 space-y-2", className)}
+      className={cn("bg-card border border-border rounded-panel p-3 space-y-2", className)}
       data-testid={`home-sid-entry-${testIdSuffix}`}
     >
       {/* Row 1: Name and Power */}

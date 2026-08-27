@@ -73,7 +73,7 @@ export const AddItemsProgressOverlay = ({
       )}
       data-interstitial-depth={layer?.depth ?? 1}
       style={{
-        backgroundColor: `rgb(0 0 0 / ${layer?.backdropOpacity ?? resolveInterstitialBackdropOpacity(1)})`,
+        backgroundColor: `hsl(var(--interstitial-scrim) / ${layer?.backdropOpacity ?? resolveInterstitialBackdropOpacity(1)})`,
         paddingTop: `${top}px`,
         zIndex: layer?.backdropZIndex ?? INTERSTITIAL_Z_INDEX.backdrop,
       }}

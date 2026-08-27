@@ -526,7 +526,7 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
     if (this.state.hasError) {
       return (
         <div className="flex min-h-screen items-center justify-center bg-background px-6">
-          <div className="max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-lg">
+          <div className="max-w-md rounded-panel border border-border bg-card p-6 text-center shadow-elev-2">
             <p className="text-lg font-semibold text-foreground">{t("app.error.title", "Something went wrong")}</p>
             <p className="mt-2 text-sm text-muted-foreground">
               {t("app.error.description", "The app hit an unexpected error. Please reopen the page or try again.")}

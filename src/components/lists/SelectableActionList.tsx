@@ -563,7 +563,7 @@ export const SelectableActionList = ({
         </div>
       ) : null}
 
-      <div className="bg-card border border-border rounded-xl p-4 overflow-hidden">{renderList(visibleItems)}</div>
+      <div className="bg-card border border-border rounded-panel p-4 overflow-hidden">{renderList(visibleItems)}</div>
 
       {viewAllTitle && (
         <AppSheet open={viewAllOpen} onOpenChange={setViewAllOpen}>
@@ -608,7 +608,7 @@ export const SelectableActionList = ({
               <AppSheetBody className={cn("flex flex-col", isCompact ? "px-3 py-3" : "px-6 py-4")}>
                 <div
                   className={cn(
-                    "bg-card border border-border rounded-xl overflow-hidden flex-1 h-full min-h-0 flex flex-col",
+                    "bg-card border border-border rounded-panel overflow-hidden flex-1 h-full min-h-0 flex flex-col",
                     isCompact ? "p-3" : "p-4",
                   )}
                 >

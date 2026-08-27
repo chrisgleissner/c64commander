@@ -265,7 +265,7 @@ export const CollapsibleSection = ({
       // Clear the fixed guidance bar when this section is scrolled into view. The variable is 0px
       // whenever the bar is not showing, so nothing is reserved for it then.
       style={{ scrollMarginBottom: "var(--keypad-guidance-reserved-height, 0px)" }}
-      className={cn("overflow-hidden rounded-xl border border-border bg-card", className)}
+      className={cn("overflow-hidden rounded-panel border border-border bg-card", className)}
       data-testid={testId ?? `${scope}-section-${id}`}
       data-open={open ? "true" : "false"}
       data-section-label={sectionLabel ?? title}

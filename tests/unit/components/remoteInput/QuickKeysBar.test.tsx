@@ -287,19 +287,20 @@ describe("QuickKeysBar", () => {
   it("tints the odd function keys f1/f3/f5/f7 but not the even ones (matches the Keys tab)", () => {
     render(<QuickKeysBarHarness {...makeHandlers()} tier="full" />);
     for (const n of [1, 3, 5, 7]) {
-      expect(screen.getByTestId(`remote-input-key-f${n}`).className, `f${n}`).toMatch(/slate/);
+      expect(screen.getByTestId(`remote-input-key-f${n}`).className, `f${n}`).toMatch(/key-function/);
     }
     for (const n of [2, 4, 6, 8]) {
-      expect(screen.getByTestId(`remote-input-key-f${n}`).className, `f${n}`).not.toMatch(/slate/);
+      expect(screen.getByTestId(`remote-input-key-f${n}`).className, `f${n}`).not.toMatch(/key-function/);
     }
   });
 
   it("carries the shared caution affordance on RUN/STOP and keeps it clear of RETURN (HARD16-006)", () => {
     render(<QuickKeysBarHarness {...makeHandlers()} tier="full" />);
     const runStop = screen.getByTestId("remote-input-key-run-stop");
-    // Caution affordance: shape (solid double border) + colour, matching the Keys tab.
-    expect(runStop.className).toContain("border-2");
-    expect(runStop.className).toContain("border-warning");
+    // Caution affordance: shape (solid double ring, D10: box-shadow not border-width) + colour,
+    // matching the Keys tab.
+    expect(runStop.className).toContain("shadow-[inset_0_0_0_2px_hsl(var(--warning))]");
+    expect(runStop.className).toContain("text-warning");
     // RUN/STOP and RETURN share the top row but are never adjacent — CTRL and
     // SPACE sit between them, so a wide RETURN tap can never halt the program.
     const returnKey = screen.getByTestId("remote-input-key-return");
@@ -327,7 +328,7 @@ describe("QuickKeysBar", () => {
   it("colours both SHIFT keys with the shared primary shift treatment", () => {
     render(<QuickKeysBarHarness {...makeHandlers()} tier="full" />);
     for (const id of ["remote-input-key-shift-left", "remote-input-key-shift-right"]) {
-      expect(screen.getByTestId(id).className, id).toMatch(/border-primary/);
+      expect(screen.getByTestId(id).className, id).toMatch(/shadow-\[inset_0_0_0_2px_hsl\(var\(--primary\)\)\]/);
     }
   });
 });

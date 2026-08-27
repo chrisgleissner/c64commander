@@ -80,7 +80,7 @@ function TabBarButton({
       {isActive && (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0.5 inset-y-0.5 -z-10 rounded-xl bg-primary/15"
+          className="pointer-events-none absolute inset-x-0.5 inset-y-0.5 -z-10 rounded-panel bg-primary/15"
         />
       )}
       <Icon className="h-[1.375rem] w-[1.375rem]" />

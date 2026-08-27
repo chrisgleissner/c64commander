@@ -94,53 +94,159 @@ that changes appearance in patches.
 
 Do these in the order below; each clears the largest remaining group.
 
-- [ ] **Radius, shadow and edge sweep — clears ~105 occurrences across ~45 files.** Codemod
+- [x] **Radius, shadow and edge sweep — clears ~105 occurrences across ~45 files.** Codemod
       `rounded-xl` / `rounded-2xl` / `rounded-3xl` → `rounded-panel`, bare `rounded` (0.25rem) →
       `rounded-sm` (which already derives from `--radius`), `shadow-sm|md|lg|xl|2xl` →
       the new `shadow-elev-*`, and the 22 `border-0|2|4` sites → the `edge` utility.
       Leave `rounded-full` alone: a pill must stay a pill, so treat it as geometry.
       Copy the pattern already used correctly at `src/lib/modalPresentation.ts:33` and
       `src/components/ui/app-surface.tsx:221,317`.
-- [ ] **Semantic state colours — clears 17 findings, all tokens already exist.**
+      Actual counts found by direct grep rather than the audit estimate: 65 `rounded-xl/2xl/3xl`
+      occurrences across 26 files; 24 bare-`rounded` occurrences, of which 16 were genuine
+      className hits (the other 8 were the identifier `rounded` used as a local variable name in
+      formatters, or the word "rounded" in prose comments — left untouched); 24 `shadow-sm/md/lg/2xl`
+      (no `shadow-xl` in the codebase), mapped `sm`→`elev-1`, `md`/`lg`→`elev-2` (Radix
+      popovers/tooltips/dialogs/sheets/toasts read as one "floating" tier), `2xl`→`elev-3`; and 15
+      genuine `border-0|2|4` sites, not 22 — `src/components/ui/table.tsx` was a second dead shadcn
+      primitive found the same way Phase 0's six were (zero imports in `src/`) and was deleted
+      rather than migrated, which also removed its `border-0`/`border-b-0` table-divider case.
+      `border-0` sites were deleted outright (a zero-width edge is the same as no edge class at
+      all); genuine 2px rings/frames became fixed `shadow-[inset_0_0_0_2px_...]` values, not
+      `var(--edge-width)` — they are fixed component identity (a slider thumb ring, a popup
+      indicator), not "the style's edge treatment", and binding them to `--edge-width` would have
+      changed their weight under `full-sun` alone, breaking the "no user-visible change" promise
+      for phases 0-2. `input.tsx`'s `file:border-0` and `switch.tsx`'s `border-2 border-transparent`
+      were left as literal Tailwind: the first resets a native `<input type=file>` button's own
+      chrome, the second is an invisible spacer trick (Radix's own thumb-offset technique), neither
+      is a visible "edge treatment" in spec's sense. `tests/unit/pages/SettingsPage.test.tsx` had
+      seven `.closest(".rounded-xl")` queries that were already stale before this change
+      (`SettingsPage.tsx` itself uses `rounded-lg`; the match was through `CollapsibleSection.tsx`,
+      which did have `rounded-xl`) — updated to `.closest(".rounded-panel")`.
+- [x] **Semantic state colours — clears 17 findings, all tokens already exist.**
       `text-amber-500|600|700` → `text-warning` at `UnifiedHealthBadge.tsx:299`,
       `DiagnosticsDialog.tsx:157`, `HealthHistoryPopup.tsx:54`, `HealthCheckDetailView.tsx:31,36`,
-      `diagnosticsSeverity.ts:24`, `SaveRamDialog.tsx:177`, `RestoreSnapshotDialog.tsx:72`,
-      `HvscControls.tsx:223`, `RemoteInputSheet.tsx:600`.
+      `diagnosticsSeverity.ts:24`, `SaveRamDialog.tsx:177` (moved to
+      `src/pages/home/dialogs/SaveRamDialog.tsx`), `RestoreSnapshotDialog.tsx:72` (moved to
+      `src/pages/home/dialogs/RestoreSnapshotDialog.tsx`), `HvscControls.tsx:223`,
+      `RemoteInputSheet.tsx:600`.
       `bg-blue-500` → `bg-diagnostics-system` at `DiagnosticsDialog.tsx:166`.
       The five literals in `src/lib/diagnostics/healthHistoryTimeline.ts:15-19` →
-      `success` / `warning` / `destructive` / `muted` / `muted-foreground`.
-      Delete the `dark:` forks these sites carry; fix the contrast in the token, not the call site.
-- [ ] **Media overlay tokens — clears 26 findings in one coherent decision.** Sweep
+      `hsl(var(--success))` / `--warning` / `--destructive` / `--muted` / `--muted-foreground`
+      (these feed an inline `backgroundColor` style, not a className, so the token is referenced
+      as a CSS value, not a Tailwind utility). Deleted the `dark:` forks at these nine sites.
+      Also found and fixed a sibling case the audit missed: `DiagnosticsDialog.tsx:165`'s
+      `SEVERITY_DOT_CLASS.warn` was still `"bg-amber-500"` sitting next to three already-tokenised
+      siblings (`error`/`info`/`debug`) → `bg-warning`.
+      Updated `tests/unit/diagnostics/diagnosticsSeverity.test.ts` and
+      `tests/unit/components/UnifiedHealthBadge.test.tsx`, both of which asserted the literal
+      `text-amber-*` strings.
+- [x] **Media overlay tokens — clears 26 findings in one coherent decision.** Sweep
       `src/components/streams/AvMirrorImmersive.tsx` (17 sites), `AvMirrorPreview.tsx` (3),
       `AvMirrorMinimap.tsx` (2), `AvMirrorControls.tsx` (1) and
       `src/components/remoteInput/RemoteInputSheet.tsx` (2) onto `--media-scrim`,
       `--media-on-scrim`, `--media-letterbox`, `--media-reticle`.
-- [ ] **Interstitial scrim — 3 findings, highest visual leverage per line.**
-      `src/components/ui/interstitialStyles.ts:28` (`bg-black`) and `:51`, plus
-      `src/components/itemSelection/AddItemsProgressOverlay.tsx:76`. Also make the colour inside
-      `--interstitial-shadow` (`src/index.css:9`) a token while keeping its geometry.
-- [ ] **Key tones and disk-group chips — 8 findings.** `src/lib/remoteInput/keyTone.ts:25,34,43,48`
-      onto `--key-character` / `--key-function` / `destructive` / `warning`;
-      `src/lib/disks/diskGroupColors.ts:10-13` onto `--category-1..4`. The latter also fixes a live
-      dark-mode bug: those chips use `text-*-700` with no dark variant and are illegible today.
-      `tests/unit/components/UnifiedHealthBadge.test.tsx` and
-      `tests/unit/lib/disks/diskGroupColors.test.ts` assert on literal class strings and need
-      matching updates.
-- [ ] **Origin icons — 3 findings.** `public/c64u-icon.svg` and `public/device-icon.svg` use
-      `stroke="currentColor"` but are loaded through `<img>` at
-      `src/components/FileOriginIcon.tsx:75`, where `currentColor` cannot inherit. Inline them as
-      components (or switch to `mask-image`) and delete the `dark:invert dark:brightness-0` hack at
-      `FileOriginIcon.tsx:71`, which is guaranteed to look wrong under any non-neutral style.
-- [ ] **Lighting Studio split.** Tokenise only the app's own chrome: the selection strokes at
-      `LightingStudioDialog.tsx:464,465` → `--ring` / `--border`, the stage panel gradient at `:510`,
-      and the preview drop shadow at `:514`. **Leave frozen**: `:119`, `:123`, `:125`, `:206`
-      (`#BFBBAF`, the physical case beige), `:207`, `:208`, `:683`. Those describe the user's
-      hardware, and recolouring them makes the preview lie.
-- [ ] **Verify the domain-data boundary held.** `src/lib/config/ledColors.ts`,
+      `AvMirrorControls.tsx` had zero `black`/`white` literals (that 1-site estimate did not
+      match anything); instead found and fixed its `LiveDot`'s `bg-emerald-500` → `bg-success` +
+      `shadow-emerald-500/30` → `shadow-success/30`, a real chrome site the audit missed.
+      Left as literal, deliberately: `AvMirrorImmersive.tsx`'s lock-state indicator colours
+      (emerald=locked, amber=searching, at :417,:450,:479,:564) and `AvMirrorMinimap.tsx`'s
+      viewport-highlight amber (:92) — the accompanying code comment explains these are chosen to
+      stay visible against arbitrary C64-palette game colours, which is a domain constraint, not
+      a style preference; and the reticle corner brackets (`RETICLE_CORNERS`, :119-124) use
+      directional `border-{t,r,b,l}-2`, left as literal border-width because with Tailwind's
+      global `box-sizing: border-box`, a fixed (non-auto) percentage-sized, empty-content element's
+      outer geometry is provably unaffected by its own border-width — D10's simple blanket rule
+      does not need to apply to a width that never varies by style in the first place.
+- [x] **Interstitial scrim — 3 findings, highest visual leverage per line.**
+      `src/components/ui/interstitialStyles.ts:28` (`bg-black` → `bg-scrim`) and `:51`
+      (`rgb(0 0 0 / …)` → `hsl(var(--interstitial-scrim) / …)`), plus
+      `src/components/itemSelection/AddItemsProgressOverlay.tsx:76` (same). Also made the colour
+      inside `--interstitial-shadow` (`src/index.css:9`) a token (`hsl(var(--foreground) / 0.24)`)
+      while keeping its geometry (offset/blur/spread untouched).
+      `tests/unit/components/ui/app-surface.test.tsx` asserted the literal `"bg-black"` class —
+      updated to `"bg-scrim"`.
+- [x] **Key tones and disk-group chips — 8 findings.** `src/lib/disks/diskGroupColors.ts:10-13`
+      onto `--category-1..4`, fixing the live dark-mode bug (those chips used `text-*-700` with no
+      dark variant and were illegible). Updated `tests/unit/components/UnifiedHealthBadge.test.tsx`
+      (see above); `tests/unit/lib/disks/diskGroupColors.test.ts` did not need changes — it asserts
+      behaviour (stable/valid color selection), not literal class strings.
+      `src/lib/remoteInput/keyTone.ts` needed more care than "onto destructive/warning" implies.
+      Its `danger`/`caution` cases carry an explicit `dark:` override (red-400/amber-300 instead of
+      the `--destructive`/`--warning` tokens) *because* the base tokens fail contrast for this
+      specific use — measured 2.33:1 for `--destructive` against the `variant="secondary"` button
+      surface these keys render on (needs 4.5:1). Raising `--destructive`'s dark lightness enough
+      to fix that (to ~68% L) drops white-on-`--destructive` (e.g. a delete button) to 2.99:1,
+      failing that role instead — the token is pulled in two directions by two different roles
+      (fill-with-white-text vs. text-on-a-different-surface) and cannot serve both without a second
+      token, which is real design work beyond this item's scope. Left the colour override in place,
+      unconverted, and fixed only what D10 actually requires: the `border-2` width mechanism, moved
+      to `shadow-[inset_0_0_0_2px_...]` (`shift`'s case too, onto `--primary`). `character` and
+      `function-primary` had no width utility at all (bare colour classes only, e.g.
+      `border-sky-300` with no accompanying `border`/`border-2`), so those are pure colour-token
+      swaps onto `--key-character-*` / `--key-function-*`, with no D10 concern.
+      `tests/unit/components/remoteInput/QuickKeysBar.test.tsx` asserted `border-2`, `border-warning`
+      and `border-primary` literal substrings for these three cases — updated to match the new
+      `shadow-[inset_...]` classes.
+- [x] **Origin icons — 3 findings.** `public/c64u-icon.svg` and `public/device-icon.svg` used
+      `stroke="currentColor"` but were loaded through `<img>` at `FileOriginIcon.tsx`, where
+      `currentColor` cannot resolve (an `<img>`'s SVG is an opaque image resource, not DOM the
+      page's CSS cascade reaches). Inlined both as React components (`C64uGlyph`, `DeviceGlyph`)
+      and deleted the `dark:invert dark:brightness-0` hack, which is now unnecessary — inline
+      `currentColor` follows the surrounding text colour on its own. Deleted the two now-unused
+      `public/*.svg` files (nothing else referenced them).
+      Updated `tests/unit/components/FileOriginIcon.test.tsx` (asserted `<img>` + `dark:invert`,
+      now asserts an inline `<svg stroke="currentColor">`) and rewrote
+      `playwright/ui.spec.ts`'s "source indicator icons invert in dark mode" test, which asserted
+      the `filter` CSS property the old hack set — nothing sets `filter` any more, so the test now
+      reads the resolved `color` on the glyph (which `stroke="currentColor"` paints with) and
+      checks it changes between light and dark, proving the real mechanism instead of a filter that
+      never worked correctly against an `<img>` in the first place.
+- [x] **Lighting Studio split.** Tokenised the app's own chrome: the selection strokes at
+      `LightingStudioDialog.tsx:464,465` → `hsl(var(--ring) / α)` / `hsl(var(--border) / α)`
+      (selected/unselected), the stage panel gradient at `:510`, and the preview drop shadow at
+      `:514`. **Left frozen**: `:119`, `:123`, `:125`, `:206` (`#BFBBAF`, the physical case beige),
+      `:207`, `:208`, `:683`, unchanged. Those describe the user's hardware, and recolouring them
+      makes the preview lie.
+      One addition beyond the plan: the stage panel gradient and drop shadow are a deliberately
+      dark "photography stage" backdrop behind the device preview, in *every* app theme — using
+      `--foreground`/`--background` directly would invert it to a light backdrop specifically in
+      dark app theme (since `--foreground` is light there), which is the opposite of the intended
+      look and would work against the feature's own design. Added two small, explicitly
+      non-per-style tokens, `--lighting-stage-1`/`-2` (same pattern as Phase 1's `--media-scrim`:
+      app-wide, not authored per style), holding the exact HSL equivalents of the original
+      `rgb(15,23,42)`/`rgb(2,6,23)` literals, and used them for the gradient, the drop shadow, and
+      a third site the audit did not list: the ground-contact ellipse shadow at `:525`
+      (`fill="rgba(15,23,42,0.35)"` → `hsl(var(--lighting-stage-1) / 0.35)`), found by a follow-up
+      `rgb(`/`rgba(` sweep of the whole file after the two listed sites were fixed.
+      Also found and left deliberately literal in the same follow-up sweep:
+      `HealthHistoryPopup.tsx:208`'s selected-segment ring, a fixed near-black + near-white double
+      ring that must read against whichever of the five (now themed)
+      `HEALTH_TIMELINE_STATE_COLORS` the selected segment happens to be — the same
+      "readable against arbitrary content" need `--media-scrim`/`--media-reticle` exist for, just
+      not literally a media surface; documented in a code comment rather than reusing those two
+      tokens under an off-domain name.
+      Also found and fixed, not in the original list: the app's own "like" accent in
+      `NowPlayingRanking.tsx:98` (`border-rose-500/60 bg-rose-500/15 text-rose-500` → the
+      `--accent` token triple), a genuine user-facing chrome site the audit missed because it sits
+      outside the Lighting/diagnostics/media file clusters the audit swept.
+- [x] **Verify the domain-data boundary held.** `src/lib/config/ledColors.ts`,
       `src/lib/lighting/constants.ts`, `PaletteSwatchStrip.tsx:63`, `AvSyncPanel.tsx:380`,
       `LightingSummaryCard.tsx:399,416,440`, `src/lib/streams/vicPalette.ts`,
       `HeatMapPopup.tsx:75,76` must be **unchanged** by this phase. Add a lint rule or a test that
       pins them if that is cheap; otherwise assert it in review.
+      Verified via `git diff --stat` against every listed path: `ledColors.ts`,
+      `lighting/constants.ts`, `PaletteSwatchStrip.tsx`, `AvSyncPanel.tsx` and `vicPalette.ts` show
+      zero diff; `LightingSummaryCard.tsx` and `HeatMapPopup.tsx` diff only outside the named lines
+      (a `rounded-xl`→`rounded-panel` card wrapper and a toggle button, nowhere near the frozen
+      colour lines), confirmed by reading those exact line numbers directly. No lint rule was added
+      to pin them — review-time `git diff --stat` against this list is cheap enough that a rule
+      would be redundant machinery for the same check.
+      One additional scope decision beyond the listed sites: `src/pages/DeviceSwitchLabPage.tsx`
+      (~40 raw `slate`/`emerald`/`rose` occurrences, a fixed terminal-log aesthetic) was left
+      entirely untouched. It renders only behind `coverageProbeEnabled` at the test-only route
+      `/__device-switch__` — a coverage-probe harness, not a page any real user reaches — so it
+      does not fall under "shipped app chrome" at all, the same reasoning that keeps the frozen
+      Lighting Studio material colours out of scope, not an oversight.
 
 ## Phase 3 — Source format, compiler, drift gate
 

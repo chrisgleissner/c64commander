@@ -12,11 +12,11 @@ export const HEALTH_TIMELINE_ZOOM_WINDOWS = [
 ] as const;
 
 export const HEALTH_TIMELINE_STATE_COLORS: Record<HealthState, string> = {
-  Healthy: "#16a34a",
-  Degraded: "#f59e0b",
-  Unhealthy: "#dc2626",
-  Idle: "#d1d5db",
-  Unavailable: "#4b5563",
+  Healthy: "hsl(var(--success))",
+  Degraded: "hsl(var(--warning))",
+  Unhealthy: "hsl(var(--destructive))",
+  Idle: "hsl(var(--muted))",
+  Unavailable: "hsl(var(--muted-foreground))",
 };
 
 export const HEALTH_TIMELINE_LEGEND_STATES: readonly HealthState[] = [

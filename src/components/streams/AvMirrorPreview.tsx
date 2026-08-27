@@ -38,7 +38,11 @@ export function AvMirrorPreview({ size = "check", session, className }: AvMirror
 
   return (
     <div
-      className={cn("relative w-full overflow-hidden rounded-md border border-border bg-black", sizeClass, className)}
+      className={cn(
+        "relative w-full overflow-hidden rounded-md border border-border bg-media-letterbox",
+        sizeClass,
+        className,
+      )}
       data-testid="av-mirror-preview"
       data-size={size}
     >
@@ -51,13 +55,13 @@ export function AvMirrorPreview({ size = "check", session, className }: AvMirror
         data-testid="av-mirror-canvas"
       />
       {!videoLive && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-xs text-white/70">
+        <div className="absolute inset-0 flex items-center justify-center bg-media-scrim/70 text-xs text-media-on-scrim/70">
           {overlay}
         </div>
       )}
       {showBadges && videoLive && video.fps > 0 && (
         <span
-          className="absolute right-1 top-1 rounded bg-black/60 px-1 text-xs leading-tight text-white/80"
+          className="absolute right-1 top-1 rounded-sm bg-media-scrim/60 px-1 text-xs leading-tight text-media-on-scrim/80"
           data-testid="av-mirror-fps"
         >
           {video.standard ?? "PAL"} {video.fps} fps

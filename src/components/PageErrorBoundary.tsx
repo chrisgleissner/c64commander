@@ -62,7 +62,7 @@ export class PageErrorBoundary extends React.Component<
           className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10"
           data-testid="page-error-boundary-fallback"
         >
-          <div className="max-w-sm rounded-xl border border-border bg-card p-5 text-center shadow">
+          <div className="max-w-sm rounded-panel border border-border bg-card p-5 text-center shadow">
             <p className="text-sm font-semibold text-foreground">{t("app.error.title", "Something went wrong")}</p>
             <p className="mt-1 text-xs text-muted-foreground">
               {t("app.error.description", "The app hit an unexpected error. Please reopen the page or try again.")}

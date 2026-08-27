@@ -25,7 +25,7 @@ describe("diagnosticsSeverity", () => {
     expect(getDiagnosticsSeverityMeta("warn")).toEqual({
       glyph: "W",
       label: "WARN",
-      colorClass: "text-amber-600",
+      colorClass: "text-warning",
     });
     expect(getDiagnosticsSeverityMeta("info")).toEqual({
       glyph: "I",

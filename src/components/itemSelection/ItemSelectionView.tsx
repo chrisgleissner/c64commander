@@ -49,7 +49,7 @@ export const ItemSelectionView = ({
     <div className="space-y-3 relative">
       {showLoadingIndicator && (
         <div
-          className="absolute right-3 top-2 z-10 rounded-full bg-muted/80 px-2 py-0.5 text-xs text-muted-foreground shadow-sm"
+          className="absolute right-3 top-2 z-10 rounded-full bg-muted/80 px-2 py-0.5 text-xs text-muted-foreground shadow-elev-1"
           data-testid="ftp-loading"
         >
           Loading…

@@ -18,11 +18,48 @@ type FileOriginIconProps = {
   label?: string;
 };
 
-const resolveIconSource = (origin: FileOrigin) => {
-  const base = typeof import.meta !== "undefined" ? import.meta.env.BASE_URL || "/" : "/";
-  if (origin === "ultimate") return `${base}c64u-icon.svg`;
-  return `${base}device-icon.svg`;
-};
+/**
+ * The C64U ("breadbin") and local-device glyphs, inlined rather than loaded through <img>.
+ * Both use stroke="currentColor" so they follow the surrounding text colour like every other
+ * icon in the app; that only works for markup actually in the DOM. Loaded through <img> (as
+ * these were before) an SVG is an opaque image resource — currentColor cannot resolve against
+ * anything, and the old dark:invert dark:brightness-0 hack was working around exactly that,
+ * imprecisely, and in a way that broke under any non-neutral appearance style.
+ */
+const C64uGlyph = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="h-full w-full"
+  >
+    <rect x={4.5} y={15} width={15} height={2} rx={1} />
+    <line x1={4.5} y1={15} x2={6.5} y2={10.5} />
+    <line x1={19.5} y1={15} x2={17.5} y2={10.5} />
+    <line x1={6.5} y1={10.5} x2={17.5} y2={10.5} />
+  </svg>
+);
+
+const DeviceGlyph = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="h-full w-full"
+  >
+    <rect x={7} y={2.5} width={10} height={19} rx={2.5} ry={2.5} />
+    <line x1={9.5} y1={6.5} x2={14.5} y2={6.5} />
+    <line x1={9.5} y1={17.5} x2={14.5} y2={17.5} />
+  </svg>
+);
 
 const resolveIconLabel = (origin: FileOrigin) =>
   origin === "ultimate"
@@ -67,12 +104,9 @@ export const FileOriginIcon = ({ origin, className, glyphClassName, label }: Fil
       aria-label={ariaLabel}
       data-testid="file-origin-icon"
       role="img"
-      className={cn(
-        "inline-flex items-center justify-center shrink-0 opacity-70 dark:invert dark:brightness-0",
-        className,
-      )}
+      className={cn("inline-flex items-center justify-center shrink-0 opacity-70", className)}
     >
-      <img src={resolveIconSource(origin)} alt="" aria-hidden="true" className="h-full w-full" />
+      {origin === "ultimate" ? <C64uGlyph /> : <DeviceGlyph />}
     </span>
   );
 };

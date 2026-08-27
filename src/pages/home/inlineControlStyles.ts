@@ -27,4 +27,4 @@
  * files, so a change to the look had to be made in three places to stay consistent.
  */
 export const INLINE_SUMMARY_CONTROL_CLASS =
-  "h-auto min-h-11 w-auto min-w-11 border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden";
+  "h-auto min-h-11 w-auto min-w-11 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden";
