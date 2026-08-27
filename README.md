@@ -307,6 +307,13 @@ Long-press the top-right status badge to view saved devices, compare their healt
 Pick one of seven colour styles under **Settings > Appearance > Style**, on top of the existing Light/Dark theme. Two of them are dark only. **Match my device** follows your C64 Ultimate's own Color Scheme instead, read on connect rather than polled. A style changes colour, corner rounding, and shading only — never layout or type size, and never the colours that show what the hardware is doing.
 
 <table>
+  <thead>
+    <tr>
+      <th align="left">Modem Grey (default)</th>
+      <th align="left">Breadbin Beige</th>
+      <th align="left">Vault Black (dark only)</th>
+    </tr>
+  </thead>
   <tr>
     <td><img src="docs/img/app/styles/showcase-modem-grey-light.png" alt="Home in Modem Grey, the default style" width="360"/></td>
     <td><img src="docs/img/app/styles/showcase-breadbin-beige-light.png" alt="Home in Breadbin Beige" width="360"/></td>
