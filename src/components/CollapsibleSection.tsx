@@ -284,12 +284,11 @@ export const CollapsibleSection = ({
           ref={headerRef}
           onClick={toggle}
           className={cn(
-            // flex-auto, not flex-1: with a basis of 0 this button grows into whatever the actions
-            // and the chevron leave, so the title absorbed the whole deficit and was truncated to
-            // nothing while a sibling "Reset" kept its full width — "Live View" was drawn as "L…"
-            // in 35 px on a 392 px screen. A content basis makes the row over-constrained instead,
-            // so every item shrinks by its own factor and the title keeps its text.
-            "flex min-w-0 flex-auto items-center justify-between text-left",
+            // flex-1, so this button — not the actions beside it — absorbs whatever the row is
+            // short of. A content basis (flex-auto) shares the deficit instead, which moved the
+            // clipping onto the action: "Reset" was drawn in 66 px of the 70 it needs. The title
+            // gets its room back from the tile and the gutter below, not from the action.
+            "flex min-w-0 flex-1 items-center justify-between text-left",
             // Compact trims the header's own padding and gaps. Tuned for a 393 px screen, the
             // original px-4/py-3/gap-3 spent about 12 CSS px per card that a 320x427 screen with
             // 218 px of scrollable height cannot spare — roughly one extra card on screen.

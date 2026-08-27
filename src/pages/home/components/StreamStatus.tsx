@@ -71,10 +71,7 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
               >
                 <button
                   type="button"
-                  // flex-auto, not flex-1: with a basis of 0 this button only grows into what the
-                  // Edit/Reset controls beside it leave, so the endpoint was crushed to 24 CSS px of
-                  // the 166 it needs. A content basis makes both sides shrink instead.
-                  className="flex min-h-11 min-w-0 flex-auto items-center gap-2 text-left"
+                  className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left"
                   onClick={() => handleStreamEditOpen(entry.key)}
                   disabled={locked}
                   data-testid={`home-stream-edit-toggle-${entry.key}`}
@@ -87,7 +84,7 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
                       : entry.label.toUpperCase()}
                   </span>
                   <span
-                    className="min-w-0 flex-1 font-semibold text-foreground truncate"
+                    className="font-semibold text-foreground truncate"
                     data-testid={`home-stream-endpoint-display-${entry.key}`}
                   >
                     {buildStreamEndpointLabel(draft.ip, draft.port)}
