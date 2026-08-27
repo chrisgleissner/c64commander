@@ -341,9 +341,18 @@ test.describe("Disk management", () => {
 
     const [mountBox, powerBox] = await Promise.all([mountButton.boundingBox(), powerButton.boundingBox()]);
     if (mountBox && powerBox) {
-      const xTolerance = 20;
+      /*
+       * Compare right edges, not left ones.
+       *
+       * Both controls are right-aligned: the mount toggle sits in the header's action row and the
+       * power toggle at the end of the drive's control row. They are not the same width — the mount
+       * toggle is a 63 px icon button, "Turn Off" is 90 px — so their left edges are 31 px apart
+       * even when both sit hard against the right edge of the card. The right edges are the aligned
+       * pair, and they are what the reader actually sees line up.
+       */
+      const edgeTolerance = 20;
       expect(powerBox.y).toBeGreaterThan(mountBox.y);
-      expect(powerBox.x).toBeGreaterThanOrEqual(mountBox.x - xTolerance);
+      expect(Math.abs(powerBox.x + powerBox.width - (mountBox.x + mountBox.width))).toBeLessThanOrEqual(edgeTolerance);
     }
 
     await clearTraces(page);

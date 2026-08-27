@@ -241,24 +241,41 @@ test.describe("UI coverage", () => {
     const strokeColor = (icon: ReturnType<Page["getByTestId"]>) =>
       icon.evaluate((el) => getComputedStyle(el.querySelector("svg") ?? el).color);
 
+    /*
+     * Read through a poll, not once.
+     *
+     * The playlist hydrates after first paint, and a row re-rendering between the locator
+     * resolving and the evaluate leaves the handle pointing at a detached node, where
+     * getComputedStyle returns "" for every property. That is invisible on a fast local run and
+     * showed up as a CI-only failure on all three attempts.
+     */
+    const settledStroke = async (icon: ReturnType<Page["getByTestId"]>) => {
+      let value = "";
+      await expect
+        .poll(async () => {
+          value = await strokeColor(icon).catch(() => "");
+          return value;
+        })
+        .not.toBe("");
+      return value;
+    };
+
     await page.emulateMedia({ colorScheme: "light" });
     await page.goto("/play", { waitUntil: "domcontentloaded" });
     const playIcon = page.getByTestId("file-origin-icon").first();
     await expect(playIcon).toBeVisible();
-    const lightStroke = await strokeColor(playIcon);
-    expect(lightStroke).not.toBe("");
+    const lightStroke = await settledStroke(playIcon);
     await snap(page, testInfo, "play-icons-light");
 
     await page.emulateMedia({ colorScheme: "dark" });
-    await expect.poll(() => strokeColor(playIcon)).not.toBe(lightStroke);
-    const darkStroke = await strokeColor(playIcon);
-    expect(darkStroke).not.toBe("");
+    await expect.poll(() => strokeColor(playIcon).catch(() => "")).not.toBe(lightStroke);
+    const darkStroke = await settledStroke(playIcon);
     await snap(page, testInfo, "play-icons-dark");
 
     await page.goto("/disks", { waitUntil: "domcontentloaded" });
     const diskIcon = page.getByTestId("file-origin-icon").first();
     await expect(diskIcon).toBeVisible();
-    const diskDarkStroke = await strokeColor(diskIcon);
+    const diskDarkStroke = await settledStroke(diskIcon);
     await snap(page, testInfo, "disk-icons-dark");
 
     // The same proof on the Disks page, whose glyph sits on a different text token than the Play
