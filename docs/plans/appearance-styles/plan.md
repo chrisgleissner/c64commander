@@ -56,19 +56,39 @@ that changes appearance in patches.
 
 ## Phase 1 — The token layer
 
-- [ ] Add the shape and elevation tokens from `spec.md` §5.1 to `:root` in `src/index.css`:
+- [x] Add the shape and elevation tokens from `spec.md` §5.1 to `:root` in `src/index.css`:
       `--radius-panel`, `--edge-width`, `--shadow-1/2/3`, `--ring-style`, `--app-bar-band`.
-- [ ] Add the missing semantic colour tokens: `--interstitial-scrim`, the `--media-*` group, the
+- [x] Add the missing semantic colour tokens: `--interstitial-scrim`, the `--media-*` group, the
       `--key-character` / `--key-function` trios, `--category-1..4`, `--chart-1..5`.
-      `--chart-2` is referenced at `src/components/diagnostics/LatencyAnalysisPopup.tsx:395` and is
-      **not defined anywhere**, so the literal fallback is what renders today.
-- [ ] Extend `tailwind.config.ts`. Today it rebinds only `borderRadius.lg/md/sm` to `var(--radius)`,
+      `--chart-2` is now defined as `160 60% 45%`, matching the fallback already live at
+      `src/components/diagnostics/LatencyAnalysisPopup.tsx:395` exactly, so that site is unaffected
+      until Phase 2 removes the now-redundant fallback. `--category-*` light values and
+      `--key-character-*` / `--key-function-*` values in both modes were derived from the exact
+      Tailwind colours the Phase-2 sweep will replace (blue/emerald/indigo/teal-700,
+      sky-50/300/800/950/700/100, slate-300/400/900/600/500/50), so those sites render
+      byte-identical in light mode; only `--category-*` dark values are new (they fix the
+      known dark-mode illegibility bug, not preserve it).
+- [x] Extend `tailwind.config.ts`. Today it rebinds only `borderRadius.lg/md/sm` to `var(--radius)`,
       so `rounded-xl`, `rounded-2xl`, `rounded-3xl`, bare `rounded` and every `shadow-*` are stock
-      Tailwind and will not follow a style. Add `borderRadius.panel`, a `boxShadow` scale bound to
-      `--shadow-*`, and the new colour tokens.
-- [ ] Add an `edge` utility that renders the style's edge as `box-shadow: inset 0 0 0
+      Tailwind and will not follow a style. Added `borderRadius.panel`, a `boxShadow` scale bound to
+      `--shadow-*`, and the new colour tokens (`chart`, `category`, `key-character`, `key-function`,
+      `scrim`, `media`). Verified all 19 new utility classes compile via a throwaway
+      `npx tailwindcss` probe build before removing it.
+- [x] Add an `edge` utility that renders the style's edge as `box-shadow: inset 0 0 0
       var(--edge-width)`, per decision D10. Nothing may set `border-width` from a style.
-- [ ] Add `font-variant-numeric: tabular-nums` to numeric readouts app-wide (not per style).
+      Added as `boxShadow.edge` (`shadow-edge`), defaulting to `hsl(var(--border))`; the handful of
+      Phase-2 sites that need a non-default edge colour (e.g. `border-primary`, `border-transparent`)
+      will use Tailwind's arbitrary-value syntax rather than growing this token surface for one-off
+      combinations.
+- [x] Add `font-variant-numeric: tabular-nums` to numeric readouts app-wide (not per style).
+      Audited: every live numeric-readout leaf (`PlaybackControlsCard`, `AvSyncPanel`,
+      `StreamStatsPanel`, `VolumeControls`, `SelectableActionList`, `SleepTimerControl`,
+      `DiagnosticsTimestamp`, `DiagnosticsListItem`, `VirtualJoystick`) already carries Tailwind's
+      stock `tabular-nums` utility consistently. The handful of other formatter call sites found
+      (`PlayFilesPage`, `HomeDiskManager`, `usePlaylistListItems`, ...) only produce label strings
+      passed up into those same leaf renderers, or land in a static disabled menu row
+      (`SelectableActionList`'s `type: "info"` entries) that never updates and so has no jitter to
+      guard against. No code change was needed; this item was already satisfied.
 
 ## Phase 2 — Migrate the 217 chrome sites
 

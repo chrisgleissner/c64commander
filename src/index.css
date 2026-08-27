@@ -172,6 +172,50 @@
 
     /* App bar layout */
     --app-bar-height: 72px;
+
+    /* Shape and elevation (spec.md docs/plans/appearance-styles/spec.md section 5.1) */
+    --radius-panel: 1rem;
+    --edge-width: 1px;
+    --shadow-1:
+      0 1px 2px 0 rgb(0 0 0 / 0.06),
+      0 1px 1px -1px rgb(0 0 0 / 0.04);
+    --shadow-2:
+      0 4px 8px -2px rgb(0 0 0 / 0.1),
+      0 2px 4px -2px rgb(0 0 0 / 0.08);
+    --shadow-3:
+      0 16px 32px -8px rgb(0 0 0 / 0.18),
+      0 6px 12px -6px rgb(0 0 0 / 0.12);
+    --ring-style: solid;
+    --app-bar-band: none;
+
+    /* Interstitial and media overlay scrims: theme-independent, always on black video/backdrop */
+    --interstitial-scrim: 0 0% 0%;
+    --media-scrim: 0 0% 0%;
+    --media-on-scrim: 0 0% 100%;
+    --media-letterbox: 0 0% 0%;
+    --media-reticle: 0 0% 100%;
+
+    /* Remote-input key tones (src/lib/remoteInput/keyTone.ts) */
+    --key-character-surface: 204 100% 97.1%;
+    --key-character-border: 199.4 95.5% 73.9%;
+    --key-character-foreground: 201 90% 27.5%;
+    --key-function-surface: 212.7 26.8% 83.9%;
+    --key-function-border: 215 20.2% 65.1%;
+    --key-function-foreground: 222.2 47.4% 11.2%;
+
+    /* Disk-group chip categories (src/lib/disks/diskGroupColors.ts) */
+    --category-1: 224 76% 48%;
+    --category-2: 163 94% 24%;
+    --category-3: 245 58% 51%;
+    --category-4: 175 77% 26%;
+
+    /* Diagnostic chart series. chart-2 matches the value already live at
+       src/components/diagnostics/LatencyAnalysisPopup.tsx:395; the rest are new. */
+    --chart-1: 228 45% 58%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 291 45% 58%;
+    --chart-4: 35 80% 52%;
+    --chart-5: 350 65% 58%;
   }
 
   .dark {
@@ -228,6 +272,19 @@
     --diag-warn: 38 90% 55%;
     --diag-error: 0 60% 60%;
 
+    /* Remote-input key tones - dark mode */
+    --key-character-surface: 204 80.2% 15.9%;
+    --key-character-border: 201.3 96.3% 32.2%;
+    --key-character-foreground: 204 93.8% 93.7%;
+    --key-function-surface: 215.3 19.3% 34.5%;
+    --key-function-border: 215.4 16.3% 46.9%;
+    --key-function-foreground: 210 40% 98%;
+
+    /* Disk-group chip categories - dark mode */
+    --category-1: 217 91% 70%;
+    --category-2: 160 70% 55%;
+    --category-3: 239 80% 75%;
+    --category-4: 173 70% 50%;
   }
 }
 
