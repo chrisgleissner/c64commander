@@ -84,13 +84,6 @@ export default {
           warn: "hsl(var(--diag-warn))",
           error: "hsl(var(--diag-error))",
         },
-        chart: {
-          1: "hsl(var(--chart-1))",
-          2: "hsl(var(--chart-2))",
-          3: "hsl(var(--chart-3))",
-          4: "hsl(var(--chart-4))",
-          5: "hsl(var(--chart-5))",
-        },
         category: {
           1: "hsl(var(--category-1))",
           2: "hsl(var(--category-2))",

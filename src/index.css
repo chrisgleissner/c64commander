@@ -215,13 +215,10 @@
     --category-3: 245 58% 51%;
     --category-4: 175 77% 26%;
 
-    /* Diagnostic chart series. chart-2 matches the value already live at
-       src/components/diagnostics/LatencyAnalysisPopup.tsx:395; the rest are new. */
+    /* Diagnostic chart series. Only the two series any chart actually draws today are
+       declared; chart-2 matches the value already live in LatencyAnalysisPopup. */
     --chart-1: 228 45% 58%;
     --chart-2: 160 60% 45%;
-    --chart-3: 291 45% 58%;
-    --chart-4: 35 80% 52%;
-    --chart-5: 350 65% 58%;
   }
 
   .dark {
