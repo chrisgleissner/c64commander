@@ -445,11 +445,14 @@ Do these in the order below; each clears the largest remaining group.
       other screenshot spec.
       Ran the full 12-test suite: all 12 passed, producing 108 PNGs (7.9M total) under
       `docs/img/app/styles/`. This is a separate, fixed-size gallery, not an addition to the existing
-      273-file screenshot corpus — the corpus itself is untouched. Visually spot-checked several
-      renditions (`modem-grey-light-buttons`, `modem-grey-dark-data`, `full-sun-light-buttons`): all
-      showed correctly tokenized, real components; a fixed-position tab bar overlapping the very
-      bottom edge of the last ("data") section's screenshot was noted and accepted as a cosmetic,
-      dev-only-tool issue not worth further scroll-margin engineering.
+      273-file screenshot corpus — the corpus itself is untouched. A fixed-position tab bar
+      overlapping the very bottom edge of the last ("data") section's screenshot was noted and
+      accepted as a cosmetic, dev-only-tool issue not worth further scroll-margin engineering.
+      **Correction, found during Phase 9's README preparation and recorded here rather than
+      silently rewritten:** an initial spot-check of a few renditions was visually inspected and
+      judged correct, but that check was wrong — it happened to look plausible by coincidence, not
+      because it was actually right. The real defect, and the fix, are recorded where they were
+      found, in Phase 9 below.
       The new gallery PNGs are captured at a viewport (500x1200) sized to fit each section's content,
       not one of the four device profiles `tests/unit/playwright/screenshotViewportBudget.test.ts`
       checks the app corpus against. Added `"styles/"` to that test's existing
@@ -642,6 +645,50 @@ compositing, a real display panel's actual contrast).
       genuinely matching the now-visibly-active row's own colour, not a contrast defect — no text is
       involved, and the row itself already demonstrates the colour. Judged not worth chasing given
       remaining time budget; left as a follow-up if a future reviewer disagrees.
+
+      **A fourth, more serious defect, found while selecting screenshots for this PR's README**
+      (not during the HIL walkthrough above — a plain desktop review of the already-committed
+      gallery corpus caught it): several `docs/img/app/styles/*.png` files showed a wrong,
+      **fixed** periwinkle-blue (`#6C7EB7`) background instead of the palette's actual
+      `--background`, in every area where a `GallerySection`'s own transparent wrapper (no `bg-*`
+      class of its own — `rounded-panel border border-border p-4`) let the page's base background
+      show through. `neon-pop-dark-buttons.png`, which should be near-black (`--background:
+      253.3 42.9% 4.1%`), showed periwinkle everywhere except inside components with their own
+      explicit fill (buttons, the card demo) — and `modem-grey-light-cards.png` had the exact same
+      defect, just harder to notice, because `#6C7EB7` happens to visually resemble a plausible
+      "blue-ish" background for that style by coincidence. That coincidence is why the Phase 6
+      spot-check above passed a genuinely broken corpus.
+      Traced to a real root cause, not assumed: `getComputedStyle` on every element inside a
+      broken section correctly reported the right per-style colours and `rgba(0, 0, 0, 0)`
+      backgrounds — the CSS was never wrong. Walking the DOM ancestor chain found it:
+      `index.html`'s pre-hydration `<style>` block sets `html, body, #root { background: #6C7EB7;
+      }` for the brand-locked splash-to-hydration flash (`spec.md` §7.3's own documented,
+      intentional exception — this part is correct and untouched). Every other real page in the app
+      happens to fully tile the viewport with its own opaque content, so `#root`'s hard-coded
+      colour never shows through in normal use. `AppStylesGalleryPage.tsx`'s root wrapper
+      (`<div className="pb-24">`) was the one place in the app that did not — no page-level
+      `bg-background`, and `GallerySection`'s own transparent wrapper leaves gaps — so `#root`'s
+      stale splash colour bled through every gap, in every one of the 108 committed images,
+      wherever a section's own content did not fully cover it. Confirmed by walking the ancestor
+      chain in a throwaway debug spec (`html`/`#root` both reported `rgb(108, 126, 183)` —
+      `#6C7EB7` — as their actual painted `backgroundColor`, while `body` correctly reported the
+      per-style colour one level below), and confirmed the fix by reproducing before and after in
+      the same harness before touching the real spec or corpus.
+      Fixed with a one-line change: `AppStylesGalleryPage.tsx`'s root div now carries
+      `min-h-screen bg-background` explicitly — painting the resolved style's own background over
+      `#root`'s stale splash colour, exactly what every other page already achieves implicitly
+      through full content coverage. Regenerated the entire 108-file gallery corpus
+      (`npx playwright test playwright/appStylesGallery.spec.ts`, all 12 tests passed) and visually
+      re-verified `vault-black-dark-buttons.png`, `full-sun-light-cards.png` and
+      `modem-grey-light-cards.png`: all three now show the correct per-style background with no
+      trace of `#6C7EB7`.
+      This was a real defect in the gallery's own compositional choice — a transparent section
+      wrapper never covering the base page — not in the token/compiler/runtime layers Phase
+      3/4 own, and not one either adversarial-review pass (below) happened to catch, since neither
+      was scoped to the gallery page's own layout. Recorded here as a reminder that a screenshot
+      corpus existing is not the same as a screenshot corpus being correct — it still has to be
+      looked at, not just produced.
+
       Also fixed two real (unrelated) chrome-migration defects an independent adversarial review
       surfaced in parallel with this HIL pass — see the "Adversarial review" note below.
 - [x] Verify "Match my device" against a real C64U on the network, not a mock: set the C64U's own
@@ -686,6 +733,28 @@ compositing, a real display panel's actual contrast).
       sharply (19370 KB → 4017 KB, a GC ran), not up. A `top` snapshot taken immediately after the
       run showed the app at 0% CPU, idle, not spinning or hung. A screenshot taken immediately after
       confirmed the app fully responsive and correctly rendered, not stuck mid-transition.
+
+**Adversarial review.** Three independent reviewers, each scoped to one layer and blind to the
+others' findings, ran against the full branch diff in parallel with the HIL pass above:
+
+1. Token contract and compiler (`styles/appearance-styles.yaml`, `compile-styles.mjs`, the
+   generated `.ts`/`.css`, the WCAG/geometry gates). **No issues** — including re-running
+   `node scripts/compile-styles.mjs --check` itself rather than only reading the source.
+2. Runtime resolution and the Settings picker (`resolveAppearance`, `matchMyDevice`, `useAppStyle`,
+   `useDeviceColorScheme`, the native system-bar polarity, the `MutationObserver` clamp, the
+   never-polls guarantee). **No issues.**
+3. The Phase 2 chrome-migration sweep — whether shipped chrome still has an unmigrated raw
+   Tailwind colour, and whether any domain-data site got accidentally tokenized. **Two real
+   findings:**
+   - `src/components/streams/AvMirrorImmersive.tsx:417` — the "drive" vs "adjust" input-mode edge
+     colour was a `border-{color}` utility left behind with no `border-width` to apply to after
+     D10 moved this component's edge to a box-shadow, so the blue/amber mode distinction had
+     silently stopped rendering. **Fixed** by making the box-shadow itself mode-conditional.
+   - `src/components/DeviceSwitchLabLauncher.tsx:23` — flagged as unmigrated `emerald-*` colours in
+     shipped chrome. **Investigated and confirmed a false positive**: this launcher is gated by the
+     same `shouldEnableCoverageProbe()` flag as `DeviceSwitchLabPage`, which `spec.md` already
+     exempts from the token sweep as test-only chrome that never reaches a real user's build — the
+     reviewer had not traced the gating deeply enough to see that. No change made.
 
 ---
 

@@ -139,7 +139,12 @@ export default function AppStylesGalleryPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   return (
-    <div className="pb-24" data-testid="app-styles-gallery-page" data-gallery-style={style.id} data-gallery-mode={mode}>
+    <div
+      className="min-h-screen bg-background pb-24"
+      data-testid="app-styles-gallery-page"
+      data-gallery-style={style.id}
+      data-gallery-mode={mode}
+    >
       <AppBar title={`Dev: Styles — ${style.name} (${mode})`} titleTestId="style-gallery-title" />
 
       <div className="mx-auto max-w-3xl space-y-6 p-4">
