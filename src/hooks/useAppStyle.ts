@@ -65,10 +65,10 @@ export function useAppStyle(deviceColorScheme: string | null) {
 
   // The `.dark` class has another writer: useTheme's effect sets it from the *raw* theme setting,
   // with no knowledge of a style's single-mode clamp, and it runs after this one (ancestor effects
-  // run last). A MutationObserver makes the clamp self-healing against that writer instead of
-  // depending on effect ordering.
+  // run last). The mode is asserted on every change — including leaving a clamped style, where
+  // useTheme's deps are unchanged so nothing else would put the class back — and a MutationObserver
+  // keeps a clamped style self-healing against that other writer.
   useEffect(() => {
-    if (!resolved.themeClamped) return;
     const shouldHaveDark = resolved.mode === "dark";
     const enforce = () => {
       if (document.documentElement.classList.contains("dark") !== shouldHaveDark) {
@@ -77,6 +77,7 @@ export function useAppStyle(deviceColorScheme: string | null) {
       }
     };
     enforce();
+    if (!resolved.themeClamped) return;
     const observer = new MutationObserver(enforce);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();

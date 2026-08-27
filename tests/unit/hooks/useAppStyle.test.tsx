@@ -108,6 +108,29 @@ describe("useAppStyle", () => {
       });
     });
 
+    /*
+     * Found switching between two real Ultimates: after a dark-only style clamped `.dark` on,
+     * moving to a both-modes style left the app dark under a Light theme setting. useTheme owns
+     * the class but its effect keys on the theme setting, which had not changed, so nothing put
+     * the class back.
+     */
+    it("restores the theme's own mode when leaving a dark-only style for a both-modes one", async () => {
+      localStorage.setItem(APP_STYLE_STORAGE_KEY, darkOnlyStyle.id);
+      themeContext.theme = "light";
+      themeContext.resolvedTheme = "light";
+      const { result } = renderHook(() => useAppStyle(null));
+      expect(document.documentElement.classList.contains("dark")).toBe(true);
+
+      act(() => {
+        result.current.setStyleId(bothModesStyle.id);
+      });
+
+      await vi.waitFor(() => {
+        expect(document.documentElement.classList.contains("dark")).toBe(false);
+      });
+      expect(document.documentElement.classList.contains("light")).toBe(true);
+    });
+
     it("updates the theme-color meta tag to the resolved --background", () => {
       localStorage.setItem(APP_STYLE_STORAGE_KEY, bothModesStyle.id);
       document.documentElement.style.setProperty("--background", "10 20% 30%");
