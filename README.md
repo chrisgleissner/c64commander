@@ -17,7 +17,7 @@ Control and manage a Commodore 64 Ultimate from Android, iOS, or a self-hosted w
 - **Playlists and SID Radio**: Play programs and SID music from local files, device storage, HVSC, or CommoServe.
 - **Remote Input and Live View**: Use an on-screen joystick or keyboard, and stream audio or video from the running machine.
 - **Disk tools**: Mount images, manage multi-disk collections, inspect image contents, and create blank disks.
-- **Appearance styles**: Seven curated colour palettes, on top of the existing Light/Dark theme, with an option to match your C64 Ultimate's own Color Scheme.
+- **Appearance styles**: Seven colour styles on top of the Light/Dark theme, or match your C64 Ultimate's own Color Scheme.
 - **Configuration**: Browse and edit the complete C64 Ultimate configuration.
 - **Diagnostics**: Review connection health, activity, traces, and latency.
 - **Multiple devices**: Save several devices, check their health, and switch between them.
@@ -266,23 +266,6 @@ Configure connections, appearance, diagnostics, playback, HVSC, and device safet
   </tr>
 </table>
 
-### Appearance Styles
-
-Seven curated colour styles sit on top of the existing Light/Dark theme, under **Settings > Appearance > Style**: Modem Grey (the default), Breadbin Beige, Petrol Teal, Neon Pop, Amber Glow, Vault Black, and Full Sun. Five come in both light and dark; two (Amber Glow, Vault Black) are dark only, and clamp the Theme control when selected. **Match my device** follows your C64 Ultimate's own Color Scheme setting instead, read once on connect and reachable again with **Refresh connection** in Settings — it never polls.
-
-A style changes colour, corner rounding, and shading only. It never changes layout, spacing, or type size, and it never recolours anything that shows what the real hardware looks like — LED colours, VIC palette swatches, and the device preview in Lighting Studio stay exactly as they are.
-
-<table>
-  <tr>
-    <td><img src="docs/img/app/styles/modem-grey-light-buttons.png" alt="Modem Grey (Light): the default style" width="240"/></td>
-    <td><img src="docs/img/app/styles/neon-pop-dark-buttons.png" alt="Neon Pop (Dark): a bold, glossy-edge style" width="240"/></td>
-  </tr>
-  <tr>
-    <td><img src="docs/img/app/styles/full-sun-light-buttons.png" alt="Full Sun (Light): a high-contrast style for bright rooms" width="240"/></td>
-    <td><img src="docs/img/app/styles/vault-black-dark-buttons.png" alt="Vault Black (Dark only): true-black with a heavy edge" width="240"/></td>
-  </tr>
-</table>
-
 ### Docs
 
 Built-in guides for setup, workflows, and day-to-day usage.
@@ -316,6 +299,18 @@ Long-press the top-right status badge to view saved devices, compare their healt
     <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/01-picker.png" alt="Switcher (Connecting)" width="360"/></td>
     <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/02-picker-expanded.png" alt="Switcher expanded details" width="360"/></td>
     <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/06-picker-one-unhealthy-expanded.png" alt="Switcher expanded unhealthy device" width="360"/></td>
+  </tr>
+</table>
+
+## Appearance Styles
+
+Pick one of seven colour styles under **Settings > Appearance > Style**, on top of the existing Light/Dark theme. Two of them are dark only. **Match my device** follows your C64 Ultimate's own Color Scheme instead, read on connect rather than polled. A style changes colour, corner rounding, and shading only — never layout or type size, and never the colours that show what the hardware is doing.
+
+<table>
+  <tr>
+    <td><img src="docs/img/app/styles/showcase-modem-grey-light.png" alt="Home in Modem Grey, the default style" width="360"/></td>
+    <td><img src="docs/img/app/styles/showcase-breadbin-beige-light.png" alt="Home in Breadbin Beige" width="360"/></td>
+    <td><img src="docs/img/app/styles/showcase-vault-black-dark.png" alt="Home in Vault Black, one of the two dark-only styles" width="360"/></td>
   </tr>
 </table>
 

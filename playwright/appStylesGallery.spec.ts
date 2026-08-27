@@ -72,6 +72,51 @@ test.describe("Appearance style gallery screenshots", () => {
     );
   });
 
+  /*
+   * Three real app screens, one per showcased style, for the README.
+   *
+   * The gallery's own section captures are a component sheet: useful for reviewing a palette, but
+   * every other screenshot in the README is a screen of the app, and four pictures of a panel
+   * headed "Buttons" read as a developer artifact next to them. These are the Home page itself,
+   * at the same phone viewport the rest of the README's shots use, so a reader sees what choosing
+   * a style actually does to the product.
+   */
+  const SHOWCASE: ReadonlyArray<{ styleId: string; mode: AppStyleMode }> = [
+    { styleId: "modem-grey", mode: "light" },
+    { styleId: "breadbin-beige", mode: "light" },
+    { styleId: "vault-black", mode: "dark" },
+  ];
+
+  for (const shot of SHOWCASE) {
+    test(`showcase: ${shot.styleId} (${shot.mode})`, async ({ page }) => {
+      await seedUiMocks(page, server.baseUrl);
+      await page.addInitScript(
+        ({ styleId }) => {
+          localStorage.setItem("c64u_app_style", styleId);
+        },
+        { styleId: shot.styleId },
+      );
+      await page.setViewportSize({ width: 393, height: 727 });
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      await page.locator("nav.tab-bar").first().waitFor({ state: "visible", timeout: 30_000 });
+      await page.waitForFunction(() => document.readyState === "complete");
+      await page.evaluate(() => document.fonts?.ready ?? Promise.resolve());
+      await page.evaluate(() => new Promise(requestAnimationFrame));
+      await page.waitForTimeout(400);
+
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.getAttribute("data-app-style")))
+        .toBe(shot.styleId);
+
+      await fs.mkdir(SCREENSHOT_ROOT, { recursive: true });
+      await page.screenshot({
+        path: path.join(SCREENSHOT_ROOT, `showcase-${shot.styleId}-${shot.mode}.png`),
+        animations: "disabled",
+        caret: "hide",
+      });
+    });
+  }
+
   for (const palette of PALETTES) {
     test(`${palette.styleId} (${palette.mode})`, async ({ page }) => {
       await seedUiMocks(page, server.baseUrl);
