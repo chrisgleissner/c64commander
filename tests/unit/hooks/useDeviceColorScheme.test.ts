@@ -9,9 +9,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 
-const connectionState = vi.hoisted(() => ({ isConnected: false }));
+const connectionState = vi.hoisted(() => ({ state: "DISCONNECTED" as string, routingEpoch: 0 }));
+vi.mock("@/hooks/useConnectionState", () => ({
+  useConnectionState: () => ({ state: connectionState.state }),
+}));
 vi.mock("@/hooks/useC64Connection", () => ({
-  useC64Connection: () => ({ status: { isConnected: connectionState.isConnected } }),
+  useConnectionRoutingEpoch: () => connectionState.routingEpoch,
 }));
 
 const getConfigItem = vi.hoisted(() => vi.fn());
@@ -22,7 +25,8 @@ import { useDeviceColorScheme } from "@/hooks/useDeviceColorScheme";
 
 describe("useDeviceColorScheme", () => {
   beforeEach(() => {
-    connectionState.isConnected = false;
+    connectionState.state = "DISCONNECTED";
+    connectionState.routingEpoch = 0;
     getConfigItem.mockReset();
   });
 
@@ -32,13 +36,13 @@ describe("useDeviceColorScheme", () => {
     expect(getConfigItem).not.toHaveBeenCalled();
   });
 
-  it("fetches once on the disconnected-to-connected transition (spec.md section 7.4)", async () => {
+  it("reads once when the connection reaches REAL_CONNECTED (spec.md section 7.4)", async () => {
     getConfigItem.mockResolvedValue({
       "User Interface Settings": { "Color Scheme": { selected: "Ultimate Black" } },
     });
     const { result, rerender } = renderHook(() => useDeviceColorScheme());
 
-    connectionState.isConnected = true;
+    connectionState.state = "REAL_CONNECTED";
     rerender();
 
     await vi.waitFor(() => expect(result.current.colorScheme).toBe("Ultimate Black"));
@@ -48,51 +52,85 @@ describe("useDeviceColorScheme", () => {
     });
   });
 
-  it("does not re-fetch on a re-render that stays connected (never polls)", async () => {
+  it("does not read in demo mode, which has no device Color Scheme to match", async () => {
+    connectionState.state = "DEMO_ACTIVE";
+    const { result, rerender } = renderHook(() => useDeviceColorScheme());
+    rerender();
+    expect(getConfigItem).not.toHaveBeenCalled();
+    expect(result.current.colorScheme).toBeNull();
+  });
+
+  it("does not re-read on a re-render that changes nothing (never polls)", async () => {
     getConfigItem.mockResolvedValue({
       "User Interface Settings": { "Color Scheme": { selected: "C128 Style" } },
     });
-    connectionState.isConnected = true;
+    connectionState.state = "REAL_CONNECTED";
     const { result, rerender } = renderHook(() => useDeviceColorScheme());
     await vi.waitFor(() => expect(result.current.colorScheme).toBe("C128 Style"));
 
     rerender();
     rerender();
+    rerender();
     expect(getConfigItem).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+   * The defect this guards, found on a real Pixel 4 against a real Ultimate: connecting calls
+   * applyC64APIRuntimeConfig straight after transitionTo("REAL_CONNECTED"), which bumps the request
+   * generation and aborts every read started on that edge. Keyed on the connect edge alone, this
+   * hook's read was aborted on every launch and never retried, so "Match my device" stayed on the
+   * compiled default until the user happened to press Refresh connection.
+   */
+  it("re-reads when the routing epoch changes, so a read aborted by the connection handoff recovers", async () => {
+    getConfigItem.mockRejectedValueOnce(new Error("Request superseded by routing change"));
+    getConfigItem.mockResolvedValue({
+      "User Interface Settings": { "Color Scheme": { selected: "Ultimate Black" } },
+    });
+
+    connectionState.state = "REAL_CONNECTED";
+    const { result, rerender } = renderHook(() => useDeviceColorScheme());
+    await vi.waitFor(() => expect(getConfigItem).toHaveBeenCalledTimes(1));
+    expect(result.current.colorScheme).toBeNull();
+
+    connectionState.routingEpoch = 1;
+    rerender();
+
+    await vi.waitFor(() => expect(result.current.colorScheme).toBe("Ultimate Black"));
+    expect(getConfigItem).toHaveBeenCalledTimes(2);
   });
 
   it("clears the cached value on disconnect", async () => {
     getConfigItem.mockResolvedValue({
       "User Interface Settings": { "Color Scheme": { selected: "Commodore Blue" } },
     });
-    connectionState.isConnected = true;
+    connectionState.state = "REAL_CONNECTED";
     const { result, rerender } = renderHook(() => useDeviceColorScheme());
     await vi.waitFor(() => expect(result.current.colorScheme).toBe("Commodore Blue"));
 
-    connectionState.isConnected = false;
+    connectionState.state = "DISCONNECTED";
     rerender();
     expect(result.current.colorScheme).toBeNull();
   });
 
-  it("re-fetches on the next connect after a disconnect", async () => {
+  it("re-reads on the next connect after a disconnect", async () => {
     getConfigItem.mockResolvedValue({
       "User Interface Settings": { "Color Scheme": { selected: "Commodore 1" } },
     });
-    connectionState.isConnected = true;
+    connectionState.state = "REAL_CONNECTED";
     const { result, rerender } = renderHook(() => useDeviceColorScheme());
     await vi.waitFor(() => expect(result.current.colorScheme).toBe("Commodore 1"));
 
-    connectionState.isConnected = false;
+    connectionState.state = "DISCONNECTED";
     rerender();
-    connectionState.isConnected = true;
+    connectionState.state = "REAL_CONNECTED";
     rerender();
 
     await vi.waitFor(() => expect(getConfigItem).toHaveBeenCalledTimes(2));
   });
 
-  it("stays null when the config item is absent or the fetch fails", async () => {
+  it("stays null when the config item is absent or the read fails", async () => {
     getConfigItem.mockRejectedValue(new Error("404"));
-    connectionState.isConnected = true;
+    connectionState.state = "REAL_CONNECTED";
     const { result, rerender } = renderHook(() => useDeviceColorScheme());
     rerender();
     await vi.waitFor(() => expect(getConfigItem).toHaveBeenCalled());

@@ -6,8 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useC64Connection } from "@/hooks/useC64Connection";
+import { useCallback, useEffect, useState } from "react";
+import { useConnectionRoutingEpoch } from "@/hooks/useC64Connection";
+import { useConnectionState } from "@/hooks/useConnectionState";
 import { getC64API } from "@/lib/c64api";
 import { extractConfigValue } from "@/lib/config/configValueExtractor";
 import { addLog } from "@/lib/logging";
@@ -16,19 +17,19 @@ const CONFIG_CATEGORY = "User Interface Settings";
 const CONFIG_ITEM = "Color Scheme";
 
 /**
- * The Ultimate's own `Color Scheme` setting, read on connect and on manual refresh only, never on
- * a poll (spec.md section 7.4, decision D4: the device's network stack is fragile under load).
- * This hook owns the connect trigger; Settings' "Refresh connection" calls the returned `refresh`.
+ * The Ultimate's own `Color Scheme` setting, read when the connection settles and on manual
+ * refresh only, never on a poll (spec.md section 7.4, decision D4: the device's network stack is
+ * fragile under load). Settings' "Refresh connection" calls the returned `refresh`.
  *
- * Returns null before the first successful read, on disconnect, or when the item is unreadable on
- * this firmware — "Match my device" then falls back to the compiled default and says so.
+ * Returns null before the first successful read, off a real device, or when the item is unreadable
+ * on this firmware — "Match my device" then falls back to the compiled default and says so.
  */
 export function useDeviceColorScheme() {
-  const {
-    status: { isConnected },
-  } = useC64Connection();
+  const connection = useConnectionState();
+  // REAL_CONNECTED only: a demo device has no Color Scheme to match, so asking is meaningless.
+  const isRealConnected = connection.state === "REAL_CONNECTED";
+  const routingEpoch = useConnectionRoutingEpoch();
   const [colorScheme, setColorScheme] = useState<string | null>(null);
-  const wasConnectedRef = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -49,15 +50,20 @@ export function useDeviceColorScheme() {
     }
   }, []);
 
+  /*
+   * Keyed on the routing epoch, not on a one-shot connect edge. Connecting calls
+   * applyC64APIRuntimeConfig immediately after transitionTo("REAL_CONNECTED"), which bumps the
+   * request generation and aborts every read started on that edge — including this one, which then
+   * never retried and left "Match my device" permanently unresolved. The epoch changes on the same
+   * connection-change event, so this re-reads once against the settled host.
+   */
   useEffect(() => {
-    if (isConnected && !wasConnectedRef.current) {
-      void refresh();
-    }
-    if (!isConnected) {
+    if (!isRealConnected) {
       setColorScheme(null);
+      return;
     }
-    wasConnectedRef.current = isConnected;
-  }, [isConnected, refresh]);
+    void refresh();
+  }, [isRealConnected, routingEpoch, refresh]);
 
   return { colorScheme, refresh };
 }

@@ -14,7 +14,10 @@ vi.mock("@/components/ThemeProvider", () => ({
   useThemeContext: () => ({ theme: "light", resolvedTheme: "light" }),
 }));
 vi.mock("@/hooks/useC64Connection", () => ({
-  useC64Connection: () => ({ status: { isConnected: false } }),
+  useConnectionRoutingEpoch: () => 0,
+}));
+vi.mock("@/hooks/useConnectionState", () => ({
+  useConnectionState: () => ({ state: "DISCONNECTED" }),
 }));
 vi.mock("@/lib/native/safeArea", () => ({ syncNativeSystemBarAppearance: vi.fn(async () => undefined) }));
 
