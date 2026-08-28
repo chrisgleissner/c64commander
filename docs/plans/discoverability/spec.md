@@ -769,3 +769,25 @@ sections assume.
 | The header no longer draws the **status word** below 430px | D3 argues the app bar has no room to spare, and it was spending nine wide letters repeating what the glyph's colour and the problem count already say. The page title now fits on one line at the Large size. | `src/index.css`, `UnifiedHealthBadge.tsx` |
 | The tour is **thirteen steps**, from the app's own inventory | §8.3's eight steps were weighted towards the most recent work and covered neither the playlist, disks, configuration nor the built-in guides. | §8.3 |
 | The focus engine ignores mutations confined to a **skipped subtree** | The overlay rewrites its result list on every keystroke, and each one rescanned the page behind it. §5.5's 100 ms budget was unreachable without this: p95 went from 109.3 ms to 47.9 ms. | `src/lib/input/focusDiscovery.ts` |
+
+
+## 16. Adversarial review
+
+An independent review of the branch against `main` found ten defects. Each was checked against the
+code before anything was changed, and all ten reproduced. Recorded because several are the kind that
+a passing test suite does not catch: the code did what it said, and what it said was wrong.
+
+| # | Defect | Why the tests did not catch it |
+| --- | --- | --- |
+| 1 | `requestConfigItemFocus` dispatched before Config had subscribed | Every test activated a config result from `/config`, where no navigation happens |
+| 2 | `requestSectionOpen` from Home's "Set up a device", same shape | As above |
+| 3 | `registerSearchEntries` had no production caller, so tier 1 was empty | The registry's own tests registered entries themselves |
+| 4 | The tour would open for every existing user after an upgrade | The key is absent on a first launch and on an upgrade alike, and only the first was tested |
+| 5 | The overlay's arrow keys reached result rows only | Keypad coverage asserted the rows, which were reachable |
+| 6 | HVSC readiness was passed as a literal `true` | The requirement resolver was tested directly, with both values |
+| 7 | Recent recorded archive tunes only, though the store has three categories | The writer's test played an archive tune |
+| 8 | The Key Explorer's copy did nothing where the Clipboard API is absent | jsdom provides the API |
+| 9 | The offline clock was not reset on device handover | No test switched between two unreachable machines |
+| 10 | A latched transport command ran before the playlist was restored | The hook was tested alone, without the page's hook ordering |
+
+Every fix carries a test that fails when the fix is reverted.
