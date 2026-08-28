@@ -2114,6 +2114,35 @@ test.describe("App screenshots", () => {
     },
   );
 
+  /*
+   * The search overlay, which the manual describes and had no picture of. Captured with a query
+   * typed rather than empty: the empty state is the four promoted tiles, which the Home overview
+   * already shows, while a query shows the grouping and which group the best match put first.
+   */
+  test(
+    "capture search overlay screenshots",
+    { tag: "@screenshots" },
+    async ({ page }: { page: Page }, testInfo: TestInfo) => {
+      for (const profileId of MANUAL_PROFILE_SEQUENCE) {
+        await page.goto("/");
+        await waitForConnected(page);
+        await applyDisplayProfileViewport(page, profileId);
+        await page.getByTestId("home-search-field").click();
+        const overlay = page.getByTestId("search-overlay");
+        await expect(overlay).toBeVisible();
+        await page.getByTestId("search-input").fill("radio");
+        await expect(page.getByTestId("search-results")).toBeVisible();
+        // Settle the debounced tier-2 pass, so the list captured is the one a reader would see.
+        await expect(page.getByTestId("search-music-spinner")).toBeHidden();
+        await captureScreenshot(page, testInfo, profileScreenshotPath("home/search", profileId, "01-overlay.png"), {
+          locator: overlay,
+        });
+        await page.getByTestId("search-close").click();
+        await expect(overlay).toBeHidden();
+      }
+    },
+  );
+
   test(
     "capture home profile screenshots",
     { tag: "@screenshots" },

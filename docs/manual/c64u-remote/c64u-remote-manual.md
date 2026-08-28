@@ -90,6 +90,7 @@ There are three ways in, and they open the same thing:
 - The **`7`** key. It works even with directional navigation switched off.
 
 Up and Down move through the results while the text stays where it is, so you can keep typing; OK opens what is selected, and Back closes search. Results are grouped, and the group with the best match comes first — typing `radio` offers **Start SID Radio** ahead of a tune with the word in its title.
+![Search, one query in](../../img/app/home/search/profiles/compact/01-overlay.png)
 
 **A result you cannot use is still listed, and it says why.** "Needs a connected C64 Ultimate", "Needs the HVSC music collection installed", "Live View is turned off in Settings". Picking one of those takes you to the setting that would enable it rather than doing nothing. Something that vanishes when it is unavailable teaches you nothing about what the app can do.
 
