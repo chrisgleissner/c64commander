@@ -661,6 +661,25 @@ const preflight = async () => {
   if (typeof page !== "object") throw new Error("the WebView is not reachable over CDP — re-run adb forward");
   if (page.hidden) throw new Error("the WebView is hidden; run `adb shell wm dismiss-keyguard` and foreground the app");
 
+  /*
+   * Refuse to run under a display-size override.
+   *
+   * A small-screen audit leaves `wm size 480x640` / `wm density 240` in force, and it survives
+   * everything short of a reset. `input` then taps the on-screen stick at coordinates the page's
+   * own devicePixelRatio says are right and the touch lands where the stick is not: the probe PRG
+   * starts, its banner reads, and the machine reports 0 frames held and 0 cells moved — which
+   * reads as a broken machine:input path rather than as rig state. `av-clarity` fails beside it
+   * with "0 tone bursts found". Both pass after a reset with no code change, so the override is
+   * worth one line here instead of two misattributed stage failures.
+   */
+  const override = await adb(["shell", "wm", "size"]).then(({ stdout }) => /Override size:\s*(\S+)/.exec(stdout)?.[1]);
+  if (override) {
+    throw new Error(
+      `the display is overridden to ${override}; run "adb shell wm size reset && adb shell wm density reset", ` +
+        "relaunch the app and re-attach adb forward",
+    );
+  }
+
   const volume = await readVolume();
   if (volume.speaker > MAX_VOLUME) {
     throw new Error(
