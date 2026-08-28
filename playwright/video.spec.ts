@@ -290,7 +290,14 @@ const tourDocs = async (page: Page) => {
   await expect(page.getByRole("heading", { name: /docs/i })).toBeVisible();
   await pauseAtTop(page);
 
-  const buttons = page.locator("main button").filter({ hasText: /^[A-Za-z]/ });
+  // The disclosure buttons, opened and closed again to show what is behind them. The tour card at
+  // the top of Docs is excluded: clicking it starts the guided tour, whose full-screen overlay then
+  // covers the rest of the walkthrough.
+  const buttons = page
+    .locator("main button")
+    .filter({ hasText: /^[A-Za-z]/ })
+    .filter({ hasNot: page.locator("[data-testid=docs-tour-start]") })
+    .and(page.locator(":not([data-testid=docs-tour-start])"));
   const count = await buttons.count();
   for (let index = 0; index < Math.min(3, count); index += 1) {
     const button = buttons.nth(index);

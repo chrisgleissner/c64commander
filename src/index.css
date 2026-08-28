@@ -178,15 +178,9 @@
     /* Shape and elevation (spec.md docs/plans/appearance-styles/spec.md section 5.1) */
     --radius-panel: calc(var(--radius) + 4px);
     --edge-width: 1px;
-    --shadow-1:
-      0 1px 2px 0 rgb(0 0 0 / 0.06),
-      0 1px 1px -1px rgb(0 0 0 / 0.04);
-    --shadow-2:
-      0 4px 8px -2px rgb(0 0 0 / 0.1),
-      0 2px 4px -2px rgb(0 0 0 / 0.08);
-    --shadow-3:
-      0 16px 32px -8px rgb(0 0 0 / 0.18),
-      0 6px 12px -6px rgb(0 0 0 / 0.12);
+    --shadow-1: 0 1px 2px 0 rgb(0 0 0 / 0.06), 0 1px 1px -1px rgb(0 0 0 / 0.04);
+    --shadow-2: 0 4px 8px -2px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.08);
+    --shadow-3: 0 16px 32px -8px rgb(0 0 0 / 0.18), 0 6px 12px -6px rgb(0 0 0 / 0.12);
     --ring-style: solid;
     --app-bar-band: none;
 
@@ -717,11 +711,11 @@ button:focus-visible,
   /*
    * What is left is the glyph and the problem count, and neither can be shortened: the badge
    * carries `min-w-0` so the host can give way, which with the host gone let flexbox squeeze
-   * whatever remained. A floor at its own content width is small here, which is the point — the
-   * width goes to the page title. Above this width the host is shown again and `min-w-0` applies.
+   * whatever remained. The floor is its content width but never more than the row, so content
+   * wider than the header still gives way rather than pushing the row past the screen edge.
    */
   .app-chrome-badge {
-    min-width: fit-content;
+    min-width: min(fit-content, 100%);
   }
 }
 

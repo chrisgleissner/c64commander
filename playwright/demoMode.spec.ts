@@ -11,6 +11,7 @@ import type { Locator, Page, Route, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { variant } from "../src/generated/variant";
 import { dismissStartupDiscoveryDialog, seedUiMocks } from "./uiMocks";
+import { TOUR_STATE_KEY, TOUR_TAKEN_STATE } from "./tourState";
 import {
   allowWarnings,
   assertNoUiIssues,
@@ -404,7 +405,17 @@ test.describe("Automatic Demo Mode", () => {
     server = await createMockC64Server({});
 
     await page.addInitScript(
-      ({ demoBaseUrl, currentDeviceHostKey }: { demoBaseUrl: string; currentDeviceHostKey: string }) => {
+      ({
+        demoBaseUrl,
+        currentDeviceHostKey,
+        tourStateKey,
+        tourTakenState,
+      }: {
+        demoBaseUrl: string;
+        currentDeviceHostKey: string;
+        tourStateKey: string;
+        tourTakenState: string;
+      }) => {
         const unreachableBaseUrl = "http://127.0.0.1:65534";
         (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
         (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = unreachableBaseUrl;
@@ -414,6 +425,9 @@ test.describe("Automatic Demo Mode", () => {
         ];
         localStorage.clear();
         sessionStorage.clear();
+        // Clearing storage also clears the tour state the context is seeded with, and the tour
+        // then opens over the page. See playwright.config.ts.
+        localStorage.setItem(tourStateKey, tourTakenState);
         localStorage.setItem("c64u_startup_discovery_window_ms", "600");
         localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
         localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
@@ -421,7 +435,12 @@ test.describe("Automatic Demo Mode", () => {
         localStorage.setItem(currentDeviceHostKey, "127.0.0.1:65534");
         delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
       },
-      { demoBaseUrl: server.baseUrl, currentDeviceHostKey: CURRENT_DEVICE_HOST_KEY },
+      {
+        demoBaseUrl: server.baseUrl,
+        currentDeviceHostKey: CURRENT_DEVICE_HOST_KEY,
+        tourStateKey: TOUR_STATE_KEY,
+        tourTakenState: TOUR_TAKEN_STATE,
+      },
     );
 
     // A loopback mock answers /v1/info in about a millisecond, which is fast
