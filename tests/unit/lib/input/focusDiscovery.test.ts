@@ -325,3 +325,73 @@ describe("FocusDiscoveryEngine", () => {
     engine.stop();
   });
 });
+
+describe("mutations inside a skipped subtree", () => {
+  /*
+   * The ring is the same either way; what this pins is whether the engine does the work to find
+   * that out. The search overlay is skipped and rewrites its result list on every keystroke, and
+   * each of those rescanned the whole page behind it — over 100 ms per keystroke on a Pixel 4.
+   */
+  it("do not trigger a rescan", async () => {
+    document.body.innerHTML = `
+      <div id="page"><button id="a">A</button></div>
+      <div id="overlay" role="dialog" data-key-nav-skip="true"><ul id="rows"></ul></div>`;
+    const { engine } = makeEngine();
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+
+    el("rows").appendChild(document.createElement("li"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(refresh).not.toHaveBeenCalled();
+    engine.stop();
+  });
+
+  it("still trigger a rescan when the skip attribute itself changes", async () => {
+    document.body.innerHTML = `
+      <div id="page"><button id="a">A</button></div>
+      <div id="overlay" role="dialog" data-key-nav-skip="true"><button id="b">B</button></div>`;
+    const { engine } = makeEngine();
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+
+    el("overlay").removeAttribute("data-key-nav-skip");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(refresh).toHaveBeenCalled();
+    engine.stop();
+  });
+
+  // A dialog nested inside a skipped region is the active scope, so its own mutations still count.
+  it("still trigger a rescan when the active scope is inside the skipped subtree", async () => {
+    document.body.innerHTML = `
+      <div id="outer" data-key-nav-skip="true">
+        <div id="overlay" role="dialog"><button id="b">B</button></div>
+      </div>`;
+    const { engine } = makeEngine();
+    engine.start();
+    const refresh = vi.spyOn(engine, "refresh");
+
+    el("overlay").appendChild(document.createElement("button"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(refresh).toHaveBeenCalled();
+    engine.stop();
+  });
+});
+
+describe("a skipped overlay", () => {
+  it("is not chosen as the active scope, without walking it", () => {
+    document.body.innerHTML = `
+      <div id="page"><button id="a">A</button></div>
+      <div id="overlay" role="dialog" data-key-nav-skip="true"><button id="b">B</button></div>`;
+    const spy = vi.spyOn(el("overlay"), "querySelectorAll");
+    const { controller, engine } = makeEngine();
+
+    engine.start();
+
+    expect(controller.list().map((item) => engine.elementForId(item.id)?.id)).toContain("a");
+    expect(spy).not.toHaveBeenCalled();
+    engine.stop();
+  });
+});

@@ -240,14 +240,21 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
     [activate, activeIndex, close, flatRows],
   );
 
-  // Keep the active row visible without moving focus, which stays in the field.
+  /*
+   * Keep the active row visible without moving focus, which stays in the field.
+   *
+   * Keyed on the active row's ID, not on `flatRows`. That array is a new identity on every render,
+   * so depending on it ran scrollIntoView on every keystroke — a forced synchronous reflow whose
+   * cost appears the moment the list is non-empty and does not scale with the number of rows.
+   * Measured on the handset: 82 ms at p50 with results against 19 ms with none.
+   */
+  const activeRowId = flatRows[activeIndex]?.resolved.entry.id ?? null;
+  const scrolledToRef = useRef<string | null>(null);
   useEffect(() => {
-    const scored = flatRows[activeIndex];
-    if (!scored) return;
-    listRef.current?.querySelector(`#${CSS.escape(rowId(scored.resolved.entry.id))}`)?.scrollIntoView({
-      block: "nearest",
-    });
-  }, [activeIndex, flatRows]);
+    if (activeRowId === null || scrolledToRef.current === activeRowId) return;
+    scrolledToRef.current = activeRowId;
+    listRef.current?.querySelector(`#${CSS.escape(rowId(activeRowId))}`)?.scrollIntoView({ block: "nearest" });
+  }, [activeRowId]);
 
   const activeRow = flatRows[activeIndex];
   const hasQuery = query.trim() !== "";

@@ -255,6 +255,9 @@ export interface ActiveScope {
 
 /** Whether `scope` holds at least one discoverable interactive element. */
 const hasInteractive = (scope: Element): boolean => {
+  // isSkipped climbs to and including the scope, so a skipped scope rejects every candidate in it.
+  // The walk below reached that answer one getComputedStyle at a time.
+  if (scope.hasAttribute(SKIP_ATTR)) return false;
   const candidates = scope.querySelectorAll(INTERACTIVE_SELECTOR);
   for (const candidate of candidates) {
     if (isFocusVisible(candidate) && !isFocusDisabled(candidate) && !isSkipped(candidate, scope)) return true;

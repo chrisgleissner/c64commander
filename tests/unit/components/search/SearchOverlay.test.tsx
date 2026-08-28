@@ -73,7 +73,9 @@ const open = async () => {
     // The overlay is behind React.lazy, so let its chunk resolve before anything asserts on it.
     await Promise.resolve();
   });
-  await screen.findByTestId("search-overlay");
+  // The first open in the file pays for resolving that chunk, which on a loaded runner takes
+  // longer than the one-second default. Only the first two tests ever failed on it.
+  await screen.findByTestId("search-overlay", {}, { timeout: 15_000 });
 };
 
 const type = (value: string) => {

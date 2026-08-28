@@ -104,6 +104,25 @@ describe("scoreTerm", () => {
   it("returns zero when the term matches nothing", () => {
     expect(scoreTerm(text, "printer")).toBe(0);
   });
+
+  /*
+   * "Matches or starts with", which is what section 5.6 says — not a bare substring.
+   *
+   * A substring rule made a single typed letter match nearly every entry through some keyword or
+   * other, which is the same noise section 5.6 rejects fuzzy subsequence matching for, arriving by
+   * another route. It also put roughly thirty-five rows on screen for the first keystroke of every
+   * query, which is where the keystroke-to-paint budget lost its tail on the handset.
+   */
+  it("matches a keyword on a word prefix, not on a letter buried inside it", () => {
+    const keyworded = toScorableText({ title: "Something else", keywords: ["station", "text size"] });
+    expect(scoreTerm(keyworded, "stat")).toBe(TERM_SCORES.keyword);
+    expect(scoreTerm(keyworded, "station")).toBe(TERM_SCORES.keyword);
+    // A word of a phrase keyword counts, so "size" finds "text size".
+    expect(scoreTerm(keyworded, "size")).toBe(TERM_SCORES.keyword);
+    // But a letter in the middle of a word does not.
+    expect(scoreTerm(keyworded, "tion")).toBe(0);
+    expect(scoreTerm(keyworded, "x")).toBe(0);
+  });
 });
 
 describe("ranking", () => {

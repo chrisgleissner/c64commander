@@ -25,6 +25,7 @@ import {
   GROUP_ATTR,
   GROUP_CONTAINER_SELECTOR,
   SECTION_LABEL_ATTR,
+  SKIP_ATTR,
   TABBAR_SCOPE_SELECTOR,
   sortIntoReadingOrder,
   discoverInteractiveElements,
@@ -128,6 +129,8 @@ export class FocusDiscoveryEngine {
   private resolvers = new Map<string, () => HTMLElement | null>();
   private sources = new Map<string, FocusDiscoverySource>();
   private scopeChain: FocusItem[] = [];
+  /** The scope the last scan resolved, so the observer can tell which skipped subtrees matter. */
+  private lastScope: Element | null = null;
 
   constructor(options: FocusDiscoveryEngineOptions) {
     this.controller = options.controller;
@@ -142,7 +145,10 @@ export class FocusDiscoveryEngine {
     if (this.started) return;
     this.started = true;
     if (typeof MutationObserver !== "undefined") {
-      this.observer = new MutationObserver(() => this.scheduleRefresh());
+      this.observer = new MutationObserver((records) => {
+        if (records.every((record) => this.cannotChangeRing(record))) return;
+        this.scheduleRefresh();
+      });
       this.observer.observe(this.doc.body, {
         childList: true,
         subtree: true,
@@ -160,10 +166,26 @@ export class FocusDiscoveryEngine {
     this.scheduled = false;
     this.observer?.disconnect();
     this.observer = null;
+    this.lastScope = null;
     this.removeAllShims();
     this.resolvers.clear();
     this.sources.clear();
     this.controller.clear();
+  }
+
+  /*
+   * A mutation inside a skipped subtree that does not contain the active scope changes nothing:
+   * the ring rejects everything in it either way. The search overlay is skipped and rewrites its
+   * result list on every keystroke, and each of those rescanned the whole page behind it —
+   * getComputedStyle and getBoundingClientRect per node, over 100 ms on a Pixel 4. The containment
+   * test is what keeps a dialog nested INSIDE a skipped region working: there the scope is inside
+   * the skipped element, so its mutations still count.
+   */
+  private cannotChangeRing(record: MutationRecord): boolean {
+    if (record.attributeName === SKIP_ATTR) return false;
+    const target = record.target instanceof Element ? record.target : record.target.parentElement;
+    const skipped = target?.closest(`[${SKIP_ATTR}]`) ?? null;
+    return skipped !== null && !(this.lastScope !== null && skipped.contains(this.lastScope));
   }
 
   /** Coalesces many DOM mutations into a single microtask re-scan. */
@@ -200,6 +222,7 @@ export class FocusDiscoveryEngine {
       return;
     }
     const scope = resolveActiveScope(this.doc);
+    this.lastScope = scope.element;
     const nodes = this.collectRingNodes(scope);
     const items = this.assemble(nodes, scope.element);
 

@@ -87,7 +87,12 @@ export const scoreTerm = (text: ScorableText, term: string): number => {
   }
   if (text.title.includes(term)) return TERM_SCORES.titleContains;
   for (const keyword of text.keywords) {
-    if (keyword.startsWith(term) || keyword.includes(term)) return TERM_SCORES.keyword;
+    // "Matches or starts with", per spec.md section 5.6, and a WORD of a phrase keyword counts
+    // too, so "size" finds the keyword "text size". A bare `includes` was both broader than the
+    // spec and the reason a single typed letter matched nearly every entry in the index: at 83
+    // entries that put ~35 rows on screen for the first keystroke of every query, which is what
+    // the keystroke-to-paint budget was losing its tail to.
+    if (keyword.startsWith(term) || keyword.includes(` ${term}`)) return TERM_SCORES.keyword;
   }
   if (text.subtitle.includes(term)) return TERM_SCORES.subtitleContains;
   return 0;
