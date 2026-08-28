@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { useSearchResults, useRequirementContext, entrySubtitle, entryTitle } from "@/hooks/useSearchResults";
+import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
 import { useSearchTier2 } from "@/hooks/useSearchTier2";
 import { SKIP_ATTR } from "@/lib/input";
 import { t } from "@/lib/i18n";
@@ -60,6 +61,9 @@ const GROUP_ORDER: readonly SearchGroup[] = ["action", "page", "setting", "confi
 const PROMOTED_ENTRY_IDS = ["action.sid-radio", "action.resume-session", "action.recently-played", "page.play"];
 
 const rowId = (entryId: string) => `search-row-${entryId.replace(/[^a-zA-Z0-9-]/g, "-")}`;
+const recentQueryId = (query: string) => `search-recent-${query.replace(/[^a-zA-Z0-9-]/g, "-")}`;
+const moreStopId = (group: SearchGroup) => `search-more-${group}`;
+const EMPTY_PLAY_STOP_ID = "search-empty-play";
 
 interface GroupedResults {
   readonly group: SearchGroup;
@@ -113,9 +117,14 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
-  // HVSC readiness is not probed here: an entry that needs it says so, and the resolver's own
-  // reason is what a disabled row shows. Tier 2 music results carry their own readiness state.
-  const ctx = useRequirementContext(true);
+  /*
+   * Read, not assumed. Passing a literal `true` made every entry that requires the archive resolve
+   * as available: on an installation where it has never been prepared, "Find a tune" was offered
+   * enabled and opened a sheet with nothing to search, instead of saying what it needs and offering
+   * the row that installs it. The state is a localStorage read, taken once per open.
+   */
+  const hvscReady = useMemo(() => loadHvscState().installedVersion > 0, [request]);
+  const ctx = useRequirementContext(hvscReady);
   const { results } = useSearchResults(query, ctx);
   const tier2 = useSearchTier2(query, true);
 
@@ -216,6 +225,44 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
     close();
   }, [close, navigate]);
 
+  const hasQuery = query.trim() !== "";
+
+  /*
+   * Everything the arrow keys can reach, in the order it is drawn.
+   *
+   * The overlay carries `data-key-nav-skip`, so the app's focus ring stays out of it and these keys
+   * are the only way around on a keypad. Cycling the result rows alone left the promoted chips, the
+   * recent searches, each "More in ..." button and the empty state's "Open Play" reachable by
+   * pointer only, which is not a keypad-first app.
+   */
+  const keyStops = useMemo<ReadonlyArray<{ readonly id: string; readonly run: () => void }>>(() => {
+    if (!hasQuery) {
+      return [
+        ...promoted.map((resolved) => ({ id: rowId(resolved.entry.id), run: () => void activate(resolved) })),
+        ...recentQueries.map((recent) => ({ id: recentQueryId(recent), run: () => setQuery(recent) })),
+      ];
+    }
+    if (flatRows.length === 0) {
+      return tier2.isSearching ? [] : [{ id: EMPTY_PLAY_STOP_ID, run: openPlayAndClose }];
+    }
+    return grouped.flatMap((section) => [
+      ...section.rows.map((scored) => ({
+        id: rowId(scored.resolved.entry.id),
+        run: () => void activate(scored.resolved),
+      })),
+      ...(section.total > section.rows.length
+        ? [
+            {
+              id: moreStopId(section.group),
+              run: () => setExpandedGroups((current) => new Set(current).add(section.group)),
+            },
+          ]
+        : []),
+    ]);
+  }, [activate, flatRows.length, grouped, hasQuery, openPlayAndClose, promoted, recentQueries, tier2.isSearching]);
+
+  const activeStopId = keyStops[activeIndex]?.id ?? null;
+
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       if (event.key === "Escape") {
@@ -224,20 +271,20 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
         return;
       }
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-        if (flatRows.length === 0) return;
+        if (keyStops.length === 0) return;
         event.preventDefault();
         const step = event.key === "ArrowDown" ? 1 : -1;
-        setActiveIndex((current) => (current + step + flatRows.length) % flatRows.length);
+        setActiveIndex((current) => (current + step + keyStops.length) % keyStops.length);
         return;
       }
       if (event.key === "Enter") {
-        const scored = flatRows[activeIndex];
-        if (!scored) return;
+        const stop = keyStops[activeIndex];
+        if (!stop) return;
         event.preventDefault();
-        void activate(scored.resolved);
+        stop.run();
       }
     },
-    [activate, activeIndex, close, flatRows],
+    [activeIndex, close, keyStops],
   );
 
   /*
@@ -248,16 +295,12 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
    * cost appears the moment the list is non-empty and does not scale with the number of rows.
    * Measured on the handset: 82 ms at p50 with results against 19 ms with none.
    */
-  const activeRowId = flatRows[activeIndex]?.resolved.entry.id ?? null;
   const scrolledToRef = useRef<string | null>(null);
   useEffect(() => {
-    if (activeRowId === null || scrolledToRef.current === activeRowId) return;
-    scrolledToRef.current = activeRowId;
-    listRef.current?.querySelector(`#${CSS.escape(rowId(activeRowId))}`)?.scrollIntoView({ block: "nearest" });
-  }, [activeRowId]);
-
-  const activeRow = flatRows[activeIndex];
-  const hasQuery = query.trim() !== "";
+    if (activeStopId === null || scrolledToRef.current === activeStopId) return;
+    scrolledToRef.current = activeStopId;
+    listRef.current?.querySelector(`#${CSS.escape(activeStopId)}`)?.scrollIntoView({ block: "nearest" });
+  }, [activeStopId]);
 
   return (
     <div
@@ -278,7 +321,7 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
           aria-expanded={flatRows.length > 0}
           aria-controls="search-results-listbox"
           aria-autocomplete="list"
-          aria-activedescendant={activeRow ? rowId(activeRow.resolved.entry.id) : undefined}
+          aria-activedescendant={activeStopId ?? undefined}
           placeholder={t("search.placeholder", "Search the app")}
           value={query}
           onChange={(event) => {
@@ -320,7 +363,11 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
                   onClick={() => void activate(resolved)}
                   disabled={!resolved.enabled && !resolved.remedyTarget}
                   title={resolved.disabledReason ?? undefined}
-                  className="min-h-11 rounded-full border border-border px-4 text-sm disabled:opacity-50"
+                  id={rowId(resolved.entry.id)}
+                  className={cn(
+                    "min-h-11 rounded-full border border-border px-4 text-sm disabled:opacity-50",
+                    activeStopId === rowId(resolved.entry.id) && "bg-muted",
+                  )}
                   data-testid={`search-chip-${resolved.entry.id}`}
                 >
                   {entryTitle(resolved.entry)}
@@ -336,8 +383,12 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
                   <button
                     key={recent}
                     type="button"
+                    id={recentQueryId(recent)}
                     onClick={() => setQuery(recent)}
-                    className="flex min-h-11 w-full items-center rounded-md px-2 text-left text-sm hover:bg-muted"
+                    className={cn(
+                      "flex min-h-11 w-full items-center rounded-md px-2 text-left text-sm hover:bg-muted",
+                      activeStopId === recentQueryId(recent) && "bg-muted",
+                    )}
                   >
                     {recent}
                   </button>
@@ -353,7 +404,13 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
             <p className="text-xs text-muted-foreground">
               {t("search.noMatchesHint", "Try a shorter word, or open Play to search the music archive.")}
             </p>
-            <Button variant="outline" onClick={openPlayAndClose} data-testid="search-empty-play">
+            <Button
+              id={EMPTY_PLAY_STOP_ID}
+              variant="outline"
+              onClick={openPlayAndClose}
+              className={cn(activeStopId === EMPTY_PLAY_STOP_ID && "bg-muted")}
+              data-testid="search-empty-play"
+            >
               {t("search.openPlay", "Open Play")}
             </Button>
           </div>
@@ -371,7 +428,7 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
                 const { entry, enabled, disabledReason } = scored.resolved;
                 const title = entryTitle(entry);
                 const subtitle = entrySubtitle(entry);
-                const isActive = activeRow?.resolved.entry.id === entry.id;
+                const isActive = activeStopId === rowId(entry.id);
                 return (
                   <div
                     key={entry.id}
@@ -404,8 +461,12 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
               {section.total > section.rows.length ? (
                 <button
                   type="button"
+                  id={moreStopId(section.group)}
                   onClick={() => setExpandedGroups((current) => new Set(current).add(section.group))}
-                  className="flex min-h-11 w-full items-center px-2 text-left text-sm text-primary"
+                  className={cn(
+                    "flex min-h-11 w-full items-center px-2 text-left text-sm text-primary",
+                    activeStopId === moreStopId(section.group) && "bg-muted",
+                  )}
                   data-testid={`search-more-${section.group}`}
                 >
                   {t("search.more", "More in")} {GROUP_LABELS[section.group]} ({section.total})

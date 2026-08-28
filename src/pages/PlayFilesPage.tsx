@@ -610,13 +610,15 @@ export default function PlayFilesPage() {
     resumeSession: () => transportCommandBus.publish("play"),
   });
 
-  // F1 and F3 from anywhere, delivered through the latch (spec.md 9.5).
+  // F1 and F3 from anywhere, delivered through the latch (spec.md 9.5). Held until the stored
+  // playlist has been restored: usePlaybackPersistence reads it in an effect declared below this
+  // one, so a command drained on mount ran against an empty playlist and did nothing.
   useTransportCommands((command) => {
     if (command === "next") void handleNext();
     else if (command === "play") {
       if (!isPlaying) void handlePlay();
     } else void handlePauseResume();
-  });
+  }, playlist.length > 0);
   const sleepTimer = useSleepTimer({
     onExpire: () => {
       void handleStop();
@@ -1605,16 +1607,23 @@ export default function PlayFilesPage() {
    * second row.
    */
   useEffect(() => {
-    if (!currentItem || !isSongCategory(currentItem.category)) return;
-    const virtualPath = currentItem.request.source === "hvsc" ? currentItem.path : null;
-    if (!virtualPath) return;
+    if (!currentItem || !currentItem.path) return;
+    // Whatever was opened, not only an archive tune. The row is reopened by this path, so a disk or
+    // a program carries the source it came from as well; only an archive tune has a path that is
+    // meaningful on its own. Recording tunes alone was why Recent stayed empty for anyone who
+    // played programs and disks, which the store has had a category for all along.
+    const isArchiveTune = isSongCategory(currentItem.category) && currentItem.request.source === "hvsc";
+    const category =
+      currentItem.category === "disk" ? "disk" : isSongCategory(currentItem.category) ? "sid" : "program";
     saveRecentlyPlayed(
       withRecentlyPlayed(
         loadRecentlyPlayed(),
         toRecentlyPlayedEntry({
-          virtualPath,
+          virtualPath: currentItem.path,
           title: currentDisplay?.title ?? currentItem.label,
           author: currentItemCredits.author,
+          category,
+          ...(isArchiveTune ? {} : { sourceId: currentItem.request.source }),
           songNr: currentItem.request.songNr,
           subsongCount: currentItem.subsongCount,
           durationMs: currentItem.durationMs,

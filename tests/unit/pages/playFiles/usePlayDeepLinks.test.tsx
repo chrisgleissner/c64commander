@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, renderHook, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
@@ -135,5 +135,41 @@ describe("useTransportCommands", () => {
     unmount();
     transportCommandBus.publish("next");
     expect(onCommand).not.toHaveBeenCalled();
+  });
+});
+
+describe("a transport command that arrives before the page is ready", () => {
+  /*
+   * Resume and the F1/F3 keys publish from another page and navigate to Play, and Play restores its
+   * stored playlist in an effect declared below the one that drains the latch. The command reached
+   * a page whose playlist was still empty, so Play and Next did nothing.
+   */
+  it("waits, then runs once the page says it is ready", () => {
+    transportCommandBus.reset();
+    const ran: string[] = [];
+    transportCommandBus.publish("play");
+
+    const { rerender } = renderHook(
+      ({ ready }: { ready: boolean }) => useTransportCommands((command) => ran.push(command), ready),
+      { initialProps: { ready: false } },
+    );
+
+    expect(ran).toEqual([]);
+
+    rerender({ ready: true });
+
+    expect(ran).toEqual(["play"]);
+    transportCommandBus.reset();
+  });
+
+  it("runs immediately when the page is ready already", () => {
+    transportCommandBus.reset();
+    const ran: string[] = [];
+    transportCommandBus.publish("next");
+
+    renderHook(() => useTransportCommands((command) => ran.push(command), true));
+
+    expect(ran).toEqual(["next"]);
+    transportCommandBus.reset();
   });
 });

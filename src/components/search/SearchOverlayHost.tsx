@@ -8,6 +8,7 @@
 
 import { Suspense, lazy, useEffect, useState } from "react";
 import { subscribeSearchOpen, type SearchOpenRequest } from "@/lib/search/overlayState";
+import { useTier1SearchEntries } from "@/hooks/useTier1SearchEntries";
 
 /**
  * Listens for an open request and loads the overlay the first time one arrives.
@@ -23,6 +24,9 @@ const SearchOverlay = lazy(() => import("@/components/search/SearchOverlay"));
 export const SearchOverlayHost = () => {
   const [request, setRequest] = useState<SearchOpenRequest | null>(null);
 
+  // Registered here, not in the overlay: the overlay is lazy, so entries published from inside it
+  // would be missing from the first query of every launch.
+  useTier1SearchEntries();
   useEffect(() => subscribeSearchOpen(setRequest), []);
 
   if (request === null) return null;

@@ -15,17 +15,24 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { useHvscArchiveSearch, type HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
 import { loadRecentlyPlayed } from "@/lib/sidRadio/recentlyPlayed";
 
-/** What was recently heard, in the same shape a search result takes. */
+/**
+ * What was recently heard, in the same shape a search result takes.
+ *
+ * Tunes only: this sheet searches the archive, and a disk or a program has no place in it. Recent
+ * holds all three, and a row of another kind would be reopened here as a tune it is not.
+ */
 const recentlyPlayedTunes = (): HvscSearchHit[] =>
-  loadRecentlyPlayed().map((entry) => ({
-    virtualPath: entry.virtualPath,
-    title: entry.title,
-    author: entry.author,
-    folder: entry.folder,
-    ...(entry.songNr === undefined ? {} : { songNr: entry.songNr }),
-    ...(entry.subsongCount === undefined ? {} : { subsongCount: entry.subsongCount }),
-    ...(entry.durationMs === undefined ? {} : { durationMs: entry.durationMs }),
-  }));
+  loadRecentlyPlayed()
+    .filter((entry) => entry.category === "sid")
+    .map((entry) => ({
+      virtualPath: entry.virtualPath,
+      title: entry.title,
+      author: entry.author,
+      folder: entry.folder,
+      ...(entry.songNr === undefined ? {} : { songNr: entry.songNr }),
+      ...(entry.subsongCount === undefined ? {} : { subsongCount: entry.subsongCount }),
+      ...(entry.durationMs === undefined ? {} : { durationMs: entry.durationMs }),
+    }));
 
 export type HvscSearchSheetProps = {
   open: boolean;

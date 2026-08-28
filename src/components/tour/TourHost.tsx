@@ -7,7 +7,6 @@
  */
 
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 import { useInterstitialActive } from "@/components/ui/interstitial-state";
 import {
@@ -26,6 +25,10 @@ import {
  * The first-launch offer waits for every startup interstitial to go (spec.md section 8.1) — the
  * splash and fade, automatic discovery and the simulated-device offer — because a tour that began
  * under one of them would spotlight a page nobody could see.
+ *
+ * It does not navigate. An earlier version routed to Home before starting, which took a user who
+ * had deep-linked somewhere else away from the page they asked for. The first step has no anchor,
+ * and every step that does navigates to its own page anyway.
  */
 const TourDriver = lazy(() => import("@/components/tour/TourDriver"));
 
@@ -33,7 +36,6 @@ const TourDriver = lazy(() => import("@/components/tour/TourDriver"));
 const SETTLE_MS = 900;
 
 export const TourHost = () => {
-  const navigate = useNavigate();
   const interstitialActive = useInterstitialActive();
   const [request, setRequest] = useState<TourStartRequest | null>(null);
   const offeredRef = useRef(false);
@@ -45,11 +47,10 @@ export const TourHost = () => {
     if (!shouldOfferTourOnLaunch(loadTourState())) return undefined;
     const timer = setTimeout(() => {
       offeredRef.current = true;
-      if (window.location.pathname !== "/") navigate("/");
       setRequest({});
     }, SETTLE_MS);
     return () => clearTimeout(timer);
-  }, [interstitialActive, navigate, request]);
+  }, [interstitialActive, request]);
 
   if (request === null) return null;
 

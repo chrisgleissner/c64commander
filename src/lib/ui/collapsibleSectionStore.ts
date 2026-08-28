@@ -212,7 +212,22 @@ export interface SectionOpenRequestDetail {
   readonly id: string;
 }
 
+/** How long a request waits for the section that answers it to mount. */
+export const SECTION_OPEN_LATCH_TTL_MS = 5_000;
+
+/*
+ * The request is latched as well as dispatched.
+ *
+ * Nearly every caller asks for a section on a page it is about to navigate to, and React Router
+ * commits that navigation asynchronously: dispatching alone reached no subscriber, so the section
+ * stayed shut and the search resolver waited for an element that was never rendered. A subscriber
+ * mounting within the window is handed the request; it is addressed to one scope and id, so any
+ * other section ignores it. The window expires so a request cannot open a section minutes later.
+ */
+let pendingSectionOpen: { scope: string; id: string; atMs: number } | null = null;
+
 export const requestSectionOpen = (scope: string, id: string): void => {
+  pendingSectionOpen = { scope, id, atMs: Date.now() };
   if (typeof window === "undefined") return;
   window.dispatchEvent(
     new CustomEvent<SectionOpenRequestDetail>(SECTION_OPEN_REQUEST_EVENT, { detail: { scope, id } }),
@@ -227,5 +242,13 @@ export const subscribeSectionOpenRequest = (handler: (scope: string, id: string)
     handler(detail.scope, detail.id);
   };
   window.addEventListener(SECTION_OPEN_REQUEST_EVENT, listener);
+  if (pendingSectionOpen !== null && Date.now() - pendingSectionOpen.atMs <= SECTION_OPEN_LATCH_TTL_MS) {
+    handler(pendingSectionOpen.scope, pendingSectionOpen.id);
+  }
   return () => window.removeEventListener(SECTION_OPEN_REQUEST_EVENT, listener);
+};
+
+/** Test seam: drops a latched request without delivering it. */
+export const resetSectionOpenLatchForTests = (): void => {
+  pendingSectionOpen = null;
 };

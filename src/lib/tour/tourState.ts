@@ -61,9 +61,37 @@ export const saveTourState = (state: TourState): void => {
   }
 };
 
-/** True on a first launch: neither finished nor abandoned, so the tour has never been offered. */
+/**
+ * Whether an installation was already in use before this release.
+ *
+ * `c64u_tour_state:v1` is new, so it is absent on a first launch AND on every upgrade — which on
+ * its own would have offered the tour to the whole existing user base. Any other key this app has
+ * written is the signal that separates the two, because a genuinely new installation has none.
+ *
+ * `E2E_FIRST_LAUNCH_KEY` is the seam playwright/tour.spec.ts uses: its harness has to seed a device
+ * and a mock server before the app loads, which would otherwise look exactly like prior use.
+ */
+export const APP_STORAGE_PREFIX = "c64u_";
+export const E2E_FIRST_LAUNCH_KEY = "c64u_e2e_first_launch";
+
+export const hasPriorAppState = (): boolean => {
+  if (typeof localStorage === "undefined") return false;
+  if (localStorage.getItem(E2E_FIRST_LAUNCH_KEY) !== null) return false;
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (key === null || key === TOUR_STATE_KEY) continue;
+    if (key.startsWith(APP_STORAGE_PREFIX)) return true;
+  }
+  return false;
+};
+
+/**
+ * True on a first launch of a new installation: nothing recorded, and no sign the app has been used
+ * before. An installation that has been used keeps the tour one tap away on Docs and in Settings →
+ * About; what it does not get is a full-screen overlay it never asked for after an update.
+ */
 export const shouldOfferTourOnLaunch = (state: TourState): boolean =>
-  state.completedAt === null && state.skippedAt === null;
+  state.completedAt === null && state.skippedAt === null && !hasPriorAppState();
 
 const TOUR_START_EVENT = "c64u-tour-start-request";
 

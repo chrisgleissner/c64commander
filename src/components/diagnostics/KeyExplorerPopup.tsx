@@ -12,6 +12,7 @@ import { Keyboard } from "lucide-react";
 import { AnalyticPopup } from "@/components/diagnostics/AnalyticPopup";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import { addErrorLog } from "@/lib/logging";
 import { resolveInputProfile } from "@/lib/input";
 import {
   KEY_OBSERVATION_LIMIT,
@@ -51,10 +52,19 @@ export function KeyExplorerPopup({ open, onClose }: { open: boolean; onClose: ()
 
   const copy = useCallback(() => {
     const text = formatObservations(observations);
+    // Optional chaining alone did nothing at all where the API is absent — no copy, no message.
+    // The text goes in the toast instead, which is the only way left to get it off the screen.
+    if (!navigator.clipboard) {
+      toast({ title: "Clipboard not available here", description: text });
+      return;
+    }
     void navigator.clipboard
-      ?.writeText(text)
+      .writeText(text)
       .then(() => toast({ title: "Key list copied" }))
-      .catch(() => toast({ title: "Could not copy the key list", description: text }));
+      .catch((error: unknown) => {
+        addErrorLog("Failed to copy the key list", { error: (error as Error).message });
+        toast({ title: "Could not copy the key list", description: text });
+      });
   }, [observations]);
 
   return (

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Radio } from "lucide-react";
 
 import { CollapsibleSection } from "@/components/CollapsibleSection";
-import { readSectionStates, requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
+import { readSectionStates, requestSectionOpen, resetSectionOpenLatchForTests } from "@/lib/ui/collapsibleSectionStore";
 
 vi.mock("framer-motion", async () => {
   // Everything the factory needs is declared INSIDE it: `vi.mock` is hoisted above module-level
@@ -47,6 +47,9 @@ describe("CollapsibleSection", () => {
   beforeEach(() => {
     localStorage.clear();
     mockProfile = "medium";
+    // The request outlives its dispatch by design, so a card mounted by the next test would drain
+    // the previous test's request. Production has no equivalent: one page, one navigation.
+    resetSectionOpenLatchForTests();
   });
 
   afterEach(() => {

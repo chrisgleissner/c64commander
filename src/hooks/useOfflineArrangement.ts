@@ -27,9 +27,21 @@ export const useOfflineArrangement = (pinned: boolean): boolean => {
   const selectedDevice = savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ?? null;
 
   const unreachableSinceRef = useRef<number | null>(status.isConnected ? null : Date.now());
+  /*
+   * Which device the clock above belongs to.
+   *
+   * Switching between two machines that are both unreachable never passes through a connected
+   * state, so without this the new one inherited the old one's start time and was declared offline
+   * on arrival instead of getting its own settling window.
+   */
+  const timedDeviceIdRef = useRef<string | null>(savedDevices.selectedDeviceId);
   const [offline, setOffline] = useState(false);
 
   useEffect(() => {
+    if (timedDeviceIdRef.current !== savedDevices.selectedDeviceId) {
+      timedDeviceIdRef.current = savedDevices.selectedDeviceId;
+      unreachableSinceRef.current = status.isConnected ? null : Date.now();
+    }
     if (status.isConnected) {
       unreachableSinceRef.current = null;
     } else if (unreachableSinceRef.current === null) {
@@ -55,7 +67,7 @@ export const useOfflineArrangement = (pinned: boolean): boolean => {
     const elapsed = Date.now() - (unreachableSinceRef.current ?? Date.now());
     const timer = setTimeout(evaluate, Math.max(0, OFFLINE_SETTLE_MS - elapsed) + 1);
     return () => clearTimeout(timer);
-  }, [status.isConnected, selectedDevice, pinned]);
+  }, [status.isConnected, selectedDevice, savedDevices.selectedDeviceId, pinned]);
 
   return offline;
 };

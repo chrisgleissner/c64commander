@@ -361,4 +361,37 @@ describe("SearchOverlay", () => {
       await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull(), { timeout: 4000 });
     });
   });
+
+  /*
+   * The overlay carries data-key-nav-skip, so the app's focus ring stays out of it and the arrow
+   * keys are the only way around on a keypad. They used to cycle the result rows alone, which left
+   * the promoted chips, the recent searches and each "More in ..." button reachable by pointer
+   * only — in a keypad-first app that is the same as not being there.
+   */
+  describe("what the arrow keys can reach", () => {
+    it("cycles the promoted chips when nothing has been typed", async () => {
+      renderOverlay();
+      await open();
+
+      const field = screen.getByTestId("search-input");
+      fireEvent.keyDown(field, { key: "ArrowDown" });
+
+      const chips = screen.getAllByTestId(/^search-chip-/);
+      expect(chips.length).toBeGreaterThan(1);
+      await waitFor(() => expect(field).toHaveAttribute("aria-activedescendant", chips[1].id));
+      expect(chips[1].id).not.toBe("");
+    });
+
+    it("activates the chip the arrow keys landed on", async () => {
+      renderOverlay();
+      await open();
+
+      const field = screen.getByTestId("search-input");
+      const chips = screen.getAllByTestId(/^search-chip-/);
+      fireEvent.keyDown(field, { key: "Enter" });
+
+      await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
+      expect(chips[0]).toBeDefined();
+    });
+  });
 });

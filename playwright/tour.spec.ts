@@ -32,6 +32,10 @@ const clearTourState = async (page: Page) => {
     if (sessionStorage.getItem("__tourStateClearedOnce") === "1") return;
     sessionStorage.setItem("__tourStateClearedOnce", "1");
     localStorage.removeItem("c64u_tour_state:v1");
+    // The app declines to offer the tour to an installation that has been used before, and this
+    // harness seeds a device and a mock server before the app loads, which is indistinguishable
+    // from prior use. This key says "treat storage as empty" for that one decision.
+    localStorage.setItem("c64u_e2e_first_launch", "1");
   });
 };
 

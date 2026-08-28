@@ -26,7 +26,19 @@ export interface ConfigItemFocusRequest {
 /** The section id a REST-grouped category renders under. */
 export const configCategorySectionId = (category: string): string => category.toLowerCase().replace(/\s+/g, "-");
 
+/** How long a request waits for the Config page to mount its subscriber. */
+export const CONFIG_ITEM_FOCUS_LATCH_TTL_MS = 5_000;
+
+/*
+ * Latched as well as dispatched, for the same reason the section request is: activating a config
+ * result from any other page navigates first, and React Router commits that asynchronously, so the
+ * Config page had not subscribed when the event went out. The request was lost, the category stayed
+ * shut, and the resolver reported "Could not reach" for an item that was there all along.
+ */
+let pendingFocus: { request: ConfigItemFocusRequest; atMs: number } | null = null;
+
 export const requestConfigItemFocus = (category: string, itemName: string): void => {
+  pendingFocus = { request: { category, itemName }, atMs: Date.now() };
   if (typeof window === "undefined") return;
   window.dispatchEvent(
     new CustomEvent<ConfigItemFocusRequest>(CONFIG_ITEM_FOCUS_EVENT, { detail: { category, itemName } }),
@@ -40,5 +52,13 @@ export const subscribeConfigItemFocus = (handler: (request: ConfigItemFocusReque
     if (detail) handler(detail);
   };
   window.addEventListener(CONFIG_ITEM_FOCUS_EVENT, listener);
+  if (pendingFocus !== null && Date.now() - pendingFocus.atMs <= CONFIG_ITEM_FOCUS_LATCH_TTL_MS) {
+    handler(pendingFocus.request);
+  }
   return () => window.removeEventListener(CONFIG_ITEM_FOCUS_EVENT, listener);
+};
+
+/** Test seam: drops a latched request without delivering it. */
+export const resetConfigItemFocusLatchForTests = (): void => {
+  pendingFocus = null;
 };

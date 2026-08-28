@@ -66,17 +66,27 @@ export const usePlayDeepLinks = (handlers: PlayDeepLinkHandlers): void => {
  * has no transport and the app then navigates: a plain window event would be dispatched and gone
  * before this page mounted.
  */
-export const useTransportCommands = (run: (command: TransportCommand) => void): void => {
+/**
+ * Delivers a latched transport command to the page that owns the transport.
+ *
+ * `ready` is what stops the command arriving before there is anything to run it on. Resume and the
+ * F1/F3 keys publish from another page and navigate here, and Play restores its stored playlist in
+ * an effect declared far below the one that drained the latch — so the command reached a page whose
+ * playlist was still empty, and Play or Next did nothing at all. Held until the page says it is
+ * ready; the latch's own expiry still drops it if that never happens.
+ */
+export const useTransportCommands = (run: (command: TransportCommand) => void, ready = true): void => {
   const runRef = useRef(run);
   runRef.current = run;
 
   useEffect(() => {
+    if (!ready) return undefined;
     const pending = transportCommandBus.takePending();
     if (pending !== null) runRef.current(pending);
     return transportCommandBus.subscribe((command) => {
-      // Claimed here, so the mount-time drain above cannot deliver it a second time.
+      // Claimed here, so the drain above cannot deliver it a second time.
       transportCommandBus.takePending();
       runRef.current(command);
     });
-  }, []);
+  }, [ready]);
 };
