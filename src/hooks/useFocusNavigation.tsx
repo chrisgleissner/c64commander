@@ -212,6 +212,10 @@ export interface KeypadShortcutHandlers {
   readonly openQuickMenu?: () => void;
   /** Enter Game Mode (0) — one keystroke from anywhere to the playing state. */
   readonly openGameMode?: () => void;
+  /** Play / pause the transport (F1). Delivered through the latch, so Play need not be mounted. */
+  readonly mediaPlayPause?: () => void;
+  /** Next tune (F3). Same latch. */
+  readonly mediaNext?: () => void;
 }
 
 export interface FocusNavigationProviderProps {
@@ -549,6 +553,20 @@ export const FocusNavigationProvider = ({
       }
       if (action === "hash" && shortcuts.openDeviceSwitcher) {
         shortcuts.openDeviceSwitcher();
+        setInputModality("key-navigation");
+        event.preventDefault();
+        return;
+      }
+      // Transport, from any page. Bound only in the keypad profile, so a desktop keyboard's F1 and
+      // F3 still resolve to softLeft and toggleInputMode and never reach here (spec.md 9.2).
+      if (action === "mediaPlayPause" && shortcuts.mediaPlayPause) {
+        shortcuts.mediaPlayPause();
+        setInputModality("key-navigation");
+        event.preventDefault();
+        return;
+      }
+      if (action === "mediaNext" && shortcuts.mediaNext) {
+        shortcuts.mediaNext();
         setInputModality("key-navigation");
         event.preventDefault();
         return;

@@ -33,6 +33,7 @@ import { FeatureFlagsProvider, useFeatureFlag, useFeatureFlags } from "@/hooks/u
 import { FocusNavigationProvider, type KeypadShortcutHandlers } from "@/hooks/useFocusNavigation";
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
+import { transportCommandBus } from "@/lib/input/latchedCommandBus";
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
 import { SearchKeyListener } from "@/components/search/SearchKeyListener";
 import { SearchOverlay } from "@/components/search/SearchOverlay";
@@ -265,6 +266,16 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
       openDiagnostics: () => requestDiagnosticsOpen("header"),
       openDeviceSwitcher: () => requestDeviceSwitcherOpen(),
       openQuickMenu: () => requestQuickMenuOpen(),
+      // F1 and F3. The command is latched as well as dispatched, so a press on a page with no
+      // transport survives the navigation to Play and is drained when Play mounts (spec.md 9.5).
+      mediaPlayPause: () => {
+        transportCommandBus.publish("playPause");
+        if (window.location.pathname !== "/play") navigate("/play");
+      },
+      mediaNext: () => {
+        transportCommandBus.publish("next");
+        if (window.location.pathname !== "/play") navigate("/play");
+      },
       openGameMode: flags.remote_input_enabled
         ? () => {
             // The sheet is mounted by Home and Play, so a request raised anywhere

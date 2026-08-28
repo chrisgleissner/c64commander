@@ -23,6 +23,7 @@
  *   Back / Clear             → back          (KEYCODE_BACK = 4 / GoBack / Escape)
  *   Call / Send              → activate      (KEYCODE_CALL = 5)
  *   Menu                     → openMenu      (KEYCODE_MENU / ContextMenu)
+ *   F1 / F3                  → mediaPlayPause / mediaNext (speculative; keypad profile only)
  *
  * A slightly longer multi-tap window suits a physical keypad.
  */
@@ -67,6 +68,23 @@ const keypadBindings: KeyBinding[] = [
   // Menu.
   { code: "ContextMenu", action: "openMenu" },
   { keyCode: 82, action: "openMenu" },
+
+  /*
+   * Transport, speculative (spec.md section 9.2).
+   *
+   * F1 and F3 are real, standard codes, and a keypad handset has separate hardware soft keys, so
+   * shadowing this profile's own inherited F1 -> softLeft and F3 -> toggleInputMode is safe ON THE
+   * DEVICE. They are declared here and NOT in defaultKeyboard, and this profile prepends, so a
+   * developer on a desktop keyboard keeps both of those.
+   *
+   * The Commodore key stays unbound. keymap.ts requires an exact code, key or keyCode and keyEvent
+   * matches exactly: there is no wildcard and no placeholder that later becomes the right value,
+   * and binding a GUESSED real code is worse than binding nothing, because a wrong guess shadows a
+   * key that already works. The Key Explorer under Diagnostics exists to read the real code off
+   * hardware; once someone has, `{ code: "<that>", action: "openSearch" }` here is the whole change.
+   */
+  { code: "F1", action: "mediaPlayPause" },
+  { code: "F3", action: "mediaNext" },
 ];
 
 export const keypadProfile = mergeKeymaps(defaultKeyboardProfile, {

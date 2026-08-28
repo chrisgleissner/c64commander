@@ -98,6 +98,7 @@ import { HeatMapPopup } from "./HeatMapPopup";
 import { HealthCheckDetailView } from "./HealthCheckDetailView";
 import { HealthHistoryPopup } from "./HealthHistoryPopup";
 import { LatencyAnalysisPopup } from "./LatencyAnalysisPopup";
+import { KeyExplorerPopup } from "./KeyExplorerPopup";
 
 export type EvidenceType = "Problems" | "Actions" | "Logs" | "Traces";
 type SeverityFilter = "All" | "Errors" | "Warnings" | "Info";
@@ -1042,6 +1043,7 @@ export function DiagnosticsDialog({
   const [connectionHostError, setConnectionHostError] = useState<string | null>(null);
   const [connectionPortError, setConnectionPortError] = useState<string | null>(null);
   const [latencyOpen, setLatencyOpen] = useState(false);
+  const [keyExplorerOpen, setKeyExplorerOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [configDriftOpen, setConfigDriftOpen] = useState(false);
   const [decisionStateOpen, setDecisionStateOpen] = useState(false);
@@ -1230,6 +1232,7 @@ export function DiagnosticsDialog({
     setConnectionHostError(null);
     setConnectionPortError(null);
     setLatencyOpen(false);
+    setKeyExplorerOpen(false);
     setHistoryOpen(false);
     setConfigDriftOpen(false);
     setDecisionStateOpen(false);
@@ -1267,6 +1270,7 @@ export function DiagnosticsDialog({
       setFiltersOpen(false);
       setConnectionOpen(false);
       setLatencyOpen(false);
+      setKeyExplorerOpen(false);
       setHistoryOpen(false);
       setConfigDriftOpen(false);
       setDecisionStateOpen(false);
@@ -1299,6 +1303,7 @@ export function DiagnosticsDialog({
     if (!open || !requestedPanel) return;
     setHeaderExpanded(requestedPanel === "overview");
     setLatencyOpen(requestedPanel === "latency");
+    setKeyExplorerOpen(requestedPanel === "key-explorer");
     setHistoryOpen(requestedPanel === "history");
     setConfigDriftOpen(requestedPanel === "config-drift");
     setDecisionStateOpen(requestedPanel === "decision-state");
@@ -1530,6 +1535,17 @@ export function DiagnosticsDialog({
         data-testid="open-latency-screen"
       >
         Latency
+      </button>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        onClick={() => {
+          setOverflowOpen(false);
+          setKeyExplorerOpen(true);
+        }}
+        data-testid="open-key-explorer-screen"
+      >
+        Key Explorer
       </button>
       <button
         type="button"
@@ -1910,6 +1926,7 @@ export function DiagnosticsDialog({
         actionSummaries={actionSummaries}
       />
       {open && latencyOpen ? <LatencyAnalysisPopup open onClose={() => setLatencyOpen(false)} /> : null}
+      {open && keyExplorerOpen ? <KeyExplorerPopup open onClose={() => setKeyExplorerOpen(false)} /> : null}
       {open && historyOpen ? (
         <HealthHistoryPopup open onClose={() => setHistoryOpen(false)} history={healthHistory} />
       ) : null}
