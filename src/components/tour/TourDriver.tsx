@@ -87,6 +87,19 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
   const pathnameRef = useRef(location.pathname);
   pathnameRef.current = location.pathname;
 
+  /*
+   * Whether the step ran with no machine, recorded without re-running the step.
+   *
+   * `status.isConnected` used to be a dependency of the effect below, so a single dropout and
+   * reconnect mid-tour re-ran that step's navigation, section open, scroll and focus with no user
+   * input at all — on a bench where the machine drops out under load, which is most of them.
+   */
+  const isConnectedRef = useRef(status.isConnected);
+  isConnectedRef.current = status.isConnected;
+  useEffect(() => {
+    if (step?.requiresDevice && !status.isConnected) ranWithoutDeviceRef.current = true;
+  }, [step, status.isConnected]);
+
   // Navigate and open, through the same resolver search and the Home tiles use.
   useEffect(() => {
     if (!step) return;
@@ -106,8 +119,8 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
         onToast: () => undefined,
       },
     );
-    if (!status.isConnected && step.requiresDevice) ranWithoutDeviceRef.current = true;
-  }, [step, navigate, status.isConnected]);
+    if (!isConnectedRef.current && step.requiresDevice) ranWithoutDeviceRef.current = true;
+  }, [step, navigate]);
 
   /*
    * Re-measured on scroll, resize and orientation change, so the hole cannot drift off its anchor.

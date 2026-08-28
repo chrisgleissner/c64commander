@@ -1003,8 +1003,10 @@ export default function ConfigBrowserPage() {
     () =>
       subscribeConfigItemFocus(({ category }) => {
         const owningPage = menuPages.find((entry) => restCategoriesOfPage(entry.page).has(category));
+        // Through the shared rule for both, so the deep link and the section it is looking for
+        // cannot drift apart: a menu page slugs its label the same way a category slugs its name.
         const sectionId = owningPage
-          ? owningPage.page.label.toLowerCase().replace(/\s+/g, "-")
+          ? configCategorySectionId(owningPage.page.label)
           : configCategorySectionId(category);
         requestSectionOpen("config", sectionId);
       }),

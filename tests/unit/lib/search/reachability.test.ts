@@ -104,14 +104,19 @@ describe("search index reachability", () => {
       },
     );
 
+    /*
+     * That the Config page and the deep-link resolver agree is now held by construction: both call
+     * configCategorySectionId, including the menu-page branch, which used to slug its label
+     * separately. What is left worth asserting is that the id a category produces is one an HTML
+     * id and a CSS selector can carry — the resolver looks the section up by it.
+     */
     it.each(items.map((entry) => [entry.id, entry] as const))(
-      "%s resolves its category to the section id the Config page uses",
+      "%s resolves its category to a usable section id",
       (_id, entry) => {
         if (entry.target.kind !== "configItem") throw new Error("filtered by kind");
-        // The Config page derives its CollapsibleSection id from the category name the same way.
-        expect(configCategorySectionId(entry.target.category)).toBe(
-          entry.target.category.toLowerCase().replace(/\s+/g, "-"),
-        );
+        const sectionId = configCategorySectionId(entry.target.category);
+        expect(sectionId).not.toBe("");
+        expect(sectionId).toMatch(/^[a-z0-9][a-z0-9-]*$/);
       },
     );
   });
