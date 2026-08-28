@@ -383,6 +383,13 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
 
       <div
         ref={listRef}
+        /*
+         * Everything the arrow keys can stop on carries role="option", including the promoted
+         * chips, the recent searches, each "More in ..." button and the empty state's Open Play.
+         * A listbox may only contain options, and aria-activedescendant may only name one — those
+         * four were plain buttons inside it, so the row the combobox claimed was active was
+         * sometimes not an option at all.
+         */
         role="listbox"
         id="search-results-listbox"
         aria-label={t("search.results", "Search results")}
@@ -401,6 +408,8 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
                   disabled={!resolved.enabled && !resolved.remedyTarget}
                   title={resolved.disabledReason ?? undefined}
                   id={rowId(resolved.entry.id)}
+                  role="option"
+                  aria-selected={activeStopId === rowId(resolved.entry.id)}
                   className={cn(
                     "min-h-11 rounded-full border border-border px-4 text-sm disabled:opacity-50",
                     activeStopId === rowId(resolved.entry.id) && "bg-muted",
@@ -421,6 +430,8 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
                     key={recent}
                     type="button"
                     id={recentQueryId(recent)}
+                    role="option"
+                    aria-selected={activeStopId === recentQueryId(recent)}
                     onClick={() => setQuery(recent)}
                     className={cn(
                       "flex min-h-11 w-full items-center rounded-md px-2 text-left text-sm hover:bg-muted",
@@ -443,6 +454,8 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
             </p>
             <Button
               id={EMPTY_PLAY_STOP_ID}
+              role="option"
+              aria-selected={activeStopId === EMPTY_PLAY_STOP_ID}
               variant="outline"
               onClick={openPlayAndClose}
               className={cn(activeStopId === EMPTY_PLAY_STOP_ID && "bg-muted")}
@@ -499,6 +512,8 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
                 <button
                   type="button"
                   id={moreStopId(section.group)}
+                  role="option"
+                  aria-selected={activeStopId === moreStopId(section.group)}
                   onClick={() => setExpandedGroups((current) => new Set(current).add(section.group))}
                   className={cn(
                     "flex min-h-11 w-full items-center px-2 text-left text-sm text-primary",

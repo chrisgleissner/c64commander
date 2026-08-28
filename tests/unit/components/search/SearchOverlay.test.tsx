@@ -193,11 +193,14 @@ describe("SearchOverlay", () => {
   });
 
   describe("results", () => {
-    it("shows the promoted chips and no results on an empty query", async () => {
+    it("shows the promoted chips and no result rows on an empty query", async () => {
       renderOverlay();
       await open();
       expect(screen.getByTestId("search-promoted")).toBeInTheDocument();
-      expect(screen.queryAllByRole("option")).toHaveLength(0);
+      // The chips are options too — everything the arrow keys stop on is, so the listbox holds only
+      // options and aria-activedescendant can name any of them. What must be absent is a RESULT.
+      expect(screen.queryAllByTestId(/^search-result-/)).toHaveLength(0);
+      expect(screen.getAllByTestId(/^search-chip-/).length).toBeGreaterThan(0);
     });
 
     it("shows recent searches on an empty query once there are some", async () => {
