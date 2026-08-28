@@ -555,7 +555,7 @@ entries:
     title_key: search.settings.textSize
     title: Text size
     subtitle_key: search.settings.textSize.subtitle
-    subtitle: Default, Large, Larger or Largest
+    subtitle: Default or Large
     keywords: [font, bigger, smaller, readable, accessibility, zoom]
     group: setting
     icon: type

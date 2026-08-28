@@ -157,6 +157,26 @@ const ACTIVE_ADD_ITEMS_PROGRESS_STATES = new Set<AddItemsProgressState["status"]
 const DRIVE_MUTATION_SETTLE_MS = isTestEnvironment ? 1 : 1500;
 
 /** Yields control back to the renderer for one event loop tick. */
+const NO_DISK_LABEL = "No disk mounted";
+
+/**
+ * The drive's mounted-image line, which is a path most of the time and a status message when
+ * nothing is mounted.
+ *
+ * ResponsivePathText elides the middle of a long path, which is right for a path and wrong for a
+ * sentence: the row it sits in leaves the label 137 CSS px at the Large text size, two short of
+ * what "No disk mounted" needs, so it drew "No disk mounte…". A sentence wraps instead, and the
+ * row already has flex-wrap for exactly this.
+ */
+const MountedLabel = ({ label, className, dataTestId }: { label: string; className?: string; dataTestId: string }) =>
+  label === NO_DISK_LABEL ? (
+    <span className={cn(className, "break-words")} data-testid={dataTestId}>
+      {label}
+    </span>
+  ) : (
+    <ResponsivePathText path={label} mode="start-and-filename" className={className} dataTestId={dataTestId} />
+  );
+
 const yieldToRenderer = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 const waitAtLeast = async (startedAt: number, durationMs: number) => {
   if (isTestEnvironment || durationMs <= 0) return;
@@ -1866,7 +1886,7 @@ export const HomeDiskManager = () => {
       : 0;
     const canRotate = Boolean(mountedDisk?.group && groupSize > 1);
     const mountedDiskName = forcedEmpty ? null : mountedDisk?.name || info?.image_file || null;
-    const mountedLabel = mountedDiskName ?? "No disk mounted";
+    const mountedLabel = mountedDiskName ?? NO_DISK_LABEL;
 
     const rawStatusLine = resolveDriveStatusRaw(driveErrors[key], info?.last_error);
     const formattedStatus = rawStatusLine ? formatDiskDosStatus(rawStatusLine) : null;
@@ -1905,7 +1925,7 @@ export const HomeDiskManager = () => {
   );
   const softIecDefaultPath = resolveSoftIecDefaultPath(softIecConfig, softIecDevice?.partitions?.[0]?.path ?? null);
   const softIecMounted = Boolean(softIecDevice?.imageFile);
-  const softIecMountedLabel = softIecDevice?.imageFile ?? "No disk mounted";
+  const softIecMountedLabel = softIecDevice?.imageFile ?? NO_DISK_LABEL;
   const softIecPowerEnabled = drivePowerOverride.softiec ?? softIecDevice?.enabled ?? false;
   const softIecHasPowerState = typeof softIecPowerEnabled === "boolean";
   const softIecPowerLabel = softIecPowerEnabled ? "Turn Off" : "Turn On";
@@ -2083,9 +2103,8 @@ export const HomeDiskManager = () => {
                     )}
                   >
                     <div className={cn("min-w-0 items-center gap-1.5", profile === "compact" ? "grid" : "flex")}>
-                      <ResponsivePathText
-                        path={mountedLabel}
-                        mode="start-and-filename"
+                      <MountedLabel
+                        label={mountedLabel}
                         className="min-w-0 flex-1 text-xs text-muted-foreground"
                         dataTestId={`drive-mounted-label-${key}`}
                       />
@@ -2306,14 +2325,13 @@ export const HomeDiskManager = () => {
                 className={cn(
                   "min-w-0 justify-between gap-2",
                   // flex-wrap so the buttons drop below rather than squeezing the mounted-disk
-                  // label to 60 CSS px of the 182 it needs at the largest text size.
+                  // label to a fraction of the width its text needs at the Large text size.
                   profile === "compact" ? "grid" : "flex flex-wrap items-center",
                 )}
               >
-                <ResponsivePathText
-                  path={softIecMountedLabel}
-                  mode="start-and-filename"
-                  className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+                <MountedLabel
+                  label={softIecMountedLabel}
+                  className="min-w-0 flex-1 text-xs text-muted-foreground"
                   dataTestId="drive-mounted-label-soft-iec"
                 />
                 <div className="flex shrink-0 items-center gap-1.5">

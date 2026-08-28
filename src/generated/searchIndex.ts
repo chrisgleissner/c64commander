@@ -586,7 +586,7 @@ export const STATIC_SEARCH_ENTRIES: readonly SearchEntry[] = [
     titleKey: "search.settings.textSize",
     titleDefault: "Text size",
     subtitleKey: "search.settings.textSize.subtitle",
-    subtitleDefault: "Default, Large, Larger or Largest",
+    subtitleDefault: "Default or Large",
     keywords: ["font", "bigger", "smaller", "readable", "accessibility", "zoom"],
     group: "setting",
     iconId: "type",

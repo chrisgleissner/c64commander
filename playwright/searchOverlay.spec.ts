@@ -9,6 +9,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
+import { LARGEST_TEXT_SCALE_ID } from "../src/lib/textScale";
 import { disableTraceAssertions } from "./traceUtils";
 
 /**
@@ -115,10 +116,10 @@ test.describe("search overlay", () => {
 
   test.describe("at 320 x 427, the largest text size", () => {
     test.beforeEach(async ({ page }) => {
-      await page.addInitScript(() => {
-        localStorage.setItem("c64u_text_scale", "largest");
+      await page.addInitScript((scaleId: string) => {
+        localStorage.setItem("c64u_text_scale", scaleId);
         localStorage.setItem("c64u_display_profile_override", "compact");
-      });
+      }, LARGEST_TEXT_SCALE_ID);
       await page.setViewportSize(SMALLEST_VIEWPORT);
     });
 

@@ -709,8 +709,19 @@ button:focus-visible,
  * dropped first. See the comment beside `app-chrome-badge-host` in `UnifiedHealthBadge`.
  */
 @media (max-width: 430px) {
-  .app-chrome-badge-host {
+  .app-chrome-badge-host,
+  .app-chrome-badge-status {
     display: none;
+  }
+
+  /*
+   * What is left is the glyph and the problem count, and neither can be shortened: the badge
+   * carries `min-w-0` so the host can give way, which with the host gone let flexbox squeeze
+   * whatever remained. A floor at its own content width is small here, which is the point — the
+   * width goes to the page title. Above this width the host is shown again and `min-w-0` applies.
+   */
+  .app-chrome-badge {
+    min-width: fit-content;
   }
 }
 
@@ -829,9 +840,16 @@ button:focus-visible,
      medium scale: medium renders text-xl at 24px, so compact needs 24 / 16 = 1.5rem to match.
      `displayProfiles.spec.ts` asserts the two stay within 0.1px of each other, which is what
      catches this drifting when either profile's sizes change. */
+  /*
+   * 1.267, not the 1.1 this had. The header is line-clamped, so its box is a whole number of line
+   * boxes and anything outside them is cut: at 1.1 the line box was 26px against the 28px the font
+   * actually draws, which took the descender off the "y" in "Play files" on every compact screen
+   * and at every text size. The ratio is what matters, so both sides stay in rem; 1.2 was still a
+   * pixel short at the Large text size, where the same font draws 34px into a 33px line.
+   */
   :root[data-display-profile="compact"] :where(.c64-header[class~="text-xl"]) {
     font-size: 1.5rem;
-    line-height: 1.65rem;
+    line-height: 1.9rem;
   }
 
   /*

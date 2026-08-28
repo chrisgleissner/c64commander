@@ -1879,14 +1879,14 @@ describe("SettingsPage", () => {
     const card = screen.getByTestId("settings-text-size");
     expect(within(card).getByTestId("settings-text-size-default")).toHaveClass("bg-primary");
 
-    fireEvent.click(within(card).getByTestId("settings-text-size-larger"));
+    fireEvent.click(within(card).getByTestId("settings-text-size-large"));
 
     // Written, so the size survives a restart.
-    expect(localStorage.getItem(TEXT_SCALE_KEY)).toBe("larger");
+    expect(localStorage.getItem(TEXT_SCALE_KEY)).toBe("large");
     // Applied, so it takes effect on the spot rather than at the next launch.
-    expect(document.documentElement.style.getPropertyValue("--text-scale")).toBe("1.3");
+    expect(document.documentElement.style.getPropertyValue("--text-scale")).toBe("1.15");
     // Reflected back, so the highlighted option is the one actually in force.
-    expect(within(card).getByTestId("settings-text-size-larger")).toHaveClass("bg-primary");
+    expect(within(card).getByTestId("settings-text-size-large")).toHaveClass("bg-primary");
     expect(within(card).getByTestId("settings-text-size-default")).not.toHaveClass("bg-primary");
   });
 

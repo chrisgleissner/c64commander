@@ -13,6 +13,7 @@ import { disableTraceAssertions } from "./traceUtils";
 import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
 import { applyDisplayProfileViewport } from "./displayProfileViewportUtils";
 import { TAB_ROUTES } from "../src/lib/navigation/tabRoutes";
+import { LARGEST_TEXT_SCALE_ID } from "../src/lib/textScale";
 import { auditSmallScreenLayout, formatDefects, type LayoutDefect } from "./smallScreenLayoutAudit";
 
 /**
@@ -188,23 +189,23 @@ test.describe("Small screen layout integrity", () => {
     });
 
     /**
-     * The same 320px screen with the app's own Text size turned up to Largest, which multiplies
-     * every `rem` by 1.5. That combination is a real one — the setting exists precisely for a
-     * small screen — and it is where this kind of defect appears first: a label that fits at the
-     * default size stops fitting, and `overflow-wrap: anywhere` in `index.css` then splits it
-     * mid-word rather than letting it run over. Largest is the only scale tested because it is
-     * the extreme: every defect found at Large or Larger was also present here.
+     * The same 320px screen with the app's own Text size turned up as far as it goes. That
+     * combination is a real one — the setting exists precisely for a small screen — and it is
+     * where this kind of defect appears first: a label that fits at the default size stops
+     * fitting, and `overflow-wrap: anywhere` in `index.css` then splits it mid-word rather than
+     * letting it run over. The size comes from LARGEST_TEXT_SCALE_ID rather than being written
+     * out, so this measures whatever the app currently offers as its maximum.
      */
     test(`${route.label} text fits the smallest supported screen at the largest text size @layout`, async ({
       page,
     }) => {
-      await setup(page, server.baseUrl, { textScale: "largest" });
+      await setup(page, server.baseUrl, { textScale: LARGEST_TEXT_SCALE_ID });
       await page.goto(route.path, { waitUntil: "domcontentloaded" });
       await settle(page);
-      await auditAndAssert(page, `${route.label} at Largest text size (as it loads)`);
+      await auditAndAssert(page, `${route.label} at the largest text size (as it loads)`);
 
       await expandAllSections(page.locator('[data-slot-active="true"]'), page);
-      await auditAndAssert(page, `${route.label} at Largest text size (every section open)`);
+      await auditAndAssert(page, `${route.label} at the largest text size (every section open)`);
     });
 
     test(`${route.label} text fits the smallest supported screen in developer mode @layout`, async ({ page }) => {
@@ -217,17 +218,51 @@ test.describe("Small screen layout integrity", () => {
   }
 
   /**
-   * The tab labels are `rem`-sized, so the app's own Text size setting (a pure CSS
-   * variable, unlike device font scale this harness can't simulate) grows them too. At
-   * largest Text size the six tabs no longer fit, and a fixed-width bar pushed Settings/
-   * Docs off-screen with no way back (HARD25-002). Must stay reachable by scroll.
+   * The page title's descenders.
+   *
+   * The compact profile pins the header's line-height, and the title is line-clamped, so its box
+   * is a whole number of line boxes and anything outside them is cut. At a 1.1 ratio the line box
+   * was 26px against the 28px the font draws, which took the tail off the "y" in "Play files" at
+   * every text size. Two pixels is below what the page audit reports, so it is measured here
+   * against the text's own rectangle.
    */
-  test("tab bar stays reachable when the app's own text size is set to Largest @layout", async ({ page }) => {
-    await seedUiMocks(page, server.baseUrl);
-    await page.addInitScript(() => {
-      localStorage.setItem("c64u_display_profile_override", "compact");
-      localStorage.setItem("c64u_text_scale", "largest");
+  for (const scaleId of ["default", LARGEST_TEXT_SCALE_ID]) {
+    test(`the page title is drawn whole at the ${scaleId} text size @layout`, async ({ page }) => {
+      await setup(page, server.baseUrl, { textScale: scaleId });
+
+      for (const route of TAB_ROUTES) {
+        await page.goto(route.path, { waitUntil: "domcontentloaded" });
+        await settle(page);
+        const title = page.locator("header .c64-header").first();
+        await expect(title).toBeVisible();
+        const fits = await title.evaluate((el) => {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          return { text: range.getBoundingClientRect().height, box: el.clientHeight };
+        });
+        expect(
+          fits.box,
+          `${route.label}: the title box is ${fits.box}px and its text draws ${fits.text}px`,
+        ).toBeGreaterThanOrEqual(Math.ceil(fits.text));
+      }
     });
+  }
+
+  /**
+   * The tab labels are `rem`-sized, so the app's own Text size setting (a pure CSS variable,
+   * unlike device font scale this harness can't simulate) grows them too. A fixed-width bar once
+   * pushed Settings and Docs off-screen with no way back (HARD25-002).
+   *
+   * The bar is not required to overflow. The offered sizes are capped at what the layout can draw
+   * whole, so at 320px all six may well fit; what is required is that every tab can be reached,
+   * which means the bar must scroll if and only if it overflows.
+   */
+  test("every tab stays reachable at the largest text size @layout", async ({ page }) => {
+    await seedUiMocks(page, server.baseUrl);
+    await page.addInitScript((scaleId: string) => {
+      localStorage.setItem("c64u_display_profile_override", "compact");
+      localStorage.setItem("c64u_text_scale", scaleId);
+    }, LARGEST_TEXT_SCALE_ID);
     await page.setViewportSize(compactViewport);
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await settle(page);
@@ -235,12 +270,10 @@ test.describe("Small screen layout integrity", () => {
     const nav = page.locator("nav.tab-bar");
     const scrollWidth = await nav.evaluate((el) => el.scrollWidth);
     const clientWidth = await nav.evaluate((el) => el.clientWidth);
-    expect(
-      scrollWidth,
-      "tab bar must actually overflow at Largest text size for this test to be meaningful",
-    ).toBeGreaterThan(clientWidth);
-    const overflowX = await nav.evaluate((el) => getComputedStyle(el).overflowX);
-    expect(["auto", "scroll"]).toContain(overflowX);
+    if (scrollWidth > clientWidth) {
+      const overflowX = await nav.evaluate((el) => getComputedStyle(el).overflowX);
+      expect(["auto", "scroll"]).toContain(overflowX);
+    }
 
     for (const route of TAB_ROUTES) {
       const tabId = `tab-${route.label.toLowerCase().replace(/\s+/g, "-")}`;

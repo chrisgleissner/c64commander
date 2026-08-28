@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { saveCoverageFromPage } from "./withCoverage";
-import { dismissStartupDiscoveryDialog } from "./uiMocks";
+import { dismissStartupDiscoveryDialog, markTourTaken } from "./uiMocks";
 
 test.afterEach(async ({ page }, testInfo) => {
   await saveCoverageFromPage(page, testInfo.title);
@@ -304,6 +304,9 @@ test.describe("Web platform auth + proxy @web-platform", () => {
       expect(clearPassword.status()).toBe(200);
     }
 
+    // The container starts with empty storage, so without this the first-run tour routes to Home
+    // and covers the page. That is the tour behaving correctly; it is not what this test is about.
+    await markTourTaken(page);
     await page.goto("/play");
     await dismissStartupDiscoveryDialog(page);
     const addButton = page.getByRole("button", {

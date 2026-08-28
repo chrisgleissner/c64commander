@@ -8,7 +8,12 @@
 
 import { type DisplayProfileOverride, isDisplayProfileOverride } from "@/lib/displayProfiles";
 import { variant } from "@/generated/variant";
-import { DEFAULT_TEXT_SCALE_ID, applyTextScaleToDocument, isTextScaleId, type TextScaleId } from "@/lib/textScale";
+import {
+  DEFAULT_TEXT_SCALE_ID,
+  applyTextScaleToDocument,
+  normalizeTextScaleId,
+  type TextScaleId,
+} from "@/lib/textScale";
 
 const LIST_PREVIEW_LIMIT_KEY = "c64u_list_preview_limit";
 const DISPLAY_PROFILE_OVERRIDE_KEY = "c64u_display_profile_override";
@@ -69,7 +74,7 @@ export const setDisplayProfileOverride = (value: DisplayProfileOverride) => {
 export const getTextScaleId = (): TextScaleId => {
   if (typeof localStorage === "undefined") return DEFAULT_TEXT_SCALE_ID;
   const raw = localStorage.getItem(TEXT_SCALE_KEY);
-  return isTextScaleId(raw) ? raw : DEFAULT_TEXT_SCALE_ID;
+  return normalizeTextScaleId(raw);
 };
 
 export const setTextScaleId = (value: TextScaleId) => {

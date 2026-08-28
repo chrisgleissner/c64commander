@@ -34,6 +34,26 @@ type HvscFixture = {
   }>;
 };
 
+/** The tour state a launch that has already seen the tour writes. */
+export const TOUR_TAKEN_STATE = JSON.stringify({
+  completedAt: 1735689600000,
+  skippedAt: null,
+  lastStepId: null,
+  deviceStepsPending: false,
+});
+
+/**
+ * Record the first-run tour as taken, before the first navigation.
+ *
+ * The tour is a full-screen overlay that opens on a launch where nothing has been recorded, and it
+ * routes to Home first, so on any other page it both covers and navigates away from what a walk is
+ * there to drive. seedUiMocks writes the same key; this is for specs that run against a real server
+ * and so do not seed anything else.
+ */
+export async function markTourTaken(page: Page) {
+  await page.addInitScript((state: string) => localStorage.setItem("c64u_tour_state:v1", state), TOUR_TAKEN_STATE);
+}
+
 export async function dismissStartupDiscoveryDialog(page: Page) {
   const clickIfVisible = async (locator: Locator, label: string) => {
     const button = locator.first();
@@ -214,6 +234,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       seedFeatureFlagsByDefault: seedFeatureFlags,
       clearStorageBeforeSeeding: clearStorage,
       currentDeviceHostKey: currentDeviceHostKeyArg,
+      tourTakenState,
     }: {
       baseUrl: string;
       songData: string;
@@ -228,6 +249,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       seedFeatureFlagsByDefault: boolean;
       clearStorageBeforeSeeding: boolean;
       currentDeviceHostKey: string;
+      tourTakenState: string;
     }) => {
       if (clearStorage) {
         localStorage.clear();
@@ -531,10 +553,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
          * page each walk is there to drive. A test that wants to SEE the tour clears this key
          * itself; see playwright/tour.spec.ts.
          */
-        localStorage.setItem(
-          "c64u_tour_state:v1",
-          JSON.stringify({ completedAt: 1735689600000, skippedAt: null, lastStepId: null, deviceStepsPending: false }),
-        );
+        localStorage.setItem("c64u_tour_state:v1", tourTakenState);
         if (seedFeatureFlags) {
           localStorage.setItem("c64u_dev_mode_enabled", "1");
           localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
@@ -641,6 +660,7 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
       seedFeatureFlagsByDefault,
       clearStorageBeforeSeeding,
       currentDeviceHostKey,
+      tourTakenState: TOUR_TAKEN_STATE,
     },
   );
 }

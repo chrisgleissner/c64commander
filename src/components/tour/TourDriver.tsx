@@ -205,9 +205,19 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
         />
       ) : null}
 
+      {/*
+        The panel reaches the edge of the screen, and its buttons must not. On a handset with
+        gesture navigation the bottom inset is the system bar: without this the Skip, Back and Next
+        row was drawn underneath it, half covered and hard to hit. Padding rather than an offset, so
+        the panel still meets the edge instead of leaving a strip of the page showing below it.
+      */}
       <div
         className="absolute inset-x-0 space-y-2 border-border bg-card p-4 shadow-elev-2"
-        style={placement === "bottom" ? { bottom: 0, borderTopWidth: 1 } : { top: 0, borderBottomWidth: 1 }}
+        style={
+          placement === "bottom"
+            ? { bottom: 0, borderTopWidth: 1, paddingBottom: "calc(1rem + var(--safe-area-inset-bottom, 0px))" }
+            : { top: 0, borderBottomWidth: 1, paddingTop: "calc(1rem + var(--safe-area-inset-top, 0px))" }
+        }
         data-testid="tour-caption"
         data-placement={placement}
       >

@@ -72,6 +72,36 @@ test.describe("first-run tour", () => {
     await expect(page.getByTestId("tour-overlay")).toHaveCount(0);
   });
 
+  /*
+   * The buttons sit above the system bar, not under it.
+   *
+   * The panel is pinned to the bottom edge, which on a handset with gesture navigation is where
+   * the system bar is. Without the inset the Skip, Back and Next row was drawn underneath it: on
+   * the device the row was half covered and hard to hit. The inset is a CSS variable the native
+   * layer writes, so the test writes it too.
+   */
+  test("keeps its buttons clear of the bottom system bar", async ({ page }) => {
+    const inset = 48;
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("tour-overlay")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("tour-caption")).toHaveAttribute("data-placement", "bottom");
+    // Written after start-up, because the native safe-area bridge writes this variable itself on
+    // launch and would overwrite a value set before it.
+    await page.evaluate((value: number) => {
+      document.documentElement.style.setProperty("--native-safe-area-inset-bottom", `${value}px`);
+    }, inset);
+    await page.waitForTimeout(200);
+
+    const viewportHeight = page.viewportSize()!.height;
+    for (const testId of ["tour-skip", "tour-back", "tour-next"]) {
+      const box = await page.getByTestId(testId).boundingBox();
+      expect(box, `${testId} must be laid out`).not.toBeNull();
+      expect(box!.y + box!.height, `${testId} must sit above the ${inset}px system bar`).toBeLessThanOrEqual(
+        viewportHeight - inset,
+      );
+    }
+  });
+
   test("spotlights the Home search field on the step that is about search", async ({ page }) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("tour-overlay")).toBeVisible({ timeout: 30_000 });

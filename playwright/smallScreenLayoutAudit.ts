@@ -242,9 +242,9 @@ export const auditSmallScreenLayout = async (page: Page, options: LayoutAuditOpt
 
     /**
      * A container that scrolls horizontally puts its content past the viewport on purpose, and
-     * the reader reaches it by scrolling. The tab bar is the case that matters here: at the
-     * largest Text size its six labels are wider than 320px by design, and
-     * `smallScreenLayoutIntegrity.spec.ts` asserts separately that they stay reachable.
+     * the reader reaches it by scrolling. The tab bar is the case that matters here: if its six
+     * labels are wider than 320px it scrolls by design, and `smallScreenLayoutIntegrity.spec.ts`
+     * asserts separately that every tab stays reachable.
      */
     const scrollsHorizontally = (element: HTMLElement): boolean => {
       let node: HTMLElement | null = element.parentElement;
