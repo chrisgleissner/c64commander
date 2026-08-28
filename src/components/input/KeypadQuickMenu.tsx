@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 import { requestDeviceSwitcherOpen, subscribeQuickMenuOpen, type QuickMenuSource } from "@/lib/input/keypadCommands";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
+import { requestSearchOpen } from "@/lib/search/overlayState";
 import { startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
@@ -102,6 +103,25 @@ export function KeypadQuickMenu() {
           </DialogDescription>
         </DialogHeader>
         <div className="-mx-1 grid min-h-0 flex-1 gap-1.5 overflow-y-auto px-1">
+          {/*
+            The top entry, on both sources: search is the way around the app for someone who does
+            not know where a thing lives, which is exactly why they opened this menu. Opening it
+            closes this dialog FIRST and opens the overlay on the next tick — stacking two Radix
+            focus scopes and letting one unmount under the other is a known source of stray focus
+            and swallowed Back presses in this codebase (spec.md section 5.7).
+          */}
+          <Button
+            variant="ghost"
+            className="justify-start gap-3"
+            data-testid="keypad-quick-menu-search"
+            onClick={() => {
+              setOpen(false);
+              setTimeout(() => requestSearchOpen({ source: "quick-menu" }), 0);
+            }}
+          >
+            {fromKeypad ? <ShortcutKey>7</ShortcutKey> : null}
+            Search
+          </Button>
           {fromKeypad
             ? TAB_ROUTES.map((route, index) => (
                 <Button

@@ -1,0 +1,151 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { SHARED_DISK_LIBRARY_ID, loadDiskLibrary } from "@/lib/disks/diskStore";
+import { normalize } from "@/lib/search/score";
+import { useHvscArchiveSearch } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
+import type { SearchEntry } from "@/lib/search/types";
+
+/**
+ * Tier 2: tens of thousands of rows, delegated to the stores that own them (spec.md sections 5.4
+ * and 5.9). Debounced and appended when it returns; it never blocks tiers 0 and 1.
+ *
+ * There is one HVSC search implementation and this is a second caller of it: `useHvscArchiveSearch`
+ * is unchanged, with its existing 180 ms debounce and 100-result cap. The config tree is read from
+ * the react-query cache the Config page already fills, so nothing new is asked of the device, and
+ * the disk library is a local store.
+ */
+
+/** The same cap the HVSC hook applies, used for the two local sources so one cannot flood the list. */
+const LOCAL_RESULT_LIMIT = 100;
+
+const diskEntries = (query: string): SearchEntry[] => {
+  if (typeof localStorage === "undefined") return [];
+  const needle = normalize(query);
+  const library = loadDiskLibrary(SHARED_DISK_LIBRARY_ID);
+  const matches: SearchEntry[] = [];
+  for (const disk of library.disks) {
+    if (!normalize(disk.name).includes(needle)) continue;
+    matches.push({
+      id: `disk.${disk.id}`,
+      titleKey: `search.disk.${disk.id}`,
+      titleDefault: disk.name,
+      subtitleKey: `search.disk.${disk.id}.path`,
+      subtitleDefault: disk.path,
+      group: "disk",
+      target: { kind: "route", path: "/disks" },
+    });
+    if (matches.length >= LOCAL_RESULT_LIMIT) break;
+  }
+  return matches;
+};
+
+/**
+ * The item names a cached `c64-category` response holds. The shape the device returns is
+ * `{ "<Category>": { items?: { "<Item>": ... } } }`, the same shape the Config page unwraps.
+ */
+const itemNamesOf = (data: unknown, category: string): string[] => {
+  if (!data || typeof data !== "object") return [];
+  const categoryData = (data as Record<string, unknown>)[category];
+  if (!categoryData || typeof categoryData !== "object" || Array.isArray(categoryData)) return [];
+  const items = (categoryData as { items?: unknown }).items ?? categoryData;
+  if (!items || typeof items !== "object") return [];
+  return Object.keys(items as Record<string, unknown>).filter((name) => name !== "errors");
+};
+
+/**
+ * Config items from whatever the Config page has already fetched. A cache read, never a fetch: the
+ * device is treated as fragile in this repo, and an item index is not worth a round of requests.
+ */
+const configEntries = (query: string, cached: ReadonlyArray<[readonly unknown[], unknown]>): SearchEntry[] => {
+  const needle = normalize(query);
+  const matches: SearchEntry[] = [];
+  const seen = new Set<string>();
+  for (const [key, data] of cached) {
+    if (key[0] !== "c64-category") continue;
+    const category = typeof key[1] === "string" ? key[1] : null;
+    if (category === null) continue;
+    for (const name of itemNamesOf(data, category)) {
+      if (!normalize(name).includes(needle)) continue;
+      const id = `config.${category}::${name}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      matches.push({
+        id,
+        titleKey: `search.configItem.${id}`,
+        titleDefault: name,
+        subtitleKey: `search.configItem.${id}.category`,
+        subtitleDefault: category,
+        group: "config",
+        target: { kind: "configItem", category, itemName: name },
+        requires: [{ kind: "device" }],
+      });
+      if (matches.length >= LOCAL_RESULT_LIMIT) break;
+    }
+  }
+  return matches;
+};
+
+export interface Tier2State {
+  readonly entries: readonly SearchEntry[];
+  /** True while the archive scan is still running, so its group header can show a spinner. */
+  readonly isSearching: boolean;
+  readonly indexUnavailable: boolean;
+}
+
+export const useSearchTier2 = (query: string, enabled: boolean): Tier2State => {
+  const queryClient = useQueryClient();
+  const hvsc = useHvscArchiveSearch({ enabled });
+  const [localEntries, setLocalEntries] = useState<readonly SearchEntry[]>([]);
+
+  const trimmed = query.trim();
+
+  // Held in a ref, not a dependency: `hvsc` is a fresh object on every result commit, and
+  // depending on it would restart the archive's own debounce on each one.
+  const setHvscQuery = hvsc.setQuery;
+  useEffect(() => {
+    setHvscQuery(enabled ? trimmed : "");
+  }, [trimmed, enabled, setHvscQuery]);
+
+  useEffect(() => {
+    if (!enabled || trimmed === "") {
+      setLocalEntries([]);
+      return;
+    }
+    const cached = queryClient
+      .getQueryCache()
+      .getAll()
+      .map((entry) => [entry.queryKey, entry.state.data] as [readonly unknown[], unknown]);
+    setLocalEntries([...diskEntries(trimmed), ...configEntries(trimmed, cached)]);
+  }, [enabled, trimmed, queryClient]);
+
+  const musicEntries = useMemo<SearchEntry[]>(
+    () =>
+      hvsc.hits.map((hit) => ({
+        id: `music.${hit.virtualPath}`,
+        titleKey: `search.music.${hit.virtualPath}`,
+        titleDefault: hit.title,
+        subtitleKey: `search.music.${hit.virtualPath}.author`,
+        subtitleDefault: hit.author ?? hit.folder,
+        group: "music",
+        target: { kind: "route", path: "/play" },
+      })),
+    [hvsc.hits],
+  );
+
+  return useMemo(
+    () => ({
+      entries: [...localEntries, ...musicEntries],
+      isSearching: hvsc.isSearching,
+      indexUnavailable: hvsc.indexUnavailable,
+    }),
+    [localEntries, musicEntries, hvsc.isSearching, hvsc.indexUnavailable],
+  );
+};

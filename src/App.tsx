@@ -34,6 +34,8 @@ import { FocusNavigationProvider, type KeypadShortcutHandlers } from "@/hooks/us
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
+import { SearchKeyListener } from "@/components/search/SearchKeyListener";
+import { SearchOverlay } from "@/components/search/SearchOverlay";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { requestDeviceSwitcherOpen, requestQuickMenuOpen } from "@/lib/input/keypadCommands";
 import { GAME_MODE_HOST_PATHS, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
@@ -309,6 +311,11 @@ const AppRoutes = () => {
             <TraceContextBridge />
             <GlobalDiagnosticsOverlay />
             <KeypadQuickMenu />
+            {/* The search key has its OWN window listener rather than a keypad shortcut, so it
+                still works when FocusNavigationProvider is mounted disabled — which is what
+                keypad_input_enabled: false does (spec.md D11). */}
+            <SearchKeyListener />
+            <SearchOverlay />
             <ConnectionController />
             <DemoModeInterstitial />
             <DeviceDiscoveryInterstitial />

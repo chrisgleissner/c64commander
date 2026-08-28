@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   loadDebugLoggingEnabled: vi.fn(),
   loadEnableSwipeNavigation: vi.fn(),
   getPlatform: vi.fn(),
+  isNativePlatform: vi.fn(() => false),
   redactTreeUri: vi.fn((uri: string) => `redacted:${uri}`),
   getPersistedUris: vi.fn(),
   uninstallConsoleBridge: vi.fn(),
@@ -205,8 +206,14 @@ vi.mock("@/lib/config/appSettings", () => ({
   saveVicPaletteId: vi.fn(),
   // Read by the app-root LocalSidModelDriver, which learns the connected machine's SID chip.
   loadLocalSidModelFromDevice: vi.fn(() => true),
+  // Read by the app-root search overlay: SID Radio is a switch in Settings, not a feature flag,
+  // and a search row gated on it has to be able to say so.
+  loadSidRadioEnabled: vi.fn(() => true),
 }));
-vi.mock("@/lib/native/platform", () => ({ getPlatform: mocks.getPlatform }));
+vi.mock("@/lib/native/platform", () => ({
+  getPlatform: mocks.getPlatform,
+  isNativePlatform: mocks.isNativePlatform,
+}));
 vi.mock("@/lib/native/safUtils", () => ({ redactTreeUri: mocks.redactTreeUri }));
 vi.mock("@/lib/native/folderPicker", () => ({
   FolderPicker: { getPersistedUris: mocks.getPersistedUris, releasePersistedUris: vi.fn() },

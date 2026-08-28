@@ -57,6 +57,7 @@ import {
   isHorizontalKeyOwner,
   normalizeKeyEvent,
   resolveInputProfile,
+  SKIP_ATTR,
   setInputModality,
   subscribeInputModality,
   type DismissibleLayer,
@@ -65,6 +66,7 @@ import {
 } from "@/lib/input";
 import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";
 import { KeypadGuidanceBar } from "@/components/input/KeypadGuidanceBar";
+import { isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 
 /** DOM attribute marking the current focus-ring item while in key-navigation modality. */
@@ -90,29 +92,6 @@ export interface FocusNavigationContextValue {
 
 const FocusNavigationContext = createContext<FocusNavigationContextValue | null>(null);
 
-/**
- * True when the event target is a text-editing element. Global navigation skips
- * these so digits/arrows reach the field (and its T9 composer) instead of being
- * consumed for focus movement.
- */
-const isEditableTarget = (target: EventTarget | null): boolean => {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
-  if (target.isContentEditable) return true;
-  const editableAttr = target.getAttribute("contenteditable");
-  return editableAttr !== null && editableAttr !== "false";
-};
-
-/**
- * Radix overlays (dialog, alert dialog, dropdown/context menu, select listbox,
- * popover) own the keyboard while focus is inside them. The global focus ring
- * sits behind them, so it must stay inert there (HAZARD 2). The discovery engine
- * already switches scope to the open overlay, but app dialogs that do not push a
- * controller layer still need this guard so an Enter never reaches a CTA behind.
- */
-const OPEN_OVERLAY_ANCESTOR_SELECTOR =
-  '[role="dialog"],[role="alertdialog"],[role="menu"],[role="listbox"],[data-radix-popper-content-wrapper]';
 /**
  * The subset of `OPEN_OVERLAY_ANCESTOR_SELECTOR` that has no native Up/Down of its own.
  * A menu/listbox/popper (a Select's dropdown, a context menu) already drives Up/Down itself —
@@ -466,7 +445,16 @@ export const FocusNavigationProvider = ({
         // the stepper inputs keep their vertical keys, which do mean something in those.
         if ((action === "dpadUp" || action === "dpadDown") && isSingleLineTextField(event.target)) {
           const overlay = (event.target as Element).closest(OPEN_OVERLAY_ANCESTOR_SELECTOR);
-          if (overlay && stepFocusWithinOverlay(overlay, event.target as Element, action === "dpadDown")) {
+          // Except where the overlay has opted out with `data-key-nav-skip`, which says it drives
+          // its own keys. The search overlay does: its Up/Down move an aria-activedescendant while
+          // focus STAYS in the field, so stepping DOM focus here would stop the user typing on the
+          // first press (spec.md section 5.7).
+          const ownsItsKeys = (event.target as Element).closest(`[${SKIP_ATTR}]`) !== null;
+          if (
+            !ownsItsKeys &&
+            overlay &&
+            stepFocusWithinOverlay(overlay, event.target as Element, action === "dpadDown")
+          ) {
             event.preventDefault();
             return;
           }

@@ -51,7 +51,13 @@ export type SemanticAction =
   | "activate"
   | "openMenu"
   | "closeMenu"
-  | "toggleInputMode";
+  | "toggleInputMode"
+  /* Reserved for the Commodore key once its emitted code is known (spec.md section 9.3). `7` is
+     served by the dedicated search listener, outside the keypad provider, so the search key does
+     not disappear when keypad navigation is switched off. */
+  | "openSearch"
+  | "mediaPlayPause"
+  | "mediaNext";
 
 /** Every {@link SemanticAction}, useful for exhaustiveness checks and tests. */
 export const SEMANTIC_ACTIONS: readonly SemanticAction[] = [
@@ -84,6 +90,9 @@ export const SEMANTIC_ACTIONS: readonly SemanticAction[] = [
   "openMenu",
   "closeMenu",
   "toggleInputMode",
+  "openSearch",
+  "mediaPlayPause",
+  "mediaNext",
 ];
 
 const DIGIT_ACTIONS: readonly SemanticAction[] = [
