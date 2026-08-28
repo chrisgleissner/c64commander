@@ -20,8 +20,19 @@ import { TOUR_STEPS } from "../src/lib/tour/steps";
  * place the first-launch behaviour is exercised end to end.
  */
 
+/*
+ * Make the NEXT load a first launch, and only that one.
+ *
+ * addInitScript runs on every navigation, so an unconditional remove would also wipe the record a
+ * reload is there to check — the tour would reopen and the test would report a defect that is its
+ * own. sessionStorage survives a reload in the same tab, so it is what marks "already done".
+ */
 const clearTourState = async (page: Page) => {
-  await page.addInitScript(() => localStorage.removeItem("c64u_tour_state:v1"));
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("__tourStateClearedOnce") === "1") return;
+    sessionStorage.setItem("__tourStateClearedOnce", "1");
+    localStorage.removeItem("c64u_tour_state:v1");
+  });
 };
 
 test.describe("first-run tour", () => {
@@ -98,6 +109,11 @@ test.describe("first-run tour", () => {
     await expect(page.getByTestId("tour-overlay")).toBeHidden();
 
     await page.goto("/docs", { waitUntil: "domcontentloaded" });
+    await page.locator("nav.tab-bar").first().waitFor({ state: "visible", timeout: 30_000 });
+    // The card animates in, so wait for it to settle rather than clicking a node about to be
+    // replaced — the first version of this failed with "element was detached from the DOM".
+    await expect(page.getByTestId("docs-tour-start")).toBeVisible();
+    await page.waitForTimeout(600);
     await page.getByTestId("docs-tour-start").click();
     await expect(page.getByTestId("tour-overlay")).toBeVisible();
     await expect(page.getByTestId("tour-progress")).toHaveText(`Step 1 of ${TOUR_STEPS.length}`);

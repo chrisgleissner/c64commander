@@ -31,4 +31,51 @@ describe("web Dockerfile", () => {
       dockerfile.indexOf("RUN npm run build && npm run build:web-server"),
     );
   });
+
+  /*
+   * Every top-level directory a prebuild compiler reads has to be in the image.
+   *
+   * `search/` was not, and the omission was invisible until the Docker build failed with
+   * "ENOENT: no such file or directory, open '/app/search/search-index.yaml'" — the compilers run
+   * from `prebuild`, which the Dockerfile invokes through `npm run build`, so a source directory
+   * left out of the COPY list fails only there. Derived from package.json rather than listed here,
+   * so the next generator added to prebuild is covered without anyone remembering to.
+   */
+  it("copies every top-level directory the prebuild compilers read", () => {
+    const dockerfile = fs.readFileSync(dockerfilePath, "utf8");
+    const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+
+    const scriptFiles = packageJson.scripts.prebuild
+      .split("&&")
+      .map((step) => /npm run ([\w:-]+)/.exec(step.trim())?.[1])
+      .filter((name): name is string => Boolean(name))
+      .map((name) => /node (scripts\/[\w.-]+\.mjs)/.exec(packageJson.scripts[name] ?? "")?.[1])
+      .filter((file): file is string => Boolean(file));
+
+    expect(scriptFiles.length).toBeGreaterThan(0);
+
+    const readDirectories = new Set<string>();
+    for (const file of scriptFiles) {
+      const source = fs.readFileSync(path.join(repoRoot, file), "utf8");
+      for (const match of source.matchAll(/join\(REPO_ROOT,\s*"([\w.-]+)"/g)) {
+        const entry = match[1];
+        // Directories only: a single file (index.html) is copied as `COPY <file> ./`, and `src` is
+        // copied wholesale already. Anything generated INTO a directory is an output, not an input.
+        if (entry === "src" || entry === "dist") continue;
+        const absolute = path.join(repoRoot, entry);
+        if (fs.existsSync(absolute) && fs.statSync(absolute).isDirectory()) readDirectories.add(entry);
+      }
+    }
+
+    for (const directory of readDirectories) {
+      expect(dockerfile, `${directory} is read by a prebuild compiler but not copied`).toContain(
+        `COPY ${directory} ./${directory}`,
+      );
+      expect(dockerfile.indexOf(`COPY ${directory} ./${directory}`)).toBeLessThan(
+        dockerfile.indexOf("RUN npm run build && npm run build:web-server"),
+      );
+    }
+  });
 });

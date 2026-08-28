@@ -168,7 +168,9 @@ test.describe("search overlay", () => {
       await page.goto("/", { waitUntil: "domcontentloaded" });
       await settle(page);
       await page.getByTestId("home-search-field").click();
-      await page.getByTestId("search-input").fill("configuration");
+      // A query that matches long rows: every term has to match something in an entry, and
+      // "configuration" matches nothing — "config" does not start with it.
+      await page.getByTestId("search-input").fill("connection");
       await expect(page.locator('[role="option"]').first()).toBeVisible();
 
       const overflow = await page.evaluate(() => {

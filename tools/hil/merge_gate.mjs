@@ -882,26 +882,44 @@ const main = async () => {
    * four-character query, p95 under 100 ms.
    */
   await stage("search-latency", false, async () => {
-    const measured = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+    const opened = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
 const w=window; w.__c64uSearchLatencyProbe=true; w.__c64uSearchLatencySamples=[];
 const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
 q("tab-home")?.click(); await wait(1200);
 q("home-search-field")?.click(); await wait(900);
-const input=q("search-input");
-if(!input) return JSON.stringify({error:"the search overlay did not open"});
+return JSON.stringify({opened: q("search-input") !== null});})()`);
+    if (!opened?.opened) throw new Error("the search overlay did not open");
+
+    /*
+     * Five rounds per eval, not thirty in one.
+     *
+     * bughunt-cdp gives Runtime.evaluate 15 s, and thirty rounds at 120 ms a keystroke is past
+     * twenty — the first version of this stage failed on that timeout rather than on the budget.
+     */
+    for (let batch = 0; batch < 6; batch += 1) {
+      const round = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+const input=document.querySelector('[data-testid="search-input"]');
+if(!input) return JSON.stringify({error:"the search field went away mid-run"});
 const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,"value").set;
 const type=async(text)=>{setter.call(input,text);
   input.dispatchEvent(new Event("input",{bubbles:true})); await wait(120);};
 const WORD="radio";
-for(let round=0;round<30;round+=1){
+for(let round=0;round<5;round+=1){
   for(let n=1;n<=4;n+=1) await type(WORD.slice(0,n));
-  await type(""); await wait(80);
+  // Clearing the box draws the promoted chips rather than a result list, which is a different
+  // amount of work — so the probe is off for it and only the four typed characters are sampled.
+  window.__c64uSearchLatencyProbe=false; await type(""); await wait(80);
+  window.__c64uSearchLatencyProbe=true;
 }
-const samples=w.__c64uSearchLatencySamples.slice(); w.__c64uSearchLatencyProbe=false;
-q("search-close")?.click(); await wait(300);
+return JSON.stringify({count:(window.__c64uSearchLatencySamples||[]).length});})()`);
+      if (round?.error) throw new Error(round.error);
+    }
+
+    const measured = await js(`(()=>{const w=window;
+const samples=(w.__c64uSearchLatencySamples||[]).slice(); w.__c64uSearchLatencyProbe=false;
+document.querySelector('[data-testid="search-close"]')?.click();
 return JSON.stringify({samples});})()`);
 
-    if (measured?.error) throw new Error(measured.error);
     const samples = Array.isArray(measured?.samples) ? measured.samples : [];
     if (samples.length < 120) {
       throw new Error(`only ${samples.length} of the 120 samples were recorded; a p95 needs all of them`);

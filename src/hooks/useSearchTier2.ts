@@ -26,6 +26,9 @@ import type { SearchEntry } from "@/lib/search/types";
 /** The same cap the HVSC hook applies, used for the two local sources so one cannot flood the list. */
 const LOCAL_RESULT_LIMIT = 100;
 
+/** The same debounce the HVSC hook applies, so the two halves of tier 2 land together. */
+const TIER2_DEBOUNCE_MS = 180;
+
 const diskEntries = (query: string): SearchEntry[] => {
   if (typeof localStorage === "undefined") return [];
   const needle = normalize(query);
@@ -114,16 +117,28 @@ export const useSearchTier2 = (query: string, enabled: boolean): Tier2State => {
     setHvscQuery(enabled ? trimmed : "");
   }, [trimmed, enabled, setHvscQuery]);
 
+  /*
+   * Debounced by the same 180 ms the archive uses, and for the same reason.
+   *
+   * These two scans read the whole disk library out of localStorage and walk every cached config
+   * category, and running them synchronously on the keystroke put that work on the path between a
+   * key press and the painted list: the HIL latency stage measured 118.8 ms at p95 against a 100 ms
+   * budget, and 71.6 ms once they moved off it. Tier 2 is defined as debounced and appended
+   * (spec.md section 5.4); this is the half of it that is not the archive.
+   */
   useEffect(() => {
     if (!enabled || trimmed === "") {
       setLocalEntries([]);
-      return;
+      return undefined;
     }
-    const cached = queryClient
-      .getQueryCache()
-      .getAll()
-      .map((entry) => [entry.queryKey, entry.state.data] as [readonly unknown[], unknown]);
-    setLocalEntries([...diskEntries(trimmed), ...configEntries(trimmed, cached)]);
+    const timer = window.setTimeout(() => {
+      const cached = queryClient
+        .getQueryCache()
+        .getAll()
+        .map((entry) => [entry.queryKey, entry.state.data] as [readonly unknown[], unknown]);
+      setLocalEntries([...diskEntries(trimmed), ...configEntries(trimmed, cached)]);
+    }, TIER2_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
   }, [enabled, trimmed, queryClient]);
 
   const musicEntries = useMemo<SearchEntry[]>(
