@@ -38,7 +38,7 @@ import { useArrangementPin } from "@/hooks/useArrangementPin";
 import { useOfflineArrangement } from "@/hooks/useOfflineArrangement";
 import { SystemInfo } from "./home/components/SystemInfo";
 import { HomeSearchField } from "./home/components/HomeSearchField";
-import { ListenAndPlay } from "./home/components/ListenAndPlay";
+import { useListenActions } from "./home/components/useListenActions";
 import { ConnectC64Card } from "./home/components/ConnectC64Card";
 import { DeviceStepsOffer } from "@/components/tour/DeviceStepsOffer";
 import { MachineControls } from "./home/components/MachineControls";
@@ -770,6 +770,7 @@ function HomePageContent() {
   const clearRamRebootSupport = telnet.isAvailable ? getTelnetSupport("rebootClearMemory") : null;
   const clearRamRebootVisible =
     homeTelnetClearRamRebootEnabled && telnet.isAvailable && clearRamRebootSupport?.status !== "unsupported";
+  const listenActions = useListenActions();
   const machineExtraActions = [
     ...(remoteInputEnabled
       ? [
@@ -810,6 +811,17 @@ function HomePageContent() {
           },
         ]
       : []),
+    /*
+     * Radio, Resume, Recent and Live View, but only while the machine section is open.
+     *
+     * MachineControls keeps them together at the end of the safe tiles, so Radio stands
+     * immediately before Resume and Recent and gives them their context without either needing a
+     * longer label. Home draws that whole section closed once a device has been unreachable for
+     * the settle window, and these are the actions that need no device at all — so in the offline
+     * arrangement they are rendered on their own below, rather than shut away with controls that
+     * genuinely cannot run.
+     */
+    ...(offlineArrangement ? [] : listenActions),
   ];
 
   const ramDumpFolderDisplayPath = ramDumpFolder
@@ -1279,9 +1291,33 @@ function HomePageContent() {
 
           <DeviceStepsOffer />
 
-          <ListenAndPlay />
-
           {offlineArrangement ? <ConnectC64Card /> : null}
+
+          {/* The same tiles, and the same grid, standing alone while the machine's own controls are
+              put away. No heading: they are the same kind of thing as the actions below, and a
+              banner of their own is what over-weighted the standalone player before. */}
+          {offlineArrangement ? (
+            <ProfileActionGrid
+              compactColumns={2}
+              mediumColumns={4}
+              expandedColumns={4}
+              cardDensity="compact"
+              testId="home-promoted-actions"
+            >
+              {listenActions.map((action) => (
+                <QuickActionCard
+                  key={action.id}
+                  icon={action.icon}
+                  label={action.label}
+                  description={action.description ?? undefined}
+                  disabled={action.disabled}
+                  onClick={action.onSelect}
+                  dataTestId={action.testId}
+                  focusId={action.focusId}
+                />
+              ))}
+            </ProfileActionGrid>
+          ) : null}
 
           {/* Machine */}
           <MachineControls
@@ -1312,8 +1348,6 @@ function HomePageContent() {
             onAction={handleAction}
             telnetBusy={telnet.isBusy}
           />
-
-          <SystemInfo appVersionOnly={offlineArrangement} />
 
           {offlineArrangement ? (
             <p className="px-2 text-sm text-muted-foreground" data-testid="home-offline-sections-note">
@@ -1996,6 +2030,11 @@ function HomePageContent() {
               )}
             </ProfileActionGrid>
           </CollapsibleSection>
+
+          {/* Last, because it is reference rather than an action: the app version, the host and the
+              firmware are read when something is wrong or before an upgrade, and never otherwise.
+              Anything wanted that rarely belongs where a reader scrolls to it deliberately. */}
+          <SystemInfo appVersionOnly={offlineArrangement} />
 
           {/* Config Fetch Error */}
           {configFetchError && (

@@ -56,7 +56,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     id: "listening-without-a-c64",
     title: "Music with no C64",
     body: "Radio plays thousands of classic C64 tunes on this device alone. No hardware and no network — pick a mood and it keeps going.",
-    anchor: { path: "/", scope: "home", sectionId: "listen-and-play", testIds: ["home-tile-action.sid-radio"] },
+    anchor: { path: "/", scope: "home", sectionId: "quick-actions", testIds: ["home-tile-action.sid-radio"] },
   },
   {
     id: "your-tunes",
@@ -65,7 +65,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     anchor: {
       path: "/",
       scope: "home",
-      sectionId: "listen-and-play",
+      sectionId: "quick-actions",
       testIds: ["home-tile-action.resume-session", "home-tile-action.recently-played"],
     },
   },

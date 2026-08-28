@@ -33,17 +33,17 @@ describe("README screenshot coverage", () => {
     expect(sources).toEqual(
       expect.arrayContaining([
         "docs/img/app/home/00-overview-light.png",
-        "docs/img/app/home/sections/01-listen-and-play-to-quick-actions.png",
+        "docs/img/app/home/sections/01-quick-actions.png",
         "docs/img/app/home/01-overview-dark.png",
-        "docs/img/app/home/sections/06-video-to-audio.png",
+        "docs/img/app/home/sections/05-video-to-audio.png",
         "docs/img/app/home/sections/10-lighting-to-keyboard-light.png",
-        "docs/img/app/home/sections/13-drives-to-printers.png",
-        "docs/img/app/home/sections/15-streams-to-config.png",
+        "docs/img/app/home/sections/12-drives-to-printers.png",
+        "docs/img/app/home/sections/15-streams-to-system-info.png",
       ]),
     );
 
     expect(homeSection).toContain('alt="C64 Commander intro"');
-    expect(homeSection).toContain('alt="Home search field, Listen and play, and quick actions (Light)"');
+    expect(homeSection).toContain('alt="Home search field and quick actions (Light)"');
     expect(homeSection).toContain('alt="Home top row and quick actions (Dark)"');
 
     for (const source of sources) {

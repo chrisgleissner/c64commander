@@ -92,23 +92,23 @@ C64 Commander reconnects to saved devices automatically on later launches.
 
 ### Home
 
-Home opens on search and on **Listen and play** — four tiles for the things that need no C64 attached: SID Radio, resuming the last tune, what you played recently, and Live View. Below them are the machine's quick actions, and below those the cards for lighting, drives, printer, SID mixer, streams, and configuration snapshots.
+Home opens on search, then **Quick Actions** — one grid holding the machine's own controls and, at the end of them, four tiles that need no C64 attached: SID Radio, resuming the last tune, what you played recently, and Live View. Below that are the cards for lighting, drives, printer, SID mixer, streams, and configuration snapshots, and the system information last.
 
-With nothing connected, Home does not become a wall of "Not available": search and Listen and play stay where they are, a card explains how to connect a machine, and the device cards are drawn as titles with their contents put away until one answers.
+With nothing connected, Home does not become a wall of "Not available": search stays where it is, Radio, Resume tune and Recent are drawn on their own because none of them needs a machine, a card explains how to connect one, and the device cards are drawn as titles with their contents put away until one answers.
 
 <table>
   <tr>
     <td><img src="docs/img/app/home/00-overview-light.png" alt="C64 Commander intro" width="360"/></td>
-    <td><img src="docs/img/app/home/sections/01-listen-and-play-to-quick-actions.png" alt="Home search field, Listen and play, and quick actions (Light)" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/01-quick-actions.png" alt="Home search field and quick actions (Light)" width="360"/></td>
     <td><img src="docs/img/app/home/01-overview-dark.png" alt="Home top row and quick actions (Dark)" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="docs/img/app/home/sections/06-video-to-audio.png" alt="Home sections from video through audio" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/05-video-to-audio.png" alt="Home sections from video through audio" width="360"/></td>
     <td><img src="docs/img/app/home/sections/10-lighting-to-keyboard-light.png" alt="Home sections through lighting" width="360"/></td>
-    <td><img src="docs/img/app/home/sections/13-drives-to-printers.png" alt="Home sections from drives through printers" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/12-drives-to-printers.png" alt="Home sections from drives through printers" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="docs/img/app/home/sections/15-streams-to-config.png" alt="Home sections from streams through config" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/15-streams-to-system-info.png" alt="Home sections from streams through system info" width="360"/></td>
     <td><img src="docs/img/app/home/dialogs/05-lighting-studio-medium.png" alt="Lighting Studio bottom sheet" width="360"/></td>
     <td><img src="docs/img/app/home/03-demo-mode-interstitial.png" alt="Demo Mode interstitial" width="360"/></td>
   </tr>
@@ -238,6 +238,7 @@ Create blank disks, inspect disk images, launch individual programs, search insi
   <tr>
     <td><img src="docs/img/app/disks/content-explorer/01-new-disk.png" alt="New disk dialog: create a formatted blank D64/D71/D81/DNP image on the device" width="360"/></td>
     <td><img src="docs/img/app/settings/content-explorer/01-launch-safety.png" alt="Settings: search inside disk images and answer a cartridge boot menu after reset" width="360"/></td>
+    <td width="360"></td>
   </tr>
 </table>
 

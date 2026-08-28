@@ -149,7 +149,7 @@ test.describe("search overlay", () => {
       await page.goto("/", { waitUntil: "domcontentloaded" });
       await settle(page);
 
-      for (const testId of ["home-search-field", "home-listen-and-play"]) {
+      for (const testId of ["home-search-field", "home-machine-controls"]) {
         const box = await page.getByTestId(testId).boundingBox();
         expect(box, testId).not.toBeNull();
         expect(box!.width, testId).toBeGreaterThan(40);

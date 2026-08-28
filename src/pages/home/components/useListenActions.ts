@@ -10,9 +10,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { History, Monitor, Play, Radio, type LucideIcon } from "lucide-react";
 
-import { CollapsibleSection } from "@/components/CollapsibleSection";
-import { QuickActionCard } from "@/components/QuickActionCard";
-import { ProfileActionGrid } from "@/components/layout/PageContainer";
 import { toast } from "@/hooks/use-toast";
 import { useRequirementContext } from "@/hooks/useSearchResults";
 import { t } from "@/lib/i18n";
@@ -38,6 +35,24 @@ import type { ResolvedSearchEntry } from "@/lib/search/types";
  * two stations end up running at once.
  */
 
+/** One promoted action, in the shape MachineControls renders its extra actions in. */
+export interface ListenAction {
+  readonly id: string;
+  readonly label: string;
+  readonly icon: LucideIcon;
+  readonly description: string | null;
+  readonly disabled: boolean;
+  readonly onSelect: () => void;
+  readonly testId: string;
+  readonly focusId: string;
+}
+
+/**
+ * Tiles whose emptiness needs no sentence. Both are greyed and already labelled with the thing
+ * that is missing, and neither reason names anything a reader could do about it.
+ */
+const SELF_EVIDENT_WHEN_EMPTY = new Set(["action.resume-session", "action.recently-played"]);
+
 interface Tile {
   readonly entryId: string;
   readonly icon: LucideIcon;
@@ -60,7 +75,7 @@ const readSessionLabel = (): string | null => {
   }
 };
 
-export const ListenAndPlay = () => {
+export const useListenActions = (): ListenAction[] => {
   const navigate = useNavigate();
   const location = useLocation();
   const [sessionLabel, setSessionLabel] = useState<string | null>(null);
@@ -84,7 +99,13 @@ export const ListenAndPlay = () => {
   const tiles = useMemo<Tile[]>(() => {
     const byId: Record<string, Omit<Tile, "entryId">> = {
       "action.sid-radio": { icon: Radio, label: t("home.tile.radio", "Radio") },
-      "action.resume-session": { icon: Play, label: t("home.tile.resume", "Resume"), detail: sessionLabel },
+      /*
+       * "Resume tune", not "Resume". The machine's own Pause control renames itself to Resume
+       * while the C64 is paused, and both tiles are now in the same grid — two buttons with the
+       * same name, one resuming the machine and one resuming a tune. Two words wrap onto a second
+       * line exactly as "Save RAM" and "Load RAM" already do beside them.
+       */
+      "action.resume-session": { icon: Play, label: t("home.tile.resume", "Resume tune"), detail: sessionLabel },
       "action.recently-played": {
         icon: History,
         label: t("home.tile.recent", "Recent"),
@@ -124,51 +145,48 @@ export const ListenAndPlay = () => {
     [location.pathname, navigate],
   );
 
-  return (
-    <CollapsibleSection
-      scope="home"
-      id="listen-and-play"
-      title={t("home.listenAndPlay", "Listen and play")}
-      summary={t("home.listenAndPlay.summary", "Needs no C64 attached")}
-      icon={Radio}
-      defaultOpen
-      testId="home-listen-and-play"
-    >
-      {/*
-        Two columns on a phone, not four. Each tile carries a word AND a line of detail, so four
-        tracks on a 393 px screen left about 37 CSS px for the label and every one wrapped to a
-        single character per line.
-
-        QuickActionCard rather than a button of our own, for the reason recorded in its own comment:
-        it puts the icon ABOVE a label that is free to wrap, so the label never competes with the
-        icon for a narrow track. A hand-rolled row put them side by side, which cost the label
-        another 40 CSS px and clipped every one of the four at the largest Text size.
-      */}
-      <ProfileActionGrid compactColumns={2} mediumColumns={2} expandedColumns={4} cardDensity="compact">
-        {resolved.map(({ tile, resolved: entry }) => {
-          if (!entry) return null;
-          const emptyRecent = tile.entryId === "action.recently-played" && recentIsEmpty;
-          const enabled = entry.enabled && !emptyRecent;
-          // Shown as the card's own description, so the reason a tile cannot run is on screen
-          // rather than only in an accessible name. A tile that vanishes teaches nothing, and one
-          // greyed with no explanation teaches less.
-          const description = enabled
-            ? (tile.detail ?? undefined)
-            : ((emptyRecent ? t("home.tile.recent.empty", "Nothing has been opened yet") : entry.disabledReason) ??
-              undefined);
-          return (
-            <QuickActionCard
-              key={tile.entryId}
-              icon={tile.icon}
-              label={tile.label}
-              description={description}
-              disabled={!enabled}
-              onClick={() => void activate(entry)}
-              dataTestId={`home-tile-${tile.entryId}`}
-            />
-          );
-        })}
-      </ProfileActionGrid>
-    </CollapsibleSection>
+  /*
+   * Returned as machine actions rather than rendered as a section of their own.
+   *
+   * This app is a remote control first and a standalone player second — it is what it is named
+   * for — so a banner headed "Needs no C64 attached" over-weighted the second and, with Live View
+   * among the four, was not even true: Live View requires a connected machine and streaming
+   * support. They are now four tiles in Quick Actions, keeping the ids the tour spotlights and the
+   * screenshot corpus names.
+   */
+  return useMemo(
+    () =>
+      resolved.flatMap(({ tile, resolved: entry }) => {
+        if (!entry) return [];
+        const emptyRecent = tile.entryId === "action.recently-played" && recentIsEmpty;
+        const enabled = entry.enabled && !emptyRecent;
+        /*
+         * The reason a tile cannot run, on the card rather than only in its accessible name: one
+         * that vanishes teaches nothing and one greyed with no explanation teaches less.
+         *
+         * "Nothing has been played yet" and "Nothing has been opened yet" are the exceptions. They
+         * restate a greyed tile already labelled Resume or Recent, and they are the only reasons
+         * here that name nothing a reader could act on — no device to connect, no switch to turn
+         * on. They were also long enough to run past the bottom of the tile. A reason that does
+         * point somewhere is still shown.
+         */
+        return [
+          {
+            id: `promoted.${tile.entryId}`,
+            label: tile.label,
+            icon: tile.icon,
+            description: enabled
+              ? (tile.detail ?? null)
+              : SELF_EVIDENT_WHEN_EMPTY.has(tile.entryId)
+                ? null
+                : (entry.disabledReason ?? null),
+            disabled: !enabled,
+            onSelect: () => void activate(entry),
+            testId: `home-tile-${tile.entryId}`,
+            focusId: `home-tile-${tile.entryId}`,
+          },
+        ];
+      }),
+    [activate, recentIsEmpty, resolved],
   );
 };

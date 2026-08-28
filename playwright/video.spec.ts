@@ -131,7 +131,7 @@ const tourHome = async (page: Page) => {
   await expect(page.getByTestId("search-overlay")).toBeHidden();
   await page.waitForTimeout(SHORT_PAUSE_MS);
 
-  await smoothScrollToLocator(page, page.getByTestId("home-listen-and-play"), 1200);
+  await smoothScrollToLocator(page, page.getByTestId("home-machine-controls"), 1200);
   await page.waitForTimeout(SHORT_PAUSE_MS);
 
   await smoothScrollToLocator(page, page.getByTestId("home-machine-controls"), 1800);

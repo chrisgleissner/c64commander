@@ -40,6 +40,14 @@ type MachineExtraAction = {
   reason?: string | null;
   variant?: "default" | "danger" | "success";
   className?: string;
+  /** A word about what this action has, when there is one — the tune Resume would restore. */
+  description?: string | null;
+  /**
+   * Overrides the generated testid and focus id. The promoted music actions keep the ids they had
+   * as their own section, because the tour spotlights them and the screenshot corpus names them.
+   */
+  testId?: string;
+  focusId?: string;
 };
 
 type PendingDestructiveAction = MachineActionConfirmation & {
@@ -167,7 +175,18 @@ export function MachineControls({
    * on a four-column grid that placed it on the far side of the row from its pair.
    */
   const remoteInputAction = safeExtraActions.find((action) => action.id === "openRemoteInput") ?? null;
-  const otherSafeExtraActions = safeExtraActions.filter((action) => action !== remoteInputAction);
+  /*
+   * The promoted actions are a contiguous run at the end of the safe tiles.
+   *
+   * They used to be their own section above this one. This app is a remote control first and a
+   * standalone player second, so a banner of its own over-weighted the second. Radio immediately
+   * before Resume and Recent is what makes those two readable: proximity does the work a longer
+   * label would, and every tile here stays one word.
+   */
+  const promotedActions = safeExtraActions.filter((action) => action.id.startsWith("promoted."));
+  const otherSafeExtraActions = safeExtraActions.filter(
+    (action) => action !== remoteInputAction && !promotedActions.includes(action),
+  );
   const destructiveExtraActions = extraActions.filter((action) => action.variant === "danger");
 
   const renderExtraAction = (action: MachineExtraAction, focusOrder: number) => {
@@ -178,8 +197,9 @@ export function MachineControls({
         key={action.id}
         icon={Icon}
         label={action.loading ? `${action.label}…` : action.label}
-        dataTestId={`home-machine-inline-${action.id}`}
-        focusId={`home-machine-${action.id}`}
+        description={action.description ?? undefined}
+        dataTestId={action.testId ?? `home-machine-inline-${action.id}`}
+        focusId={action.focusId ?? `home-machine-${action.id}`}
         focusOrder={focusOrder}
         onClick={() => {
           if (!requiresConfirmation) {
@@ -280,6 +300,9 @@ export function MachineControls({
                 />
               </>
             ) : null}
+            {/* The promoted actions, as one run: the machine's own controls lead, because that is
+                what this app is for, and the destructive tiles still come last. */}
+            {promotedActions.map((action, index) => renderExtraAction(action, 160 + index * 2))}
             <QuickActionCard
               icon={RotateCcw}
               label="Reset"

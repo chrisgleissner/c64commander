@@ -1298,7 +1298,7 @@ describe("HomePage SID status", () => {
     await waitFor(() => expect(machineControlPayloadRef.current.powerOff.mutateAsync).toHaveBeenCalled());
   });
 
-  it("renders exactly seven machine controls with one pause-resume control", async () => {
+  it("renders the machine controls and the promoted actions in one grid, with one pause-resume control", async () => {
     featureFlagsRef.current.home_telnet_reu_snapshot_enabled = false;
     // remote_input_enabled is default-on in the real registry (Remote Input is no
     // longer developer-only); force it off here so the Remote Control overflow
@@ -1316,12 +1316,28 @@ describe("HomePage SID status", () => {
     renderHomePage();
 
     const machineControls = screen.getByTestId("home-machine-controls");
-    expect(within(machineControls).getAllByRole("button")).toHaveLength(7);
+    /*
+     * The machine's own controls lead and the destructive ones come last, with the four promoted
+     * actions as one run between them. Radio stands immediately before Resume and Recent, which is
+     * what makes those two readable without a longer label.
+     */
     expect(
       within(machineControls)
         .getAllByRole("button")
         .map((button) => button.textContent),
-    ).toEqual(["Menu", "Pause", "Save RAM", "Load RAM", "Reset", "Reboot", "Power Off"]);
+    ).toEqual([
+      "Menu",
+      "Pause",
+      "Save RAM",
+      "Load RAM",
+      "Radio",
+      "Resume tune",
+      "Recent",
+      "Live ViewLive View is turned off in Settings",
+      "Reset",
+      "Reboot",
+      "Power Off",
+    ]);
     expect(within(machineControls).getAllByRole("button", { name: /^pause$/i })).toHaveLength(1);
     expect(within(machineControls).queryByRole("button", { name: /^resume$/i })).toBeNull();
     expect(within(machineControls).queryByRole("button", { name: /^power cycle$/i })).toBeNull();
@@ -2330,10 +2346,14 @@ describe("HomePage offline arrangement", () => {
     resetSavedDevicesCacheForTests();
   });
 
-  it("leads with the search field and the Listen and play block", () => {
+  // Search first, then the actions. The promoted actions live in the machine's grid rather than a
+  // section of their own: this app is a remote control first, and a banner over the standalone
+  // player over-weighted it — and with Live View among them the banner's claim was not even true.
+  it("leads with the search field, then the promoted actions", () => {
     renderWithRouter(<HomePage />);
     expect(screen.getByTestId("home-search-field")).toBeInTheDocument();
-    expect(screen.getByTestId("home-listen-and-play")).toBeInTheDocument();
+    expect(screen.queryByTestId("home-listen-and-play")).toBeNull();
+    expect(screen.getByTestId("home-tile-action.sid-radio")).toBeInTheDocument();
   });
 
   it("offers the Connect a C64 card in place of the machine quick actions", () => {
@@ -2376,14 +2396,22 @@ describe("HomePage offline arrangement", () => {
     for (const entryId of ["action.sid-radio", "action.resume-session", "action.recently-played"]) {
       expect(screen.getByTestId(`home-tile-${entryId}`), entryId).toBeInTheDocument();
     }
-    // The reason is VISIBLE text on the card, not only an accessible name.
+    /*
+     * Greyed with no sentence under it. "Nothing has been played yet" restates a tile already
+     * labelled Resume and names nothing to act on, and it ran past the bottom of the card. A
+     * reason that DOES point somewhere — a device to connect, a switch to turn on — is still
+     * shown, which the Live View assertions below cover.
+     */
     const resume = screen.getByTestId("home-tile-action.resume-session");
     expect(resume).toBeDisabled();
-    expect(resume.textContent).toContain("Nothing has been played yet");
+    expect(resume.textContent).toBe("Resume tune");
 
+    // Disabled, but with no line of its own: "Nothing has been opened yet" only restates a greyed
+    // tile labelled Recent, and a line under every tile is what made this row look heavier than
+    // the machine's actions. A reason that says something — a device, or a switch — is still shown.
     const recent = screen.getByTestId("home-tile-action.recently-played");
     expect(recent).toBeDisabled();
-    expect(recent.textContent).toContain("Nothing has been opened yet");
+    expect(recent.textContent).toBe("Recent");
   });
 
   it("keeps the Live View tile listed, disabled, rather than hiding it", () => {
