@@ -56,7 +56,57 @@ Physical keys are normalized to **semantic actions**; the authoritative list is
 `keypad` merged over it for Android D-pad/numeric keypads). Families:
 `digit0`–`digit9`, `star`, `hash`, `dpadUp/Down/Left/Right`, `center`,
 `softLeft/Right`, `back`, `delete`, `enter`, `escape`, `nextField`,
-`previousField`, `activate`, `openMenu`, `closeMenu`, `toggleInputMode`.
+`previousField`, `activate`, `openMenu`, `closeMenu`, `toggleInputMode`,
+`openSearch`, `mediaPlayPause`, `mediaNext`.
+
+### 3.1 Search: `7`, on its own listener
+
+`7` opens the app-wide search overlay. It is **not** served by the keypad shortcut
+handler in `useFocusNavigation`, because that handler exists only while
+`flags.keypad_input_enabled` is true (`App.tsx` mounts `FocusNavigationProvider`
+with `enabled={…}`). Search is how someone finds their way around when the ring
+is not doing it for them, so it must not disappear when they turn the ring off.
+
+`SearchKeyListener` (`src/components/search/SearchKeyListener.tsx`) therefore
+installs its own capture-phase `keydown` listener, resolves the event through the
+keypad profile, and opens search on `digit7` or on `openSearch`. It applies the
+same two exclusions the digit shortcuts do — inert inside a text field, inert
+while an overlay owns the keys — which now live in one place,
+`src/lib/input/eventTargets.ts`, rather than being copied.
+
+`7` is free only while there are six tabs. `SearchKeyListener.test.tsx` asserts
+`TAB_ROUTES.length < 7`, so a seventh tab fails the build rather than silently
+stealing the search key.
+
+### 3.2 Transport: F1 and F3, keypad profile only
+
+`F1 → mediaPlayPause` and `F3 → mediaNext` are declared in
+`profiles/keypad.ts` and nowhere else. That profile prepends over
+`defaultKeyboard`, so on a handset F1 and F3 are the transport, while a desktop
+keyboard keeps `F1 → softLeft` and `F3 → toggleInputMode`. Both are speculative
+in the sense that no handset has been measured, but the codes themselves are
+real and standard, and a keypad handset has separate hardware soft keys.
+
+`usePlaybackController` is mounted only by `PlayFilesPage`, so the keys publish
+onto the **latched** bus in `src/lib/input/latchedCommandBus.ts` rather than the
+transient `keypadCommands` pattern: the app navigates to Play, and a plain
+`window.dispatchEvent` would be gone before Play subscribed. The latch expires
+after 5 s so a press cannot fire later on an unrelated navigation.
+
+### 3.3 The Commodore key is not bound
+
+`keymap.ts` requires an exact `code`, `key` or `keyCode`, and `keyEvent.ts`
+matches exactly. There is no wildcard and no placeholder that later becomes the
+right value, and binding a **guessed** real code is worse than binding nothing:
+a wrong guess shadows a key that already works. The intended action is recorded
+— the Commodore key opens search, a second door beside `7` — so once someone
+reads its real code off hardware with the Key Explorer (§5.1), binding it is one
+row in `profiles/keypad.ts`.
+
+**Nothing may be bound to `keyCode: 0`.** `useFocusNavigation` recognises the
+Android hardware Back button as `key === "Escape" && code === "" && keyCode === 0`,
+so such a binding would silently steal Back on every handset.
+`transportBindings.test.ts` asserts no profile has one.
 
 ## 4. Key-only operation
 
@@ -130,6 +180,19 @@ Each entry carries: `category`, `timestamp`, `route`, `activeElement`
 `ignoredReason`, `preventDefaultApplied`, `keypadEnabled`, `modality`, and — for
 T9 — `t9State` with **lengths/indices only**.
 
+### 5.1 Key Explorer
+
+**Diagnostics → Key Explorer** answers "what does this key actually send?" For
+each key pressed it reports the `key`, `code` and `keyCode` the WebView
+delivered, and the semantic action the keypad profile resolves it to — or that it
+resolves to nothing. The last ten are kept and can be copied as text.
+
+It cannot reuse the diagnostics above, for three reasons that all apply at once:
+they emit only when debug logging is on; events on editable targets are
+deliberately never logged; and an event inside an open overlay returns before
+diagnostics are emitted, which is exactly where this panel sits. It therefore
+installs its own capture-phase listener, **active only while the panel is open**.
+
 ## 6. Privacy
 
 Diagnostics intentionally do **not** record any field text or the T9 buffer (only
@@ -137,6 +200,12 @@ lengths/indices), and never raw host/IP values. Structure that could carry
 sensitive values sits under keys the existing recursive export redactor
 sanitizes (`host`/`hostname`/`ip`/`address`, `password`/`token`/…). The global
 handler skips editable targets, so typed characters are never captured.
+
+The Key Explorer records **key identity only**. A printable character is replaced
+by its shape — `<character>`, `<digit>`, `<space>` — before it is stored, so
+nothing anyone typed can reach a report they are about to attach to a bug. A
+named key such as `Escape` or `F1` is kept as it is, because that name is the
+answer the panel exists to give.
 
 ## 7. Test procedures
 

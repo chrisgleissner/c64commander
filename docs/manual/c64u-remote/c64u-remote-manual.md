@@ -79,13 +79,39 @@ A healthy badge at the top right confirms that the active device is responding. 
 
 The badge at the top right says how the current device is: healthy, degraded, unhealthy, or offline. Tap it to open Diagnostics — and, when the app is offline, to try the connection again. Long-press it, press `#`, or use the Quick Menu to open the Device Switcher.
 
+### Finding Your Way
+
+You do not have to know where a thing lives to reach it. Search covers every page, every card, every setting the app owns, every setting your machine reports, and every tune, disk and program you have. Type two or three letters and pick the answer.
+
+There are three ways in, and they open the same thing:
+
+- The **search field** at the top of Home. Tapping it opens search over the whole screen, so the results are not squeezed into the strip above the on-screen keyboard.
+- The first entry of the **Quick Menu**, whichever way you opened that menu.
+- The **`7`** key. It works even with directional navigation switched off.
+
+Up and Down move through the results while the text stays where it is, so you can keep typing; OK opens what is selected, and Back closes search. Results are grouped, and the group with the best match comes first — typing `radio` offers **Start SID Radio** ahead of a tune with the word in its title.
+
+**A result you cannot use is still listed, and it says why.** "Needs a connected C64 Ultimate", "Needs the HVSC music collection installed", "Live View is turned off in Settings". Picking one of those takes you to the setting that would enable it rather than doing nothing. Something that vanishes when it is unavailable teaches you nothing about what the app can do.
+
+With the box empty, search offers the four things worth doing first and the searches you have run before.
+
+### The Tour
+
+The first time you open C64U Remote it offers a short guided walk through the app — the real app, not pictures of it. It goes to each page, puts a spotlight on what it is talking about, and explains it in a line or two.
+
+**Step n of 8** at the bottom says where you are, and **Skip**, **Back** and **Next** are always there; on a keypad, Left and Right are Back and Next, OK is Next, and the Back key leaves. You can stop at any point.
+
+It is not a one-off. Start it again whenever you like from the card at the top of **Docs**, or from **Settings → About → Take the tour**. If you took it before your C64 was connected, the three steps that needed one explained themselves instead of pointing at anything; Home offers those three again, once, the first time a machine answers.
+
 ### Home
 
 Home groups the day-to-day controls.
 
 ![Home overview](../../img/app/home/profiles/compact/01-overview.png)
 
-Start at the top. The system strip confirms which app build, device, and firmware you are using. Below it, Quick Actions run from the ones you reach for most to the ones you reach for rarely: **Game** and **Input**, which sit together as two ways into the same second screen, then Menu, Pause/Resume, the RAM snapshot actions, and then, in their own band, the ones that interrupt whatever the machine is doing — Reset, Reboot, and Power Off where the device supports it. Nothing that stops your C64 sits next to something that does not.
+Start at the top. The search field comes first, and under it **Listen and play** — four tiles for the things that need no C64 attached at all. **Radio** starts a SID Radio station, thousands of tunes played on this device with no network and no hardware. **Resume** picks up the last tune where it stopped, and names it. **Recent** is the way back to anything you have opened before. **Live View** goes to the card that brings the machine's picture and sound into the app. A tile you cannot use right now is still there, greyed, saying what it is waiting for.
+
+Below that come the machine's own controls, and below those the system strip, which confirms which app build, device, and firmware you are using. Quick Actions run from the ones you reach for most to the ones you reach for rarely: **Game** and **Input**, which sit together as two ways into the same second screen, then Menu, Pause/Resume, the RAM snapshot actions, and then, in their own band, the ones that interrupt whatever the machine is doing — Reset, Reboot, and Power Off where the device supports it. Nothing that stops your C64 sits next to something that does not.
 
 Two more actions can join that last band: a **Reboot (Clr Mem)** that wipes memory on the way, and **Power Cycle**. Both go through the Telnet menu service rather than the web service, so they start out switched off; turn them on in Settings → Experimental Features once Telnet is enabled on the device.
 
@@ -94,6 +120,8 @@ Directly below sits **Live View**, which brings the sound and the picture of the
 Keep going and the rest of Home is a set of cards, each its own labeled chapter you open or close by tapping its header. **CPU & RAM** holds the processor speed, turbo behavior and the RAM expansion. **Video**, directly followed by **Audio**, holds the output mode, resolution and scan lines, and then the SID mixer's channel strips — audio and video sit together because that is how most people think about them. **Ports** holds the joystick swap, the serial bus, the cartridge preference and the user port. **User Interface** rounds the group out, and, on a machine that has them, so do the case and keyboard lights.
 
 Which of these start open and which start closed is chosen once, for a first-time visit, in favor of the cards most people touch every session; every card is closed or opened the same way, by tapping its header, and the app remembers what you left open from then on — a card you never use can stay out of the way, and one you always want stays exactly where you put it. On the compact display profile, where there is the least room, opening one card closes the others, so the list of titles stays on screen around whatever is open. **Expand all sections** and **Collapse all sections** in the Quick Menu do the whole page at once. Everything here is in Config as well; these cards just save you the search.
+
+**With no C64 connected**, Home rearranges. Search and Listen and play stay where they are, because neither needs a machine. In place of the machine controls is a card explaining how to connect one, the system strip drops to the app version alone, and the machine's cards are drawn as titles with nothing inside them, under a line saying so. Nothing is lost: whichever cards you had open are open again the moment your C64 answers. The app waits a few seconds before rearranging, so a brief network hiccup does not shuffle the page under you, and it goes back the instant the machine is there again.
 
 The remaining cards cover drives, the printer, streams, and **Config actions**. That last one holds **Save**, which writes the current settings into flash on the Commodore 64 Ultimate so they survive a power cycle, along with Load, Reset, Revert, and the app's own named configuration snapshots.
 
@@ -192,6 +220,20 @@ If the device is hard to reach, start in **Connection**. If it answers but feels
 **Appearance** is local to the app and never touches your C64. It sets the theme, the style, the text size, the display profile, card descriptions, whether the app runs full screen, and whether it follows the phone's rotation or stays in portrait or landscape.
 
 **Style** is a set of colours, corner rounding and shading — a look, layered on top of **Theme**, which stays the light-or-dark switch. Pick one directly, or choose **Match my device** to follow the Color Scheme your C64 Ultimate is already set to; that reads the device once when you connect, not continuously, and falls back with a note if it can't be read yet. A few styles come in one shade only, in which case Theme is disabled and Settings says why.
+
+There are seven:
+
+| Style | What it is |
+| --- | --- |
+| Cool Grey | Neutral, blue-leaning grey. The one the app starts with. |
+| Breadbin Beige | The warm beige of the original case. |
+| Ocean Teal | Deep blue-green with a warm coral highlight. |
+| Neon Pop | Bright and saturated. Dark only. |
+| Amber Glow | An amber monitor. Dark only. |
+| Vault Black | Near-black with a two-tone band. Dark only. |
+| High Contrast | Maximum legibility: heavy edges, strong text, no soft fills. |
+
+**Cool Grey**, **Ocean Teal** and **High Contrast** were called Modem Grey, Petrol Teal and Full Sun in earlier releases. Only the names changed — the colours are identical, and whichever you had chosen is still the one you have.
 
 **Text size** enlarges every part of the app, in four steps from **Default** to **Largest**. Reach for it when the app is harder to read than you would like; the display profile beside it changes the layout rather than the type. At the largest sizes the tab bar along the bottom scrolls sideways rather than pushing a tab off the edge, so every page stays reachable. Reach a page another way — the Quick Menu, a number key, or a link from elsewhere in the app — and the bar scrolls that tab into view, so the bar always shows you where you are.
 
@@ -957,7 +999,7 @@ On by default. You can turn it off in Settings → Experimental Features. Direct
 | Back / Escape | Close the top dialog, leave a field, leave a group, or go back. |
 | Menu / Context Menu | Open the focused item menu; if none exists, open the Quick Menu. |
 
-The rule is simple: **OK goes in, Back comes out**. **F1** and **F2** act as soft keys, and F1 follows the same way out as Back.
+The rule is simple: **OK goes in, Back comes out**. On a desktop keyboard **F1** and **F2** act as soft keys, and F1 follows the same way out as Back; on a keypad handset F1 and F3 are the transport keys instead (below).
 
 #### Number Keys
 
@@ -971,7 +1013,19 @@ Outside text fields — and outside any open dialog or sheet, which keep the key
 | 4 | Config |
 | 5 | Settings |
 | 6 | Docs |
+| 7 | Search |
 | 0 | Game Mode |
+
+`7` opens search, and it keeps working even if you turn directional navigation off — search is how you find your way around when the keys are not doing it for you.
+
+#### Transport Keys
+
+| Key | What it does |
+| --- | --- |
+| F1 | Play or pause, from any page |
+| F3 | Next tune, from any page |
+
+Press either from anywhere and the app goes to Play and does it there. **The Commodore key is not bound yet.** The exact code a given handset sends for it is not known, and guessing would risk taking over a key that already works; **Diagnostics → Key Explorer** reports what any key you press really sends, which is what that decision is waiting on.
 
 #### Star and Pound
 
@@ -995,6 +1049,8 @@ For hostnames, this makes entries such as `c64u` and `192.168.1.64` practical wi
 #### Quick Menu
 
 There are two ways in, and each offers what that way in calls for. Press **Menu** when the selected control has no menu of its own: the Quick Menu then lists the six pages, each with the number key that reaches it directly, followed by Game Mode on `0`, Diagnostics on `*`, and the Device Switcher on `#` when more than one device is saved. Tap the three-dot **Quick Menu** button instead — every page carries one in the top bar, beside the health badge — and the page jumps are left out, since the tab bar is already in front of you; what is left is the actions for the page you are on.
+
+**Search** is the first entry either way in, because someone opening this menu is usually looking for something rather than for a page.
 
 On a page built from cards, both ways in also offer **Expand all sections**, **Collapse all sections**, and **Show card descriptions**. Both section entries are always listed, so the one you want is in the same place every time; whichever of the two would do nothing is shown but unavailable.
 

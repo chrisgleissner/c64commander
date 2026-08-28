@@ -13,6 +13,8 @@ Control and manage a Commodore 64 Ultimate from Android, iOS, or a self-hosted w
 
 - **Cross-platform**: Android and iOS apps, plus a self-hosted Docker web app for Windows, macOS, and Linux.
 - **Device support**: Works with the C64 Ultimate, Ultimate 64 Elite I/II, and Ultimate-II+(L) cartridges.
+- **Search**: Find any page, setting, action, tune or disk by name. Three ways in — the field at the top of Home, the Quick menu, or the `7` key. A result you cannot use yet is still listed, with the reason.
+- **Guided tour**: A first-run walk through the app, driving the real thing rather than showing pictures of it. Skippable at any step, and restartable from Docs or Settings > About.
 - **Dashboard**: Control the machine, drives, printer, SID mixer, lighting, and streams from one page.
 - **Playlists and SID Radio**: Play programs and SID music from local files, device storage, HVSC, or CommoServe.
 - **Remote Input and Live View**: Use an on-screen joystick or keyboard, and stream audio or video from the running machine.
@@ -90,7 +92,9 @@ C64 Commander reconnects to saved devices automatically on later launches.
 
 ### Home
 
-Control the machine, quick actions, lighting, drives, printer, SID mixer, streams, and configuration snapshots.
+Home opens on search and on **Listen and play** — four tiles for the things that need no C64 attached: SID Radio, resuming the last tune, what you played recently, and Live View. Below them are the machine's quick actions, and below those the cards for lighting, drives, printer, SID mixer, streams, and configuration snapshots.
+
+With nothing connected, Home does not become a wall of "Not available": search and Listen and play stay where they are, a card explains how to connect a machine, and the device cards are drawn as titles with their contents put away until one answers.
 
 <table>
   <tr>
@@ -361,7 +365,11 @@ The layout adapts to the screen size: Small for phones, Standard for large phone
 
 Use a hardware keyboard, D-pad, joystick, or numeric keypad to navigate the app. The highlighted control shows the current selection. Use Up/Down to move, OK/Enter to activate, and Back/Escape to close or return.
 
-Disable this under **Settings > Experimental > Keyboard and keypad navigation** for touch-only use. T9 text entry is used only in keypad-first mode; hardware keyboard input remains unchanged.
+`1`–`6` jump to the six pages, `7` opens search, `0` starts Game Mode, `*` opens Diagnostics and `#` opens the device switcher. On a keypad handset `F1` is play/pause and `F3` is next tune, from any page. `7` keeps working even with keypad navigation switched off, because search is how you get around when the keys are not doing it for you.
+
+**Diagnostics > Key Explorer** reports what any key you press actually sends — the `key`, `code` and `keyCode`, and what the app resolves it to. It records the key's identity only, never a typed character.
+
+Disable directional navigation under **Settings > Experimental > Keyboard and keypad navigation** for touch-only use. T9 text entry is used only in keypad-first mode; hardware keyboard input remains unchanged.
 
 ## Troubleshooting
 
