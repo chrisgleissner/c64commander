@@ -13,7 +13,6 @@ import {
   isSearchLatencyProbeEnabled,
   markSearchKeystroke,
   markSearchResultsPainted,
-  percentile,
 } from "@/lib/search/latencyProbe";
 
 type ProbeWindow = Window & {
@@ -83,29 +82,5 @@ describe("search latency probe", () => {
       markSearchResultsPainted();
     }
     expect(probeWindow.__c64uSearchLatencySamples).toHaveLength(LATENCY_SAMPLE_LIMIT);
-  });
-
-  describe("percentile", () => {
-    /*
-     * Nearest-rank, and the reason the HIL stage takes 120 samples: at 20 the p95 is the 19th of
-     * 20, which is one of the two worst observations rather than an estimate of anything.
-     */
-    it("takes the nearest rank", () => {
-      const values = Array.from({ length: 100 }, (_unused, index) => index + 1);
-      expect(percentile(values, 0.95)).toBe(95);
-      expect(percentile(values, 0.5)).toBe(50);
-    });
-
-    it("is the worst value at the top", () => {
-      expect(percentile([5, 1, 3], 1)).toBe(5);
-    });
-
-    it("is the best value at the bottom", () => {
-      expect(percentile([5, 1, 3], 0)).toBe(1);
-    });
-
-    it("has no answer with no samples", () => {
-      expect(percentile([], 0.95)).toBeNull();
-    });
   });
 });

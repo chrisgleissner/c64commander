@@ -59,13 +59,11 @@ export const markSearchResultsPainted = (): void => {
   target[SAMPLES] = samples.slice(-LATENCY_SAMPLE_LIMIT);
 };
 
-/** Nearest-rank p95, which is what the gate reports. Exported so the rule is testable. */
-export const percentile = (values: readonly number[], fraction: number): number | null => {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((left, right) => left - right);
-  const rank = Math.ceil(fraction * sorted.length);
-  return sorted[Math.min(Math.max(rank, 1), sorted.length) - 1];
-};
+/*
+ * The p95 rule itself lives in tools/hil/percentile.mjs, with the gate that reports it. The app
+ * only collects samples: a copy here was tested while the gate ran its own, so the tested rule was
+ * not the one deciding whether a build passed.
+ */
 
 export const __testing = {
   reset: () => {

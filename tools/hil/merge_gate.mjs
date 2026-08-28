@@ -68,6 +68,7 @@ import { promisify } from "node:util";
 import { writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { percentile } from "./percentile.mjs";
 
 const execFileAsync = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -925,7 +926,7 @@ return JSON.stringify({samples});})()`);
       throw new Error(`only ${samples.length} of the 120 samples were recorded; a p95 needs all of them`);
     }
     const sorted = [...samples].sort((left, right) => left - right);
-    const at = (fraction) => sorted[Math.min(Math.ceil(fraction * sorted.length), sorted.length) - 1];
+    const at = (fraction) => percentile(samples, fraction);
     const p95 = at(0.95);
     // The whole distribution in the message, not only the number that failed: a p95 over budget
     // with a healthy p50 is a tail to chase, and one with a p50 already close is a different fault.
