@@ -622,7 +622,10 @@ export default function PlayFilesPage() {
     // Recently played is the empty state of the archive search sheet, which is where that list has
     // always lived; a second list of the same rows would be a second idea of what a result is.
     openRecentlyPlayed: () => setHvscSearchOpen(true),
-    openFindATune: () => setHvscSearchOpen(true),
+    openFindATune: (seed) => {
+      setHvscSearchSeed(seed ?? null);
+      setHvscSearchOpen(true);
+    },
     openLikedTunes: () => setLikedTunesSheetOpen(true),
     resumeSession: () => transportCommandBus.publish("play"),
   });

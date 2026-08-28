@@ -24,7 +24,8 @@ import { transportCommandBus, type TransportCommand } from "@/lib/input/latchedC
 export interface PlayDeepLinkHandlers {
   readonly openRadioLauncher: () => void;
   readonly openRecentlyPlayed: () => void;
-  readonly openFindATune: () => void;
+  /** `seed` is the words the user searched for, so a tune found in global search is found here too. */
+  readonly openFindATune: (seed?: string) => void;
   readonly openLikedTunes: () => void;
   readonly resumeSession: () => void;
 }
@@ -46,12 +47,21 @@ export const usePlayDeepLinks = (handlers: PlayDeepLinkHandlers): void => {
   useEffect(() => {
     if (location.search === "") return;
     const params = new URLSearchParams(location.search);
+    // A global-search music result names one tune out of roughly sixty thousand. Arriving at Play
+    // with nothing but the page would lose that, so the query comes along and seeds the sheet.
+    const seed = params.get("q");
     let consumed = false;
     for (const [param, handlerName] of Object.entries(PARAM_TO_HANDLER)) {
       if (params.get(param) !== "1") continue;
       params.delete(param);
       consumed = true;
-      handlersRef.current[handlerName]();
+      if (handlerName === "openFindATune") {
+        // `q` belongs to `find`, so only `find` clears it. A stray q on another parameter is
+        // somebody else's and is left in the URL untouched.
+        params.delete("q");
+        if (seed) handlersRef.current.openFindATune(seed);
+        else handlersRef.current.openFindATune();
+      } else handlersRef.current[handlerName]();
     }
     if (!consumed) return;
     const search = params.toString();

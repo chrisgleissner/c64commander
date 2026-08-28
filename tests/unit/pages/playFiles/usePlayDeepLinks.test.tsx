@@ -53,6 +53,32 @@ describe("usePlayDeepLinks", () => {
     await waitFor(() => expect(handlers[handlerName]).toHaveBeenCalledTimes(1));
   });
 
+  /*
+   * A tier-2 music result names one tune out of roughly sixty thousand. It used to target a bare
+   * /play, so activating it opened the page and lost which tune had been searched for.
+   */
+  it("seeds the archive sheet with the tune the search result named", async () => {
+    const handlers = noopHandlers();
+    renderAt(`/play?find=1&q=${encodeURIComponent("Last Ninja 2")}`, handlers);
+    await waitFor(() => expect(handlers.openFindATune).toHaveBeenCalledWith("Last Ninja 2"));
+    // And the seed goes with the parameter that carried it.
+    await waitFor(() => expect(screen.getByTestId("search").textContent).toBe(""));
+  });
+
+  it("opens the archive sheet on nothing in particular when no tune was named", async () => {
+    const handlers = noopHandlers();
+    renderAt("/play?find=1", handlers);
+    await waitFor(() => expect(handlers.openFindATune).toHaveBeenCalledWith());
+  });
+
+  it("leaves a q it did not consume alone", async () => {
+    const handlers = noopHandlers();
+    renderAt("/play?radio=1&q=keep", handlers);
+    await waitFor(() => expect(handlers.openRadioLauncher).toHaveBeenCalledTimes(1));
+    // radio does not read q, but it is the only parameter consumed, so q is not its to remove.
+    await waitFor(() => expect(screen.getByTestId("search").textContent).toBe("?q=keep"));
+  });
+
   it("strips the parameter, so a back-navigation does not reopen what was dismissed", async () => {
     const handlers = noopHandlers();
     renderAt("/play?radio=1", handlers);

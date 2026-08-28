@@ -167,7 +167,9 @@ export const useSearchTier2 = (query: string, enabled: boolean): Tier2State => {
         subtitleKey: `search.music.${hit.virtualPath}.author`,
         subtitleDefault: hit.author ?? hit.folder,
         group: "music",
-        target: { kind: "route", path: "/play" },
+        // Play's archive sheet, opened on this tune's own title rather than on an empty box: the
+        // result names one tune out of tens of thousands and arriving at a bare /play loses it.
+        target: { kind: "route", path: `/play?find=1&q=${encodeURIComponent(hit.title)}` },
       })),
     [hvsc.hits],
   );

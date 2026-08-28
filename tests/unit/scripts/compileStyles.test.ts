@@ -204,6 +204,12 @@ describe("compile-styles", () => {
       writeFileSync(tsOutputPath, 'id: "test-style",\nid: "old-style",\n', "utf8");
       const config = loadConfig({ yamlPath, tsOutputPath });
       expect(config.renames).toEqual({ "old-style": "test-style" });
+      /*
+       * And that the map reaches the file the app imports. The rename is only useful because
+       * useAppStyle reads APP_STYLE_RENAMES at startup, so a map built correctly and then not
+       * emitted would drop every stored old id back to the default with nothing to show for it.
+       */
+      expect(renderTs(config)).toContain('"old-style": "test-style"');
     });
 
     it("rejects a renamed_from: value that is still a live style id", () => {
