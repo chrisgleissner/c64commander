@@ -807,3 +807,46 @@ what it said, and what it said was not what the app needed.
 Two lessons worth keeping. A test that constructs its own input tends to construct the input the code
 already handles — the `event.key` case is exactly that. And a store that gains a capability needs a
 writer and a reader in the same change, or the capability exists only in the type.
+
+A third review, run as two Claude subagents — one against this specification, one hunting defects in
+the code — found fourteen more. The three that mattered most were regressions the earlier rounds had
+introduced.
+
+| # | Defect | Consequence |
+| --- | --- | --- |
+| 1 | `hasPriorAppState` asked its question after the saved-devices store had written its own key during render | The first-run tour could never open on a first launch — round 2's fix for upgrading users had switched it off for everyone |
+| 2 | `compareScored` applied "unmet sorts last" only within a group while comparing scores across groups | Not a strict weak ordering; on the real index a one-letter query put four disabled rows above five enabled ones |
+| 3 | The section-open latch was re-delivered rather than claimed | Navigating away and back within five seconds reopened a card the user had closed, and persisted it |
+| 4 | The tour read `event.key`, so a D-pad could not drive it | Undrivable on the hardware with no pointer |
+| 5 | A tap on a force-closed section header wrote the flipped value | A card left open came back closed once the machine answered |
+| 6 | The tour's opening step measured no viewport | The one step that points at nothing dimmed nothing |
+| 7 | A non-archive tune in Recent was rebuilt as an archive request | It did not play |
+| 8 | Four entries were gated by flags they did not declare | Offered enabled, then "Could not reach" |
+| 9 | An expanded group stayed expanded for every later query | The five-row cap stopped applying for the session |
+| 10 | The music spinner was drawn inside a heading that existed only once results arrived | Never on screen during the wait it describes |
+| 11 | `redactKey` counted UTF-16 units | An emoji reached the clipboard verbatim |
+| 12 | Only Home claimed the Remote Input request | The search result did nothing when activated from Play |
+| 13 | The tier-2 config cap was checked on the inner loop only | Roughly one extra row per cached category |
+| 14 | Five tests could not fail, shown by mutation | Fixed alongside |
+
+The pattern across all three rounds: a rule that depends on the PAIR rather than the element is not
+an ordering; a question asked after startup is not the same question asked before it; and a test that
+constructs its own input tends to construct the input the code already handles.
+
+## 17. Home, after use
+
+The layout in §6.1 was revised once the branch could be used on a handset.
+
+"Listen and play" is gone as a section. Its tiles were drawn at two columns against Quick Actions'
+four, so each was twice the width of the controls below it; its banner read "Needs no C64 attached"
+while one of its four tiles requires a connected machine and streaming support; and this app is a
+remote control first and a standalone player second, so a banner across the top of Home for the
+second was the wrong emphasis. The four promoted actions are tiles in Quick Actions, at the end of
+the safe controls and before the destructive ones. In the offline arrangement, where that section is
+drawn closed, they are rendered on their own instead — they are the actions that need no device, and
+shutting them away exactly when they are the only usable ones would be the wrong way round.
+
+Resume is labelled "Resume tune". The machine's Pause control renames itself to Resume while the C64
+is paused, and one grid cannot hold two buttons of the same name meaning different things.
+
+System info moves to the foot of the page. It is reference rather than an action.
