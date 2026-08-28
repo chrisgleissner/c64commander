@@ -20,6 +20,7 @@ vi.mock("@/components/ui/interstitial-state", () => ({
 
 import { TourHost } from "@/components/tour/TourHost";
 import { TOUR_STEPS } from "@/lib/tour/steps";
+import { resamplePriorAppStateForTests } from "@/lib/tour/tourState";
 import { TOUR_ACTIVE_ATTRIBUTE, TOUR_STATE_KEY, loadTourState, requestTourStart } from "@/lib/tour/tourState";
 
 /*
@@ -62,6 +63,9 @@ const mountAnchor = (testId: string, rect = { top: 100, left: 20, width: 80, hei
 describe("TourDriver", () => {
   beforeEach(() => {
     localStorage.clear();
+    // Production samples this once, when the module is first imported, before anything the app
+    // writes to itself can land. A test that clears storage afterwards has to re-sample.
+    resamplePriorAppStateForTests();
     connectionRef.current = { isConnected: false };
     interstitialActiveRef.current = false;
     document.documentElement.removeAttribute(TOUR_ACTIVE_ATTRIBUTE);
@@ -208,11 +212,11 @@ describe("TourDriver", () => {
     it("moves with Left and Right, and Enter is Next", async () => {
       renderDriver();
       await startTour();
-      fireEvent.keyDown(window, { key: "ArrowRight" });
+      fireEvent.keyDown(window, { key: "ArrowRight", code: "ArrowRight" });
       await waitFor(() => expect(screen.getByTestId("tour-progress").textContent).toContain("Step 2"));
-      fireEvent.keyDown(window, { key: "Enter" });
+      fireEvent.keyDown(window, { key: "Enter", code: "Enter" });
       await waitFor(() => expect(screen.getByTestId("tour-progress").textContent).toContain("Step 3"));
-      fireEvent.keyDown(window, { key: "ArrowLeft" });
+      fireEvent.keyDown(window, { key: "ArrowLeft", code: "ArrowLeft" });
       await waitFor(() => expect(screen.getByTestId("tour-progress").textContent).toContain("Step 2"));
     });
 
@@ -281,5 +285,22 @@ describe("TourDriver", () => {
       await waitFor(() => expect(loadTourState().skippedAt).not.toBeNull());
       expect(loadTourState().deviceStepsPending).toBe(false);
     });
+  });
+
+  /*
+   * The opening step points at nothing, and the viewport is only measured by the effect that draws
+   * the hole. Skipping that effect for an anchor-less step left the scrim as one empty rectangle,
+   * so the very first thing a new user sees was a caption over a completely undimmed app.
+   */
+  it("dims the app behind the opening step, which points at nothing", async () => {
+    renderDriver();
+    await startTour();
+
+    const scrims = screen.getAllByTestId("tour-scrim");
+    const covered = scrims.some((scrim) => {
+      const style = scrim.getAttribute("style") ?? "";
+      return !/width:\s*0(px)?[;\s]/.test(style) && !/height:\s*0(px)?[;\s]/.test(style);
+    });
+    expect(covered, "at least one scrim rectangle must have a size").toBe(true);
   });
 });

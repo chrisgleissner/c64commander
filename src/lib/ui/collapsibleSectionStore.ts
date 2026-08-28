@@ -242,8 +242,16 @@ export const subscribeSectionOpenRequest = (handler: (scope: string, id: string)
     handler(detail.scope, detail.id);
   };
   window.addEventListener(SECTION_OPEN_REQUEST_EVENT, listener);
+  /*
+   * Claimed, not merely read. Leaving the request in place re-delivered it to every subscriber that
+   * mounted inside the window: navigating away from Home and back within five seconds remounts
+   * every section, and a card the user had closed by hand in the meantime opened itself again and
+   * persisted that. One request opens one section, once.
+   */
   if (pendingSectionOpen !== null && Date.now() - pendingSectionOpen.atMs <= SECTION_OPEN_LATCH_TTL_MS) {
-    handler(pendingSectionOpen.scope, pendingSectionOpen.id);
+    const claimed = pendingSectionOpen;
+    pendingSectionOpen = null;
+    handler(claimed.scope, claimed.id);
   }
   return () => window.removeEventListener(SECTION_OPEN_REQUEST_EVENT, listener);
 };

@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Radio } from "lucide-react";
 
 import { CollapsibleSection } from "@/components/CollapsibleSection";
-import { readSectionStates, requestSectionOpen, resetSectionOpenLatchForTests } from "@/lib/ui/collapsibleSectionStore";
+import {
+  readSectionStates,
+  requestSectionOpen,
+  resetSectionOpenLatchForTests,
+  writeSectionState,
+} from "@/lib/ui/collapsibleSectionStore";
 
 vi.mock("framer-motion", async () => {
   // Everything the factory needs is declared INSIDE it: `vi.mock` is hoisted above module-level
@@ -480,14 +485,24 @@ describe("CollapsibleSection", () => {
       expect(readSectionStates("home").get("drives")).toBe(true);
     });
 
-    it("puts the body straight back when the override lifts", async () => {
+    /*
+     * A tap on the header while the body is forced shut must not reach the store. Home draws the
+     * device cards closed while nothing is connected, and it has to give the reader back whatever
+     * they had open once a machine answers: writing the flipped value through meant a card the user
+     * had left open came back closed, after a tap that appeared to do nothing.
+     */
+    it("ignores a tap on the header, and puts the body straight back when the override lifts", async () => {
+      writeSectionState("home", "drives", true);
       const { rerender } = render(
         <CollapsibleSection scope="home" id="drives" title="Drives" icon={Radio} forceClosed>
           <p>Drive A</p>
         </CollapsibleSection>,
       );
+      expect(document.getElementById("home-section-body-drives")).toBeNull();
+
       fireEvent.click(screen.getByTestId("home-section-toggle-drives"));
-      await waitFor(() => expect(readSectionStates("home").get("drives")).toBe(true));
+
+      expect(readSectionStates("home").get("drives")).toBe(true);
       expect(document.getElementById("home-section-body-drives")).toBeNull();
 
       rerender(

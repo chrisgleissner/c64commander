@@ -136,18 +136,35 @@ export const scoreEntry = (
 };
 
 /**
- * Ties break on title length, then alphabetically, and an entry whose requirements are unmet sorts
- * last within its group — listed, disabled and explained, never hidden.
+ * Score, then title length, then alphabetically. Every key is a property of one entry, which is
+ * what makes this a strict weak ordering.
+ *
+ * Availability is deliberately NOT here. An earlier version applied "unmet sorts last" only when
+ * two entries shared a group weight, while comparing scores across groups — a rule that depends on
+ * the PAIR rather than the element, and therefore not transitive: with an action scoring 80
+ * enabled, an action scoring 120 disabled and a page scoring 100 enabled, it reports A before B, B
+ * before C and C before A. Given a cycle `Array#sort` produces whatever its algorithm happens to
+ * produce, and on the real 83-entry index a one-letter query put four disabled action rows above
+ * five enabled ones. Folding availability in ahead of score instead would rank a weak keyword match
+ * on an action above an exact title match on a page.
+ *
+ * "Last within its group" is applied by {@link compareWithinGroup}, where groups actually exist.
  */
 export const compareScored = (left: ScoredEntry, right: ScoredEntry): number => {
-  const leftGroup = GROUP_WEIGHTS[left.resolved.entry.group];
-  const rightGroup = GROUP_WEIGHTS[right.resolved.entry.group];
-  if (leftGroup === rightGroup && left.resolved.enabled !== right.resolved.enabled) {
-    return left.resolved.enabled ? -1 : 1;
-  }
   if (left.score !== right.score) return right.score - left.score;
   if (left.title.length !== right.title.length) return left.title.length - right.title.length;
   return left.title.localeCompare(right.title);
+};
+
+/**
+ * The order inside one group: an entry whose requirements are unmet sorts last — listed, disabled
+ * and explained, never hidden — and everything else falls back to {@link compareScored}. Used by
+ * the overlay once results have been bucketed, so a disabled row cannot push an enabled one out of
+ * the rows a group shows.
+ */
+export const compareWithinGroup = (left: ScoredEntry, right: ScoredEntry): number => {
+  if (left.resolved.enabled !== right.resolved.enabled) return left.resolved.enabled ? -1 : 1;
+  return compareScored(left, right);
 };
 
 /** A resolved entry plus its pre-normalised text, so a caller can build the pair once and reuse it. */

@@ -173,3 +173,24 @@ describe("a request made before the section exists", () => {
     }
   });
 });
+
+/*
+ * Navigating away from Home and back within the window remounts every section. Leaving the request
+ * in place re-delivered it to each of them, so a card the user had closed by hand in the meantime
+ * opened itself again — and CollapsibleSection persists an open, so the close was lost.
+ */
+it("is claimed by the first subscriber, not re-delivered to the next", () => {
+  resetSectionOpenLatchForTests();
+  const first: Array<[string, string]> = [];
+  const second: Array<[string, string]> = [];
+
+  requestSectionOpen("home", "drives");
+  const stopFirst = subscribeSectionOpenRequest((scope, id) => first.push([scope, id]));
+  const stopSecond = subscribeSectionOpenRequest((scope, id) => second.push([scope, id]));
+
+  expect(first).toEqual([["home", "drives"]]);
+  expect(second).toEqual([]);
+  stopFirst();
+  stopSecond();
+  resetSectionOpenLatchForTests();
+});

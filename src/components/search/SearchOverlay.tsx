@@ -26,7 +26,7 @@ import { resolveEntry } from "@/lib/search/requirements";
 import { navigateToSearchTarget } from "@/lib/search/navigate";
 import { markSearchKeystroke, markSearchResultsPainted } from "@/lib/search/latencyProbe";
 import { SEARCH_OVERLAY_TESTID, subscribeSearchClose, type SearchOpenRequest } from "@/lib/search/overlayState";
-import type { ScoredEntry } from "@/lib/search/score";
+import { compareWithinGroup, type ScoredEntry } from "@/lib/search/score";
 import type { ResolvedSearchEntry, SearchEntry, SearchGroup } from "@/lib/search/types";
 import { cn } from "@/lib/utils";
 
@@ -96,7 +96,13 @@ const groupResults = (results: readonly ScoredEntry[], expanded: ReadonlySet<Sea
     else byGroup.set(scored.resolved.entry.group, [scored]);
   }
   return [...byGroup.entries()]
-    .map(([group, all]) => ({
+    .map(([group, unsorted]) => {
+      // Sorted here, where the group exists: an entry whose requirements are unmet sorts last, so a
+      // disabled row cannot take one of the rows this group shows from an enabled one.
+      const all = [...unsorted].sort(compareWithinGroup);
+      return { group, all };
+    })
+    .map(({ group, all }) => ({
       group,
       rows: expanded.has(group) ? all : all.slice(0, ROWS_PER_GROUP),
       total: all.length,

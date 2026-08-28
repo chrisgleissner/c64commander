@@ -7,12 +7,18 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { EMPTY_TOUR_STATE, hasPriorAppState, shouldOfferTourOnLaunch } from "@/lib/tour/tourState";
+import {
+  EMPTY_TOUR_STATE,
+  hasPriorAppState,
+  resamplePriorAppStateForTests,
+  shouldOfferTourOnLaunch,
+} from "@/lib/tour/tourState";
 import { DEVICE_STEP_IDS, TOUR_STEPS } from "@/lib/tour/steps";
 
 describe("who is offered the tour on launch", () => {
   beforeEach(() => {
     localStorage.clear();
+    resamplePriorAppStateForTests();
   });
 
   /*
@@ -26,6 +32,7 @@ describe("who is offered the tour on launch", () => {
 
   it("is not offered to an installation that has been used before", () => {
     localStorage.setItem("c64u_current_device_host", "192.168.1.10");
+    resamplePriorAppStateForTests();
 
     expect(hasPriorAppState()).toBe(true);
     expect(shouldOfferTourOnLaunch(EMPTY_TOUR_STATE)).toBe(false);
@@ -33,6 +40,7 @@ describe("who is offered the tour on launch", () => {
 
   it("ignores storage that is not this app's", () => {
     localStorage.setItem("some-other-app", "1");
+    resamplePriorAppStateForTests();
 
     expect(hasPriorAppState()).toBe(false);
     expect(shouldOfferTourOnLaunch(EMPTY_TOUR_STATE)).toBe(true);
@@ -59,5 +67,25 @@ describe("the device steps", () => {
       expect(indices[position]).toBe(indices[position - 1] + 1);
     }
     expect(DEVICE_STEP_IDS.length).toBe(indices.length);
+  });
+});
+
+/*
+ * The regression this guards: the saved-devices store writes its normalised envelope back the very
+ * first time anything reads it, and that read happens during React's render pass. Asking "has this
+ * installation been used before?" after that point found a key the app had just written to itself,
+ * so the first-run tour never opened for a genuinely new user.
+ */
+describe("a key the app writes to itself during startup", () => {
+  it("does not make a fresh installation look like an old one", () => {
+    localStorage.clear();
+    resamplePriorAppStateForTests();
+    expect(shouldOfferTourOnLaunch(EMPTY_TOUR_STATE)).toBe(true);
+
+    // What the saved-devices store does on its first read, before any effect runs.
+    localStorage.setItem("c64u_saved_devices:v1", JSON.stringify({ devices: [], selectedDeviceId: null }));
+
+    expect(hasPriorAppState()).toBe(false);
+    expect(shouldOfferTourOnLaunch(EMPTY_TOUR_STATE)).toBe(true);
   });
 });

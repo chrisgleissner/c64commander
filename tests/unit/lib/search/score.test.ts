@@ -10,12 +10,15 @@ import { describe, expect, it } from "vitest";
 import {
   GROUP_WEIGHTS,
   TERM_SCORES,
+  compareScored,
+  compareWithinGroup,
   normalize,
   rank,
   scoreTerm,
   splitTerms,
   toScorableText,
   type ScorableEntry,
+  type ScoredEntry,
 } from "@/lib/search/score";
 import type { ResolvedSearchEntry, SearchEntry, SearchGroup } from "@/lib/search/types";
 
@@ -171,9 +174,42 @@ describe("ranking", () => {
       entry("action.enabled", "Radio one", "action"),
       entry("action.disabled", "Radio", "action", { enabled: false }),
     ];
-    const ids = rank(index, "radio").map((scored) => scored.resolved.entry.id);
-    // "Radio" would otherwise win on the exact-title score and the shorter title.
+    // Through the comparator the overlay applies once results are bucketed, which is where a group
+    // exists. "Radio" would otherwise win on the exact-title score and the shorter title.
+    const ids = rank(index, "radio")
+      .sort(compareWithinGroup)
+      .map((scored) => scored.resolved.entry.id);
     expect(ids).toEqual(["action.enabled", "action.disabled"]);
+  });
+
+  /*
+   * The comparator has to be a strict weak ordering or Array#sort is free to produce anything.
+   *
+   * An earlier version applied "unmet sorts last" only when two entries shared a group weight while
+   * comparing scores across groups — a rule about the PAIR, not the element. These three then form
+   * a cycle: A before B, B before C, and C before A. On the real index that put four disabled rows
+   * above five enabled ones.
+   */
+  it("is transitive across groups and availability", () => {
+    const cycle = [
+      { id: "a", group: "action" as const, score: 80, enabled: true, title: "aaa" },
+      { id: "b", group: "action" as const, score: 120, enabled: false, title: "bbb" },
+      { id: "c", group: "page" as const, score: 100, enabled: true, title: "ccc" },
+    ].map(({ id, group, score, enabled, title }) => ({
+      resolved: { entry: { ...entry(id, title, group), group }, enabled, disabledReason: null, remedyTarget: null },
+      score,
+      title,
+    })) as unknown as ScoredEntry[];
+
+    for (const left of cycle) {
+      for (const right of cycle) {
+        for (const middle of cycle) {
+          if (compareScored(left, middle) < 0 && compareScored(middle, right) < 0) {
+            expect(compareScored(left, right), `${left.title} < ${middle.title} < ${right.title}`).toBeLessThan(0);
+          }
+        }
+      }
+    }
   });
 
   it("lifts an entry this user has picked before", () => {

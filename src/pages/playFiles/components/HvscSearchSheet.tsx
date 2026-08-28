@@ -16,14 +16,21 @@ import { useHvscArchiveSearch, type HvscSearchHit } from "@/pages/playFiles/hook
 import { loadRecentlyPlayed, type RecentlyPlayedEntry } from "@/lib/sidRadio/recentlyPlayed";
 
 /**
- * What was recently heard, in the same shape a search result takes.
+ * A row of Recent that came from the archive, which is what this sheet can reopen.
  *
- * Tunes only: this sheet searches the archive, and a disk or a program has no place in it. Recent
- * holds all three, and a row of another kind would be reopened here as a tune it is not.
+ * `category === "sid"` is not enough. A .sid played from the C64's own storage or from a local
+ * folder is a tune of that category too, and every row here is reopened through
+ * `buildFoundTuneItem`, which builds an `hvsc` request from the path — so a device path went to the
+ * archive, which does not contain it, and the tune did not play. A row written before the source
+ * was recorded came from the archive, because nothing else was ever written to Recent then.
  */
+const isArchiveTune = (entry: RecentlyPlayedEntry): boolean =>
+  entry.category === "sid" && (entry.source === undefined || entry.source === "hvsc");
+
+/** What was recently heard from the archive, in the same shape a search result takes. */
 const recentlyPlayedTunes = (): HvscSearchHit[] =>
   loadRecentlyPlayed()
-    .filter((entry) => entry.category === "sid")
+    .filter(isArchiveTune)
     .map((entry) => ({
       virtualPath: entry.virtualPath,
       title: entry.title,
@@ -172,15 +179,17 @@ export const HvscSearchSheet = ({
    * Disks and programs are listed too, and separately.
    *
    * The tile that opens this is specified as "recently played tunes, disks and programs"
-   * (spec.md section 6.3), and Recent counts all three, so filtering them out here gave a
+   * (spec.md section 6.3), and Recent counts all of them, so filtering them out here gave a
    * disk-only history an enabled tile that opened an empty sheet. They are not put through
-   * TuneList: its rows offer a station seed, which only a tune can be.
+   * TuneList: its rows offer a station seed, which only an archive tune can be, and it reopens
+   * every row as an archive path. A tune from the device's own storage belongs in this list too,
+   * for that second reason.
    */
   const [recentOther, setRecentOther] = useState<RecentlyPlayedEntry[]>([]);
   useEffect(() => {
     if (!open) return;
     setRecent(recentlyPlayedTunes());
-    setRecentOther(loadRecentlyPlayed().filter((entry) => entry.category !== "sid"));
+    setRecentOther(loadRecentlyPlayed().filter((entry) => !isArchiveTune(entry)));
   }, [open]);
   /**
    * Whether the explanatory text is still worth its height.
@@ -269,7 +278,7 @@ export const HvscSearchSheet = ({
                 {recentOther.length > 0 ? (
                   <>
                     <p className="pb-2 pt-3 text-xs text-muted-foreground" data-testid="recently-played-other-heading">
-                      Disks and programs
+                      Also recently opened
                     </p>
                     {recentOther.map((entry) => (
                       <button

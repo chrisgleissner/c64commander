@@ -519,6 +519,7 @@ export const STATIC_SEARCH_ENTRIES: readonly SearchEntry[] = [
     group: "setting",
     iconId: "cpu",
     target: { kind: "section", path: "/settings", scope: "settings", id: "hvsc" },
+    requires: [{ kind: "flag", flag: "hvsc_enabled" }],
   },
   {
     id: "settings.section.online-archive",
@@ -530,6 +531,7 @@ export const STATIC_SEARCH_ENTRIES: readonly SearchEntry[] = [
     group: "setting",
     iconId: "cloud",
     target: { kind: "section", path: "/settings", scope: "settings", id: "online-archive" },
+    requires: [{ kind: "flag", flag: "commoserve_enabled" }],
   },
   {
     id: "settings.section.device-safety",
@@ -902,6 +904,7 @@ export const STATIC_SEARCH_ENTRIES: readonly SearchEntry[] = [
     group: "setting",
     iconId: "link",
     target: { kind: "control", path: "/settings", scope: "settings", sectionId: "hvsc", testId: "hvsc-base-url" },
+    requires: [{ kind: "flag", flag: "hvsc_enabled" }],
   },
   {
     id: "settings.control.open-online-archive",
@@ -919,6 +922,7 @@ export const STATIC_SEARCH_ENTRIES: readonly SearchEntry[] = [
       sectionId: "online-archive",
       testId: "open-online-archive",
     },
+    requires: [{ kind: "flag", flag: "commoserve_enabled" }],
   },
   {
     id: "settings.control.persist-config-to-flash",

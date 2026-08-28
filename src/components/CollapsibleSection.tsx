@@ -257,6 +257,15 @@ export const CollapsibleSection = ({
   const toggle = useCallback(
     (event: MouseEvent<HTMLButtonElement>) => {
       onToggleClick?.(event);
+      /*
+       * Inert while the body is forced shut, because the store must not learn about it.
+       *
+       * `forceClosed` is presentation only: Home draws the device cards closed while nothing is
+       * connected and has to give the reader back whatever they had open once a machine answers.
+       * A tap on the header used to write the flipped value through anyway — nothing appeared, and
+       * a card the user had left open came back closed.
+       */
+      if (forceClosed) return;
       setOpen((current) => {
         const next = !current;
         writeSectionState(scope, id, next);
@@ -268,7 +277,7 @@ export const CollapsibleSection = ({
         return next;
       });
     },
-    [scope, id, onToggle, onToggleClick],
+    [forceClosed, scope, id, onToggle, onToggleClick],
   );
 
   /*

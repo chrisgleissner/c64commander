@@ -74,7 +74,7 @@ export const saveTourState = (state: TourState): void => {
 export const APP_STORAGE_PREFIX = "c64u_";
 export const E2E_FIRST_LAUNCH_KEY = "c64u_e2e_first_launch";
 
-export const hasPriorAppState = (): boolean => {
+const detectPriorAppState = (): boolean => {
   if (typeof localStorage === "undefined") return false;
   if (localStorage.getItem(E2E_FIRST_LAUNCH_KEY) !== null) return false;
   for (let index = 0; index < localStorage.length; index += 1) {
@@ -83,6 +83,25 @@ export const hasPriorAppState = (): boolean => {
     if (key.startsWith(APP_STORAGE_PREFIX)) return true;
   }
   return false;
+};
+
+/*
+ * Sampled once, when this module is first imported, and never again.
+ *
+ * It has to be. The saved-devices store writes its normalised envelope back the first time anything
+ * reads it — on a fresh install `raw` is null, so the write always happens — and that read comes
+ * from a `useSyncExternalStore` getSnapshot, which React runs DURING render. Asking this question
+ * later therefore found a key the app had just written to itself and concluded the installation was
+ * an old one, which meant the first-run tour never opened for a genuinely new user at all. Module
+ * initialisation runs before any of that.
+ */
+let priorAppState = detectPriorAppState();
+
+export const hasPriorAppState = (): boolean => priorAppState;
+
+/** Test seam: re-samples storage, which only module initialisation does in production. */
+export const resamplePriorAppStateForTests = (): void => {
+  priorAppState = detectPriorAppState();
 };
 
 /**

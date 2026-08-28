@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { navigateToSearchTarget } from "@/lib/search/navigate";
 import { captionPlacement, scrimRects, unionRect, type Rect } from "@/lib/tour/spotlight";
+import { isDeviceBackKey, resolveInputProfile, resolveSemanticAction } from "@/lib/input";
 import { TOUR_STEPS, tourStepIndex } from "@/lib/tour/steps";
 import { TOUR_ACTIVE_ATTRIBUTE, loadTourState, saveTourState, type TourStartRequest } from "@/lib/tour/tourState";
 
@@ -45,6 +46,9 @@ export interface TourDriverProps {
   readonly request: TourStartRequest;
   readonly onFinished: () => void;
 }
+
+/** Keypad bindings prepended to the keyboard ones, so a D-pad and a keyboard both resolve here. */
+const TOUR_KEYMAP = resolveInputProfile("keypad");
 
 export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
   const navigate = useNavigate();
@@ -105,12 +109,17 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
     if (!status.isConnected && step.requiresDevice) ranWithoutDeviceRef.current = true;
   }, [step, navigate, status.isConnected]);
 
-  // Re-measured on scroll, resize and orientation change, so the hole cannot drift off its anchor.
+  /*
+   * Re-measured on scroll, resize and orientation change, so the hole cannot drift off its anchor.
+   *
+   * It runs for a step with no anchor too. The viewport starts at 0 by 0 and this is its only
+   * writer, so returning early left the scrim a single empty rectangle: the opening step, the one
+   * step that points at nothing, dimmed none of the app behind its caption.
+   */
   useEffect(() => {
-    if (!step?.anchor) return undefined;
     const remeasure = () => {
       setViewport({ width: window.innerWidth, height: window.innerHeight });
-      setHole(unionRect(measureAnchors(step.anchor?.testIds ?? [])));
+      setHole(step?.anchor ? unionRect(measureAnchors(step.anchor.testIds)) : null);
     };
     remeasure();
     // The anchor is reached asynchronously, so measure again once it has had time to arrive.
@@ -160,16 +169,27 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      // The tour owns the keys while it is up. Left and Right are Back and Next, OK is Next, and
-      // the Back key skips, which is the same "Back goes out" rule the rest of the app follows.
-      const handled: Record<string, () => void> = {
-        ArrowLeft: back,
-        ArrowRight: next,
-        Enter: next,
-        " ": next,
-        Escape: () => finish("skipped"),
+      /*
+       * The tour owns the keys while it is up. Left and Right are Back and Next, OK is Next, and
+       * the Back key skips, which is the same "Back goes out" rule the rest of the app follows.
+       *
+       * Resolved through the keymap, not off `event.key`. A keypad handset's D-pad emits
+       * `code: "DpadLeft"` with `key: "Unidentified"`, so comparing key names left the tour
+       * undrivable on the one kind of hardware that has no pointer to fall back on. The device
+       * Back button resolves to no action at all and is asked for by name.
+       */
+      const semantic = resolveSemanticAction(TOUR_KEYMAP, event);
+      const handled: Partial<Record<string, () => void>> = {
+        dpadLeft: back,
+        dpadRight: next,
+        enter: next,
+        center: next,
+        activate: next,
+        escape: () => finish("skipped"),
+        back: () => finish("skipped"),
       };
-      const action = handled[event.key];
+      const action =
+        event.key === " " ? next : isDeviceBackKey(event) ? () => finish("skipped") : handled[semantic ?? ""];
       if (!action) return;
       event.preventDefault();
       event.stopPropagation();

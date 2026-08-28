@@ -496,6 +496,8 @@ entries:
     keywords: [archive, music collection, download, update, base url]
     group: setting
     icon: cpu
+    requires:
+      - { kind: flag, flag: hvsc_enabled }
     target: { kind: section, path: /settings, scope: settings, id: hvsc }
 
   - id: settings.section.online-archive
@@ -506,6 +508,8 @@ entries:
     keywords: [commoserve, archive, browser, host, override, download]
     group: setting
     icon: cloud
+    requires:
+      - { kind: flag, flag: commoserve_enabled }
     target: { kind: section, path: /settings, scope: settings, id: online-archive }
 
   - id: settings.section.device-safety
@@ -805,6 +809,8 @@ entries:
     keywords: [url, mirror, download, archive, source]
     group: setting
     icon: link
+    requires:
+      - { kind: flag, flag: hvsc_enabled }
     target: { kind: control, path: /settings, scope: settings, sectionId: hvsc, testId: hvsc-base-url }
 
   - id: settings.control.open-online-archive
@@ -815,6 +821,8 @@ entries:
     keywords: [commoserve, browse, download, games, programs]
     group: setting
     icon: cloud
+    requires:
+      - { kind: flag, flag: commoserve_enabled }
     target: { kind: control, path: /settings, scope: settings, sectionId: online-archive, testId: open-online-archive }
 
   - id: settings.control.persist-config-to-flash

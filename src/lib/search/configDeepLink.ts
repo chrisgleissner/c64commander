@@ -52,8 +52,12 @@ export const subscribeConfigItemFocus = (handler: (request: ConfigItemFocusReque
     if (detail) handler(detail);
   };
   window.addEventListener(CONFIG_ITEM_FOCUS_EVENT, listener);
+  // Claimed, not merely read: leaving it in place re-delivered it on every remount inside the
+  // window, moving focus again on a page the user had since scrolled somewhere else.
   if (pendingFocus !== null && Date.now() - pendingFocus.atMs <= CONFIG_ITEM_FOCUS_LATCH_TTL_MS) {
-    handler(pendingFocus.request);
+    const claimed = pendingFocus;
+    pendingFocus = null;
+    handler(claimed.request);
   }
   return () => window.removeEventListener(CONFIG_ITEM_FOCUS_EVENT, listener);
 };
