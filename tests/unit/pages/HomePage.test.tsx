@@ -1317,23 +1317,27 @@ describe("HomePage SID status", () => {
 
     const machineControls = screen.getByTestId("home-machine-controls");
     /*
-     * The machine's own controls lead and the destructive ones come last, with the four promoted
-     * actions as one run between them. Radio stands immediately before Resume and Recent, which is
+     * Watch, listen, operate, careful. Live View leads with Game and Input — all three are ways to
+     * use the machine from here — then the music trio, then the operational tiles, then the ones
+     * that interrupt the machine. Radio stands immediately before Last tune and Recent, which is
      * what makes those two readable without a longer label.
+     *
+     * Game and Input are absent here: remote_input_enabled is forced off above so the count is
+     * about the machine controls rather than the Remote Input pair.
      */
     expect(
       within(machineControls)
         .getAllByRole("button")
         .map((button) => button.textContent),
     ).toEqual([
+      "Live ViewLive View is turned off in Settings",
+      "Radio",
+      "Last tune",
+      "Recent",
       "Menu",
       "Pause",
       "Save RAM",
       "Load RAM",
-      "Radio",
-      "Last tune",
-      "Recent",
-      "Live ViewLive View is turned off in Settings",
       "Reset",
       "Reboot",
       "Power Off",

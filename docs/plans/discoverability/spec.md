@@ -541,8 +541,14 @@ adding a seventh tab fails the build rather than silently stealing the search ke
 | F3 | Next tune, from any page | Speculative. Same reasoning; shadows `F3 → toggleInputMode`. |
 
 Two semantic actions are added: `mediaPlayPause` and `mediaNext`. Both bindings go in the **keypad
-profile only**, which prepends and therefore shadows the desktop base, so a developer on a desktop
-keyboard keeps `softLeft` and `toggleInputMode`.
+profile only**, which prepends and therefore shadows the desktop base.
+
+Revised after implementation: that placement does not spare a desktop keyboard today.
+`FocusNavigationProvider` is mounted once with `profileId="keypad"` and there is no runtime
+selector, so the keypad profile is the only one any code path resolves and F1 is `mediaPlayPause`
+everywhere. `defaultKeyboard`'s `softLeft` and `toggleInputMode` are dormant until a selector
+exists. The cost is one of several ways to go back on a desktop; Escape and the Back key are
+unaffected.
 
 **`keyCode: 0` must never be bound.** `useFocusNavigation.tsx:449` recognises the Android hardware Back
 button as `key === "Escape" && code === "" && keyCode === 0`.
@@ -841,8 +847,10 @@ The layout in §6.1 was revised once the branch could be used on a handset.
 four, so each was twice the width of the controls below it; its banner read "Needs no C64 attached"
 while one of its four tiles requires a connected machine and streaming support; and this app is a
 remote control first and a standalone player second, so a banner across the top of Home for the
-second was the wrong emphasis. The four promoted actions are tiles in Quick Actions, at the end of
-the safe controls and before the destructive ones. In the offline arrangement, where that section is
+second was the wrong emphasis. The four promoted actions are tiles in Quick Actions, which now reads in four
+bands: watch (Live View, Game, Input), listen (Radio, Last tune, Recent), operate (Menu, Pause, the
+RAM snapshots), and the ones that interrupt the machine last. Live View belongs with Game and Input
+because all three are ways to use the C64 from here. In the offline arrangement, where that section is
 drawn closed, they are rendered on their own instead — they are the actions that need no device, and
 shutting them away exactly when they are the only usable ones would be the wrong way round.
 

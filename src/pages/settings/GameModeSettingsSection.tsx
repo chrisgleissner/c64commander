@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { beginKeyCapture } from "@/lib/input/keyCaptureState";
 import { resolveInputProfile } from "@/lib/input/profiles";
 import { resolveSemanticAction } from "@/lib/input/keyEvent";
 import type { SemanticAction } from "@/lib/input";
@@ -94,6 +95,8 @@ export const GameModeSettingsSection = () => {
 
   useEffect(() => {
     if (capturingSlot === null) return;
+    // Global shortcuts stand aside while a slot is being captured; see keyCaptureState.
+    const endCapture = beginKeyCapture();
     const onKeyDown = (event: KeyboardEvent) => {
       const slot = capturingSlotRef.current;
       if (slot === null) return;
@@ -119,7 +122,10 @@ export const GameModeSettingsSection = () => {
       });
     };
     window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
+    return () => {
+      endCapture();
+      window.removeEventListener("keydown", onKeyDown, true);
+    };
   }, [capturingSlot]);
 
   return (

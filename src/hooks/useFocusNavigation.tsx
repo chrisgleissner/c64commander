@@ -558,8 +558,9 @@ export const FocusNavigationProvider = ({
         event.preventDefault();
         return;
       }
-      // Transport, from any page. Bound only in the keypad profile, so a desktop keyboard's F1 and
-      // F3 still resolve to softLeft and toggleInputMode and never reach here (spec.md 9.2).
+      // Transport, from any page. Declared only in the keypad profile — which is the only profile
+      // this provider is ever mounted with, so F1 and F3 reach here on a desktop keyboard too.
+      // defaultKeyboard's softLeft and toggleInputMode are dormant until a selector exists.
       if (action === "mediaPlayPause" && shortcuts.mediaPlayPause) {
         shortcuts.mediaPlayPause();
         setInputModality("key-navigation");

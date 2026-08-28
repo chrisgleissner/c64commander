@@ -74,8 +74,13 @@ const keypadBindings: KeyBinding[] = [
    *
    * F1 and F3 are real, standard codes, and a keypad handset has separate hardware soft keys, so
    * shadowing this profile's own inherited F1 -> softLeft and F3 -> toggleInputMode is safe ON THE
-   * DEVICE. They are declared here and NOT in defaultKeyboard, and this profile prepends, so a
-   * developer on a desktop keyboard keeps both of those.
+   * DEVICE. They are declared here and NOT in defaultKeyboard.
+   *
+   * That placement does NOT currently spare a desktop keyboard, and this comment used to claim it
+   * did. `FocusNavigationProvider` is mounted once, with `profileId="keypad"` and no runtime
+   * selector, so this profile is the only one any code path resolves — F1 is mediaPlayPause
+   * everywhere. defaultKeyboard's own F1 and F3 are dormant until a selector exists. The cost is
+   * one of several ways to go back on a desktop; Escape and the Back key are unaffected.
    *
    * The Commodore key stays unbound. keymap.ts requires an exact code, key or keyCode and keyEvent
    * matches exactly: there is no wildcard and no placeholder that later becomes the right value,

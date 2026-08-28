@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SearchKeyListener } from "@/components/search/SearchKeyListener";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 import { subscribeSearchOpen, type SearchOpenRequest } from "@/lib/search/overlayState";
+import { beginKeyCapture } from "@/lib/input/keyCaptureState";
 
 const pressSeven = (target: EventTarget = window) =>
   fireEvent.keyDown(target as Element | Document | Window, { code: "Digit7", key: "7", keyCode: 55 });
@@ -93,5 +94,32 @@ describe("SearchKeyListener", () => {
    */
   it("has fewer than seven tabs, which is what leaves 7 free", () => {
     expect(TAB_ROUTES.length).toBeLessThan(7);
+  });
+});
+
+/*
+ * Game Mode's joystick binder waits for a key so it can record which one. It is an inline settings
+ * block rather than a Radix overlay, so the open-overlay exclusion does not see it, and both it and
+ * this listener are on the capture phase of window with this one registered first — so
+ * `event.defaultPrevented` is always false here. Pressing 7 while capturing a slot bound the slot
+ * AND dropped the search overlay over Settings.
+ */
+describe("while a key binding is being captured", () => {
+  it("leaves the key to whatever is capturing it", () => {
+    const opens: unknown[] = [];
+    const stop = subscribeSearchOpen((request) => opens.push(request));
+    render(<SearchKeyListener />);
+
+    const endCapture = beginKeyCapture();
+    try {
+      fireEvent.keyDown(window, { key: "7", code: "Digit7" });
+      expect(opens).toEqual([]);
+    } finally {
+      endCapture();
+    }
+
+    fireEvent.keyDown(window, { key: "7", code: "Digit7" });
+    expect(opens).toHaveLength(1);
+    stop();
   });
 });

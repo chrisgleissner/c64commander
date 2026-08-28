@@ -8,6 +8,7 @@
 
 import { useEffect } from "react";
 import { isAnyOverlayOpen, isEditableTarget } from "@/lib/input/eventTargets";
+import { isCapturingKeyBinding } from "@/lib/input/keyCaptureState";
 import { keypadProfile } from "@/lib/input/profiles/keypad";
 import { findBinding } from "@/lib/input/keyEvent";
 import { requestSearchOpen } from "@/lib/search/overlayState";
@@ -32,10 +33,19 @@ export const SearchKeyListener = () => {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const onKeyDown = (event: KeyboardEvent) => {
-      // The same two exclusions the digit shortcuts apply: a text field owns its digits for T9,
-      // and an open overlay owns the keyboard.
+      /*
+       * The same two exclusions the digit shortcuts apply: a text field owns its digits for T9, and
+       * an open overlay owns the keyboard. Plus one more.
+       *
+       * Something is waiting for a key so it can record which one. Game Mode's joystick binder is
+       * an inline settings block rather than a Radix overlay, so `isAnyOverlayOpen` does not see
+       * it, and `event.defaultPrevented` cannot help either: both listen on the capture phase of
+       * window and this one is registered at the app root, so it runs first. Pressing 7 while
+       * capturing a slot bound the slot AND dropped the search overlay over Settings.
+       */
       if (isEditableTarget(event.target)) return;
       if (isAnyOverlayOpen()) return;
+      if (isCapturingKeyBinding()) return;
 
       const binding = findBinding(keypadProfile, event);
       // `openSearch` is what the Commodore key will resolve to once its emitted code is known; it

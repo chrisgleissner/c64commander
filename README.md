@@ -92,7 +92,7 @@ C64 Commander reconnects to saved devices automatically on later launches.
 
 ### Home
 
-Home opens on search, then **Quick Actions** — one grid holding the machine's own controls and, at the end of them, four tiles that need no C64 attached: SID Radio, resuming the last tune, what you played recently, and Live View. Below that are the cards for lighting, drives, printer, SID mixer, streams, and configuration snapshots, and the system information last.
+Home opens on search, then **Quick Actions** — one grid in four bands: watch (Live View, Game, Input), listen (SID Radio, the last tune, what you played recently), operate (Menu, Pause, the RAM snapshots), and last the ones that interrupt the machine. Below that are the cards for lighting, drives, printer, SID mixer, streams, and configuration snapshots, and the system information last.
 
 With nothing connected, Home does not become a wall of "Not available": search stays where it is, Radio, Last tune and Recent are drawn on their own because none of them needs a machine, a card explains how to connect one, and the device cards are drawn as titles with their contents put away until one answers.
 

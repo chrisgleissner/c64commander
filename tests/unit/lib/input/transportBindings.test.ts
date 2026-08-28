@@ -26,13 +26,18 @@ describe("transport bindings", () => {
   });
 
   /*
-   * The regression the placement exists to prevent. The bindings are declared in the KEYPAD profile
-   * only, which prepends over the desktop base, so a developer on a desktop keyboard keeps the soft
-   * key and the input-mode toggle they have always had.
+   * The desktop profile still declares its own F1 and F3, but nothing selects it: the app mounts
+   * FocusNavigationProvider once with profileId="keypad" and has no runtime selector, so the
+   * keypad profile shadows both everywhere. This asserted the declaration and was read as proving
+   * a desktop keyboard keeps them, which it does not — the comment above it said exactly that.
+   * It is worth keeping only as a record of what the base profile holds for when a selector exists.
    */
-  it("leaves the desktop profile's F1 and F3 alone", () => {
+  it("keeps F1 and F3 in the desktop profile, which nothing selects yet", () => {
     expect(findBinding(defaultKeyboardProfile, press("F1"))?.action).toBe("softLeft");
     expect(findBinding(defaultKeyboardProfile, press("F3"))?.action).toBe("toggleInputMode");
+    // What actually resolves today, on every platform.
+    expect(findBinding(keypadProfile, press("F1"))?.action).toBe("mediaPlayPause");
+    expect(findBinding(keypadProfile, press("F3"))?.action).toBe("mediaNext");
   });
 
   it("leaves the Commodore key unbound rather than guessing at a code", () => {

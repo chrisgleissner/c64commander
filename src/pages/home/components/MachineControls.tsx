@@ -184,6 +184,16 @@ export function MachineControls({
    * label would, and every tile here stays one word.
    */
   const promotedActions = safeExtraActions.filter((action) => action.id.startsWith("promoted."));
+  /*
+   * The grid reads watch, listen, operate, careful.
+   *
+   * Live View leads with Game and Input: all three are ways to use the machine from here, and
+   * keeping them together is the whole point of the first band. The music trio follows as its own
+   * band. Then the operational tiles, and the ones that interrupt the machine last, as they always
+   * were. Nothing that stops your C64 sits next to something that does not.
+   */
+  const watchActions = promotedActions.filter((action) => action.id === "promoted.home.section.live-view");
+  const listenActions = promotedActions.filter((action) => !watchActions.includes(action));
   const otherSafeExtraActions = safeExtraActions.filter(
     (action) => action !== remoteInputAction && !promotedActions.includes(action),
   );
@@ -241,9 +251,10 @@ export function MachineControls({
             cardDensity="compact"
             testId="home-machine-controls"
           >
-            {/* Frequent and safe first, destructive last in increasing severity, pairs
-                kept adjacent, and one focus group throughout — splitting the grid would
-                cost a keypad user a ring level to descend into. */}
+            {/* Watch, listen, operate, careful — destructive last in increasing severity, pairs kept
+                adjacent, and one focus group throughout: splitting the grid would cost a keypad
+                user a ring level to descend into. */}
+            {watchActions.map((action, index) => renderExtraAction(action, 90 + index * 2))}
             {gameModeVisible ? (
               <QuickActionCard
                 icon={Joystick}
@@ -256,6 +267,7 @@ export function MachineControls({
               />
             ) : null}
             {remoteInputAction ? renderExtraAction(remoteInputAction, 105) : null}
+            {listenActions.map((action, index) => renderExtraAction(action, 106 + index * 2))}
             <QuickActionCard
               icon={Menu}
               label="Menu"
@@ -300,9 +312,6 @@ export function MachineControls({
                 />
               </>
             ) : null}
-            {/* The promoted actions, as one run: the machine's own controls lead, because that is
-                what this app is for, and the destructive tiles still come last. */}
-            {promotedActions.map((action, index) => renderExtraAction(action, 160 + index * 2))}
             <QuickActionCard
               icon={RotateCcw}
               label="Reset"
