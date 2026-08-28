@@ -11,6 +11,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { History, Monitor, Play, Radio, type LucideIcon } from "lucide-react";
 
 import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { QuickActionCard } from "@/components/QuickActionCard";
 import { ProfileActionGrid } from "@/components/layout/PageContainer";
 import { toast } from "@/hooks/use-toast";
 import { useRequirementContext } from "@/hooks/useSearchResults";
@@ -22,7 +23,6 @@ import { navigateToSearchTarget } from "@/lib/search/navigate";
 import { resolveEntry } from "@/lib/search/requirements";
 import { getSearchEntries } from "@/lib/search/registry";
 import { PLAYBACK_SESSION_KEY } from "@/pages/playFiles/playFilesUtils";
-import { cn } from "@/lib/utils";
 import type { ResolvedSearchEntry } from "@/lib/search/types";
 
 /**
@@ -117,50 +117,43 @@ export const ListenAndPlay = () => {
       scope="home"
       id="listen-and-play"
       title={t("home.listenAndPlay", "Listen and play")}
-      summary={t("home.listenAndPlay.summary", "Music and games that need no C64 attached")}
+      summary={t("home.listenAndPlay.summary", "Needs no C64 attached")}
       icon={Radio}
       defaultOpen
       testId="home-listen-and-play"
     >
       {/*
         Two columns on a phone, not four. Each tile carries a word AND a line of detail, so four
-        tracks on a 393 px screen leave about 37 CSS px for the label and every one of them wraps to
-        a single character per line — measured, and visible in the corpus before this was set.
+        tracks on a 393 px screen left about 37 CSS px for the label and every one wrapped to a
+        single character per line.
+
+        QuickActionCard rather than a button of our own, for the reason recorded in its own comment:
+        it puts the icon ABOVE a label that is free to wrap, so the label never competes with the
+        icon for a narrow track. A hand-rolled row put them side by side, which cost the label
+        another 40 CSS px and clipped every one of the four at the largest Text size.
       */}
       <ProfileActionGrid compactColumns={2} mediumColumns={2} expandedColumns={4} cardDensity="compact">
         {resolved.map(({ tile, resolved: entry }) => {
           if (!entry) return null;
           const emptyRecent = tile.entryId === "action.recently-played" && recentIsEmpty;
           const enabled = entry.enabled && !emptyRecent;
-          const reason = emptyRecent
-            ? t("home.tile.recent.empty", "Nothing has been opened yet")
-            : entry.disabledReason;
-          const Icon = tile.icon;
+          // Shown as the card's own description, so the reason a tile cannot run is on screen
+          // rather than only in an accessible name. A tile that vanishes teaches nothing, and one
+          // greyed with no explanation teaches less.
+          const description = enabled
+            ? (tile.detail ?? undefined)
+            : ((emptyRecent ? t("home.tile.recent.empty", "Nothing has been opened yet") : entry.disabledReason) ??
+              undefined);
           return (
-            <button
+            <QuickActionCard
               key={tile.entryId}
-              type="button"
+              icon={tile.icon}
+              label={tile.label}
+              description={description}
               disabled={!enabled}
               onClick={() => void activate(entry)}
-              data-testid={`home-tile-${tile.entryId}`}
-              // The reason is in the accessible name, not only the tooltip: a tile that vanishes
-              // teaches nothing, and one that is greyed with no explanation teaches less.
-              aria-label={enabled ? tile.label : `${tile.label}. ${reason ?? ""}`}
-              className={cn(
-                "flex min-h-11 flex-col items-start justify-center gap-1 rounded-panel border border-border bg-card p-3 text-left",
-                enabled ? "hover:bg-muted/60" : "opacity-60",
-              )}
-            >
-              <span className="flex w-full min-w-0 items-center gap-2 text-sm font-medium">
-                <Icon className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-                {/* min-w-0 and a word break, so a narrow track truncates the label rather than
-                    breaking it down the middle of a word. */}
-                <span className="min-w-0 truncate">{tile.label}</span>
-              </span>
-              <span className="line-clamp-2 w-full min-w-0 break-words text-xs text-muted-foreground">
-                {enabled ? (tile.detail ?? "") : reason}
-              </span>
-            </button>
+              dataTestId={`home-tile-${tile.entryId}`}
+            />
           );
         })}
       </ProfileActionGrid>

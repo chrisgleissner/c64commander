@@ -927,10 +927,13 @@ return JSON.stringify({samples});})()`);
     const sorted = [...samples].sort((left, right) => left - right);
     const at = (fraction) => sorted[Math.min(Math.ceil(fraction * sorted.length), sorted.length) - 1];
     const p95 = at(0.95);
-    if (p95 > 100) {
-      throw new Error(`keystroke to painted list is ${p95.toFixed(1)} ms at p95 over ${sorted.length} samples (budget 100)`);
-    }
-    return `${sorted.length} samples, p50 ${at(0.5).toFixed(1)} ms, p95 ${p95.toFixed(1)} ms, max ${sorted[sorted.length - 1].toFixed(1)} ms`;
+    // The whole distribution in the message, not only the number that failed: a p95 over budget
+    // with a healthy p50 is a tail to chase, and one with a p50 already close is a different fault.
+    const shape =
+      `${sorted.length} samples, p50 ${at(0.5).toFixed(1)} ms, p90 ${at(0.9).toFixed(1)} ms, ` +
+      `p95 ${p95.toFixed(1)} ms, max ${sorted[sorted.length - 1].toFixed(1)} ms`;
+    if (p95 > 100) throw new Error(`keystroke to painted list is over budget (100 ms at p95): ${shape}`);
+    return shape;
   });
 
   // The sender, on the host's own link. Silent: it only listens.

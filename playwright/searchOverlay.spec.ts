@@ -122,6 +122,28 @@ test.describe("search overlay", () => {
       await page.setViewportSize(SMALLEST_VIEWPORT);
     });
 
+    /*
+     * Every tile label is drawn WHOLE, not clipped.
+     *
+     * The first version of these tiles put the icon beside the label in a flex row. On the device
+     * at the largest Text size that left about 50 CSS px for the text in a 131 px track and all
+     * four labels were clipped — "Live View" among them. QuickActionCard puts the icon above the
+     * label, so the label has the whole track and is free to wrap.
+     */
+    test("draws every tile label whole rather than clipping it", async ({ page }) => {
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      await settle(page);
+
+      const clipped = await page.evaluate(() =>
+        [...document.querySelectorAll('[data-testid^="home-tile-"]')].flatMap((tile) =>
+          [...tile.querySelectorAll("span")]
+            .filter((span) => span.scrollWidth - span.clientWidth > 1 || span.scrollHeight - span.clientHeight > 1)
+            .map((span) => `${tile.getAttribute("data-testid")}: ${(span.textContent ?? "").trim()}`),
+        ),
+      );
+      expect(clipped, "tile text clipped at the largest text size").toEqual([]);
+    });
+
     test("nothing on Home truncates to nothing", async ({ page }) => {
       await page.goto("/", { waitUntil: "domcontentloaded" });
       await settle(page);

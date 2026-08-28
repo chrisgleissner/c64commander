@@ -2376,13 +2376,14 @@ describe("HomePage offline arrangement", () => {
     for (const entryId of ["action.sid-radio", "action.resume-session", "action.recently-played"]) {
       expect(screen.getByTestId(`home-tile-${entryId}`), entryId).toBeInTheDocument();
     }
+    // The reason is VISIBLE text on the card, not only an accessible name.
     const resume = screen.getByTestId("home-tile-action.resume-session");
     expect(resume).toBeDisabled();
-    expect(resume.getAttribute("aria-label")).toContain("Nothing has been played yet");
+    expect(resume.textContent).toContain("Nothing has been played yet");
 
     const recent = screen.getByTestId("home-tile-action.recently-played");
     expect(recent).toBeDisabled();
-    expect(recent.getAttribute("aria-label")).toContain("Nothing has been opened yet");
+    expect(recent.textContent).toContain("Nothing has been opened yet");
   });
 
   it("keeps the Live View tile listed, disabled, rather than hiding it", () => {
@@ -2390,7 +2391,7 @@ describe("HomePage offline arrangement", () => {
     renderWithRouter(<HomePage />);
     const tile = screen.getByTestId("home-tile-home.section.live-view");
     expect(tile).toBeDisabled();
-    expect(tile.getAttribute("aria-label")).toContain("Needs a connected C64 Ultimate");
+    expect(tile.textContent).toContain("Needs a connected C64 Ultimate");
   });
 
   it("names the switch on the Live View tile when Live View itself is turned off", () => {
@@ -2398,6 +2399,6 @@ describe("HomePage offline arrangement", () => {
     renderWithRouter(<HomePage />);
     const tile = screen.getByTestId("home-tile-home.section.live-view");
     expect(tile).toBeDisabled();
-    expect(tile.getAttribute("aria-label")).toContain("turned off in Settings");
+    expect(tile.textContent).toContain("turned off in Settings");
   });
 });
