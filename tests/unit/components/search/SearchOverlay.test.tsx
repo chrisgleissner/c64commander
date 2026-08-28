@@ -267,22 +267,38 @@ describe("SearchOverlay", () => {
       }
     });
 
+    const rowsInGroup = (label: string) =>
+      screen.getAllByRole("option").filter((row) => row.getAttribute("aria-label")?.startsWith(`${label}:`));
+
     it("caps a group at five rows and offers to expand it", async () => {
       renderOverlay();
       await open();
       type("s");
       await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(0));
-      const more = screen.queryByTestId("search-more-setting");
-      if (more) {
-        const before = screen.getAllByRole("option").length;
-        fireEvent.click(more);
-        await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(before));
-      }
-      // Whether or not a group overflowed, no group may draw more than five rows unexpanded.
-      const settingRows = screen
-        .getAllByRole("option")
-        .filter((row) => row.getAttribute("aria-label")?.startsWith("Settings:"));
-      expect(settingRows.length).toBeGreaterThan(0);
+
+      // The cap itself, asserted rather than assumed: the earlier version of this test wrapped the
+      // expansion in `if (more)` and finished by checking the count was above zero, so raising
+      // ROWS_PER_GROUP to fifty left it green.
+      const more = screen.getByTestId("search-more-setting");
+      expect(rowsInGroup("Settings")).toHaveLength(5);
+
+      fireEvent.click(more);
+
+      await waitFor(() => expect(rowsInGroup("Settings").length).toBeGreaterThan(5));
+    });
+
+    it("expands one group for one query, and caps it again on the next", async () => {
+      renderOverlay();
+      await open();
+      type("s");
+      await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(0));
+      fireEvent.click(screen.getByTestId("search-more-setting"));
+      await waitFor(() => expect(rowsInGroup("Settings").length).toBeGreaterThan(5));
+
+      type("se");
+
+      await waitFor(() => expect(screen.getByTestId("search-more-setting")).toBeInTheDocument());
+      expect(rowsInGroup("Settings")).toHaveLength(5);
     });
 
     it("shows a spinner on the music group while the archive scan is running", async () => {
@@ -291,8 +307,12 @@ describe("SearchOverlay", () => {
       await open();
       type("radio");
       await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(0));
-      // The music group only exists once a hit lands; with none, the empty state must not appear
-      // while the scan is still running, because "nothing matches" would be a lie.
+
+      // The heading and its spinner while the scan runs, with no hit yet. Before, the music group
+      // existed only once a hit landed, so the one thing the spinner is there to say was never on
+      // screen during the wait it describes.
+      expect(screen.getByTestId("search-music-spinner")).toBeInTheDocument();
+      // "Nothing matches" would be a lie while the archive is still being read.
       expect(screen.queryByTestId("search-empty")).toBeNull();
     });
   });
@@ -385,16 +405,36 @@ describe("SearchOverlay", () => {
       expect(chips[1].id).not.toBe("");
     });
 
-    it("activates the chip the arrow keys landed on", async () => {
+    it("activates the chip the arrow keys landed on, not the first one drawn", async () => {
       renderOverlay();
       await open();
 
       const field = screen.getByTestId("search-input");
       const chips = screen.getAllByTestId(/^search-chip-/);
+      expect(chips.length).toBeGreaterThan(1);
+
+      /*
+       * Moved before activating, and the recorded pick names WHICH chip ran. The earlier version
+       * pressed Enter without an arrow key and asserted only that a chip existed, so it could not
+       * tell the second chip from the first — or from none of them.
+       *
+       * The target is the last chip that is enabled here: activating a disabled one navigates to
+       * the switch that would enable it and records nothing, which would prove neither thing.
+       */
+      const target = chips.map((chip, index) => ({ chip, index })).filter(({ chip }) => !chip.hasAttribute("disabled"));
+      const last = target[target.length - 1];
+      expect(last.index).toBeGreaterThan(0);
+      for (let step = 0; step < last.index; step += 1) {
+        fireEvent.keyDown(field, { key: "ArrowDown", code: "ArrowDown" });
+      }
+      await waitFor(() => expect(field).toHaveAttribute("aria-activedescendant", last.chip.id));
+      const expectedEntryId = last.chip.getAttribute("data-testid")?.replace("search-chip-", "");
+
       fireEvent.keyDown(field, { key: "Enter", code: "Enter" });
 
-      await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
-      expect(chips[0]).toBeDefined();
+      await waitFor(() =>
+        expect(JSON.parse(localStorage.getItem("c64u_search_picked:v1") ?? "[]")).toEqual([expectedEntryId]),
+      );
     });
   });
 

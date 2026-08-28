@@ -155,10 +155,18 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
     [tier2.entries, ctx],
   );
 
-  const grouped = useMemo(
-    () => groupResults([...results, ...tier2Scored], expandedGroups),
-    [results, tier2Scored, expandedGroups],
-  );
+  const grouped = useMemo(() => {
+    const sections = groupResults([...results, ...tier2Scored], expandedGroups);
+    /*
+     * A music heading while the archive is still being scanned, even with nothing in it yet.
+     *
+     * The spinner is drawn in that heading, and the heading only existed once tier 2 had produced a
+     * hit — so the one thing it is there to say, that results are still coming, was never on screen
+     * during the wait it describes.
+     */
+    if (!tier2.isSearching || sections.some((section) => section.group === "music")) return sections;
+    return [...sections, { group: "music" as const, rows: [], total: 0 }];
+  }, [results, tier2Scored, expandedGroups, tier2.isSearching]);
   const flatRows = useMemo(() => grouped.flatMap((section) => section.rows), [grouped]);
 
   // Resolved from the registry, not from `results`: an empty query ranks nothing, and the chips
@@ -173,6 +181,10 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
 
   useEffect(() => {
     setActiveIndex(0);
+    // Expanding a group is an answer to one query. Left standing, "More in Settings (12)" kept every
+    // later query's Settings group uncapped for the rest of the session, and the five-row cap — and
+    // the keystroke cost it exists to bound — quietly stopped applying.
+    setExpandedGroups(new Set());
   }, [query]);
 
   /*

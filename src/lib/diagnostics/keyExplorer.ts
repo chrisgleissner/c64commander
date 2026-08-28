@@ -39,7 +39,15 @@ export const KEY_OBSERVATION_LIMIT = 10;
  * are about to attach to a bug. `key` is replaced by a shape, not the character.
  */
 export const redactKey = (key: string): string => {
-  if (key.length !== 1) return key;
+  /*
+   * Counted in characters, not UTF-16 units.
+   *
+   * `key.length !== 1` let anything outside the BMP straight through: an emoji from a soft keyboard
+   * has a length of 2, so it was recorded verbatim and went into the text the Copy button puts on
+   * the clipboard. Named keys ("Enter", "ArrowUp", "F1") are many characters and are kept, which is
+   * the distinction this is drawing.
+   */
+  if ([...key].length !== 1) return key;
   if (/[0-9]/.test(key)) return "<digit>";
   if (/\s/.test(key)) return "<space>";
   return "<character>";

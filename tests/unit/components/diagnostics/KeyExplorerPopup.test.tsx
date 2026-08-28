@@ -12,6 +12,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const emitKeyInputDiagnostics = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/diagnostics/keyInputDiagnostics", () => ({ emitKeyInputDiagnostics }));
 
+const toasts = vi.hoisted(() => [] as Array<{ title?: string; description?: string }>);
+vi.mock("@/hooks/use-toast", () => ({
+  toast: (input: { title?: string; description?: string }) => toasts.push(input),
+}));
+
 import { KeyExplorerPopup } from "@/components/diagnostics/KeyExplorerPopup";
 import { formatObservations, observeKey, redactKey } from "@/lib/diagnostics/keyExplorer";
 import { keypadProfile } from "@/lib/input/profiles/keypad";
@@ -123,5 +128,50 @@ describe("Key Explorer", () => {
     it("has something to say with nothing recorded", () => {
       expect(formatObservations([])).toBe("No keys recorded.");
     });
+  });
+});
+
+/*
+ * The copy button where the Clipboard API is absent — a WebView without it, or a page served over
+ * plain HTTP. Optional chaining ended the expression with no copy AND no message, so the button
+ * did nothing at all and said nothing about it. jsdom provides no clipboard by default, which is
+ * exactly the case that had no test.
+ */
+describe("copying the key list", () => {
+  beforeEach(() => {
+    toasts.length = 0;
+  });
+
+  it("puts the list in a toast where there is no clipboard", () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
+    Object.defineProperty(globalThis.navigator, "clipboard", { value: undefined, configurable: true });
+    try {
+      render(<KeyExplorerPopup open onOpenChange={() => undefined} />);
+      fireEvent.keyDown(window, { key: "a", code: "KeyA" });
+
+      fireEvent.click(screen.getByTestId("key-explorer-copy"));
+
+      expect(toasts).toHaveLength(1);
+      expect(toasts[0].title).toBe("Clipboard not available here");
+      expect(toasts[0].description ?? "").not.toBe("");
+    } finally {
+      if (original) Object.defineProperty(globalThis.navigator, "clipboard", original);
+    }
+  });
+});
+
+/*
+ * "Never the character a key produced" has to hold for characters outside the BMP too. A length
+ * check in UTF-16 units let an emoji from a soft keyboard through verbatim, into the observation
+ * list and into the text the Copy button puts on the clipboard.
+ */
+describe("redaction", () => {
+  it("redacts a character that takes two UTF-16 units", () => {
+    expect(redactKey("\u{1F600}")).toBe("<character>");
+  });
+
+  it("still keeps the name of a named key", () => {
+    expect(redactKey("ArrowUp")).toBe("ArrowUp");
+    expect(redactKey("Enter")).toBe("Enter");
   });
 });

@@ -7,6 +7,8 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { STATIC_SEARCH_ENTRIES } from "@/generated/searchIndex";
 import { deriveDeviceCapabilities } from "@/lib/deviceCapabilities";
 import { resolveEntry, resolveRequirement, type RequirementContext } from "@/lib/search/requirements";
@@ -50,19 +52,24 @@ const denyingContext = (): RequirementContext => ({
 
 describe("search requirement resolver", () => {
   it("covers every member of the SearchRequirement union", () => {
-    const kinds = new Set(EVERY_REQUIREMENT_KIND.map((requirement) => requirement.kind));
-    // Mirrors the union in src/lib/search/types.ts. Adding a kind there without adding it here
-    // fails this, and adding it here without a resolver arm fails the next test.
-    expect([...kinds].sort()).toEqual([
-      "capability",
-      "device",
-      "flag",
-      "hvsc",
-      "productFamily",
-      "session",
-      "telnet",
-      "variant",
-    ]);
+    /*
+     * Read out of types.ts, not written out again here.
+     *
+     * The earlier version compared EVERY_REQUIREMENT_KIND against a hardcoded list of the same
+     * strings thirty lines below it, so adding a ninth member to the union changed neither side and
+     * the test stayed green — while its own comment claimed the opposite. A type does not exist at
+     * run time, so the source is the only place the union can be read from.
+     */
+    const source = readFileSync(join(process.cwd(), "src/lib/search/types.ts"), "utf8");
+    const start = source.indexOf("export type SearchRequirement");
+    // To the blank line that ends the declaration. Not to the first semicolon: the members are
+    // object types and several carry one of their own, e.g. `{ kind: "capability"; capability: ... }`.
+    const union = source.slice(start, source.indexOf("\n\n", start));
+    const declared = [...union.matchAll(/kind:\s*"([a-zA-Z]+)"/g)].map((match) => match[1]).sort();
+    expect(declared.length).toBeGreaterThan(0);
+
+    const covered = [...new Set(EVERY_REQUIREMENT_KIND.map((requirement) => requirement.kind))].sort();
+    expect(covered).toEqual(declared);
   });
 
   it.each(EVERY_REQUIREMENT_KIND.map((requirement) => [requirement.kind, requirement] as const))(
