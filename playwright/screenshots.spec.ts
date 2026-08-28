@@ -2014,7 +2014,9 @@ test.describe("App screenshots", () => {
       colorScheme: "light",
       reducedMotion: "reduce",
     });
-    await expect(getActiveHealthBadge(page)).toContainText("C64U");
+    // The connected state, not the host name: below 430px the badge draws neither the host nor the
+    // status word, so asserting on its text passed on strings that are in the DOM but not on screen.
+    await expect(getActiveHealthBadge(page)).toHaveAttribute("data-connection-state", "REAL_CONNECTED");
     await captureScreenshot(page, testInfo, "home/02-connection-status-popover.png", {
       locator: getActiveHealthBadge(page),
     });

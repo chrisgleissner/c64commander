@@ -80,6 +80,32 @@ test.describe("first-run tour", () => {
    * the device the row was half covered and hard to hit. The inset is a CSS variable the native
    * layer writes, so the test writes it too.
    */
+  /*
+   * Every anchored step finds what it points at.
+   *
+   * A step whose anchors never appear degrades to a caption with no spotlight, which is the right
+   * behaviour and an easy way to not notice that a test id was renamed. This asserts the spotlight
+   * is drawn for each step that declares one, so a broken anchor fails rather than degrading
+   * quietly. The mock device is connected, so the steps that need a machine are covered too.
+   */
+  test("spotlights something on every step that points at the app", async ({ page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("tour-overlay")).toBeVisible({ timeout: 30_000 });
+
+    for (const [index, step] of TOUR_STEPS.entries()) {
+      if (index > 0) {
+        await page.getByTestId("tour-next").click();
+        await expect(page.getByTestId("tour-progress")).toHaveText(`Step ${index + 1} of ${TOUR_STEPS.length}`);
+      }
+      await expect(page.getByTestId("tour-overlay")).toHaveAttribute("data-tour-step", step.id);
+      if (step.anchor === undefined) continue;
+      await expect(
+        page.getByTestId("tour-spotlight"),
+        `step "${step.id}" points at ${step.anchor.testIds.join(", ")} and must spotlight it`,
+      ).toBeVisible({ timeout: 10_000 });
+    }
+  });
+
   test("keeps its buttons clear of the bottom system bar", async ({ page }) => {
     const inset = 48;
     await page.goto("/", { waitUntil: "domcontentloaded" });

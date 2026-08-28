@@ -225,6 +225,17 @@ describe("TourDriver", () => {
     });
   });
 
+  /*
+   * Walks to the first step that needs a machine. Derived rather than counted: the step list is the
+   * app's own feature tour and grows, and a hardcoded index silently walks to the wrong step.
+   */
+  const walkToFirstDeviceStep = async () => {
+    const target = TOUR_STEPS.findIndex((step) => step.requiresDevice === true);
+    expect(target, "at least one step must need a machine").toBeGreaterThan(0);
+    for (let index = 0; index < target; index += 1) fireEvent.click(screen.getByTestId("tour-next"));
+    await waitFor(() => expect(screen.getByTestId("tour-progress").textContent).toContain(`Step ${target + 1} `));
+  };
+
   describe("what it records", () => {
     it("writes skippedAt and the step it was on, from any step", async () => {
       renderDriver();
@@ -254,9 +265,7 @@ describe("TourDriver", () => {
       connectionRef.current = { isConnected: false };
       renderDriver();
       await startTour();
-      // Walk as far as the first device step (index 4).
-      for (let index = 0; index < 4; index += 1) fireEvent.click(screen.getByTestId("tour-next"));
-      await waitFor(() => expect(screen.getByTestId("tour-progress").textContent).toContain("Step 5"));
+      await walkToFirstDeviceStep();
       fireEvent.click(screen.getByTestId("tour-skip"));
 
       await waitFor(() => expect(loadTourState().deviceStepsPending).toBe(true));
@@ -266,8 +275,7 @@ describe("TourDriver", () => {
       connectionRef.current = { isConnected: true };
       renderDriver();
       await startTour();
-      for (let index = 0; index < 4; index += 1) fireEvent.click(screen.getByTestId("tour-next"));
-      await waitFor(() => expect(screen.getByTestId("tour-progress").textContent).toContain("Step 5"));
+      await walkToFirstDeviceStep();
       fireEvent.click(screen.getByTestId("tour-skip"));
 
       await waitFor(() => expect(loadTourState().skippedAt).not.toBeNull());
