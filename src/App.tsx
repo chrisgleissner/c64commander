@@ -33,7 +33,7 @@ import { FeatureFlagsProvider, useFeatureFlag, useFeatureFlags } from "@/hooks/u
 import { FocusNavigationProvider, type KeypadShortcutHandlers } from "@/hooks/useFocusNavigation";
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
-import { transportCommandBus } from "@/lib/input/latchedCommandBus";
+import { createTransportShortcut } from "@/lib/input/transportShortcuts";
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
 import { SearchKeyListener } from "@/components/search/SearchKeyListener";
 import { SearchOverlayHost } from "@/components/search/SearchOverlayHost";
@@ -258,6 +258,10 @@ const KEYPAD_FOCUS_PROFILE_ID = "keypad";
 const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const { flags } = useFeatureFlags();
+  const transportShortcutOptions = useMemo(
+    () => ({ navigate: (path: string) => navigate(path), currentPath: () => window.location.pathname }),
+    [navigate],
+  );
   const shortcuts = useMemo<KeypadShortcutHandlers>(
     () => ({
       jumpToTab: (index) => {
@@ -267,16 +271,9 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
       openDiagnostics: () => requestDiagnosticsOpen("header"),
       openDeviceSwitcher: () => requestDeviceSwitcherOpen(),
       openQuickMenu: () => requestQuickMenuOpen(),
-      // F1 and F3. The command is latched as well as dispatched, so a press on a page with no
-      // transport survives the navigation to Play and is drained when Play mounts (spec.md 9.5).
-      mediaPlayPause: () => {
-        transportCommandBus.publish("playPause");
-        if (window.location.pathname !== "/play") navigate("/play");
-      },
-      mediaNext: () => {
-        transportCommandBus.publish("next");
-        if (window.location.pathname !== "/play") navigate("/play");
-      },
+      // F1 and F3, built by the shared factory so the test drives this wiring and not a copy.
+      mediaPlayPause: createTransportShortcut("playPause", transportShortcutOptions),
+      mediaNext: createTransportShortcut("next", transportShortcutOptions),
       openGameMode: flags.remote_input_enabled
         ? () => {
             // The sheet is mounted by Home and Play, so a request raised anywhere
@@ -287,7 +284,7 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
           }
         : undefined,
     }),
-    [navigate, flags.remote_input_enabled],
+    [navigate, flags.remote_input_enabled, transportShortcutOptions],
   );
   return (
     <FocusNavigationProvider

@@ -12,7 +12,6 @@ import { isCapturingKeyBinding } from "@/lib/input/keyCaptureState";
 import { keypadProfile } from "@/lib/input/profiles/keypad";
 import { findBinding } from "@/lib/input/keyEvent";
 import { requestSearchOpen } from "@/lib/search/overlayState";
-import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 
 /**
  * The search key, on its own listener (spec.md D11 and section 9.1).
@@ -22,8 +21,8 @@ import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
  * it vanish for anyone who turns keypad navigation off — and search is the way around the app for
  * exactly the people most likely to have done so.
  *
- * `7` is free only while there are six tabs. `searchKey.test.ts` asserts TAB_ROUTES.length < 7, so
- * adding a seventh tab fails the build rather than silently stealing the search key.
+ * `7` is free only while there are six tabs. `SearchKeyListener.test.tsx` asserts TAB_ROUTES.length
+ * < 7, so adding a seventh tab fails the tests rather than silently stealing the search key.
  */
 
 /** Digits 1-6 jump to a tab; 7 is the first one that means nothing else. */
@@ -61,6 +60,3 @@ export const SearchKeyListener = () => {
 
   return null;
 };
-
-/** Exported so the guard can be asserted where the constant lives. */
-export const TAB_COUNT = TAB_ROUTES.length;
