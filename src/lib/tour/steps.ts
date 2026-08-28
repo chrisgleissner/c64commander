@@ -61,7 +61,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "your-tunes",
     title: "Pick up where you left off",
-    body: "Resume returns to the last tune at the point it stopped. Recent is the way back to anything you have opened before.",
+    body: "Last tune goes back to what you were playing, at the point it stopped. Recent is the way back to anything you have opened before.",
     anchor: {
       path: "/",
       scope: "home",

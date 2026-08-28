@@ -183,6 +183,31 @@ describe("TourDriver", () => {
       expect(screen.getByTestId("tour-caption").textContent).toContain("Everything is one search away");
     });
 
+    it("spotlights an anchor that arrives after the short settle but inside the resolver's ceiling", async () => {
+      /*
+       * The resolver waits up to two seconds. Measuring only on a fixed 600 ms delay decided a slow
+       * step had failed while its anchor was still on its way, so the caption said the control could
+       * not be found and the scrim covered the control that had just appeared.
+       */
+      const section = document.createElement("div");
+      section.setAttribute("data-section-scope", "home");
+      section.setAttribute("data-section-id", "quick-actions");
+      document.body.appendChild(section);
+      renderDriver();
+      await startTour();
+      for (let index = 0; index < 3; index += 1) fireEvent.click(screen.getByTestId("tour-next"));
+      await waitFor(() => expect(screen.getByTestId("tour-overlay")).toHaveAttribute("data-tour-step", "your-tunes"));
+      expect(screen.queryByTestId("tour-spotlight")).toBeNull();
+
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      act(() => {
+        mountAnchor("home-tile-action.resume-session", { top: 100, left: 10, width: 50, height: 44 });
+      });
+
+      await waitFor(() => expect(screen.getByTestId("tour-spotlight")).toBeInTheDocument(), { timeout: 3_000 });
+      section.remove();
+    });
+
     it("spotlights the union of a two-anchor step's rects", async () => {
       mountAnchor("home-tile-action.resume-session", { top: 100, left: 10, width: 50, height: 44 });
       mountAnchor("home-tile-action.recently-played", { top: 100, left: 80, width: 50, height: 44 });

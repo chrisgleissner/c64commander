@@ -65,6 +65,8 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
   const lastIndex = request.throughStepId === undefined ? TOUR_STEPS.length - 1 : tourStepIndex(request.throughStepId);
   const stepCount = Math.max(1, lastIndex - firstIndex + 1);
   const [hole, setHole] = useState<Rect | null>(null);
+  /** Bumped when the resolver settles, so the spotlight re-measures a slow anchor. */
+  const [anchorResolved, setAnchorResolved] = useState(0);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const ranWithoutDeviceRef = useRef(false);
 
@@ -107,6 +109,7 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
       setHole(null);
       return;
     }
+    let current = true;
     const { path, scope, sectionId, testIds } = step.anchor;
     void navigateToSearchTarget(
       scope && sectionId ? { kind: "control", path, scope, sectionId, testId: testIds[0] } : { kind: "route", path },
@@ -118,8 +121,16 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
         // resolver would raise for search is deliberately swallowed here.
         onToast: () => undefined,
       },
-    );
+    ).then(() => {
+      // The resolver waits up to two seconds for the anchor. Measuring on a shorter fixed delay
+      // decided a slow step had failed while the element was still on its way, so it is measured
+      // again here, once the resolver knows the answer either way.
+      if (current) setAnchorResolved((count) => count + 1);
+    });
     if (!isConnectedRef.current && step.requiresDevice) ranWithoutDeviceRef.current = true;
+    return () => {
+      current = false;
+    };
   }, [step, navigate]);
 
   /*
@@ -135,7 +146,10 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
       setHole(step?.anchor ? unionRect(measureAnchors(step.anchor.testIds)) : null);
     };
     remeasure();
-    // The anchor is reached asynchronously, so measure again once it has had time to arrive.
+    /*
+     * Measured again on a short delay for the common case, where the anchor is already mounted and
+     * only the scroll has to land. The slow case is covered by anchorResolved in the deps.
+     */
     const settle = setTimeout(remeasure, 600);
     window.addEventListener("scroll", remeasure, true);
     window.addEventListener("resize", remeasure);
@@ -146,7 +160,7 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
       window.removeEventListener("resize", remeasure);
       window.removeEventListener("orientationchange", remeasure);
     };
-  }, [step]);
+  }, [step, anchorResolved]);
 
   const finish = useCallback(
     (outcome: "completed" | "skipped") => {
