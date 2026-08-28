@@ -46,6 +46,12 @@ const buildPrinterTelnetActions = (enabled: boolean) => {
 };
 
 interface PrinterManagerProps {
+  /**
+   * Draws the card's header without its body while Home is in its offline arrangement, WITHOUT
+   * writing to the section store, so the user's own open/closed choice survives (spec.md 6.2).
+   */
+  forceClosed?: boolean;
+
   isConnected: boolean;
   machineTaskBusy: boolean;
   machineTaskId: string | null;
@@ -63,6 +69,7 @@ const PRINTER_OPTION_DOMAIN_REFS: DeviceConfigItemRef[] = [
 ];
 
 export function PrinterManager({
+  forceClosed,
   isConnected,
   machineTaskBusy,
   machineTaskId,
@@ -183,6 +190,7 @@ export function PrinterManager({
     <CollapsibleSection
       scope="home"
       id="printers"
+      forceClosed={forceClosed}
       title="Printers"
       icon={Printer}
       testId="home-printers"

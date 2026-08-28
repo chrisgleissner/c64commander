@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   RotateCcw,
@@ -33,7 +33,13 @@ import { AppBar } from "@/components/AppBar";
 import { QuickActionCard } from "@/components/QuickActionCard";
 import { Button } from "@/components/ui/button";
 
+import { remoteInputRequestBus } from "@/lib/input/latchedCommandBus";
+import { useArrangementPin } from "@/hooks/useArrangementPin";
+import { useOfflineArrangement } from "@/hooks/useOfflineArrangement";
 import { SystemInfo } from "./home/components/SystemInfo";
+import { HomeSearchField } from "./home/components/HomeSearchField";
+import { ListenAndPlay } from "./home/components/ListenAndPlay";
+import { ConnectC64Card } from "./home/components/ConnectC64Card";
 import { MachineControls } from "./home/components/MachineControls";
 import { AudioMixer } from "./home/components/AudioMixer";
 import { StreamStatus } from "./home/components/StreamStatus";
@@ -152,6 +158,12 @@ function HomePageContent() {
   const { profile } = useDisplayProfile();
   const isCompactProfile = profile === "compact";
   const { status } = useC64Connection();
+  // Nothing may reorder the page under an open dialog, sheet, the search overlay or the tour
+  // (spec.md section 7.3). Observed from the DOM rather than tracked as state: Home mounts a dozen
+  // sheets of its own and the overlays that matter most — search, the tour, the device switcher —
+  // are mounted by the app root, so there is no single piece of state that already knows.
+  const arrangementPinned = useArrangementPin();
+  const offlineArrangement = useOfflineArrangement(arrangementPinned);
   const isActive = status.isConnected;
   const [keyboardLightingRequested, setKeyboardLightingRequested] = useState(true);
 
@@ -255,6 +267,15 @@ function HomePageContent() {
   const [clearFlashDialogOpen, setClearFlashDialogOpen] = useState(false);
   const [snapshotManagerOpen, setSnapshotManagerOpen] = useState(false);
   const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
+  // "Open Remote Input" from search: Home and Play each own a sheet, so the request latches and
+  // whichever page mounts next claims it (spec.md 9.5).
+  useEffect(() => {
+    if (remoteInputRequestBus.takePending() !== null) setRemoteInputSheetOpen(true);
+    return remoteInputRequestBus.subscribe(() => {
+      remoteInputRequestBus.takePending();
+      setRemoteInputSheetOpen(true);
+    });
+  }, []);
   const [restoreTarget, setRestoreTarget] = useState<RestorableSnapshotEntry | null>(null);
   const [reuProgress, setReuProgress] = useState<ReuProgressState | null>(null);
   const [reuTaskPending, setReuTaskPending] = useState(false);
@@ -1250,11 +1271,18 @@ function HomePageContent() {
             gap-4 spent 16 CSS px between each of thirteen cards — 192 px of a 332 px content area
             on nothing. */}
         <PageStack className={isCompactProfile ? undefined : "gap-4"}>
-          {/* System Info */}
-          <SystemInfo />
+          {/* Search, then what works with no C64 attached, then the machine (spec.md section 6.1).
+              System info moves below both: a version line is not the most important thing on the
+              landing screen, and it is what used to occupy that position. */}
+          <HomeSearchField />
+
+          <ListenAndPlay />
+
+          {offlineArrangement ? <ConnectC64Card /> : null}
 
           {/* Machine */}
           <MachineControls
+            forceClosed={offlineArrangement}
             status={status}
             machineTaskBusy={machineTaskBusy}
             machineExecutionState={machineExecutionState}
@@ -1282,17 +1310,27 @@ function HomePageContent() {
             telnetBusy={telnet.isBusy}
           />
 
+          <SystemInfo appVersionOnly={offlineArrangement} />
+
+          {offlineArrangement ? (
+            <p className="px-2 text-sm text-muted-foreground" data-testid="home-offline-sections-note">
+              Connect a C64 Ultimate to reach its settings.
+            </p>
+          ) : null}
+
           {liveViewEnabled && (audioMirrorEnabled || videoMirrorEnabled) && deviceCapabilities.supportsStreaming ? (
             <LiveViewCard
               audioEnabled={audioMirrorEnabled}
               videoEnabled={videoMirrorEnabled}
               showAvSyncTests={avSyncTestsEnabled}
+              forceClosed={offlineArrangement}
             />
           ) : null}
 
           <CollapsibleSection
             scope="home"
             id="cpu-ram"
+            forceClosed={offlineArrangement}
             title="CPU & RAM"
             icon={Cpu}
             defaultOpen
@@ -1419,7 +1457,14 @@ function HomePageContent() {
             </SummaryConfigCard>
           </CollapsibleSection>
 
-          <CollapsibleSection scope="home" id="ports" title="Ports" icon={Plug} testId="home-ports-summary">
+          <CollapsibleSection
+            scope="home"
+            id="ports"
+            forceClosed={offlineArrangement}
+            title="Ports"
+            icon={Plug}
+            testId="home-ports-summary"
+          >
             <SummaryConfigCard
               title="Ports"
               testId="home-ports-summary-rows"
@@ -1517,6 +1562,7 @@ function HomePageContent() {
           <CollapsibleSection
             scope="home"
             id="video"
+            forceClosed={offlineArrangement}
             title="Video"
             icon={Monitor}
             defaultOpen
@@ -1641,11 +1687,17 @@ function HomePageContent() {
             </SummaryConfigCard>
           </CollapsibleSection>
 
-          <AudioMixer isConnected={isActive} machineTaskBusy={machineTaskBusy} runMachineTask={runMachineTask} />
+          <AudioMixer
+            forceClosed={offlineArrangement}
+            isConnected={isActive}
+            machineTaskBusy={machineTaskBusy}
+            runMachineTask={runMachineTask}
+          />
 
           <CollapsibleSection
             scope="home"
             id="user-interface"
+            forceClosed={offlineArrangement}
             title="User Interface"
             icon={PanelTop}
             testId="home-user-interface-summary"
@@ -1662,7 +1714,14 @@ function HomePageContent() {
             />
           </CollapsibleSection>
 
-          <CollapsibleSection scope="home" id="lighting" title="Lighting" icon={Lightbulb} testId="home-lighting-group">
+          <CollapsibleSection
+            scope="home"
+            id="lighting"
+            forceClosed={offlineArrangement}
+            title="Lighting"
+            icon={Lightbulb}
+            testId="home-lighting-group"
+          >
             {lightingStudioEnabled ? (
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex flex-wrap gap-2 text-xs">
@@ -1738,6 +1797,7 @@ function HomePageContent() {
           </CollapsibleSection>
 
           <DriveManager
+            forceClosed={offlineArrangement}
             isConnected={isActive}
             handleAction={handleAction}
             machineTaskBusy={machineTaskBusy}
@@ -1767,6 +1827,7 @@ function HomePageContent() {
           />
 
           <PrinterManager
+            forceClosed={offlineArrangement}
             isConnected={isActive}
             machineTaskBusy={machineTaskBusy}
             machineTaskId={machineTaskId}
@@ -1792,7 +1853,9 @@ function HomePageContent() {
             }}
           />
 
-          {deviceCapabilities.supportsStreaming ? <StreamStatus isConnected={isActive} /> : null}
+          {deviceCapabilities.supportsStreaming ? (
+            <StreamStatus forceClosed={offlineArrangement} isConnected={isActive} />
+          ) : null}
 
           {/* Config Actions */}
           {/*
@@ -1807,6 +1870,7 @@ function HomePageContent() {
           <CollapsibleSection
             scope="home"
             id="config-actions"
+            forceClosed={offlineArrangement}
             title="Config"
             icon={Settings2}
             testId="home-config-actions"

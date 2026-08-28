@@ -14,6 +14,7 @@ import { variant } from "@/generated/variant";
 import { loadSidRadioEnabled } from "@/lib/config/appSettings";
 import { deriveDeviceCapabilities } from "@/lib/deviceCapabilities";
 import { t } from "@/lib/i18n";
+import { addErrorLog } from "@/lib/logging";
 import { PLAYBACK_SESSION_KEY } from "@/pages/playFiles/playFilesUtils";
 import { loadPickedEntryIds } from "@/lib/search/history";
 import { getSearchEntries, subscribeSearchEntries } from "@/lib/search/registry";
@@ -33,7 +34,10 @@ const hasRestorableSession = (): boolean => {
     if (!raw) return false;
     const parsed = JSON.parse(raw) as { currentItemId?: unknown } | null;
     return Boolean(parsed && typeof parsed === "object" && parsed.currentItemId);
-  } catch {
+  } catch (error) {
+    addErrorLog("Failed to read the playback session while resolving a search requirement", {
+      error: (error as Error).message,
+    });
     return false;
   }
 };

@@ -13,7 +13,12 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { getBuildInfo } from "@/lib/buildInfo";
 import { cn } from "@/lib/utils";
 
-export function SystemInfo() {
+/**
+ * `appVersionOnly` is Home's offline arrangement (spec.md section 6.1): with nothing connected, the
+ * device and firmware rows would both read "Not connected", which is two rows saying what the
+ * Connect card above already says.
+ */
+export function SystemInfo({ appVersionOnly = false }: { appVersionOnly?: boolean } = {}) {
   const [expanded, setExpanded] = useState(false);
   const { status } = useC64Connection();
   const { profile } = useDisplayProfile();
@@ -62,18 +67,22 @@ export function SystemInfo() {
             {buildInfo.versionLabel || "Not available"}
           </span>
         </span>
-        <span className="flex min-w-0 max-w-full shrink-0 items-baseline gap-1.5">
-          <span className="shrink-0 text-muted-foreground">Device</span>
-          <span className="min-w-0 truncate font-semibold text-foreground" data-testid="home-system-device">
-            {deviceValue}
-          </span>
-        </span>
-        <span className="flex min-w-0 max-w-full shrink-0 items-baseline gap-1.5">
-          <span className="shrink-0 text-muted-foreground">Firmware</span>
-          <span className="min-w-0 truncate font-semibold text-foreground" data-testid="home-system-firmware">
-            {firmwareValue}
-          </span>
-        </span>
+        {appVersionOnly ? null : (
+          <>
+            <span className="flex min-w-0 max-w-full shrink-0 items-baseline gap-1.5">
+              <span className="shrink-0 text-muted-foreground">Device</span>
+              <span className="min-w-0 truncate font-semibold text-foreground" data-testid="home-system-device">
+                {deviceValue}
+              </span>
+            </span>
+            <span className="flex min-w-0 max-w-full shrink-0 items-baseline gap-1.5">
+              <span className="shrink-0 text-muted-foreground">Firmware</span>
+              <span className="min-w-0 truncate font-semibold text-foreground" data-testid="home-system-firmware">
+                {firmwareValue}
+              </span>
+            </span>
+          </>
+        )}
       </div>
       {expanded && (
         // One column on the smallest screen: two columns leave about 108px each, and

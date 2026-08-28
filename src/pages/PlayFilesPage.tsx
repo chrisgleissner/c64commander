@@ -97,6 +97,8 @@ import { NowPlayingRanking } from "@/pages/playFiles/components/NowPlayingRankin
 import { useCurrentTuneMd5 } from "@/pages/playFiles/hooks/useCurrentTuneMd5";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
 import { LikedTunesSheet } from "@/pages/playFiles/components/LikedTunesSheet";
+import { usePlayDeepLinks, useTransportCommands } from "@/pages/playFiles/hooks/usePlayDeepLinks";
+import { transportCommandBus } from "@/lib/input/latchedCommandBus";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
@@ -596,6 +598,25 @@ export default function PlayFilesPage() {
   useEffect(() => {
     handleNextRef.current = handleNext;
   }, [handleNext]);
+
+  // Home's tiles and the search overlay send this page here to do one thing (spec.md 6.3).
+  usePlayDeepLinks({
+    openRadioLauncher: () => setSidRadioLauncherOpen(true),
+    // Recently played is the empty state of the archive search sheet, which is where that list has
+    // always lived; a second list of the same rows would be a second idea of what a result is.
+    openRecentlyPlayed: () => setHvscSearchOpen(true),
+    openFindATune: () => setHvscSearchOpen(true),
+    openLikedTunes: () => setLikedTunesSheetOpen(true),
+    resumeSession: () => transportCommandBus.publish("play"),
+  });
+
+  // F1 and F3 from anywhere, delivered through the latch (spec.md 9.5).
+  useTransportCommands((command) => {
+    if (command === "next") void handleNext();
+    else if (command === "play") {
+      if (!isPlaying) void handlePlay();
+    } else void handlePauseResume();
+  });
   const sleepTimer = useSleepTimer({
     onExpire: () => {
       void handleStop();

@@ -167,15 +167,28 @@ const js = async (expression) => {
  * it exists to catch. A fresh install starts with both off, so a gate that assumed the mirror was
  * already live graded silence and reported it as a parse failure.
  */
-/** Read Listen and Watch without changing them, so the run can put them back. */
+/**
+ * Read Listen and Watch without changing them, so the run can put them back.
+ *
+ * The card has to be OPENED first, the same way setMirror already does it: Live View is a
+ * collapsible card, its toggles are not in the tree while it is closed, and Home now also draws
+ * every device card closed while nothing is connected. A card left closed reported the toggles as
+ * missing, which reads as a broken build rather than as a rig that is not talking to its machine.
+ */
 const readMirror = async () => {
   const state = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
 const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
 q("tab-home")?.click();await wait(1800);
 const card=q("live-view-card"); if(!card) return JSON.stringify({error:"the Live View card is not on Home"});
 card.scrollIntoView({block:"center"});await wait(300);
-return JSON.stringify({audio:q("av-audio-toggle")?.getAttribute("aria-pressed")==="true",
-  video:q("av-video-toggle")?.getAttribute("aria-pressed")==="true"});})()`);
+if(card.getAttribute("data-force-closed")==="true")
+  return JSON.stringify({error:"Home is in its offline arrangement, so the Live View card cannot open - the rig is not connected to its C64"});
+const toggle=card.querySelector('button[aria-expanded="false"][aria-controls]');
+if(toggle){toggle.click();await wait(800);card.scrollIntoView({block:"center"});await wait(400);}
+const audio=q("av-audio-toggle"), video=q("av-video-toggle");
+if(!audio||!video) return JSON.stringify({error:"the mirror toggles are not on the Live View card"});
+return JSON.stringify({audio:audio.getAttribute("aria-pressed")==="true",
+  video:video.getAttribute("aria-pressed")==="true"});})()`);
   if (state.error) throw new Error(state.error);
   return { audio: state.audio, video: state.video };
 };
@@ -189,6 +202,8 @@ q("tab-home")?.click();await wait(2000);
 const card=q("live-view-card");
 if(!card) return JSON.stringify({error:"the Live View card is not on Home"});
 card.scrollIntoView({block:"center"});await wait(400);
+if(card.getAttribute("data-force-closed")==="true")
+  return JSON.stringify({error:"Home is in its offline arrangement, so the Live View card cannot open - the rig is not connected to its C64"});
 // Live View is a collapsible card and is closed on a first visit, so the mirror toggles are not
 // in the tree until it is opened. The toggle is a button that says it is not expanded.
 const toggle=card.querySelector('button[aria-expanded="false"][aria-controls]');

@@ -50,6 +50,12 @@ type PendingDestructiveAction = MachineActionConfirmation & {
 const REBOOT_CLEAR_MEMORY_ACTION_IDS = new Set(["rebootClearMemory"]);
 
 export interface MachineControlsProps {
+  /**
+   * Draws the card's header without its body while Home is in its offline arrangement, WITHOUT
+   * writing to the section store, so the user's own open/closed choice survives (spec.md 6.2).
+   */
+  forceClosed?: boolean;
+
   status: { isConnected: boolean; isConnecting: boolean };
   machineTaskBusy: boolean;
   machineExecutionState: "running" | "paused" | "unknown";
@@ -85,6 +91,7 @@ export interface MachineControlsProps {
 }
 
 export function MachineControls({
+  forceClosed,
   status,
   machineTaskBusy,
   machineExecutionState,
@@ -199,6 +206,7 @@ export function MachineControls({
       <CollapsibleSection
         scope="home"
         id="quick-actions"
+        forceClosed={forceClosed}
         title="Quick Actions"
         icon={Zap}
         defaultOpen

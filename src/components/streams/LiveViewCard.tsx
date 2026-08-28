@@ -18,6 +18,12 @@ import { StreamStatsPanel } from "./StreamStatsPanel";
 import { HelperText } from "@/components/ui/HelperText";
 
 export interface LiveViewCardProps {
+  /**
+   * Draws the card's header without its body while Home is in its offline arrangement, WITHOUT
+   * writing to the section store, so the user's own open/closed choice survives (spec.md 6.2).
+   */
+  forceClosed?: boolean;
+
   audioEnabled?: boolean;
   videoEnabled?: boolean;
   /** Show the A/V Sync + Tap latency measurement tools (gated by the av_sync_tests feature flag). */
@@ -32,6 +38,7 @@ export interface LiveViewCardProps {
  * The full zoom/pan experience lives in Remote Input game mode (see 06-av-mirror-ux).
  */
 export function LiveViewCard({
+  forceClosed,
   audioEnabled = true,
   videoEnabled = true,
   showAvSyncTests = true,
@@ -45,6 +52,7 @@ export function LiveViewCard({
     <CollapsibleSection
       scope="home"
       id="live-view"
+      forceClosed={forceClosed}
       title="Live View"
       icon={MonitorPlay}
       testId="live-view-card"

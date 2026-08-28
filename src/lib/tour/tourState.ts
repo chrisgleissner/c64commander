@@ -8,6 +8,13 @@
 
 import { addErrorLog } from "@/lib/logging";
 
+/**
+ * Set on <html> while the tour is running. Home reads it to pin its arrangement (spec.md 7.3), and
+ * the swipe layer reads it to disable itself — a swipe that changed the page under a spotlight
+ * would leave the spotlight pointing at nothing.
+ */
+export const TOUR_ACTIVE_ATTRIBUTE = "data-tour-active";
+
 /** spec.md section 8.4. */
 export const TOUR_STATE_KEY = "c64u_tour_state:v1";
 
