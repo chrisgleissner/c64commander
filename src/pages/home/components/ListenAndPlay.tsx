@@ -122,7 +122,12 @@ export const ListenAndPlay = () => {
       defaultOpen
       testId="home-listen-and-play"
     >
-      <ProfileActionGrid compactColumns={2} mediumColumns={4} expandedColumns={4} cardDensity="compact">
+      {/*
+        Two columns on a phone, not four. Each tile carries a word AND a line of detail, so four
+        tracks on a 393 px screen leave about 37 CSS px for the label and every one of them wraps to
+        a single character per line — measured, and visible in the corpus before this was set.
+      */}
+      <ProfileActionGrid compactColumns={2} mediumColumns={2} expandedColumns={4} cardDensity="compact">
         {resolved.map(({ tile, resolved: entry }) => {
           if (!entry) return null;
           const emptyRecent = tile.entryId === "action.recently-played" && recentIsEmpty;
@@ -146,11 +151,13 @@ export const ListenAndPlay = () => {
                 enabled ? "hover:bg-muted/60" : "opacity-60",
               )}
             >
-              <span className="flex items-center gap-2 text-sm font-medium">
+              <span className="flex w-full min-w-0 items-center gap-2 text-sm font-medium">
                 <Icon className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-                {tile.label}
+                {/* min-w-0 and a word break, so a narrow track truncates the label rather than
+                    breaking it down the middle of a word. */}
+                <span className="min-w-0 truncate">{tile.label}</span>
               </span>
-              <span className="line-clamp-2 w-full text-xs text-muted-foreground">
+              <span className="line-clamp-2 w-full min-w-0 break-words text-xs text-muted-foreground">
                 {enabled ? (tile.detail ?? "") : reason}
               </span>
             </button>

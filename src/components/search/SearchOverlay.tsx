@@ -22,12 +22,8 @@ import { recordPickedEntry, recordRecentQuery, loadRecentQueries } from "@/lib/s
 import { getSearchEntries } from "@/lib/search/registry";
 import { resolveEntry } from "@/lib/search/requirements";
 import { navigateToSearchTarget } from "@/lib/search/navigate";
-import {
-  SEARCH_OVERLAY_TESTID,
-  subscribeSearchClose,
-  subscribeSearchOpen,
-  type SearchOpenRequest,
-} from "@/lib/search/overlayState";
+import { markSearchKeystroke, markSearchResultsPainted } from "@/lib/search/latencyProbe";
+import { SEARCH_OVERLAY_TESTID, subscribeSearchClose, type SearchOpenRequest } from "@/lib/search/overlayState";
 import type { ScoredEntry } from "@/lib/search/score";
 import type { ResolvedSearchEntry, SearchEntry, SearchGroup } from "@/lib/search/types";
 import { cn } from "@/lib/utils";
@@ -101,11 +97,16 @@ const groupResults = (results: readonly ScoredEntry[], expanded: ReadonlySet<Sea
     .map(({ group, rows, total }) => ({ group, rows, total }));
 };
 
-export const SearchOverlay = () => {
+export interface SearchOverlayProps {
+  /** A new object per open request, so re-opening while already open re-seeds the field. */
+  readonly request: SearchOpenRequest;
+  readonly onClose: () => void;
+}
+
+export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(request.initialQuery ?? "");
   const [activeIndex, setActiveIndex] = useState(0);
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<SearchGroup>>(new Set());
   const [recentQueries, setRecentQueries] = useState<readonly string[]>([]);
@@ -116,7 +117,7 @@ export const SearchOverlay = () => {
   // reason is what a disabled row shows. Tier 2 music results carry their own readiness state.
   const ctx = useRequirementContext(true);
   const { results } = useSearchResults(query, ctx);
-  const tier2 = useSearchTier2(query, open);
+  const tier2 = useSearchTier2(query, true);
 
   // Appended, never merged into the synchronous pass: tiers 0 and 1 have already committed with
   // the keystroke, and tier 2 lands whenever its debounce returns.
@@ -150,31 +151,39 @@ export const SearchOverlay = () => {
     setActiveIndex(0);
   }, [query]);
 
+  /*
+   * The end of the keystroke-to-painted-list interval (spec.md section 5.5).
+   *
+   * This effect runs after the results have committed, and the frame callback it schedules runs
+   * after the browser has painted them — so the measurement covers scoring, reconciliation and the
+   * paint, rather than the part that is easy to time. It costs one boolean read when the probe is
+   * off, which is always outside a HIL run.
+   */
+  useEffect(() => {
+    const frame = requestAnimationFrame(markSearchResultsPainted);
+    return () => cancelAnimationFrame(frame);
+  }, [flatRows]);
+
   const close = useCallback(() => {
-    setOpen(false);
     setQuery("");
     setExpandedGroups(new Set());
-  }, []);
+    onClose();
+  }, [onClose]);
 
-  useEffect(
-    () =>
-      subscribeSearchOpen((request: SearchOpenRequest) => {
-        setOpen(true);
-        setQuery(request.initialQuery ?? "");
-        setExpandedGroups(new Set());
-        setRecentQueries(loadRecentQueries());
-      }),
-    [],
-  );
+  // Re-seeded on a fresh request, so a second door opened while this one is already up starts over.
+  useEffect(() => {
+    setQuery(request.initialQuery ?? "");
+    setExpandedGroups(new Set());
+    setRecentQueries(loadRecentQueries());
+  }, [request]);
 
   useEffect(() => subscribeSearchClose(close), [close]);
 
   useEffect(() => {
-    if (!open) return;
     // After the paint, so the field is in the document and the keyboard opens once.
     const raf = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(raf);
-  }, [open]);
+  }, []);
 
   const activate = useCallback(
     async (resolved: ResolvedSearchEntry) => {
@@ -233,15 +242,12 @@ export const SearchOverlay = () => {
 
   // Keep the active row visible without moving focus, which stays in the field.
   useEffect(() => {
-    if (!open) return;
     const scored = flatRows[activeIndex];
     if (!scored) return;
     listRef.current?.querySelector(`#${CSS.escape(rowId(scored.resolved.entry.id))}`)?.scrollIntoView({
       block: "nearest",
     });
-  }, [activeIndex, flatRows, open]);
-
-  if (!open) return null;
+  }, [activeIndex, flatRows]);
 
   const activeRow = flatRows[activeIndex];
   const hasQuery = query.trim() !== "";
@@ -268,7 +274,10 @@ export const SearchOverlay = () => {
           aria-activedescendant={activeRow ? rowId(activeRow.resolved.entry.id) : undefined}
           placeholder={t("search.placeholder", "Search the app")}
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            markSearchKeystroke();
+            setQuery(event.target.value);
+          }}
           onKeyDown={onKeyDown}
           data-testid="search-input"
           className="border-0 bg-transparent px-0 focus-visible:ring-0 focus-visible:ring-offset-0"
@@ -402,3 +411,5 @@ export const SearchOverlay = () => {
     </div>
   );
 };
+
+export default SearchOverlay;

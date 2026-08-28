@@ -25,6 +25,9 @@
  *               speaker neither muted nor loud. Every later stage misreads a bad rig as a defect.
  *   input       A held direction keeps moving the C64, and the key-to-direction mapping survives
  *               rotation. Needs the CIA at the far end of the relay.
+ *   search-latency
+ *               Keystroke to painted list in the search overlay, 120 samples, p95 under 100 ms.
+ *               Needs the real handset: a shared CI runner cannot settle a latency budget.
  *   wire        What the Ultimate SENDS, measured on the host's own link. Rules the network in or
  *               out BEFORE anything is blamed on the app — the single most common wrong turn here.
  *   av-clarity  The tone ladder as it comes out of the phone's speaker, graded per note for
@@ -774,6 +777,20 @@ const preflight = async () => {
    */
   await silenceC64();
 
+  /*
+   * Get the first-run tour out of the way.
+   *
+   * It is a full-screen overlay that opens on a launch where nothing has been recorded, which is
+   * exactly what a fresh `--install-apk` leaves behind. `input` taps through `adb shell input` at
+   * real screen coordinates, so a tour still up eats every one of them and the stage reports a
+   * machine that never moved — rig state read as a broken machine:input path.
+   */
+  const tour = await js(`(()=>{const o=document.querySelector('[data-testid="tour-overlay"]');
+if(!o) return JSON.stringify({dismissed:false});
+document.querySelector('[data-testid="tour-skip"]')?.click();
+return JSON.stringify({dismissed:true});})()`);
+  const tourNote = tour?.dismissed ? ", skipped the first-run tour" : "";
+
   const volume = await readVolume();
   if (volume.speaker > MAX_VOLUME) {
     throw new Error(
@@ -795,7 +812,7 @@ const preflight = async () => {
   }
   return (
     `device ${attached.length}, route ${page.route}, speaker volume ${volume.speaker}, ` +
-    `mirror audio=${initialMirror.audio} video=${initialMirror.video}${masterNote}`
+    `mirror audio=${initialMirror.audio} video=${initialMirror.video}${masterNote}${tourNote}`
   );
 };
 
@@ -853,6 +870,49 @@ const main = async () => {
     if (!rotation.ok) throw new Error(`rotation: ${rotation.out.trim().split("\n").slice(-3).join(" | ")}`);
     const moved = number(hold.out, /kept moving rather than stopping after one cell\s+\((\d+) cells\)/, "cells moved");
     return `held direction moved ${moved} cells; ${number(rotation.out, /(\d+)\/\d+ checks passed/, "rotation checks")} rotation checks passed`;
+  });
+
+  /*
+   * Keystroke to painted list, on the phone (spec.md section 5.5).
+   *
+   * The budget only means anything measured here. A wall-clock threshold inside Vitest is a flake
+   * generator on a shared runner, and the deterministic work gate beside it proves the algorithm has
+   * not gone quadratic — not what this handset does with it. Twenty samples could not establish a
+   * p95 either: it would be one of the two worst observations. So: 120 samples, thirty rounds of a
+   * four-character query, p95 under 100 ms.
+   */
+  await stage("search-latency", false, async () => {
+    const measured = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+const w=window; w.__c64uSearchLatencyProbe=true; w.__c64uSearchLatencySamples=[];
+const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
+q("tab-home")?.click(); await wait(1200);
+q("home-search-field")?.click(); await wait(900);
+const input=q("search-input");
+if(!input) return JSON.stringify({error:"the search overlay did not open"});
+const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,"value").set;
+const type=async(text)=>{setter.call(input,text);
+  input.dispatchEvent(new Event("input",{bubbles:true})); await wait(120);};
+const WORD="radio";
+for(let round=0;round<30;round+=1){
+  for(let n=1;n<=4;n+=1) await type(WORD.slice(0,n));
+  await type(""); await wait(80);
+}
+const samples=w.__c64uSearchLatencySamples.slice(); w.__c64uSearchLatencyProbe=false;
+q("search-close")?.click(); await wait(300);
+return JSON.stringify({samples});})()`);
+
+    if (measured?.error) throw new Error(measured.error);
+    const samples = Array.isArray(measured?.samples) ? measured.samples : [];
+    if (samples.length < 120) {
+      throw new Error(`only ${samples.length} of the 120 samples were recorded; a p95 needs all of them`);
+    }
+    const sorted = [...samples].sort((left, right) => left - right);
+    const at = (fraction) => sorted[Math.min(Math.ceil(fraction * sorted.length), sorted.length) - 1];
+    const p95 = at(0.95);
+    if (p95 > 100) {
+      throw new Error(`keystroke to painted list is ${p95.toFixed(1)} ms at p95 over ${sorted.length} samples (budget 100)`);
+    }
+    return `${sorted.length} samples, p50 ${at(0.5).toFixed(1)} ms, p95 ${p95.toFixed(1)} ms, max ${sorted[sorted.length - 1].toFixed(1)} ms`;
   });
 
   // The sender, on the host's own link. Silent: it only listens.

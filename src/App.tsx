@@ -36,8 +36,8 @@ import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnos
 import { transportCommandBus } from "@/lib/input/latchedCommandBus";
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
 import { SearchKeyListener } from "@/components/search/SearchKeyListener";
-import { SearchOverlay } from "@/components/search/SearchOverlay";
-import { TourDriver } from "@/components/tour/TourDriver";
+import { SearchOverlayHost } from "@/components/search/SearchOverlayHost";
+import { TourHost } from "@/components/tour/TourHost";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { requestDeviceSwitcherOpen, requestQuickMenuOpen } from "@/lib/input/keypadCommands";
 import { GAME_MODE_HOST_PATHS, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
@@ -327,8 +327,8 @@ const AppRoutes = () => {
                 still works when FocusNavigationProvider is mounted disabled — which is what
                 keypad_input_enabled: false does (spec.md D11). */}
             <SearchKeyListener />
-            <SearchOverlay />
-            <TourDriver />
+            <SearchOverlayHost />
+            <TourHost />
             <ConnectionController />
             <DemoModeInterstitial />
             <DeviceDiscoveryInterstitial />

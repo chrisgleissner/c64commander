@@ -30,6 +30,12 @@ tags:
       - tapOn:
           text: "Not now"
           optional: true
+      # The first-run tour. On a fresh install nothing has been recorded, so it opens over
+      # Home as a full-screen overlay and swallows every tap beneath it. Optional, so a run
+      # on a device that has already seen it costs a warning and nothing else.
+      - tapOn:
+          text: "Skip"
+          optional: true
       - tapOn:
           text: "Retry connection"
           optional: true
@@ -104,17 +110,21 @@ tags:
 #                         do surface theirs, which is why tapping tab ids works, but the
 #                         page title is a plain h1 and does not.
 #
-# The system-information row, which is the first thing Home draws under the app bar and
-# renders whether or not a device is connected. It reads "App <version> Device <host>
-# Firmware <version>" as one node, so it is matched with `.*` around the part named here;
-# Maestro compares a selector against an element's whole text.
+# The search field, which is the first thing Home draws under the app bar. It is on screen
+# at the smallest supported size and it renders in BOTH arrangements, connected or not.
 #
-# This used to assert "Reboot", a quick-action button further down the page. That works
-# on a tall screen and fails on the one this app is built for: at 480x640, which is
-# 320x426 CSS pixels, the quick actions are below the fold and Maestro only sees what is
-# on screen. The run that first used the real panel size failed on it three times with
-# nothing wrong with the app. An anchor for "the page rendered" has to be one that is on
-# screen at the smallest supported size.
+# Two anchors were tried before it and each failed for the same reason — it was not the
+# first thing on the page:
+#
+#   "Reboot"            a quick action further down. At 480x640, which is 320x426 CSS
+#                       pixels, the quick actions are below the fold and Maestro only sees
+#                       what is on screen. Three runs failed on it with nothing wrong.
+#   ".*Firmware.*"      the system-information row. It was the first thing on the page
+#                       until Home was reordered to lead with search; it now sits below the
+#                       machine controls, and with no machine connected it drops to the app
+#                       version alone and the word is not on the page at all.
+#
+# Matched on the field's accessible name, which is what Maestro reads from a button.
 #
 # Wrapped in a retry that dismisses the device picker first. The picker re-arms on its
 # own - the background rediscovery timer re-probes every few seconds and a probe that
@@ -128,10 +138,10 @@ tags:
           text: "Not now"
           optional: true
       - waitForAnimationToEnd
-      - assertVisible: ".*Firmware.*"
+      - assertVisible: "Search the app"
 
-# The system-information row is the first thing Home renders, so reaching it says the page
-# has started rather than finished. The anchor this replaced - a quick action further down
+# The search field is the first thing Home renders, so reaching it says the page has
+# started rather than finished. The anchor this replaced - a quick action further down
 # the page - was slower to appear and had been standing in for a readiness wait that was
 # never written down: three iOS flows that had passed for months began failing on their
 # own next assertion the moment the anchor moved up the page, on a screen where the change

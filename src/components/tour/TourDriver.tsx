@@ -10,19 +10,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
-import { useInterstitialActive } from "@/components/ui/interstitial-state";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { navigateToSearchTarget } from "@/lib/search/navigate";
 import { captionPlacement, scrimRects, unionRect, type Rect } from "@/lib/tour/spotlight";
 import { TOUR_STEPS, tourStepIndex } from "@/lib/tour/steps";
-import {
-  TOUR_ACTIVE_ATTRIBUTE,
-  loadTourState,
-  saveTourState,
-  shouldOfferTourOnLaunch,
-  subscribeTourStart,
-  type TourStartRequest,
-} from "@/lib/tour/tourState";
+import { TOUR_ACTIVE_ATTRIBUTE, loadTourState, saveTourState, type TourStartRequest } from "@/lib/tour/tourState";
 
 /**
  * The first-run tour driver (spec.md section 8).
@@ -36,9 +28,6 @@ import {
  * Home reads it to pin its arrangement.
  */
 
-/** How long after the last interstitial closes before the tour is offered. */
-const SETTLE_MS = 900;
-
 const measureAnchors = (testIds: readonly string[]): Rect[] => {
   if (typeof document === "undefined") return [];
   return testIds
@@ -51,50 +40,35 @@ const measureAnchors = (testIds: readonly string[]): Rect[] => {
     .filter((rect) => rect.width > 0 && rect.height > 0);
 };
 
-export const TourDriver = () => {
+export interface TourDriverProps {
+  /** Where to start. A new object per request, so a second request restarts the walk. */
+  readonly request: TourStartRequest;
+  readonly onFinished: () => void;
+}
+
+export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const interstitialActive = useInterstitialActive();
   const { status } = useC64Connection();
 
-  const [running, setRunning] = useState(false);
-  const [stepIndex, setStepIndex] = useState(0);
+  const [stepIndex, setStepIndex] = useState(() => tourStepIndex(request.fromStepId ?? null));
   const [hole, setHole] = useState<Rect | null>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const ranWithoutDeviceRef = useRef(false);
-  const offeredRef = useRef(false);
 
   const step = TOUR_STEPS[stepIndex];
 
-  const start = useCallback((request: TourStartRequest = {}) => {
+  // Restarted on a fresh request, so asking for the device chapter while the tour is up moves to it.
+  useEffect(() => {
     ranWithoutDeviceRef.current = false;
     setStepIndex(tourStepIndex(request.fromStepId ?? null));
-    setRunning(true);
-  }, []);
-
-  useEffect(() => subscribeTourStart(start), [start]);
-
-  // First launch, strictly after every interstitial (section 8.1).
-  useEffect(() => {
-    if (running || offeredRef.current || interstitialActive) return undefined;
-    if (!shouldOfferTourOnLaunch(loadTourState())) return undefined;
-    const timer = setTimeout(() => {
-      offeredRef.current = true;
-      if (window.location.pathname !== "/") navigate("/");
-      start();
-    }, SETTLE_MS);
-    return () => clearTimeout(timer);
-  }, [interstitialActive, navigate, running, start]);
+  }, [request]);
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
-    if (!running) {
-      document.documentElement.removeAttribute(TOUR_ACTIVE_ATTRIBUTE);
-      return undefined;
-    }
     document.documentElement.setAttribute(TOUR_ACTIVE_ATTRIBUTE, "true");
     return () => document.documentElement.removeAttribute(TOUR_ACTIVE_ATTRIBUTE);
-  }, [running]);
+  }, []);
 
   // Read from a ref rather than a dependency: the path changes as a RESULT of this effect, and
   // depending on it would re-run the resolver on its own navigation.
@@ -103,7 +77,7 @@ export const TourDriver = () => {
 
   // Navigate and open, through the same resolver search and the Home tiles use.
   useEffect(() => {
-    if (!running || !step) return;
+    if (!step) return;
     if (!step.anchor) {
       setHole(null);
       return;
@@ -121,11 +95,11 @@ export const TourDriver = () => {
       },
     );
     if (!status.isConnected && step.requiresDevice) ranWithoutDeviceRef.current = true;
-  }, [running, step, navigate, status.isConnected]);
+  }, [step, navigate, status.isConnected]);
 
   // Re-measured on scroll, resize and orientation change, so the hole cannot drift off its anchor.
   useEffect(() => {
-    if (!running || !step?.anchor) return undefined;
+    if (!step?.anchor) return undefined;
     const remeasure = () => {
       setViewport({ width: window.innerWidth, height: window.innerHeight });
       setHole(unionRect(measureAnchors(step.anchor?.testIds ?? [])));
@@ -142,7 +116,7 @@ export const TourDriver = () => {
       window.removeEventListener("resize", remeasure);
       window.removeEventListener("orientationchange", remeasure);
     };
-  }, [running, step]);
+  }, [step]);
 
   const finish = useCallback(
     (outcome: "completed" | "skipped") => {
@@ -154,10 +128,10 @@ export const TourDriver = () => {
         lastStepId: TOUR_STEPS[stepIndex]?.id ?? null,
         deviceStepsPending: state.deviceStepsPending || ranWithoutDeviceRef.current,
       });
-      setRunning(false);
       setHole(null);
+      onFinished();
     },
-    [stepIndex],
+    [onFinished, stepIndex],
   );
 
   const next = useCallback(() => {
@@ -174,7 +148,6 @@ export const TourDriver = () => {
   const back = useCallback(() => setStepIndex((current) => Math.max(0, current - 1)), []);
 
   useEffect(() => {
-    if (!running) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       // The tour owns the keys while it is up. Left and Right are Back and Next, OK is Next, and
       // the Back key skips, which is the same "Back goes out" rule the rest of the app follows.
@@ -193,9 +166,9 @@ export const TourDriver = () => {
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [back, finish, next, running]);
+  }, [back, finish, next]);
 
-  if (!running || !step) return null;
+  if (!step) return null;
 
   const pieces = scrimRects(hole, viewport);
   const placement = captionPlacement(hole, viewport.height);
@@ -264,3 +237,5 @@ export const TourDriver = () => {
     </div>
   );
 };
+
+export default TourDriver;

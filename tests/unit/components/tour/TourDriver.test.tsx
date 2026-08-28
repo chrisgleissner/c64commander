@@ -18,18 +18,30 @@ vi.mock("@/components/ui/interstitial-state", () => ({
   useInterstitialActive: () => interstitialActiveRef.current,
 }));
 
-import { TourDriver } from "@/components/tour/TourDriver";
+import { TourHost } from "@/components/tour/TourHost";
 import { TOUR_STEPS } from "@/lib/tour/steps";
 import { TOUR_ACTIVE_ATTRIBUTE, TOUR_STATE_KEY, loadTourState, requestTourStart } from "@/lib/tour/tourState";
 
+/*
+ * Rendered through the HOST, not the driver directly. The host is what App mounts: it owns the
+ * first-launch decision and loads the driver lazily, so the driver's steps, spotlight geometry and
+ * scrim never reach the index bundle. Testing the driver alone would leave that wiring unproven.
+ */
 const renderDriver = () =>
   render(
     <MemoryRouter>
-      <TourDriver />
+      <TourHost />
     </MemoryRouter>,
   );
 
-const startTour = () => act(() => requestTourStart());
+const startTour = async () => {
+  await act(async () => {
+    requestTourStart();
+    // The driver is behind React.lazy; let its chunk resolve before anything asserts on it.
+    await Promise.resolve();
+  });
+  await screen.findByTestId("tour-overlay");
+};
 
 const mountAnchor = (testId: string, rect = { top: 100, left: 20, width: 80, height: 44 }) => {
   const element = document.createElement("div");
@@ -85,23 +97,19 @@ describe("TourDriver", () => {
     });
 
     it("starts once every interstitial has gone and the app has settled", async () => {
-      vi.useFakeTimers();
-      try {
-        interstitialActiveRef.current = true;
-        const { rerender } = renderDriver();
-        interstitialActiveRef.current = false;
-        rerender(
-          <MemoryRouter>
-            <TourDriver />
-          </MemoryRouter>,
-        );
-        await act(async () => {
-          vi.advanceTimersByTime(2_000);
-        });
-        expect(screen.getByTestId("tour-overlay")).toBeInTheDocument();
-      } finally {
-        vi.useRealTimers();
-      }
+      interstitialActiveRef.current = true;
+      const { rerender } = renderDriver();
+      expect(screen.queryByTestId("tour-overlay")).toBeNull();
+
+      interstitialActiveRef.current = false;
+      rerender(
+        <MemoryRouter>
+          <TourHost />
+        </MemoryRouter>,
+      );
+      // Real timers: the driver is behind React.lazy, and its chunk resolves on a microtask that
+      // fake timers do not advance. The settle window is short enough to wait out.
+      await screen.findByTestId("tour-overlay", undefined, { timeout: 5_000 });
     });
 
     it("does not offer itself again once it has been completed or skipped", async () => {
@@ -125,22 +133,22 @@ describe("TourDriver", () => {
   describe("running", () => {
     it("marks the document while it runs, so swipe navigation and Home can stand down", async () => {
       renderDriver();
-      startTour();
+      await startTour();
       await waitFor(() => expect(document.documentElement.hasAttribute(TOUR_ACTIVE_ATTRIBUTE)).toBe(true));
 
       fireEvent.click(screen.getByTestId("tour-skip"));
       await waitFor(() => expect(document.documentElement.hasAttribute(TOUR_ACTIVE_ATTRIBUTE)).toBe(false));
     });
 
-    it("is the same length every time, whatever can be reached", () => {
+    it("is the same length every time, whatever can be reached", async () => {
       renderDriver();
-      startTour();
+      await startTour();
       expect(screen.getByTestId("tour-progress").textContent).toBe(`Step 1 of ${TOUR_STEPS.length}`);
     });
 
     it("walks forward and back through every step", async () => {
       renderDriver();
-      startTour();
+      await startTour();
       for (let index = 1; index < TOUR_STEPS.length; index += 1) {
         fireEvent.click(screen.getByTestId("tour-next"));
         await waitFor(() =>
@@ -155,15 +163,15 @@ describe("TourDriver", () => {
       );
     });
 
-    it("cannot go back from the first step", () => {
+    it("cannot go back from the first step", async () => {
       renderDriver();
-      startTour();
+      await startTour();
       expect(screen.getByTestId("tour-back")).toBeDisabled();
     });
 
     it("degrades a step whose anchors never appear to the caption alone", async () => {
       renderDriver();
-      startTour();
+      await startTour();
       // Nothing is mounted, so no anchor can be measured on any step.
       fireEvent.click(screen.getByTestId("tour-next"));
       await waitFor(() => expect(screen.getByTestId("tour-overlay")).toHaveAttribute("data-tour-degraded", "true"));
@@ -175,7 +183,7 @@ describe("TourDriver", () => {
       mountAnchor("home-tile-action.resume-session", { top: 100, left: 10, width: 50, height: 44 });
       mountAnchor("home-tile-action.recently-played", { top: 100, left: 80, width: 50, height: 44 });
       renderDriver();
-      startTour();
+      await startTour();
       // Step 4 is "your-tunes".
       for (let index = 0; index < 3; index += 1) fireEvent.click(screen.getByTestId("tour-next"));
 
@@ -187,9 +195,9 @@ describe("TourDriver", () => {
       expect(spotlight.style.width).toBe("132px");
     });
 
-    it("keeps every control at the 44 px floor", () => {
+    it("keeps every control at the 44 px floor", async () => {
       renderDriver();
-      startTour();
+      await startTour();
       for (const testId of ["tour-skip", "tour-back", "tour-next"]) {
         expect(screen.getByTestId(testId).className).toContain("min-h-11");
       }
@@ -199,7 +207,7 @@ describe("TourDriver", () => {
   describe("keyboard", () => {
     it("moves with Left and Right, and Enter is Next", async () => {
       renderDriver();
-      startTour();
+      await startTour();
       fireEvent.keyDown(window, { key: "ArrowRight" });
       await waitFor(() => expect(screen.getByTestId("tour-progress").textContent).toContain("Step 2"));
       fireEvent.keyDown(window, { key: "Enter" });
@@ -210,7 +218,7 @@ describe("TourDriver", () => {
 
     it("skips on the Back key", async () => {
       renderDriver();
-      startTour();
+      await startTour();
       fireEvent.keyDown(window, { key: "Escape" });
       await waitFor(() => expect(screen.queryByTestId("tour-overlay")).toBeNull());
       expect(loadTourState().skippedAt).not.toBeNull();
@@ -220,7 +228,7 @@ describe("TourDriver", () => {
   describe("what it records", () => {
     it("writes skippedAt and the step it was on, from any step", async () => {
       renderDriver();
-      startTour();
+      await startTour();
       fireEvent.click(screen.getByTestId("tour-next"));
       await waitFor(() => expect(screen.getByTestId("tour-progress").textContent).toContain("Step 2"));
       fireEvent.click(screen.getByTestId("tour-skip"));
@@ -232,7 +240,7 @@ describe("TourDriver", () => {
 
     it("writes completedAt on the last step", async () => {
       renderDriver();
-      startTour();
+      await startTour();
       for (let index = 1; index < TOUR_STEPS.length; index += 1) {
         fireEvent.click(screen.getByTestId("tour-next"));
         await waitFor(() => expect(screen.getByTestId("tour-progress").textContent).toContain(`Step ${index + 1}`));
@@ -245,7 +253,7 @@ describe("TourDriver", () => {
     it("flags the device steps as pending when they ran with nothing connected", async () => {
       connectionRef.current = { isConnected: false };
       renderDriver();
-      startTour();
+      await startTour();
       // Walk as far as the first device step (index 4).
       for (let index = 0; index < 4; index += 1) fireEvent.click(screen.getByTestId("tour-next"));
       await waitFor(() => expect(screen.getByTestId("tour-progress").textContent).toContain("Step 5"));
@@ -257,7 +265,7 @@ describe("TourDriver", () => {
     it("does not flag them when a machine was attached the whole way", async () => {
       connectionRef.current = { isConnected: true };
       renderDriver();
-      startTour();
+      await startTour();
       for (let index = 0; index < 4; index += 1) fireEvent.click(screen.getByTestId("tour-next"));
       await waitFor(() => expect(screen.getByTestId("tour-progress").textContent).toContain("Step 5"));
       fireEvent.click(screen.getByTestId("tour-skip"));

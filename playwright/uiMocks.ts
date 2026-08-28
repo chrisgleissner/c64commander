@@ -523,6 +523,18 @@ export async function seedUiMocks(page: Page, baseUrl: string, options: UiMockSe
           for (const id of settingsIds) entries[id] = true;
           localStorage.setItem("c64u_open_sections", JSON.stringify(entries));
         })();
+        /*
+         * The first-run tour, marked as already taken.
+         *
+         * It is a full-screen overlay that opens on a launch where nothing has been recorded, and
+         * every one of these tests starts from exactly that state — so without this it covers the
+         * page each walk is there to drive. A test that wants to SEE the tour clears this key
+         * itself; see playwright/tour.spec.ts.
+         */
+        localStorage.setItem(
+          "c64u_tour_state:v1",
+          JSON.stringify({ completedAt: 1735689600000, skippedAt: null, lastStepId: null, deviceStepsPending: false }),
+        );
         if (seedFeatureFlags) {
           localStorage.setItem("c64u_dev_mode_enabled", "1");
           localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");

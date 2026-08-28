@@ -48,21 +48,33 @@ vi.mock("@/pages/playFiles/hooks/useHvscArchiveSearch", () => ({
 const toastSpy = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/use-toast", () => ({ toast: toastSpy, useToast: () => ({ toast: toastSpy }) }));
 
-import { SearchOverlay } from "@/components/search/SearchOverlay";
+import { SearchOverlayHost } from "@/components/search/SearchOverlayHost";
 import { SKIP_ATTR } from "@/lib/input";
 import { requestSearchOpen } from "@/lib/search/overlayState";
 import { SEARCH_RECENT_KEY } from "@/lib/search/history";
 
+/*
+ * Rendered through the HOST, not the overlay directly. The host is what App mounts, and it loads
+ * the overlay lazily so its archive, disk-store and config-cache reach never lands in the index
+ * bundle — testing the overlay alone would leave that wiring unproven.
+ */
 const renderOverlay = () =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter>
-        <SearchOverlay />
+        <SearchOverlayHost />
       </MemoryRouter>
     </QueryClientProvider>,
   );
 
-const open = () => act(() => requestSearchOpen({ source: "key" }));
+const open = async () => {
+  await act(async () => {
+    requestSearchOpen({ source: "key" });
+    // The overlay is behind React.lazy, so let its chunk resolve before anything asserts on it.
+    await Promise.resolve();
+  });
+  await screen.findByTestId("search-overlay");
+};
 
 const type = (value: string) => {
   fireEvent.change(screen.getByTestId("search-input"), { target: { value } });
@@ -89,22 +101,22 @@ describe("SearchOverlay", () => {
 
   it("opens on a request from any door", async () => {
     renderOverlay();
-    open();
+    await open();
     await waitFor(() => expect(screen.getByTestId("search-overlay")).toBeInTheDocument());
   });
 
-  it("is a dialog whose result list the discovery engine skips", () => {
+  it("is a dialog whose result list the discovery engine skips", async () => {
     renderOverlay();
-    open();
+    await open();
     const overlay = screen.getByTestId("search-overlay");
     expect(overlay).toHaveAttribute("role", "dialog");
     expect(overlay).toHaveAttribute(SKIP_ATTR);
     expect(screen.getByTestId("search-results")).toHaveAttribute(SKIP_ATTR);
   });
 
-  it("presents the field as a combobox over a listbox", () => {
+  it("presents the field as a combobox over a listbox", async () => {
     renderOverlay();
-    open();
+    await open();
     const input = screen.getByTestId("search-input");
     expect(input).toHaveAttribute("role", "combobox");
     expect(input).toHaveAttribute("aria-controls", "search-results-listbox");
@@ -119,7 +131,7 @@ describe("SearchOverlay", () => {
      */
     it("does not move DOM focus out of the field on Down", async () => {
       renderOverlay();
-      open();
+      await open();
       const input = screen.getByTestId("search-input");
       await waitFor(() => expect(document.activeElement).toBe(input));
       type("radio");
@@ -132,7 +144,7 @@ describe("SearchOverlay", () => {
 
     it("advances aria-activedescendant on Down and returns it on Up", async () => {
       renderOverlay();
-      open();
+      await open();
       const input = screen.getByTestId("search-input");
       type("radio");
       await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(1));
@@ -149,7 +161,7 @@ describe("SearchOverlay", () => {
 
     it("marks exactly one row selected, and it is the one aria-activedescendant names", async () => {
       renderOverlay();
-      open();
+      await open();
       const input = screen.getByTestId("search-input");
       type("radio");
       await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(0));
@@ -162,37 +174,37 @@ describe("SearchOverlay", () => {
 
     it("closes on Escape", async () => {
       renderOverlay();
-      open();
+      await open();
       fireEvent.keyDown(screen.getByTestId("search-input"), { key: "Escape" });
       await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
     });
 
     it("closes on the close button", async () => {
       renderOverlay();
-      open();
+      await open();
       fireEvent.click(screen.getByTestId("search-close"));
       await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
     });
   });
 
   describe("results", () => {
-    it("shows the promoted chips and no results on an empty query", () => {
+    it("shows the promoted chips and no results on an empty query", async () => {
       renderOverlay();
-      open();
+      await open();
       expect(screen.getByTestId("search-promoted")).toBeInTheDocument();
       expect(screen.queryAllByRole("option")).toHaveLength(0);
     });
 
-    it("shows recent searches on an empty query once there are some", () => {
+    it("shows recent searches on an empty query once there are some", async () => {
       localStorage.setItem(SEARCH_RECENT_KEY, JSON.stringify(["radio"]));
       renderOverlay();
-      open();
+      await open();
       expect(within(screen.getByTestId("search-recent")).getByText("radio")).toBeInTheDocument();
     });
 
     it("names what was searched for when nothing matches, and offers the nearest group", async () => {
       renderOverlay();
-      open();
+      await open();
       type("zzzznotathing");
       await waitFor(() => expect(screen.getByTestId("search-empty")).toBeInTheDocument());
       expect(screen.getByTestId("search-empty").textContent).toContain("zzzznotathing");
@@ -204,7 +216,7 @@ describe("SearchOverlay", () => {
       // user with a working install and no machine attached actually reads.
       flagsRef.current = { live_view_enabled: true };
       renderOverlay();
-      open();
+      await open();
       type("live view");
       await waitFor(() => expect(screen.getByTestId("search-result-home.section.live-view")).toBeInTheDocument());
       const row = screen.getByTestId("search-result-home.section.live-view");
@@ -215,7 +227,7 @@ describe("SearchOverlay", () => {
     it("names the switch when a row is gated on one that is off", async () => {
       flagsRef.current = { live_view_enabled: false };
       renderOverlay();
-      open();
+      await open();
       type("live view");
       await waitFor(() => expect(screen.getByTestId("search-result-home.section.live-view")).toBeInTheDocument());
       expect(screen.getByTestId("search-result-home.section.live-view").textContent).toContain(
@@ -225,7 +237,7 @@ describe("SearchOverlay", () => {
 
     it("puts the group holding the best match first, not a fixed group order", async () => {
       renderOverlay();
-      open();
+      await open();
       type("settings");
       await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(0));
       // "Settings" is an exact title match in Pages; "Config actions" only matches in its subtitle.
@@ -234,7 +246,7 @@ describe("SearchOverlay", () => {
 
     it("folds the group name into each option's accessible name, and hides the header from it", async () => {
       renderOverlay();
-      open();
+      await open();
       type("settings");
       await waitFor(() => expect(screen.getByTestId("search-result-page.settings")).toBeInTheDocument());
       expect(screen.getByTestId("search-result-page.settings").getAttribute("aria-label")).toContain("Pages:");
@@ -242,7 +254,7 @@ describe("SearchOverlay", () => {
 
     it("every row meets the 44 px floor", async () => {
       renderOverlay();
-      open();
+      await open();
       type("s");
       await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(0));
       for (const row of screen.getAllByRole("option")) {
@@ -252,7 +264,7 @@ describe("SearchOverlay", () => {
 
     it("caps a group at five rows and offers to expand it", async () => {
       renderOverlay();
-      open();
+      await open();
       type("s");
       await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(0));
       const more = screen.queryByTestId("search-more-setting");
@@ -271,7 +283,7 @@ describe("SearchOverlay", () => {
     it("shows a spinner on the music group while the archive scan is running", async () => {
       hvscRef.current = { hits: [], isSearching: true, indexUnavailable: false };
       renderOverlay();
-      open();
+      await open();
       type("radio");
       await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(0));
       // The music group only exists once a hit lands; with none, the empty state must not appear
@@ -283,7 +295,7 @@ describe("SearchOverlay", () => {
   describe("activating a result", () => {
     it("records the query and the entry, then closes", async () => {
       renderOverlay();
-      open();
+      await open();
       type("settings");
       await waitFor(() => expect(screen.getByTestId("search-result-page.settings")).toBeInTheDocument());
       fireEvent.click(screen.getByTestId("search-result-page.settings"));
@@ -295,7 +307,7 @@ describe("SearchOverlay", () => {
 
     it("never records a query that was abandoned without activating anything", async () => {
       renderOverlay();
-      open();
+      await open();
       type("settings");
       await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(0));
       fireEvent.keyDown(screen.getByTestId("search-input"), { key: "Escape" });
@@ -305,7 +317,7 @@ describe("SearchOverlay", () => {
 
     it("activates the row aria-activedescendant names, not the first one drawn", async () => {
       renderOverlay();
-      open();
+      await open();
       const input = screen.getByTestId("search-input");
       type("settings");
       await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(1));
@@ -323,7 +335,7 @@ describe("SearchOverlay", () => {
 
     it("stays open and toasts when the target never appears, rather than failing silently", async () => {
       renderOverlay();
-      open();
+      await open();
       // A Home section, with no Home page rendered: the resolver waits out its ceiling.
       type("config actions");
       await waitFor(() => expect(screen.getByTestId("search-result-home.section.config-actions")).toBeInTheDocument());
@@ -339,7 +351,7 @@ describe("SearchOverlay", () => {
 
     it("takes a disabled row to the setting that would enable it", async () => {
       renderOverlay();
-      open();
+      await open();
       type("live view");
       await waitFor(() => expect(screen.getByTestId("search-result-home.section.live-view")).toBeInTheDocument());
       fireEvent.click(screen.getByTestId("search-result-home.section.live-view"));
