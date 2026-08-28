@@ -52,6 +52,14 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
   const { status } = useC64Connection();
 
   const [stepIndex, setStepIndex] = useState(() => tourStepIndex(request.fromStepId ?? null));
+  /*
+   * The run's bounds. A full tour is every step; the offer Home makes after a first connection is
+   * the steps that needed a machine and stops there, rather than carrying on through the rest and
+   * repeating what has already been seen. The progress line counts within the range.
+   */
+  const firstIndex = tourStepIndex(request.fromStepId ?? null);
+  const lastIndex = request.throughStepId === undefined ? TOUR_STEPS.length - 1 : tourStepIndex(request.throughStepId);
+  const stepCount = Math.max(1, lastIndex - firstIndex + 1);
   const [hole, setHole] = useState<Rect | null>(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const ranWithoutDeviceRef = useRef(false);
@@ -136,14 +144,14 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
 
   const next = useCallback(() => {
     setStepIndex((current) => {
-      if (current + 1 >= TOUR_STEPS.length) {
+      if (current + 1 > lastIndex) {
         // Deferred out of the updater: finish() writes storage and sets state of its own.
         queueMicrotask(() => finish("completed"));
         return current;
       }
       return current + 1;
     });
-  }, [finish]);
+  }, [finish, lastIndex]);
 
   const back = useCallback(() => setStepIndex((current) => Math.max(0, current - 1)), []);
 
@@ -222,7 +230,7 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
         data-placement={placement}
       >
         <p className="text-xs text-muted-foreground" data-testid="tour-progress">
-          Step {stepIndex + 1} of {TOUR_STEPS.length}
+          Step {stepIndex - firstIndex + 1} of {stepCount}
         </p>
         <h2 className="text-base font-semibold">{step.title}</h2>
         <p className="text-sm text-muted-foreground">{step.body}</p>

@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useConnectionRoutingEpoch } from "@/hooks/useC64Connection";
 import { SHARED_DISK_LIBRARY_ID, loadDiskLibrary } from "@/lib/disks/diskStore";
 import { normalize } from "@/lib/search/score";
 import { useHvscArchiveSearch } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
@@ -67,12 +68,20 @@ const itemNamesOf = (data: unknown, category: string): string[] => {
  * Config items from whatever the Config page has already fetched. A cache read, never a fetch: the
  * device is treated as fragile in this repo, and an item index is not worth a round of requests.
  */
-const configEntries = (query: string, cached: ReadonlyArray<[readonly unknown[], unknown]>): SearchEntry[] => {
+const configEntries = (
+  query: string,
+  cached: ReadonlyArray<[readonly unknown[], unknown]>,
+  routingEpoch: unknown,
+): SearchEntry[] => {
   const needle = normalize(query);
   const matches: SearchEntry[] = [];
   const seen = new Set<string>();
   for (const [key, data] of cached) {
     if (key[0] !== "c64-category") continue;
+    // The epoch the entry was fetched under. React Query keeps the previous device's categories
+    // until they are collected, and offering those would name items the current machine does not
+    // have — the resolver would then wait out its ceiling on an anchor that is never rendered.
+    if (key[2] !== routingEpoch) continue;
     const category = typeof key[1] === "string" ? key[1] : null;
     if (category === null) continue;
     for (const name of itemNamesOf(data, category)) {
@@ -105,6 +114,7 @@ export interface Tier2State {
 
 export const useSearchTier2 = (query: string, enabled: boolean): Tier2State => {
   const queryClient = useQueryClient();
+  const routingEpoch = useConnectionRoutingEpoch();
   const hvsc = useHvscArchiveSearch({ enabled });
   const [localEntries, setLocalEntries] = useState<readonly SearchEntry[]>([]);
 
@@ -127,8 +137,11 @@ export const useSearchTier2 = (query: string, enabled: boolean): Tier2State => {
    * (spec.md section 5.4); this is the half of it that is not the archive.
    */
   useEffect(() => {
+    // Cleared first, not left standing through the debounce. The previous query's rows stayed on
+    // screen and selectable while the next scan ran, so Enter could open something the typed text
+    // no longer named.
+    setLocalEntries([]);
     if (!enabled || trimmed === "") {
-      setLocalEntries([]);
       return undefined;
     }
     const timer = window.setTimeout(() => {
@@ -136,10 +149,10 @@ export const useSearchTier2 = (query: string, enabled: boolean): Tier2State => {
         .getQueryCache()
         .getAll()
         .map((entry) => [entry.queryKey, entry.state.data] as [readonly unknown[], unknown]);
-      setLocalEntries([...diskEntries(trimmed), ...configEntries(trimmed, cached)]);
+      setLocalEntries([...diskEntries(trimmed), ...configEntries(trimmed, cached, routingEpoch)]);
     }, TIER2_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [enabled, trimmed, queryClient]);
+  }, [enabled, trimmed, queryClient, routingEpoch]);
 
   const musicEntries = useMemo<SearchEntry[]>(
     () =>

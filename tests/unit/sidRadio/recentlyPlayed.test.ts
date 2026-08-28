@@ -234,3 +234,28 @@ describe("v1 to v2 migration", () => {
     expect(loadRecentlyPlayed().map((entry) => entry.virtualPath)).toEqual(["/a/b.sid"]);
   });
 });
+
+/*
+ * A disk or a program is reopened by its source path, and the router dispatches on the source KIND.
+ * Storing the id alone left a row that could be listed and not opened; storing the kind alone could
+ * not say which of several configured local roots the path belongs to.
+ */
+describe("where a non-archive row came from", () => {
+  it("keeps both the source kind and the source id", () => {
+    const entry = toRecentlyPlayedEntry({
+      virtualPath: "/Games/Elite.d64",
+      title: "Elite",
+      category: "disk",
+      source: "local",
+      sourceId: "local-source-2",
+    });
+
+    expect(entry.source).toBe("local");
+    expect(entry.sourceId).toBe("local-source-2");
+
+    saveRecentlyPlayed([entry]);
+    const [readBack] = loadRecentlyPlayed();
+    expect(readBack.source).toBe("local");
+    expect(readBack.sourceId).toBe("local-source-2");
+  });
+});

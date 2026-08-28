@@ -45,12 +45,20 @@ export const DeviceStepsOffer = () => {
       <Compass className="mt-2 h-5 w-5 shrink-0 text-primary" aria-hidden />
       <div className="min-w-0 flex-1 space-y-2">
         <p className="text-sm">
-          {t("tour.deviceSteps.offer", "Your C64 is connected. See the three tour steps that needed it?")}
+          {t(
+            "tour.deviceSteps.offer",
+            // Counted, not written out: the list grows, and "three" was wrong the moment a fourth
+            // step needed a machine.
+            `Your C64 is connected. See the ${DEVICE_STEP_IDS.length} tour steps that needed it?`,
+          )}
         </p>
         <Button
           onClick={() => {
             dismiss();
-            requestTourStart({ fromStepId: DEVICE_STEP_IDS[0] });
+            requestTourStart({
+              fromStepId: DEVICE_STEP_IDS[0],
+              throughStepId: DEVICE_STEP_IDS[DEVICE_STEP_IDS.length - 1],
+            });
           }}
           className="min-h-11"
           data-testid="home-tour-device-steps-start"

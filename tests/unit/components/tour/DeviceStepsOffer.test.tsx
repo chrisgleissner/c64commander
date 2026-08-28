@@ -57,7 +57,11 @@ describe("DeviceStepsOffer", () => {
       render(<DeviceStepsOffer />);
       await waitFor(() => expect(screen.getByTestId("home-tour-device-steps-start")).toBeInTheDocument());
       fireEvent.click(screen.getByTestId("home-tour-device-steps-start"));
-      expect(requests).toEqual([{ fromStepId: DEVICE_STEP_IDS[0] }]);
+      // Bounded: the offer is for the steps that needed a machine, not for the rest of the tour
+      // after them, which the user has already seen.
+      expect(requests).toEqual([
+        { fromStepId: DEVICE_STEP_IDS[0], throughStepId: DEVICE_STEP_IDS[DEVICE_STEP_IDS.length - 1] },
+      ]);
     } finally {
       release();
     }

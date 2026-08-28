@@ -16,7 +16,7 @@ import { toast } from "@/hooks/use-toast";
 import { useSearchResults, useRequirementContext, entrySubtitle, entryTitle } from "@/hooks/useSearchResults";
 import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
 import { useSearchTier2 } from "@/hooks/useSearchTier2";
-import { SKIP_ATTR } from "@/lib/input";
+import { SKIP_ATTR, resolveInputProfile, resolveSemanticAction } from "@/lib/input";
 import { t } from "@/lib/i18n";
 import { resolveSearchHandler } from "@/lib/search/handlers";
 import { recordPickedEntry, recordRecentQuery, loadRecentQueries } from "@/lib/search/history";
@@ -64,6 +64,9 @@ const rowId = (entryId: string) => `search-row-${entryId.replace(/[^a-zA-Z0-9-]/
 const recentQueryId = (query: string) => `search-recent-${query.replace(/[^a-zA-Z0-9-]/g, "-")}`;
 const moreStopId = (group: SearchGroup) => `search-more-${group}`;
 const EMPTY_PLAY_STOP_ID = "search-empty-play";
+
+/** Keypad bindings prepended to the keyboard ones, so a D-pad and a keyboard both resolve here. */
+const OVERLAY_KEYMAP = resolveInputProfile("keypad");
 
 interface GroupedResults {
   readonly group: SearchGroup;
@@ -263,21 +266,29 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
 
   const activeStopId = keyStops[activeIndex]?.id ?? null;
 
+  /*
+   * Read through the keymap, not off `event.key`.
+   *
+   * A keypad handset's D-pad emits `code: "DpadDown"` or `keyCode: 20`, never `key: "ArrowDown"`,
+   * so a handler that compares key names is inert on exactly the hardware that has no pointer to
+   * fall back on. The keypad profile carries the keyboard bindings too, so one lookup serves both.
+   */
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === "Escape") {
+      const action = resolveSemanticAction(OVERLAY_KEYMAP, event);
+      if (action === "escape" || action === "back") {
         event.preventDefault();
         close();
         return;
       }
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (action === "dpadDown" || action === "dpadUp") {
         if (keyStops.length === 0) return;
         event.preventDefault();
-        const step = event.key === "ArrowDown" ? 1 : -1;
+        const step = action === "dpadDown" ? 1 : -1;
         setActiveIndex((current) => (current + step + keyStops.length) % keyStops.length);
         return;
       }
-      if (event.key === "Enter") {
+      if (action === "enter" || action === "center" || action === "activate") {
         const stop = keyStops[activeIndex];
         if (!stop) return;
         event.preventDefault();

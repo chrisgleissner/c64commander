@@ -16,6 +16,9 @@ const connectionRef = vi.hoisted(() => ({
 }));
 vi.mock("@/hooks/useC64Connection", () => ({
   useC64Connection: () => ({ status: connectionRef.current }),
+  // Tier 2 scopes cached config categories to the epoch they were fetched under, so the previous
+  // device's items are not offered after a handover.
+  useConnectionRoutingEpoch: () => 0,
 }));
 
 const flagsRef = vi.hoisted(() => ({ current: {} as Record<string, boolean> }));
@@ -139,8 +142,8 @@ describe("SearchOverlay", () => {
       type("radio");
       await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(0));
 
-      fireEvent.keyDown(input, { key: "ArrowDown" });
-      fireEvent.keyDown(input, { key: "ArrowDown" });
+      fireEvent.keyDown(input, { key: "ArrowDown", code: "ArrowDown" });
+      fireEvent.keyDown(input, { key: "ArrowDown", code: "ArrowDown" });
       expect(document.activeElement).toBe(input);
     });
 
@@ -152,12 +155,12 @@ describe("SearchOverlay", () => {
       await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(1));
 
       const first = input.getAttribute("aria-activedescendant");
-      fireEvent.keyDown(input, { key: "ArrowDown" });
+      fireEvent.keyDown(input, { key: "ArrowDown", code: "ArrowDown" });
       const second = input.getAttribute("aria-activedescendant");
       expect(second).not.toBe(first);
       expect(second).toBeTruthy();
 
-      fireEvent.keyDown(input, { key: "ArrowUp" });
+      fireEvent.keyDown(input, { key: "ArrowUp", code: "ArrowUp" });
       expect(input.getAttribute("aria-activedescendant")).toBe(first);
     });
 
@@ -167,7 +170,7 @@ describe("SearchOverlay", () => {
       const input = screen.getByTestId("search-input");
       type("radio");
       await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(0));
-      fireEvent.keyDown(input, { key: "ArrowDown" });
+      fireEvent.keyDown(input, { key: "ArrowDown", code: "ArrowDown" });
 
       const selected = screen.getAllByRole("option").filter((row) => row.getAttribute("aria-selected") === "true");
       expect(selected).toHaveLength(1);
@@ -177,7 +180,7 @@ describe("SearchOverlay", () => {
     it("closes on Escape", async () => {
       renderOverlay();
       await open();
-      fireEvent.keyDown(screen.getByTestId("search-input"), { key: "Escape" });
+      fireEvent.keyDown(screen.getByTestId("search-input"), { key: "Escape", code: "Escape" });
       await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
     });
 
@@ -312,7 +315,7 @@ describe("SearchOverlay", () => {
       await open();
       type("settings");
       await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(0));
-      fireEvent.keyDown(screen.getByTestId("search-input"), { key: "Escape" });
+      fireEvent.keyDown(screen.getByTestId("search-input"), { key: "Escape", code: "Escape" });
       await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
       expect(localStorage.getItem("c64u_search_recent:v1")).toBeNull();
     });
@@ -323,12 +326,12 @@ describe("SearchOverlay", () => {
       const input = screen.getByTestId("search-input");
       type("settings");
       await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(1));
-      fireEvent.keyDown(input, { key: "ArrowDown" });
+      fireEvent.keyDown(input, { key: "ArrowDown", code: "ArrowDown" });
 
       const activeId = input.getAttribute("aria-activedescendant");
       const activeRow = screen.getAllByRole("option").find((row) => row.id === activeId);
       const expectedEntryId = activeRow?.getAttribute("data-testid")?.replace("search-result-", "");
-      fireEvent.keyDown(input, { key: "Enter" });
+      fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
 
       await waitFor(() =>
         expect(JSON.parse(localStorage.getItem("c64u_search_picked:v1") ?? "[]")).toEqual([expectedEntryId]),
@@ -374,7 +377,7 @@ describe("SearchOverlay", () => {
       await open();
 
       const field = screen.getByTestId("search-input");
-      fireEvent.keyDown(field, { key: "ArrowDown" });
+      fireEvent.keyDown(field, { key: "ArrowDown", code: "ArrowDown" });
 
       const chips = screen.getAllByTestId(/^search-chip-/);
       expect(chips.length).toBeGreaterThan(1);
@@ -388,10 +391,44 @@ describe("SearchOverlay", () => {
 
       const field = screen.getByTestId("search-input");
       const chips = screen.getAllByTestId(/^search-chip-/);
-      fireEvent.keyDown(field, { key: "Enter" });
+      fireEvent.keyDown(field, { key: "Enter", code: "Enter" });
 
       await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
       expect(chips[0]).toBeDefined();
+    });
+  });
+
+  /*
+   * A keypad handset's D-pad emits `code: "DpadDown"`, never `key: "ArrowDown"`. A handler that
+   * compares key names is inert on exactly the hardware that has no pointer to fall back on, and
+   * the overlay opts out of the focus ring, so these keys are the only way around it there.
+   */
+  describe("a keypad D-pad", () => {
+    it("moves the selection and activates, the same as an arrow key", async () => {
+      renderOverlay();
+      await open();
+      const field = screen.getByTestId("search-input");
+
+      fireEvent.keyDown(field, { key: "Unidentified", code: "DpadDown" });
+
+      const chips = screen.getAllByTestId(/^search-chip-/);
+      await waitFor(() => expect(field).toHaveAttribute("aria-activedescendant", chips[1].id));
+
+      // Back to the first chip, which is always enabled, then activate it.
+      fireEvent.keyDown(field, { key: "Unidentified", code: "DpadUp" });
+      await waitFor(() => expect(field).toHaveAttribute("aria-activedescendant", chips[0].id));
+
+      fireEvent.keyDown(field, { key: "Unidentified", code: "DpadCenter" });
+      await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
+    });
+
+    it("closes on the Back key", async () => {
+      renderOverlay();
+      await open();
+
+      fireEvent.keyDown(screen.getByTestId("search-input"), { key: "Unidentified", code: "Backspace", keyCode: 4 });
+
+      await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
     });
   });
 });

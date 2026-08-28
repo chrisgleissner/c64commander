@@ -8,6 +8,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { EMPTY_TOUR_STATE, hasPriorAppState, shouldOfferTourOnLaunch } from "@/lib/tour/tourState";
+import { DEVICE_STEP_IDS, TOUR_STEPS } from "@/lib/tour/steps";
 
 describe("who is offered the tour on launch", () => {
   beforeEach(() => {
@@ -40,5 +41,23 @@ describe("who is offered the tour on launch", () => {
   it("is still not offered once it has been taken or skipped", () => {
     expect(shouldOfferTourOnLaunch({ ...EMPTY_TOUR_STATE, completedAt: 1 })).toBe(false);
     expect(shouldOfferTourOnLaunch({ ...EMPTY_TOUR_STATE, skippedAt: 1 })).toBe(false);
+  });
+});
+
+/*
+ * The offer Home makes after a first connection runs a RANGE of the tour, so the steps that need a
+ * machine have to be next to each other. Reordering them into two groups would silently include
+ * whatever fell between.
+ */
+describe("the device steps", () => {
+  it("are a contiguous run", () => {
+    const indices = TOUR_STEPS.map((step, index) => (step.requiresDevice === true ? index : -1)).filter(
+      (index) => index >= 0,
+    );
+    expect(indices.length).toBeGreaterThan(1);
+    for (let position = 1; position < indices.length; position += 1) {
+      expect(indices[position]).toBe(indices[position - 1] + 1);
+    }
+    expect(DEVICE_STEP_IDS.length).toBe(indices.length);
   });
 });

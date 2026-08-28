@@ -36,7 +36,14 @@ export type RecentlyPlayedEntry = {
   folder: string;
   /** Absent on a v1 entry, which is why the migration writes "sid" onto every one of them. */
   category: RecentlyPlayedCategory;
-  /** Where the item came from, when it is not the HVSC archive — a local folder, a device path. */
+  /**
+   * Where the item came from, when it is not the HVSC archive.
+   *
+   * Both halves are needed to reopen it: `source` is the play-source kind the router dispatches on,
+   * and `sourceId` names which configured source of that kind, because a device can have several
+   * local roots and the kind alone cannot say which tree the path belongs to.
+   */
+  source?: string;
   sourceId?: string;
   songNr?: number;
   subsongCount?: number;
@@ -85,6 +92,7 @@ export const toRecentlyPlayedEntry = (input: {
   title: string;
   author?: string | null;
   category?: RecentlyPlayedCategory;
+  source?: string;
   sourceId?: string;
   songNr?: number;
   subsongCount?: number;
@@ -96,6 +104,7 @@ export const toRecentlyPlayedEntry = (input: {
   author: input.author ?? null,
   folder: folderOf(input.virtualPath),
   category: input.category ?? "sid",
+  ...(input.source === undefined ? {} : { source: input.source }),
   ...(input.sourceId === undefined ? {} : { sourceId: input.sourceId }),
   ...(input.songNr === undefined ? {} : { songNr: input.songNr }),
   ...(input.subsongCount === undefined ? {} : { subsongCount: input.subsongCount }),
@@ -120,6 +129,7 @@ const parseEntry = (value: unknown): RecentlyPlayedEntry | null => {
     folder: typeof row.folder === "string" ? row.folder : folderOf(row.virtualPath),
     // Absent on every v1 row, which held tunes only.
     category: typeof row.category === "string" && CATEGORIES.has(row.category) ? row.category : "sid",
+    ...(typeof row.source === "string" ? { source: row.source } : {}),
     ...(typeof row.sourceId === "string" ? { sourceId: row.sourceId } : {}),
     ...(typeof row.songNr === "number" ? { songNr: row.songNr } : {}),
     ...(typeof row.subsongCount === "number" ? { subsongCount: row.subsongCount } : {}),

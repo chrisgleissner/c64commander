@@ -105,7 +105,7 @@ import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLaun
 import { HvscSearchSheet } from "@/pages/playFiles/components/HvscSearchSheet";
 import { TuneListSheet } from "@/pages/playFiles/components/TuneListSheet";
 import type { HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
-import { buildFoundTuneItem, insertAfterCurrent } from "@/pages/playFiles/insertTuneNext";
+import { buildFoundTuneItem, buildRecentPlaylistItem, insertAfterCurrent } from "@/pages/playFiles/insertTuneNext";
 import { expandSubsongs, hasAllTunesQueued, MIN_TUNES_TO_EXPAND } from "@/pages/playFiles/expandSubsongs";
 import { md548ForVirtualPath } from "@/lib/sidRadio/md5PathIndex";
 import {
@@ -113,6 +113,7 @@ import {
   saveRecentlyPlayed,
   toRecentlyPlayedEntry,
   withRecentlyPlayed,
+  type RecentlyPlayedEntry,
 } from "@/lib/sidRadio/recentlyPlayed";
 import { useLikedTuneCount } from "@/lib/sidRadio/useLikedTuneCount";
 import { recordSkip } from "@/lib/sidRadio/sidRadioStats";
@@ -1623,7 +1624,11 @@ export default function PlayFilesPage() {
           title: currentDisplay?.title ?? currentItem.label,
           author: currentItemCredits.author,
           category,
-          ...(isArchiveTune ? {} : { sourceId: currentItem.request.source }),
+          // Both halves of where it came from: the kind the router dispatches on, and which
+          // configured source of that kind. A device can have several local roots, and "local"
+          // alone cannot say which tree the path belongs to.
+          ...(isArchiveTune ? {} : { source: currentItem.request.source }),
+          ...(isArchiveTune || !currentItem.sourceId ? {} : { sourceId: currentItem.sourceId }),
           songNr: currentItem.request.songNr,
           subsongCount: currentItem.subsongCount,
           durationMs: currentItem.durationMs,
@@ -1665,6 +1670,17 @@ export default function PlayFilesPage() {
   const playFoundTune = useCallback(
     (hit: HvscSearchHit) => {
       const item = buildFoundTuneItem(hit);
+      const { items, index } = insertAfterCurrent(playlist, currentIndex, item);
+      void startPlaylist(items, index, { replaceQueue: true });
+    },
+    [currentIndex, playlist, startPlaylist],
+  );
+
+  // The same path for a disk or a program out of Recent: its stored source kind and id are what
+  // turn a remembered path back into something the router can dispatch.
+  const playRecentItem = useCallback(
+    (entry: RecentlyPlayedEntry) => {
+      const item = buildRecentPlaylistItem(entry);
       const { items, index } = insertAfterCurrent(playlist, currentIndex, item);
       void startPlaylist(items, index, { replaceQueue: true });
     },
@@ -2970,6 +2986,7 @@ export default function PlayFilesPage() {
               if (!open) setHvscSearchSeed(null);
             }}
             onPlay={playFoundTune}
+            onPlayRecent={playRecentItem}
             onStartStation={startStationFromFoundTune}
             canSeedStation={canSeedStationFrom}
             stationActive={sidRadio.active}

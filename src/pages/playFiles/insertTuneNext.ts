@@ -21,6 +21,8 @@
  */
 
 import type { PlaylistItem } from "@/pages/playFiles/types";
+import type { PlayFileCategory } from "@/lib/playback/fileTypes";
+import type { PlaySource } from "@/lib/playback/playbackRouter";
 
 export type InsertNextResult<T> = {
   items: T[];
@@ -71,5 +73,37 @@ export const buildFoundTuneItem = (hit: {
     // first frame instead of falling back to the three-minute default. `durationSource` is left
     // unset so a later songlengths load does not treat this as a default it may overwrite.
     ...(hit.durationMs === undefined ? {} : { durationMs: hit.durationMs }),
+  };
+};
+
+/**
+ * A playable item for a row of Recent, whatever kind it is.
+ *
+ * The archive builder above assumes an HVSC tune. Recent also holds disks and programs, whose
+ * identity is a source path rather than an archive path, and which need the source kind the router
+ * dispatches on. An entry with no recorded source is treated as an archive tune, which is what every
+ * row written before this existed was.
+ */
+export const buildRecentPlaylistItem = (entry: {
+  virtualPath: string;
+  title: string;
+  category?: "sid" | "disk" | "program";
+  source?: string;
+  sourceId?: string;
+  songNr?: number;
+  subsongCount?: number;
+  durationMs?: number;
+}): PlaylistItem => {
+  const source = (entry.source ?? "hvsc") as PlaySource;
+  if (source === "hvsc") return buildFoundTuneItem(entry);
+  const unique = Math.random().toString(36).slice(2, 10);
+  const category: PlayFileCategory = entry.category === "disk" ? "disk" : "prg";
+  return {
+    id: `recent:${source}:${entry.virtualPath}:${unique}`,
+    request: { source, path: entry.virtualPath, ...(entry.sourceId ? { sourceId: entry.sourceId } : {}) },
+    category,
+    label: entry.virtualPath.split("/").filter(Boolean).pop() ?? entry.title,
+    path: entry.virtualPath,
+    ...(entry.sourceId ? { sourceId: entry.sourceId } : {}),
   };
 };

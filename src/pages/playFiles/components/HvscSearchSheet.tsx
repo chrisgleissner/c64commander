@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useHvscArchiveSearch, type HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
-import { loadRecentlyPlayed } from "@/lib/sidRadio/recentlyPlayed";
+import { loadRecentlyPlayed, type RecentlyPlayedEntry } from "@/lib/sidRadio/recentlyPlayed";
 
 /**
  * What was recently heard, in the same shape a search result takes.
@@ -52,6 +52,11 @@ export type HvscSearchSheetProps = {
    */
   onStartStation?: (hit: HvscSearchHit) => void;
   canSeedStation?: (hit: HvscSearchHit) => boolean;
+  /**
+   * Reopen a recently played disk or program. Absent where the caller cannot play one, in which case
+   * those rows are shown disabled rather than hidden — the history is still what it is.
+   */
+  onPlayRecent?: (entry: RecentlyPlayedEntry) => void;
   /** True while a station is running, which is what makes the play action an interruption. */
   stationActive: boolean;
   /**
@@ -155,6 +160,7 @@ export const HvscSearchSheet = ({
   onPlay,
   onStartStation,
   canSeedStation,
+  onPlayRecent,
   stationActive,
   initialQuery,
 }: HvscSearchSheetProps) => {
@@ -162,9 +168,19 @@ export const HvscSearchSheet = ({
   // Read once per opening: it changes only when a track starts, which cannot happen while this is
   // the thing being looked at.
   const [recent, setRecent] = useState<HvscSearchHit[]>([]);
+  /*
+   * Disks and programs are listed too, and separately.
+   *
+   * The tile that opens this is specified as "recently played tunes, disks and programs"
+   * (spec.md section 6.3), and Recent counts all three, so filtering them out here gave a
+   * disk-only history an enabled tile that opened an empty sheet. They are not put through
+   * TuneList: its rows offer a station seed, which only a tune can be.
+   */
+  const [recentOther, setRecentOther] = useState<RecentlyPlayedEntry[]>([]);
   useEffect(() => {
     if (!open) return;
     setRecent(recentlyPlayedTunes());
+    setRecentOther(loadRecentlyPlayed().filter((entry) => entry.category !== "sid"));
   }, [open]);
   /**
    * Whether the explanatory text is still worth its height.
@@ -176,7 +192,7 @@ export const HvscSearchSheet = ({
    * there is: results, or the tunes just heard. Both of those answer the same question better than
    * the sentence does.
    */
-  const showIntro = !search.query.trim() && recent.length === 0;
+  const showIntro = !search.query.trim() && recent.length === 0 && recentOther.length === 0;
   // Act first, close second: the action is the point, and a handler that needed this sheet still
   // mounted would otherwise break silently.
   const play = useCallback(
@@ -233,19 +249,46 @@ export const HvscSearchSheet = ({
             /* A station is endless and one-way: a tune goes by, you think "what was that", and it is
                gone. This is the way back, and it costs no new screen — the sheet is already open,
                already called Find a tune, and the rows are the same rows. */
-            recent.length > 0 ? (
+            recent.length > 0 || recentOther.length > 0 ? (
               <>
-                <p className="pb-2 text-xs text-muted-foreground" data-testid="recently-played-heading">
-                  Recently played
-                </p>
-                <TuneList
-                  tunes={recent}
-                  onPlay={play}
-                  onStartStation={onStartStation ? seed : undefined}
-                  canSeedStation={canSeedStation}
-                  stationActive={stationActive}
-                  testId="recently-played-row"
-                />
+                {recent.length > 0 ? (
+                  <>
+                    <p className="pb-2 text-xs text-muted-foreground" data-testid="recently-played-heading">
+                      Recently played
+                    </p>
+                    <TuneList
+                      tunes={recent}
+                      onPlay={play}
+                      onStartStation={onStartStation ? seed : undefined}
+                      canSeedStation={canSeedStation}
+                      stationActive={stationActive}
+                      testId="recently-played-row"
+                    />
+                  </>
+                ) : null}
+                {recentOther.length > 0 ? (
+                  <>
+                    <p className="pb-2 pt-3 text-xs text-muted-foreground" data-testid="recently-played-other-heading">
+                      Disks and programs
+                    </p>
+                    {recentOther.map((entry) => (
+                      <button
+                        key={`${entry.category}:${entry.virtualPath}`}
+                        type="button"
+                        onClick={() => {
+                          onPlayRecent?.(entry);
+                          onOpenChange(false);
+                        }}
+                        disabled={onPlayRecent === undefined}
+                        className="flex min-h-11 w-full flex-col justify-center rounded-md px-2 py-1.5 text-left hover:bg-muted disabled:opacity-50"
+                        data-testid="recently-played-other-row"
+                      >
+                        <span className="text-sm text-foreground">{entry.title}</span>
+                        <span className="text-xs text-muted-foreground">{entry.folder}</span>
+                      </button>
+                    ))}
+                  </>
+                ) : null}
               </>
             ) : (
               <p className="text-sm text-muted-foreground">

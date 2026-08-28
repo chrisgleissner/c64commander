@@ -98,6 +98,12 @@ const TOUR_START_EVENT = "c64u-tour-start-request";
 export interface TourStartRequest {
   /** Start at the device chapter, for the offer Home makes after a first connection. */
   readonly fromStepId?: string;
+  /**
+   * Last step of the run, inclusive. The offer Home makes after a first connection is for the steps
+   * that needed a machine and nothing else: without an end the run carried on through the rest of
+   * the tour, repeating what had already been seen.
+   */
+  readonly throughStepId?: string;
 }
 
 /**
