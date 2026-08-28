@@ -95,6 +95,8 @@ Up and Down move through the results while the text stays where it is, so you ca
 
 **A result you cannot use is still listed, and it says why.** "Needs a connected C64 Ultimate", "Needs the HVSC music collection installed", "Live View is turned off in Settings". Picking one of those takes you to the setting that would enable it rather than doing nothing. Something that vanishes when it is unavailable teaches you nothing about what the app can do.
 
+Search reaches your music too. A tune from the HVSC collection opens **Find a tune** on the Play tab already showing that title, so you land on the piece you searched for rather than on the page it lives on.
+
 With the box empty, search offers the four things worth doing first and the searches you have run before.
 
 ### The Tour
@@ -123,7 +125,7 @@ Keep going and the rest of Home is a set of cards, each its own labeled chapter 
 
 Which of these start open and which start closed is chosen once, for a first-time visit, in favor of the cards most people touch every session; every card is closed or opened the same way, by tapping its header, and the app remembers what you left open from then on — a card you never use can stay out of the way, and one you always want stays exactly where you put it. On the compact display profile, where there is the least room, opening one card closes the others, so the list of titles stays on screen around whatever is open. **Expand all sections** and **Collapse all sections** in the Quick Menu do the whole page at once. Everything here is in Config as well; these cards just save you the search.
 
-**With no C64 connected**, Home rearranges. The search field stays where it is, and so do Radio, Resume and Recent, because none of them needs a machine — they are drawn on their own, below a card explaining how to connect one. The machine's controls and its cards are drawn as titles with nothing inside them, under a line saying so, and the system information at the foot of the page drops to the app version alone. Nothing is lost: whichever cards you had open are open again the moment your C64 answers. The app waits a few seconds before rearranging, so a brief network hiccup does not shuffle the page under you, and it goes back the instant the machine is there again.
+**With no C64 connected**, Home rearranges. The search field stays where it is, and so do Radio, Last tune and Recent, because none of them needs a machine — they are drawn on their own, below a card explaining how to connect one. The machine's controls and its cards are drawn as titles with nothing inside them, under a line saying so, and the system information at the foot of the page drops to the app version alone. Nothing is lost: whichever cards you had open are open again the moment your C64 answers. The app waits a few seconds before rearranging, so a brief network hiccup does not shuffle the page under you, and it goes back the instant the machine is there again.
 
 The remaining cards cover drives, the printer, streams, and **Config actions**. That last one holds **Save**, which writes the current settings into flash on the connected Ultimate-family device so they survive a power cycle, along with Load, Reset, Revert, and the app's own named configuration snapshots.
 
