@@ -100,12 +100,14 @@ export const useListenActions = (): ListenAction[] => {
     const byId: Record<string, Omit<Tile, "entryId">> = {
       "action.sid-radio": { icon: Radio, label: t("home.tile.radio", "Radio") },
       /*
-       * "Resume tune", not "Resume". The machine's own Pause control renames itself to Resume
-       * while the C64 is paused, and both tiles are now in the same grid — two buttons with the
-       * same name, one resuming the machine and one resuming a tune. Two words wrap onto a second
-       * line exactly as "Save RAM" and "Load RAM" already do beside them.
+       * "Last tune", not "Resume". Two constraints meet here. The machine's own Pause control
+       * renames itself to Resume while the C64 is paused, and both tiles are in one grid now, so
+       * "Resume" alone would be two buttons of the same name meaning different things. And the
+       * word "Resume" does not fit: at four columns on a 320px screen the layout audit measured it
+       * needing 64px in a 59px tile. "Last" and "tune" each fit, and with the play glyph above them
+       * the tile reads as what it does.
        */
-      "action.resume-session": { icon: Play, label: t("home.tile.resume", "Resume tune"), detail: sessionLabel },
+      "action.resume-session": { icon: Play, label: t("home.tile.resume", "Last tune"), detail: sessionLabel },
       "action.recently-played": {
         icon: History,
         label: t("home.tile.recent", "Recent"),

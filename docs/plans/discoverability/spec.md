@@ -846,7 +846,9 @@ the safe controls and before the destructive ones. In the offline arrangement, w
 drawn closed, they are rendered on their own instead — they are the actions that need no device, and
 shutting them away exactly when they are the only usable ones would be the wrong way round.
 
-Resume is labelled "Resume tune". The machine's Pause control renames itself to Resume while the C64
-is paused, and one grid cannot hold two buttons of the same name meaning different things.
+Resume is labelled "Last tune". Two constraints meet: the machine's Pause control renames itself to
+Resume while the C64 is paused, so one grid cannot hold two buttons of that name meaning different
+things; and "Resume" does not fit a tile at four columns on a 320px screen, where the layout audit
+measured it needing 64px in a 59px box.
 
 System info moves to the foot of the page. It is reference rather than an action.

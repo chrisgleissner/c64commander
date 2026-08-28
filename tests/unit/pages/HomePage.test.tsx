@@ -1331,7 +1331,7 @@ describe("HomePage SID status", () => {
       "Save RAM",
       "Load RAM",
       "Radio",
-      "Resume tune",
+      "Last tune",
       "Recent",
       "Live ViewLive View is turned off in Settings",
       "Reset",
@@ -2404,7 +2404,7 @@ describe("HomePage offline arrangement", () => {
      */
     const resume = screen.getByTestId("home-tile-action.resume-session");
     expect(resume).toBeDisabled();
-    expect(resume.textContent).toBe("Resume tune");
+    expect(resume.textContent).toBe("Last tune");
 
     // Disabled, but with no line of its own: "Nothing has been opened yet" only restates a greyed
     // tile labelled Recent, and a line under every tile is what made this row look heavier than
