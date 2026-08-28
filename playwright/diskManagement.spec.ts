@@ -339,21 +339,35 @@ test.describe("Disk management", () => {
     await expect(powerButton).toBeVisible();
     await expect(powerButton).toHaveText("Turn Off");
 
-    const [mountBox, powerBox] = await Promise.all([mountButton.boundingBox(), powerButton.boundingBox()]);
+    /*
+     * Check each control against its own container, not against the other control.
+     *
+     * The claim worth holding is that both controls sit at the right-hand end of their row: the
+     * mount toggle at the end of the card header's action row, the power toggle at the end of the
+     * drive's control row. Comparing the two to each other measured something else. Their left
+     * edges are 31 px apart simply because the mount toggle is a 63 px icon button and "Turn Off"
+     * is 90 px wide, and their right edges sit in containers with different padding, which differed
+     * by 4.5 px locally and by 53.6 px on CI. Neither number says anything about whether the
+     * controls are where they should be.
+     */
+    const insetFromRowEnd = (button: ReturnType<Page["getByTestId"]>) =>
+      button.evaluate((el) => {
+        const row = el.parentElement;
+        if (!row) return Number.NaN;
+        return row.getBoundingClientRect().right - el.getBoundingClientRect().right;
+      });
+
+    const [mountBox, powerBox, mountInset, powerInset] = await Promise.all([
+      mountButton.boundingBox(),
+      powerButton.boundingBox(),
+      insetFromRowEnd(mountButton),
+      insetFromRowEnd(powerButton),
+    ]);
     if (mountBox && powerBox) {
-      /*
-       * Compare right edges, not left ones.
-       *
-       * Both controls are right-aligned: the mount toggle sits in the header's action row and the
-       * power toggle at the end of the drive's control row. They are not the same width — the mount
-       * toggle is a 63 px icon button, "Turn Off" is 90 px — so their left edges are 31 px apart
-       * even when both sit hard against the right edge of the card. The right edges are the aligned
-       * pair, and they are what the reader actually sees line up.
-       */
-      const edgeTolerance = 20;
       expect(powerBox.y).toBeGreaterThan(mountBox.y);
-      expect(Math.abs(powerBox.x + powerBox.width - (mountBox.x + mountBox.width))).toBeLessThanOrEqual(edgeTolerance);
     }
+    expect(mountInset, `mount toggle inset from the end of its row: ${mountInset}px`).toBeLessThanOrEqual(2);
+    expect(powerInset, `power toggle inset from the end of its row: ${powerInset}px`).toBeLessThanOrEqual(2);
 
     await clearTraces(page);
     await powerButton.click();

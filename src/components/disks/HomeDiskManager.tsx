@@ -2295,8 +2295,10 @@ export const HomeDiskManager = () => {
                   aria-label="Select directory for Soft IEC Default Path"
                 >
                   {/* Wraps rather than truncating: the path is arbitrary and on a 320 px screen
-                      "Select directory (/Temp/)" needed 270 px of the 241 available. */}
-                  <span className="line-clamp-2 break-all">Select directory ({softIecDefaultPath})</span>
+                      "Select directory (/Temp/)" needed 270 px of the 241 available. `break-words`
+                      rather than `break-all`, which split "/USB0/" across two lines inside a 240 px
+                      column although the whole path fits on one. */}
+                  <span className="line-clamp-2 break-words">Select directory ({softIecDefaultPath})</span>
                 </FocusableDiskButton>
               </div>
 
