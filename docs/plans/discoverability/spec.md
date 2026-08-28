@@ -791,3 +791,19 @@ a passing test suite does not catch: the code did what it said, and what it said
 | 10 | A latched transport command ran before the playlist was restored | The hook was tested alone, without the page's hook ordering |
 
 Every fix carries a test that fails when the fix is reverted.
+
+The review was run again after those fixes and found six more. The same pattern holds: the code did
+what it said, and what it said was not what the app needed.
+
+| # | Defect | Why the tests did not catch it |
+| --- | --- | --- |
+| 1 | The overlay read its keys off `event.key`, so a keypad D-pad (`code: "DpadDown"`) did nothing | Every test fired `key` alone, which no real keyboard sends |
+| 2 | The Recent sheet dropped disks and programs, though the tile counts them | Nothing was ever written to Recent but archive tunes until this branch |
+| 3 | A recent row stored the play-source KIND as its source id, so it could not be reopened | No test reopened a row from a configured local source |
+| 4 | Config search offered the previous device's cached items after a handover | No test switched device with a populated query cache |
+| 5 | Tier 2 left the previous query's rows selectable through the next debounce | The hook was asserted after settling, never during |
+| 6 | The follow-up device tour ran on past the device steps, repeating the rest | The driver was tested from step 1, where the range is the whole tour |
+
+Two lessons worth keeping. A test that constructs its own input tends to construct the input the code
+already handles — the `event.key` case is exactly that. And a store that gains a capability needs a
+writer and a reader in the same change, or the capability exists only in the type.
