@@ -63,7 +63,7 @@ node scripts/generate-test-sid.mjs --hz 900  --name "Tone-High" --waveform sawto
 # starts the first tune briefly and pauses it if the control is missing.
 ```
 
-### Three pieces of rig state that look like defects
+### Four pieces of rig state that look like defects
 
 - **The Ultimate's own master volume.** The app mutes the machine when playback pauses, and the
   gate pauses between stages, so `Audio Mixer / Vol Master` is often left at `OFF`. `av-clarity`
@@ -85,6 +85,11 @@ node scripts/generate-test-sid.mjs --hz 900  --name "Tone-High" --waveform sawto
   that the app-side assertions in the same stage still pass, because they drive the DOM rather than
   the touchscreen. Run `adb shell wm size reset && adb shell wm density reset`, relaunch the app,
   and re-attach `adb forward` before the gate.
+- **A machine left inside a previous stage's program.** `input` uploads a probe program and
+  `av-clarity` starts a tune, and neither takes on a machine that is still running something. The
+  probe's telemetry block never appears, which the stage reports as "joystick-probe did not start",
+  and the tone stimulus is heard as one burst instead of eight. `preflight` now resets the machine
+  before anything else, the same reset `silenceC64` already performs between the audible stages.
 
 The pitches are far apart and deliberately not an octave — an octave shares harmonics, and one
 tone is then mistaken for the other — and both are where a phone speaker actually works. The

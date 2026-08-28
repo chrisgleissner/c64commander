@@ -747,6 +747,18 @@ const preflight = async () => {
     );
   }
 
+  /*
+   * Start from a machine that is not running anything.
+   *
+   * `input` uploads a probe program and `av-clarity` starts a tune, and neither takes on a machine
+   * left inside a previous stage's program: the probe's telemetry block never appears, which the
+   * stage reports as "joystick-probe did not start", and the tone stimulus is heard as one burst
+   * instead of eight. Both passed immediately after a reset with no code change. `silenceC64`
+   * already resets between the audible stages, so this only extends the same treatment to the
+   * start of the run — and the machine is one the gate is about to drive anyway.
+   */
+  await silenceC64();
+
   const volume = await readVolume();
   if (volume.speaker > MAX_VOLUME) {
     throw new Error(
