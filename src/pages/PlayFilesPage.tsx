@@ -98,7 +98,7 @@ import { useCurrentTuneMd5 } from "@/pages/playFiles/hooks/useCurrentTuneMd5";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
 import { LikedTunesSheet } from "@/pages/playFiles/components/LikedTunesSheet";
 import { usePlayDeepLinks, useTransportCommands } from "@/pages/playFiles/hooks/usePlayDeepLinks";
-import { transportCommandBus } from "@/lib/input/latchedCommandBus";
+import { remoteInputRequestBus, transportCommandBus } from "@/lib/input/latchedCommandBus";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
@@ -332,6 +332,22 @@ export default function PlayFilesPage() {
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
   const { value: remoteInputEnabled } = useFeatureFlag("remote_input_enabled");
   const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
+  /*
+   * The Remote Input request, claimed here as well as on Home.
+   *
+   * The search handler publishes and navigates to Home only when the current page is neither Home
+   * nor Play, on the stated grounds that both own a sheet. Only Home subscribed, so activating the
+   * result from Play published a command nobody claimed: no navigation, no sheet, and the latch
+   * expired five seconds later. The claim inside the handler is what stops the mount-time drain
+   * delivering it a second time.
+   */
+  useEffect(() => {
+    if (remoteInputRequestBus.takePending() !== null) setRemoteInputSheetOpen(true);
+    return remoteInputRequestBus.subscribe(() => {
+      remoteInputRequestBus.takePending();
+      setRemoteInputSheetOpen(true);
+    });
+  }, []);
   const [likedTunesSheetOpen, setLikedTunesSheetOpen] = useState(false);
   const [sidRadioLauncherOpen, setSidRadioLauncherOpen] = useState(false);
   const [hvscSearchOpen, setHvscSearchOpen] = useState(false);

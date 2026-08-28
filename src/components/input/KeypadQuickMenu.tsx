@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -46,6 +46,8 @@ export function KeypadQuickMenu() {
   const remoteInputEnabled = useFeatureFlagValue("remote_input_enabled");
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState<QuickMenuSource>("keypad");
+  /** Set while this menu is closing in order to hand over to the search overlay. */
+  const handingOverToSearchRef = useRef(false);
   // Only a keypad user needs the page jumps and the key names. Someone who tapped the app bar has
   // the tab bar in front of them, and a key legend names keys their device may not have.
   const fromKeypad = source === "keypad";
@@ -95,7 +97,22 @@ export function KeypadQuickMenu() {
         screen, and an unbounded dialog simply ran off the bottom with no way to reach the last
         item. The header stays put and the list is what scrolls.
       */}
-      <DialogContent className="flex max-h-[85dvh] max-w-xs flex-col overflow-hidden" data-testid="keypad-quick-menu">
+      <DialogContent
+        className="flex max-h-[85dvh] max-w-xs flex-col overflow-hidden"
+        data-testid="keypad-quick-menu"
+        /*
+         * Focus is normally restored to whatever opened this menu. Not when the menu is closing in
+         * order to open the search overlay: this dialog animates out over 200 ms, Radix keeps it
+         * mounted until that finishes, and its focus scope then pulled focus off the search field
+         * the overlay had already taken — closing the soft keyboard a fifth of a second after it
+         * appeared.
+         */
+        onCloseAutoFocus={(event) => {
+          if (!handingOverToSearchRef.current) return;
+          handingOverToSearchRef.current = false;
+          event.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Quick menu</DialogTitle>
           <DialogDescription>
@@ -115,6 +132,7 @@ export function KeypadQuickMenu() {
             className="justify-start gap-3"
             data-testid="keypad-quick-menu-search"
             onClick={() => {
+              handingOverToSearchRef.current = true;
               setOpen(false);
               setTimeout(() => requestSearchOpen({ source: "quick-menu" }), 0);
             }}

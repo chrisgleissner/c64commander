@@ -70,6 +70,16 @@ test.describe("search overlay", () => {
       await page.getByTestId("keypad-quick-menu-search").click();
       await expect(page.getByTestId("search-overlay")).toBeVisible();
       await expect(page.getByTestId("keypad-quick-menu")).toHaveCount(0);
+
+      /*
+       * And the field still has focus once the menu has finished animating out. The dialog closes
+       * over 200 ms, Radix keeps it mounted until that ends, and its focus scope restored focus to
+       * the button that opened it — taking the caret off a field the user was about to type into
+       * and closing the soft keyboard a fifth of a second after it appeared. The other door
+       * asserts focus immediately; this one has to wait the animation out to be worth anything.
+       */
+      await page.waitForTimeout(600);
+      await expect(page.getByTestId("search-input")).toBeFocused();
     });
   });
 

@@ -77,6 +77,10 @@ const configEntries = (
   const matches: SearchEntry[] = [];
   const seen = new Set<string>();
   for (const [key, data] of cached) {
+    // Checked on the outer loop too. Breaking only out of the inner one let every further category
+    // add one more row past the limit, so a one-letter query against a device reporting twenty-odd
+    // categories returned roughly twenty more entries than the cap names.
+    if (matches.length >= LOCAL_RESULT_LIMIT) break;
     if (key[0] !== "c64-category") continue;
     // The epoch the entry was fetched under. React Query keeps the previous device's categories
     // until they are collected, and offering those would name items the current machine does not
