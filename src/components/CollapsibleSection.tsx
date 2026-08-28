@@ -52,7 +52,8 @@ export interface CollapsibleSectionProps {
    * collapsible. */
   actions?: ReactNode;
   /** Draw the icon without its tinted tile. For a card whose header already carries controls, the
-   * tile is decoration that costs the title about 46 CSS px of the row. */
+   * tile is decoration that costs the title about 46 CSS px of the row. Defaults to on whenever
+   * `actions` are present, because that is exactly the row that cannot spare them. */
   plainIcon?: boolean;
   /** Extra classes on the card root, for a caller that has to place the card itself. */
   className?: string;
@@ -105,7 +106,7 @@ export const CollapsibleSection = ({
   badge,
   headerRef,
   actions,
-  plainIcon = false,
+  plainIcon,
   className,
   testId,
   toggleTestId,
@@ -120,6 +121,19 @@ export const CollapsibleSection = ({
   // Drives the tighter padding and type below. It no longer closes anything: see the note where
   // the accordion effect used to be.
   const compact = profile === "compact";
+  /*
+   * A header carrying actions puts them on their own row on both phone profiles.
+   *
+   * Title, action and chevron cannot share one row at the largest text size: the toggle absorbs
+   * whatever the other two leave, which left "Drives" 3 CSS px of the 67 it needs at 320 px and
+   * 17 px at 392 px. Dropping the icon tile and the gutter (below) buys back about 59 px, which is
+   * not close to enough. `expanded` keeps the single row, where there is width for all three.
+   */
+  const stackActions = profile !== "expanded";
+  // A header carrying controls has no room for the icon's tinted tile: measured on a 392 px screen
+  // at the Larger text size, the tile plus its padding took 47 of the 156 px the toggle had, which
+  // left "Drives" 48 px for 66 px of text. The icon alone still carries the scanning cue.
+  const showPlainIcon = plainIcon ?? actions != null;
 
   /*
    * Closed on every profile, for now.
@@ -265,67 +279,82 @@ export const CollapsibleSection = ({
       // Clear the fixed guidance bar when this section is scrolled into view. The variable is 0px
       // whenever the bar is not showing, so nothing is reserved for it then.
       style={{ scrollMarginBottom: "var(--keypad-guidance-reserved-height, 0px)" }}
-      className={cn("overflow-hidden rounded-xl border border-border bg-card", className)}
+      className={cn("overflow-hidden rounded-panel border border-border bg-card", className)}
       data-testid={testId ?? `${scope}-section-${id}`}
       data-open={open ? "true" : "false"}
       data-section-label={sectionLabel ?? title}
     >
-      <div className="flex items-center gap-3 pr-1">
-        {/* The clickable toggle stops at the chevron; `actions` sits as a sibling rather
+      {/*
+        On the compact profile a header carrying actions gives them their own row.
+        Title, action and chevron cannot share 289 px at the largest text size: the toggle absorbs
+        whatever the other two leave, and on Home that left "Drives" and "Printers" 3 px of the 67
+        and 85 they need — the title was not shortened, it was gone. Every other profile keeps the
+        single row, so this costs height only where the alternative is an unreadable title.
+      */}
+      <div className={cn(stackActions && actions ? "flex flex-col" : "flex items-center gap-3 pr-1")}>
+        <div className={cn(stackActions && actions ? "flex items-center gap-3 pr-1" : "contents")}>
+          {/* The clickable toggle stops at the chevron; `actions` sits as a sibling rather
             than inside this button, because an interactive control (e.g. a Reset button)
             cannot nest inside another button without breaking the DOM and the a11y tree. */}
-        <button
-          type="button"
-          ref={headerRef}
-          onClick={toggle}
-          className={cn(
-            "flex min-w-0 flex-1 items-center justify-between text-left",
-            // Compact trims the header's own padding and gaps. Tuned for a 393 px screen, the
-            // original px-4/py-3/gap-3 spent about 12 CSS px per card that a 320x427 screen with
-            // 218 px of scrollable height cannot spare — roughly one extra card on screen.
-            // min-h-11 is the 44px touch floor. The compact profile trims padding and drops the icon
-            // tile, but it must not take the row below the floor: the target handset's touchscreen
-            // is off by default, not absent, and this app also runs on small touch phones.
-            //
-            // The other profiles keep the tile but no longer let it set the row height. A closed
-            // card is one line of text, and Settings stacks eleven of them; at py-3 around a
-            // p-2 tile each closed card cost 67.5 CSS px on the phone profile against 27 px of
-            // actual text. py-2 around a p-1.5 tile holds the row at 54 px, still above the 44 px
-            // touch floor, and gives back most of a screen over the length of the page.
-            compact ? "min-h-11 gap-2 px-3 py-1.5" : "min-h-11 gap-2.5 px-4 py-2",
-          )}
-          // The accessibility tree exposes the HTML id, not data-testid, so this is what
-          // makes the header addressable from outside the browser.
-          id={resolvedToggleTestId}
-          data-testid={resolvedToggleTestId}
-          aria-expanded={open}
-          aria-controls={resolvedBodyId}
-        >
-          <span className="flex min-w-0 flex-1 items-center gap-2.5">
-            {/*
+          <button
+            type="button"
+            ref={headerRef}
+            onClick={toggle}
+            className={cn(
+              // flex-1, so this button — not the actions beside it — absorbs whatever the row is
+              // short of. A content basis (flex-auto) shares the deficit instead, which moved the
+              // clipping onto the action: "Reset" was drawn in 66 px of the 70 it needs. The title
+              // gets its room back from the tile and the gutter below, not from the action.
+              "flex min-w-0 flex-1 items-center justify-between text-left",
+              // Compact trims the header's own padding and gaps. Tuned for a 393 px screen, the
+              // original px-4/py-3/gap-3 spent about 12 CSS px per card that a 320x427 screen with
+              // 218 px of scrollable height cannot spare — roughly one extra card on screen.
+              // min-h-11 is the 44px touch floor. The compact profile trims padding and drops the icon
+              // tile, but it must not take the row below the floor: the target handset's touchscreen
+              // is off by default, not absent, and this app also runs on small touch phones.
+              //
+              // The other profiles keep the tile but no longer let it set the row height. A closed
+              // card is one line of text, and Settings stacks eleven of them; at py-3 around a
+              // p-2 tile each closed card cost 67.5 CSS px on the phone profile against 27 px of
+              // actual text. py-2 around a p-1.5 tile holds the row at 54 px, still above the 44 px
+              // touch floor, and gives back most of a screen over the length of the page.
+              // A header carrying controls also gives up the wider gutter, for the same reason it gives
+              // up the icon tile: px-4 is 47 CSS px of the row at the Larger text size, which is more
+              // than "Printers" needs to be drawn in full.
+              compact || showPlainIcon ? "min-h-11 gap-2 px-3 py-1.5" : "min-h-11 gap-2.5 px-4 py-2",
+            )}
+            // The accessibility tree exposes the HTML id, not data-testid, so this is what
+            // makes the header addressable from outside the browser.
+            id={resolvedToggleTestId}
+            data-testid={resolvedToggleTestId}
+            aria-expanded={open}
+            aria-controls={resolvedBodyId}
+          >
+            <span className="flex min-w-0 flex-1 items-center gap-2.5">
+              {/*
               Compact drops the tile around the icon and keeps the icon itself. The tile was a 30 px
               box in a 47 px row, so it — not the title — set the height of every closed card, and a
               320x427 screen has 218 px of scrollable height to spend. The icon still carries the
               scanning cue; the box around it was decoration.
             */}
-            <span className={cn(compact || plainIcon ? "shrink-0" : "rounded-lg bg-primary/10 p-1.5")}>
-              <Icon
-                className={cn("text-primary", compact || plainIcon ? "h-[1.125rem] w-[1.125rem]" : "h-5 w-5")}
-                aria-hidden
-              />
-            </span>
-            <span className="flex min-w-0 flex-1 flex-col">
-              {/* Still a real heading: the section titles are how the page is navigated, by a
+              <span className={cn(compact || showPlainIcon ? "shrink-0" : "rounded-lg bg-primary/10 p-1.5")}>
+                <Icon
+                  className={cn("text-primary", compact || showPlainIcon ? "h-[1.125rem] w-[1.125rem]" : "h-5 w-5")}
+                  aria-hidden
+                />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                {/* Still a real heading: the section titles are how the page is navigated, by a
                   screen reader and by anyone scanning it. The badge sits beside the heading
                   rather than inside it, so the heading's accessible name stays the title alone. */}
-              {/*
+                {/*
                 Title and badge stay on one line, so every closed card is the same height.
                 Without `min-w-0`/`truncate` on the heading and `shrink-0` on the badge, a long
                 title next to a badge wrapped onto a second row: "Experimental Features" with its
                 "7/11 on" badge measured 64 CSS px against 38 for every other card on the page.
               */}
-              <span className="flex min-w-0 items-center gap-2">
-                {/*
+                <span className="flex min-w-0 items-center gap-2">
+                  {/*
                   `flex-1` when the title has alternative wordings, so it fills the row rather than
                   shrinking to its own text. `FittedText` measures the width it has been given, and
                   in a shrink-to-fit box that is whatever the current wording needs — which makes
@@ -333,39 +362,54 @@ export const CollapsibleSection = ({
                   to it and the longer one never fits again. Two identical drive cards side by side
                   ended up reading "A" and "Drive B".
                 */}
-                <h2 className={cn("min-w-0 truncate font-medium", titleVariants?.length ? "flex-1" : undefined)}>
-                  {titleVariants && titleVariants.length > 0 ? (
-                    <FittedText variants={titleVariants} label={title} />
-                  ) : (
-                    title
-                  )}
-                </h2>
-                {badge ? <span className="shrink-0">{badge}</span> : null}
-              </span>
-              {summary ? (
-                // Wrapped, not truncated: a summary cut off mid-word tells the reader less
-                // than no summary at all, and these pages are read on a narrow screen.
-                //
-                // When descriptions are off it becomes screen-reader-only rather than disappearing.
-                // Two reasons. It is still useful to someone who cannot see the layout the setting
-                // exists to protect. And the accessible NAME of this disclosure button is built from
-                // its contents, so dropping the summary shortened "Diagnostics Logs, health checks…"
-                // to "Diagnostics" — which then collided with the "Diagnostics" button inside the
-                // section, leaving two buttons on the page with one name.
-                <span
-                  className={cn(
-                    "leading-snug text-muted-foreground",
-                    showSummary ? (compact ? "text-sm" : "text-xs") : "sr-only",
-                  )}
-                >
-                  {summary}
+                  {/*
+                  Two lines, not one truncated line. A section title is how the page is navigated,
+                  and on the 320 px screen at the largest text size the title box is 127 px against
+                  titles needing up to 313 px, so a single line cut every long one: "Network
+                  services & timezone" was drawn as "Network services &…". Wrapping costs height
+                  only on the rows that need it — a title that fits still renders as one line, so
+                  most cards keep the uniform height the closed list depends on.
+                */}
+                  <h2
+                    className={cn(
+                      "min-w-0 break-words font-medium",
+                      // line-clamp still ends in an ellipsis, but at two lines rather than one, so
+                      // it is the backstop for a title no shorter wording exists for.
+                      titleVariants?.length ? "flex-1 truncate" : "line-clamp-2",
+                    )}
+                  >
+                    {titleVariants && titleVariants.length > 0 ? (
+                      <FittedText variants={titleVariants} label={title} />
+                    ) : (
+                      title
+                    )}
+                  </h2>
+                  {badge ? <span className="shrink-0">{badge}</span> : null}
                 </span>
-              ) : null}
+                {summary ? (
+                  // Wrapped, not truncated: a summary cut off mid-word tells the reader less
+                  // than no summary at all, and these pages are read on a narrow screen.
+                  //
+                  // When descriptions are off it becomes screen-reader-only rather than disappearing.
+                  // Two reasons. It is still useful to someone who cannot see the layout the setting
+                  // exists to protect. And the accessible NAME of this disclosure button is built from
+                  // its contents, so dropping the summary shortened "Diagnostics Logs, health checks…"
+                  // to "Diagnostics" — which then collided with the "Diagnostics" button inside the
+                  // section, leaving two buttons on the page with one name.
+                  <span
+                    className={cn(
+                      "leading-snug text-muted-foreground",
+                      showSummary ? (compact ? "text-sm" : "text-xs") : "sr-only",
+                    )}
+                  >
+                    {summary}
+                  </span>
+                ) : null}
+              </span>
             </span>
-          </span>
-        </button>
-        {actions}
-        {/*
+          </button>
+          {stackActions && actions ? null : actions}
+          {/*
           Fixed order across every card: title, then any actions, then the chevron hard against the
           right edge. The chevron used to sit inside the toggle button, which put `actions` to its
           RIGHT and moved the chevron's horizontal position from card to card depending on whether
@@ -378,23 +422,27 @@ export const CollapsibleSection = ({
           tab order, so it adds no second "expand" node for a screen reader or the keypad ring: it
           is a second touch target for the same action the header row already exposes.
         */}
-        <button
-          type="button"
-          onClick={toggle}
-          tabIndex={-1}
-          aria-hidden="true"
-          // A real touch target, so 44x44 and not just 44 tall.
-          className="flex size-11 shrink-0 items-center justify-center"
-          // Deliberately NOT prefixed with the toggle's testid: callers select every header on a
-          // page with a prefix match (`^home-section-toggle-`), and a chevron caught by that
-          // selector is clicked as if it were another header — which closes the card the real
-          // header just opened.
-          data-testid={`${scope}-section-chevron-${id}`}
-        >
-          <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
-            <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
-          </motion.span>
-        </button>
+          <button
+            type="button"
+            onClick={toggle}
+            tabIndex={-1}
+            aria-hidden="true"
+            // A real touch target, so 44x44 and not just 44 tall.
+            className="flex size-11 shrink-0 items-center justify-center"
+            // Deliberately NOT prefixed with the toggle's testid: callers select every header on a
+            // page with a prefix match (`^home-section-toggle-`), and a chevron caught by that
+            // selector is clicked as if it were another header — which closes the card the real
+            // header just opened.
+            data-testid={`${scope}-section-chevron-${id}`}
+          >
+            <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
+              <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
+            </motion.span>
+          </button>
+        </div>
+        {stackActions && actions ? (
+          <div className="flex flex-wrap items-center justify-end gap-2 px-3 pb-2">{actions}</div>
+        ) : null}
       </div>
 
       <AnimatePresence initial={false}>

@@ -51,7 +51,7 @@ const PROBE_PRESENTATION = [
 
 const OUTCOME_TONE: Record<string, string> = {
   Success: "text-success",
-  Partial: "text-amber-500",
+  Partial: "text-warning",
   Fail: "text-destructive",
   Skipped: "text-muted-foreground",
 };
@@ -184,7 +184,10 @@ export function HealthHistoryPopup({ open, onClose, history: providedHistory }: 
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">No data</div>
         ) : (
           <>
-            <div className="rounded-xl border border-border/70 bg-card p-3" data-testid="health-history-timeline-panel">
+            <div
+              className="rounded-panel border border-border/70 bg-card p-3"
+              data-testid="health-history-timeline-panel"
+            >
               <div
                 ref={trackRef}
                 className="relative w-full overflow-hidden rounded-md bg-background"
@@ -197,12 +200,17 @@ export function HealthHistoryPopup({ open, onClose, history: providedHistory }: 
                     <button
                       key={segment.id}
                       type="button"
-                      className="absolute inset-y-0 border-0 p-0"
+                      className="absolute inset-y-0 p-0"
                       style={{
                         left: `${segment.startColumn}px`,
                         width: `${widthPx}px`,
                         backgroundColor: HEALTH_TIMELINE_STATE_COLORS[segment.state],
                         opacity: selectedSegmentId === segment.id ? 0.78 : 1,
+                        // Fixed near-black + near-white, not app tokens: this ring must read
+                        // against whatever HEALTH_TIMELINE_STATE_COLORS the segment happens to
+                        // be (five different hues, now themed) in either light or dark app
+                        // theme, so it needs the same "readable against arbitrary content"
+                        // guarantee --media-scrim/--media-reticle give video overlays.
                         boxShadow:
                           selectedSegmentId === segment.id
                             ? "inset 0 0 0 2px rgba(15, 23, 42, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.85)"
@@ -230,7 +238,7 @@ export function HealthHistoryPopup({ open, onClose, history: providedHistory }: 
 
             {selectedSegment ? (
               <div
-                className="mt-3 rounded-xl border border-border/70 bg-card p-3"
+                className="mt-3 rounded-panel border border-border/70 bg-card p-3"
                 data-testid="health-history-selection-overlay"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -259,7 +267,7 @@ export function HealthHistoryPopup({ open, onClose, history: providedHistory }: 
                 </div>
 
                 <div
-                  className="mt-4 rounded-xl border border-border/70 bg-background/60 p-3"
+                  className="mt-4 rounded-panel border border-border/70 bg-background/60 p-3"
                   data-testid="health-history-event-list"
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -284,7 +292,7 @@ export function HealthHistoryPopup({ open, onClose, history: providedHistory }: 
                       return (
                         <div
                           key={event.id}
-                          className="rounded-xl border border-border/70 bg-card"
+                          className="rounded-panel border border-border/70 bg-card"
                           data-testid={`health-history-event-row-${event.id}`}
                         >
                           <button

@@ -8,8 +8,10 @@
 
 import { useState } from "react";
 
+import { ChevronDown, MonitorSpeaker } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { addLog } from "@/lib/logging";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
@@ -18,7 +20,7 @@ import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { saveMirrorC64Audio } from "@/lib/config/appSettings";
 
 /**
- * "Listen on: [Local] [Remote] [Both]" (spec §12.5, Track B / LE2).
+ * "Listen: [Here] [C64] [Both]" (spec §12.5, Track B / LE2).
  *
  * The control asks ONE question — which speakers you hear the tune on — and
  * every option names speakers, so the middle one is simply the union of the
@@ -54,6 +56,7 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
   // Latched when the device refuses to stream, so a route that demonstrably
   // does not work stops being offered.
   const [streamingFailed, setStreamingFailed] = useState(false);
+  const [open, setOpen] = useState(false);
 
   /**
    * "Both" is HIDDEN, not disabled, when the C64's audio cannot reach this
@@ -112,43 +115,64 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
         variant={active ? "default" : "outline"}
         data-testid={testId}
         aria-pressed={active}
-        onClick={() => select(value)}
-        // `px-1` rather than the size variant's `px-3`: the grid column decides the width, so
-        // the padding only sets a minimum, and `px-3` puts "Remote" over a third of a 320px row.
-        // `min-w-0` is deliberately NOT set — `buttonVariants` carries the 44px `min-w-11` floor.
-        className="px-1"
+        onClick={() => {
+          select(value);
+          setOpen(false);
+        }}
+        className="w-full justify-start px-2"
       >
         {title}
       </Button>
     );
   };
 
+  const currentLabel = selected === "local" ? "Here" : selected === "both" ? "Both" : "C64";
+
   return (
-    // Label above, options in an equal-width grid sized to how many are actually rendered.
-    // A wrapping row cost a whole second line at 320 CSS px — three buttons need 305px of a
-    // 278px column — making a 44px control 96px tall on the screen with the least room. Equal
-    // columns hold one line and weight the options equally, which is what they are.
-    // Measured in docs/plans/segmented-control/PROPOSAL.md.
-    <div
-      role="group"
-      aria-label="Listen on"
-      data-testid="playback-engine-toggle"
-      className={cn("space-y-1.5 min-w-0", className)}
-    >
-      <Label className="text-xs font-medium text-muted-foreground">Listen on</Label>
-      {/* `auto-fit` rather than a fixed column count: each option is one word, so it cannot wrap
-          out of a track that is too narrow for it. At the largest Text size on a 320px screen
-          "Remote" needed 88px against a 78px track and was clipped. With a track floor the row
-          drops to fewer columns instead, and each option keeps its whole label. */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(6rem,1fr))] gap-2">
-        {/* Local, Remote, Both — in that order, so the row reads as a progression from this device
-            outwards to both. "Remote" rather than the device's name or host: the header already says
-            which device is connected, repeating it here spent the row's width on something already on
-            screen, and the wording now matches Remote Input. */}
-        {option("local", "Local", "playback-engine-local")}
-        {option("c64", "Remote", "playback-engine-c64")}
+    /*
+     * An output chip, not a row of three buttons.
+     *
+     * The three-button block sat at the top of the card and took 126 CSS px of a 427 px screen — 30%
+     * of the viewport for a routing preference — which pushed the transport, the reason the page
+     * exists, to within 118 px of the bottom. Routing is the established job of a single output
+     * affordance (AirPlay, Cast, Spotify Connect all do this): one quiet element showing where the
+     * sound goes, which expands only when you want to move it. It now sits with the volume control,
+     * so one row answers where the sound goes and how loud it is.
+     *
+     * "Here", not "Local": the app also runs on tablets and a desktop browser, and `SOURCE_LABELS`
+     * spends "Local" on a different question — which files you are browsing, not which speakers you
+     * are using. One D-pad stop instead of three, and every option is still one press away inside.
+     */
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          data-testid="playback-engine-toggle"
+          /* The selected destination, readable while the chooser is closed. The options carry
+             aria-pressed, but they exist only while the popover is open, so nothing outside the
+             component could otherwise tell where the sound is going. */
+          data-engine={selected}
+          aria-label={`Listen on ${currentLabel}. Change where the sound comes out.`}
+          className={cn("h-11 shrink-0 gap-1 rounded-full bg-muted px-2.5 text-xs font-normal", className)}
+        >
+          {/* MonitorSpeaker, not Volume2: the mute button sits immediately to the right of this
+              chip and already carries a speaker glyph, so two of them side by side read as one
+              control drawn twice. This one means "output destination", which is the question the
+              chip answers. */}
+          <MonitorSpeaker className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+          <span>{currentLabel}</span>
+          <ChevronDown className="h-3 w-3 text-muted-foreground" aria-hidden />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-40 p-1" data-testid="playback-engine-options">
+        {/* Real buttons, not menu items: the keypad ring walks buttons, and each keeps the testid
+            the HIL harness and the unit tests already address. */}
+        {option("local", "Here", "playback-engine-local")}
+        {option("c64", "C64", "playback-engine-c64")}
         {canStreamBack ? option("both", "Both", "playback-listen-both") : null}
-      </div>
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }

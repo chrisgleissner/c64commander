@@ -191,9 +191,11 @@ If the device is hard to reach, start in **Connection**. If it answers but feels
 
 **Connection** also holds your saved devices: their name, host, HTTP, FTP and Telnet ports, and network password. Saving checks that the web service answers before the device is kept; FTP and Telnet are stored as given and are tested by a health check.
 
-**Appearance** is local to the app and never touches your C64. It sets the theme, the text size, the display profile, card descriptions, whether the app runs full screen, and whether it follows the phone's rotation or stays in portrait or landscape.
+**Appearance** is local to the app and never touches your C64. It sets the theme, the style, the text size, the display profile, card descriptions, whether the app runs full screen, and whether it follows the phone's rotation or stays in portrait or landscape.
 
-**Text size** enlarges every part of the app, in four steps from **Default** to **Largest**. Reach for it when the app is harder to read than you would like; the display profile beside it changes the layout rather than the type. At the largest sizes the tab bar along the bottom scrolls sideways rather than pushing a tab off the edge, so every page stays reachable.
+**Style** is a set of colours, corner rounding and shading — a look, layered on top of **Theme**, which stays the light-or-dark switch. Pick one directly, or choose **Match my device** to follow the Color Scheme your C64 Ultimate is already set to; that reads the device once when you connect, not continuously, and falls back with a note if it can't be read yet. A few styles come in one shade only, in which case Theme is disabled and Settings says why.
+
+**Text size** enlarges every part of the app, in four steps from **Default** to **Largest**. Reach for it when the app is harder to read than you would like; the display profile beside it changes the layout rather than the type. At the largest sizes the tab bar along the bottom scrolls sideways rather than pushing a tab off the edge, so every page stays reachable. Reach a page another way — the Quick Menu, a number key, or a link from elsewhere in the app — and the bar scrolls that tab into view, so the bar always shows you where you are.
 
 **Card descriptions** is the one-line summary under each card's title, on every page built from cards. It starts off, because on a small screen it costs about half the height of every closed card; turn it on if you would rather read what a card holds than remember it. The Quick Menu switches the same thing on and off without leaving the page you are on.
 
@@ -408,13 +410,13 @@ Your C64 will play any of it, and so will your phone or tablet for most tunes. T
 
 #### Where the music plays
 
-When a SID tune is playing, the Play page offers **Listen on**. You have a choice of machine:
+When a SID tune is playing, the Play page shows an **output button** beside the volume slider, marked with the destination the sound is going to. Press it to choose:
 
-- **Local** — your phone or tablet plays the tune itself. Your C64 need not even be switched on.
-- **Remote** — your C64 plays it, through its own SID chip.
+- **Here** — your phone or tablet plays the tune itself. Your C64 need not even be switched on.
+- **C64** — your C64 plays it, through its own SID chip.
 - **Both** — your C64 plays it and also sends the sound across your network, so you hear it in both places.
 
-**Both** is offered when Live View and its audio are switched on, and it takes itself away again if your C64 declines to send the sound. The sound leaves the machine over its **Ethernet** connection, so a C64 that is only on Wi-Fi cannot supply it. **Listen on** appears for SID tunes alone — programs and disks always run on the C64, because that is the only machine that can run them.
+**Both** is offered when Live View and its audio are switched on, and it takes itself away again if your C64 declines to send the sound. The sound leaves the machine over its **Ethernet** connection, so a C64 that is only on Wi-Fi cannot supply it. The output button appears for SID tunes alone — programs and disks always run on the C64, because that is the only machine that can run them.
 
 To play music on its own, your phone or tablet needs a copy of two programs built into every C64: the **KERNAL** and **BASIC** ROMs. Many tunes call into them, and without them those tunes start and then play nothing. The ROMs are under copyright and cannot be shipped with an app, so C64 Commander reads them from your own machine — by itself, the first time you play a tune here while the C64 is connected. There is nothing to set up. The copies stay on your phone or tablet, and are never uploaded, never shared, and never included in a diagnostics report. Read them only from a machine that is yours, or that you have permission to use.
 
@@ -430,7 +432,7 @@ These apply to tunes playing on your phone or tablet. On the C64 the buttons ste
 
 **Volume** and **Mute** follow whichever machine is sounding: playing here, they change this tune alone and leave your ringer and notifications as they were; playing on the C64, they move the machine’s own mixer. Your phone or tablet will either play a tune itself or play the sound sent from your C64, never both at once — whichever you start last takes over.
 
-The rest is under **Settings → SID Radio**. **Crossfade** overlaps one tune into the next, both audible while the first fades away: **Off** for a clean cut, or **Short** (0.6s), **Medium** (1.5s), **Long** (3s), or **Longest** (4s). It starts at Off. Only your phone or tablet can sound two tunes at once, so the control is grayed out while **Listen on** is set to the C64.
+The rest is under **Settings → SID Radio**. **Crossfade** overlaps one tune into the next, both audible while the first fades away: **Off** for a clean cut, or **Short** (0.6s), **Medium** (1.5s), **Long** (3s), or **Longest** (4s). It starts at Off. Only your phone or tablet can sound two tunes at once, so the control is grayed out while the output is set to the C64.
 
 There are two versions of the SID chip — the **6581** and the **8580** — and music written for one sounds a little different on the other. Most files say which the composer used, and those always play on the chip they name. For the many older files that say nothing, turn on **Match my Commodore 64** and the app reads the chip out of your own machine; **Otherwise use** picks between 6581 and 8580 for when it has not read one yet. A line underneath tells you which is in use at the moment.
 
@@ -912,7 +914,7 @@ Preferred locations are marked first.
 | CommoServe | **Play → Add items**, Disks → Add disks, Settings → Online Archive | On by default. You can turn it off in Settings → Stable Features. |
 | Demo Mode | **Settings → Connection** | Off to begin with. Turn it on in Settings → Stable Features. |
 | Background playback scheduling | **Play**, Android app permissions | Always on in this edition. |
-| Display profile, theme, text size, card descriptions, orientation | **Settings → Appearance** | Screenshots in this manual use the medium profile. |
+| Display profile, theme, style, text size, card descriptions, orientation | **Settings → Appearance** | Screenshots in this manual use the medium profile. |
 | Settings transfer (export and import) | **Settings → Diagnostics** | App settings, feature switches and safety tuning. Saved devices and passwords stay behind. |
 | Notification style and duration | **Settings → Notifications** | Show everything, or errors alone. |
 | Device Safety | **Settings → Device Safety** | Leave it on Auto. It starts Conservative while it identifies the device and firmware, then chooses the appropriate profile. See Device Safety Modes. |

@@ -21,7 +21,7 @@ type DiagnosticsSeverityMeta = {
 
 export const DIAGNOSTICS_SEVERITY_META: Record<DiagnosticsSeverity, DiagnosticsSeverityMeta> = {
   error: { glyph: "E", label: "ERROR", colorClass: "text-destructive" },
-  warn: { glyph: "W", label: "WARN", colorClass: "text-amber-600" },
+  warn: { glyph: "W", label: "WARN", colorClass: "text-warning" },
   info: { glyph: "I", label: "INFO", colorClass: "text-muted-foreground" },
   debug: { glyph: "D", label: "DEBUG", colorClass: "text-c64-blue" },
 };

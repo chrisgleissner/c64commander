@@ -187,7 +187,7 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
         ))}
         {governor.overridden && (
           <span
-            className="ml-1 rounded bg-destructive/15 px-1.5 py-0.5 text-xs font-medium text-destructive"
+            className="ml-1 rounded-sm bg-destructive/15 px-1.5 py-0.5 text-xs font-medium text-destructive"
             data-testid="stream-stats-override"
             title={governor.reason}
           >

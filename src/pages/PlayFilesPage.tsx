@@ -2424,11 +2424,10 @@ export default function PlayFilesPage() {
           ) : null}
           <ProfileSplitSection minColumnWidth="22rem" testId="play-primary-layout">
             <div
-              className="bg-card border border-border rounded-xl p-4 space-y-4"
+              className="bg-card border border-border rounded-panel p-4 space-y-4"
               data-section-label="Playback controls"
               data-testid="play-section-playback"
             >
-              {playbackEngine.localEngineEnabled && currentItem?.category === "sid" ? <PlaybackEngineToggle /> : null}
               <PlaybackControlsCard
                 hasCurrentItem={Boolean(currentItem)}
                 currentItemLabel={currentDisplay?.title ?? null}
@@ -2514,11 +2513,24 @@ export default function PlayFilesPage() {
                   // routes must not be blended: while the C64 route's handlers also ran on this
                   // device, its synchronisation loop pulled the slider back to the Ultimate's level
                   // a moment after every drag.
-                  <VolumeControls
-                    {...volumeBinding}
-                    previewIntervalMs={volumeSliderPreviewIntervalMs}
-                    useNativeRangeInput={isAndroid}
-                  />
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    {/* Where the sound goes, then how loud it is — one row answering both. The
+                        chip used to be a three-button block at the top of the card, which spent
+                        30% of a 427 px screen on a preference and pushed the transport off it. */}
+                    {playbackEngine.localEngineEnabled && currentItem?.category === "sid" ? (
+                      <PlaybackEngineToggle />
+                    ) : null}
+                    {/* basis-48 with flex-wrap: the volume row keeps the chip's line while there is
+                        room for both, and drops to its own line at the largest Text size rather
+                        than pushing the dB readout past the 320 px edge. */}
+                    <div className="min-w-0 flex-1 basis-48">
+                      <VolumeControls
+                        {...volumeBinding}
+                        previewIntervalMs={volumeSliderPreviewIntervalMs}
+                        useNativeRangeInput={isAndroid}
+                      />
+                    </div>
+                  </div>
                 }
                 shuffleEnabled={shuffleEnabled}
                 onShuffleChange={(value) => setShuffleEnabled(Boolean(value))}

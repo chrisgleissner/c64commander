@@ -1016,7 +1016,7 @@ export default function ConfigBrowserPage() {
             section gap, the same shape as HomePage's `gap-4` override. */}
         <PageStack className={profile === "compact" ? undefined : "gap-3"}>
           {!status.isConnected ? (
-            <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 text-center">
+            <div className="bg-destructive/10 border border-destructive/20 rounded-panel p-4 text-center">
               <p className="text-sm text-destructive font-medium">Not connected</p>
               <p className="text-xs text-muted-foreground mt-1">Configure connection in Settings</p>
             </div>

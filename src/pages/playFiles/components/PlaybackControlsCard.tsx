@@ -521,10 +521,17 @@ export const PlaybackControlsCard = ({
             ranking pair directly above it, which is flush, and against the progress bar and the
             metadata line, which are flush too. Distributing them puts the first and last on the
             card's own edges, so every row of this card now starts and ends on the same two lines. */}
-        <div className="flex items-center justify-between gap-2" data-testid="playback-transport-row">
+        {/*
+          Centred, with only Play carrying a fill.
+          Four equally-outlined buttons spread across the row gave the card no focal point: squinted
+          at from a distance every one of them read the same, and the thing you press most was
+          indistinguishable from the three you press rarely. Play is now a filled circle and the
+          other three are ghosts, which is the media-player idiom and what the squint test rewards.
+        */}
+        <div className="flex items-center justify-center gap-1.5" data-testid="playback-transport-row">
           <Button
             ref={previousFocusRef}
-            variant="outline"
+            variant="ghost"
             size="icon"
             onClick={() => {
               // A hold already scrubbed; do not also change track.
@@ -551,6 +558,7 @@ export const PlaybackControlsCard = ({
             ref={playFocusRef}
             variant={isPlaying ? "destructive" : "default"}
             size="icon"
+            className="size-14 rounded-full"
             onClick={isPlaying ? onStop : onPlay}
             disabled={!hasPlaylist || isPlaylistLoading}
             data-c64-persistent-active={isPlaying && !isPaused ? "true" : undefined}
@@ -559,11 +567,11 @@ export const PlaybackControlsCard = ({
             aria-label={isPlaying ? "Stop" : "Play"}
             title={isPlaying ? "Stop" : "Play"}
           >
-            {isPlaying ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            {isPlaying ? <Square className="h-5 w-5" /> : <Play className="h-5 w-5" />}
           </Button>
           <Button
             ref={pauseFocusRef}
-            variant="outline"
+            variant="ghost"
             size="icon"
             onClick={onPauseResume}
             disabled={!canPause || isPlaylistLoading}
@@ -576,7 +584,7 @@ export const PlaybackControlsCard = ({
           </Button>
           <Button
             ref={nextFocusRef}
-            variant="outline"
+            variant="ghost"
             size="icon"
             onClick={() => {
               // A hold already scrubbed; do not also change track.
@@ -704,7 +712,7 @@ export const PlaybackControlsCard = ({
                       />
                       <span
                         aria-hidden
-                        className="absolute -top-5 left-0 -translate-x-1/2 whitespace-nowrap rounded bg-primary px-1 text-xs font-medium leading-4 tabular-nums text-primary-foreground"
+                        className="absolute -top-5 left-0 -translate-x-1/2 whitespace-nowrap rounded-sm bg-primary px-1 text-xs font-medium leading-4 tabular-nums text-primary-foreground"
                         data-testid="playback-awaited-timestamp"
                       >
                         {pendingSeek.targetLabel}

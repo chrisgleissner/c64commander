@@ -2005,7 +2005,10 @@ export const HomeDiskManager = () => {
                       "min-w-0 overflow-hidden text-xs text-muted-foreground",
                       profile === "compact"
                         ? "grid gap-2 whitespace-normal"
-                        : "flex items-center gap-1 whitespace-nowrap",
+                        : // flex-wrap: each label/control pair stays whole (whitespace-nowrap) but
+                          // the row moves them onto a second line instead of running past the card
+                          // and the viewport, which it did by 53 px at the largest text size.
+                          "flex flex-wrap items-center gap-1 whitespace-nowrap",
                     )}
                   >
                     <span className="shrink-0">Bus ID</span>
@@ -2242,7 +2245,9 @@ export const HomeDiskManager = () => {
               <div
                 className={cn(
                   "min-w-0 overflow-hidden text-xs text-muted-foreground",
-                  profile === "compact" ? "grid gap-2 whitespace-normal" : "flex items-center gap-1 whitespace-nowrap",
+                  profile === "compact"
+                    ? "grid gap-2 whitespace-normal"
+                    : "flex flex-wrap items-center gap-1 whitespace-nowrap",
                 )}
               >
                 <span className="shrink-0">Bus ID</span>
@@ -2289,12 +2294,21 @@ export const HomeDiskManager = () => {
                   data-testid="drive-default-path-select-soft-iec"
                   aria-label="Select directory for Soft IEC Default Path"
                 >
-                  <span className="truncate">Select directory ({softIecDefaultPath})</span>
+                  {/* Wraps rather than truncating: the path is arbitrary and on a 320 px screen
+                      "Select directory (/Temp/)" needed 270 px of the 241 available. `break-words`
+                      rather than `break-all`, which split "/USB0/" across two lines inside a 240 px
+                      column although the whole path fits on one. */}
+                  <span className="line-clamp-2 break-words">Select directory ({softIecDefaultPath})</span>
                 </FocusableDiskButton>
               </div>
 
               <div
-                className={cn("min-w-0 justify-between gap-2", profile === "compact" ? "grid" : "flex items-center")}
+                className={cn(
+                  "min-w-0 justify-between gap-2",
+                  // flex-wrap so the buttons drop below rather than squeezing the mounted-disk
+                  // label to 60 CSS px of the 182 it needs at the largest text size.
+                  profile === "compact" ? "grid" : "flex flex-wrap items-center",
+                )}
               >
                 <ResponsivePathText
                   path={softIecMountedLabel}
@@ -2371,7 +2385,7 @@ export const HomeDiskManager = () => {
             Disks
           </h3>
 
-          <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+          <div className="bg-card border border-border rounded-panel p-4 space-y-4">
             <SelectableActionList
               title="Disk list"
               selectionLabel="items"

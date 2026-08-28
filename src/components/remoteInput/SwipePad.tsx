@@ -103,7 +103,7 @@ export const SwipePad = ({ heldInputs, onHeldInputsChange, disabled = false, siz
     <div
       ref={zoneRef}
       className={cn(
-        "relative flex touch-none items-center justify-center overflow-hidden rounded-xl border border-dashed border-border bg-muted text-center text-xs text-muted-foreground",
+        "relative flex touch-none items-center justify-center overflow-hidden rounded-panel border border-dashed border-border bg-muted text-center text-xs text-muted-foreground",
         disabled && "opacity-40",
       )}
       style={{ width: sizePx, height: sizePx }}

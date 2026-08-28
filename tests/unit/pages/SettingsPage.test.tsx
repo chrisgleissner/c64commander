@@ -45,6 +45,7 @@ import { applyScreenOrientationMode } from "@/lib/native/screenOrientation";
 import * as deviceSafetySettings from "@/lib/config/deviceSafetySettings";
 import { exportSettingsJson, importSettingsJson } from "@/lib/config/settingsTransfer";
 import { variant } from "@/generated/variant";
+import { APP_STYLES, DEFAULT_APP_STYLE_ID } from "@/generated/appStyles";
 import {
   loadConfigWriteIntervalMs,
   loadDemoModeEnabled,
@@ -95,6 +96,9 @@ const {
   mockPrimeDiagnosticsOverlaySuppression,
   mockRequestDiagnosticsOpen,
   mockSetTheme,
+  mockSetStyleId,
+  mockRefreshDeviceColorScheme,
+  appStyleStateRef,
   mockSetListPreviewLimit,
   mockSwitchSavedDevice,
   mockEvaluateNewDeviceReachability,
@@ -116,6 +120,18 @@ const {
   mockPrimeDiagnosticsOverlaySuppression: vi.fn(),
   mockRequestDiagnosticsOpen: vi.fn(),
   mockSetTheme: vi.fn(),
+  mockSetStyleId: vi.fn(),
+  mockRefreshDeviceColorScheme: vi.fn(async () => undefined),
+  appStyleStateRef: {
+    current: {
+      storedStyleId: "modem-grey" as string | null,
+      isMatchMyDevice: false,
+      matchedDeviceStyleId: null as string | null,
+      styleId: "modem-grey",
+      mode: "light" as "light" | "dark",
+      themeClamped: false,
+    },
+  },
   mockSetListPreviewLimit: vi.fn(),
   mockSwitchSavedDevice: vi.fn(async () => undefined),
   mockEvaluateNewDeviceReachability: vi.fn(async () => ({ status: "reachable" })),
@@ -258,6 +274,16 @@ vi.mock("@/components/ThemeProvider", () => ({
   useThemeContext: () => ({
     theme: "light",
     setTheme: mockSetTheme,
+    resolvedTheme: "light",
+  }),
+}));
+vi.mock("@/components/AppStyleProvider", () => ({
+  useAppStyleContext: () => ({
+    ...appStyleStateRef.current,
+    setStyleId: mockSetStyleId,
+    styles: APP_STYLES,
+    defaultStyleId: DEFAULT_APP_STYLE_ID,
+    refreshDeviceColorScheme: mockRefreshDeviceColorScheme,
   }),
 }));
 
@@ -700,6 +726,16 @@ beforeEach(() => {
     lastProbeSucceededAtMs: null,
     lastProbeFailedAtMs: null,
   };
+  appStyleStateRef.current = {
+    storedStyleId: "modem-grey",
+    isMatchMyDevice: false,
+    matchedDeviceStyleId: null,
+    styleId: "modem-grey",
+    mode: "light",
+    themeClamped: false,
+  };
+  mockSetStyleId.mockClear();
+  mockRefreshDeviceColorScheme.mockClear();
   mockGetConnectionSnapshot.mockReturnValue({ state: "REAL_CONNECTED" });
   deviceDiscoveryStateRef.current = {
     phase: "idle",
@@ -1435,9 +1471,9 @@ describe("SettingsPage", () => {
     expect(aboutIndex).toBeGreaterThan(deviceSafetyIndex);
     expect(aboutIndex).toBe(headings.length - 1);
 
-    const connectionSection = screen.getByRole("heading", { name: "Connection" }).closest(".rounded-xl");
+    const connectionSection = screen.getByRole("heading", { name: "Connection" }).closest(".rounded-panel");
     const configHeading = screen.queryByRole("heading", { name: "Config" });
-    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-panel");
 
     expect(connectionSection).toBeTruthy();
     expect(configHeading).toBeNull();
@@ -1676,7 +1712,9 @@ describe("SettingsPage", () => {
   it("changes theme when selecting a new option", () => {
     renderSettingsPage();
 
-    fireEvent.click(screen.getByRole("button", { name: /dark/i }));
+    // Scoped to the Theme group: "Dark only" style badges (e.g. Amber Glow, Vault Black) also
+    // match a loose /dark/i name query once the Style picker's rows are in the same section.
+    fireEvent.click(within(screen.getByRole("group", { name: "Theme" })).getByRole("button", { name: /dark/i }));
 
     expect(mockSetTheme).toHaveBeenCalledWith("dark");
   });
@@ -1695,6 +1733,144 @@ describe("SettingsPage", () => {
     const buttons = within(sectionBody("appearance")).getAllByRole("button");
     const themeLabels = buttons.slice(0, 3).map((button) => button.textContent?.trim() ?? "");
     expect(themeLabels).toEqual(["Auto", "Light", "Dark"]);
+  });
+
+  describe("appearance style picker", () => {
+    it("renders a row for every generated style plus Match my device", () => {
+      renderSettingsPage();
+
+      for (const style of APP_STYLES) {
+        expect(screen.getByTestId(`settings-app-style-${style.id}`)).toBeInTheDocument();
+      }
+      expect(screen.getByTestId("settings-app-style-match-my-device")).toBeInTheDocument();
+    });
+
+    it("marks dark-only styles and leaves both-mode styles unmarked", () => {
+      renderSettingsPage();
+
+      for (const style of APP_STYLES) {
+        const row = screen.getByTestId(`settings-app-style-${style.id}`);
+        if (style.modes.length === 1) {
+          expect(within(row).getByText("Dark only")).toBeInTheDocument();
+        } else {
+          expect(within(row).queryByText("Dark only")).not.toBeInTheDocument();
+        }
+      }
+    });
+
+    it("highlights the currently selected style", () => {
+      appStyleStateRef.current.storedStyleId = "petrol-teal";
+      appStyleStateRef.current.styleId = "petrol-teal";
+      renderSettingsPage();
+
+      expect(screen.getByTestId("settings-app-style-petrol-teal")).toHaveClass("bg-primary");
+      expect(screen.getByTestId("settings-app-style-modem-grey")).not.toHaveClass("bg-primary");
+    });
+
+    it("highlights the resolved default style when nothing has been stored yet", () => {
+      // Fresh install: no stored id, so the compiled default is what is on screen and the row
+      // for it has to read as selected rather than leaving the whole group looking unset.
+      appStyleStateRef.current.storedStyleId = null;
+      appStyleStateRef.current.styleId = "modem-grey";
+      renderSettingsPage();
+
+      expect(screen.getByTestId("settings-app-style-modem-grey")).toHaveClass("bg-primary");
+      expect(screen.getByTestId("settings-app-style-petrol-teal")).not.toHaveClass("bg-primary");
+    });
+
+    it("calls setStyleId when a style row is clicked", () => {
+      renderSettingsPage();
+
+      fireEvent.click(screen.getByTestId("settings-app-style-vault-black"));
+
+      expect(mockSetStyleId).toHaveBeenCalledWith("vault-black");
+    });
+
+    it("calls setStyleId with the sentinel when Match my device is clicked", () => {
+      renderSettingsPage();
+
+      fireEvent.click(screen.getByTestId("settings-app-style-match-my-device"));
+
+      expect(mockSetStyleId).toHaveBeenCalledWith("match-my-device");
+    });
+
+    it("disables the Theme row and explains why when the selected style is dark-only", () => {
+      appStyleStateRef.current.storedStyleId = "vault-black";
+      appStyleStateRef.current.styleId = "vault-black";
+      appStyleStateRef.current.mode = "dark";
+      appStyleStateRef.current.themeClamped = true;
+      renderSettingsPage();
+
+      const themeGroup = screen.getByRole("group", { name: "Theme" });
+      for (const button of within(themeGroup).getAllByRole("button")) {
+        expect(button).toBeDisabled();
+      }
+      expect(screen.getByTestId("settings-theme-clamped-note")).toHaveTextContent(
+        "Vault Black only renders dark, so Theme has no effect while it's selected.",
+      );
+    });
+
+    it("does not disable the Theme row for a style that follows the theme normally", () => {
+      renderSettingsPage();
+
+      const themeGroup = screen.getByRole("group", { name: "Theme" });
+      for (const button of within(themeGroup).getAllByRole("button")) {
+        expect(button).not.toBeDisabled();
+      }
+      expect(screen.queryByTestId("settings-theme-clamped-note")).not.toBeInTheDocument();
+    });
+
+    it("reports the matched style when Match my device has resolved one", () => {
+      appStyleStateRef.current.storedStyleId = "match-my-device";
+      appStyleStateRef.current.isMatchMyDevice = true;
+      appStyleStateRef.current.matchedDeviceStyleId = "vault-black";
+      appStyleStateRef.current.styleId = "vault-black";
+      renderSettingsPage();
+
+      expect(screen.getByTestId("settings-app-style-match-status")).toHaveTextContent(
+        "Matches the device's Color Scheme right now: Vault Black.",
+      );
+    });
+
+    it("falls back to the default style visibly when the device has not been probed", () => {
+      appStyleStateRef.current.storedStyleId = "match-my-device";
+      appStyleStateRef.current.isMatchMyDevice = true;
+      appStyleStateRef.current.matchedDeviceStyleId = null;
+      appStyleStateRef.current.styleId = DEFAULT_APP_STYLE_ID;
+      renderSettingsPage();
+
+      expect(screen.getByTestId("settings-app-style-match-status")).toHaveTextContent(
+        /The device hasn't reported a Color Scheme yet — using Modem Grey until it connects or you refresh the connection\./,
+      );
+    });
+
+    it("calls refreshDeviceColorScheme alongside a manual connection refresh that lands connected", async () => {
+      vi.mocked(discoverConnection).mockResolvedValueOnce(undefined);
+      mockGetConnectionSnapshot.mockReturnValue({ state: "REAL_CONNECTED" });
+      renderSettingsPage();
+
+      fireEvent.click(screen.getByLabelText("Refresh connection"));
+
+      await waitFor(() => {
+        expect(discoverConnection).toHaveBeenCalledWith("manual");
+      });
+      await waitFor(() => {
+        expect(mockRefreshDeviceColorScheme).toHaveBeenCalled();
+      });
+    });
+
+    it("does not call refreshDeviceColorScheme when a manual refresh finishes offline", async () => {
+      vi.mocked(discoverConnection).mockResolvedValueOnce(undefined);
+      mockGetConnectionSnapshot.mockReturnValue({ state: "OFFLINE_NO_DEMO" });
+      renderSettingsPage();
+
+      fireEvent.click(screen.getByLabelText("Refresh connection"));
+
+      await waitFor(() => {
+        expect(discoverConnection).toHaveBeenCalledWith("manual");
+      });
+      expect(mockRefreshDeviceColorScheme).not.toHaveBeenCalled();
+    });
   });
 
   it("persists the chosen text size and applies it to the document", () => {
@@ -2078,7 +2254,7 @@ describe("SettingsPage", () => {
 
     renderSettingsPage();
 
-    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-panel");
     expect(deviceSafetySection).toBeTruthy();
     const trigger = within(deviceSafetySection as HTMLElement).getByRole("combobox");
     fireEvent.change(trigger, { target: { value: "RELAXED" } });
@@ -2117,7 +2293,7 @@ describe("SettingsPage", () => {
 
       renderSettingsPage();
 
-      const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+      const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-panel");
       expect(deviceSafetySection).toBeTruthy();
 
       const options = within(deviceSafetySection as HTMLElement).getAllByRole("option");
@@ -2140,7 +2316,7 @@ describe("SettingsPage", () => {
     try {
       renderSettingsPage();
 
-      const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+      const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-panel");
       expect(deviceSafetySection).toBeTruthy();
       const trigger = within(deviceSafetySection as HTMLElement).getByRole("combobox");
       fireEvent.change(trigger, { target: { value: "CONSERVATIVE" } });
@@ -2350,7 +2526,7 @@ describe("SettingsPage", () => {
   it("enables debug logging when switching to troubleshooting mode", () => {
     renderSettingsPage();
 
-    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-panel");
     expect(deviceSafetySection).toBeTruthy();
     const trigger = within(deviceSafetySection as HTMLElement).getByRole("combobox");
     fireEvent.change(trigger, { target: { value: "TROUBLESHOOTING" } });
@@ -2361,7 +2537,7 @@ describe("SettingsPage", () => {
   it("shows the actual Config write spacing default in Device Safety advanced controls", () => {
     renderSettingsPage();
 
-    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-xl");
+    const deviceSafetySection = screen.getByRole("heading", { name: "Device Safety" }).closest(".rounded-panel");
 
     expect(deviceSafetySection).toBeTruthy();
     const configWriteInput = within(deviceSafetySection as HTMLElement).getByLabelText("Config write spacing (ms)");

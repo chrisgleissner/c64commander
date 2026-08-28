@@ -7,10 +7,10 @@
  */
 
 export const diskGroupColors = [
-  { chip: "bg-blue-500/20 border-blue-500/40", text: "text-blue-700" },
-  { chip: "bg-emerald-500/20 border-emerald-500/40", text: "text-emerald-700" },
-  { chip: "bg-indigo-500/20 border-indigo-500/40", text: "text-indigo-700" },
-  { chip: "bg-teal-500/20 border-teal-500/40", text: "text-teal-700" },
+  { chip: "bg-category-1/20 border-category-1/40", text: "text-category-1" },
+  { chip: "bg-category-2/20 border-category-2/40", text: "text-category-2" },
+  { chip: "bg-category-3/20 border-category-3/40", text: "text-category-3" },
+  { chip: "bg-category-4/20 border-category-4/40", text: "text-category-4" },
 ];
 
 export const pickDiskGroupColor = (value: string) => {

@@ -63,7 +63,7 @@ node scripts/generate-test-sid.mjs --hz 900  --name "Tone-High" --waveform sawto
 # starts the first tune briefly and pauses it if the control is missing.
 ```
 
-### Two pieces of rig state that look like defects
+### Four pieces of rig state that look like defects
 
 - **The Ultimate's own master volume.** The app mutes the machine when playback pauses, and the
   gate pauses between stages, so `Audio Mixer / Vol Master` is often left at `OFF`. `av-clarity`
@@ -76,6 +76,20 @@ node scripts/generate-test-sid.mjs --hz 900  --name "Tone-High" --waveform sawto
   no children in the DOM at all — so a control inside it is absent rather than merely off screen,
   and a click on it silently does nothing. The joystick harness opens Quick Actions and Live View
   itself before looking for the Game Mode tile and the Watch switch.
+- **A display-size override left over from a small-screen audit.** `adb shell wm size 480x640` and
+  `wm density 240` stay in force until they are reset, and the gate does not detect them. `input`
+  taps the on-screen stick at coordinates derived from the page's own `devicePixelRatio`, and under
+  an override those taps land where the stick is not: the probe PRG starts and its banner reads
+  correctly, but the machine reports `0 frames` held and `0 cells` moved, which looks like a broken
+  `machine:input` path. `av-clarity` fails alongside it with "only 0 tone bursts found". The tell is
+  that the app-side assertions in the same stage still pass, because they drive the DOM rather than
+  the touchscreen. Run `adb shell wm size reset && adb shell wm density reset`, relaunch the app,
+  and re-attach `adb forward` before the gate.
+- **A machine left inside a previous stage's program.** `input` uploads a probe program and
+  `av-clarity` starts a tune, and neither takes on a machine that is still running something. The
+  probe's telemetry block never appears, which the stage reports as "joystick-probe did not start",
+  and the tone stimulus is heard as one burst instead of eight. `preflight` now resets the machine
+  before anything else, the same reset `silenceC64` already performs between the audible stages.
 
 The pitches are far apart and deliberately not an octave — an octave shares harmonics, and one
 tone is then mistaken for the other — and both are where a phone speaker actually works. The

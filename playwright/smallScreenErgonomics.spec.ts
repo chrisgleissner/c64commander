@@ -35,6 +35,10 @@ import { TAB_ROUTES } from "../src/lib/navigation/tabRoutes";
  * `smallScreenLayoutIntegrity.spec.ts` measures that, and the two are meant to be read
  * and changed together: this one stops type being shrunk to make something fit, and
  * that one stops type being enlarged without being given room.
+ *
+ * Runs on the default appearance style only. `appearanceGeometryInvariance.spec.ts` proves that
+ * switching style changes zero geometry, so a type-size or reach floor measured here holds for all
+ * twelve generated palettes without re-running this spec under each one.
  */
 
 /**

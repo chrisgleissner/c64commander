@@ -182,8 +182,13 @@ export const describeCaptureBudgetViolation = (violation: CaptureBudgetViolation
  * they do already show only what a device shows — but the device is not one of the four profiles
  * above, and no capture code decides their size. Listed rather than pattern-matched so that adding
  * one is a deliberate act.
+ *
+ * `styles/` holds the appearance-style gallery (docs/plans/appearance-styles/spec.md section 11):
+ * `playwright/appStylesGallery.spec.ts` screenshots one widget section at a time, at a viewport
+ * (500x1200) sized to fit every section's content rather than to match a supported device profile.
+ * These are developer reference images of a palette, not documentation of an app screen.
  */
-export const NON_APP_CAPTURE_PREFIXES: readonly string[] = ["launch/auth-challenge/"];
+export const NON_APP_CAPTURE_PREFIXES: readonly string[] = ["launch/auth-challenge/", "styles/"];
 
 export const isNonAppCapture = (relativePath: string): boolean =>
   NON_APP_CAPTURE_PREFIXES.some((prefix) => relativePath.startsWith(prefix));

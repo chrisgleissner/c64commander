@@ -154,7 +154,7 @@ const DEFAULT_TYPES = new Set<EvidenceType>(["Problems", "Actions"]);
 const ACTIVITY_PAGE_SIZE = 20;
 const HEADER_TONE: Record<OverallHealthState["state"], string> = {
   Healthy: "text-success",
-  Degraded: "text-amber-500",
+  Degraded: "text-warning",
   Unhealthy: "text-destructive",
   Idle: "text-muted-foreground",
   Unavailable: "text-muted-foreground",
@@ -162,8 +162,8 @@ const HEADER_TONE: Record<OverallHealthState["state"], string> = {
 
 const SEVERITY_DOT_CLASS: Record<DiagnosticsSeverity, string> = {
   error: "bg-destructive",
-  warn: "bg-amber-500",
-  info: "bg-blue-500",
+  warn: "bg-warning",
+  info: "bg-diagnostics-system",
   debug: "bg-muted-foreground",
 };
 
@@ -1660,14 +1660,14 @@ export function DiagnosticsDialog({
     >
       {profile === "compact" ? (
         <div
-          className="fixed inset-x-4 top-[5.25rem] z-[220] max-h-[min(16rem,calc(100dvh-7rem))] overflow-y-auto overscroll-contain rounded-lg border border-border bg-background py-1 shadow-lg"
+          className="fixed inset-x-4 top-[5.25rem] z-[220] max-h-[min(16rem,calc(100dvh-7rem))] overflow-y-auto overscroll-contain rounded-lg border border-border bg-background py-1 shadow-elev-2"
           data-testid="diagnostics-overflow-panel"
         >
           {overflowPanelContent}
         </div>
       ) : (
         <div
-          className="absolute right-0 top-full z-10 mt-1 w-max max-w-[min(13rem,calc(100vw-2rem))] rounded-lg border border-border bg-background py-1 shadow-lg"
+          className="absolute right-0 top-full z-10 mt-1 w-max max-w-[min(13rem,calc(100vw-2rem))] rounded-lg border border-border bg-background py-1 shadow-elev-2"
           data-testid="diagnostics-overflow-panel"
         >
           {overflowPanelContent}
@@ -1707,7 +1707,10 @@ export function DiagnosticsDialog({
 
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-4">
             {/* Phase 1: Compact header */}
-            <section className="shrink-0 rounded-xl border border-border/70 bg-card" data-testid="diagnostics-header">
+            <section
+              className="shrink-0 rounded-panel border border-border/70 bg-card"
+              data-testid="diagnostics-header"
+            >
               <div className="flex items-start justify-between gap-2 px-3 py-2">
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <p
@@ -1787,11 +1790,11 @@ export function DiagnosticsDialog({
             {/* Phase 3: Unified filter bar */}
             {/* Wraps to a second line rather than clipping. On a 320px screen the
                 summary text and the funnel button leave under 60px for the active
-                filter chips, which is not enough for one of them; `rounded-2xl` is
+                filter chips, which is not enough for one of them; `rounded-panel` is
                 indistinguishable from `rounded-full` at the one-line height this has
                 on every other screen, and stays a sane shape when it does wrap. */}
             <div
-              className="mt-3 flex flex-wrap items-center gap-1.5 rounded-2xl border border-border/70 bg-card px-2.5 py-1.5 text-xs"
+              className="mt-3 flex flex-wrap items-center gap-1.5 rounded-panel border border-border/70 bg-card px-2.5 py-1.5 text-xs"
               data-testid="filters-collapsed-bar"
             >
               <span className="shrink-0 font-semibold text-foreground">Filters</span>

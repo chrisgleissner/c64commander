@@ -87,7 +87,7 @@ const MetricToggle = ({ mode, onChange }: { mode: HeatMapMetricMode; onChange: (
         onClick={() => onChange(m)}
         aria-pressed={mode === m}
         className={cn(
-          "px-2.5 py-0.5 text-xs font-medium rounded border transition-colors",
+          "px-2.5 py-0.5 text-xs font-medium rounded-sm border transition-colors",
           mode === m
             ? "border-primary bg-primary/10 text-primary"
             : "border-border text-muted-foreground hover:border-primary/40",
@@ -218,7 +218,7 @@ export function HeatMapPopup({ open, onClose, variant, traceEvents }: Props) {
           </span>
         </div>
 
-        <div className="mb-3 shrink-0 rounded-xl border border-border/70 bg-muted/20 px-3 py-2">
+        <div className="mb-3 shrink-0 rounded-panel border border-border/70 bg-muted/20 px-3 py-2">
           <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-muted-foreground">
             <span>Low signal</span>
             <span>High signal</span>

@@ -117,8 +117,26 @@ export interface StreamUdpPlugin {
    * the plugin reassemble VIC datagrams into whole frames natively and emit `videoframe` events
    * instead of per-packet `datagram` events.
    */
-  bind(options: { name: string; port: number; group?: string; assemble?: boolean }): Promise<StreamUdpBindResult>;
+  bind(options: {
+    name: string;
+    port: number;
+    group?: string;
+    assemble?: boolean;
+    /** Accept packets only from this host (name or IPv4); omitted/empty accepts any sender. */
+    source?: string;
+  }): Promise<StreamUdpBindResult>;
   close(options: { name: string }): Promise<void>;
+  /**
+   * Point an already-bound stream at a different sender, without tearing the socket down.
+   *
+   * The mirror's groups are multicast and every Ultimate defaults to the same ones, so a second
+   * machine streaming into them is received alongside the selected one. For video that is not merely
+   * noisy: the two carry independent frame-number spaces, so an unfiltered assembler finishes one
+   * machine's frame with the other's lines. The plugin drops a foreign sender's packets before any
+   * sequence or frame accounting, so the app shows the right frames without needing the other
+   * machine to stop. Called again on a device switch.
+   */
+  setExpectedSource(options: { name: string; host: string | null }): Promise<void>;
   /**
    * Set the native keep-rate for an assembled video stream, in permille (0–1000; 1000 = present
    * every frame). The assembler decimates natively — skipping the Base64 encode + bridge of frames

@@ -36,6 +36,9 @@ import { cn } from "@/lib/utils";
 import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { useThemeContext } from "@/components/ThemeProvider";
+import { useAppStyleContext } from "@/components/AppStyleProvider";
+import { MATCH_MY_DEVICE_SENTINEL } from "@/lib/appStyles/matchMyDevice";
+import type { AppStyle, AppStyleColors, AppStyleMode } from "@/generated/appStyles";
 import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorFields";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { Input } from "@/components/ui/input";
@@ -240,6 +243,36 @@ import type { DeviceDiscoveryCandidate } from "@/lib/deviceDiscovery/types";
 
 type Theme = "light" | "dark" | "system";
 
+/**
+ * The colours an app-style row's swatch should preview: whichever mode the style declares that is
+ * closest to the app's own resolved theme, so the swatch shows what selecting the row would
+ * actually produce right now rather than an arbitrary mode.
+ */
+const resolveAppStyleSwatchColors = (style: AppStyle, preferredMode: AppStyleMode): AppStyleColors | undefined => {
+  const mode: AppStyleMode = style.modes.includes(preferredMode) ? preferredMode : style.modes[0];
+  return mode === "dark" ? style.dark?.colors : style.light?.colors;
+};
+
+const AppStyleSwatch = ({ colors }: { colors: AppStyleColors }) => (
+  <span className="flex shrink-0 items-center gap-1" aria-hidden="true">
+    {[colors.background, colors.primary, colors.accent].map((hsl, index) => (
+      <span
+        key={index}
+        className="h-4 w-4 rounded-full border border-border/60"
+        style={{ backgroundColor: `hsl(${hsl})` }}
+      />
+    ))}
+  </span>
+);
+
+/**
+ * Shared by every Style row. `flex-wrap` is load-bearing: at the largest Text size on a 320px
+ * screen the name and the swatch together exceed the row, and without it the name box shrinks
+ * below the width of its own longest word and clips it.
+ */
+const APP_STYLE_ROW_CLASS =
+  "h-auto w-full flex-wrap justify-between gap-x-3 gap-y-1 whitespace-normal px-3 py-2 text-left";
+
 const DEVICE_PRODUCT_DISPLAY_LABELS = {
   C64U: "C64U",
   U64: "U64",
@@ -276,7 +309,18 @@ export default function SettingsPage() {
   const switchSavedDevice = useSavedDeviceSwitching();
   const connectionSnapshot = useConnectionState();
   const deviceDiscovery = useDeviceDiscovery();
-  const { theme, setTheme } = useThemeContext();
+  const { theme, setTheme, resolvedTheme } = useThemeContext();
+  const {
+    setStyleId,
+    isMatchMyDevice,
+    matchedDeviceStyleId,
+    styleId: resolvedStyleId,
+    mode: resolvedStyleMode,
+    themeClamped,
+    styles: appStyles,
+    defaultStyleId: defaultAppStyleId,
+    refreshDeviceColorScheme,
+  } = useAppStyleContext();
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
   const { flags, resolved, setFlag } = useFeatureFlags();
   const { limit: listPreviewLimit, setLimit: setListPreviewLimit } = useListPreviewLimit();
@@ -876,6 +920,10 @@ export default function SettingsPage() {
       if (getConnectionSnapshot().state === "REAL_CONNECTED") {
         setHostnameError(null);
         setReachabilitySuggestion(null);
+        // "Match my device" reads the Ultimate's own Color Scheme on connect and on manual
+        // refresh only, never on a poll (spec.md section 7.4, decision D4) — this is that
+        // second trigger.
+        void refreshDeviceColorScheme();
       }
     } catch (error) {
       reportUserError({
@@ -1201,6 +1249,7 @@ export default function SettingsPage() {
                       key={option.value}
                       type="button"
                       variant={isActive ? "default" : "outline"}
+                      disabled={themeClamped}
                       onClick={wrapUserEvent(
                         () => setTheme(option.value),
                         "select",
@@ -1218,10 +1267,121 @@ export default function SettingsPage() {
                       )}
                     >
                       <Icon className={`h-6 w-6 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
-                      <span className={`text-sm ${isActive ? "font-medium" : ""}`}>{option.label}</span>
+                      {/* break-normal here too: the global :where(span) rule (src/index.css) matches
+                          this span directly, so the button's own break-normal above does not cascade
+                          to it — a real device wrapped "Light" as "Ligh"/"t" without this. */}
+                      <span className={`break-normal text-sm ${isActive ? "font-medium" : ""}`}>{option.label}</span>
                     </Button>
                   );
                 })}
+              </div>
+              {/* A plain <p>, not HelperText: HelperText hides on the compact profile unless
+                  "Card descriptions" is on, but a control that vanishes is harder to understand
+                  than one that explains itself (spec.md section 7.1, rule 2), so this disclosure
+                  has to stay visible everywhere, including on the keypad-first compact device
+                  this rule matters most for. */}
+              {themeClamped ? (
+                <p className="text-xs leading-snug text-muted-foreground" data-testid="settings-theme-clamped-note">
+                  {appStyles.find((style) => style.id === resolvedStyleId)?.name ?? resolvedStyleId} only renders{" "}
+                  {resolvedStyleMode}, so Theme has no effect while it&apos;s selected.
+                </p>
+              ) : null}
+
+              <div className="space-y-2 rounded-lg border border-border/70 p-3" data-testid="settings-app-style">
+                <Label className="text-sm font-medium">Style</Label>
+                {/* Full-width rows, not the Theme/Text-size grid pattern: each row carries a name,
+                    an optional "Dark only" marker and a live 3-colour swatch, which needs more
+                    width than a 2-column grid leaves at 320px. Always one column, for every
+                    profile, for that reason — not only on compact. */}
+                <div className="grid grid-cols-1 gap-2" role="group" aria-label="Style">
+                  {appStyles.map((style) => {
+                    // resolvedStyleId, not storedStyleId: on a fresh install nothing is stored yet
+                    // and the compiled default is what is actually on screen, so it is the row that
+                    // must read as selected.
+                    const isActive = !isMatchMyDevice && resolvedStyleId === style.id;
+                    // Preview each style under the theme the user has actually set, clamped to
+                    // whichever mode that style declares — the same rule resolveAppearance uses,
+                    // so the swatch never lies about what selecting the row would produce.
+                    const swatchColors = resolveAppStyleSwatchColors(style, resolvedTheme);
+                    return (
+                      <Button
+                        key={style.id}
+                        type="button"
+                        variant={isActive ? "default" : "outline"}
+                        aria-pressed={isActive}
+                        onClick={() => setStyleId(style.id)}
+                        className={APP_STYLE_ROW_CLASS}
+                        data-testid={`settings-app-style-${style.id}`}
+                      >
+                        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                          {/* break-normal overrides the global overflow-wrap: anywhere
+                              (src/index.css), which otherwise wraps a name one character per line
+                              inside this min-width: 0 box. */}
+                          <span className="break-normal text-sm font-medium">{style.name}</span>
+                          {style.modes.length === 1 ? (
+                            /* text-[11px] is the smallest size the compact profile compensates
+                               (to 0.9rem); anything smaller falls below the 14px legibility floor
+                               on a 320px screen. */
+                            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                              Dark only
+                            </span>
+                          ) : null}
+                        </span>
+                        {swatchColors ? <AppStyleSwatch colors={swatchColors} /> : null}
+                      </Button>
+                    );
+                  })}
+                  {(() => {
+                    const matchedStyle = matchedDeviceStyleId
+                      ? appStyles.find((style) => style.id === matchedDeviceStyleId)
+                      : undefined;
+                    const swatchColors = matchedStyle
+                      ? resolveAppStyleSwatchColors(matchedStyle, resolvedTheme)
+                      : undefined;
+                    return (
+                      <Button
+                        type="button"
+                        variant={isMatchMyDevice ? "default" : "outline"}
+                        aria-pressed={isMatchMyDevice}
+                        onClick={() => setStyleId(MATCH_MY_DEVICE_SENTINEL)}
+                        className={APP_STYLE_ROW_CLASS}
+                        data-testid="settings-app-style-match-my-device"
+                      >
+                        <span className="break-normal text-sm font-medium">Match my device</span>
+                        {swatchColors ? (
+                          <AppStyleSwatch colors={swatchColors} />
+                        ) : (
+                          <span className="shrink-0 text-xs text-muted-foreground">?</span>
+                        )}
+                      </Button>
+                    );
+                  })()}
+                </div>
+                {/* Plain <p>, not HelperText, for the same reason as the Theme-clamp note above:
+                    spec.md section 7.4 requires the fallback to be said, not just applied, and
+                    that has to hold on the compact profile too. */}
+                {isMatchMyDevice ? (
+                  matchedDeviceStyleId ? (
+                    <p
+                      className="text-xs leading-snug text-muted-foreground"
+                      data-testid="settings-app-style-match-status"
+                    >
+                      Matches the device&apos;s Color Scheme right now:{" "}
+                      {appStyles.find((style) => style.id === matchedDeviceStyleId)?.name ?? matchedDeviceStyleId}.
+                    </p>
+                  ) : (
+                    <p
+                      className="text-xs leading-snug text-muted-foreground"
+                      data-testid="settings-app-style-match-status"
+                    >
+                      The device hasn&apos;t reported a Color Scheme yet — using{" "}
+                      {appStyles.find((style) => style.id === defaultAppStyleId)?.name ?? defaultAppStyleId} until it
+                      connects or you refresh the connection.
+                    </p>
+                  )
+                ) : (
+                  <HelperText>Styles are curated colour palettes; pick one to preview it immediately.</HelperText>
+                )}
               </div>
 
               <div className="space-y-2 rounded-lg border border-border/70 p-3">
@@ -1441,13 +1601,31 @@ export default function SettingsPage() {
                           }}
                           data-testid={`settings-device-row-${device.id}`}
                         >
+                          {/*
+                            Name on the first line, address on the second, and neither truncated.
+                            One line of "C64U · 192.168.1.148" needs 230 CSS px against the 184 the
+                            row has on a 320 px screen, and a device whose name IS its host was
+                            drawn as "C64U · c64u" in 47 px — a string that repeats itself and then
+                            cuts the half that identifies the machine. The product code is dropped
+                            on compact (the row is already under a C64U heading) and the host is
+                            omitted when the name is the host, so the second line carries only what
+                            the first does not already say.
+                          */}
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-foreground">
+                            <p className="line-clamp-2 break-words text-sm font-medium text-foreground">
                               {buildSavedDevicePrimaryLabel(device)}
                             </p>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {productCode} · {device.host}
-                            </p>
+                            {(() => {
+                              const name = buildSavedDevicePrimaryLabel(device).trim().toLowerCase();
+                              const host = device.host.trim();
+                              const detail = host.toLowerCase() === name ? "" : host;
+                              const secondary = isCompactProfile
+                                ? detail
+                                : [productCode, detail].filter(Boolean).join(" · ");
+                              return secondary ? (
+                                <p className="break-all text-xs text-muted-foreground">{secondary}</p>
+                              ) : null;
+                            })()}
                           </div>
                           {isSelected ? (
                             <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-xs font-medium text-muted-foreground">

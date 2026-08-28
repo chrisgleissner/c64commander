@@ -52,6 +52,11 @@ export const variantConfig = {
     displayNamePascalCase: "C64commander",
     exportedFileBasename: "c64commander",
     featureFlags: {
+      app_styles_gallery_enabled: {
+        developer_only: true,
+        enabled: false,
+        visible_to_user: false,
+      },
       audio_mirror_enabled: {
         developer_only: false,
         enabled: true,

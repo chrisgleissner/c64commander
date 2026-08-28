@@ -68,7 +68,7 @@ export function AvMirrorMinimap({ viewport, onSeek, session, className }: AvMirr
       tabIndex={0}
       aria-label="Live view minimap — arrow keys pan the viewport"
       className={cn(
-        "relative w-28 shrink-0 cursor-pointer overflow-hidden rounded border border-white/40 bg-black touch-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400",
+        "relative w-28 shrink-0 cursor-pointer overflow-hidden rounded-sm border border-media-on-scrim/40 bg-media-letterbox touch-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400",
         className,
       )}
       onPointerDown={(event) => {
@@ -89,7 +89,7 @@ export function AvMirrorMinimap({ viewport, onSeek, session, className }: AvMirr
         style={{ imageRendering: "pixelated", aspectRatio: "384 / 272" }}
       />
       <div
-        className="pointer-events-none absolute rounded-sm border-2 border-amber-400 bg-amber-300/10"
+        className="pointer-events-none absolute rounded-sm shadow-[inset_0_0_0_2px_theme(colors.amber.400)] bg-amber-300/10"
         style={{
           left: `${rect.x * 100}%`,
           top: `${rect.y * 100}%`,

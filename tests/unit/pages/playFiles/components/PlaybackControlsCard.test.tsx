@@ -261,17 +261,20 @@ describe("PlaybackControlsCard", () => {
     expect(screen.getByTestId("playlist-reshuffle")).toBeEnabled();
   });
 
-  it("spreads the transport across the card so its ends sit on the card's own edges", () => {
-    // The buttons are a fixed 44 px, so in the previous `grid-cols-4` they sat at the left of cells
-    // wider than themselves and the row stopped short of the right edge — visibly ragged against
-    // the ranking pair above it and the progress bar below it, both of which are flush.
+  it("centres the transport around a single filled Play, so the card has one focal point", () => {
+    // Amended deliberately. Spreading four equally-outlined buttons edge to edge gave the card no
+    // focal point: squinted at from across a room every one of them read the same, so the control
+    // pressed constantly was indistinguishable from the three pressed rarely. Play now carries the
+    // only fill and the others are ghosts, which is the media-player idiom. The order is still
+    // prev, play, pause, next — the assertion that actually protects muscle memory.
     render(<PlaybackControlsCard {...buildProps()} />);
 
     const row = screen.getByTestId("playback-transport-row");
-    expect(row.className).toContain("justify-between");
+    expect(row.className).toContain("justify-center");
     expect(row.className).not.toMatch(/\bgrid-cols-4\b/);
     expect(row.firstElementChild).toHaveAttribute("data-testid", "playlist-prev");
     expect(row.lastElementChild).toHaveAttribute("data-testid", "playlist-next");
+    expect(screen.getByTestId("playlist-play").className).toContain("rounded-full");
   });
 
   it("keeps track metadata and transport controls stacked full-width", () => {

@@ -296,7 +296,7 @@ export function LightingSummaryCard({
 
   return (
     <div
-      className="bg-card border border-border rounded-xl p-3 space-y-2"
+      className="bg-card border border-border rounded-panel p-3 space-y-2"
       data-section-label={sectionLabel}
       data-testid={`${testIdPrefix}-summary`}
     >

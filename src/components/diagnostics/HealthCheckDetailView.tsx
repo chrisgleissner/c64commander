@@ -28,12 +28,12 @@ const PRESENTATION_ORDER = ["REST", "FTP", "TELNET", "CONFIG", "RASTER", "JIFFY"
 
 const outcomeColorClass: Record<string, string> = {
   Success: "text-success",
-  Partial: "text-amber-500",
+  Partial: "text-warning",
   Fail: "text-destructive",
   Skipped: "text-muted-foreground",
   SUCCESS: "text-success",
   FAILED: "text-destructive",
-  TIMEOUT: "text-amber-500",
+  TIMEOUT: "text-warning",
   CANCELLED: "text-muted-foreground",
   RUNNING: "text-muted-foreground",
   PENDING: "text-muted-foreground",
@@ -64,7 +64,7 @@ export function HealthCheckDetailView({
         <p className="text-xs text-muted-foreground">Run a health check to load probe detail.</p>
       ) : (
         <div className="space-y-3">
-          <div className="rounded border border-border p-2 space-y-1.5">
+          <div className="rounded-sm border border-border p-2 space-y-1.5">
             {PRESENTATION_ORDER.map((probeName, idx) => {
               // Live run: use liveProbes for completed entries; derive status for in-flight / pending
               let probe: HealthCheckProbeRecord | undefined;
@@ -174,7 +174,7 @@ export function HealthCheckDetailView({
           </div>
 
           {result && !activeLive && (
-            <div className="rounded border border-primary/30 bg-primary/5 p-2 text-xs space-y-1">
+            <div className="rounded-sm border border-primary/30 bg-primary/5 p-2 text-xs space-y-1">
               <p className="font-semibold text-foreground">Summary</p>
               <p>
                 Latency: <span className="font-mono">p50 {result.latency.p50}ms</span>

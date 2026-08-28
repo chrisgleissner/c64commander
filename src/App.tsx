@@ -16,6 +16,7 @@ import { registerQueryClient } from "@/lib/query/queryClientRegistry";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import React, { Suspense, lazy, useEffect, useMemo } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { AppStyleProvider } from "@/components/AppStyleProvider";
 import { TabBar } from "@/components/TabBar";
 import { ConnectionController } from "@/components/ConnectionController";
 import { AvMirrorGovernorDriver } from "@/components/streams/AvMirrorGovernorDriver";
@@ -28,7 +29,7 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
-import { FeatureFlagsProvider, useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { FeatureFlagsProvider, useFeatureFlag, useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { FocusNavigationProvider, type KeypadShortcutHandlers } from "@/hooks/useFocusNavigation";
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
@@ -77,6 +78,7 @@ import {
 } from "@/lib/startup/launchSequence";
 
 const NotFound = lazy(() => import("./pages/NotFound"));
+const AppStylesGalleryPage = lazy(() => import("./pages/AppStylesGalleryPage"));
 
 export const shouldBundleCoverageProbeModules = () =>
   import.meta.env.VITE_ENABLE_TEST_PROBES === "1" || !import.meta.env.PROD;
@@ -288,6 +290,7 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
 const AppRoutes = () => {
   const coverageProbeEnabled = shouldEnableCoverageProbe();
   const { CoverageProbePage, DeviceSwitchLabPage, TestHeartbeat } = getCoverageProbeModules();
+  const { value: appStylesGalleryEnabled } = useFeatureFlag("app_styles_gallery_enabled");
   return (
     <BrowserRouter>
       <LightingStudioProvider>
@@ -326,6 +329,7 @@ const AppRoutes = () => {
                 {coverageProbeEnabled && DeviceSwitchLabPage ? (
                   <Route path="/__device-switch__" element={<DeviceSwitchLabPage />} />
                 ) : null}
+                {appStylesGalleryEnabled ? <Route path="/dev/styles" element={<AppStylesGalleryPage />} /> : null}
                 <Route path="*" element={<NotFoundForUnknownPaths />} />
               </Routes>
             </Suspense>
@@ -340,19 +344,21 @@ const AppRoutes = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
-      <DisplayProfileProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <FeatureFlagsProvider>
-            <RefreshControlProvider>
-              <AppErrorBoundary>
-                <StartupLaunchCoordinator />
-              </AppErrorBoundary>
-            </RefreshControlProvider>
-          </FeatureFlagsProvider>
-        </TooltipProvider>
-      </DisplayProfileProvider>
+      <AppStyleProvider>
+        <DisplayProfileProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <FeatureFlagsProvider>
+              <RefreshControlProvider>
+                <AppErrorBoundary>
+                  <StartupLaunchCoordinator />
+                </AppErrorBoundary>
+              </RefreshControlProvider>
+            </FeatureFlagsProvider>
+          </TooltipProvider>
+        </DisplayProfileProvider>
+      </AppStyleProvider>
     </ThemeProvider>
   </QueryClientProvider>
 );
@@ -526,7 +532,7 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
     if (this.state.hasError) {
       return (
         <div className="flex min-h-screen items-center justify-center bg-background px-6">
-          <div className="max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-lg">
+          <div className="max-w-md rounded-panel border border-border bg-card p-6 text-center shadow-elev-2">
             <p className="text-lg font-semibold text-foreground">{t("app.error.title", "Something went wrong")}</p>
             <p className="mt-2 text-sm text-muted-foreground">
               {t("app.error.description", "The app hit an unexpected error. Please reopen the page or try again.")}

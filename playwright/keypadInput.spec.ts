@@ -18,6 +18,11 @@ import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUi
  * PRIME DIRECTIVE: the only new affordance is the `data-key-selected` highlight,
  * shown ONLY once a recognized key takes effect and removed on touch. Not tagged
  * @screenshots/@web-platform so `npm run test:e2e` runs it.
+ *
+ * Runs on the default appearance style only, and is style-agnostic by construction anyway: it
+ * asserts on `data-key-selected` and the tap/persistent-active attributes, never a colour,
+ * `box-shadow` or `outline`. See appearanceGeometryInvariance.spec.ts for the geometry proof that
+ * covers every other assertion in this file across all twelve generated palettes.
  */
 
 const KEYPAD_FLAG_KEY = "c64u_feature_flag:keypad_input_enabled";

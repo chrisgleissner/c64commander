@@ -55,6 +55,28 @@ describe("NativeUdpStreamReceiver (native platform)", () => {
     receiver.close();
   });
 
+  /*
+   * The mirror's groups are multicast and every Ultimate defaults to the same ones, so a second
+   * machine streaming into them is received here too. Measured with two on one LAN: 20446 and 20436
+   * packets into 239.0.1.64 in the same six seconds. Video is the damaging case — the two carry
+   * independent frame-number spaces, so an unfiltered assembler finishes one machine's frame with
+   * the other's lines. The plugin drops a foreign sender before any frame accounting, so it has to
+   * be told which machine to accept.
+   */
+  it("tells the plugin which machine to accept packets from", async () => {
+    const receiver = createStreamReceiver({ name: "video", port: 11000, expectedSource: "192.168.1.15" });
+    await receiver.ready?.();
+    expect(streamUdp.bind).toHaveBeenCalledWith(expect.objectContaining({ name: "video", source: "192.168.1.15" }));
+    receiver.close();
+  });
+
+  it("leaves the sender filter open when no device is selected", async () => {
+    const receiver = createStreamReceiver({ name: "video", port: 11000, expectedSource: null });
+    await receiver.ready?.();
+    expect(streamUdp.bind).toHaveBeenCalledWith(expect.objectContaining({ source: undefined }));
+    receiver.close();
+  });
+
   it("binds the port with native assembly off, resolves its destination, and forwards decoded datagrams", async () => {
     // Assembly OFF → the per-packet datagram path (the web/fallback behaviour).
     const receiver = createStreamReceiver({ name: "video", port: 11000, nativeVideoAssembly: false });

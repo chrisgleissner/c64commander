@@ -50,6 +50,7 @@ describe("featureFlags persistence and logging", () => {
       "audio_mirror_enabled",
       "video_mirror_enabled",
       "new_disk_enabled",
+      "app_styles_gallery_enabled",
     ]);
   });
 
@@ -80,6 +81,7 @@ describe("featureFlags persistence and logging", () => {
       audio_mirror_enabled: "experimental",
       video_mirror_enabled: "experimental",
       new_disk_enabled: "stable",
+      app_styles_gallery_enabled: "experimental",
     });
   });
 

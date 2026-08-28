@@ -436,6 +436,27 @@ If intent is unclear, the UX is incorrect.
 
 ---
 
+## Appearance and Tokens
+
+Colour, corner radius, elevation and edge weight are a selectable appearance style layered on top
+of layout, not decisions a component makes for itself. See
+`docs/internals/appearance-styles.md` for the full contract, including which of those tokens are
+compiled but not yet consumed by any component.
+
+- New UI must use the existing CSS custom properties (`--card`, `--primary`, `--radius-panel`,
+  `--shadow-1/2/3`, the `shadow-edge` utility, etc.), never a raw Tailwind palette utility
+  (`bg-slate-100`), a hex literal, or a stock `rounded-*`/`shadow-*` class.
+- Corner radius, elevation and edge weight may vary by style; layout, spacing and type scale must
+  not — a style change must never move a box.
+- Check a change against every generated palette at `/dev/styles` (a developer-only route, gated by
+  the `app_styles_gallery_enabled` feature flag), which renders real shipped components across all
+  12 generated palettes.
+- Domain data that already carries meaning — LED colours, VIC palette swatches, the device-preview
+  materials in Lighting Studio — is exempt: it must stay exactly as the device or the standard
+  defines it, not follow the app's appearance style.
+
+---
+
 ## Summary
 
 - Sources define scope.

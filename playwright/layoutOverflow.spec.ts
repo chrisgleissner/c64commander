@@ -6,6 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+/**
+ * Runs on the default appearance style only; see appearanceGeometryInvariance.spec.ts, which proves
+ * switching style changes zero geometry so this overflow coverage holds for all twelve generated
+ * palettes.
+ */
+
 import { test, expect } from "@playwright/test";
 import type { Locator, Page, TestInfo } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";

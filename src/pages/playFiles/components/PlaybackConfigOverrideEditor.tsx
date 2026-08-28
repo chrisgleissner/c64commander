@@ -235,7 +235,7 @@ export const PlaybackConfigOverrideEditor = ({ item, onChangeOverrides }: Playba
             options={selectedItem.options}
             details={selectedItem.details}
             onValueChange={setPendingValue}
-            className="border-0 p-0"
+            className="p-0"
           />
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={handleSaveOverride} disabled={!selectedCategory || !selectedItemName}>

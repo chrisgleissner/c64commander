@@ -6,6 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+/**
+ * Runs on the default appearance style only; see appearanceGeometryInvariance.spec.ts, which proves
+ * switching style changes zero geometry so this coverage holds for all twelve generated palettes.
+ * The style gallery in appStylesGallery.spec.ts is the separate, fixed-size corpus that documents
+ * a palette as a picture — this corpus is not multiplied per style.
+ */
+
 import { test, expect } from "@playwright/test";
 import { openAllCards } from "./cards";
 import type { Locator, Page, TestInfo } from "@playwright/test";

@@ -32,6 +32,9 @@ import { auditSmallScreenLayout, formatDefects, type LayoutDefect } from "./smal
  * Everything measured here comes from the rendered page - element boxes, text run
  * rectangles and line boxes - rather than from the stylesheet, so a defect reported
  * here is one a user would see.
+ *
+ * Runs on the default appearance style only; see appearanceGeometryInvariance.spec.ts, which proves
+ * switching style changes zero geometry so this coverage holds for all twelve generated palettes.
  */
 
 const compactViewport = DISPLAY_PROFILE_VIEWPORTS.compact.viewport;

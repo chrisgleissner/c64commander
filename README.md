@@ -20,6 +20,7 @@ Control and manage a Commodore 64 Ultimate from Android, iOS, or a self-hosted w
 - **Configuration**: Browse and edit the complete C64 Ultimate configuration.
 - **Diagnostics**: Review connection health, activity, traces, and latency.
 - **Multiple devices**: Save several devices, check their health, and switch between them.
+- **Appearance styles**: Seven colour styles on top of the Light/Dark theme, or match your C64 Ultimate's own Color Scheme.
 
 ## Getting Started
 
@@ -298,6 +299,25 @@ Long-press the top-right status badge to view saved devices, compare their healt
     <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/01-picker.png" alt="Switcher (Connecting)" width="360"/></td>
     <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/02-picker-expanded.png" alt="Switcher expanded details" width="360"/></td>
     <td><img src="docs/img/app/diagnostics/switch-device/profiles/medium/06-picker-one-unhealthy-expanded.png" alt="Switcher expanded unhealthy device" width="360"/></td>
+  </tr>
+</table>
+
+## Appearance Styles
+
+Pick one of seven colour styles under **Settings > Appearance > Style**, on top of the existing Light/Dark theme. Two of them are dark only. **Match my device** follows your C64 Ultimate's own Color Scheme instead, read on connect rather than polled. A style changes colour, corner rounding, and shading only — never layout or type size, and never the colours that show what the hardware is doing.
+
+<table>
+  <thead>
+    <tr>
+      <th align="left">Modem Grey (default)</th>
+      <th align="left">Breadbin Beige</th>
+      <th align="left">Vault Black (dark only)</th>
+    </tr>
+  </thead>
+  <tr>
+    <td><img src="docs/img/app/styles/showcase-modem-grey-light.png" alt="Home in Modem Grey, the default style" width="360"/></td>
+    <td><img src="docs/img/app/styles/showcase-breadbin-beige-light.png" alt="Home in Breadbin Beige" width="360"/></td>
+    <td><img src="docs/img/app/styles/showcase-vault-black-dark.png" alt="Home in Vault Black, one of the two dark-only styles" width="360"/></td>
   </tr>
 </table>
 

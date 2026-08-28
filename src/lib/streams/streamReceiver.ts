@@ -97,6 +97,15 @@ export interface StreamReceiverOptions {
    * and native-only; defaults on. Threaded from the app setting so it can be A/B toggled at runtime.
    */
   nativeVideoAssembly?: boolean;
+  /**
+   * The machine whose packets this receiver should accept, as a host name or IPv4.
+   *
+   * The mirror's groups are multicast and every Ultimate defaults to the same ones, so a second
+   * machine streaming into them arrives here too. Naming the expected sender lets the native
+   * receiver drop the rest before any frame assembly, which is what keeps the picture right without
+   * depending on the other machine being stopped. Omitted accepts any sender.
+   */
+  expectedSource?: string | null;
   /** Injectable WebSocket constructor for tests. */
   socketFactory?: (url: string) => WebSocketLike;
 }
@@ -244,7 +253,13 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
         }),
       );
     }
-    this.readyPromise = StreamUdp.bind({ name: this.name, port, group, assemble: this.assemble })
+    this.readyPromise = StreamUdp.bind({
+      name: this.name,
+      port,
+      group,
+      assemble: this.assemble,
+      source: options.expectedSource ?? undefined,
+    })
       .then((result) => {
         // The bind reports the phone's site-local IPv4 — the unicast address a
         // Wi‑Fi audio stream (firmware wifi=true) must be relayed to.

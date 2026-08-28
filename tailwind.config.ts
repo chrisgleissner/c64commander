@@ -84,21 +84,41 @@ export default {
           warn: "hsl(var(--diag-warn))",
           error: "hsl(var(--diag-error))",
         },
-        sidebar: {
-          DEFAULT: "hsl(var(--sidebar-background))",
-          foreground: "hsl(var(--sidebar-foreground))",
-          primary: "hsl(var(--sidebar-primary))",
-          "primary-foreground": "hsl(var(--sidebar-primary-foreground))",
-          accent: "hsl(var(--sidebar-accent))",
-          "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
-          border: "hsl(var(--sidebar-border))",
-          ring: "hsl(var(--sidebar-ring))",
+        category: {
+          1: "hsl(var(--category-1))",
+          2: "hsl(var(--category-2))",
+          3: "hsl(var(--category-3))",
+          4: "hsl(var(--category-4))",
+        },
+        "key-character": {
+          surface: "hsl(var(--key-character-surface))",
+          border: "hsl(var(--key-character-border))",
+          foreground: "hsl(var(--key-character-foreground))",
+        },
+        "key-function": {
+          surface: "hsl(var(--key-function-surface))",
+          border: "hsl(var(--key-function-border))",
+          foreground: "hsl(var(--key-function-foreground))",
+        },
+        scrim: "hsl(var(--interstitial-scrim))",
+        media: {
+          scrim: "hsl(var(--media-scrim))",
+          "on-scrim": "hsl(var(--media-on-scrim))",
+          letterbox: "hsl(var(--media-letterbox))",
+          reticle: "hsl(var(--media-reticle))",
         },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        panel: "var(--radius-panel)",
+      },
+      boxShadow: {
+        "elev-1": "var(--shadow-1)",
+        "elev-2": "var(--shadow-2)",
+        "elev-3": "var(--shadow-3)",
+        edge: "inset 0 0 0 var(--edge-width) hsl(var(--border))",
       },
       keyframes: {
         "accordion-down": {

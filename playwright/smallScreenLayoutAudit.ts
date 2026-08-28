@@ -272,7 +272,10 @@ export const auditSmallScreenLayout = async (page: Page, options: LayoutAuditOpt
         );
         continue;
       }
-      if (paintedLeft < -TOL) {
+      // Same exemption as the right edge above: content inside a horizontal scroller is reachable
+      // by scrolling, so it is not off the screen in the sense this check is about. The tab bar
+      // scrolls the current page's tab into view, which pushes the first tabs past the left edge.
+      if (paintedLeft < -TOL && !scrollsHorizontally(element)) {
         record("outside-viewport", element, `left edge at ${Math.round(paintedLeft)}px is left of the viewport`, text);
         continue;
       }
@@ -399,7 +402,6 @@ export const auditSmallScreenLayout = async (page: Page, options: LayoutAuditOpt
     // overflow.
     // ---------------------------------------------------------------------------
     const HYPHEN_LIKE = new Set(["-", "‐", "‑", "‒", "–", "—", "/", "\\", "­"]);
-    const ORDINARY_WORD = /^[\p{L}\p{M}'’]{2,12}$/u;
     const range = document.createRange();
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     const seenBreaks = new Set<string>();
@@ -447,8 +449,23 @@ export const auditSmallScreenLayout = async (page: Page, options: LayoutAuditOpt
         const wordWidth = rects.reduce((sum, r) => sum + r.width, 0);
         if (lineWidth <= 0) continue;
         const fitsOnItsOwnLine = wordWidth <= lineWidth - 1;
-        const bare = word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
-        if (!fitsOnItsOwnLine && !ORDINARY_WORD.test(bare)) continue;
+        /*
+         * Only an AVOIDABLE break is a defect.
+         *
+         * A word wider than the line it is on has three possible outcomes: break it, cut it off, or
+         * let it run outside its box. This rule used to report the break for ordinary words, on the
+         * grounds that a word that short should have been given room. That was written while those
+         * strings were cut off instead, which the `clipped` check does not see when the cut is a
+         * `truncate`. Now that they wrap, the rule was asking for the one outcome that is worse:
+         * "SID addressing" renders its second word at 226 CSS px on a 320 px screen at the largest
+         * text size, against a 126 px line, and no amount of room short of a smaller type size
+         * makes it fit. A break is what a reader can still read.
+         *
+         * A word that WOULD fit on its own line is still reported: that break is the layout's
+         * fault, not the word's — `break-all` on a path did exactly this, splitting "/USB0/" across
+         * two lines inside a 240 px column.
+         */
+        if (!fitsOnItsOwnLine) continue;
 
         // Find the character the line broke before, so a break after a hyphen can be
         // told apart from a break in the middle of a run of letters.

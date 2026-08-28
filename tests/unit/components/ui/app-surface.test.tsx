@@ -80,7 +80,7 @@ describe("App surface primitives", () => {
     );
     expect(overlay?.className).toContain(APP_INTERSTITIAL_BACKDROP_CLASSNAME.split(" ")[0]);
     expect(overlay?.style.zIndex).toBe("200");
-    expect(overlay?.style.backgroundColor).toBe("rgba(0, 0, 0, 0.4)");
+    expect(overlay?.style.backgroundColor).toBe("hsl(var(--interstitial-scrim) / 0.4)");
   });
 
   it("keeps AppSheet as a bottom sheet on expanded widths", () => {
@@ -240,7 +240,7 @@ describe("App surface primitives", () => {
 
   it("backdrop uses an unblurred 40% darkening layer", () => {
     const baseClass = APP_INTERSTITIAL_BACKDROP_CLASSNAME.split(" ")[0];
-    expect(baseClass).toBe("bg-black");
+    expect(baseClass).toBe("bg-scrim");
     expect(resolveInterstitialBackdropOpacity(1)).toBe(0.4);
     expect(APP_INTERSTITIAL_BACKDROP_CLASSNAME).not.toContain("backdrop-blur");
     expect(APP_INTERSTITIAL_BACKDROP_CLASSNAME).not.toContain("supports-[backdrop-filter]");
@@ -294,8 +294,8 @@ describe("App surface primitives", () => {
     expect(backdropDepths).toEqual(expect.arrayContaining(["1", "2"]));
     const firstBackdrop = overlays.find((element) => element.getAttribute("data-interstitial-depth") === "1");
     const secondBackdrop = overlays.find((element) => element.getAttribute("data-interstitial-depth") === "2");
-    expect(firstBackdrop?.style.backgroundColor).toBe("rgba(0, 0, 0, 0.4)");
-    expect(secondBackdrop?.style.backgroundColor).toBe("rgba(0, 0, 0, 0.25)");
+    expect(firstBackdrop?.style.backgroundColor).toBe("hsl(var(--interstitial-scrim) / 0.4)");
+    expect(secondBackdrop?.style.backgroundColor).toBe("hsl(var(--interstitial-scrim) / 0.25)");
     expect(firstBackdrop?.style.zIndex).toBe("200");
     expect(secondBackdrop?.style.zIndex).toBe("220");
   });

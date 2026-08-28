@@ -45,35 +45,60 @@ describe("setSystemBarsVisibility", () => {
 });
 
 describe("syncNativeSystemBarAppearance", () => {
-  afterEach(() => vi.clearAllMocks());
+  afterEach(() => {
+    vi.clearAllMocks();
+    document.documentElement.style.removeProperty("--background");
+  });
 
   it("does not call the plugin when not on native Android", async () => {
     platform.isNativePlatform.mockReturnValue(false);
     platform.getPlatform.mockReturnValue("web");
-    await syncNativeSystemBarAppearance("light");
+    document.documentElement.style.setProperty("--background", "0 0% 100%");
+    await syncNativeSystemBarAppearance();
     expect(plugin.setSystemBarsAppearance).not.toHaveBeenCalled();
   });
 
-  it("requests dark icons (light bars) for the light theme on native Android", async () => {
+  it("requests dark icons (light bars) when the resolved background is light", async () => {
     platform.isNativePlatform.mockReturnValue(true);
     platform.getPlatform.mockReturnValue("android");
-    await syncNativeSystemBarAppearance("light");
+    document.documentElement.style.setProperty("--background", "0 0% 100%");
+    await syncNativeSystemBarAppearance();
     expect(plugin.setSystemBarsAppearance).toHaveBeenCalledWith({ light: true });
   });
 
-  it("requests light icons (dark bars) for the dark theme on native Android", async () => {
+  it("requests light icons (dark bars) when the resolved background is dark", async () => {
     platform.isNativePlatform.mockReturnValue(true);
     platform.getPlatform.mockReturnValue("android");
-    await syncNativeSystemBarAppearance("dark");
+    document.documentElement.style.setProperty("--background", "0 0% 0%");
+    await syncNativeSystemBarAppearance();
     expect(plugin.setSystemBarsAppearance).toHaveBeenCalledWith({ light: false });
+  });
+
+  it("requests light icons (dark bars) for a dark-only style's background even though that reads the same as 'light theme, dark style' would", async () => {
+    // The point of the fix (spec.md section 7.3): this function no longer takes the theme
+    // setting at all, only the resolved --background, so a dark-only style produces dark bars
+    // regardless of whether the user's Theme setting is "light", "dark" or "system".
+    platform.isNativePlatform.mockReturnValue(true);
+    platform.getPlatform.mockReturnValue("android");
+    document.documentElement.style.setProperty("--background", "229.1 24.4% 8.8%"); // modem-grey dark
+    await syncNativeSystemBarAppearance();
+    expect(plugin.setSystemBarsAppearance).toHaveBeenCalledWith({ light: false });
+  });
+
+  it("defaults to light bars when --background is not resolvable at all", async () => {
+    platform.isNativePlatform.mockReturnValue(true);
+    platform.getPlatform.mockReturnValue("android");
+    await syncNativeSystemBarAppearance();
+    expect(plugin.setSystemBarsAppearance).toHaveBeenCalledWith({ light: true });
   });
 
   it("swallows a plugin failure and logs a warning", async () => {
     platform.isNativePlatform.mockReturnValue(true);
     platform.getPlatform.mockReturnValue("android");
+    document.documentElement.style.setProperty("--background", "0 0% 100%");
     plugin.setSystemBarsAppearance.mockRejectedValueOnce(new Error("boom"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    await expect(syncNativeSystemBarAppearance("light")).resolves.toBeUndefined();
+    await expect(syncNativeSystemBarAppearance()).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });

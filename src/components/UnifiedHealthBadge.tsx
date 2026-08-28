@@ -296,7 +296,7 @@ function PickerHealthStatusBadge({
 // §8.3 — Color classes per health state (shape is primary; color reinforces only)
 const HEALTH_COLOR: Record<HealthState, string> = {
   Healthy: "text-success",
-  Degraded: "text-amber-500",
+  Degraded: "text-warning",
   Unhealthy: "text-destructive",
   Idle: "text-muted-foreground",
   Unavailable: "text-muted-foreground",

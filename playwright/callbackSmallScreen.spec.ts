@@ -16,6 +16,9 @@
  * It asserts no horizontal overflow on the offline app shell across every
  * primary tab route — the offline shell is exactly the Callback's manual-IP
  * first-run state, so no mock device is needed.
+ *
+ * Runs on the default appearance style only; see appearanceGeometryInvariance.spec.ts, which proves
+ * switching style changes zero geometry so this coverage holds for all twelve generated palettes.
  */
 
 import { test, expect, type Page } from "@playwright/test";

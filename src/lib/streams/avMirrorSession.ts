@@ -244,7 +244,13 @@ export class AvMirrorSession {
       stopStream: () => stopStream("audio"),
       onChange: (s) => this.update({ audio: { state: s.state, droppedPackets: s.droppedPackets, error: s.error } }),
       createReceiver:
-        deps.createAudioReceiver ?? ((opts) => createStreamReceiver({ ...opts, port: loadStreamAudioPort() })),
+        deps.createAudioReceiver ??
+        ((opts) =>
+          createStreamReceiver({
+            ...opts,
+            port: loadStreamAudioPort(),
+            expectedSource: getC64API().getDeviceHost(),
+          })),
       createPlayer: deps.createPlayer,
       // Native low-latency audio when the setting is on AND we're on a device with the plugin;
       // evaluated at start (not import) so the live setting wins. Returns null → WebAudio fallback.
@@ -281,6 +287,9 @@ export class AvMirrorSession {
             ...opts,
             port: loadStreamVideoPort(),
             nativeVideoAssembly: loadStreamNativeVideoAssembly(),
+            // Accept video only from the selected machine. Every Ultimate defaults to the same
+            // multicast group, so a second one streaming into it is assembled into our frames.
+            expectedSource: getC64API().getDeviceHost(),
           })),
       renderFrame: (frame, height, arrivalMs) => this.emitFrame(frame, height, arrivalMs),
       // Start at the governor's effective divisor (from the saved frame-rate mode); the tick keeps it live.

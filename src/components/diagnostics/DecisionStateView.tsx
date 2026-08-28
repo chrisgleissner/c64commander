@@ -80,7 +80,7 @@ export function DecisionStateView({ onBack, onRepair, repairRunning, actionSumma
         </Button>
       </div>
 
-      <section className="space-y-2 rounded border border-border/70 p-2" data-testid="decision-state-playback">
+      <section className="space-y-2 rounded-sm border border-border/70 p-2" data-testid="decision-state-playback">
         <p className="text-xs font-semibold text-foreground">Playback</p>
         <MetricRow label="State" value={decisionState.playback.state} />
         <MetricRow label="Confidence" value={decisionState.playback.confidence} />
@@ -95,10 +95,10 @@ export function DecisionStateView({ onBack, onRepair, repairRunning, actionSumma
         <MetricRow label="Reason" value={decisionState.playback.reason ?? "-"} />
       </section>
 
-      <section className="space-y-2 rounded border border-border/70 p-2" data-testid="decision-state-reconcilers">
+      <section className="space-y-2 rounded-sm border border-border/70 p-2" data-testid="decision-state-reconcilers">
         <p className="text-xs font-semibold text-foreground">Reconcilers</p>
         {Object.values(decisionState.reconcilers).map((reconciler) => (
-          <div key={reconciler.key} className="space-y-1 rounded border border-border/60 bg-muted/20 p-2">
+          <div key={reconciler.key} className="space-y-1 rounded-sm border border-border/60 bg-muted/20 p-2">
             <div className="flex items-center justify-between gap-3 text-xs">
               <span className="font-medium capitalize text-foreground">{reconciler.key}</span>
               <span className="font-mono text-muted-foreground">{reconciler.result}</span>
@@ -120,7 +120,7 @@ export function DecisionStateView({ onBack, onRepair, repairRunning, actionSumma
         ))}
       </section>
 
-      <section className="space-y-2 rounded border border-border/70 p-2" data-testid="decision-state-health-check">
+      <section className="space-y-2 rounded-sm border border-border/70 p-2" data-testid="decision-state-health-check">
         <p className="text-xs font-semibold text-foreground">Health check</p>
         <MetricRow label="Run state" value={healthCheckState.runState} />
         <MetricRow label="Run ID" value={healthCheckState.currentRunId ?? "-"} />
@@ -138,7 +138,7 @@ export function DecisionStateView({ onBack, onRepair, repairRunning, actionSumma
         </div>
       </section>
 
-      <section className="space-y-2 rounded border border-border/70 p-2" data-testid="decision-state-transport">
+      <section className="space-y-2 rounded-sm border border-border/70 p-2" data-testid="decision-state-transport">
         <p className="text-xs font-semibold text-foreground">Transport</p>
         <MetricRow label="REST avg" value={average(restDurations)} />
         <MetricRow label="FTP avg" value={average(ftpDurations)} />
@@ -149,7 +149,7 @@ export function DecisionStateView({ onBack, onRepair, repairRunning, actionSumma
             recentEffects.map(({ summary, effect }) => (
               <div
                 key={`${summary.correlationId}-${effect.type}-${effect.label}`}
-                className="rounded border border-border/60 bg-muted/20 p-2 text-xs"
+                className="rounded-sm border border-border/60 bg-muted/20 p-2 text-xs"
               >
                 <p className="font-medium text-foreground">
                   {effect.type === "REST" ? `${effect.method} ${effect.path}` : `${effect.operation} ${effect.path}`}
@@ -167,14 +167,14 @@ export function DecisionStateView({ onBack, onRepair, repairRunning, actionSumma
         </div>
       </section>
 
-      <section className="space-y-2 rounded border border-border/70 p-2" data-testid="decision-state-transitions">
+      <section className="space-y-2 rounded-sm border border-border/70 p-2" data-testid="decision-state-transitions">
         <p className="text-xs font-semibold text-foreground">Recent transitions</p>
         <div className="space-y-1">
           {[...decisionState.transitions, ...healthCheckState.transitions]
             .sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp))
             .slice(0, 10)
             .map((entry) => (
-              <div key={entry.id} className="rounded border border-border/60 bg-muted/20 p-2 text-xs">
+              <div key={entry.id} className="rounded-sm border border-border/60 bg-muted/20 p-2 text-xs">
                 <p className="font-medium text-foreground">{entry.target}</p>
                 <p className="text-muted-foreground">
                   {entry.from ?? "-"} to {entry.to} · {formatDiagnosticsTimestamp(entry.timestamp)}

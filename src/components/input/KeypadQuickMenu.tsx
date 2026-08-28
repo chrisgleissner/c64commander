@@ -26,7 +26,7 @@ import {
 
 /** The physical key that reaches this entry directly, drawn as the keycap it is. */
 const ShortcutKey = ({ children }: { children: ReactNode }) => (
-  <kbd className="inline-flex min-w-6 shrink-0 items-center justify-center rounded border border-border bg-muted px-1 py-0.5 font-sans text-xs font-semibold text-muted-foreground">
+  <kbd className="inline-flex min-w-6 shrink-0 items-center justify-center rounded-sm border border-border bg-muted px-1 py-0.5 font-sans text-xs font-semibold text-muted-foreground">
     {children}
   </kbd>
 );

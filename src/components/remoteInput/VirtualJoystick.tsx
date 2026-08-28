@@ -268,7 +268,7 @@ export const VirtualJoystick = ({
   const fireButton = (
     <Button
       variant={heldInputs.has("fire") ? "default" : "secondary"}
-      className="rounded-full text-base font-bold shadow-lg"
+      className="rounded-full text-base font-bold shadow-elev-2"
       style={{ width: firePx, height: firePx }}
       disabled={disabled}
       data-testid="remote-input-fire-button"
@@ -286,7 +286,7 @@ export const VirtualJoystick = ({
 
   const autofireToggle = (
     <div
-      className="flex flex-col items-center gap-2 rounded-3xl bg-background/90 px-3 py-2 text-center text-sm shadow-lg backdrop-blur-sm"
+      className="flex flex-col items-center gap-2 rounded-panel bg-background/90 px-3 py-2 text-center text-sm shadow-elev-2 backdrop-blur-sm"
       data-testid="remote-input-autofire-toggle"
     >
       {/* HARD16-008: the same horizontal Switch + label pattern as the Port

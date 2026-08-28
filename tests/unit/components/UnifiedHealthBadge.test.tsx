@@ -328,9 +328,9 @@ describe("UnifiedHealthBadge", () => {
     const spans = badge.querySelectorAll('[data-overlay-critical="badge"]');
 
     expect(spans[0]?.className).toContain("text-foreground");
-    expect(spans[1]?.className).toContain("text-amber-500");
+    expect(spans[1]?.className).toContain("text-warning");
     expect(spans[1]?.className).toContain("h-[1em]");
-    expect(spans[2]?.className).toContain("text-amber-500");
+    expect(spans[2]?.className).toContain("text-warning");
     expect(spans[3]?.className).toContain("text-foreground");
   });
 

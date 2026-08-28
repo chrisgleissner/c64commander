@@ -9,6 +9,7 @@
 import { registerPlugin } from "@capacitor/core";
 
 import { getPlatform, isNativePlatform } from "./platform";
+import { isLightLuminance, relativeLuminanceFromHsl } from "@/lib/appStyles/colorMath";
 
 export type SafeAreaInsets = {
   top: number;
@@ -111,15 +112,21 @@ export const setSystemBarsVisibility = async (options: SystemBarsVisibility): Pr
 };
 
 /**
- * Match the native status/navigation-bar icon appearance to the app's resolved
- * theme so the clock/battery icons stay legible over the (transparent, edge-to-
- * edge) bars: light theme → dark icons, dark theme → light icons. No-op off
- * native Android. Re-invoked whenever the resolved theme changes (see useTheme).
+ * Match the native status/navigation-bar icon appearance to the *resolved background*, not to
+ * the light/dark theme setting, so the clock/battery icons stay legible over the (transparent,
+ * edge-to-edge) bars regardless of which appearance style is active: a dark-only style (e.g.
+ * amber-glow, vault-black) keeps a dark background under the light theme setting too, and light
+ * icons on a light bar would be unreadable there (spec.md docs/plans/appearance-styles/spec.md
+ * section 7.3). No-op off native Android. Re-invoked whenever the resolved theme changes (see
+ * useTheme) and whenever the resolved app style changes (see useAppStyle), since either can move
+ * --background.
  */
-export const syncNativeSystemBarAppearance = async (resolvedTheme: "light" | "dark"): Promise<void> => {
+export const syncNativeSystemBarAppearance = async (): Promise<void> => {
   if (!isNativePlatform() || getPlatform() !== "android") return;
   try {
-    await SafeArea.setSystemBarsAppearance({ light: resolvedTheme === "light" });
+    const backgroundHsl = getComputedStyle(document.documentElement).getPropertyValue("--background").trim();
+    const isLightBackground = backgroundHsl ? isLightLuminance(relativeLuminanceFromHsl(backgroundHsl)) : true;
+    await SafeArea.setSystemBarsAppearance({ light: isLightBackground });
   } catch (error) {
     console.warn("Failed to set native system bar appearance", { error });
   }

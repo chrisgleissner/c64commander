@@ -66,7 +66,7 @@ export function DeviceDetailView({ info, onBack }: Props) {
       {!info ? (
         <p className="text-xs text-muted-foreground">Run a health check to load device info.</p>
       ) : (
-        <div className="rounded border border-border p-2 space-y-0.5">
+        <div className="rounded-sm border border-border p-2 space-y-0.5">
           <DetailRow label="Product" value={info.product} />
           <DetailRow label="Firmware" value={info.firmware} />
           <DetailRow label="FPGA" value={info.fpga} />

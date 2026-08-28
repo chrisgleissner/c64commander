@@ -7,10 +7,20 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import { PlaybackEngineToggle } from "@/pages/playFiles/components/PlaybackEngineToggle";
 import { LOCAL_DEVICE_LABEL, SOURCE_LABELS, connectedDeviceLabel } from "@/lib/sourceNavigation/sourceTerms";
+
+/*
+ * The three options live in a popover now: the control on the card is a single output chip, so a
+ * test that wants an option has to open it first. The chip carries `playback-engine-toggle`, the
+ * testid the options used to sit under, so the HIL harness still finds the control itself.
+ */
+const renderChooser = () => {
+  render(<PlaybackEngineToggle />);
+  fireEvent.click(screen.getByTestId("playback-engine-toggle"));
+};
 
 vi.mock("@/hooks/useFeatureFlags", () => ({
   useFeatureFlag: (id: string) => ({ value: id === "live_view_enabled" || id === "audio_mirror_enabled" }),
@@ -49,38 +59,59 @@ describe("device naming and iconography", () => {
     // machine is which is still told apart by name everywhere the choice is actually between machines.
     savedDevice.current = { name: "u64" };
 
-    render(<PlaybackEngineToggle />);
+    renderChooser();
 
-    expect(screen.getByTestId("playback-engine-c64")).toHaveTextContent("Remote");
+    expect(screen.getByTestId("playback-engine-c64")).toHaveTextContent("C64");
     expect(screen.getByTestId("playback-engine-c64")).not.toHaveTextContent("u64");
   });
 
   it("uses the same wording whether or not a device name is known", () => {
-    render(<PlaybackEngineToggle />);
+    renderChooser();
 
-    expect(screen.getByTestId("playback-engine-c64")).toHaveTextContent("Remote");
+    expect(screen.getByTestId("playback-engine-c64")).toHaveTextContent("C64");
     expect(screen.getByTestId("playback-engine-c64")).not.toHaveTextContent(SOURCE_LABELS.c64u);
   });
 
-  it("calls this device Local, as the source picker and disks list do", () => {
-    render(<PlaybackEngineToggle />);
+  /*
+   * Amended deliberately, and the invariant narrowed rather than dropped.
+   *
+   * This row asks where the SOUND comes out; the source picker asks which FILES you are browsing.
+   * Reusing "Local" for both named two different things with one word, and it is also wrong on the
+   * desktop web app, where "this device" is not a phone. "Here" is true of every host the app runs
+   * on and, at four characters, is what lets all three options hold one 44px row at the largest
+   * Text size. The guard that still matters — one machine must not appear under several names —
+   * is asserted below for the C64 side, which is where that bug actually happened.
+   */
+  it("names the near sink Here, not the source picker's file-source word", () => {
+    renderChooser();
 
-    expect(screen.getByTestId("playback-engine-local")).toHaveTextContent(LOCAL_DEVICE_LABEL);
+    expect(screen.getByTestId("playback-engine-local")).toHaveTextContent("Here");
+    expect(screen.getByTestId("playback-engine-local")).not.toHaveTextContent(LOCAL_DEVICE_LABEL);
     expect(LOCAL_DEVICE_LABEL).toBe(SOURCE_LABELS.local);
   });
 
   it("draws no icon at all on the listen-target row", () => {
     // Amended deliberately, and narrowed rather than deleted. The row is now an equal-width grid so
     // it holds one line at 320 CSS px, and a third of that row cannot fit an icon beside its label —
-    // "Remote" overflowed its column by 9.4px (docs/plans/segmented-control/PROPOSAL.md §3a). What
-    // the original guard existed for still stands: no lucide stand-in may appear here for a device
-    // that already has canonical artwork, so the row must carry no icon of either kind.
-    render(<PlaybackEngineToggle />);
+    // "Remote" overflowed its column by 9.4px (docs/plans/segmented-control/PROPOSAL.md §3a).
+    //
+    // Narrowed again now that the control is an output chip. The guard exists to stop a lucide
+    // stand-in being drawn for a MACHINE that already has canonical artwork, and that still holds:
+    // no origin icon may appear on the chip or on any option. The chip's own speaker glyph is not a
+    // device icon — it is what makes a small pill read as an audio output rather than a filter — so
+    // it is allowed, and the assertion below is about origin artwork rather than any svg at all.
+    renderChooser();
 
-    const row = screen.getByTestId("playback-engine-toggle");
-    expect(within(row).queryByTestId("file-origin-icon")).toBeNull();
-    expect(row.querySelector("svg")).toBeNull();
-    expect(row.querySelector("img")).toBeNull();
+    const chip = screen.getByTestId("playback-engine-toggle");
+    expect(within(chip).queryByTestId("file-origin-icon")).toBeNull();
+    expect(chip.querySelector("img")).toBeNull();
+    for (const testId of ["playback-engine-local", "playback-engine-c64", "playback-listen-both"]) {
+      const option = screen.queryByTestId(testId);
+      if (!option) continue;
+      expect(within(option).queryByTestId("file-origin-icon")).toBeNull();
+      expect(option.querySelector("svg")).toBeNull();
+      expect(option.querySelector("img")).toBeNull();
+    }
   });
 
   it("resolves the connected label the same way wherever it is asked", () => {

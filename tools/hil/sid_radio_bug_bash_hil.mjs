@@ -264,6 +264,20 @@ async function main() {
     return true;
   };
 
+  /**
+   * Tap one of the three output destinations.
+   *
+   * They are options inside a popover anchored to the output button on the volume row, not
+   * buttons sitting on the page, so the chooser has to be opened before the option exists to be
+   * tapped. Opening it is idempotent for this purpose: if the option is already on screen,
+   * `stableGeometry` finds it and the extra tap is skipped.
+   */
+  const tapOutput = async (testid, scenario) => {
+    if (await stableGeometry(testid, scenario)) return tap(testid, scenario);
+    if (!(await tap("playback-engine-toggle", scenario))) return false;
+    return tap(testid, scenario);
+  };
+
   /** The same tap, without the blind settle — the caller waits for an observable change instead. */
   const tapNoSettle = async (testid, scenario) => {
     const g = await stableGeometry(testid, scenario);
@@ -271,7 +285,6 @@ async function main() {
     adb("shell", "input", "tap", String(Math.round(g.cx * DPR)), String(Math.round(g.cy * DPR)));
     return true;
   };
-
 
   const read = async (scenario, step) => {
     const cur = await evaluate(CURRENT);
@@ -482,7 +495,7 @@ async function main() {
     await observe("chaos:start");
     for (let round = 0; round < CHAOS_ROUNDS; round += 1) {
       for (const route of ["playback-engine-c64", "playback-listen-both", "playback-engine-local"]) {
-        if (!(await tap(route, "chaos"))) break;
+        if (!(await tapOutput(route, "chaos"))) break;
         await sleep(2500);
         const note = await observe(`round ${round + 1} route ${route}`);
         // Whatever the route, a station must still be running and still have a track. Losing either
@@ -504,7 +517,7 @@ async function main() {
       }
     }
     // Back to on-device so the run ends somewhere audible rather than half-switched.
-    await tap("playback-engine-local", "chaos");
+    await tapOutput("playback-engine-local", "chaos");
     await sleep(2000);
     await observe("chaos:end");
   }

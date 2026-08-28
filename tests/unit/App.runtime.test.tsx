@@ -68,6 +68,10 @@ vi.mock("@/components/ui/button", () => ({
 }));
 vi.mock("@/components/ThemeProvider", () => ({
   ThemeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useThemeContext: () => ({ theme: "light", resolvedTheme: "light" }),
+}));
+vi.mock("@/components/AppStyleProvider", () => ({
+  AppStyleProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 vi.mock("@/hooks/useDisplayProfile", () => ({
   DisplayProfileProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,

@@ -82,6 +82,25 @@ class StreamUdpPlugin : Plugin() {
    * stream it did not ask for.
    */
   private val streamSenders = java.util.concurrent.ConcurrentHashMap<String, MutableSet<String>>()
+
+  /**
+   * The only machine whose packets a stream will accept, per stream name.
+   *
+   * Recording the senders (above) makes two-sender interference visible, but it does not make the
+   * picture right: the assembler still sees two independent frame-number spaces interleaved, so
+   * partial frames from one Ultimate are completed with lines from the other. Measured on the wire
+   * with both machines streaming into 239.0.1.64: 20446 and 20436 packets in the same six seconds,
+   * which is what a viewer sees as violent flicker between two different screens.
+   *
+   * Filtering here, before any sequence or frame accounting, is what makes the app show the right
+   * frames on its own rather than depending on the other machine being stopped. Empty means accept
+   * everything, which is also the state while a host name is still being resolved — failing open
+   * for a moment is better than a black screen.
+   */
+  private val expectedSource = ConcurrentHashMap<String, InetAddress>()
+
+  /** Packets dropped because they came from a machine other than [expectedSource], per stream. */
+  private val rejectedPackets = ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
   private val logTag = "StreamUdpPlugin"
   private var multicastLock: WifiManager.MulticastLock? = null
 
@@ -174,6 +193,60 @@ class StreamUdpPlugin : Plugin() {
     call.resolve(JSObject())
   }
 
+  /**
+   * Name the machine a stream should accept packets from. Called again on a device switch, so the
+   * filter follows the selection without tearing the socket down.
+   *
+   * Resolution happens off the caller's thread: a host name that needs DNS/mDNS can take hundreds of
+   * milliseconds, and blocking the bridge for that would stall the UI. `null`/blank clears it.
+   */
+  @PluginMethod
+  fun setExpectedSource(call: PluginCall) {
+    val name = call.getString("name")
+    if (name == null) {
+      call.reject("name is required")
+      return
+    }
+    applyExpectedSource(name, call.getString("host"))
+    call.resolve(JSObject())
+  }
+
+  private fun applyExpectedSource(name: String, host: String?) {
+    val trimmed = host?.trim()?.substringBefore(':')?.takeIf { it.isNotEmpty() }
+    if (trimmed == null) {
+      expectedSource.remove(name)
+      return
+    }
+    executor.execute {
+      try {
+        val resolved = InetAddress.getByName(trimmed)
+        expectedSource[name] = resolved
+        Log.i(logTag, "stream $name: accepting packets only from $trimmed (${resolved.hostAddress})")
+      } catch (error: Exception) {
+        // Leave the filter open rather than dropping every packet for an unresolvable name.
+        expectedSource.remove(name)
+        Log.w(logTag, "stream $name: could not resolve expected sender $trimmed; accepting all", error)
+      }
+    }
+  }
+
+  /**
+   * True when this packet came from a machine the stream was not told to listen to.
+   *
+   * Called per packet on both hot paths, so the common case — filter unset, or the address object
+   * the socket reuses for the same peer — costs a reference compare.
+   */
+  private fun isForeign(name: String, source: InetAddress?): Boolean {
+    val expected = expectedSource[name] ?: return false
+    if (source === expected || source == expected) return false
+    val counter = rejectedPackets.getOrPut(name) { java.util.concurrent.atomic.AtomicLong() }
+    val n = counter.incrementAndGet()
+    if (n == 1L || n % FOREIGN_LOG_EVERY == 0L) {
+      Log.w(logTag, "stream $name: dropped $n packet(s) from ${source?.hostAddress} (expected ${expected.hostAddress})")
+    }
+    return true
+  }
+
   @PluginMethod
   fun bind(call: PluginCall) {
     val name = call.getString("name")
@@ -190,6 +263,8 @@ class StreamUdpPlugin : Plugin() {
     val assemble = call.getBoolean("assemble", false) == true
     try {
       closeSocket(name)
+      rejectedPackets.remove(name)
+      applyExpectedSource(name, call.getString("source"))
       val socket: DatagramSocket =
         if (group != null) {
           acquireMulticastLock()
@@ -522,6 +597,9 @@ class StreamUdpPlugin : Plugin() {
             Log.i(logTag, "stream $name: sender $ip (distinct senders now ${senders.size})")
           }
         }
+        // Before any sequence or loss accounting: a foreign packet must not enter this stream's
+        // state at all, or it is counted as our sender's loss and mixed into our playback.
+        if (isForeign(name, source)) continue
         // PLAYBACK FIRST, telemetry second — the order matters on this thread.
         //
         // This is the URGENT_AUDIO receive thread and it is the real-time path. The base64 encode +
@@ -628,12 +706,29 @@ class StreamUdpPlugin : Plugin() {
     var frameHeight = VIC_PAL_HEIGHT
     // Bresenham phase accumulator (permille units) for native cadence decimation; thread-confined.
     var phaseAccum = 0
+    // Same cheap origin tracking as the per-packet loop: the socket reuses the address object for
+    // the same peer, so the single-sender case stays a reference compare.
+    var lastAssemblySender: java.net.InetAddress? = null
+    val assemblySenders = streamSenders.getOrPut(name) { java.util.concurrent.ConcurrentHashMap.newKeySet() }
     val stats = RateLog(name, "assembled")
     while (!socket.isClosed) {
       try {
         packet.setLength(buffer.size)
         socket.receive(packet)
         val arrivalNanos = clockNanos()
+        // Drop a foreign sender's packet before it reaches the assembler. Two Ultimates on one
+        // multicast group carry two independent frame-number spaces, so an unfiltered assembler
+        // completes one machine's partial frame with the other machine's lines — which is the
+        // violent flicker, and the apparent frame-rate collapse, seen on the rig.
+        val source = packet.address
+        if (source !== lastAssemblySender) {
+          lastAssemblySender = source
+          val ip = source?.hostAddress
+          if (ip != null && assemblySenders.size < MAX_TRACKED_SENDERS && assemblySenders.add(ip)) {
+            Log.i(logTag, "stream $name: sender $ip (distinct senders now ${assemblySenders.size})")
+          }
+        }
+        if (isForeign(name, source)) continue
         val data = packet.data
         val off = packet.offset
         val len = packet.length
@@ -898,6 +993,9 @@ class StreamUdpPlugin : Plugin() {
     // Audio wire format: u16 LE seq prefix, then interleaved stereo S16 (4 bytes/frame).
     /** Enough to notice a second (or third) sender without letting a spoofing flood grow the set. */
     private const val MAX_TRACKED_SENDERS = 4
+
+    /** Log the first foreign packet, then one line per this many, so a stuck sender cannot spam. */
+    private const val FOREIGN_LOG_EVERY = 5000L
 
     private const val AUDIO_SEQ_BYTES = 2
     private const val AUDIO_BYTES_PER_FRAME = 4

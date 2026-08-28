@@ -82,7 +82,7 @@ export const HvscPreparationSheet = ({
         </AppSheetHeader>
 
         <AppSheetBody className="space-y-4 px-4 py-4 sm:px-6" data-testid="hvsc-preparation-body">
-          <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+          <div className="rounded-panel border border-border bg-muted/30 p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-foreground">{statusLabel}</p>

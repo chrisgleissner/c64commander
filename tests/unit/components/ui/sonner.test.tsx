@@ -9,8 +9,8 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("next-themes", () => ({
-  useTheme: vi.fn(() => ({ theme: "dark" })),
+vi.mock("@/components/ThemeProvider", () => ({
+  useThemeContext: vi.fn(() => ({ resolvedTheme: "dark" })),
 }));
 
 vi.mock("sonner", () => ({

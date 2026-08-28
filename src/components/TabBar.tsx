@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { useEffect, useRef } from "react";
 import { Home, Sliders, Settings, BookOpen, Play, Disc } from "lucide-react";
 import { useLocation, useNavigate, type NavigateFunction } from "react-router-dom";
 import { useInterstitialActive } from "@/components/ui/interstitial-state";
@@ -42,15 +43,23 @@ function TabBarButton({
   order,
   isActive,
   navigate,
+  activeRef,
 }: {
   readonly tab: Tab;
   readonly order: number;
   readonly isActive: boolean;
   readonly navigate: NavigateFunction;
+  readonly activeRef?: React.RefObject<HTMLButtonElement>;
 }) {
   const Icon = tab.icon;
   const tabId = `tab-${tab.label.toLowerCase().replace(/\s+/g, "-")}`;
-  const focusRef = useFocusItem<HTMLButtonElement>({ id: tabId, order, group: "primary-tabs" });
+  const keypadRef = useFocusItem<HTMLButtonElement>({ id: tabId, order, group: "primary-tabs" });
+  // The keypad ring owns one ref; the bar needs the active node too, to scroll it into view.
+  const focusRef = (node: HTMLButtonElement | null) => {
+    if (typeof keypadRef === "function") keypadRef(node);
+    else if (keypadRef) (keypadRef as React.MutableRefObject<HTMLButtonElement | null>).current = node;
+    if (isActive && activeRef) (activeRef as React.MutableRefObject<HTMLButtonElement | null>).current = node;
+  };
 
   return (
     <button
@@ -80,7 +89,7 @@ function TabBarButton({
       {isActive && (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0.5 inset-y-0.5 -z-10 rounded-xl bg-primary/15"
+          className="pointer-events-none absolute inset-x-0.5 inset-y-0.5 -z-10 rounded-panel bg-primary/15"
         />
       )}
       <Icon className="h-[1.375rem] w-[1.375rem]" />
@@ -103,6 +112,39 @@ export function TabBar() {
   const location = useLocation();
   const navigate = useNavigate();
   const interstitialActive = useInterstitialActive();
+  const navRef = useRef<HTMLElement>(null);
+  const activeTabRef = useRef<HTMLButtonElement>(null);
+
+  /*
+   * Keep the selected tab on screen.
+   *
+   * The bar scrolls (`overflow-x-auto` in index.css) because six labels do not fit 320 CSS px at
+   * the larger Text sizes — "Docs", the last one, is the one drawn past the edge. Scrolling alone
+   * is not enough: a page reached any other way (the Quick menu, a deep link, the keypad) left the
+   * bar wherever it happened to be, so the tab for the page you are on could be the one off screen.
+   * `inline: "nearest"` moves it the minimum distance, so a tab already visible does not jog.
+   */
+  useEffect(() => {
+    const nav = navRef.current;
+    const active = activeTabRef.current;
+    if (!nav || !active) return;
+    // One frame, so the bar has been laid out for the route that just became active.
+    const raf = requestAnimationFrame(() => {
+      if (nav.scrollWidth <= nav.clientWidth + 1) return;
+      const bar = nav.getBoundingClientRect();
+      const tab = active.getBoundingClientRect();
+      // Explicit arithmetic rather than scrollIntoView: the bar is `justify-around`, and with the
+      // free space distributed around the items `scrollIntoView({inline:"nearest"})` stopped 9 px
+      // in and left the last tab still off screen. GAP keeps a sliver of the neighbour visible, so
+      // the row reads as scrollable rather than as if it simply ends there.
+      const GAP = 12;
+      const overRight = tab.right - bar.right;
+      const overLeft = bar.left - tab.left;
+      if (overRight > 0) nav.scrollLeft += overRight + GAP;
+      else if (overLeft > 0) nav.scrollLeft -= overLeft + GAP;
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [location.pathname]);
 
   return (
     <div
@@ -114,6 +156,7 @@ export function TabBar() {
       data-interstitial-active={interstitialActive ? "true" : "false"}
     >
       <nav
+        ref={navRef}
         className="tab-bar app-chrome-rail app-chrome-rail-bottom bg-background"
         data-app-chrome-family="primary"
         data-focus-scope="tabbar"
@@ -125,6 +168,7 @@ export function TabBar() {
             order={TAB_FOCUS_ORDER_BASE + index}
             isActive={tabIndexForPath(location.pathname) === tabIndexForPath(tab.path)}
             navigate={navigate}
+            activeRef={activeTabRef}
           />
         ))}
       </nav>

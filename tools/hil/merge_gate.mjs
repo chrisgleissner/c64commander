@@ -352,6 +352,7 @@ const stage = async (name, audible, body) => {
   console.log(`\n=== ${name} ===`);
   const startedAt = Date.now();
   try {
+    if (audible) await ensureMachineAudible();
     const detail = await body();
     results.push({ name, status: "pass", detail: detail ?? "", seconds: (Date.now() - startedAt) / 1000 });
     console.log(`  PASS ${detail ?? ""}`);
@@ -441,14 +442,84 @@ return JSON.stringify({engine:!!q("playback-engine-toggle")});})()`);
  * same tune on the other path" is only a meaningful comparison if both paths were reached the way
  * a user reaches them.
  */
+/** What the output button's `data-engine` reads once each option has been chosen. */
+const OUTPUT_ENGINE = {
+  "playback-engine-local": "local",
+  "playback-engine-c64": "c64",
+  "playback-listen-both": "both",
+};
+
+/**
+ * A JS fragment that clicks one of the three output destinations, opening the chooser first.
+ *
+ * The destinations used to be three buttons sitting on the page, and the stages clicked one of
+ * them directly. They are now options inside a popover anchored to the output button on the
+ * volume row, so an option is not in the DOM until that button has been clicked — and a stage
+ * that goes straight for the option id reads "the option is not on the page" while the control
+ * is right there. Defines `pickOutput(id, label)`, which returns null or an error string.
+ */
+const PICK_OUTPUT = `const pickOutput=async(id,label)=>{
+  let e=q(id);
+  if(!e){
+    const t=q("playback-engine-toggle");
+    if(!t) return "the output button is not on the page";
+    t.click();await wait(900);
+    e=q(id);
+  }
+  if(!e) return "the "+label+" output option is not on the page";
+  e.click();await wait(1200);
+  return null;};`;
+
+/**
+ * The clock, in seconds, or null while it reads something that is not `m:ss`.
+ *
+ * Split rather than matched: a regex escape inside the template literal would have to be doubled
+ * to survive into the page, and `\\d` silently became `d` on the first attempt.
+ */
+const READ_ELAPSED = `(()=>{const e=document.querySelector('[data-testid="playback-elapsed"]');
+const parts=String(e?.innerText??"").trim().split(":");
+if(parts.length!==2) return JSON.stringify({seconds:null});
+const mins=Number(parts[0]),secs=Number(parts[1]);
+return JSON.stringify({seconds:Number.isFinite(mins)&&Number.isFinite(secs)?mins*60+secs:null});})()`;
+
+/**
+ * Wait until the clock belongs to THIS tune and is counting.
+ *
+ * Two shapes have to be told apart, and each defeated a simpler rule. The previous tune's clock
+ * keeps running for a second or two after the click, so "any reading that differs from the one
+ * sampled a moment ago" stops on the old tune's next tick — measured on a Pixel 4 with the local
+ * engine: 0:27, 0:28, then 0:00 for two seconds, then 0:01 and counting. Waiting only for the drop
+ * to a lower number then stops on the new tune's standing 0:00, which the remote path holds for
+ * longer than a second before it counts. So the wait requires both: a reading that has advanced on
+ * the one before it, and one that belongs to the new tune rather than to the old one.
+ *
+ * The polling is done here rather than inside the page because a single evaluate is capped at 15 s
+ * by `bughunt-cdp`, and a wait long enough for a slow start ran into that cap instead of failing on
+ * what it was measuring.
+ */
+const waitForTuneToStart = async (staleSeconds, timeoutMs = 25000) => {
+  const deadline = Date.now() + timeoutMs;
+  let previous = null;
+  while (Date.now() < deadline) {
+    const { seconds } = await js(READ_ELAPSED);
+    const belongsToThisTune = staleSeconds === 0 || seconds < staleSeconds;
+    if (seconds !== null && seconds > 0 && previous !== null && seconds > previous && belongsToThisTune) {
+      return seconds;
+    }
+    previous = seconds;
+    await sleep(400);
+  }
+  return null;
+};
+
 const gradePlayback = async (testId, label) => {
   const titles = await readPlaylist();
   const index = titles.indexOf(TONE_TUNES[0].title);
   const started = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
 const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
-const e=q("${testId}");
-if(!e) return JSON.stringify({error:"the ${label} engine option is not on the page"});
-e.click();await wait(1500);
+${PICK_OUTPUT}
+const pickError=await pickOutput("${testId}","${label}");
+if(pickError) return JSON.stringify({error:pickError});
 const items=document.querySelectorAll('[data-testid="playlist-item"]');
 const item=items[${index}]; if(!item) return JSON.stringify({error:"the tune left the playlist"});
 // Start THIS row, not "the current track". The row Play button calls
@@ -456,39 +527,27 @@ const item=items[${index}]; if(!item) return JSON.stringify({error:"the tune lef
 // something is already playing, which is why these stages recorded a clock frozen at 0:00.
 const rowPlay=item.querySelector('button[aria-label^="Play "]');
 if(!rowPlay) return JSON.stringify({error:"the row has no Play button"});
-// What the clock read for the PREVIOUS tune. Sampled before the click because the display keeps
-// showing it for about half a second afterwards, and a wait that stops at "anything but 0:00"
-// stops on that stale value. Measured on a Pixel 4, the clock reads 0:13 (the old position),
-// then 0:00 for roughly two seconds while the tune starts, and only then counts.
-const staleElapsed=q("playback-elapsed")?.innerText??null;
+const parts=String(q("playback-elapsed")?.innerText??"").trim().split(":");
+const stale=parts.length===2?Number(parts[0])*60+Number(parts[1]):0;
 rowPlay.click();
-// So wait for a reading that is neither the old tune's nor a standing 0:00. That is the first
-// second of THIS tune, and it cannot be satisfied by either thing that is not it.
-for(let i=0;i<50;i++){
-  const now=q("playback-elapsed")?.innerText??"0:00";
-  if(now!=="0:00" && now!==staleElapsed) break;
-  await wait(300);
-}
-// Then let the sound reach the speaker. The clock starts when playback is SCHEDULED; the sink
-// still has its buffer to fill, and the microphone is on the far side of that. Recording the
-// moment the clock moved put a 250-300 ms hole at the very start of every take — located in the
-// gate's own recording at 0.00-0.30 s, with the remaining 9.7 s clean. That is the rig's own
-// latency, not a defect in the tune.
-await wait(700);
-// Two readings a second apart, because "it is playing" is a clock that ADVANCES, and one sample
-// at one instant cannot tell that from a clock parked at 0:00.
-const first=q("playback-elapsed")?.innerText??null;
-await wait(1100);
-const second=q("playback-elapsed")?.innerText??null;
-return JSON.stringify({engine:q("${testId}")?.getAttribute("aria-pressed"),
-  elapsed:second, advancing:first!==second});})()`);
+return JSON.stringify({engine:q("playback-engine-toggle")?.getAttribute("data-engine"),
+  stale:Number.isFinite(stale)?stale:0});})()`);
   if (started.error) throw new Error(started.error);
-  if (started.engine !== "true") throw new Error(`the ${label} engine did not take`);
-  if (!started.advancing) {
-    throw new Error(
-      `${label}: the transport says playing but the clock is not advancing (stuck at ${started.elapsed})`,
-    );
+  // Read from the output button, not the option: clicking an option closes the chooser, so the
+  // option's own aria-pressed is gone by the time playback has started.
+  if (started.engine !== OUTPUT_ENGINE[testId]) {
+    throw new Error(`the ${label} engine did not take (the output button reads ${started.engine})`);
   }
+  const elapsed = await waitForTuneToStart(started.stale);
+  if (elapsed === null) {
+    throw new Error(`${label}: the transport says playing but the clock never started counting`);
+  }
+  // Then let the sound reach the speaker. The clock starts when playback is SCHEDULED; the sink
+  // still has its buffer to fill, and the microphone is on the far side of that. Recording the
+  // moment the clock moved put a 250-300 ms hole at the very start of every take — located in the
+  // gate's own recording at 0.00-0.30 s, with the remaining 9.7 s clean. That is the rig's own
+  // latency, not a defect in the tune.
+  await sleep(700);
 
   const wav = path.join(TMP, `sid-${testId}.wav`);
   await recordMic(wav, TONE_SECONDS);
@@ -526,15 +585,24 @@ const gradeCrossfade = async () => {
   const index = titles.indexOf(TONE_TUNES[0].title);
   const started = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
 const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
-q("playback-engine-local")?.click();await wait(1200);
+${PICK_OUTPUT}
+const pickError=await pickOutput("playback-engine-local","Local");
+if(pickError) return JSON.stringify({error:pickError});
 const items=document.querySelectorAll('[data-testid="playlist-item"]');
 const item=items[${index}]; if(!item) return JSON.stringify({error:"the tune left the playlist"});
 // See the note in the sid-remote/sid-local starter: start the row, never the transport toggle.
 const rowPlay=item.querySelector('button[aria-label^="Play "]');
 if(!rowPlay) return JSON.stringify({error:"the row has no Play button"});
-rowPlay.click();await wait(4000);
-return JSON.stringify({elapsed:q("playback-elapsed")?.innerText??null});})()`);
+const parts=String(q("playback-elapsed")?.innerText??"").trim().split(":");
+const stale=parts.length===2?Number(parts[0])*60+Number(parts[1]):0;
+rowPlay.click();
+return JSON.stringify({stale:Number.isFinite(stale)?stale:0});})()`);
   if (started.error) throw new Error(started.error);
+  // The same wait as the other playback stages, rather than a fixed four seconds: the recording has
+  // to start with the first tune already sounding, and a local start has taken up to nine.
+  if ((await waitForTuneToStart(started.stale)) === null) {
+    throw new Error("the first tune never started counting, so there is no join to record");
+  }
 
   const wav = path.join(TMP, "crossfade.wav");
   const recording = run("arecord", [
@@ -633,6 +701,21 @@ const setMasterVolume = async (value) => {
   if (!response.ok || errors.length) throw new Error(`the Ultimate would not take Vol Master=${value}: ${errors}`);
 };
 
+/**
+ * Un-mute the machine before an audible stage.
+ *
+ * Preflight already does this once, but it does not survive the run: the app mutes the machine
+ * every time playback pauses and the gate pauses between stages, so `crossfade` graded silence
+ * after `sid-local` had run, and a `--only` list that omits preflight graded silence throughout.
+ * Whatever was found first is still what `restoreRig` puts back.
+ */
+const ensureMachineAudible = async () => {
+  const master = await readMasterVolume().catch(() => null);
+  if (!master || master.current !== "OFF") return;
+  if (initialMasterVolume === null) initialMasterVolume = master.current;
+  await setMasterVolume(master.fallback);
+};
+
 const preflight = async () => {
   const { stdout: devices } = await adb(["devices"]);
   const attached = devices.split("\n").filter((l) => /\tdevice$/.test(l));
@@ -644,6 +727,37 @@ const preflight = async () => {
   const page = await js("(()=>JSON.stringify({route:location.pathname,hidden:document.hidden}))()");
   if (typeof page !== "object") throw new Error("the WebView is not reachable over CDP — re-run adb forward");
   if (page.hidden) throw new Error("the WebView is hidden; run `adb shell wm dismiss-keyguard` and foreground the app");
+
+  /*
+   * Refuse to run under a display-size override.
+   *
+   * A small-screen audit leaves `wm size 480x640` / `wm density 240` in force, and it survives
+   * everything short of a reset. `input` then taps the on-screen stick at coordinates the page's
+   * own devicePixelRatio says are right and the touch lands where the stick is not: the probe PRG
+   * starts, its banner reads, and the machine reports 0 frames held and 0 cells moved — which
+   * reads as a broken machine:input path rather than as rig state. `av-clarity` fails beside it
+   * with "0 tone bursts found". Both pass after a reset with no code change, so the override is
+   * worth one line here instead of two misattributed stage failures.
+   */
+  const override = await adb(["shell", "wm", "size"]).then(({ stdout }) => /Override size:\s*(\S+)/.exec(stdout)?.[1]);
+  if (override) {
+    throw new Error(
+      `the display is overridden to ${override}; run "adb shell wm size reset && adb shell wm density reset", ` +
+        "relaunch the app and re-attach adb forward",
+    );
+  }
+
+  /*
+   * Start from a machine that is not running anything.
+   *
+   * `input` uploads a probe program and `av-clarity` starts a tune, and neither takes on a machine
+   * left inside a previous stage's program: the probe's telemetry block never appears, which the
+   * stage reports as "joystick-probe did not start", and the tone stimulus is heard as one burst
+   * instead of eight. Both passed immediately after a reset with no code change. `silenceC64`
+   * already resets between the audible stages, so this only extends the same treatment to the
+   * start of the run — and the machine is one the gate is about to drive anyway.
+   */
+  await silenceC64();
 
   const volume = await readVolume();
   if (volume.speaker > MAX_VOLUME) {
