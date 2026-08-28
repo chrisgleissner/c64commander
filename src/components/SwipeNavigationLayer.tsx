@@ -17,6 +17,7 @@ import { TAB_ROUTES, resolveSwipeTarget, tabIndexForPath } from "@/lib/navigatio
 import { AppChromeModeProvider } from "@/components/layout/AppChromeContext";
 import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { APP_SETTINGS_KEYS, loadEnableSwipeNavigation } from "@/lib/config/appSettings";
+import { useTourActive } from "@/hooks/useTourActive";
 import {
   buildRunwayPanelIndexes,
   resolveAdjacentIndexes,
@@ -162,6 +163,10 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
   const interstitialActive = useInterstitialActive();
   const [runway, setRunway] = useState<RunwayState>(() => buildIdleState(routeIndex));
   const [swipeNavigationEnabled, setSwipeNavigationEnabled] = useState(() => loadEnableSwipeNavigation());
+  // Disabled outright while the tour runs: a swipe that changed the page under a spotlight would
+  // leave the spotlight pointing at nothing (spec.md section 8.1).
+  const tourActive = useTourActive();
+  const swipeEnabled = swipeNavigationEnabled && !tourActive;
   const runwayRef = useRef(runway);
   runwayRef.current = runway;
 
@@ -329,7 +334,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
 
   const onProgress = useCallback(
     (dx: number, velocityX: number) => {
-      if (!swipeNavigationEnabled) return;
+      if (!swipeEnabled) return;
       const current = runwayRef.current;
       if (current.phase === "transitioning") return;
 
@@ -340,12 +345,12 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
         lastVelocityX: velocityX,
       }));
     },
-    [swipeNavigationEnabled],
+    [swipeEnabled],
   );
 
   const onCommit = useCallback(
     (direction: SwipeDirection, metadata: SwipeGestureMetadata) => {
-      if (!swipeNavigationEnabled) return;
+      if (!swipeEnabled) return;
       const current = runwayRef.current;
       if (current.phase === "transitioning") return;
 
@@ -370,12 +375,12 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       });
       navigate(TAB_ROUTES[targetIndex].path);
     },
-    [navigate, swipeNavigationEnabled],
+    [navigate, swipeEnabled],
   );
 
   const onCancel = useCallback(
     (metadata: SwipeGestureMetadata) => {
-      if (!swipeNavigationEnabled) return;
+      if (!swipeEnabled) return;
       const current = runwayRef.current;
       if (current.phase === "transitioning") return;
 
@@ -397,11 +402,11 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
         lastVelocityX: metadata.velocityX,
       });
     },
-    [swipeNavigationEnabled],
+    [swipeEnabled],
   );
 
   useSwipeGesture(containerRef, {
-    enabled: swipeNavigationEnabled,
+    enabled: swipeEnabled,
     onProgress,
     onCommit,
     onCancel,
@@ -437,7 +442,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       style={{ height: "calc(100dvh - var(--app-tab-bar-reserved-height))", touchAction: "pan-y pinch-zoom" }}
       inert={interstitialActive ? "" : undefined}
       data-testid="swipe-navigation-container"
-      data-swipe-enabled={swipeNavigationEnabled ? "true" : "false"}
+      data-swipe-enabled={swipeEnabled ? "true" : "false"}
       data-swipe-motion-mode={runtimeMotionMode}
       data-swipe-effects={transitionConfig.reducedEffects ? "reduced" : "standard"}
       data-interstitial-active={interstitialActive ? "true" : "false"}

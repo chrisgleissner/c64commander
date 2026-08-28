@@ -228,6 +228,31 @@ describe("SwipeNavigationLayer", () => {
     expect(screen.getByTestId("location-probe")).toHaveTextContent("/");
   });
 
+  /*
+   * The tour disables swiping outright: a swipe that changed the page under a spotlight would leave
+   * the spotlight pointing at nothing (spec.md section 8.1).
+   */
+  it("disables swipe gestures while the tour is running, even with the setting on", async () => {
+    document.documentElement.setAttribute("data-tour-active", "true");
+    try {
+      renderLayer("/", undefined, false, true);
+      expect(await screen.findByTestId("swipe-navigation-container")).toHaveAttribute("data-swipe-enabled", "false");
+
+      act(() => {
+        capturedCallbacks?.onCommit(1, { dx: -120, dy: 0, velocityX: -1 });
+      });
+
+      expect(screen.getByTestId("location-probe")).toHaveTextContent("/");
+    } finally {
+      document.documentElement.removeAttribute("data-tour-active");
+    }
+  });
+
+  it("swipes again as soon as the tour ends", async () => {
+    renderLayer("/", undefined, false, true);
+    expect(await screen.findByTestId("swipe-navigation-container")).toHaveAttribute("data-swipe-enabled", "true");
+  });
+
   it("renders the requested slot and settings sub-routes", async () => {
     renderLayer("/settings/open-source-licenses");
     expect(await screen.findByText("Settings Page")).toBeInTheDocument();

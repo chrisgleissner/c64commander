@@ -40,6 +40,7 @@ import { SystemInfo } from "./home/components/SystemInfo";
 import { HomeSearchField } from "./home/components/HomeSearchField";
 import { ListenAndPlay } from "./home/components/ListenAndPlay";
 import { ConnectC64Card } from "./home/components/ConnectC64Card";
+import { DeviceStepsOffer } from "@/components/tour/DeviceStepsOffer";
 import { MachineControls } from "./home/components/MachineControls";
 import { AudioMixer } from "./home/components/AudioMixer";
 import { StreamStatus } from "./home/components/StreamStatus";
@@ -1275,6 +1276,8 @@ function HomePageContent() {
               System info moves below both: a version line is not the most important thing on the
               landing screen, and it is what used to occupy that position. */}
           <HomeSearchField />
+
+          <DeviceStepsOffer />
 
           <ListenAndPlay />
 
