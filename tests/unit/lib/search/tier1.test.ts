@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { TIER1_SOURCES, likedTuneEntries, recentlyPlayedEntries } from "@/lib/search/tier1";
 import { getSearchEntries, registerSearchEntries, resetSearchRegistryForTests } from "@/lib/search/registry";
 import { saveRecentlyPlayed, toRecentlyPlayedEntry } from "@/lib/sidRadio/recentlyPlayed";
+import { resolveSearchHandler } from "@/lib/search/handlers";
 
 /*
  * Tier 1 is what THIS installation knows about, and it is the half of the index that a build cannot
@@ -76,5 +77,22 @@ describe("tier 1", () => {
     const after = getSearchEntries();
     expect(after.length).toBe(before + 1);
     expect(after.some((entry) => entry.titleDefault === "Commando")).toBe(true);
+  });
+
+  /*
+   * The generated index has a contract test that every handlerId it names resolves. Tier 1 is built
+   * at runtime and is not in that file, so nothing held its targets to the same rule: a typo would
+   * have produced a row that looked fine and did nothing when activated.
+   */
+  it("names only handlers that resolve", () => {
+    for (const build of Object.values(TIER1_SOURCES)) {
+      for (const entry of build()) {
+        if (entry.target.kind !== "action") continue;
+        expect(
+          resolveSearchHandler(entry.target.handlerId),
+          `unresolved handler ${entry.target.handlerId}`,
+        ).not.toBeNull();
+      }
+    }
   });
 });

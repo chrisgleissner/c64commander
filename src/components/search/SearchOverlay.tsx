@@ -14,9 +14,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { useSearchResults, useRequirementContext, entrySubtitle, entryTitle } from "@/hooks/useSearchResults";
-import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
+import { isHvscInstalled } from "@/lib/hvsc/hvscStateStore";
 import { useSearchTier2 } from "@/hooks/useSearchTier2";
-import { SKIP_ATTR, resolveInputProfile, resolveSemanticAction } from "@/lib/input";
+import { PROMOTED_ENTRY_IDS } from "@/lib/search/promoted";
+import { SKIP_ATTR, isDeviceBackKey, resolveInputProfile, resolveSemanticAction } from "@/lib/input";
 import { t } from "@/lib/i18n";
 import { resolveSearchHandler } from "@/lib/search/handlers";
 import { recordPickedEntry, recordRecentQuery, loadRecentQueries } from "@/lib/search/history";
@@ -58,10 +59,15 @@ const GROUP_LABELS: Readonly<Record<SearchGroup, string>> = {
 const GROUP_ORDER: readonly SearchGroup[] = ["action", "page", "setting", "config", "docs", "disk", "music"];
 
 /** The four capabilities that are one action from Home, offered as chips on an empty query. */
-const PROMOTED_ENTRY_IDS = ["action.sid-radio", "action.resume-session", "action.recently-played", "page.play"];
-
 const rowId = (entryId: string) => `search-row-${entryId.replace(/[^a-zA-Z0-9-]/g, "-")}`;
 const recentQueryId = (query: string) => `search-recent-${query.replace(/[^a-zA-Z0-9-]/g, "-")}`;
+/*
+ * The DOM id of each keyboard stop, which is also its testid.
+ *
+ * One expression per kind, not two: the arrow keys find a stop by id and the tests find it by
+ * testid, and when those were written out separately a renamed row was reachable by one and not the
+ * other.
+ */
 const moreStopId = (group: SearchGroup) => `search-more-${group}`;
 const EMPTY_PLAY_STOP_ID = "search-empty-play";
 
@@ -126,7 +132,7 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
    * enabled and opened a sheet with nothing to search, instead of saying what it needs and offering
    * the row that installs it. The state is a localStorage read, taken once per open.
    */
-  const hvscReady = useMemo(() => loadHvscState().installedVersion > 0, [request]);
+  const hvscReady = useMemo(() => isHvscInstalled(), [request]);
   const ctx = useRequirementContext(hvscReady);
   const { results } = useSearchResults(query, ctx);
   const tier2 = useSearchTier2(query, true);
@@ -276,7 +282,9 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       const action = resolveSemanticAction(OVERLAY_KEYMAP, event);
-      if (action === "escape" || action === "back") {
+      // The device Back key resolves to no action at all, so it is asked for by name. Without this
+      // the hardware Back button could not close the overlay on the handset.
+      if (action === "escape" || action === "back" || isDeviceBackKey(event)) {
         event.preventDefault();
         close();
         return;
@@ -420,7 +428,7 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
               variant="outline"
               onClick={openPlayAndClose}
               className={cn(activeStopId === EMPTY_PLAY_STOP_ID && "bg-muted")}
-              data-testid="search-empty-play"
+              data-testid={EMPTY_PLAY_STOP_ID}
             >
               {t("search.openPlay", "Open Play")}
             </Button>
@@ -478,7 +486,7 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
                     "flex min-h-11 w-full items-center px-2 text-left text-sm text-primary",
                     activeStopId === moreStopId(section.group) && "bg-muted",
                   )}
-                  data-testid={`search-more-${section.group}`}
+                  data-testid={moreStopId(section.group)}
                 >
                   {t("search.more", "More in")} {GROUP_LABELS[section.group]} ({section.total})
                 </button>

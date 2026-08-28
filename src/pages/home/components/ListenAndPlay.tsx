@@ -21,6 +21,8 @@ import { loadRecentlyPlayed } from "@/lib/sidRadio/recentlyPlayed";
 import { resolveSearchHandler } from "@/lib/search/handlers";
 import { navigateToSearchTarget } from "@/lib/search/navigate";
 import { resolveEntry } from "@/lib/search/requirements";
+import { isHvscInstalled } from "@/lib/hvsc/hvscStateStore";
+import { PROMOTED_ENTRY_IDS } from "@/lib/search/promoted";
 import { getSearchEntries } from "@/lib/search/registry";
 import { PLAYBACK_SESSION_KEY } from "@/pages/playFiles/playFilesUtils";
 import type { ResolvedSearchEntry } from "@/lib/search/types";
@@ -69,22 +71,32 @@ export const ListenAndPlay = () => {
     setRecentCount(loadRecentlyPlayed().length);
   }, []);
 
-  const ctx = useRequirementContext(true);
+  // Read, not assumed: an entry that needs the archive must resolve as unavailable where it has
+  // never been prepared, so the tile says what it is waiting for instead of failing when tapped.
+  const hvscReady = useMemo(() => isHvscInstalled(), []);
+  const ctx = useRequirementContext(hvscReady);
 
-  const tiles = useMemo<Tile[]>(
-    () => [
-      { entryId: "action.sid-radio", icon: Radio, label: t("home.tile.radio", "Radio") },
-      { entryId: "action.resume-session", icon: Play, label: t("home.tile.resume", "Resume"), detail: sessionLabel },
-      {
-        entryId: "action.recently-played",
+  /*
+   * Built from the shared list, in its order. The tiles and the search overlay's chips are the same
+   * four promoted actions, and holding the ids in two places is how they came to disagree about the
+   * fourth one.
+   */
+  const tiles = useMemo<Tile[]>(() => {
+    const byId: Record<string, Omit<Tile, "entryId">> = {
+      "action.sid-radio": { icon: Radio, label: t("home.tile.radio", "Radio") },
+      "action.resume-session": { icon: Play, label: t("home.tile.resume", "Resume"), detail: sessionLabel },
+      "action.recently-played": {
         icon: History,
         label: t("home.tile.recent", "Recent"),
         detail: recentCount > 0 ? `${recentCount}` : null,
       },
-      { entryId: "home.section.live-view", icon: Monitor, label: t("home.tile.liveView", "Live View") },
-    ],
-    [recentCount, sessionLabel],
-  );
+      "home.section.live-view": { icon: Monitor, label: t("home.tile.liveView", "Live View") },
+    };
+    return PROMOTED_ENTRY_IDS.flatMap((entryId) => {
+      const tile = byId[entryId];
+      return tile === undefined ? [] : [{ entryId, ...tile }];
+    });
+  }, [recentCount, sessionLabel]);
 
   const resolved = useMemo(() => {
     const entries = getSearchEntries();

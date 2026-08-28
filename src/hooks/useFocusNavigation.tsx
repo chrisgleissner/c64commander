@@ -67,6 +67,7 @@ import {
 import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";
 import { KeypadGuidanceBar } from "@/components/input/KeypadGuidanceBar";
 import { isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
+import { isDeviceBackKey } from "@/lib/input/keyEvent";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 
 /** DOM attribute marking the current focus-ring item while in key-navigation modality. */
@@ -429,7 +430,7 @@ export const FocusNavigationProvider = ({
       // an error toast covered the screen with no key able to dismiss it. Reuse the toast's own
       // tap handler (dismiss + open Diagnostics), but let an open dialog win. The Pixel 4 hardware
       // Back key arrives as {key:"Escape",code:"",keyCode:0}, matching no declared "back" binding.
-      const isDeviceBackButton = event.key === "Escape" && event.code === "" && event.keyCode === 0;
+      const isDeviceBackButton = isDeviceBackKey(event);
       if ((action === "back" || isDeviceBackButton) && !document.querySelector(OPEN_OVERLAY_ANCESTOR_SELECTOR)) {
         const toast = document.querySelector<HTMLElement>('[data-testid="app-toast"]');
         if (toast) {

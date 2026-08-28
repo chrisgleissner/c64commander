@@ -193,7 +193,7 @@ function CategorySection({
   // d-pad + center. No-op in the default variant (no provider) and unchanged for
   // pointer/touch. The header `<button>` activates by click, toggling the section.
   const categoryHeaderFocusRef = useFocusItem<HTMLButtonElement>({
-    id: `config-category-${categoryName.toLowerCase().replace(/\s+/g, "-")}`,
+    id: `config-category-${configCategorySectionId(categoryName)}`,
     order: focusOrder,
     group: "config-categories",
   });
@@ -207,7 +207,7 @@ function CategorySection({
   // group action; every open section also shows Refresh. Used to gate keypad
   // focus-ring registration of those CTAs below.
   const hasCategoryGroupAction = isAudioMixer || isClockSettings;
-  const categorySlug = categoryName.toLowerCase().replace(/\s+/g, "-");
+  const categorySlug = configCategorySectionId(categoryName);
   const [soloState, dispatchSolo] = useReducer(soloReducer, { soloItem: null });
   const [audioConfiguredItems, setAudioConfiguredItems] = useState<ConfigListItem[]>([]);
   const audioConfiguredRef = useRef<ConfigListItem[]>([]);
@@ -787,17 +787,17 @@ function CategorySection({
       })),
     [audioConfiguredItems, authoritativeValues, categoryName, isAudioMixer, items],
   );
-  const sectionId = `config-section-${categoryName.toLowerCase().replace(/\s+/g, "-")}`;
+  const sectionId = `config-section-${configCategorySectionId(categoryName)}`;
 
   return (
     <CollapsibleSection
       scope="config"
-      id={categoryName.toLowerCase().replace(/\s+/g, "-")}
+      id={configCategorySectionId(categoryName)}
       title={displayTitle ?? categoryName}
       summary={groupLabel ?? undefined}
       icon={FolderOpen}
       headerRef={categoryHeaderFocusRef}
-      toggleTestId={`config-category-${categoryName.toLowerCase().replace(/\s+/g, "-")}`}
+      toggleTestId={`config-category-${configCategorySectionId(categoryName)}`}
       bodyId={sectionId}
       onOpenChange={setIsOpen}
       onToggleClick={wrapUserEvent(() => undefined, "toggle", "ConfigSection", { title: categoryName }, "ConfigHeader")}

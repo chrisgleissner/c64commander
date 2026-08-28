@@ -7,7 +7,7 @@
  */
 
 import { useEffect } from "react";
-import { isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
+import { isAnyOverlayOpen, isEditableTarget } from "@/lib/input/eventTargets";
 import { keypadProfile } from "@/lib/input/profiles/keypad";
 import { findBinding } from "@/lib/input/keyEvent";
 import { requestSearchOpen } from "@/lib/search/overlayState";
@@ -35,7 +35,7 @@ export const SearchKeyListener = () => {
       // The same two exclusions the digit shortcuts apply: a text field owns its digits for T9,
       // and an open overlay owns the keyboard.
       if (isEditableTarget(event.target)) return;
-      if (document.querySelector(OPEN_OVERLAY_ANCESTOR_SELECTOR)) return;
+      if (isAnyOverlayOpen()) return;
 
       const binding = findBinding(keypadProfile, event);
       // `openSearch` is what the Commodore key will resolve to once its emitted code is known; it

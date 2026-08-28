@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
+import { isAnyOverlayOpen } from "@/lib/input/eventTargets";
 import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 
 /**
@@ -25,10 +25,7 @@ export const useArrangementPin = (): boolean => {
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
     const evaluate = () =>
-      setPinned(
-        document.querySelector(OPEN_OVERLAY_ANCESTOR_SELECTOR) !== null ||
-          document.documentElement.hasAttribute(TOUR_ACTIVE_ATTRIBUTE),
-      );
+      setPinned(isAnyOverlayOpen() || document.documentElement.hasAttribute(TOUR_ACTIVE_ATTRIBUTE));
     evaluate();
     const observer = new MutationObserver(evaluate);
     observer.observe(document.body, { childList: true, subtree: true });

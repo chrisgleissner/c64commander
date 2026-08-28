@@ -21,6 +21,7 @@ export {
   isDigitAction,
   digitForAction,
   normalizeKeyEvent,
+  isDeviceBackKey,
   resolveSemanticAction,
   findBinding,
 } from "./keyEvent";

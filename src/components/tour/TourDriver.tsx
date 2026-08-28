@@ -153,7 +153,10 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
     });
   }, [finish, lastIndex]);
 
-  const back = useCallback(() => setStepIndex((current) => Math.max(0, current - 1)), []);
+  // Clamped to the run's first step, not to zero: the device-steps offer starts partway in, and
+  // going back past its start would show a step the user has already been through and read as
+  // "Step 0 of 4".
+  const back = useCallback(() => setStepIndex((current) => Math.max(firstIndex, current - 1)), [firstIndex]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -241,14 +244,14 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
           <Button
             variant="outline"
             onClick={back}
-            disabled={stepIndex === 0}
+            disabled={stepIndex === firstIndex}
             className="min-h-11"
             data-testid="tour-back"
           >
             Back
           </Button>
           <Button onClick={next} className="min-h-11" data-testid="tour-next">
-            {stepIndex + 1 === TOUR_STEPS.length ? "Done" : "Next"}
+            {stepIndex === lastIndex ? "Done" : "Next"}
           </Button>
         </div>
       </div>

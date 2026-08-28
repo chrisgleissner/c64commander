@@ -430,5 +430,20 @@ describe("SearchOverlay", () => {
 
       await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
     });
+
+    /*
+     * The handset's hardware Back arrives as {key:"Escape", code:"", keyCode:0} and matches no
+     * keymap binding at all — spec.md 9.3 forbids binding keyCode 0, which would swallow every
+     * event reporting no code. Reading keys through the keymap alone therefore left the one key a
+     * keypad-only user has for "go back" unable to close the overlay.
+     */
+    it("closes on the device Back button, which no binding can express", async () => {
+      renderOverlay();
+      await open();
+
+      fireEvent.keyDown(screen.getByTestId("search-input"), { key: "Escape", code: "", keyCode: 0 });
+
+      await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
+    });
   });
 });

@@ -88,6 +88,9 @@ const hvscStateMocks = vi.hoisted(() => ({
     ingestionSummary: null,
     updates: {},
   })),
+  // The service asks the store whether the archive is installed rather than reading
+  // `installedVersion` itself, so the mock has to answer the same question the real store does.
+  isHvscInstalled: vi.fn(() => true),
 }));
 
 vi.mock("@/lib/hvsc/hvscStateStore", () => hvscStateMocks);
@@ -97,7 +100,7 @@ import { addLog, addErrorLog } from "@/lib/logging";
 import { InMemoryTextBackend } from "@/lib/songlengths";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
 import { saveHvscBrowseIndexSnapshot } from "@/lib/hvsc/hvscBrowseIndexStore";
-import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
+import { isHvscInstalled, loadHvscState } from "@/lib/hvsc/hvscStateStore";
 import {
   ensureHvscSonglengthsReadyOnColdStart,
   exportHvscSonglengthsSnapshot,
@@ -180,6 +183,10 @@ describe("hvscSongLengthService", () => {
 
   describe("discoverSonglengthFiles", () => {
     it("returns no files and skips filesystem probing when HVSC is not installed", async () => {
+      // Driven through the predicate the service actually consults. Setting `installedVersion` on
+      // the state alone stopped gating anything once the "is it installed" question moved into the
+      // store, and this test would have passed while the gate did nothing.
+      vi.mocked(isHvscInstalled).mockReturnValue(false);
       vi.mocked(loadHvscState).mockReturnValue({
         installedBaselineVersion: null,
         installedVersion: 0,
