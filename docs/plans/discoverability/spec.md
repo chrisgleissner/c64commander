@@ -70,7 +70,7 @@ quick actions consume it. The first-run tour consumes it.
 | D4  | The search key is `7`. `*` and `#` are not touched. | `*` already means three things (Diagnostics globally, host-separator cycling in a text field, drive/view toggle in Game Mode) and `#` likewise. `7` means one thing (T9 letters in a text field) and nothing outside one. `7` also continues the existing "digits go somewhere" grouping. |
 | D5  | The index is tiered: a **static tier compiled at build time**, and lazy tiers appended asynchronously. Generation runs in `prebuild`; a drift check runs in `lint`. | The pattern `feature-flags` and `menu-mapping` already use. `styles:check` alone is not enough: it runs only in `lint`, and `test:ci` never calls `lint`, so a stale generated file can pass the whole test suite. |
 | D6  | An entry whose precondition is unmet is **listed, disabled, with the reason** — never hidden. | Hiding "Live View" because no device is connected makes the app look like it cannot do it. |
-| D7  | Home gains two blocks above the existing machine Quick Actions: the search field, then **Listen and play**. The machine Quick Actions grid is unchanged. | Keeps "Start SID Radio" from ever being a neighbour of "Power Off". |
+| D7  | Home gains two blocks above the existing machine Quick Actions: the search field, then **Listen and play**. The machine Quick Actions grid is unchanged. | Keeps "Start SID Radio" from ever being a neighbour of "Power Off". **Revised in §17:** the section is gone and its four tiles sit inside Quick Actions, in bands that keep Radio away from Power Off. |
 | D8  | Home's offline arrangement is derived from the **selected device's** connection state and its bootstrap status (§7.2). No new network polling is introduced. | There is always at least one saved device — a default is bootstrapped on first launch and deleting the last one immediately replaces it (`savedDevices/store.ts:919`) — so "no saved device" is not a state that exists. Background health checks probe only the selected device (`useSavedDeviceHealthChecks.ts:439`); polling every saved device to manufacture a global answer would add traffic against hardware this repo already treats as fragile. |
 | D9  | The first-run tour **drives the real app**: it navigates to each page, spotlights the actual elements, and captions them. A step whose anchors cannot appear degrades to the same caption without a spotlight. | The user sees the app, not pictures of it, and the tour is the same length every time. |
 | D10 | The tour can be abandoned at any step, and restarted from **Docs** and from **Settings → About**. If it ran with no device, Home offers the remaining device steps once after the first successful connection. | A tour that can only be taken once helps only once. |
@@ -336,6 +336,10 @@ regenerates the index, so a test run cannot pass against a stale one.
 
 ### 6.1 Order
 
+**Revised in §17**, after the branch was used on a handset: "Listen and play" is no longer a section
+of its own, and System info moved to the foot of the page. The tables below describe revision 2 of
+this section; §17 states what changed and why.
+
 The current order, read from `HomePage.tsx`: System info (1254), Machine controls (1257), Live View
 (1286), CPU & RAM (1295), Ports (1422), **Video (1519)**, Audio mixer (1644), User interface (1648),
 Lighting (1665), Drives (1740), Printers (1769), Streams (1795), Config actions (1809). Thirteen
@@ -344,9 +348,9 @@ blocks. Revision 1 omitted Video and miscounted; this is the real list.
 | Position | Connected | Offline (settled, §7.2) |
 | --- | --- | --- |
 | 1 | Search field | Search field |
-| 2 | Listen and play | Listen and play |
+| 2 | Listen and play (§17: the four tiles moved into Quick Actions) | Listen and play (§17: rendered on their own, as the only usable actions) |
 | 3 | Machine Quick Actions | **Connect a C64** card |
-| 4 | System info | System info, app version only |
+| 4 | System info (§17: moved to the foot of the page) | System info, app version only (§17: at the foot) |
 | 5–16 | Live View, CPU & RAM, Ports, Video, Audio mixer, User interface, Lighting, Drives, Printers, Streams, Config actions — order unchanged | Rendered **closed**, under one line: "Connect a C64 Ultimate to reach its settings." |
 
 System info moves below the actions. A version line is not the most important thing on the landing
@@ -375,7 +379,7 @@ implementation must honour:
 | Tile | What it does | Reuses | Disabled when |
 | --- | --- | --- | --- |
 | **Radio** | Navigates to `/play?radio=1`; Play opens the station launcher on mount | `SidRadioLauncherSheet`, `useSidRadio` | SID Radio is switched off in Settings |
-| **Resume** | Restores the last tune session and plays, naming the tune on the tile | `PLAYBACK_SESSION_KEY` and the restore path in `usePlaybackPersistence` (`usePlaybackPersistence.ts:297`) | There is no restorable session |
+| **Last tune** ("Resume" in revision 1; see §17) | Restores the last tune session and plays, naming the tune on the tile | `PLAYBACK_SESSION_KEY` and the restore path in `usePlaybackPersistence` (`usePlaybackPersistence.ts:297`) | There is no restorable session |
 | **Recent** | Opens a sheet of recently played tunes, disks and programs | `recentlyPlayed.ts`, extended (§6.4) | The list is empty |
 | **Live View** | Expands and scrolls to the Live View card | `LiveViewCard`, the §5.12 resolver | No device, or `supportsStreaming` is false |
 
@@ -461,7 +465,7 @@ interface TourStep {
   readonly body: string;
   /**
    * Where to go and what to spotlight. `testIds` is a list because a step may point at more than one
-   * element — step 4 highlights both the Resume and the Recent tile — and the spotlight is then the
+   * element — step 4 highlights both the Last tune and the Recent tile — and the spotlight is then the
    * union of their rects. Absent for a step that explains rather than points.
    */
   readonly anchor?: { path: string; scope?: string; sectionId?: string; testIds: readonly string[] };
@@ -488,7 +492,7 @@ abbreviations, and no word that only means something inside this app.
 | 1 | What this app is | none, centred | same |
 | 2 | Search — what it finds, and the three ways in | Home search field | same |
 | 3 | Music with no C64 | Home *Radio* tile | same — fully demonstrable |
-| 4 | Pick up where you left off | Home *Resume* and *Recent* tiles | same |
+| 4 | Pick up where you left off | Home *Last tune* and *Recent* tiles | same |
 | 5 | Build a playlist — this device, the machine's storage, the online library | the Play tab | same |
 | 6 | Disks and games — mount, collect, swap, create | the Disks tab | same |
 | 7 | Connecting your C64 | the health badge | explains; offers to run discovery |
@@ -707,7 +711,7 @@ pre-rename build, and the commit that adds it is the commit that renames.
 | Requirements | The resolver handles every member of the union exhaustively; with each requirement unmet, its entries are listed, disabled, and carry the stated reason. |
 | Drift | `styles:check` and `search:check` clean; a hand-edited generated file fails `search:check`. |
 | Overlay keyboard | Down does not move DOM focus out of the field; `aria-activedescendant` advances; the result list carries `data-key-nav-skip`. |
-| Home offline | At the settled offline state Home renders the search field, Listen and play and the Connect card, and the device section headers render with their bodies closed. |
+| Home offline | At the settled offline state Home renders the search field, the four promoted actions on their own (§17), and the Connect card, and the device section headers render with their bodies closed. |
 | Section store | An offline period does not change any persisted section open-state. |
 | Connection flap | 8 seconds unreachable does not reorder Home; 9 seconds does; reconnection restores it immediately; nothing reorders while an overlay is open or the tour is running. |
 | Recently played | A real v1 payload migrates to v2 with `category: "sid"`. |

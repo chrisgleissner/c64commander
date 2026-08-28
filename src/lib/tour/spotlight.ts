@@ -16,7 +16,7 @@ export interface Rect {
 /**
  * The union of every anchor's rect, padded.
  *
- * A step may point at more than one element — step 4 spotlights both the Resume and the Recent tile
+ * A step may point at more than one element — step 4 spotlights both the Last tune and the Recent tile
  * — so the spotlight is what encloses them all rather than one of them.
  */
 export const unionRect = (rects: readonly Rect[], padding = 6): Rect | null => {

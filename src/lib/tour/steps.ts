@@ -27,7 +27,7 @@ export interface TourStep {
   readonly body: string;
   /**
    * Where to go and what to spotlight. `testIds` is a LIST because a step may point at more than
-   * one element — step 4 highlights both the Resume and the Recent tile — and the spotlight is then
+   * one element — step 4 highlights both the Last tune and the Recent tile — and the spotlight is then
    * the union of their rects. Absent for a step that explains rather than points.
    */
   readonly anchor?: {
