@@ -165,7 +165,10 @@ def main() -> int:
         time.sleep(2)
         click_testid(cdp, "sid-radio-style-0", timeout_s=8)
         time.sleep(10)
-        # Route the C64's audio here.
+        # Route the C64's audio here. The three destinations are options inside a popover on the
+        # volume row, so the output button has to be opened before the option is on the page.
+        click_testid(cdp, "playback-engine-toggle", timeout_s=8)
+        time.sleep(1)
         click_testid(cdp, "playback-listen-both", timeout_s=8)
         time.sleep(10)
         stream_tune = cdp.evaluate("(() => { const m = document.body.innerText.match(/[\\w\\-\\.]+\\.sid/); return m ? m[0] : null; })()")

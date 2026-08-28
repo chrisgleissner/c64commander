@@ -150,6 +150,10 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
           variant="ghost"
           size="sm"
           data-testid="playback-engine-toggle"
+          /* The selected destination, readable while the chooser is closed. The options carry
+             aria-pressed, but they exist only while the popover is open, so nothing outside the
+             component could otherwise tell where the sound is going. */
+          data-engine={selected}
           aria-label={`Listen on ${currentLabel}. Change where the sound comes out.`}
           className={cn("h-11 shrink-0 gap-1 rounded-full bg-muted px-2.5 text-xs font-normal", className)}
         >

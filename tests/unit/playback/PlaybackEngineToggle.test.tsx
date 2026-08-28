@@ -60,6 +60,20 @@ describe("PlaybackEngineToggle", () => {
     expect(screen.getByTestId("playback-engine-c64")).toHaveAttribute("aria-pressed", "false");
   });
 
+  /*
+   * The chosen destination has to be readable while the chooser is CLOSED. The options carry
+   * aria-pressed but only exist while the popover is open, so the HIL merge gate — which clicks an
+   * option, starts a tune and then checks where the sound went — had nothing left to read and
+   * reported that the engine never took.
+   */
+  it("reports the selected destination on the closed output button", () => {
+    renderChooser();
+    expect(screen.getByTestId("playback-engine-toggle")).toHaveAttribute("data-engine", "c64");
+    fireEvent.click(screen.getByTestId("playback-engine-local"));
+    expect(screen.getByTestId("playback-engine-toggle")).toHaveAttribute("data-engine", "local");
+    expect(screen.queryByTestId("playback-engine-local")).toBeNull();
+  });
+
   it("switches back to C64", () => {
     localStorage.setItem("c64u_playback_engine", "local");
     renderChooser();
