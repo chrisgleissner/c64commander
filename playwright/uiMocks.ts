@@ -9,6 +9,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { Locator, Page } from "@playwright/test";
+import { TOUR_STATE_KEY, TOUR_TAKEN_STATE } from "./tourState";
 import { ensureValidSidBase64 } from "./sidFixture";
 import { variant } from "../src/generated/variant";
 
@@ -34,14 +35,6 @@ type HvscFixture = {
   }>;
 };
 
-/** The tour state a launch that has already seen the tour writes. */
-export const TOUR_TAKEN_STATE = JSON.stringify({
-  completedAt: 1735689600000,
-  skippedAt: null,
-  lastStepId: null,
-  deviceStepsPending: false,
-});
-
 /**
  * Record the first-run tour as taken, before the first navigation.
  *
@@ -51,7 +44,7 @@ export const TOUR_TAKEN_STATE = JSON.stringify({
  * and so do not seed anything else.
  */
 export async function markTourTaken(page: Page) {
-  await page.addInitScript((state: string) => localStorage.setItem("c64u_tour_state:v1", state), TOUR_TAKEN_STATE);
+  await page.addInitScript((state: string) => localStorage.setItem(TOUR_STATE_KEY, state), TOUR_TAKEN_STATE);
 }
 
 export async function dismissStartupDiscoveryDialog(page: Page) {
