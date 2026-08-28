@@ -478,21 +478,32 @@ same caption. That is what "explain rather than skip" means.
 
 ### 8.3 Steps
 
+The steps come from the app's own inventory of itself — the search index's pages, actions, config
+areas and settings, and the page-by-page description in `README.md` — rather than from what was built
+most recently. Captions are written for a reader who has never used a C64: short sentences, no
+abbreviations, and no word that only means something inside this app.
+
 | # | Step | Anchors | Without a device |
 | --- | --- | --- | --- |
 | 1 | What this app is | none, centred | same |
 | 2 | Search — what it finds, and the three ways in | Home search field | same |
-| 3 | Listening with no C64 | Home *Radio* tile | same — fully demonstrable |
-| 4 | Your tunes: liked, recent, resume | Home *Resume* and *Recent* tiles | same |
-| 5 | Connecting a C64 Ultimate | the health badge | explains; offers to run discovery |
-| 6 | Controlling the machine | Home Quick Actions | explains |
-| 7 | Live View and Remote Input | Home Live View card | explains |
-| 8 | Making it yours — appearance, text size, display profile | Settings → Appearance | same |
+| 3 | Music with no C64 | Home *Radio* tile | same — fully demonstrable |
+| 4 | Pick up where you left off | Home *Resume* and *Recent* tiles | same |
+| 5 | Build a playlist — this device, the machine's storage, the online library | the Play tab | same |
+| 6 | Disks and games — mount, collect, swap, create | the Disks tab | same |
+| 7 | Connecting your C64 | the health badge | explains; offers to run discovery |
+| 8 | Controlling the machine | Home Quick Actions | explains |
+| 9 | Watch, listen and play | Home Live View card | explains |
+| 10 | Every machine setting | the Config tab | explains |
+| 11 | Getting around without the screen | the Home tab | same |
+| 12 | Help is built in, and restarts this tour | Docs tour card | same |
+| 13 | Making it yours — appearance, text size, display profile | Settings → Appearance | same |
 
 ### 8.4 Controls and state
 
-A caption bar at the bottom carries `Step n of 8` and **Skip**, **Back**, **Next**. Keypad: Left and
-Right are Back and Next, OK is Next, the Back key skips. Every control is at least 44 px.
+A caption bar at the bottom carries `Step n of <count>` and **Skip**, **Back**, **Next**. Keypad: Left
+and Right are Back and Next, OK is Next, the Back key skips. Every control is at least 44 px. The bar
+is padded by the bottom safe-area inset, or its buttons are drawn under the system navigation bar.
 
 ```ts
 // c64u_tour_state:v1
@@ -746,3 +757,15 @@ revision 1 against the code, and each was confirmed against the cited file befor
 | 18 | Resume cited the mixer-snapshot module, not the tune session | §6.3 cites `PLAYBACK_SESSION_KEY` in `usePlaybackPersistence` |
 | 19 | The "byte-identical" test had no baseline to compare against | §10.3 commits a pre-rename token fixture |
 | 20 | Broken cross-references, a one-anchor tour step needing two, and a type that did not match the i18n claim | Fixed in §7.2, §8.2 and §5.1 |
+
+## 15. Changes made during implementation
+
+Measured on the handset rather than reasoned about, and recorded here because they change what earlier
+sections assume.
+
+| What | Why | Where |
+| --- | --- | --- |
+| Text sizes capped at **1.15**; "Larger" and "Largest" retired and migrated to the largest remaining size | At 1.3 the Config section titles lost half their text behind a two-line clamp and a tab left the bar; at 1.5 ten section titles and the page title itself were cut. §5 and §6 assume the app renders at the sizes it offers. | `src/lib/textScale.ts` |
+| The header no longer draws the **status word** below 430px | D3 argues the app bar has no room to spare, and it was spending nine wide letters repeating what the glyph's colour and the problem count already say. The page title now fits on one line at the Large size. | `src/index.css`, `UnifiedHealthBadge.tsx` |
+| The tour is **thirteen steps**, from the app's own inventory | §8.3's eight steps were weighted towards the most recent work and covered neither the playlist, disks, configuration nor the built-in guides. | §8.3 |
+| The focus engine ignores mutations confined to a **skipped subtree** | The overlay rewrites its result list on every keystroke, and each one rescanned the page behind it. §5.5's 100 ms budget was unreachable without this: p95 went from 109.3 ms to 47.9 ms. | `src/lib/input/focusDiscovery.ts` |
