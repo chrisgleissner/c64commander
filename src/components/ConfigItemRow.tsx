@@ -259,6 +259,10 @@ export function ConfigItemRow({
     className,
   );
 
+  // Global search deep-links to one live item by name (spec.md section 5.9), and no per-item testid
+  // exists — every row shares "config-item-layout". These two attributes are that address.
+  const itemAnchorProps = { "data-config-item": name, "data-config-category": category ?? undefined };
+
   const labelBlockClassName = cn("flex flex-col", layout === "horizontal" ? "shrink-0 pr-4" : "w-full");
 
   const resolvedLabelClassName = cn(
@@ -431,7 +435,13 @@ export function ConfigItemRow({
     const checked = String(displayValue).trim().toLowerCase() === checkboxMapping.checkedValue.trim().toLowerCase();
 
     return (
-      <div ref={containerRef} className={rowClassName} data-testid="config-item-layout" data-layout={layout}>
+      <div
+        ref={containerRef}
+        className={rowClassName}
+        data-testid="config-item-layout"
+        data-layout={layout}
+        {...itemAnchorProps}
+      >
         <div className={labelBlockClassName}>
           <span ref={labelRef} className={resolvedLabelClassName} data-testid="config-item-label">
             {displayLabel}
@@ -471,7 +481,13 @@ export function ConfigItemRow({
     const displayValueLabel = displayValue === "" ? "(empty)" : formatOption(String(displayValue));
 
     return (
-      <div ref={containerRef} className={rowClassName} data-testid="config-item-layout" data-layout={layout}>
+      <div
+        ref={containerRef}
+        className={rowClassName}
+        data-testid="config-item-layout"
+        data-layout={layout}
+        {...itemAnchorProps}
+      >
         <div className={labelBlockClassName}>
           <span ref={labelRef} className={resolvedLabelClassName} data-testid="config-item-label">
             {displayLabel}
@@ -527,7 +543,13 @@ export function ConfigItemRow({
     const formatSliderLabel = (index: number) => formatOption(String(resolveSliderOption(index)));
 
     return (
-      <div ref={containerRef} className={rowClassName} data-testid="config-item-layout" data-layout={layout}>
+      <div
+        ref={containerRef}
+        className={rowClassName}
+        data-testid="config-item-layout"
+        data-layout={layout}
+        {...itemAnchorProps}
+      >
         <div className={labelBlockClassName}>
           <span ref={labelRef} className={resolvedLabelClassName} data-testid="config-item-label">
             {displayLabel}
@@ -586,6 +608,7 @@ export function ConfigItemRow({
       className={rowClassName}
       data-testid="config-item-layout"
       data-layout={layout}
+      {...itemAnchorProps}
     >
       <div className={labelBlockClassName}>
         <span ref={labelRef} className={resolvedLabelClassName} data-testid="config-item-label">

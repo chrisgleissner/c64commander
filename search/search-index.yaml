@@ -1,0 +1,997 @@
+# Tier 0 of the app-wide search index. Compiled by scripts/compile-search-index.mjs into
+# src/generated/searchIndex.ts.
+#
+# See docs/plans/discoverability/spec.md section 5 for the entry contract. Two rules matter most
+# when adding a row here:
+#
+#   1. `requires` must be honest about what has to be true for the anchor to RENDER. An entry that
+#      is enabled when its anchor cannot render is a resolver timeout in front of a user.
+#   2. Ids are persisted in the recently-picked list, so an id must not change between builds.
+#
+# `title` is the English default beside `title_key`; a translation can be added under that key
+# without regenerating this file. `keywords` are English-only in this release.
+
+version: 1
+
+entries:
+  # ---------------------------------------------------------------------------------------------
+  # Pages
+  # ---------------------------------------------------------------------------------------------
+  - id: page.home
+    title_key: search.page.home
+    title: Home
+    subtitle_key: search.page.home.subtitle
+    subtitle: Status, machine controls and the quick settings
+    keywords: [start, landing, main, dashboard]
+    group: page
+    icon: home
+    target: { kind: route, path: / }
+
+  - id: page.play
+    title_key: search.page.play
+    title: Play files
+    subtitle_key: search.page.play.subtitle
+    subtitle: Playlist, transport and SID Radio
+    keywords: [music, tunes, sid, playlist, player, listen]
+    group: page
+    icon: play
+    target: { kind: route, path: /play }
+
+  - id: page.disks
+    title_key: search.page.disks
+    title: Disks
+    subtitle_key: search.page.disks.subtitle
+    subtitle: Drives, mounted images and the disk library
+    keywords: [drive, d64, image, mount, floppy]
+    group: page
+    icon: hard-drive
+    target: { kind: route, path: /disks }
+
+  - id: page.config
+    title_key: search.page.config
+    title: Config
+    subtitle_key: search.page.config.subtitle
+    subtitle: Every setting the connected machine exposes
+    keywords: [device settings, machine settings, firmware, categories]
+    group: page
+    icon: sliders
+    target: { kind: route, path: /config }
+
+  - id: page.settings
+    title_key: search.page.settings
+    title: Settings
+    subtitle_key: search.page.settings.subtitle
+    subtitle: How this app looks and behaves
+    keywords: [preferences, options, app settings]
+    group: page
+    icon: settings
+    target: { kind: route, path: /settings }
+
+  - id: page.docs
+    title_key: search.page.docs
+    title: Docs
+    subtitle_key: search.page.docs.subtitle
+    subtitle: How each page works
+    keywords: [help, manual, guide, documentation]
+    group: page
+    icon: book
+    target: { kind: route, path: /docs }
+
+  - id: page.open-source-licenses
+    title_key: search.page.openSourceLicenses
+    title: Open source licenses
+    subtitle_key: search.page.openSourceLicenses.subtitle
+    subtitle: The libraries this app is built on
+    keywords: [licence, license, attribution, third party, gpl]
+    group: page
+    icon: file-text
+    target: { kind: route, path: /settings/open-source-licenses }
+
+  # ---------------------------------------------------------------------------------------------
+  # Actions
+  # ---------------------------------------------------------------------------------------------
+  - id: action.sid-radio
+    title_key: search.action.sidRadio
+    title: Start SID Radio
+    subtitle_key: search.action.sidRadio.subtitle
+    subtitle: Thousands of tunes, played on this device, no C64 needed
+    keywords: [radio, station, shuffle, stream, random, listen]
+    group: action
+    icon: radio
+    target: { kind: action, handlerId: startSidRadio }
+    requires:
+      - { kind: flag, flag: sid_radio_enabled }
+
+  - id: action.resume-session
+    title_key: search.action.resumeSession
+    title: Resume the last tune
+    subtitle_key: search.action.resumeSession.subtitle
+    subtitle: Pick up where playback stopped
+    keywords: [continue, restore, last played, resume]
+    group: action
+    icon: play
+    target: { kind: action, handlerId: resumePlaybackSession }
+    requires:
+      - { kind: session }
+
+  - id: action.recently-played
+    title_key: search.action.recentlyPlayed
+    title: Recently played
+    subtitle_key: search.action.recentlyPlayed.subtitle
+    subtitle: Tunes, disks and programs you opened before
+    keywords: [history, recent, again, last]
+    group: action
+    icon: history
+    target: { kind: action, handlerId: openRecentlyPlayed }
+
+  - id: action.find-a-tune
+    title_key: search.action.findATune
+    title: Find a tune
+    subtitle_key: search.action.findATune.subtitle
+    subtitle: Search the HVSC archive by title or composer
+    keywords: [hvsc, search music, composer, archive, tune]
+    group: action
+    icon: search
+    target: { kind: action, handlerId: openFindATune }
+    requires:
+      - { kind: hvsc }
+
+  - id: action.liked-tunes
+    title_key: search.action.likedTunes
+    title: Liked tunes
+    subtitle_key: search.action.likedTunes.subtitle
+    subtitle: Everything you marked with a heart
+    keywords: [favourites, favorites, hearts, liked]
+    group: action
+    icon: heart
+    target: { kind: action, handlerId: openLikedTunes }
+    requires:
+      - { kind: flag, flag: sid_radio_enabled }
+
+  - id: action.play-pause
+    title_key: search.action.playPause
+    title: Play or pause
+    subtitle_key: search.action.playPause.subtitle
+    subtitle: Also on the F1 key
+    keywords: [transport, pause, stop, resume playback]
+    group: action
+    icon: play
+    target: { kind: action, handlerId: mediaPlayPause }
+
+  - id: action.next-tune
+    title_key: search.action.nextTune
+    title: Next tune
+    subtitle_key: search.action.nextTune.subtitle
+    subtitle: Also on the F3 key
+    keywords: [skip, forward, next track]
+    group: action
+    icon: skip-forward
+    target: { kind: action, handlerId: mediaNext }
+
+  - id: action.diagnostics
+    title_key: search.action.diagnostics
+    title: Diagnostics
+    subtitle_key: search.action.diagnostics.subtitle
+    subtitle: Device health, app activity and support data
+    keywords: [logs, health, debug, support, troubleshoot]
+    group: action
+    icon: activity
+    target: { kind: action, handlerId: openDiagnostics }
+
+  - id: action.key-explorer
+    title_key: search.action.keyExplorer
+    title: Key Explorer
+    subtitle_key: search.action.keyExplorer.subtitle
+    subtitle: See what code a key on this device emits
+    keywords: [keypad, keyboard, keycode, binding, remote key]
+    group: action
+    icon: keyboard
+    target: { kind: action, handlerId: openKeyExplorer }
+
+  - id: action.device-switcher
+    title_key: search.action.deviceSwitcher
+    title: Switch device
+    subtitle_key: search.action.deviceSwitcher.subtitle
+    subtitle: Choose which saved C64 the app talks to
+    keywords: [change device, pick device, saved devices]
+    group: action
+    icon: repeat
+    target: { kind: action, handlerId: openDeviceSwitcher }
+
+  - id: action.quick-menu
+    title_key: search.action.quickMenu
+    title: Quick menu
+    subtitle_key: search.action.quickMenu.subtitle
+    subtitle: Jump to a page, expand sections, open Game Mode
+    keywords: [menu, shortcuts, jump]
+    group: action
+    icon: menu
+    target: { kind: action, handlerId: openQuickMenu }
+
+  - id: action.expand-sections
+    title_key: search.action.expandSections
+    title: Expand all sections
+    subtitle_key: search.action.expandSections.subtitle
+    subtitle: Open every card on the page you are on
+    keywords: [open all, unfold, expand]
+    group: action
+    icon: chevrons-down
+    target: { kind: action, handlerId: expandAllSections }
+
+  - id: action.collapse-sections
+    title_key: search.action.collapseSections
+    title: Collapse all sections
+    subtitle_key: search.action.collapseSections.subtitle
+    subtitle: Close every card on the page you are on
+    keywords: [close all, fold, collapse]
+    group: action
+    icon: chevrons-up
+    target: { kind: action, handlerId: collapseAllSections }
+
+  - id: action.tour
+    title_key: search.action.tour
+    title: Take the tour
+    subtitle_key: search.action.tour.subtitle
+    subtitle: A guided walk through what this app does
+    keywords: [intro, introduction, first run, walkthrough, onboarding, help]
+    group: action
+    icon: compass
+    target: { kind: action, handlerId: startTour }
+
+  - id: action.game-mode
+    title_key: search.action.gameMode
+    title: Game Mode
+    subtitle_key: search.action.gameMode.subtitle
+    subtitle: Picture, sound and a joystick on this device
+    keywords: [joystick, controller, play games, remote]
+    group: action
+    icon: gamepad
+    target: { kind: action, handlerId: startGameMode }
+    requires:
+      - { kind: flag, flag: remote_input_enabled }
+      - { kind: device }
+      - { kind: capability, capability: supportsMachineInput }
+
+  - id: action.remote-input
+    title_key: search.action.remoteInput
+    title: Remote Input
+    subtitle_key: search.action.remoteInput.subtitle
+    subtitle: Type on the C64 from this device
+    keywords: [keyboard, type, joystick, control]
+    group: action
+    icon: keyboard
+    target: { kind: action, handlerId: openRemoteInput }
+    requires:
+      - { kind: flag, flag: remote_input_enabled }
+      - { kind: device }
+      - { kind: capability, capability: supportsMachineInput }
+
+  # ---------------------------------------------------------------------------------------------
+  # Home sections
+  # ---------------------------------------------------------------------------------------------
+  - id: home.section.quick-actions
+    title_key: search.home.quickActions
+    title: Quick Actions
+    subtitle_key: search.home.quickActions.subtitle
+    subtitle: Reset, reboot, pause, power off
+    keywords: [reset, reboot, power, pause, resume, menu, machine]
+    group: action
+    icon: zap
+    target: { kind: section, path: /, scope: home, id: quick-actions }
+
+  - id: home.section.live-view
+    title_key: search.home.liveView
+    title: Live View
+    subtitle_key: search.home.liveView.subtitle
+    subtitle: Watch and listen to the C64 on this device
+    keywords: [mirror, video, screen, stream, watch, listen, av]
+    group: action
+    icon: monitor
+    target: { kind: section, path: /, scope: home, id: live-view }
+    requires:
+      - { kind: flag, flag: live_view_enabled }
+      - { kind: device }
+      - { kind: capability, capability: supportsStreaming }
+
+  - id: home.section.cpu-ram
+    title_key: search.home.cpuRam
+    title: CPU & RAM
+    subtitle_key: search.home.cpuRam.subtitle
+    subtitle: Turbo, CPU speed, badline timing, RAM expansion
+    keywords: [turbo, speed, supercpu, badline, reu, ram expansion, memory]
+    group: config
+    icon: cpu
+    target: { kind: section, path: /, scope: home, id: cpu-ram }
+    requires:
+      - { kind: device }
+
+  - id: home.section.ports
+    title_key: search.home.ports
+    title: Ports
+    subtitle_key: search.home.ports.subtitle
+    subtitle: Joystick input, serial bus, cartridge, user port
+    keywords: [joystick, swap, serial, iec, cartridge, user port]
+    group: config
+    icon: plug
+    target: { kind: section, path: /, scope: home, id: ports }
+    requires:
+      - { kind: device }
+
+  - id: home.section.video
+    title_key: search.home.video
+    title: Video
+    subtitle_key: search.home.video.subtitle
+    subtitle: Screen colours, video mode, HDMI, scanlines
+    keywords: [palette, colours, colors, hdmi, pal, ntsc, scanlines, analog, digital]
+    group: config
+    icon: monitor
+    target: { kind: section, path: /, scope: home, id: video }
+    requires:
+      - { kind: device }
+
+  - id: home.section.audio
+    title_key: search.home.audio
+    title: Audio mixer
+    subtitle_key: search.home.audio.subtitle
+    subtitle: SID sockets, volume, pan and shaping
+    keywords: [sid, volume, mixer, pan, "6581", "8580", ultisid, sound]
+    group: config
+    icon: sliders
+    target: { kind: section, path: /, scope: home, id: audio }
+    requires:
+      - { kind: device }
+
+  - id: home.section.user-interface
+    title_key: search.home.userInterface
+    title: User Interface
+    subtitle_key: search.home.userInterface.subtitle
+    subtitle: The machine's own menu overlay and colour scheme
+    keywords: [overlay, wasd, cursors, colour scheme, color scheme, menu]
+    group: config
+    icon: panel-top
+    target: { kind: section, path: /, scope: home, id: user-interface }
+    requires:
+      - { kind: device }
+
+  - id: home.section.lighting
+    title_key: search.home.lighting
+    title: Lighting
+    subtitle_key: search.home.lighting.subtitle
+    subtitle: Case light and keyboard light
+    keywords: [led, light, rgb, keyboard lighting, case light, colour]
+    group: config
+    icon: lightbulb
+    target: { kind: section, path: /, scope: home, id: lighting }
+    requires:
+      - { kind: flag, flag: lighting_studio_enabled }
+      - { kind: device }
+
+  - id: home.section.drives
+    title_key: search.home.drives
+    title: Drives
+    subtitle_key: search.home.drives.subtitle
+    subtitle: Drive A, B and Soft-IEC on the machine
+    keywords: [drive, "1541", mount, bus id, disk, reset drive]
+    group: config
+    icon: hard-drive
+    target: { kind: section, path: /, scope: home, id: drives }
+    requires:
+      - { kind: device }
+
+  - id: home.section.printers
+    title_key: search.home.printers
+    title: Printers
+    subtitle_key: search.home.printers.subtitle
+    subtitle: Printer power, bus and reset
+    keywords: [printer, print, mps, bus]
+    group: config
+    icon: printer
+    target: { kind: section, path: /, scope: home, id: printers }
+    requires:
+      - { kind: device }
+
+  - id: home.section.streams
+    title_key: search.home.streams
+    title: Streams
+    subtitle_key: search.home.streams.subtitle
+    subtitle: VIC, audio and debug stream targets
+    keywords: [stream, vic, udp, multicast, endpoint, target]
+    group: config
+    icon: waves
+    target: { kind: section, path: /, scope: home, id: streams }
+    requires:
+      - { kind: device }
+      - { kind: capability, capability: supportsStreaming }
+
+  - id: home.section.config-actions
+    title_key: search.home.configActions
+    title: Config actions
+    subtitle_key: search.home.configActions.subtitle
+    subtitle: Save, load, revert and reset the machine's settings
+    keywords: [save config, load config, revert, reset to default, flash, profile]
+    group: action
+    icon: settings
+    target: { kind: section, path: /, scope: home, id: config-actions }
+    requires:
+      - { kind: device }
+
+  # ---------------------------------------------------------------------------------------------
+  # Settings sections
+  # ---------------------------------------------------------------------------------------------
+  - id: settings.section.appearance
+    title_key: search.settings.appearance
+    title: Appearance
+    subtitle_key: search.settings.appearance.subtitle
+    subtitle: Theme, style, text size, display profile, orientation
+    keywords: [theme, dark, light, style, colour, color, font, text size, rotation]
+    group: setting
+    icon: palette
+    target: { kind: section, path: /settings, scope: settings, id: appearance }
+
+  - id: settings.section.connection
+    title_key: search.settings.connection
+    title: Connection
+    subtitle_key: search.settings.connection.subtitle
+    subtitle: Saved devices, hostname, ports and password
+    keywords: [device, host, ip, port, password, ftp, telnet, connect, network]
+    group: setting
+    icon: wifi
+    target: { kind: section, path: /settings, scope: settings, id: connection }
+
+  - id: settings.section.diagnostics
+    title_key: search.settings.diagnostics
+    title: Diagnostics
+    subtitle_key: search.settings.diagnostics.subtitle
+    subtitle: Open diagnostics and turn on debug logging
+    keywords: [logs, debug, trace, support]
+    group: setting
+    icon: activity
+    target: { kind: section, path: /settings, scope: settings, id: diagnostics }
+
+  - id: settings.section.play-and-disk
+    title_key: search.settings.playAndDisk
+    title: Play and Disk
+    subtitle_key: search.settings.playAndDisk.subtitle
+    subtitle: Autostart, boot menu, stream ports and buffers
+    keywords: [autostart, boot, launch, stream port, buffer, latency, subfolder]
+    group: setting
+    icon: play
+    target: { kind: section, path: /settings, scope: settings, id: play-and-disk }
+
+  - id: settings.section.features-stable
+    title_key: search.settings.featuresStable
+    title: Stable Features
+    subtitle_key: search.settings.featuresStable.subtitle
+    subtitle: Supported capabilities you can switch on and off
+    keywords: [feature flags, toggles, switches, capabilities]
+    group: setting
+    icon: toggle-right
+    target: { kind: section, path: /settings, scope: settings, id: feature-group-stable }
+
+  - id: settings.section.features-experimental
+    title_key: search.settings.featuresExperimental
+    title: Experimental Features
+    subtitle_key: search.settings.featuresExperimental.subtitle
+    subtitle: Capabilities still under rollout
+    keywords: [feature flags, experimental, beta, toggles]
+    group: setting
+    icon: flask
+    target: { kind: section, path: /settings, scope: settings, id: feature-group-experimental }
+
+  - id: settings.section.sid-radio
+    title_key: search.settings.sidRadio
+    title: SID Radio
+    subtitle_key: search.settings.sidRadio.subtitle
+    subtitle: Station settings, rankings, playback engine and ROMs
+    keywords: [radio, station, engine, residfp, roms, crossfade, rankings, chip]
+    group: setting
+    icon: radio
+    target: { kind: section, path: /settings, scope: settings, id: sid-radio }
+
+  - id: settings.section.hvsc
+    title_key: search.settings.hvsc
+    title: HVSC
+    subtitle_key: search.settings.hvsc.subtitle
+    subtitle: Where the SID music collection comes from
+    keywords: [archive, music collection, download, update, base url]
+    group: setting
+    icon: cpu
+    target: { kind: section, path: /settings, scope: settings, id: hvsc }
+
+  - id: settings.section.online-archive
+    title_key: search.settings.onlineArchive
+    title: Online archive
+    subtitle_key: search.settings.onlineArchive.subtitle
+    subtitle: Browse and override the archive host
+    keywords: [commoserve, archive, browser, host, override, download]
+    group: setting
+    icon: cloud
+    target: { kind: section, path: /settings, scope: settings, id: online-archive }
+
+  - id: settings.section.device-safety
+    title_key: search.settings.deviceSafety
+    title: Device safety
+    subtitle_key: search.settings.deviceSafety.subtitle
+    subtitle: Circuit override and whether settings survive a restart
+    keywords: [flash, persist, circuit, override, safety, restart]
+    group: setting
+    icon: shield
+    target: { kind: section, path: /settings, scope: settings, id: device-safety }
+
+  - id: settings.section.notifications
+    title_key: search.settings.notifications
+    title: Notifications
+    subtitle_key: search.settings.notifications.subtitle
+    subtitle: How long a toast stays and which ones show
+    keywords: [toast, alert, message, duration, visibility]
+    group: setting
+    icon: bell
+    target: { kind: section, path: /settings, scope: settings, id: notifications }
+
+  - id: settings.section.about
+    title_key: search.settings.about
+    title: About
+    subtitle_key: search.settings.about.subtitle
+    subtitle: Version, licenses and documentation
+    keywords: [version, build, licence, license, credits, tour]
+    group: setting
+    icon: info
+    target: { kind: section, path: /settings, scope: settings, id: about }
+
+  # ---------------------------------------------------------------------------------------------
+  # Settings controls
+  # ---------------------------------------------------------------------------------------------
+  - id: settings.control.app-style
+    title_key: search.settings.appStyle
+    title: Style
+    subtitle_key: search.settings.appStyle.subtitle
+    subtitle: Seven colour styles on top of Light and Dark
+    keywords: [palette, colour, color, appearance, skin, cool grey, ocean teal, high contrast]
+    group: setting
+    icon: palette
+    target: { kind: control, path: /settings, scope: settings, sectionId: appearance, testId: settings-app-style }
+
+  - id: settings.control.text-size
+    title_key: search.settings.textSize
+    title: Text size
+    subtitle_key: search.settings.textSize.subtitle
+    subtitle: Default, Large, Larger or Largest
+    keywords: [font, bigger, smaller, readable, accessibility, zoom]
+    group: setting
+    icon: type
+    target: { kind: control, path: /settings, scope: settings, sectionId: appearance, testId: settings-text-size }
+
+  - id: settings.control.display-profile
+    title_key: search.settings.displayProfile
+    title: Display profile
+    subtitle_key: search.settings.displayProfile.subtitle
+    subtitle: Small, Standard, Large or Auto
+    keywords: [layout, density, tablet, phone, compact, size]
+    group: setting
+    icon: layout
+    target:
+      {
+        kind: control,
+        path: /settings,
+        scope: settings,
+        sectionId: appearance,
+        testId: settings-display-profile-override,
+      }
+
+  - id: settings.control.orientation
+    title_key: search.settings.orientation
+    title: Orientation
+    subtitle_key: search.settings.orientation.subtitle
+    subtitle: Portrait, Landscape or Auto
+    keywords: [rotate, rotation, landscape, portrait, screen]
+    group: setting
+    icon: rotate-cw
+    target:
+      {
+        kind: control,
+        path: /settings,
+        scope: settings,
+        sectionId: appearance,
+        testId: settings-screen-orientation-mode,
+      }
+
+  - id: settings.control.section-descriptions
+    title_key: search.settings.sectionDescriptions
+    title: Show section descriptions
+    subtitle_key: search.settings.sectionDescriptions.subtitle
+    subtitle: A line under each card title saying what is inside
+    keywords: [summary, description, card, hint]
+    group: setting
+    icon: text
+    target:
+      {
+        kind: control,
+        path: /settings,
+        scope: settings,
+        sectionId: appearance,
+        testId: settings-show-section-descriptions,
+      }
+
+  - id: settings.control.add-device
+    title_key: search.settings.addDevice
+    title: Add device
+    subtitle_key: search.settings.addDevice.subtitle
+    subtitle: Save another C64 Ultimate
+    keywords: [new device, second device, host, register]
+    group: setting
+    icon: plus
+    target: { kind: control, path: /settings, scope: settings, sectionId: connection, testId: settings-add-device }
+
+  - id: settings.control.discover-devices
+    title_key: search.settings.discoverDevices
+    title: Discover devices
+    subtitle_key: search.settings.discoverDevices.subtitle
+    subtitle: Scan this network for a C64 Ultimate
+    keywords: [scan, find, search network, autodetect]
+    group: setting
+    icon: radar
+    target:
+      { kind: control, path: /settings, scope: settings, sectionId: connection, testId: settings-discover-devices }
+
+  - id: settings.control.open-diagnostics
+    title_key: search.settings.openDiagnostics
+    title: Open diagnostics
+    subtitle_key: search.settings.openDiagnostics.subtitle
+    subtitle: Health, activity and support export
+    keywords: [logs, export, health, report, bug]
+    group: setting
+    icon: activity
+    target: { kind: control, path: /settings, scope: settings, sectionId: diagnostics, testId: diagnostics-open-dialog }
+
+  - id: settings.control.friendly-sid-names
+    title_key: search.settings.friendlySidNames
+    title: Friendly SID names
+    subtitle_key: search.settings.friendlySidNames.subtitle
+    subtitle: Show tune titles instead of file names
+    keywords: [titles, filenames, names, readable]
+    group: setting
+    icon: type
+    target:
+      { kind: control, path: /settings, scope: settings, sectionId: play-and-disk, testId: settings-friendly-sid-names }
+
+  - id: settings.control.search-inside-disks
+    title_key: search.settings.searchInsideDisks
+    title: Search inside disk images
+    subtitle_key: search.settings.searchInsideDisks.subtitle
+    subtitle: Look at what a .d64 holds when filtering
+    keywords: [d64, contents, in image, deep search]
+    group: setting
+    icon: search
+    target:
+      {
+        kind: control,
+        path: /settings,
+        scope: settings,
+        sectionId: play-and-disk,
+        testId: settings-search-inside-disks,
+      }
+    requires:
+      - { kind: flag, flag: in_image_search_enabled }
+
+  - id: settings.control.boot-menu-answer
+    title_key: search.settings.bootMenuAnswer
+    title: Answer the cartridge boot menu
+    subtitle_key: search.settings.bootMenuAnswer.subtitle
+    subtitle: Press the menu key for you after a reset
+    keywords: [boot, autostart, cartridge, menu key, launch safety]
+    group: setting
+    icon: power
+    target:
+      { kind: control, path: /settings, scope: settings, sectionId: play-and-disk, testId: settings-boot-menu-answer }
+    requires:
+      - { kind: flag, flag: launch_safety_enabled }
+
+  - id: settings.control.stream-video-port
+    title_key: search.settings.streamVideoPort
+    title: Video stream port
+    subtitle_key: search.settings.streamVideoPort.subtitle
+    subtitle: Where Live View listens for the picture
+    keywords: [port, udp, video, stream, network]
+    group: setting
+    icon: monitor
+    target:
+      { kind: control, path: /settings, scope: settings, sectionId: play-and-disk, testId: settings-stream-video-port }
+
+  - id: settings.control.stream-audio-port
+    title_key: search.settings.streamAudioPort
+    title: Audio stream port
+    subtitle_key: search.settings.streamAudioPort.subtitle
+    subtitle: Where Live View listens for the sound
+    keywords: [port, udp, audio, stream, network]
+    group: setting
+    icon: volume-2
+    target:
+      { kind: control, path: /settings, scope: settings, sectionId: play-and-disk, testId: settings-stream-audio-port }
+
+  - id: settings.control.stream-network-buffer
+    title_key: search.settings.streamNetworkBuffer
+    title: Audio network buffer
+    subtitle_key: search.settings.streamNetworkBuffer.subtitle
+    subtitle: How much sound is held back against Wi-Fi jitter
+    keywords: [buffer, latency, crackle, jitter, delay, audio]
+    group: setting
+    icon: volume-2
+    target:
+      {
+        kind: control,
+        path: /settings,
+        scope: settings,
+        sectionId: play-and-disk,
+        testId: settings-stream-network-buffer,
+      }
+
+  - id: settings.control.joystick-key-layout
+    title_key: search.settings.joystickKeyLayout
+    title: Joystick keys
+    subtitle_key: search.settings.joystickKeyLayout.subtitle
+    subtitle: Which keys steer in Game Mode
+    keywords: [joystick, keypad, binding, diamond, t9, custom]
+    group: setting
+    icon: gamepad
+    target:
+      {
+        kind: control,
+        path: /settings,
+        scope: settings,
+        sectionId: play-and-disk,
+        testId: settings-joystick-key-layout,
+      }
+    requires:
+      - { kind: flag, flag: remote_input_enabled }
+
+  - id: settings.control.game-mode-joystick
+    title_key: search.settings.gameModeJoystick
+    title: On-screen joystick
+    subtitle_key: search.settings.gameModeJoystick.subtitle
+    subtitle: Auto, Visible or Hidden in Game Mode
+    keywords: [joystick, touch, overlay, game mode]
+    group: setting
+    icon: gamepad
+    target:
+      { kind: control, path: /settings, scope: settings, sectionId: play-and-disk, testId: settings-game-mode-joystick }
+    requires:
+      - { kind: flag, flag: remote_input_enabled }
+
+  - id: settings.control.show-autofire
+    title_key: search.settings.showAutofire
+    title: Show Autofire button
+    subtitle_key: search.settings.showAutofire.subtitle
+    subtitle: An autofire control in Game Mode
+    keywords: [autofire, rapid, fire, game mode]
+    group: setting
+    icon: zap
+    target:
+      { kind: control, path: /settings, scope: settings, sectionId: play-and-disk, testId: settings-show-autofire }
+    requires:
+      - { kind: flag, flag: remote_input_enabled }
+
+  - id: settings.control.sid-radio-min-seconds
+    title_key: search.settings.sidRadioMinSeconds
+    title: Shortest tune to play
+    subtitle_key: search.settings.sidRadioMinSeconds.subtitle
+    subtitle: Skip anything a station finds shorter than this
+    keywords: [length, duration, short, minimum, station, skip]
+    group: setting
+    icon: clock
+    target:
+      {
+        kind: control,
+        path: /settings,
+        scope: settings,
+        sectionId: sid-radio,
+        testId: settings-sid-radio-min-seconds-input,
+      }
+
+  - id: settings.control.clear-rankings
+    title_key: search.settings.clearRankings
+    title: Clear my rankings
+    subtitle_key: search.settings.clearRankings.subtitle
+    subtitle: Forget every heart and cross
+    keywords: [reset likes, forget, hearts, taste, rankings]
+    group: setting
+    icon: trash
+    target: { kind: control, path: /settings, scope: settings, sectionId: sid-radio, testId: settings-clear-rankings }
+
+  - id: settings.control.hvsc-base-url
+    title_key: search.settings.hvscBaseUrl
+    title: HVSC base URL
+    subtitle_key: search.settings.hvscBaseUrl.subtitle
+    subtitle: Where the SID collection is downloaded from
+    keywords: [url, mirror, download, archive, source]
+    group: setting
+    icon: link
+    target: { kind: control, path: /settings, scope: settings, sectionId: hvsc, testId: hvsc-base-url }
+
+  - id: settings.control.open-online-archive
+    title_key: search.settings.openOnlineArchive
+    title: Open archive browser
+    subtitle_key: search.settings.openOnlineArchive.subtitle
+    subtitle: Browse the online archive of disks and programs
+    keywords: [commoserve, browse, download, games, programs]
+    group: setting
+    icon: cloud
+    target: { kind: control, path: /settings, scope: settings, sectionId: online-archive, testId: open-online-archive }
+
+  - id: settings.control.persist-config-to-flash
+    title_key: search.settings.persistConfigToFlash
+    title: Keep device settings after a restart
+    subtitle_key: search.settings.persistConfigToFlash.subtitle
+    subtitle: Write config changes to the machine's flash
+    keywords: [flash, save, persist, restart, power cycle, permanent]
+    group: setting
+    icon: save
+    target:
+      {
+        kind: control,
+        path: /settings,
+        scope: settings,
+        sectionId: device-safety,
+        testId: settings-persist-config-to-flash,
+      }
+
+  - id: settings.control.allow-circuit-override
+    title_key: search.settings.allowCircuitOverride
+    title: Allow circuit override
+    subtitle_key: search.settings.allowCircuitOverride.subtitle
+    subtitle: Let the app change settings that can stress the hardware
+    keywords: [safety, override, protection, advanced]
+    group: setting
+    icon: shield
+    target:
+      {
+        kind: control,
+        path: /settings,
+        scope: settings,
+        sectionId: device-safety,
+        testId: settings-allow-circuit-override,
+      }
+
+  - id: settings.control.about-build-info
+    title_key: search.settings.aboutBuildInfo
+    title: App version
+    subtitle_key: search.settings.aboutBuildInfo.subtitle
+    subtitle: Which build of the app this is
+    keywords: [version, build, number, commit, release]
+    group: setting
+    icon: info
+    target: { kind: control, path: /settings, scope: settings, sectionId: about, testId: settings-about-build-info }
+
+  # ---------------------------------------------------------------------------------------------
+  # Docs sections
+  # ---------------------------------------------------------------------------------------------
+  - id: docs.section.getting-started
+    title_key: search.docs.gettingStarted
+    title: Getting started
+    subtitle_key: search.docs.gettingStarted.subtitle
+    subtitle: Getting the app talking to your C64
+    keywords: [setup, first, connect, network, begin, help]
+    group: docs
+    icon: wifi
+    target: { kind: section, path: /docs, scope: docs, id: getting-started }
+
+  - id: docs.section.home
+    title_key: search.docs.home
+    title: About the Home page
+    subtitle_key: search.docs.home.subtitle
+    subtitle: What Home shows and what it controls
+    keywords: [help, home, explain]
+    group: docs
+    icon: home
+    target: { kind: section, path: /docs, scope: docs, id: home }
+
+  - id: docs.section.play
+    title_key: search.docs.play
+    title: About playing files
+    subtitle_key: search.docs.play.subtitle
+    subtitle: Playlists, transport and where sound comes out
+    keywords: [help, play, music, explain]
+    group: docs
+    icon: play
+    target: { kind: section, path: /docs, scope: docs, id: play }
+
+  - id: docs.section.disks
+    title_key: search.docs.disks
+    title: About disks and drives
+    subtitle_key: search.docs.disks.subtitle
+    subtitle: Mounting images and managing the library
+    keywords: [help, disk, drive, explain]
+    group: docs
+    icon: hard-drive
+    target: { kind: section, path: /docs, scope: docs, id: disks }
+
+  - id: docs.section.disk-swapping
+    title_key: search.docs.diskSwapping
+    title: About swapping disks
+    subtitle_key: search.docs.diskSwapping.subtitle
+    subtitle: Multi-disk games and side changes
+    keywords: [help, swap, side, multi disk, explain]
+    group: docs
+    icon: repeat
+    target: { kind: section, path: /docs, scope: docs, id: disk-swapping }
+
+  - id: docs.section.config
+    title_key: search.docs.config
+    title: About Config
+    subtitle_key: search.docs.config.subtitle
+    subtitle: How the machine's own settings are grouped
+    keywords: [help, config, explain]
+    group: docs
+    icon: sliders
+    target: { kind: section, path: /docs, scope: docs, id: config }
+
+  - id: docs.section.settings
+    title_key: search.docs.settings
+    title: About Settings
+    subtitle_key: search.docs.settings.subtitle
+    subtitle: What each app setting decides
+    keywords: [help, settings, explain]
+    group: docs
+    icon: settings
+    target: { kind: section, path: /docs, scope: docs, id: settings }
+
+  - id: docs.section.diagnostics
+    title_key: search.docs.diagnostics
+    title: About Diagnostics
+    subtitle_key: search.docs.diagnostics.subtitle
+    subtitle: Reading health and exporting support data
+    keywords: [help, diagnostics, logs, explain]
+    group: docs
+    icon: activity
+    target: { kind: section, path: /docs, scope: docs, id: diagnostics }
+
+  # ---------------------------------------------------------------------------------------------
+  # Config items that exist on every supported machine. The rest of the live config tree is tier 2,
+  # built from the data the Config page already fetches (spec.md section 5.9).
+  # ---------------------------------------------------------------------------------------------
+  - id: config.item.audio-mixer-vol-ultisid-1
+    title_key: search.config.volUltisid1
+    title: Vol UltiSid 1
+    subtitle_key: search.config.volUltisid1.subtitle
+    subtitle: Audio Mixer
+    keywords: [volume, ultisid, mixer, level, sid]
+    group: config
+    icon: sliders
+    target: { kind: configItem, category: Audio Mixer, itemName: Vol UltiSid 1 }
+    requires:
+      - { kind: device }
+
+  - id: config.item.led-strip-mode
+    title_key: search.config.ledStripMode
+    title: LedStrip Mode
+    subtitle_key: search.config.ledStripMode.subtitle
+    subtitle: LED Strip Settings
+    keywords: [led, strip, light, mode, rgb]
+    group: config
+    icon: lightbulb
+    target: { kind: configItem, category: LED Strip Settings, itemName: LedStrip Mode }
+    requires:
+      - { kind: device }
+
+  - id: config.item.network-hostname
+    title_key: search.config.networkHostname
+    title: Host Name
+    subtitle_key: search.config.networkHostname.subtitle
+    subtitle: Network Settings
+    keywords: [hostname, name, network, dns, address]
+    group: config
+    icon: wifi
+    target: { kind: configItem, category: Network Settings, itemName: Host Name }
+    requires:
+      - { kind: device }
+
+  - id: config.item.user-interface-color-scheme
+    title_key: search.config.colorScheme
+    title: Color Scheme
+    subtitle_key: search.config.colorScheme.subtitle
+    subtitle: User Interface Settings
+    keywords: [colour, color, scheme, menu, theme, ultimate]
+    group: config
+    icon: palette
+    target: { kind: configItem, category: User Interface Settings, itemName: Color Scheme }
+    requires:
+      - { kind: device }

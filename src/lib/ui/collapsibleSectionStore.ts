@@ -197,3 +197,35 @@ export const writeSectionState = (scope: string, id: string, open: boolean): voi
   entries.set(compositeKey(scope, id), open);
   writeRawEntries(OPEN_SECTIONS_KEY, entries);
 };
+
+/**
+ * Asks one named card to open, so search and the tour can land on a control inside it.
+ *
+ * Scoped rather than broadcast, unlike the bulk event above: the caller names exactly one section
+ * and every other card on the page is left as the user set it. A card that opens this way persists
+ * the choice like any other, because the user asked for that section.
+ */
+export const SECTION_OPEN_REQUEST_EVENT = "c64u-collapsible-section-open-request";
+
+export interface SectionOpenRequestDetail {
+  readonly scope: string;
+  readonly id: string;
+}
+
+export const requestSectionOpen = (scope: string, id: string): void => {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<SectionOpenRequestDetail>(SECTION_OPEN_REQUEST_EVENT, { detail: { scope, id } }),
+  );
+};
+
+export const subscribeSectionOpenRequest = (handler: (scope: string, id: string) => void): (() => void) => {
+  if (typeof window === "undefined") return () => undefined;
+  const listener = (event: Event) => {
+    const detail = (event as CustomEvent<SectionOpenRequestDetail>).detail;
+    if (!detail) return;
+    handler(detail.scope, detail.id);
+  };
+  window.addEventListener(SECTION_OPEN_REQUEST_EVENT, listener);
+  return () => window.removeEventListener(SECTION_OPEN_REQUEST_EVENT, listener);
+};

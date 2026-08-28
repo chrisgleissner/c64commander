@@ -1291,3 +1291,21 @@ button:focus-visible,
 :root[data-display-profile="compact"] .tab-bar {
   padding-bottom: var(--app-chrome-rail-padding-y);
 }
+
+/* The landing highlight search, the Home quick actions and the tour all leave on whatever they
+   reached (spec.md section 5.12). Outline and box-shadow only, never a border or a size: the
+   element must not move under the finger that is about to touch it. */
+[data-search-landed="true"] {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px hsl(var(--ring) / 0.25);
+  border-radius: var(--radius);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-search-landed="true"] {
+    transition:
+      outline-color 150ms ease-out,
+      box-shadow 150ms ease-out;
+  }
+}

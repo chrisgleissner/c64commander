@@ -58,6 +58,8 @@ import {
   type TerminologyOverlay,
 } from "@/lib/config/menuMapping";
 import { MenuPageSection } from "@/pages/config/MenuPageSection";
+import { configCategorySectionId, subscribeConfigItemFocus } from "@/lib/search/configDeepLink";
+import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
 import { UnroutedCategorySections } from "@/pages/config/UnroutedCategorySections";
 
 type ConfigListItem = {
@@ -925,6 +927,17 @@ const flattenMenuPages = (hierarchy: MenuHierarchy): MenuPageEntry[] => {
   return entries;
 };
 
+/** Every REST category a menu page reads from, so a deep link can find the card that holds one. */
+const restCategoriesOfPage = (page: MenuNode): Set<string> => {
+  const categories = new Set<string>();
+  const walk = (node: MenuNode) => {
+    if (node.kind === "item" && node.rest) categories.add(node.rest.category);
+    for (const child of node.children ?? []) walk(child);
+  };
+  walk(page);
+  return categories;
+};
+
 // The single REST category a page reads from when it is a flat, single-category page
 // (used to delegate the Audio Mixer page to the specialized CategorySection).
 const soleRestCategory = (page: MenuNode): string | null => {
@@ -980,6 +993,23 @@ export default function ConfigBrowserPage() {
         entry.page.label.toLowerCase().includes(query) || (entry.groupLabel ?? "").toLowerCase().includes(query),
     );
   }, [menuPages, searchQuery]);
+
+  /*
+   * Global search deep-links to one live item (spec.md section 5.9). Which card holds it depends
+   * on the mode: a menu page can read several categories, a REST-grouped card is the category. The
+   * item's own row carries data-config-item, so the resolver takes it from here once it renders.
+   */
+  useEffect(
+    () =>
+      subscribeConfigItemFocus(({ category }) => {
+        const owningPage = menuPages.find((entry) => restCategoriesOfPage(entry.page).has(category));
+        const sectionId = owningPage
+          ? owningPage.page.label.toLowerCase().replace(/\s+/g, "-")
+          : configCategorySectionId(category);
+        requestSectionOpen("config", sectionId);
+      }),
+    [menuPages],
+  );
 
   const liveCategories = categoriesData?.categories ?? [];
   // Categories whose unclaimed items smart-routing cannot place on any menu page (an

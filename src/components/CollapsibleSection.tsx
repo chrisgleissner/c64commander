@@ -17,6 +17,7 @@ import {
   announceSectionOpened,
   loadShowSectionDescriptions,
   subscribeSectionsBulk,
+  subscribeSectionOpenRequest,
   readSectionStates,
   writeSectionState,
 } from "@/lib/ui/collapsibleSectionStore";
@@ -67,6 +68,12 @@ export interface CollapsibleSectionProps {
   /** `data-section-label` on the root, read by the screenshot catalog and the keypad
    * focus engine's "innermost wins" section grouping. Defaults to `title`. */
   sectionLabel?: string;
+  /**
+   * Draws the header without the body, whatever the persisted state says, and WITHOUT writing to
+   * the section store. Home uses it for the offline arrangement: a user who had Drives open finds
+   * it open again when their C64 comes back, because nothing was persisted while it was away.
+   */
+  forceClosed?: boolean;
   /** Fires whenever the open state changes, including the restore from persisted state on
    * mount and a close forced by the compact profile's one-open-at-a-time rule. Use this,
    * not `onToggle`, for a caller that mirrors the open state (e.g. to gate a lazy fetch on
@@ -112,6 +119,7 @@ export const CollapsibleSection = ({
   toggleTestId,
   bodyId,
   sectionLabel,
+  forceClosed,
   onOpenChange,
   onToggle,
   onToggleClick,
@@ -229,6 +237,23 @@ export const CollapsibleSection = ({
     element.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
   }, [open]);
 
+  // Search and the tour land on a control inside a card, so the card has to be open first. Scoped
+  // to this one id: every other card on the page keeps whatever the user set.
+  useEffect(
+    () =>
+      subscribeSectionOpenRequest((requestedScope, requestedId) => {
+        if (requestedScope !== scope || requestedId !== id) return;
+        setOpen((current) => {
+          if (current) return current;
+          writeSectionState(scope, id, true);
+          openedByUserRef.current = true;
+          announceSectionOpened(scope, id);
+          return true;
+        });
+      }),
+    [scope, id],
+  );
+
   const toggle = useCallback(
     (event: MouseEvent<HTMLButtonElement>) => {
       onToggleClick?.(event);
@@ -270,6 +295,9 @@ export const CollapsibleSection = ({
 
   const resolvedToggleTestId = toggleTestId ?? `${scope}-section-toggle-${id}`;
   const resolvedBodyId = bodyId ?? `${scope}-section-body-${id}`;
+  // Presentation only. `open` is the persisted answer and is what goes back on screen the moment
+  // the override lifts; `bodyVisible` is what is drawn right now.
+  const bodyVisible = open && !forceClosed;
 
   return (
     <motion.section
@@ -281,7 +309,12 @@ export const CollapsibleSection = ({
       style={{ scrollMarginBottom: "var(--keypad-guidance-reserved-height, 0px)" }}
       className={cn("overflow-hidden rounded-panel border border-border bg-card", className)}
       data-testid={testId ?? `${scope}-section-${id}`}
-      data-open={open ? "true" : "false"}
+      // Scope and id, always, whatever testid the caller chose. Search and the tour address a card
+      // through these, so renaming a testid cannot break a registry entry that names the section.
+      data-section-scope={scope}
+      data-section-id={id}
+      data-open={bodyVisible ? "true" : "false"}
+      data-force-closed={forceClosed ? "true" : undefined}
       data-section-label={sectionLabel ?? title}
     >
       {/*
@@ -327,7 +360,7 @@ export const CollapsibleSection = ({
             // makes the header addressable from outside the browser.
             id={resolvedToggleTestId}
             data-testid={resolvedToggleTestId}
-            aria-expanded={open}
+            aria-expanded={bodyVisible}
             aria-controls={resolvedBodyId}
           >
             <span className="flex min-w-0 flex-1 items-center gap-2.5">
@@ -435,7 +468,7 @@ export const CollapsibleSection = ({
             // header just opened.
             data-testid={`${scope}-section-chevron-${id}`}
           >
-            <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
+            <motion.span animate={{ rotate: bodyVisible ? 180 : 0 }} transition={{ duration: 0.2 }}>
               <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
             </motion.span>
           </button>
@@ -446,7 +479,7 @@ export const CollapsibleSection = ({
       </div>
 
       <AnimatePresence initial={false}>
-        {open ? (
+        {bodyVisible ? (
           <motion.div
             id={resolvedBodyId}
             initial={{ height: 0, opacity: 0 }}
