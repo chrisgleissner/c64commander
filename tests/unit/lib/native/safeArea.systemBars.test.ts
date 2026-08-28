@@ -80,7 +80,7 @@ describe("syncNativeSystemBarAppearance", () => {
     // regardless of whether the user's Theme setting is "light", "dark" or "system".
     platform.isNativePlatform.mockReturnValue(true);
     platform.getPlatform.mockReturnValue("android");
-    document.documentElement.style.setProperty("--background", "229.1 24.4% 8.8%"); // modem-grey dark
+    document.documentElement.style.setProperty("--background", "229.1 24.4% 8.8%"); // cool-grey dark
     await syncNativeSystemBarAppearance();
     expect(plugin.setSystemBarsAppearance).toHaveBeenCalledWith({ light: false });
   });

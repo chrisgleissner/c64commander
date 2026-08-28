@@ -211,6 +211,17 @@ export const validateStyle = (id, style) => {
   requireNonEmptyString(style.name, `styles.${id}.name`);
   requireNonEmptyString(style.description, `styles.${id}.description`);
 
+  if (style.renamed_from !== undefined) {
+    if (!Array.isArray(style.renamed_from) || style.renamed_from.length === 0) {
+      fail(`styles.${id}.renamed_from must be a non-empty array`);
+    }
+    for (const oldId of style.renamed_from) {
+      if (typeof oldId !== "string" || !STYLE_ID_PATTERN.test(oldId)) {
+        fail(`styles.${id}.renamed_from entries must be kebab-case ids, got ${JSON.stringify(oldId)}`);
+      }
+    }
+  }
+
   if (!Array.isArray(style.modes) || style.modes.length === 0) {
     fail(`styles.${id}.modes must be a non-empty array`);
   }
@@ -232,18 +243,42 @@ export const validateStyle = (id, style) => {
 };
 
 /**
+ * Old id -> live id, collected from every `renamed_from:`. A rename keeps the style, so it is not a
+ * retirement; the stored value is migrated through this map instead of falling back to the default.
+ */
+export const buildRenameMap = (config) => {
+  const liveIds = new Set(Object.keys(config.styles));
+  const renames = {};
+  for (const [id, style] of Object.entries(config.styles)) {
+    for (const oldId of style.renamed_from ?? []) {
+      if (liveIds.has(oldId)) {
+        fail(`styles.${id}.renamed_from lists ${JSON.stringify(oldId)}, which is still a live style id`);
+      }
+      if (renames[oldId] !== undefined) {
+        fail(`renamed_from ${JSON.stringify(oldId)} is claimed by both ${renames[oldId]} and ${id}`);
+      }
+      renames[oldId] = id;
+    }
+  }
+  return renames;
+};
+
+/**
  * Style ids are the persisted setting value (spec.md section 6.4), so a retired id must be
  * declared, not silently dropped, or a stored value downgrades to the compiled default with no
- * record of why. Vacuous on the very first compile, when no previous generated output exists yet.
+ * record of why. A `renamed_from:` declaration counts as that notice: the style still exists under
+ * a new id. Vacuous on the very first compile, when no previous generated output exists yet.
  */
-const checkNoSilentRetirement = (config, previousIds) => {
+const checkNoSilentRetirement = (config, previousIds, renames) => {
   if (previousIds === null) return;
   const retired = new Set(config.retired ?? []);
   const currentIds = new Set(Object.keys(config.styles));
-  const droppedWithoutNotice = previousIds.filter((id) => !currentIds.has(id) && !retired.has(id));
+  const droppedWithoutNotice = previousIds.filter(
+    (id) => !currentIds.has(id) && !retired.has(id) && renames[id] === undefined,
+  );
   if (droppedWithoutNotice.length > 0) {
     fail(
-      `style id(s) disappeared without a "retired:" entry: ${droppedWithoutNotice.join(", ")} ` +
+      `style id(s) disappeared without a "retired:" or "renamed_from:" entry: ${droppedWithoutNotice.join(", ")} ` +
         `(styles/appearance-styles.yaml)`,
     );
   }
@@ -292,9 +327,10 @@ export const loadConfig = ({ yamlPath = DEFAULT_SOURCE_PATH, tsOutputPath = DEFA
     }
   }
 
-  checkNoSilentRetirement(config, readPreviousStyleIds(tsOutputPath));
+  const renames = buildRenameMap(config);
+  checkNoSilentRetirement(config, readPreviousStyleIds(tsOutputPath), renames);
 
-  return config;
+  return { ...config, renames };
 };
 
 const renderModeBlockLiteral = (block, indent) => {
@@ -371,7 +407,11 @@ export interface AppStyleModeTokens {
 }
 
 export interface AppStyle {
-  /** Stable, persisted setting value. Never renamed once shipped (spec.md section 6.4). */
+  /**
+   * The persisted setting value. Changing it is a rename, not a retirement: the old id is declared
+   * under \`renamed_from:\` in the YAML and appears in APP_STYLE_RENAMES, which the storage read
+   * maps through. An id that is dropped with neither declaration fails the compile.
+   */
   readonly id: string;
   readonly name: string;
   readonly description: string;
@@ -393,6 +433,13 @@ export const DEVICE_SCHEME_TO_STYLE_ID: Readonly<Record<string, string>> = ${JSO
     null,
     2,
   )};
+
+/**
+ * Retired id -> the live id that replaced it, from every \`renamed_from:\` in the YAML. Applied at
+ * the storage read (useAppStyle) and to the gallery's ?style= parameter, so a stored or bookmarked
+ * old id resolves to the style it names instead of falling back to the default.
+ */
+export const APP_STYLE_RENAMES: Readonly<Record<string, string>> = ${JSON.stringify(config.renames ?? {}, null, 2)};
 `;
 };
 

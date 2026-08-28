@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useThemeContext } from "@/components/ThemeProvider";
 import { APP_STYLES, DEFAULT_APP_STYLE_ID } from "@/generated/appStyles";
+import { applyStyleRename } from "@/lib/appStyles/renames";
 import { MATCH_MY_DEVICE_SENTINEL, resolveMatchMyDeviceStyleId } from "@/lib/appStyles/matchMyDevice";
 import { resolveAppearance } from "@/lib/appStyles/resolveAppearance";
 import { syncNativeSystemBarAppearance } from "@/lib/native/safeArea";
@@ -16,7 +17,18 @@ import { syncNativeSystemBarAppearance } from "@/lib/native/safeArea";
 const APP_STYLE_STORAGE_KEY = "c64u_app_style";
 const THEME_COLOR_META_SELECTOR = 'meta[name="theme-color"]';
 
-const readStoredStyleId = (): string | null => localStorage.getItem(APP_STYLE_STORAGE_KEY);
+/**
+ * The rename migration runs here, at the read, and nowhere later: resolveAppearance is pure and the
+ * fallback effect below *removes* an id it does not recognise, so a migration that ran after either
+ * of them would paint the default and then erase the user's real choice.
+ */
+export const readStoredStyleId = (): string | null => {
+  const stored = localStorage.getItem(APP_STYLE_STORAGE_KEY);
+  if (stored === null) return null;
+  const renamed = applyStyleRename(stored);
+  if (renamed !== stored) localStorage.setItem(APP_STYLE_STORAGE_KEY, renamed);
+  return renamed;
+};
 
 /**
  * Style axis (spec.md), a sibling of useTheme rather than a widening of it: a separate

@@ -8,7 +8,7 @@
 
 schema_version: 1
 
-default_style: modem-grey
+default_style: cool-grey
 
 # "Match my device" (spec.md section 7.4): maps the Ultimate's own `Color Scheme` setting to an
 # app style. The three "Commodore N" aliases map together because the firmware renders them
@@ -16,16 +16,17 @@ default_style: modem-grey
 # data change here, not a code change.
 device_scheme_map:
   Ultimate Black: vault-black
-  Commodore Blue: modem-grey
-  Commodore 1: modem-grey
-  Commodore 2: modem-grey
-  Commodore 3: modem-grey
-  C128 Style: petrol-teal
+  Commodore Blue: cool-grey
+  Commodore 1: cool-grey
+  Commodore 2: cool-grey
+  Commodore 3: cool-grey
+  C128 Style: ocean-teal
 
 styles:
-  modem-grey:
-    name: "Modem Grey"
-    description: "Neutral default. Today's palette, cleaned up."
+  cool-grey:
+    renamed_from: [modem-grey]
+    name: "Cool Grey"
+    description: "Neutral, blue-leaning grey. The app's default."
     modes: [light, dark]
     light:
       radius: "12px"
@@ -111,9 +112,10 @@ styles:
         warning: "42.2 70.5% 58.8%" # #E0B44C
         destructive: "5.9 66% 70%" # #E58A80
         destructive-foreground: "8.6 36.8% 7.5%" # #1A0E0C
-  petrol-teal:
-    name: "Petrol Teal"
-    description: "The translucent teal shell. Coral key in both modes."
+  ocean-teal:
+    renamed_from: [petrol-teal]
+    name: "Ocean Teal"
+    description: "Deep blue-green with a warm coral highlight."
     modes: [light, dark]
     light:
       radius: "10px"
@@ -248,9 +250,10 @@ styles:
         warning: "41.3 67% 54.9%" # #D9A93F
         destructive: "5.4 58.7% 59.2%" # #D4655A
         destructive-foreground: "7.5 47.1% 6.7%" # #190B09
-  full-sun:
-    name: "Full Sun"
-    description: "Maximum contrast, keypad first. Heavy edges, no fill games."
+  high-contrast:
+    renamed_from: [full-sun]
+    name: "High Contrast"
+    description: "Maximum legibility. Heavy edges, strong text, no soft fills."
     modes: [light, dark]
     light:
       radius: "0px"

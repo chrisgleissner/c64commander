@@ -81,7 +81,7 @@ every palette, but no shipped component reads them yet, so the `edge` and `ring_
 `styles/appearance-styles.yaml` and `vault-black`'s `app_bar_band` currently have no effect on
 screen. The Phase 2 sweep deliberately left the 2px sites on fixed `shadow-[inset_0_0_0_2px_…]`
 values rather than binding them to `--edge-width`, because at that point the styles were not yet
-selectable and binding them would have changed those controls' weight under `full-sun`
+selectable and binding them would have changed those controls' weight under `high-contrast`
 (`docs/plans/appearance-styles/plan.md`, Phase 2). Wiring the three axes up is follow-up work: it
 is a visual change to shipped chrome and needs its own gallery review, so it was not folded into
 the change that made styles selectable.
@@ -108,7 +108,29 @@ cannot slip past a stale build):
 - Every palette passes every contrast gate in §7.
 - `--ring` is never equal to `--border`.
 - `default_style` exists and is a declared id.
-- Style ids are kebab-case and stable.
+- Style ids are kebab-case, and an id that goes away is declared: either under `retired:` or, if the
+  style is still there under a different id, under that style's `renamed_from:`. Neither declaration
+  is a licence to change colour — see §5.1.
+
+### 5.1 Renaming a style
+
+A rename is not a retirement: the style, and every one of its token values, stays. Declare the old
+id under the new style's `renamed_from:` list. The compiler then accepts the disappearance, and
+emits `APP_STYLE_RENAMES` (old id → live id) into `src/generated/appStyles.ts`. It rejects a
+`renamed_from` value that is still a live id, and one claimed by two styles.
+
+`applyStyleRename` (`src/lib/appStyles/renames.ts`) is the only consumer. It runs in two places:
+
+- `readStoredStyleId` in `useAppStyle`, which maps the persisted value and writes the new id back.
+  It has to run at the read: `resolveAppearance` is pure, and the unknown-id rule below *removes* an
+  id it does not recognise, so migrating any later would paint the default and erase the choice.
+- `AppStylesGalleryPage`'s `?style=` parameter, so an old URL in a document or a bookmark still
+  lands on the style it names instead of falling back to the first style.
+
+A release that renames a style commits `tests/fixtures/appStyleTokens.pre-rename.json` — every
+compiled token value from before the rename, keyed by the new id — and
+`tests/unit/lib/appStyles/preRenameTokens.test.ts` asserts the live table still equals it. That is
+what makes "no colour changed" checkable after the generated file has already been rewritten.
 
 Run `npm run styles:build` to regenerate, `npm run styles:check` to verify with no writes (this is
 the CI gate — see the `styles` job in `.github/workflows/android.yaml`). `--check` fails with
@@ -153,8 +175,8 @@ resolves to, so the choice survives a device change.
 | Device `Color Scheme`                                          | App style                                    |
 | ---------------------------------------------------------------- | --------------------------------------------- |
 | `Ultimate Black`                                                  | `vault-black`                                 |
-| `Commodore Blue`, `Commodore 1`, `Commodore 2`, `Commodore 3`     | `modem-grey`                                  |
-| `C128 Style`                                                      | `petrol-teal`                                 |
+| `Commodore Blue`, `Commodore 1`, `Commodore 2`, `Commodore 3`     | `cool-grey`                                  |
+| `C128 Style`                                                      | `ocean-teal`                                 |
 | unknown / unreachable                                             | the compiled default, and the picker says so  |
 
 The mapping table (`device_scheme_map` in `styles/appearance-styles.yaml`) is data, not code, so a

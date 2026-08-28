@@ -14,7 +14,7 @@
  * data-app-style and the .dark class together for it.
  */
 
-html[data-app-style="modem-grey"] {
+html[data-app-style="cool-grey"] {
   --radius: 12px;
   --edge-width: 1px;
   --ring-style: solid;
@@ -41,7 +41,7 @@ html[data-app-style="modem-grey"] {
   --secondary-foreground: 222.4 24.6% 13.5%;
 }
 
-html[data-app-style="modem-grey"].dark {
+html[data-app-style="cool-grey"].dark {
   --radius: 12px;
   --edge-width: 1px;
   --ring-style: solid;
@@ -122,7 +122,7 @@ html[data-app-style="breadbin-beige"].dark {
   --secondary-foreground: 40 50.8% 87.3%;
 }
 
-html[data-app-style="petrol-teal"] {
+html[data-app-style="ocean-teal"] {
   --radius: 10px;
   --edge-width: 1px;
   --ring-style: solid;
@@ -149,7 +149,7 @@ html[data-app-style="petrol-teal"] {
   --secondary-foreground: 177.9 50% 11%;
 }
 
-html[data-app-style="petrol-teal"].dark {
+html[data-app-style="ocean-teal"].dark {
   --radius: 10px;
   --edge-width: 1px;
   --ring-style: solid;
@@ -285,7 +285,7 @@ html[data-app-style="vault-black"].dark {
   --app-bar-band: linear-gradient(90deg, #4b4fa8 0 46%, #9a3a2e 46% 100%);
 }
 
-html[data-app-style="full-sun"] {
+html[data-app-style="high-contrast"] {
   --radius: 0px;
   --edge-width: 2px;
   --ring-style: solid;
@@ -312,7 +312,7 @@ html[data-app-style="full-sun"] {
   --secondary-foreground: 0 0% 0%;
 }
 
-html[data-app-style="full-sun"].dark {
+html[data-app-style="high-contrast"].dark {
   --radius: 0px;
   --edge-width: 2px;
   --ring-style: solid;

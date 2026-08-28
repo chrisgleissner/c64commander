@@ -309,13 +309,13 @@ Pick one of seven colour styles under **Settings > Appearance > Style**, on top 
 <table>
   <thead>
     <tr>
-      <th align="left">Modem Grey (default)</th>
+      <th align="left">Cool Grey (default)</th>
       <th align="left">Breadbin Beige</th>
       <th align="left">Vault Black (dark only)</th>
     </tr>
   </thead>
   <tr>
-    <td><img src="docs/img/app/styles/showcase-modem-grey-light.png" alt="Home in Modem Grey, the default style" width="360"/></td>
+    <td><img src="docs/img/app/styles/showcase-cool-grey-light.png" alt="Home in Cool Grey, the default style" width="360"/></td>
     <td><img src="docs/img/app/styles/showcase-breadbin-beige-light.png" alt="Home in Breadbin Beige" width="360"/></td>
     <td><img src="docs/img/app/styles/showcase-vault-black-dark.png" alt="Home in Vault Black, one of the two dark-only styles" width="360"/></td>
   </tr>

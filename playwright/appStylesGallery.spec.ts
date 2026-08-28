@@ -13,7 +13,7 @@ import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import { disableTraceAssertions } from "./traceUtils";
 import { registerScreenshotSections, sanitizeSegment } from "./screenshotCatalog";
-import { APP_STYLES, type AppStyleMode } from "../src/generated/appStyles";
+import { APP_STYLES, APP_STYLE_RENAMES, type AppStyleMode } from "../src/generated/appStyles";
 
 /**
  * The style gallery (spec.md section 11): one screenshot per (style, mode, section) across all 12
@@ -82,7 +82,7 @@ test.describe("Appearance style gallery screenshots", () => {
    * a style actually does to the product.
    */
   const SHOWCASE: ReadonlyArray<{ styleId: string; mode: AppStyleMode }> = [
-    { styleId: "modem-grey", mode: "light" },
+    { styleId: "cool-grey", mode: "light" },
     { styleId: "breadbin-beige", mode: "light" },
     { styleId: "vault-black", mode: "dark" },
   ];
@@ -116,6 +116,25 @@ test.describe("Appearance style gallery screenshots", () => {
       });
     });
   }
+
+  /*
+   * A ?style= that names a retired id — from a README, the manual or a bookmark — must land on the
+   * style that id became, not on the silent fall back to APP_STYLES[0] the page does for a value it
+   * does not recognise.
+   */
+  test("resolves a ?style= that names a retired id", async ({ page }) => {
+    await seedUiMocks(page, server.baseUrl);
+    await page.addInitScript(() => {
+      localStorage.setItem("c64u_feature_flag:app_styles_gallery_enabled", "1");
+      sessionStorage.setItem("c64u_feature_flag:app_styles_gallery_enabled", "1");
+    });
+    await page.setViewportSize({ width: 500, height: 1200 });
+    for (const [retiredId, liveId] of Object.entries(APP_STYLE_RENAMES)) {
+      await page.goto(`/dev/styles?style=${retiredId}&mode=light`, { waitUntil: "domcontentloaded" });
+      await settle(page);
+      await expect(page.getByTestId("app-styles-gallery-page")).toHaveAttribute("data-gallery-style", liveId);
+    }
+  });
 
   for (const palette of PALETTES) {
     test(`${palette.styleId} (${palette.mode})`, async ({ page }) => {
