@@ -116,6 +116,13 @@ const OBSERVED_ATTRIBUTES = [
   "data-key-nav-skip",
 ];
 
+/*
+ * The overlays that take the ring when they open. Deliberately NOT OVERLAY_SELECTOR: that includes
+ * listbox, and the search overlay is a skipped subtree whose listbox rows are rewritten on every
+ * keystroke — the reason the skipped-subtree guard below exists at all.
+ */
+const MODAL_SELECTOR = "[role='dialog'],[role='alertdialog'],[role='menu']";
+
 export class FocusDiscoveryEngine {
   private readonly controller: FocusController;
   private readonly listExplicit: () => ExplicitRegistration[];
@@ -138,6 +145,14 @@ export class FocusDiscoveryEngine {
     this.freezeDuringTransientLayer = options.freezeDuringTransientLayer ?? (() => false);
     this.onAfterAssemble = options.onAfterAssemble;
     this.doc = options.doc ?? document;
+  }
+
+  private addsAnOverlay(record: MutationRecord): boolean {
+    for (const node of record.addedNodes) {
+      if (!(node instanceof Element)) continue;
+      if (node.matches(MODAL_SELECTOR) || node.querySelector(MODAL_SELECTOR) !== null) return true;
+    }
+    return false;
   }
 
   /** Attaches the observer and performs the first scan. Idempotent. */
@@ -178,14 +193,18 @@ export class FocusDiscoveryEngine {
    * the ring rejects everything in it either way. The search overlay is skipped and rewrites its
    * result list on every keystroke, and each of those rescanned the whole page behind it —
    * getComputedStyle and getBoundingClientRect per node, over 100 ms on a Pixel 4. The containment
-   * test is what keeps a dialog nested INSIDE a skipped region working: there the scope is inside
-   * the skipped element, so its mutations still count.
+   * test keeps a dialog nested INSIDE a skipped region working once the scope has moved into it,
+   * and the overlay test covers the moment before that, when it is only being mounted.
    */
   private cannotChangeRing(record: MutationRecord): boolean {
     if (record.attributeName === SKIP_ATTR) return false;
     const target = record.target instanceof Element ? record.target : record.target.parentElement;
     const skipped = target?.closest(`[${SKIP_ATTR}]`) ?? null;
-    return skipped !== null && !(this.lastScope !== null && skipped.contains(this.lastScope));
+    if (skipped === null) return false;
+    // An overlay OPENING inside a skipped subtree is the one thing in there that does change the
+    // ring, and containment cannot see it: the scope only moves inside once the scan has run.
+    if (this.addsAnOverlay(record)) return false;
+    return !(this.lastScope !== null && skipped.contains(this.lastScope));
   }
 
   /** Coalesces many DOM mutations into a single microtask re-scan. */
