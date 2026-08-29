@@ -22,6 +22,28 @@ export default {
       },
     },
     extend: {
+      spacing: {
+        /*
+         * The touch target, in CSS pixels rather than rem.
+         *
+         * WCAG 2.5.5 asks for 44 CSS pixels, which is a physical size: it is how much of a screen a
+         * fingertip covers, and a reader who enlarges the type has not enlarged their finger. The
+         * `11` step is only ever used here to express that floor — 123 uses across the app, every
+         * one of them `min-h`, `h`, `min-w`, `w` or `size`, and none of them padding, margin or gap.
+         *
+         * Tailwind's own `11` is 2.75rem, and rem is tied to the display profile's root font size
+         * and then multiplied again by the app's Text size setting. That made the floor 44px on the
+         * compact profile at the default size and nowhere else: 49.5px on medium, 53.6px on
+         * expanded, 56.9px on medium at the Large size. Every control carrying it was 5.5 to 12.9px
+         * taller than the requirement, for a line of text about 22px tall — a Home card with six
+         * rows spent up to 78px on nothing, and Home has thirteen cards.
+         *
+         * Overriding the step is what makes this one change rather than a sweep of 123 call sites,
+         * which is the kind of sweep that has broken this app's chrome before.
+         * `smallScreenErgonomics.spec.ts` still asserts the floor is met; it is now met exactly.
+         */
+        11: "44px",
+      },
       fontFamily: {
         mono: ["JetBrains Mono", "ui-monospace", "monospace"],
         sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],

@@ -266,10 +266,14 @@ export function PrinterManager({
                 </SelectContent>
               </Select>
             </div>
+            {/* Each row wraps, for the reason the SID identity row does: the label cannot shrink, so
+                at the Large text size the value was the only thing that could give and "US/UK" was
+                cut to 44px of the 49px it needs. Dropping the value to its own line keeps it
+                whole. */}
             {printerControlRows
               .filter((entry) => entry.options.length > 0)
               .map((entry) => (
-                <div key={entry.itemName} className="flex items-center justify-between gap-2">
+                <div key={entry.itemName} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                   <span className="shrink-0 text-muted-foreground whitespace-nowrap">{entry.label}</span>
                   <Select
                     value={entry.value}

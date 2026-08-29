@@ -141,15 +141,32 @@ export function DriveCard({
         </Button>
       }
     >
-      {/* Row 1.5: Mounted Path */}
+      {/* Row 1.5: Mounted Path.
+          The row wraps, and the value is allowed the whole of it when it does. The drive cards sit
+          two to a row, so this card is 147px wide on a 393px screen; with the label beside it the
+          button had 57.7px for "No disk mounted", which needs 149px, and drew "No d…". The label
+          taking its own line is the only way the value can be read at all here. */}
       {(mountedPath !== undefined || pathValue !== undefined) && (
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
           <span className="shrink-0 text-muted-foreground whitespace-nowrap">{mountedPathLabel || "Disk"}</span>
           <button
             type="button"
             onClick={onMountedPathClick || onPathClick}
             disabled={!isConnected || pathPending}
-            className="min-h-11 flex-1 truncate text-left font-medium text-foreground hover:underline"
+            className={cn(
+              "min-h-11 min-w-0 flex-1 basis-full text-left font-medium text-foreground hover:underline sm:basis-auto",
+              /*
+               * A path is elided; a sentence wraps.
+               *
+               * Cutting the middle of a path still leaves it recognisable, and that is what
+               * `truncate` is for here. "No disk mounted" and "Select..." are not paths — cutting
+               * them gives "No d…", which says nothing — and this card is 147px wide because the
+               * drives sit two to a row, so on the medium profile there is no width at which the
+               * sentence fits on one line. `MountedLabel` in HomeDiskManager already draws this
+               * same distinction for the row below.
+               */
+              (mountedPath ?? pathValue)?.includes("/") ? "truncate" : "whitespace-normal break-words",
+            )}
             data-testid={`home-drive-mounted-${testIdSuffix}`}
           >
             {(mountedPath ?? pathValue) || "Select..."}
@@ -157,13 +174,28 @@ export function DriveCard({
         </div>
       )}
 
-      {/* Row 2: Bus ID and Type */}
-      <div className={cn("grid gap-2 text-xs", profile === "compact" ? "grid-cols-1" : "grid-cols-2")}>
+      {/* Row 2: Bus ID and Type.
+          Two columns only where the card is actually wide enough for them. The drive cards sit two
+          to a row, so on the medium profile a card is 147px and each of these cells got about 70px
+          — a "Type" label and then 32px for its value against the 44px touch floor, which squeezed
+          the trigger to exactly that floor and cut "1541" to 44px of the 47px it needs. It fitted
+          before only because the floor was a rem that happened to be 49.5px there; sizing the floor
+          honestly in pixels is what exposed the column count as the real problem. */}
+      <div className={cn("grid gap-2 text-xs", profile === "expanded" ? "grid-cols-2" : "grid-cols-1")}>
         <div className="flex items-center gap-2">
           <span className="shrink-0 text-muted-foreground whitespace-nowrap">Bus ID</span>
           <Select value={busIdValue} onValueChange={onBusIdChange} disabled={!isConnected || busIdPending}>
             <SelectTrigger
-              className={cn(inlineSelectTriggerClass, "min-h-11 flex-1 justify-start overflow-hidden")}
+              className={cn(
+                inlineSelectTriggerClass,
+                // Sized to its own content, not to the cell. `flex-1` gave these a basis of 0, so in
+                // a narrow cell they shrank to the 44px touch floor and `overflow-hidden` cut the
+                // rest — "1541" in a 44px box needing 47px on CI's wider fallback font. It fitted
+                // before only because the floor was a rem that happened to be 49.5px there. These
+                // values are short (a bus number, a drive type), so letting each keep its own width
+                // costs the row nothing and cannot cut it.
+                "min-h-11 min-w-11 shrink-0 justify-start",
+              )}
               data-testid={`home-drive-bus-${testIdSuffix}`}
             >
               <SelectValue placeholder={busIdValue} />
@@ -183,7 +215,16 @@ export function DriveCard({
               <span className="shrink-0 text-muted-foreground whitespace-nowrap">Type</span>
               <Select value={typeValue} onValueChange={onTypeChange} disabled={!isConnected || typePending}>
                 <SelectTrigger
-                  className={cn(inlineSelectTriggerClass, "min-h-11 flex-1 justify-start overflow-hidden")}
+                  className={cn(
+                    inlineSelectTriggerClass,
+                    // Sized to its own content, not to the cell. `flex-1` gave these a basis of 0, so in
+                    // a narrow cell they shrank to the 44px touch floor and `overflow-hidden` cut the
+                    // rest — "1541" in a 44px box needing 47px on CI's wider fallback font. It fitted
+                    // before only because the floor was a rem that happened to be 49.5px there. These
+                    // values are short (a bus number, a drive type), so letting each keep its own width
+                    // costs the row nothing and cannot cut it.
+                    "min-h-11 min-w-11 shrink-0 justify-start",
+                  )}
                   data-testid={`home-drive-type-${testIdSuffix}`}
                 >
                   <SelectValue placeholder={typeValue} />

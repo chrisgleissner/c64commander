@@ -25,6 +25,15 @@
  *
  * Extracted because the identical string was previously repeated verbatim in three
  * files, so a change to the look had to be made in three places to stay consistent.
+ *
+ * `border-0` is load-bearing and must not be removed as redundant. Every caller puts this on a
+ * `SelectTrigger`, whose own base class is `border border-input`; `cn` merges with tailwind-merge,
+ * so this string is the only thing turning that edge off. The appearance-token sweep in 0.10.0-rc1
+ * deleted it on the reasoning that "a zero-width edge is the same as no edge class", which is true
+ * of a bare element and false of one whose base class already draws a border. Every read-only value
+ * on Home - Pattern, Color, Tint, SID Select, Turbo Control, the drive and printer selects - then
+ * drew a 1px box around its text with no padding inside it, so the text touched the box and the row
+ * grew to 49.5px. `inlineControls.spec.ts` measures the rendered border and fails if it returns.
  */
 export const INLINE_SUMMARY_CONTROL_CLASS =
-  "h-auto min-h-11 w-auto min-w-11 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden";
+  "h-auto min-h-11 w-auto min-w-11 border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden";

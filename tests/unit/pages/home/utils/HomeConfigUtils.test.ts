@@ -251,8 +251,10 @@ describe("HomeConfigUtils", () => {
       expect(formatPrinterLabel("Ink density")).toBe("Ink");
     });
 
+    // "CBM set", so the three character-set rows read as a set and the long one stops crowding
+    // the value beside it.
     it("formats Commodore charset", () => {
-      expect(formatPrinterLabel("Commodore charset")).toBe("CBM charset");
+      expect(formatPrinterLabel("Commodore charset")).toBe("CBM set");
     });
 
     it("formats Epson charset", () => {

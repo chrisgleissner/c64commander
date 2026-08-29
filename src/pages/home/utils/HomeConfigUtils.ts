@@ -80,7 +80,10 @@ export const formatPrinterLabel = (itemName: string) => {
   if (itemName === "Output file") return "Output";
   if (itemName === "Output type") return "Type";
   if (itemName === "Ink density") return "Ink";
-  if (itemName === "Commodore charset") return "CBM charset";
+  // "CBM set", not "CBM charset": the three character-set rows sit in one column, and the long one
+  // left almost no gap between its label and the value beside it. Shortening it also makes the
+  // three read as the set they are — CBM set, Epson set, IBM set.
+  if (itemName === "Commodore charset") return "CBM set";
   if (itemName === "Epson charset") return "Epson set";
   if (itemName === "IBM table 2") return "IBM set";
   return itemName;
