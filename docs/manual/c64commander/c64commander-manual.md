@@ -114,7 +114,11 @@ Home groups the day-to-day controls.
 
 ![Home overview](../../img/app/home/profiles/medium/01-overview.png)
 
-Start at the top. The search field comes first, and under it **Quick Actions**. Three of its tiles work without a C64: **Radio** starts a SID Radio station of thousands of tunes played on this device, **Last** picks up your last tune where it stopped and names it underneath, and **Recent** takes you back to anything you have opened before. **Live** does need a machine, and takes you to the card that brings its picture and sound into the app. A tile you cannot use yet is still there, grayed, telling you what it needs.
+Start at the top. The search field comes first, and under it **Quick Actions**.
+
+Three of those tiles work without a C64 at all. **Radio** starts a SID Radio station of thousands of tunes, played on this device. **Last** picks up your last tune where it stopped, and names it underneath. **Recent** takes you back to anything you have opened before.
+
+**Live** does need a machine, and takes you to the card that brings its picture and sound into the app. A tile you cannot use yet is still there, grayed, telling you what it needs.
 
 The grid runs in four bands. **Watch** first: Live, Game and Input. **Listen** next: Radio, Last and Recent. Then the everyday controls: Menu, Pause/Resume, and **Backup** and **Restore** for the machine's memory. Last come **Reset** and **Power**, which interrupt whatever your C64 is doing.
 
@@ -128,7 +132,9 @@ Two more actions can join the **Power** sheet: **Reboot (Clr Mem)**, which wipes
 
 Directly below sits **Live View**, which brings the sound and the picture of the running machine into the app. It is a card like the ones below it and starts closed, so tap its header to reach the switches inside; while it is playing, a **Reset** in that header stops both feeds without opening it. It has a chapter of its own later on.
 
-Keep going and the rest of Home is a set of cards. Tap a header to open or close one. **CPU & RAM** holds the processor speed, turbo behavior and the RAM expansion. **Video** holds the output mode, resolution and scan lines, and **Audio**, directly below it, the SID mixer's channel strips. **Ports** holds the joystick swap, the serial bus, the cartridge preference and the user port. **User Interface** rounds the group out, and, on a machine that has them, so does **Lighting**, for the case and keyboard lights.
+Keep going and the rest of Home is a set of cards, and tapping a header opens or closes one.
+
+**CPU & RAM** holds the processor speed, turbo behavior and the RAM expansion. **Video** holds the output mode, resolution and scan lines, and **Audio**, directly below it, the SID mixer's channel strips. **Ports** holds the joystick swap, the serial bus, the cartridge preference and the user port. **User Interface** rounds the group out, and, on a machine that has them, so does **Lighting**, for the case and keyboard lights.
 
 Some cards start open and some start closed, and the app remembers what you left open. On the compact display profile, opening one card closes the others, so the list of titles stays on screen. **Expand all sections** and **Collapse all sections** in the Quick Menu do the whole page at once. Everything here is in Config as well; these cards save you the search.
 
@@ -184,7 +190,9 @@ Disks is where the drives and your disk images live.
 
 ![Disks overview](../../img/app/disks/profiles/medium/01-overview.png)
 
-The page has three drive cards: **Drive A**, **Drive B**, and a **Soft IEC** drive that reads loose files straight from a folder rather than from a disk image. Each card turns its drive on or off, sets its bus ID and type, mounts and ejects, and resets. Power and the mounted disk stay on the card header, so whether a drive is on and whether it holds a disk can both be seen and changed without opening the card. **Drive A** starts open and the other two start closed. Below them, **Add disks** builds a collection from the sources you have.
+The page has three drive cards: **Drive A**, **Drive B**, and a **Soft IEC** drive that reads loose files straight from a folder rather than from a disk image. Each card turns its drive on or off, sets its bus ID and type, mounts and ejects, and resets.
+
+Power and the mounted disk stay on the card header, so you can see and change both without opening the card. **Drive A** starts open and the other two start closed. Below them, **Add disks** builds a collection from the sources you have.
 
 ![Disk collection view](../../img/app/disks/profiles/medium/02-view-all.png)
 
@@ -208,7 +216,11 @@ Search for a category, open it, and edit the rows directly. Each item gets the c
 
 A change goes to the device the moment you make it. Most take effect at once; a few, the cartridge choice among them, are stored now and take effect at the next reset.
 
-Turn on **Keep device settings after a restart** in **Settings → Device Safety** to have the app save every device setting it changes, or use **Save** in the Config card to write the current settings to flash once. The machine's own **Auto save config** does not cover this. It decides whether the machine saves changes you make in its on-screen setup menu, and has no effect on changes made from the app. On a Commodore 64 Ultimate, set it at **C= + RESTORE → User interface → Auto save config**. C64 Commander mirrors that menu in Config as **User interface → Auto save config**. On other supported devices, search Config for **Auto Save Config** if the menu naming differs.
+Turn on **Keep device settings after a restart** in **Settings → Device Safety** to have the app save every device setting it changes, or use **Save** in the Config card to write the current settings to flash once.
+
+The machine's own **Auto save config** does not cover this. It decides whether the machine saves changes you make in its on-screen setup menu, and has no effect on changes made from the app.
+
+On a Commodore 64 Ultimate, set it at **C= + RESTORE → User interface → Auto save config**. C64 Commander mirrors that menu in Config as **User interface → Auto save config**. On other supported devices, search Config for **Auto Save Config** if the menu naming differs.
 
 Config is where you look when you know a setting exists but not where the device menu keeps it. The search box narrows the tree to the pages and groups whose names match; open one to see its rows. After changing a value, let the write finish before changing a related one.
 
@@ -230,7 +242,9 @@ If the device is hard to reach, start in **Connection**. If it answers but feels
 
 **Appearance** is local to the app and never touches your C64. It sets the theme, the style, the text size, the display profile, card descriptions, whether the app runs full screen, and whether it follows the phone's rotation or stays in portrait or landscape.
 
-**Style** is a set of colors, corner rounding and shading, layered on top of **Theme**, which stays your light-or-dark switch. Pick a style, or choose **Match my device** to follow the Color Scheme your C64 Ultimate is set to. Match my device reads your machine each time you connect, and leaves the current style in place with a note if it cannot read it yet. Two styles come in one shade only; for those, Theme is disabled and Settings tells you why.
+**Style** is a set of colors, corner rounding and shading, layered on top of **Theme**, which stays your light-or-dark switch. Pick a style, or choose **Match my device** to follow the Color Scheme your C64 Ultimate is set to.
+
+Match my device reads your machine each time you connect, and leaves the current style in place with a note if it cannot read it yet. Two styles come in one shade only; for those, Theme is disabled and Settings tells you why.
 
 There are seven:
 
@@ -248,7 +262,9 @@ There are seven:
 
 **Card descriptions** is the one-line summary under each card's title, on every page built from cards. It starts off, because on a small screen it costs about half the height of every closed card; turn it on if you would rather read what a card holds than remember it. The Quick Menu switches the same thing on and off without leaving the page you are on.
 
-**Diagnostics** opens the diagnostics panel, switches debug logging on, and carries **Settings transfer**, which lives here despite the name. Settings transfer exports your app settings, feature switches and device-safety tuning to a file you can import onto another phone or tablet. Saved devices and passwords are deliberately left out, so the file is safe to move about.
+**Diagnostics** opens the diagnostics panel and switches debug logging on. It also carries **Settings transfer**, which lives here despite the name.
+
+Settings transfer exports your app settings, feature switches and device-safety tuning to a file you can import onto another phone or tablet. Saved devices and passwords are left out, so the file is safe to move about.
 
 **Notifications** decides whether you see every message or only errors, and how long each one stays on screen. **About** shows the version and links to the open source licenses.
 
@@ -260,7 +276,9 @@ A setting you change from the app reaches the connected Ultimate-family device a
 
 **Keep device settings after a restart**, in **Settings → Device Safety**, changes that. With it on, every device setting the app changes is also written to the machine's own storage, so it survives a power cycle, exactly as though you had saved it from the machine's setup menu.
 
-Turn it on deliberately. It is not hard to save a setting that leaves the machine awkward to use, and once saved it comes back that way every time. The way out is to hold **RESTORE** while you switch the connected Ultimate-family device on: it then starts with its default settings instead of the saved ones, which is enough to get you back to a working machine. Nothing is erased, and your saved values are still there, so you can put the setting right and save it again.
+Turn it on deliberately. A setting that leaves the machine awkward to use will come back that way every time you switch on.
+
+If that happens, hold **RESTORE** while you switch the connected Ultimate-family device on. It starts with its default settings instead of the saved ones, which is enough to get you back to a working machine. Nothing is erased: your saved values are still there, so you can put the setting right and save it again.
 
 ### Docs
 
@@ -345,7 +363,9 @@ Preferred path: Play. Use C64U source for files already on the target device; us
 5. Confirm the selection.
 6. Open **View all** if the list is long.
 
-To search rather than browse, type in the box at the top and choose **Everywhere**. **This folder** narrows what is on screen; **Everywhere** searches the whole source by title or composer, which for HVSC means the whole archive of some sixty thousand files. Sources that have to be read folder by folder, such as a folder on your device or the card in your C64, offer a **Scan** button instead of searching as you type, because that search has to walk the whole source rather than consult an index.
+To search rather than browse, type in the box at the top and choose **Everywhere**. **This folder** narrows what is on screen; **Everywhere** searches the whole source by title or composer, which for HVSC means the whole archive of some sixty thousand files.
+
+Sources that have to be read folder by folder, such as a folder on your device or the card in your C64, offer a **Scan** button instead of searching as you type.
 
 ![Searching the whole of HVSC rather than one folder](../../img/app/play/import/profiles/medium/09-hvsc-search-scope.png)
 
@@ -467,7 +487,11 @@ When a SID tune is playing, the Play page shows an **output button** beside the 
 
 **Both** is offered when Live View and its audio are switched on, and it takes itself away again if your C64 declines to send the sound. The sound leaves the machine over its **Ethernet** connection, so a C64 that is only on Wi-Fi cannot supply it. The output button appears for SID tunes alone, because programs and disks always run on the C64, which is the only machine that can run them.
 
-To play music on its own, your phone or tablet needs a copy of two programs built into every C64: the **KERNAL** and **BASIC** ROMs. Many tunes call into them, and without them those tunes start and then play nothing. The ROMs are under copyright and cannot be shipped with an app, so C64 Commander reads them from your own machine. It does so by itself, the first time you play a tune here while the C64 is connected, and there is nothing to set up. The copies stay on your phone or tablet, and are never uploaded, never shared, and never included in a diagnostics report. Read them only from a machine that is yours, or that you have permission to use.
+To play music on its own, your phone or tablet needs a copy of two programs built into every C64: the **KERNAL** and **BASIC** ROMs. Many tunes call into them, and without them those tunes start and then play nothing.
+
+The ROMs are under copyright and cannot be shipped with an app, so C64 Commander reads them from your own machine. It does so by itself, the first time you play a tune here while the C64 is connected. There is nothing for you to set up.
+
+The copies stay on your phone or tablet, and are never uploaded, never shared, and never included in a diagnostics report. Read them only from a machine that is yours, or that you have permission to use.
 
 #### Moving around inside a tune
 
@@ -483,7 +507,9 @@ These apply to tunes playing on your phone or tablet. On the C64 the buttons ste
 
 The rest is under **Settings → SID Radio**. **Crossfade** overlaps one tune into the next, both audible while the first fades away: **Off** for a clean cut, or **Short** (0.6s), **Medium** (1.5s), **Long** (3s), or **Longest** (4s). It starts at Off. Only your phone or tablet can sound two tunes at once, so the control is grayed out while the output is set to the C64.
 
-There are two versions of the SID chip, the **6581** and the **8580**, and music written for one sounds a little different on the other. Most files say which the composer used, and those always play on the chip they name. For the many older files that say nothing, turn on **Match my Commodore 64** and the app reads the chip out of your own machine; **Otherwise use** picks between 6581 and 8580 for when it has not read one yet. A line underneath tells you which is in use at the moment.
+There are two versions of the SID chip, the **6581** and the **8580**, and music written for one sounds a little different on the other. Most files say which the composer used, and those always play on the chip they name.
+
+For the many older files that say nothing, turn on **Match my Commodore 64** and the app reads the chip out of your own machine. **Otherwise use** picks between 6581 and 8580 until it has read one. A line underneath tells you which is in use.
 
 #### The SID Audio Mixer
 
@@ -491,7 +517,9 @@ A C64 can have more than one SID chip. **Home → Audio** gives you a **master v
 
 ### SID Radio
 
-The High Voltage SID Collection holds around sixty thousand files and close to ninety thousand tunes, which is far too many to browse. SID Radio plays it like a radio station: pick a mood, or a tune you already like, and the app keeps finding more music of the same kind. There is no playlist to build, and nothing is downloaded as you listen: once the collection is on your device, the app already knows which tunes resemble one another.
+The High Voltage SID Collection holds around sixty thousand files and close to ninety thousand tunes, far too many to browse. SID Radio plays it like a radio station: pick a mood, or a tune you already like, and the app keeps finding more music of the same kind.
+
+There is no playlist to build, and nothing is downloaded as you listen. Once the collection is on your device, the app already knows which tunes resemble one another.
 
 ![Choosing a station: a mood, your own taste, or anything at all](../../img/app/play/sid-radio/profiles/medium/02-stations.png)
 
@@ -521,7 +549,9 @@ Your choices stay on your phone or tablet. They are attached to the music itself
 
 **It can run out.** A station follows a chain of similar tunes, and occasionally it reaches the end of that chain, usually after many skips in one session. The app tells you, and you can pick another mood.
 
-While a station runs it chooses what comes next, so Shuffle, Repeat and Reshuffle step out of the way; they come back, with your settings intact, the moment you stop it. The line at the top of the Now Playing card says where the music is coming from. Tap it to see why this tune was chosen, or **Stop** beside it to end the station. Each station starts fresh, so the same mood gives you different music every time.
+While a station runs it chooses what comes next, so Shuffle, Repeat and Reshuffle step out of the way. They come back, with your settings intact, the moment you stop it.
+
+The line at the top of the Now Playing card says where the music is coming from. Tap it to see why this tune was chosen, or **Stop** beside it to end the station. Each station starts fresh, so the same mood gives you different music every time.
 
 #### Finding one particular tune
 
@@ -549,7 +579,9 @@ The line under the title comes from the SID file itself: the composer, the year 
 
 Two things a SID file cannot record have been documented separately by the archive's editors. Both sit under **About this tune**, below the line described above. Tap it to open them and tap it again to fold them away; it starts folded so that the transport and the progress bar are still on screen on a small phone. It appears only for tunes the archive describes, which is about a third of them.
 
-The first is whether a tune is an arrangement, and of whose music. Much C64 music is a cover of a pop record, a film score or an arcade original, and the name in the file is whoever wrote the C64 version. Rob Hubbard's *Commando* is an example: he did write the C64 version, but the music is Tamayo Kawamoto's, from the arcade game. Where the archive records this, opening **About this tune** shows it: **BGM1 · music by Tamayo Kawamoto**.
+The first is whether a tune is an arrangement, and of whose music. Much C64 music is a cover of a pop record, a film score or an arcade original, and the name in the file is whoever wrote the C64 version.
+
+Rob Hubbard's *Commando* is an example. He did write the C64 version, but the music is Tamayo Kawamoto's, from the arcade game. Where the archive records this, **About this tune** shows it: **BGM1 · music by Tamayo Kawamoto**.
 
 The second is what the individual tunes inside a file are called, so a list of nineteen numbered rows becomes a title screen, a high-score jingle and a game-over sting. Any note the editors left about a tune is shown underneath. Short notes appear in full; longer ones are trimmed and marked **Show more**, and tapping the note shows the rest.
 
@@ -576,15 +608,23 @@ While the sound or the picture is playing, a **Reset** appears in the card's hea
 
 Open **Remote Input** while **Watch** is on and the picture sits above the joystick and the keyboard, which gives you a screen for playing a game or following a program you are typing into. Enter **Game Mode** and the picture takes the whole sheet.
 
-Move around it however suits you. On a touchscreen, **pinch** to zoom, **drag** to slide the picture about, and **double-tap** to jump straight in on a spot. A second double-tap fits the whole screen back on. A small map in the corner shows which part you are looking at; drag its rectangle to move somewhere else at once. Switch on **Follow** and the view drifts along on its own to wherever the action is, which keeps the cursor in sight as you type.
+Move around the picture however suits you. On a touchscreen, **pinch** to zoom, **drag** to slide it about, and **double-tap** to jump straight in on a spot; a second double-tap fits the whole screen back on.
 
-**Lock on** is the control to use while you are playing. Follow on its own drifts toward whatever moved, which is the wrong thing in a game where everything moves at once. Press and hold your character instead, or, with no touchscreen, line the crosshair at the middle of the view up on it with the direction keys and press **OK**. The view then stays with that one character while enemies move around it. It survives the character flashing, changing color, animating, moving fast, wrapping round the screen edge, and being hidden for a moment. The status line reads **Hold on your character** until something is locked, then **Locked on**. Tap that, ask for the whole screen back, or press **OK** again to let go, and the view returns to ordinary following rather than sitting on empty background.
+A small map in the corner shows which part you are looking at, and dragging its rectangle moves you elsewhere at once. Switch on **Follow** and the view drifts along on its own to wherever the action is, which keeps the cursor in sight as you type.
+
+**Lock on** keeps the view on your character while you play. Press and hold your character on the screen, or, with no touchscreen, line the crosshair at the middle of the view up on it with the direction keys and press **OK**.
+
+The view then travels with that one character while enemies move around it. It holds on through flashing, color changes, animation, fast movement, a wrap around the screen edge, and a moment out of sight.
+
+The status line reads **Hold on your character** until something is locked, then **Locked on**. To let go, tap the status line, ask for the whole screen back, or press **OK** again. The view returns to ordinary following.
 
 ![The immersive screen in Remote Input](../../img/app/home/remote-input/profiles/medium/06-av-mirror-immersive.png)
 
 #### Driving the C64, or adjusting the view
 
-When you steer your phone or tablet with a physical keypad, those same keys could drive the C64 or move the picture, so Live View makes the difference impossible to mistake. The mirror wears a colored border, and a matching label in the corner of the picture, that tell you at a glance which one you are doing: **blue**, marked **“C64”**, means your keys go straight to the machine, as usual; **amber**, marked **“View”**, means your keys zoom and pan the picture instead.
+When you steer your phone or tablet with a physical keypad, those same keys can drive the C64 or move the picture. A colored border round the mirror, with a matching label in the corner, tells you which.
+
+**Blue**, marked **“C64”**, means your keys go straight to the machine. **Amber**, marked **“View”**, means they zoom and pan the picture instead.
 
 Press `*` or the **menu key**, or the on-screen **Fit** button, to change between the two. You are never stranded in front of a frozen game: adjusting the view returns to driving on its own after a short pause. While the border is amber, the keypad moves the view like this:
 
@@ -607,7 +647,11 @@ The same four moves have on-screen buttons: **plus** and **minus** to zoom, the 
 
 Live View keeps the **sound** running smoothly above everything else. If a packet of audio goes missing on the network it fills the tiny gap so cleanly you will not hear a click, and it never lets the picture run away and leave the sound trailing behind.
 
-The sound plays through a **fast, low-latency path**, so what you hear follows your keypresses closely: the app holds far less sound waiting to play than ordinary in-app audio does. Three switches in **Settings → Play and Disk** control this side of things, and all three start on. **Low-latency audio (native)** is the fast path itself. **Fast video (native assembly)** builds the picture the same way, and is what lets it reach the full 50 frames a second of a PAL machine. **Input priority (instant joystick)** hands the joystick and keyboard the right of way: while you are driving, the picture gives up a few frames so your input reaches the machine at once, then climbs straight back. Turn one off to compare, or if it misbehaves on your device.
+The sound plays through a **fast, low-latency path**, so what you hear follows your keypresses closely.
+
+Three switches in **Settings → Play and Disk** control this, and all three start on. **Low-latency audio (native)** is the fast path itself. **Fast video (native assembly)** builds the picture the same way, and is what reaches the full 50 frames a second of a PAL machine.
+
+**Input priority (instant joystick)** gives the joystick and keyboard right of way: while you are driving, the picture gives up a few frames so your input lands at once, then climbs straight back. Turn any of the three off to compare, or if one misbehaves on your device.
 
 One number sits beside them: the **audio network buffer**, 60 milliseconds to begin with. It is how much sound the app holds in hand against a network that delivers in fits and starts. Lower it for the shortest possible delay, raise it if the sound breaks up.
 
@@ -624,7 +668,9 @@ The **picture** is the demanding part, so you get a say in how much of it to dra
 - **Auto** plays every frame it can, eases off when your device is under strain, and climbs back to full speed as soon as there is room to spare. Leave it here.
 - **100%**, **50%**, and **25%** cap the picture at the full rate, half, or a quarter of what the C64 is sending. A lower setting is gentler on the battery and on older phones and leaves more headroom for the game you are driving. Even at a manual cap the app will still drop below it for a moment if that is what it takes to keep the sound clean, because the sound always comes first.
 
-**Stats** also shows, at a glance and over the last few minutes, how the stream is doing: the picture's frame rate, how full the audio buffer is, any packets lost on the network and how they were smoothed over, and the app's own load. The sound and the picture cross the network as two separate streams, so **More** counts their losses apart: **Dropped pkts** under **Audio**, and **Lost pkts** under **Video**. Open or close it as you like: it is light enough that watching it costs the stream nothing. If you ever need to send in a report, **Export diagnostics** saves all of it as a small file.
+**Stats** also shows how the stream is doing, at a glance and over the last few minutes: the picture's frame rate, how full the audio buffer is, any packets lost on the network and how they were smoothed over, and the app's own load.
+
+The sound and the picture cross the network as two separate streams, so **More** counts their losses apart: **Dropped pkts** under **Audio**, **Lost pkts** under **Video**. Open or close it as you like: it is light enough that watching it costs the stream nothing. **Export diagnostics** saves all of it as a small file.
 
 #### Checking the sound and picture yourself
 
@@ -633,9 +679,13 @@ Under Live View are three checks you can run whenever something seems off. They 
 - **A/V sync** and **Tap latency** answer *when*: how far apart the sound and picture are, and how long it takes a keypress to come back to you.
 - **Tone & color ladder** answers *what*. It plays a short tune on your C64, a scale from C3 up to C4 and back at half a second a note, and changes the screen color on every note, stepping through all sixteen C64 colors as it goes. Because the C64 changes the note and the color at the very same instant, anything that arrives out of step arrived that way across your network.
 
-The ladder grades what comes back and shows you five numbers: how many notes were **in tune**, how far off the **pitch** was, whether notes ran **long or short**, whether the two deliberate **silent gaps** really were silent, and how far apart the **sound and picture** were. Wrong pitches, notes running long, or a gap that is not silent all point the same way: the sound is being corrupted on the way to you rather than merely delayed. The most common cause by far is a second machine on your network streaming into the same place, and this check makes that obvious in one run.
+The ladder grades what comes back and shows you five numbers: how many notes were **in tune**, how far off the **pitch** was, whether notes ran **long or short**, whether the two deliberate **silent gaps** really were silent, and how far apart the **sound and picture** were.
 
-Live View is ready as it stands. The picture and the sound stay off until you press **Watch** or **Listen**, so nothing crosses the network until you ask for it. The device sends to two network ports, 11000 for the picture and 11001 for the sound, and **Settings → Play and Disk** changes them if those numbers are already spoken for. Live View borrows the same feeds as **Streams** below, and while it plays it takes charge of them; see there for how the two share.
+Wrong pitches, notes running long, or a gap that is not silent all point the same way: the sound is being corrupted on the way to you rather than merely delayed. The commonest cause is a second machine on your network streaming into the same place, and this check makes that plain in one run.
+
+Live View is ready as it stands. The picture and the sound stay off until you press **Watch** or **Listen**, so nothing crosses the network until you ask for it.
+
+The device sends to two network ports, 11000 for the picture and 11001 for the sound, and **Settings → Play and Disk** changes them if those numbers are already spoken for. Live View borrows the same feeds as **Streams** below, and while it plays it takes charge of them.
 
 **Live View** itself is in Settings → Stable Features, and turning it off hides the whole thing. **Audio Mirror** and **Video Mirror**, in Experimental Features, choose which of the two feeds it offers.
 
@@ -671,22 +721,30 @@ A quick-keys bar beside the joystick keeps the keys you reach for mid-game one t
 
 #### Game Mode
 
-**Game Mode** is the app set up for playing: the picture and the sound as you last left them, everything else out of the way, and whichever controls suit how you are driving. One action starts it: the **Game** tile on Home, the **Game Mode** button on Play, or the `0` key from anywhere. You are then playing, with nothing else to press. Starting a program, a cartridge or a disk can open it for you as well; **Settings → Play and Disk → Enter Game Mode when a game starts** decides.
+**Game Mode** is the app set up for playing: the picture and the sound as you last left them, everything else out of the way, and whichever controls suit how you are driving.
+
+One action starts it: the **Game** tile on Home, the **Game Mode** button on Play, or the `0` key from anywhere. Starting a program, a cartridge or a disk can open it for you as well, and **Settings → Play and Disk → Enter Game Mode when a game starts** decides whether it does.
 
 ![Game Mode](../../img/app/home/remote-input/profiles/medium/02-game-mode.png)
 
-The on-screen joystick stays where it is until you pick up the keys. Play with the touchscreen and it is there; steer the game with a physical key and it steps aside so the picture has the whole screen, and touching it brings it straight back. Nothing else moves it, and opening Game Mode with the `0` key does not count as playing on the keys. To decide yourself, press **Hide joystick** or **Show joystick** on the Game Mode toolbar for the game you are playing, or set **Settings → Play and Disk → On-screen joystick in Game mode** to **Visible** or **Hidden** instead of **Auto**.
+The on-screen joystick stays where it is until you pick up the keys. Play with the touchscreen and it is there; steer the game with a physical key and it steps aside so the picture has the whole screen, and touching it brings it straight back.
+
+Nothing else moves it, and opening Game Mode with the `0` key does not count as playing on the keys. To decide yourself, press **Hide joystick** or **Show joystick** on the Game Mode toolbar for the game you are playing, or set **Settings → Play and Disk → On-screen joystick in Game mode** to **Visible** or **Hidden** instead of **Auto**.
 
 ![Game Mode, played on the physical keys](../../img/app/home/remote-input/profiles/medium/07-game-mode-keys.png)
 
-With the controls out of the way, three keys still reach everything. `#` brings RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again. `*`, or the menu key, changes between driving the C64 and adjusting the view. **Back** leaves. The floating **cog** button at the top of the picture brings the whole toolbar back, and **Show joystick** on that toolbar brings the on-screen joystick back.
+With the controls out of the way, three keys still reach everything. `#` brings RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again. `*`, or the menu key, changes between driving the C64 and adjusting the view. **Back** leaves.
+
+The floating **cog** button at the top of the picture brings the whole toolbar back, and **Show joystick** on that toolbar brings the on-screen joystick back.
 Set the joystick to **Hidden** with the picture switched off and Game Mode has nothing to draw, so the space says so: it tells you the picture is off, and carries the **Watch** and **Listen** switches and the quick keys, all reachable without a touchscreen. The game keeps taking your keys the whole time. Turn **Watch** on and the picture takes the space instead.
 
 If you are playing on a television, turn **Watch** off once and Game Mode keeps opening without the picture. The controls take the space instead, so it is never blank.
 
 #### Steering with a physical keyboard
 
-**Settings → Play and Disk → Joystick keys** decides which keys steer. **Classic T9** uses 2, 4, 6 and 8 with 5 as fire, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centered)** uses the four keys around 8, with 8 itself as fire. **Custom** lets you press the key you want for each direction. A hardware D-pad always steers as well, whatever you choose here. The mapping turns with your device, so you only ever set it up one way up. Where the sensor cannot tell which way up the device is, the **Orientation** control in Game Mode's toolbar pins the mapping to **Auto**, **0°**, **90°** or **270°**.
+**Settings → Play and Disk → Joystick keys** decides which keys steer. **Classic T9** uses 2, 4, 6 and 8 with 5 as fire, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centered)** uses the four keys around 8, with 8 itself as fire. **Custom** lets you press the key you want for each direction. A hardware D-pad always steers as well, whatever you choose here.
+
+The mapping turns with your device, so you only ever set it up one way up. Where the sensor cannot tell which way up the device is, the **Orientation** control in Game Mode's toolbar pins the mapping to **Auto**, **0°**, **90°** or **270°**.
 
 Leave with **Exit**, at the top of the Game Mode toolbar, or your device's Back button. Both release everything you were holding. Closing the sheet also stops the picture and sound if Game Mode was what started them, and leaves them running if they were already on before you arrived.
 
@@ -694,9 +752,17 @@ Leave with **Exit**, at the top of the Game Mode toolbar, or your device's Back 
 
 ![Remote Input keyboard mode](../../img/app/home/remote-input/04-keyboard-medium.png)
 
-Full Joystick relay uses the device's `machine:input` REST endpoint. It needs recent firmware: a Commodore 64 Ultimate on firmware **1.2.0** or newer, or an Ultimate 64, Ultimate 64 Elite, or Ultimate 64 Elite II on firmware **3.15** or newer. The Ultimate-II cannot relay a joystick at all: as a cartridge it cannot change the state of the C64's CIA 1 input chip, so it has no `machine:input` support. On the Ultimate-II, and on any device running older firmware, the app automatically falls back to **Keys** only. That fallback types by placing characters into the C64's KERNAL keyboard buffer. It is ideal for BASIC, where you can type commands, `LOAD`, and `RUN`, but most games read the keyboard and joystick hardware directly and will not respond to it. RUN/STOP and RESTORE are also unavailable in the fallback. If the device is password-protected, enter its password in Settings first, because both Joystick and Keys need it.
+Full Joystick relay uses the device's `machine:input` REST endpoint. It needs recent firmware: a Commodore 64 Ultimate on firmware **1.2.0** or newer, or an Ultimate 64, Ultimate 64 Elite, or Ultimate 64 Elite II on firmware **3.15** or newer.
 
-Remote Input is careful never to leave a key or direction stuck on the real C64. Everything you are holding is released automatically when you close the sheet, switch mode or port, switch to another device, or send the app to the background. If a message does not reach the device, the header shows **Reconnecting…** until the next one gets through. And at any moment you can tap **Release All** to let go of every key and button at once.
+The Ultimate-II cannot relay a joystick at all: as a cartridge it cannot change the state of the C64's CIA 1 input chip, so it has no `machine:input` support. On the Ultimate-II, and on any device running older firmware, the app automatically falls back to **Keys** only.
+
+That fallback types by placing characters into the C64's KERNAL keyboard buffer. It is ideal for BASIC, where you can type commands, `LOAD`, and `RUN`, but most games read the keyboard and joystick hardware directly and will not respond to it. RUN/STOP and RESTORE are also unavailable in the fallback.
+
+If the device is password-protected, enter its password in Settings first, because both Joystick and Keys need it.
+
+Nothing you are holding is left stuck on the real C64. Everything is released when you close the sheet, switch mode or port, switch to another device, or send the app to the background. If a message does not reach the device, the header shows **Reconnecting…** until the next one gets through.
+
+At any moment you can tap **Release All** to let go of every key and button at once.
 
 _Availability: on by default. You can turn it off in Settings → Stable Features._
 
@@ -721,15 +787,25 @@ The status line says where things stand: **No config**, **Candidates found**, **
 
 C64 Commander gives your C64 two disk drives and a Soft IEC drive, and the **Disks** page has a card for each. Every card is a small control panel of its own.
 
-Turn a drive on or off with its power control; a drive must be **on** before it can mount anything. Give it a **bus ID** so software can find it. The first drive is 8 by convention, and the device tells the app which numbers it will accept. Set its **type** to match the disk: a 1541 for D64 and G64, a 1571 for D71 (it reads D64 too), a 1581 for D81. This list also comes from the device, so a machine that offers more types shows them. **Reset** restarts the drive's own processor and nothing else, which is the gentlest way to bring a confused drive back without disturbing the C64.
+Turn a drive on or off with its power control. A drive must be **on** before it can mount anything.
+
+Give it a **bus ID** so software can find it; the first drive is 8 by convention, and the device tells the app which numbers it will accept. Set its **type** to match the disk: a 1541 for D64 and G64, a 1571 for D71 (which reads D64 too), a 1581 for D81. This list also comes from the device, so a machine that offers more types shows them.
+
+**Reset** restarts the drive's own processor, which is the gentlest way to bring a confused drive back without disturbing the C64.
 
 You will rarely set any of this by hand. Starting a disk from Play switches the drive on if it is off, and changes its type if the current one cannot read the disk, telling you so as it goes.
 
-Mounting is the heart of the page. Choose a disk from your collection, choose the drive, and mount it; **Eject** empties the drive again. A disk that already lives on the connected Ultimate-family device mounts in place. A **Local** disk is copied across first, and whatever a program writes to it returns to your own file when you eject, so high scores and saved games survive. A disk from the online archive has no file of yours to return to: its changes last only while the app is running, and ejecting it offers you **Save a local copy**.
+Mounting is the heart of the page. Choose a disk from your collection, choose the drive, and mount it; **Eject** empties the drive again.
 
-There are two ways to start a disk once it is mounted, and **Settings → Play and Disk → Disk first-PRG load** chooses between them. **Classic KERNAL load** does what you would do at the keyboard: `LOAD"*",8,1` and `RUN`. **DMA** lifts the first program off the disk and writes it straight into memory, which is far quicker. A few loaders object to arriving that way, so if a disk that used to start no longer does, try the classic route.
+A disk that already lives on the connected Ultimate-family device mounts in place. A **Local** disk is copied across first, and whatever a program writes to it returns to your own file when you eject, so your high scores and saved games survive. A disk from the online archive has no file of yours to return to: its changes last only while the app is running, and ejecting it offers you **Save a local copy**.
 
-For a title that spans several disks, keep the related images in one **group**. Adding a folder does this for you, from the file names or from the folder itself; move any stragglers by hand. A group puts **rotate** controls on the drive card, so when a program asks for the next disk you swap without going near the collection. The **Soft IEC** drive is the other way in: point it at a folder on the device and your C64 reads the loose files inside it directly, which suits a large collection that was never packed into disk images.
+There are two ways to start a disk once it is mounted, and **Settings → Play and Disk → Disk first-PRG load** chooses between them. **Classic KERNAL load** does what you would do at the keyboard: `LOAD"*",8,1` and `RUN`. **DMA** lifts the first program off the disk and writes it straight into memory, which is much quicker.
+
+A few loaders object to arriving that way, so if a disk that used to start no longer does, try the classic route.
+
+For a title that spans several disks, keep the related images in one **group**. Adding a folder does this for you, from the file names or from the folder itself; move any stragglers by hand. A group puts **rotate** controls on the drive card, so when a program asks for the next disk you swap without going near the collection.
+
+The **Soft IEC** drive is the other way in. Point it at a folder on the device and your C64 reads the loose files inside it directly, which suits a large collection that was never packed into disk images.
 
 ### Content Explorer
 
@@ -751,9 +827,15 @@ _Availability: on by default. You can turn it off in Settings → Stable Feature
 
 #### Launch Safety
 
-Some machines have a freezer cartridge configured, of the Action Replay or Retro Replay kind. On those, starting a program directly can land you in the cartridge's own menu instead, which looks exactly like the app misbehaving. Launch Safety heads that off: around a direct **Run** or **Load** it *parks* the cartridge, then puts it back. It never writes to the device's saved settings, so a power cycle always restores the cartridge, and where no cartridge is configured it does nothing at all. **Mount & Load** resets the machine in any case and is left alone. All of this happens by itself; there is nothing to press.
+Some machines have a freezer cartridge configured, of the Action Replay or Retro Replay kind. On those, starting a program directly can land you in the cartridge's own menu.
 
-One further option sits in **Settings → Play and Disk**: **Answer cartridge boot menu after reset**. It starts off, and helps in one narrow case: a cartridge that puts up a boot menu when the machine resets, which would otherwise swallow the LOAD that Mount & Load types. Turn it on to choose the **menu key** (F1 to F8, RETURN, or SPACE; F7 to start with) and a **boot settle** time, given in milliseconds, between 1000 and 8000 (2800 to start with). The app then presses that key after the reset to clear the menu. Leave it off unless you have such a cartridge.
+Launch Safety heads that off. Around a direct **Run** or **Load** it *parks* the cartridge, then puts it back. It never writes to the device's saved settings, so a power cycle always restores the cartridge, and where no cartridge is configured it does nothing at all.
+
+**Mount & Load** resets the machine in any case, and is left alone. All of this happens by itself; there is nothing for you to press.
+
+One further option sits in **Settings → Play and Disk**: **Answer cartridge boot menu after reset**. It starts off, and helps in one narrow case: a cartridge that puts up a boot menu when the machine resets, swallowing the LOAD that Mount & Load types.
+
+Turn it on to choose the **menu key** (F1 to F8, RETURN, or SPACE; F7 to start with) and a **boot settle** time in milliseconds, between 1000 and 8000 (2800 to start with). The app then presses that key after the reset to clear the menu. Leave it off unless you have such a cartridge.
 
 _Availability: on by default. You can turn it off in Settings → Stable Features._
 
@@ -765,7 +847,11 @@ _Availability: off to begin with. Turn it on in Settings → Experimental Featur
 
 #### Creating a Blank Disk
 
-To make a fresh disk to save to, open **Disks** and choose **New disk**, which formats a blank image on the device. Pick the **type**, D64 (1541), D71 (1571), D81 (1581), or DNP (CMD native), give it a **file name**, and set a **disk label** of up to 16 characters, which follows the file name unless you change it. A D64 lets you choose the number of **tracks**, 35 to 41, and 35 is the usual answer; a DNP needs one between 1 and 255; D71 and D81 need none. Last, type the **storage folder** on the device, which starts at `/USB0`. The top-level `/` is a list of drives and holds no files. **Create & mount** builds the image, adds it to your collection, and mounts it in Drive A ready to write to.
+To make a fresh disk to save to, open **Disks** and choose **New disk**, which formats a blank image on the device. Pick the **type**: D64 (1541), D71 (1571), D81 (1581), or DNP (CMD native). Give it a **file name**, and a **disk label** of up to 16 characters, which follows the file name unless you change it.
+
+A D64 lets you set the number of **tracks**, 35 to 41, and 35 is the usual answer. A DNP needs a number between 1 and 255. D71 and D81 need none.
+
+Last, type the **storage folder** on the device. It starts at `/USB0`; the top-level `/` lists drives and holds no files. **Create & mount** builds the image, adds it to your collection, and mounts it in Drive A, ready to write to.
 
 _Availability: on by default. You can turn it off in Settings → Stable Features._
 
@@ -785,7 +871,11 @@ When you tap **Backup**, the app asks which region of memory to capture:
 
 Snapshots live on your phone or tablet, not on the C64. Each is named from its type and the date and time, and if something is playing its title becomes the label. Add or change a **Comment** on any snapshot afterwards. The app keeps a hundred and drops the oldest once that fills.
 
-**Restore** opens your snapshot library. Filter it by name or by type, then tap a snapshot to put it back. The app asks you to confirm, because restoring overwrites the matching memory on the C64. It writes only the bytes the snapshot holds, and leaves the CIA timers alone so the cursor keeps its usual blink. A CPU + RAM snapshot resumes the program where it stopped; where that proves impossible the app restores the memory alone and says so. Note that a CPU + RAM snapshot is filed under **Program** in the library, since that is what it holds. The same library edits comments and removes snapshots you have finished with.
+**Restore** opens your snapshot library. Filter it by name or by type, then tap a snapshot to put it back. The app asks you to confirm, because restoring overwrites the matching memory on the C64.
+
+It writes only the bytes the snapshot holds, and leaves the CIA timers alone so the cursor keeps its usual blink. A CPU + RAM snapshot resumes the program where it stopped; where that proves impossible the app restores the memory alone and tells you. A CPU + RAM snapshot is filed under **Program** in the library.
+
+The same library edits comments and removes snapshots you have finished with.
 
 _Availability: on by default. You can turn it off in Settings → Stable Features._
 
@@ -799,9 +889,13 @@ One more control, **Flush/Eject**, finishes the current page and sends it on. It
 
 Two ideas make the configuration tree easy to live with: where a change goes, and how to keep it.
 
-Every change you make, on Home, on Disks, or in Config, reaches the running device at once, and almost all of them take effect there and then; a few, the cartridge choice among them, wait for the next reset. The device holds two copies of its settings: the **live** ones it is using now, and a **flash** copy it reloads at power-on. A change is live instantly; it survives a reboot or power cycle only once it reaches flash.
+Every change you make, on Home, on Disks, or in Config, reaches the running device at once, and almost all take effect there and then; a few, the cartridge choice among them, wait for the next reset.
 
-The **Config** card on Home decides which. **Save** writes the live settings into flash now. Reach for it when you have left **Keep device settings after a restart** off and want this one change to last. Beside it are **Load** from flash, **Reset** to the factory settings, and **Revert**, which undoes the changes you have made since the last save. The app also keeps its own named **configuration snapshots** on the phone or tablet, apart from the device's flash: save the setup you like, then load it back whenever you want the whole thing at once.
+The device holds two copies of its settings: the **live** ones it is using now, and a **flash** copy it reloads at power-on. A change is live instantly, and survives a reboot or power cycle only once it reaches flash.
+
+The **Config** card on Home decides which. **Save** writes the live settings into flash now. Reach for it when you have left **Keep device settings after a restart** off and want this one change to last.
+
+Beside it are **Load** from flash, **Reset** to the factory settings, and **Revert**, which undoes the changes you have made since the last save. The app also keeps its own named **configuration snapshots** on the phone or tablet, apart from the device's flash: save the setup you like, then load it back whenever you want the whole thing at once.
 
 ### Switching Between Devices
 
@@ -813,11 +907,15 @@ Open it in any of three ways, whenever more than one device is saved:
 - Press **`#`** on a hardware keyboard or keypad.
 - Choose **Switch device** in the Quick Menu.
 
-The switcher checks each saved device for you and looks again every ten seconds while it is open. Each row shows the name, a status pill reading **Selected**, **Verifying**, **Offline** or **Mismatch**, a health badge, and a short line such as how many checks passed or when the device was last seen. The device you are using is highlighted. Tap the chevron to open a row and read the checks one by one, which tells a sleeping device from one that is genuinely unreachable. To keep the switcher gentle on machines it is only glancing at, these rows check the web and FTP services and read a setting without writing one; the full round of checks, Telnet included, belongs to **Run health check** in Diagnostics.
+The switcher checks each saved device for you, and looks again every ten seconds while it is open. Each row carries the name, a status pill reading **Selected**, **Verifying**, **Offline** or **Mismatch**, a health badge, and a short line such as how many checks passed or when the device was last seen. The device you are on is highlighted.
+
+Tap the chevron to open a row and read the checks one by one, which tells a sleeping device from one that is truly unreachable. These rows stay light on the machines they glance at: they check the web and FTP services and read a setting without writing one. For the full round, Telnet included, use **Run health check** in Diagnostics.
 
 Tap a device to switch to it. Before anything else the app safely lets go of any input you were holding on the old device, stops tracking its playback and pause state, retargets to the new device's address and ports, and then checks that the new device answers. While that happens the target shows a **Verifying** pill; once it responds, it becomes the active device.
 
-Saved devices are created and edited in **Settings → Connection**, under **Saved devices**. Add one, edit its **Device name**, **Hostname / IP** and its **HTTP**, **FTP** and **Telnet** ports, give it a **Network Password**, or delete one you have finished with. **Save & Connect** waits for the device to answer before keeping it, so the list does not fill with machines that are not there. With a single device saved there is nothing to switch to, and the switcher stays out of your way.
+Saved devices are created and edited in **Settings → Connection**, under **Saved devices**. Add one, edit its **Device name**, **Hostname / IP** and its **HTTP**, **FTP** and **Telnet** ports, give it a **Network Password**, or delete one you have finished with.
+
+**Save & Connect** waits for the device to answer before keeping it. With a single device saved there is nothing to switch to, and the switcher stays out of your way.
 
 ### Reading Diagnostics
 
@@ -827,7 +925,9 @@ The panel has three parts, from top to bottom:
 
 - The **health header** shows the state (Healthy, Degraded, Unhealthy or Offline), which device it refers to, and when it was last checked. Tap **Run health check** to test the connection now. The check tries the web, FTP and Telnet services, then three signals from the C64 itself: CONFIG, RASTER and JIFFY. Each reports its own result and timing, alongside the overall latency. Open the header to read them one by one.
 
-The CONFIG check does more than read. It nudges a live setting by a hair, reads it back to confirm the device applied the change, then puts the original value back. On a machine with lights, the case light or the keyboard, you will see them **pulse once** as it runs, a visible heartbeat that says the connection is alive. On a machine without lights it nudges a mixer volume instead, for about a twelfth of a second.
+The CONFIG check does more than read. It nudges a live setting by a hair, reads it back to confirm the device applied the change, then puts the original value back.
+
+On a machine with lights, the case light or the keyboard, you will see them **pulse once** as it runs, a visible heartbeat that says the connection is alive. On a machine without lights it nudges a mixer volume instead, for about a twelfth of a second.
 - The **Filters** bar says how much of the activity you are looking at and opens the filter editor. Filter by device, by kind of activity (Problems, Actions, Logs, Traces), by what raised it (App, REST, FTP, Telnet), or by severity (Errors, Warnings, Info). The editor also holds five one-tap shortcuts: **Errors only**, **Problems only**, **REST**, **FTP**, and **Reset**.
 - The **Activity** list gathers problems, actions, logs, and traces together. Tap any row to expand it for the full details.
 
@@ -860,7 +960,9 @@ Good habits:
 - drop to Conservative for older or unknown firmware, Wi-Fi, or a first setup;
 - power-cycle the device if the web, FTP and Telnet services all stop answering while ping still works.
 
-**Device Safety** in Settings decides how hard the app pushes the device. Its five modes trade speed for caution: they cap how many requests run at once, pace them, and set how long the app remembers an answer and how long it waits after a failure. **Auto** reads the model and the firmware and picks for you, and is the one to leave it on. The full list is in [Device Safety Modes](#device-safety-modes). Choosing **Relaxed** asks you to confirm, and leaves a banner while it is in force.
+**Device Safety** in Settings decides how hard the app pushes the device. Its five modes trade speed for caution: they cap how many requests run at once, pace them, and set how long the app remembers an answer and how long it waits after a failure.
+
+**Auto** reads the model and the firmware and picks for you, and is the one to leave it on. The full list is in [Device Safety Modes](#device-safety-modes). Choosing **Relaxed** asks you to confirm, and leaves a banner while it is in force.
 
 The same chapter also opens up every individual number behind those modes: discovery windows, timeouts, how many requests may run at once, cooldowns, backoff, and the circuit breaker. Leave them alone unless you are chasing a particular fault.
 
@@ -976,7 +1078,10 @@ Preferred locations are marked first.
 
 ### Keyboard and Directional Input Reference
 
-On by default. You can turn it off in Settings → Experimental Features. Directional navigation answers to D-pad keys, arrow keys, and hardware keyboards. While you are steering by keys, a bar along the bottom shows where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Activate, Edit, Select, Toggle, Adjust or Switch in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.
+On by default. You can turn it off in Settings → Experimental Features. Directional navigation answers to D-pad keys, arrow keys, and hardware keyboards.
+
+While you are steering by keys, a bar along the bottom tells you where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Activate, Edit, Select, Toggle, Adjust or Switch in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.
+ While you are steering by keys, a bar along the bottom shows where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Activate, Edit, Select, Toggle, Adjust or Switch in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.
 
 #### Directional Pad
 
@@ -1025,7 +1130,9 @@ Press either from any page and the app takes you to Play and does it there. **Th
 
 #### Quick Menu
 
-There are two ways in, and each offers what that way in calls for. Press **Menu** when the selected control has no menu of its own: the Quick Menu then lists the six pages, each with the number key that reaches it directly, followed by Game Mode on `0`, Diagnostics on `*`, and the Device Switcher on `#` when more than one device is saved. Every page also carries a three-dot **Quick Menu** button in the top bar, beside the health badge. Opened that way, the menu leaves out the page jumps, since the tab bar is already in front of you, and lists the actions for the page you are on.
+There are two ways in. Press **Menu** when the selected control has no menu of its own, and the Quick Menu lists the six pages, each with the number key that reaches it directly, followed by Game Mode on `0`, Diagnostics on `*`, and the Device Switcher on `#` when more than one device is saved.
+
+Every page also carries a three-dot **Quick Menu** button in the top bar, beside the health badge. Opened that way, the menu leaves out the page jumps and gives you the actions for the page you are on.
 
 **Search** is the first entry, whichever way you open the menu.
 
