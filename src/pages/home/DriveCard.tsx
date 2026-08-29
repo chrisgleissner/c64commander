@@ -141,15 +141,32 @@ export function DriveCard({
         </Button>
       }
     >
-      {/* Row 1.5: Mounted Path */}
+      {/* Row 1.5: Mounted Path.
+          The row wraps, and the value is allowed the whole of it when it does. The drive cards sit
+          two to a row, so this card is 147px wide on a 393px screen; with the label beside it the
+          button had 57.7px for "No disk mounted", which needs 149px, and drew "No d…". The label
+          taking its own line is the only way the value can be read at all here. */}
       {(mountedPath !== undefined || pathValue !== undefined) && (
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
           <span className="shrink-0 text-muted-foreground whitespace-nowrap">{mountedPathLabel || "Disk"}</span>
           <button
             type="button"
             onClick={onMountedPathClick || onPathClick}
             disabled={!isConnected || pathPending}
-            className="min-h-11 flex-1 truncate text-left font-medium text-foreground hover:underline"
+            className={cn(
+              "min-h-11 min-w-0 flex-1 basis-full text-left font-medium text-foreground hover:underline sm:basis-auto",
+              /*
+               * A path is elided; a sentence wraps.
+               *
+               * Cutting the middle of a path still leaves it recognisable, and that is what
+               * `truncate` is for here. "No disk mounted" and "Select..." are not paths — cutting
+               * them gives "No d…", which says nothing — and this card is 147px wide because the
+               * drives sit two to a row, so on the medium profile there is no width at which the
+               * sentence fits on one line. `MountedLabel` in HomeDiskManager already draws this
+               * same distinction for the row below.
+               */
+              (mountedPath ?? pathValue)?.includes("/") ? "truncate" : "whitespace-normal break-words",
+            )}
             data-testid={`home-drive-mounted-${testIdSuffix}`}
           >
             {(mountedPath ?? pathValue) || "Select..."}

@@ -362,6 +362,17 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    /*
+     * Moving the pointer over the picture brings the controls back, before anything else here.
+     *
+     * `bumpIdle` was reachable only from a pointer DOWN, a key, or a mode change, and this handler
+     * returned immediately unless that pointer was already captured — so on a pointer device a hover
+     * did nothing and the auto-hidden zoom and fit controls could only be recovered by clicking the
+     * picture, which is also the pan gesture and, with Follow on, the lock gesture. Every video
+     * player restores its controls on pointer movement; this one now does too. The 2.6s timer is
+     * restarted, not cancelled, so they still hide once the pointer settles.
+     */
+    bumpIdle();
     const prev = pointers.current.get(event.pointerId);
     if (!prev) return;
     const press = longPressRef.current;

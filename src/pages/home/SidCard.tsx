@@ -237,12 +237,14 @@ export function SidCard({
       </div>
 
       {/* Row 3: Shaping Controls.
-          Three columns share about 250px on the smallest screen, which leaves each
-          label around 80px. "Resistor" alone needs 65px at the size the compact
-          profile renders it, so the label ran over its neighbour and the value beside
-          it was cut to four characters. One column per control gives each label and
-          its value the width they need, the same way row 4 already does. */}
-      <div className={cn("grid gap-2 text-xs", profile === "compact" ? "grid-cols-1" : "grid-cols-3")}>
+          Wrapping flex, not a fixed column count. Three EQUAL columns gave every control the same
+          width whatever it held, so "Cap" was cut to "470.." and "Digis" to "Med…" while the row
+          beside them still had free space — the grid had already decided the split before it knew
+          what was in it. Sized to content, each label keeps its value, and a control that no longer
+          fits moves to the next line instead of losing characters. This is why the compact profile
+          needed a one-column special case before: at three columns each label had about 80px and
+          "Resistor" alone needs 65px. Content sizing covers both profiles with one rule. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
         {shapingControls.map((control, index) => (
           <div key={index} className="flex items-center gap-2">
             <span className="shrink-0 text-muted-foreground whitespace-nowrap">{control.label}</span>

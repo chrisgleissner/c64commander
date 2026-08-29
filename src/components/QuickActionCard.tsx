@@ -83,9 +83,13 @@ export function QuickActionCard({
         // The vertical sizes are what they are because every label here is now one word on one
         // line. A grid row stretches to its tallest tile, so a single wrapped label used to add
         // 21.6px to all four tiles beside it: the medium 393px row measured 112.3px against the
-        // 86px floor. With nothing wrapping, the floor is what decides, and 64px sits above the
-        // 44px touch minimum while staying under the ~70px the content needs on its own.
-        compact ? "gap-1 px-0.5 py-2 min-h-[64px]" : null,
+        // 86px floor.
+        //
+        // With nothing wrapping, CONTENT decides the height, not the floor — the icon, the gap and
+        // one line of label came to 71.6px on compact against a 64px floor the tile never reached.
+        // `py-1.5` and `gap-0.5` take 6px of that back. The floor stays as the 44px touch minimum
+        // written in pixels, which is what it is for; it is inert while the content is taller.
+        compact ? "gap-0.5 px-0.5 py-1.5 min-h-11" : null,
         variantClasses[variant],
         disabled ? "opacity-50 cursor-not-allowed" : null,
         className,
@@ -93,7 +97,9 @@ export function QuickActionCard({
     >
       <div
         className={cn(
-          compact ? "p-1" : "p-2",
+          // `p-0.5`: the tinted chip reads as a chip at 2px around the glyph, and the 8px it used
+          // to carry was the single largest piece of dead height in the tile.
+          compact ? "p-0.5" : "p-2",
           "rounded-lg",
           variant === "danger"
             ? "bg-destructive/10 text-destructive"

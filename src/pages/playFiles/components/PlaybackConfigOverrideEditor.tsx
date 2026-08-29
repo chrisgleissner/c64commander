@@ -235,7 +235,10 @@ export const PlaybackConfigOverrideEditor = ({ item, onChangeOverrides }: Playba
             options={selectedItem.options}
             details={selectedItem.details}
             onValueChange={setPendingValue}
-            className="p-0"
+            // `border-0` off `.settings-row`'s `border-b`: this row is not the last child of its
+            // box, so `last:border-0` does not reach it and it drew a divider across the middle of
+            // a bordered panel. Removed as redundant by the 0.10.0-rc1 token sweep; it is not.
+            className="border-0 p-0"
           />
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={handleSaveOverride} disabled={!selectedCategory || !selectedItemName}>

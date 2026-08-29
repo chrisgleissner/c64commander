@@ -53,7 +53,7 @@ describe("QuickActionCard", () => {
       </DisplayProfileProvider>,
     );
 
-    expect(screen.getByRole("button", { name: "Play" }).className).toContain("min-h-[64px]");
+    expect(screen.getByRole("button", { name: "Play" }).className).toContain("min-h-11");
   });
 
   it("falls back to adaptive compact density on compact displays", () => {
@@ -66,7 +66,7 @@ describe("QuickActionCard", () => {
       </DisplayProfileProvider>,
     );
 
-    expect(screen.getByRole("button", { name: "Play" }).className).toContain("min-h-[64px]");
+    expect(screen.getByRole("button", { name: "Play" }).className).toContain("min-h-11");
   });
 
   it("applies disabled styles when disabled", () => {
