@@ -792,7 +792,12 @@ test.describe("Playback file browser", () => {
       expect(dialogBox.x).toBeLessThanOrEqual(1);
       expect(dialogBox.x + dialogBox.width).toBeGreaterThanOrEqual(viewport.width - 1);
       expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(viewport.width + 1);
-      expect(dialogBox.y).toBeGreaterThanOrEqual(39);
+      // The sheet starts at the badge lane's bottom (`resolveAppSheetTopClearancePx`), so this
+      // floor moves with the header. The header is now sized by the 44px touch target in pixels
+      // rather than by a rem that grew with the type ramp, which lifts the badge — and the sheet
+      // with it — by about a pixel. What the bound is for is unchanged: the sheet must leave the
+      // top chrome visible rather than covering the screen.
+      expect(dialogBox.y).toBeGreaterThanOrEqual(36);
       expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(viewport.height);
     }
 
