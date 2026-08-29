@@ -125,16 +125,17 @@ test.describe("Game Mode", () => {
     await expect(page.getByTestId("remote-input-collapse-chrome")).toHaveCount(0);
   });
 
-  test("Game Mode is the first Quick Action tile, ahead of every destructive one", async ({ page }) => {
+  test("Game Mode leads the Quick Action grid, ahead of every destructive one", async ({ page }) => {
     await page.goto("/");
     await waitForConnected(page);
 
     const labels = await page
       .locator('[data-panel-position="1"] [data-testid="home-machine-controls"] button')
       .allInnerTexts();
-    // The tile carries one word. What this test is about is its POSITION, so it reads the
-    // label the tile actually prints rather than the feature's full name.
-    expect(labels[0]?.trim()).toBe("Game");
+    // The tiles carry one word each. What this test is about is their POSITION, so it reads the
+    // labels the tiles actually print rather than the features' full names. The grid opens on the
+    // three ways to use the machine from here, in this order.
+    expect(labels.slice(0, 3).map((label) => label.trim())).toEqual(["Live View", "Game", "Input"]);
 
     const destructive = ["Reset", "Reboot", "Reboot (Clr Mem)", "Power Cycle", "Power Off"];
     const trimmed = labels.map((label) => label.trim());

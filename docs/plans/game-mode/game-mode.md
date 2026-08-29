@@ -1081,7 +1081,7 @@ built as designed, what deviated and why, and what the hardware run proved.
 | GM-16 | `docs/cta-inventory.md` updated; `remoteInputKeypadReachability.spec.ts` and `gameMode.spec.ts` |
 | GM-17 | `useFocusNavigation.test.tsx` (`0`, text field, open overlay, no handler); `gameMode.spec.ts` from Home, Play and Settings |
 | GM-18 | `gameModeEntryPoints.test.ts`, one test per condition |
-| GM-19 | `MachineControls.test.tsx` "leads with Game Mode and keeps every destructive tile after every safe one"; `gameMode.spec.ts` asserts the rendered order |
+| GM-19 | `MachineControls.test.tsx` "opens on the watch band and keeps every destructive tile after every safe one"; `gameMode.spec.ts` asserts the rendered order |
 | GM-20 | `gameModeEntryPoints.test.ts` `resolvePickerConfirm` |
 | GM-21 | The keypad path is `0` → play → `#` for Watch/Listen → Back, each covered above; no Settings visit appears in it |
 

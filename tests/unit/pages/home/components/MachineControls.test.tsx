@@ -125,7 +125,7 @@ describe("MachineControls", () => {
 
   // GM-19: the first row at two columns used to be Reset + Reboot — the two most
   // destructive actions, where a thumb lands and where the keypad ring starts.
-  it("leads with Game Mode and keeps every destructive tile after every safe one", () => {
+  it("opens on the watch band and keeps every destructive tile after every safe one", () => {
     render(
       <MachineControls
         {...defaultProps}
@@ -134,7 +134,8 @@ describe("MachineControls", () => {
         ramActionsVisible
         onPowerCycle={vi.fn()}
         extraActions={[
-          { id: "openRemoteInput", label: "Remote Input", onSelect: vi.fn() },
+          { id: "promoted.home.section.live-view", label: "Live View", onSelect: vi.fn() },
+          { id: "openRemoteInput", label: "Input", onSelect: vi.fn() },
           {
             id: "rebootClearMemory",
             label: "Reboot (Clr Mem)",
@@ -149,7 +150,7 @@ describe("MachineControls", () => {
     const labels = Array.from(screen.getByTestId("home-machine-controls").querySelectorAll("button")).map(
       (button) => button.textContent,
     );
-    expect(labels[0]).toBe("Game");
+    expect(labels.slice(0, 3)).toEqual(["Live View", "Game", "Input"]);
 
     const destructive = ["Reset", "Reboot", "Reboot (Clr Mem)", "Power Cycle", "Power Off"];
     const firstDestructive = labels.findIndex((label) => destructive.includes(label ?? ""));

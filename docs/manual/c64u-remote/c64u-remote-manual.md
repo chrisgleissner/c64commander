@@ -112,9 +112,11 @@ Home groups the day-to-day controls.
 
 ![Home overview](../../img/app/home/profiles/compact/01-overview.png)
 
-Start at the top. The search field comes first, and under it **Quick Actions** — one grid holding the machine's own controls and, at the end of them, four tiles that need no C64 at all. **Radio** starts a SID Radio station, thousands of tunes played on this device with no network and no hardware. **Last tune** picks up the last tune where it stopped, and names it — two words, because the machine's own Pause control renames itself to Resume while the C64 is paused. **Recent** is the way back to anything you have opened before. **Live View** goes to the card that brings the machine's picture and sound into the app. A tile you cannot use right now is still there, greyed, saying what it is waiting for.
+Start at the top. The search field comes first, and under it **Quick Actions** — one grid holding the machine's own controls together with three tiles that need no C64 at all. **Radio** starts a SID Radio station, thousands of tunes played on this device with no network and no hardware. **Last tune** picks up the last tune where it stopped, and names it — two words, because the machine's own Pause control renames itself to Resume while the C64 is paused. **Recent** is the way back to anything you have opened before. **Live View**, which does need a machine, goes to the card that brings its picture and sound into the app. A tile you cannot use right now is still there, greyed, saying what it is waiting for.
 
 Quick Actions is one grid in four bands. **Watch** comes first — Live View, Game and Input, three ways to use the C64 from here. **Listen** follows: Radio, Last tune and Recent, the three that need no C64 at all. Then the **operational** tiles — Menu, Pause/Resume and the RAM snapshot actions — and last, in their own band, the ones that interrupt whatever the machine is doing: Reset, Reboot, and Power Off where the device supports it. Nothing that stops your C64 sits next to something that does not. The system strip, which confirms which app build, device and firmware you are using, is at the foot of the page: it is read when something is wrong or before an upgrade, and not otherwise.
+
+The **Game** and **Input** tiles of that first band open the second-screen joystick and keyboard for the C64. Both have their own walkthrough in [Remote Input](#remote-input), later in this guide.
 
 Two more actions can join that last band: a **Reboot (Clr Mem)** that wipes memory on the way, and **Power Cycle**. Both go through the Telnet menu service rather than the web service, so they start out switched off; turn them on in Settings → Experimental Features once Telnet is enabled on the device.
 
@@ -127,8 +129,6 @@ Which of these start open and which start closed is chosen once, for a first-tim
 **With no C64 connected**, Home rearranges. The search field stays where it is, and so do Radio, Last tune and Recent, because none of them needs a machine — they are drawn on their own, below a card explaining how to connect one. The machine's controls and its cards are drawn as titles with nothing inside them, under a line saying so, and the system information at the foot of the page drops to the app version alone. Nothing is lost: whichever cards you had open are open again the moment your C64 answers. The app waits a few seconds before rearranging, so a brief network hiccup does not shuffle the page under you, and it goes back the instant the machine is there again.
 
 The remaining cards cover drives, the printer, streams, and **Config actions**. That last one holds **Save**, which writes the current settings into flash on the Commodore 64 Ultimate so they survive a power cycle, along with Load, Reset, Revert, and the app's own named configuration snapshots.
-
-The **Game** and **Input** tiles open the second-screen joystick and keyboard for the C64. Both have their own walkthrough in [Remote Input](#remote-input), later in this guide.
 
 ### Play
 
@@ -645,7 +645,7 @@ Remote Input turns your phone into a second-screen controller for the C64. It is
 
 Open it from either of two places:
 
-- From **Home**, tap **Game** — the first tile in Quick Actions — or **Input** further along the same row. The tiles carry one word each; both open the same second screen, Game Mode set up for playing and Remote Input with everything on show.
+- From **Home**, tap **Game** or **Input**, the second and third tiles in Quick Actions. The tiles carry one word each; both open the same second screen, Game Mode set up for playing and Remote Input with everything on show.
 - From **Play**, tap **Remote Input** or **Game Mode** while an item is playing. The Play buttons keep the full names; only the Home tiles are shortened.
 
 Each place opens its own copy of the controller, so a key you are holding in one never leaks into the other.
@@ -943,7 +943,7 @@ Preferred locations are marked first.
 | Power Cycle | **Home → Quick Actions** | On by default. You can turn it off in Settings → Experimental Features. |
 | Clear-RAM reboot | **Home → Quick Actions** | On by default. You can turn it off in Settings → Experimental Features. |
 | Save / Load RAM | **Home → Quick Actions** | On by default. You can turn it off in Settings → Stable Features. |
-| Game Mode | **Home → Quick Actions**, Play (while an item plays), `0` | The first tile in Quick Actions, labelled **Game**. Opens the controller with the picture and sound as you last left them. |
+| Game Mode | **Home → Quick Actions**, Play (while an item plays), `0` | In the first band of Quick Actions, labelled **Game**. Opens the controller with the picture and sound as you last left them. |
 | Remote Input | **Home → Quick Actions**, Play (while an item plays) | On by default. You can turn it off in Settings → Stable Features. Joystick needs a Commodore 64 Ultimate on firmware 1.2.0 or newer; otherwise only Keys are available. |
 | CPU speed and turbo | **Home → CPU & RAM**, Config | Home is preferred for common changes. |
 | Video mode and scan lines | **Home → Video**, Config | Home is preferred. |

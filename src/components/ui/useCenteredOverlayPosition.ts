@@ -45,7 +45,10 @@ export function useWorkflowSheetPosition<T extends HTMLElement>(
     return {
       style: {
         top: `${top}px`,
-      },
+        // A caller that sets its own height needs this to bound it: `top` is explicit, so an
+        // explicit height is measured downwards from it and `bottom-0` no longer constrains it.
+        "--app-sheet-top-clearance": `${top}px`,
+      } as React.CSSProperties,
     };
   });
 }

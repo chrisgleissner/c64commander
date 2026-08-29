@@ -67,11 +67,11 @@ tags:
       - extendedWaitUntil:
           visible: "Play files"
           timeout: ${TIMEOUT}
-- extendedWaitUntil:
-    visible: "Play files"
-    timeout: ${TIMEOUT}
-- assertVisible: "Play files"
-- assertNotVisible: "Something went wrong"
+      # Inside the retry, not after it. The picker can re-arm between the wait above and a
+      # check placed after the block, and it covers the tab bar, so the assertion then fails
+      # on a tab that had already rendered. Here a late dialog costs one more attempt.
+      - assertVisible: "Play files"
+      - assertNotVisible: "Something went wrong"
 - takeScreenshot: play-tab
 # Settings, Config and Home are retried the same way as Play, and for the same reason:
 # the device picker re-arms itself while a background scan keeps finding nothing, so it
@@ -94,8 +94,11 @@ tags:
       - extendedWaitUntil:
           visible: "Settings"
           timeout: ${SHORT_TIMEOUT}
-- assertVisible: "Settings"
-- assertNotVisible: "Something went wrong"
+      # Inside the retry, not after it. The picker can re-arm between the wait above and a
+      # check placed after the block, and it covers the tab bar, so the assertion then fails
+      # on a tab that had already rendered. Here a late dialog costs one more attempt.
+      - assertVisible: "Settings"
+      - assertNotVisible: "Something went wrong"
 - takeScreenshot: settings-tab
 - retry:
     maxRetries: 3
@@ -114,8 +117,11 @@ tags:
       - extendedWaitUntil:
           visible: "Config"
           timeout: ${SHORT_TIMEOUT}
-- assertVisible: "Config"
-- assertNotVisible: "Something went wrong"
+      # Inside the retry, not after it. The picker can re-arm between the wait above and a
+      # check placed after the block, and it covers the tab bar, so the assertion then fails
+      # on a tab that had already rendered. Here a late dialog costs one more attempt.
+      - assertVisible: "Config"
+      - assertNotVisible: "Something went wrong"
 - takeScreenshot: config-tab
 - retry:
     maxRetries: 3
@@ -134,6 +140,9 @@ tags:
       - extendedWaitUntil:
           visible: "Home"
           timeout: ${SHORT_TIMEOUT}
-- assertVisible: "Home"
-- assertNotVisible: "Something went wrong"
+      # Inside the retry, not after it. The picker can re-arm between the wait above and a
+      # check placed after the block, and it covers the tab bar, so the assertion then fails
+      # on a tab that had already rendered. Here a late dialog costs one more attempt.
+      - assertVisible: "Home"
+      - assertNotVisible: "Something went wrong"
 - takeScreenshot: home-tab

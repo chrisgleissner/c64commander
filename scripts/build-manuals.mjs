@@ -757,7 +757,7 @@ const featureRows = ({ features, variant }) => {
     rows.push([
       "Game Mode",
       "**Home → Quick Actions**, Play (while an item plays), `0`",
-      "The first tile in Quick Actions, labelled **Game**. Opens the controller with the picture and sound as you last left them.",
+      "In the first band of Quick Actions, labelled **Game**. Opens the controller with the picture and sound as you last left them.",
     ]);
     rows.push([
       "Remote Input",
@@ -1241,10 +1241,16 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Home overview", profile, "home/profiles/{profile}/01-overview.png"),
     "",
-    "Start at the top. The search field comes first, and under it **Quick Actions** \u2014 one grid holding the machine's own controls and, at the end of them, four tiles that need no C64 at all. **Radio** starts a SID Radio station, thousands of tunes played on this device with no network and no hardware. **Last tune** picks up the last tune where it stopped, and names it \u2014 two words, because the machine's own Pause control renames itself to Resume while the C64 is paused. **Recent** is the way back to anything you have opened before. **Live View** goes to the card that brings the machine's picture and sound into the app. A tile you cannot use right now is still there, greyed, saying what it is waiting for.",
+    "Start at the top. The search field comes first, and under it **Quick Actions** \u2014 one grid holding the machine's own controls together with three tiles that need no C64 at all. **Radio** starts a SID Radio station, thousands of tunes played on this device with no network and no hardware. **Last tune** picks up the last tune where it stopped, and names it \u2014 two words, because the machine's own Pause control renames itself to Resume while the C64 is paused. **Recent** is the way back to anything you have opened before. **Live View**, which does need a machine, goes to the card that brings its picture and sound into the app. A tile you cannot use right now is still there, greyed, saying what it is waiting for.",
     "",
     "Quick Actions is one grid in four bands. **Watch** comes first \u2014 Live View, Game and Input, three ways to use the C64 from here. **Listen** follows: Radio, Last tune and Recent, the three that need no C64 at all. Then the **operational** tiles \u2014 Menu, Pause/Resume and the RAM snapshot actions \u2014 and last, in their own band, the ones that interrupt whatever the machine is doing: Reset, Reboot, and Power Off where the device supports it. Nothing that stops your C64 sits next to something that does not. The system strip, which confirms which app build, device and firmware you are using, is at the foot of the page: it is read when something is wrong or before an upgrade, and not otherwise.",
     "",
+    ...(includeFeature(features, "remote_input_enabled")
+      ? [
+          "The **Game** and **Input** tiles of that first band open the second-screen joystick and keyboard for the C64. Both have their own walkthrough in [Remote Input](#remote-input), later in this guide.",
+          "",
+        ]
+      : []),
     "Two more actions can join that last band: a **Reboot (Clr Mem)** that wipes memory on the way, and **Power Cycle**. Both go through the Telnet menu service rather than the web service, so they start out switched off; turn them on in Settings → Experimental Features once Telnet is enabled on the device.",
     "",
     ...(includeFeature(features, "audio_mirror_enabled") || includeFeature(features, "video_mirror_enabled")
@@ -1271,12 +1277,6 @@ export const renderManualMarkdown = ({ variant, features }) => {
       variant,
     )} so they survive a power cycle, along with Load, Reset, Revert, and the app's own named configuration snapshots.`,
     "",
-    ...(includeFeature(features, "remote_input_enabled")
-      ? [
-          "The **Game** and **Input** tiles open the second-screen joystick and keyboard for the C64. Both have their own walkthrough in [Remote Input](#remote-input), later in this guide.",
-          "",
-        ]
-      : []),
     "### Play",
     "",
     "Play is for building a playlist and running it.",
@@ -1858,7 +1858,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "Open it from either of two places:",
           "",
-          "- From **Home**, tap **Game** — the first tile in Quick Actions — or **Input** further along the same row. The tiles carry one word each; both open the same second screen, Game Mode set up for playing and Remote Input with everything on show.",
+          "- From **Home**, tap **Game** or **Input**, the second and third tiles in Quick Actions. The tiles carry one word each; both open the same second screen, Game Mode set up for playing and Remote Input with everything on show.",
           "- From **Play**, tap **Remote Input** or **Game Mode** while an item is playing. The Play buttons keep the full names; only the Home tiles are shortened.",
           "",
           "Each place opens its own copy of the controller, so a key you are holding in one never leaks into the other.",

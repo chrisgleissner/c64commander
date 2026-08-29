@@ -72,6 +72,10 @@ describe("App surface primitives", () => {
       "--app-sheet-bottom-clearance: calc(5rem + var(--safe-area-inset-bottom))",
     );
     expect(dialog.getAttribute("style")).toContain(`top: ${resolveAppSheetTopClearancePx()}px`);
+    // Published as well as applied. `top` is explicit, so a caller that sets its own height
+    // measures downwards from it and `bottom-0` stops bounding the sheet; the caller subtracts
+    // this variable to keep the bottom edge on screen.
+    expect(dialog.getAttribute("style")).toContain(`--app-sheet-top-clearance: ${resolveAppSheetTopClearancePx()}px`);
     expect(dialog.getAttribute("style")).toContain("z-index: 210");
     expect(dialog).toHaveAttribute("data-interstitial-depth", "1");
 

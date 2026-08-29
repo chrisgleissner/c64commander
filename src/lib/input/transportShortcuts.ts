@@ -24,8 +24,7 @@ export interface TransportShortcutOptions {
  * navigation to Play and is drained when Play mounts. Extracted from App so a test can drive the
  * production wiring rather than a copy of it.
  */
-export const createTransportShortcut =
-  (command: TransportCommand, options: TransportShortcutOptions) => (): void => {
-    transportCommandBus.publish(command);
-    if (options.currentPath() !== TRANSPORT_PATH) options.navigate(TRANSPORT_PATH);
-  };
+export const createTransportShortcut = (command: TransportCommand, options: TransportShortcutOptions) => (): void => {
+  transportCommandBus.publish(command);
+  if (options.currentPath() !== TRANSPORT_PATH) options.navigate(TRANSPORT_PATH);
+};
