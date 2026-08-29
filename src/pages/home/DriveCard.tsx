@@ -174,13 +174,28 @@ export function DriveCard({
         </div>
       )}
 
-      {/* Row 2: Bus ID and Type */}
-      <div className={cn("grid gap-2 text-xs", profile === "compact" ? "grid-cols-1" : "grid-cols-2")}>
+      {/* Row 2: Bus ID and Type.
+          Two columns only where the card is actually wide enough for them. The drive cards sit two
+          to a row, so on the medium profile a card is 147px and each of these cells got about 70px
+          — a "Type" label and then 32px for its value against the 44px touch floor, which squeezed
+          the trigger to exactly that floor and cut "1541" to 44px of the 47px it needs. It fitted
+          before only because the floor was a rem that happened to be 49.5px there; sizing the floor
+          honestly in pixels is what exposed the column count as the real problem. */}
+      <div className={cn("grid gap-2 text-xs", profile === "expanded" ? "grid-cols-2" : "grid-cols-1")}>
         <div className="flex items-center gap-2">
           <span className="shrink-0 text-muted-foreground whitespace-nowrap">Bus ID</span>
           <Select value={busIdValue} onValueChange={onBusIdChange} disabled={!isConnected || busIdPending}>
             <SelectTrigger
-              className={cn(inlineSelectTriggerClass, "min-h-11 flex-1 justify-start overflow-hidden")}
+              className={cn(
+                inlineSelectTriggerClass,
+                // Sized to its own content, not to the cell. `flex-1` gave these a basis of 0, so in
+                // a narrow cell they shrank to the 44px touch floor and `overflow-hidden` cut the
+                // rest — "1541" in a 44px box needing 47px on CI's wider fallback font. It fitted
+                // before only because the floor was a rem that happened to be 49.5px there. These
+                // values are short (a bus number, a drive type), so letting each keep its own width
+                // costs the row nothing and cannot cut it.
+                "min-h-11 min-w-11 shrink-0 justify-start",
+              )}
               data-testid={`home-drive-bus-${testIdSuffix}`}
             >
               <SelectValue placeholder={busIdValue} />
@@ -200,7 +215,16 @@ export function DriveCard({
               <span className="shrink-0 text-muted-foreground whitespace-nowrap">Type</span>
               <Select value={typeValue} onValueChange={onTypeChange} disabled={!isConnected || typePending}>
                 <SelectTrigger
-                  className={cn(inlineSelectTriggerClass, "min-h-11 flex-1 justify-start overflow-hidden")}
+                  className={cn(
+                    inlineSelectTriggerClass,
+                    // Sized to its own content, not to the cell. `flex-1` gave these a basis of 0, so in
+                    // a narrow cell they shrank to the 44px touch floor and `overflow-hidden` cut the
+                    // rest — "1541" in a 44px box needing 47px on CI's wider fallback font. It fitted
+                    // before only because the floor was a rem that happened to be 49.5px there. These
+                    // values are short (a bus number, a drive type), so letting each keep its own width
+                    // costs the row nothing and cannot cut it.
+                    "min-h-11 min-w-11 shrink-0 justify-start",
+                  )}
                   data-testid={`home-drive-type-${testIdSuffix}`}
                 >
                   <SelectValue placeholder={typeValue} />
