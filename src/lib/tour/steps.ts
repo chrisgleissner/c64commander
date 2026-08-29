@@ -27,7 +27,7 @@ export interface TourStep {
   readonly body: string;
   /**
    * Where to go and what to spotlight. `testIds` is a LIST because a step may point at more than
-   * one element — step 4 highlights both the Last tune and the Recent tile — and the spotlight is then
+   * one element — step 4 highlights both the Last and the Recent tile — and the spotlight is then
    * the union of their rects. Absent for a step that explains rather than points.
    */
   readonly anchor?: {
@@ -61,7 +61,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "your-tunes",
     title: "Pick up where you left off",
-    body: "Last tune goes back to what you were playing, at the point it stopped. Recent is the way back to anything you have opened before.",
+    body: "Last goes back to the tune you were playing, at the point it stopped. Recent is the way back to anything you have opened before.",
     anchor: {
       path: "/",
       scope: "home",
@@ -124,7 +124,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "making-it-yours",
     title: "Making it yours",
-    body: "Seven colour styles on top of Light and Dark, a larger text size, and a layout that can be set to fit more or less on the screen.",
+    body: "Seven color styles on top of Light and Dark, a larger text size, and a layout that can be set to fit more or less on the screen.",
     anchor: { path: "/settings", scope: "settings", sectionId: "appearance", testIds: ["settings-app-style"] },
   },
 ];

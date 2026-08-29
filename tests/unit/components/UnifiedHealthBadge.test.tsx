@@ -271,8 +271,10 @@ describe("UnifiedHealthBadge", () => {
 
       expect(textContent).toContain("999+");
       // Compact drops the host label: at 320 px it took 48% of the header to render a truncated IP.
-      // The glyph and the count stay, which is what the badge is for.
-      expect(textContent).toMatch(profile === "compact" ? /\S+\s+999\+/ : /C64U\s+\S+\s+999\+/);
+      // The shape and the count stay, which is what the badge is for. The shape is an <svg>, so it
+      // is asserted as an element rather than as a character in the text between the two labels.
+      expect(textContent).toMatch(profile === "compact" ? /^\s*999\+/ : /C64U\s+999\+/);
+      expect(badge.querySelector("svg[data-health-shape]")).not.toBeNull();
       expect(textContent).not.toContain("1000");
       expect(textContent.match(/999\+/g)).toHaveLength(1);
 
@@ -293,7 +295,7 @@ describe("UnifiedHealthBadge", () => {
     expect(badge.className).toContain("min-w-[44px]");
   });
 
-  it("drops the host label on the smallest screen, keeping the health glyph", () => {
+  it("drops the host label on the smallest screen, keeping the health shape", () => {
     mockState.healthState.problemCount = 0;
     mockState.currentProfile = "medium";
     const medium = render(<UnifiedHealthBadge />);
@@ -302,9 +304,11 @@ describe("UnifiedHealthBadge", () => {
 
     mockState.currentProfile = "compact";
     render(<UnifiedHealthBadge />);
-    const compact = screen.getByTestId("unified-health-badge").textContent ?? "";
-    expect(compact).not.toContain("C64U");
-    expect(compact.trim().length).toBeGreaterThan(0);
+    const badge = screen.getByTestId("unified-health-badge");
+    expect(badge.textContent ?? "").not.toContain("C64U");
+    // The shape is what is left, and it is drawn rather than typed, so it is an element to find
+    // rather than a character in the text.
+    expect(badge.querySelector("svg[data-health-shape]")).not.toBeNull();
   });
 
   it("renders the expanded problem suffix without a separate count span", () => {
@@ -327,11 +331,14 @@ describe("UnifiedHealthBadge", () => {
     const badge = screen.getByTestId("unified-health-badge");
     const spans = badge.querySelectorAll('[data-overlay-critical="badge"]');
 
-    expect(spans[0]?.className).toContain("text-foreground");
-    expect(spans[1]?.className).toContain("text-warning");
-    expect(spans[1]?.className).toContain("h-[1em]");
-    expect(spans[2]?.className).toContain("text-warning");
-    expect(spans[3]?.className).toContain("text-foreground");
+    // The shape is an <svg>, whose `className` is an SVGAnimatedString rather than a string.
+    const classOf = (element: Element | undefined) => element?.getAttribute("class") ?? "";
+
+    expect(classOf(spans[0])).toContain("text-foreground");
+    expect(classOf(spans[1])).toContain("text-warning");
+    expect(spans[1]?.tagName.toLowerCase()).toBe("svg");
+    expect(classOf(spans[2])).toContain("text-warning");
+    expect(classOf(spans[3])).toContain("text-foreground");
   });
 
   it("keeps nowrap and overflow containment classes on the badge", () => {
@@ -387,25 +394,42 @@ describe("UnifiedHealthBadge", () => {
     expect(badge.querySelectorAll('[data-overlay-critical="badge"]')[0]?.textContent).toBe("U64E2");
   });
 
-  it("makes the healthy glyph optically larger than the degraded glyph", () => {
-    mockState.currentProfile = "medium";
-    (mockState.healthState as { state: string }).state = "Healthy";
-    mockState.healthState.problemCount = 0;
-    const { unmount } = render(<UnifiedHealthBadge />);
+  /**
+   * The shape cannot leave its own box, whatever font the device has.
+   *
+   * Up to 0.10.0-rc2 the badge typed one of `●▲◆○◌` and scaled it — 1.42x for Healthy — to reach
+   * the size the design asked for. Those scale factors were measured against one machine's
+   * fallback font, because Inter, which the stack names first, ships none of the five characters.
+   * On the font CI and the Android WebView fall back to, `●` fills its em box, so 1.42x of it
+   * overflowed the badge row on every side, and the row clips its overflow: the healthy circle
+   * shipped with its top and both sides sliced off. An SVG with a viewBox is the same size
+   * everywhere and is drawn inside the box it is given, so no scale factor is needed and there is
+   * nothing to clip.
+   */
+  it("draws each state as an SVG inside its own box rather than typing a character", () => {
+    for (const [state, shapeSelector] of [
+      ["Healthy", "circle[fill='currentColor']"],
+      ["Degraded", "path"],
+      ["Unhealthy", "path"],
+      ["Idle", "circle[stroke='currentColor']"],
+      ["Unavailable", "circle[stroke-dasharray]"],
+    ] as const) {
+      (mockState.healthState as { state: string }).state = state;
+      mockState.currentProfile = "medium";
+      const { unmount } = render(<UnifiedHealthBadge />);
 
-    let glyph = screen.getByTestId("unified-health-badge").querySelectorAll('[data-overlay-critical="badge"]')[1];
-    expect(glyph?.className).toContain("scale-[1.42]");
-    expect(glyph?.className).toContain("translate-y-[-0.11em]");
+      const shape = screen.getByTestId("unified-health-badge").querySelector("svg[data-health-shape]");
+      expect(shape, state).not.toBeNull();
+      expect(shape?.getAttribute("data-health-shape"), state).toBe(state);
+      expect(shape?.getAttribute("viewBox"), state).toBe("0 0 24 24");
+      expect(shape?.querySelector(shapeSelector), state).not.toBeNull();
+      // No transform: a scaled element is what left the box, and its size is now the box's own.
+      const shapeClass = shape?.getAttribute("class") ?? "";
+      expect(shapeClass, state).not.toMatch(/\bscale-|\btranslate-y-/);
+      expect(shapeClass, state).toContain("h-[1.25em]");
 
-    unmount();
-
-    (mockState.healthState as { state: string }).state = "Degraded";
-    mockState.healthState.problemCount = 3;
-    render(<UnifiedHealthBadge />);
-
-    glyph = screen.getByTestId("unified-health-badge").querySelectorAll('[data-overlay-critical="badge"]')[1];
-    expect(glyph?.className).toContain("scale-100");
-    expect(glyph?.className).toContain("translate-y-[-0.03em]");
+      unmount();
+    }
   });
 
   it("keeps the badge data contract stable when online device labeling is unavailable", () => {
@@ -425,7 +449,10 @@ describe("UnifiedHealthBadge", () => {
     mockState.currentProfile = "expanded";
     const { unmount } = render(<UnifiedHealthBadge />);
 
-    expect(screen.getByTestId("unified-health-badge").textContent).toContain("Offline ◌ Device not reachable");
+    // The words are text; the state is the shape between them, which is drawn, not typed.
+    let badge = screen.getByTestId("unified-health-badge");
+    expect(badge.textContent?.replace(/\s+/g, " ")).toBe("Offline Device not reachable");
+    expect(badge.querySelector("svg[data-health-shape]")).toHaveAttribute("data-health-shape", "Unavailable");
 
     unmount();
 
@@ -434,7 +461,9 @@ describe("UnifiedHealthBadge", () => {
     mockState.currentProfile = "medium";
     render(<UnifiedHealthBadge />);
 
-    expect(screen.getByTestId("unified-health-badge").textContent).toBe("Not connected ○");
+    badge = screen.getByTestId("unified-health-badge");
+    expect(badge.textContent?.replace(/\s+/g, " ").trim()).toBe("Not connected");
+    expect(badge.querySelector("svg[data-health-shape]")).toHaveAttribute("data-health-shape", "Idle");
   });
 
   it("clicking the badge calls requestDiagnosticsOpen with 'header'", () => {

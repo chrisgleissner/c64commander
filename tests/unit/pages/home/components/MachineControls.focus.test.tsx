@@ -86,12 +86,11 @@ describe("MachineControls keypad focus ring (C64U Remote)", () => {
     // Quick Actions is itself collapsible now, so its own toggle is the ring's first
     // stop. Selection starts there; OK establishes focus without activating (the
     // section is already open), and stepping down from it walks Menu → Pause → Reset →
-    // Reboot.
+    // Power.
     expect(focusContext.current?.engine.sourceForId("home-machine-reset")).toBe("dom+explicit");
-    expect(focusContext.current?.engine.sourceForId("home-machine-reboot")).toBe("dom+explicit");
+    expect(focusContext.current?.engine.sourceForId("home-machine-power")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("home-machine-pause-resume")).toBe("dom+explicit");
     expect(focusContext.current?.engine.sourceForId("home-machine-menu")).toBe("dom+explicit");
-    expect(focusContext.current?.engine.sourceForId("home-machine-power-off")).toBe("dom+explicit");
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     expect(document.activeElement).toBe(screen.getByTestId("home-section-toggle-quick-actions"));
 
@@ -106,33 +105,37 @@ describe("MachineControls keypad focus ring (C64U Remote)", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("orders Power Off last in the section (reachable by stepping back from the top)", () => {
+  it("orders Power last in the section (reachable by stepping back from the top)", () => {
     renderInRing();
 
     // Descend into the section; from the top, a backward step wraps to the highest order
-    // (Power Off at 190), proving it traverses after every other machine action.
+    // (the Power tile at 180), proving it traverses after every other machine action.
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     fireEvent.keyDown(document.body, { code: "DpadUp" });
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Power Off" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Power" }));
 
+    // Power Off is a row of the sheet the Power tile opens, and is still reachable from here.
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
+    fireEvent.click(screen.getByTestId("home-power-action-power-off"));
     expect(baseProps.onPowerOff).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps pruned RAM / Power Cycle actions out of the ring (only the five canonical actions cycle)", () => {
+  it("keeps pruned RAM / Power Cycle actions out of the ring (only the four canonical actions cycle)", () => {
     // Mirrors the C64U Remote surface: ramActionsVisible and onPowerCycle absent.
     renderInRing();
 
-    expect(screen.queryByRole("button", { name: "Save RAM" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Backup" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Power Cycle" })).not.toBeInTheDocument();
 
     // Enter the ring (lands on the section's own toggle, its first stop), step once more
-    // onto the first card, then six DpadDown steps - one for the toggle, five for the
-    // actions - wrap exactly back to it, confirming the ring holds only those six stops.
+    // onto the first card, then five DpadDown steps - one for the toggle, four for the
+    // actions - wrap exactly back to it, confirming the ring holds only those five stops.
+    // Reboot and Power Off are rows of the Power sheet now, so the Power tile is one stop
+    // where the three of them used to be three.
     fireEvent.keyDown(document.body, { code: "DpadCenter" });
     fireEvent.keyDown(document.body, { code: "DpadDown" });
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Menu" }));
-    const order = ["Pause", "Reset", "Reboot", "Power Off", "Quick Actions", "Menu"];
+    const order = ["Pause", "Reset", "Power", "Quick Actions", "Menu"];
     for (const name of order) {
       fireEvent.keyDown(document.body, { code: "DpadDown" });
       expect(document.activeElement).toBe(screen.getByRole("button", { name }));

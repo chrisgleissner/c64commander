@@ -298,7 +298,7 @@ test.describe("Small screen layout integrity", () => {
    */
   const DIALOGS: ReadonlyArray<{ name: string; route: string; open: (page: Page) => Promise<void> }> = [
     {
-      name: "Home / Save RAM",
+      name: "Home / Backup",
       route: "/",
       open: async (page) => {
         await page.locator('[data-slot-active="true"]').getByTestId("home-save-ram").click();

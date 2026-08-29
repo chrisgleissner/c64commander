@@ -113,13 +113,9 @@ describe("MachineControls", () => {
     render(<MachineControls {...defaultProps} />);
 
     const buttons = screen.getByTestId("home-machine-controls").querySelectorAll("button");
-    expect(Array.from(buttons).map((button) => button.textContent)).toEqual([
-      "Menu",
-      "Pause",
-      "Reset",
-      "Reboot",
-      "Power Off",
-    ]);
+    // Reboot and Power Off are rows of the Power sheet now; the grid carries the one tile that
+    // opens it, so Reset stays the only destructive action a single tap can reach.
+    expect(Array.from(buttons).map((button) => button.textContent)).toEqual(["Menu", "Pause", "Reset", "Power"]);
     expect(screen.getByTestId("home-machine-controls")).toHaveAttribute("data-compact-columns", "2");
   });
 
@@ -134,7 +130,7 @@ describe("MachineControls", () => {
         ramActionsVisible
         onPowerCycle={vi.fn()}
         extraActions={[
-          { id: "promoted.home.section.live-view", label: "Live View", onSelect: vi.fn() },
+          { id: "promoted.home.section.live-view", label: "Live", onSelect: vi.fn() },
           { id: "openRemoteInput", label: "Input", onSelect: vi.fn() },
           {
             id: "rebootClearMemory",
@@ -150,9 +146,9 @@ describe("MachineControls", () => {
     const labels = Array.from(screen.getByTestId("home-machine-controls").querySelectorAll("button")).map(
       (button) => button.textContent,
     );
-    expect(labels.slice(0, 3)).toEqual(["Live View", "Game", "Input"]);
+    expect(labels.slice(0, 3)).toEqual(["Live", "Game", "Input"]);
 
-    const destructive = ["Reset", "Reboot", "Reboot (Clr Mem)", "Power Cycle", "Power Off"];
+    const destructive = ["Reset", "Power"];
     const firstDestructive = labels.findIndex((label) => destructive.includes(label ?? ""));
     const lastSafe = labels.reduce((last, label, index) => (destructive.includes(label ?? "") ? last : index), -1);
     expect(firstDestructive).toBeGreaterThan(lastSafe);
@@ -179,16 +175,17 @@ describe("MachineControls", () => {
 
     rerender(<MachineControls {...defaultProps} ramActionsVisible={true} />);
 
-    expect(screen.getByTestId("home-save-ram")).toHaveTextContent("Save RAM");
-    expect(screen.getByTestId("home-load-ram")).toHaveTextContent("Load RAM");
+    expect(screen.getByTestId("home-save-ram")).toHaveTextContent("Backup");
+    expect(screen.getByTestId("home-load-ram")).toHaveTextContent("Restore");
   });
 
   it("opens Reboot confirmation before executing the REST reboot mutation", () => {
     render(<MachineControls {...defaultProps} />);
 
-    fireEvent.click(screen.getByTestId("action-Reboot"));
+    fireEvent.click(screen.getByTestId("home-power-actions"));
+    fireEvent.click(screen.getByTestId("home-power-action-reboot"));
 
-    expect(screen.getByRole("dialog")).toHaveTextContent("Reboot?");
+    expect(screen.getByRole("dialog", { name: "Reboot?" })).toHaveTextContent("Reboot?");
     expect(defaultProps.onReboot).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText("Confirm"));
 
@@ -256,7 +253,8 @@ describe("MachineControls", () => {
   it("keeps Power Off delegated to the existing protected flow", () => {
     render(<MachineControls {...defaultProps} />);
 
-    fireEvent.click(screen.getByTestId("action-Power Off"));
+    fireEvent.click(screen.getByTestId("home-power-actions"));
+    fireEvent.click(screen.getByTestId("home-power-action-power-off"));
 
     expect(defaultProps.onPowerOff).toHaveBeenCalledTimes(1);
     expect(defaultProps.controls.powerOff.mutateAsync).not.toHaveBeenCalled();
@@ -265,24 +263,19 @@ describe("MachineControls", () => {
 
   it("omits Power Cycle when no handler is provided", () => {
     render(<MachineControls {...defaultProps} />);
-    expect(screen.queryByTestId("home-power-cycle")).toBeNull();
+    fireEvent.click(screen.getByTestId("home-power-actions"));
+    expect(screen.queryByTestId("home-power-action-power-cycle")).toBeNull();
   });
 
   it("opens Power Cycle confirmation before calling the handler", () => {
     const onPowerCycle = vi.fn();
     render(<MachineControls {...defaultProps} onPowerCycle={onPowerCycle} />);
     const buttons = screen.getByTestId("home-machine-controls").querySelectorAll("button");
-    expect(Array.from(buttons).map((button) => button.textContent)).toEqual([
-      "Menu",
-      "Pause",
-      "Reset",
-      "Reboot",
-      "Power Cycle",
-      "Power Off",
-    ]);
-    fireEvent.click(screen.getByTestId("home-power-cycle"));
+    expect(Array.from(buttons).map((button) => button.textContent)).toEqual(["Menu", "Pause", "Reset", "Power"]);
+    fireEvent.click(screen.getByTestId("home-power-actions"));
+    fireEvent.click(screen.getByTestId("home-power-action-power-cycle"));
     expect(onPowerCycle).not.toHaveBeenCalled();
-    expect(screen.getByRole("dialog")).toHaveTextContent("Power Cycle?");
+    expect(screen.getByRole("dialog", { name: "Power Cycle?" })).toHaveTextContent("Power Cycle?");
     fireEvent.click(screen.getByText("Confirm"));
     expect(onPowerCycle).toHaveBeenCalledTimes(1);
   });
@@ -388,15 +381,24 @@ describe("MachineControls", () => {
       "Menu",
       "Pause",
       "Save REU",
-      "Save RAM",
-      "Load RAM",
+      "Backup",
+      "Restore",
       "Reset",
-      "Reboot",
-      "Reboot (Clr Mem)",
-      "Power Cycle",
-      "Power Off",
+      "Power",
     ]);
     expect(screen.getByTestId("home-machine-controls")).toHaveAttribute("data-compact-columns", "2");
+
+    // The four that were tiles are rows of the Power sheet, in increasing severity.
+    fireEvent.click(screen.getByTestId("home-power-actions"));
+    const sheetRows = Array.from(
+      screen.getByTestId("home-power-sheet").querySelectorAll("button[data-testid^='home-power-action-']"),
+    ).map((button) => button.getAttribute("data-testid"));
+    expect(sheetRows).toEqual([
+      "home-power-action-reboot",
+      "home-power-action-rebootClearMemory",
+      "home-power-action-power-cycle",
+      "home-power-action-power-off",
+    ]);
   });
 
   it("renders loading extra actions with an ellipsis label", () => {

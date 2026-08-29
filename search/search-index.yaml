@@ -107,7 +107,9 @@ entries:
     title: Resume the last tune
     subtitle_key: search.action.resumeSession.subtitle
     subtitle: Pick up where playback stopped
-    keywords: [continue, restore, last played, resume]
+    # Not "restore": that is now the Home tile that puts a RAM snapshot back, and a reader typing
+    # it means that one.
+    keywords: [continue, last played, resume, again]
     group: action
     icon: play
     target: { kind: action, handlerId: resumePlaybackSession }
@@ -273,8 +275,11 @@ entries:
     title_key: search.home.quickActions
     title: Quick Actions
     subtitle_key: search.home.quickActions.subtitle
-    subtitle: Reset, reboot, pause, power off
-    keywords: [reset, reboot, power, pause, resume, menu, machine]
+    subtitle: Reset, pause, menu, backup and restore, power
+    # "save ram" and "load ram" stay listed: they were the tile labels up to 0.10.0-rc2, and a
+    # reader who learned them there has to be able to find where they went.
+    keywords:
+      [reset, reboot, power, pause, resume, menu, machine, backup, restore, snapshot, save ram, load ram, memory]
     group: action
     icon: zap
     target: { kind: section, path: /, scope: home, id: quick-actions }
@@ -321,7 +326,7 @@ entries:
     title_key: search.home.video
     title: Video
     subtitle_key: search.home.video.subtitle
-    subtitle: Screen colours, video mode, HDMI, scanlines
+    subtitle: Screen colors, video mode, HDMI, scanlines
     keywords: [palette, colours, colors, hdmi, pal, ntsc, scanlines, analog, digital]
     group: config
     icon: monitor
@@ -345,7 +350,7 @@ entries:
     title_key: search.home.userInterface
     title: User Interface
     subtitle_key: search.home.userInterface.subtitle
-    subtitle: The machine's own menu overlay and colour scheme
+    subtitle: The machine's own menu overlay and color scheme
     keywords: [overlay, wasd, cursors, colour scheme, color scheme, menu]
     group: config
     icon: panel-top
@@ -549,7 +554,7 @@ entries:
     title_key: search.settings.appStyle
     title: Style
     subtitle_key: search.settings.appStyle.subtitle
-    subtitle: Seven colour styles on top of Light and Dark
+    subtitle: Seven color styles on top of Light and Dark
     keywords: [palette, colour, color, appearance, skin, cool grey, ocean teal, high contrast]
     group: setting
     icon: palette

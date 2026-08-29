@@ -193,9 +193,9 @@ Status: implemented and HIL-verified on real c64u/u64 hardware (2026-07-06); see
 
 | Entry point         | Component                                                      | Trigger                                                                                                 |
 | ------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Home quick action   | `MachineControls` -> `HomePage` (`remoteInputSheetOpen` state) | Tap "Remote Input" tile in Quick Actions                                                                 |
+| Home quick action   | `MachineControls` -> `HomePage` (`remoteInputSheetOpen` state) | Tap the "Input" tile in Quick Actions                                                                   |
 | Play transport      | `PlayFilesPage` (`remoteInputSheetOpen` state)                 | Tap "Remote Input" button, shown only while a playlist item is actively playing                          |
-| Home Game Mode tile | `MachineControls` -> `startGameMode()`                         | Tap "Game Mode", first in Quick Actions; starts the remembered Watch/Listen and opens the sheet to play  |
+| Home Game Mode tile | `MachineControls` -> `startGameMode()`                         | Tap "Game", in the first band of Quick Actions; starts the remembered Watch/Listen and opens the sheet to play |
 | Play Game Mode      | `PlayFilesPage` -> `startGameMode()`                           | Tap "Game Mode"; leads the row for a `prg`/`crt`/`disk` item, follows Remote Input for a `sid`/`mod` one |
 | `0` key             | `useFocusNavigation` shortcuts -> `App` -> `startGameMode()`   | Anywhere outside a text field or an open overlay; navigates to Home first where no sheet is mounted      |
 | Quick Menu          | `KeypadQuickMenu` -> `startGameMode()`                         | Menu key -> "Game Mode"                                                                                  |

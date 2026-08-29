@@ -760,7 +760,7 @@ Three kinds of text keep their capitals, and they cover most of what looks like 
    in the machine's own setup menu, and the machine spells it that way — including its American
    "Color". The same applies to values the device supplies.
 
-So "Manage app configs" but "Save RAM"; "Switch device" but "Open Lighting Studio".
+So "Manage app configs" but "Save REU memory"; "Switch device" but "Open Lighting Studio".
 
 ## Spelling: American English
 

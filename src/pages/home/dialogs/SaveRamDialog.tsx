@@ -152,7 +152,8 @@ export function SaveRamDialog({
     <AppDialog open={open} onOpenChange={handleClose}>
       <AppDialogContent data-testid="save-ram-dialog">
         <AppDialogHeader>
-          <AppDialogTitle>Save RAM</AppDialogTitle>
+          {/* Named for the tile that opens it. */}
+          <AppDialogTitle>Backup</AppDialogTitle>
           <AppDialogDescription>
             Choose the memory region to snapshot.
             {showCustom && " Enter one or more hex ranges."}

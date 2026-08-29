@@ -26,7 +26,7 @@ import { resolveEntry } from "@/lib/search/requirements";
 import { navigateToSearchTarget } from "@/lib/search/navigate";
 import { markSearchKeystroke, markSearchResultsPainted } from "@/lib/search/latencyProbe";
 import { SEARCH_OVERLAY_TESTID, subscribeSearchClose, type SearchOpenRequest } from "@/lib/search/overlayState";
-import { compareWithinGroup, type ScoredEntry } from "@/lib/search/score";
+import { GROUP_WEIGHTS, compareWithinGroup, type ScoredEntry } from "@/lib/search/score";
 import type { ResolvedSearchEntry, SearchEntry, SearchGroup } from "@/lib/search/types";
 import { cn } from "@/lib/utils";
 
@@ -55,8 +55,16 @@ const GROUP_LABELS: Readonly<Record<SearchGroup, string>> = {
   docs: "Docs",
 };
 
-/** Tie-break order when two groups' best rows score the same, and the order tier 2 lands in. */
-const GROUP_ORDER: readonly SearchGroup[] = ["action", "page", "setting", "config", "docs", "disk", "music"];
+/**
+ * Tie-break order when two groups' best rows score the same, and the order tier 2 lands in.
+ *
+ * Derived from the ranking's own group weights rather than written out again. The two lists said
+ * the same thing in two files, and the one here would have gone on saying it after the weights in
+ * `score.ts` changed.
+ */
+const GROUP_ORDER: readonly SearchGroup[] = (Object.keys(GROUP_WEIGHTS) as SearchGroup[]).sort(
+  (left, right) => GROUP_WEIGHTS[right] - GROUP_WEIGHTS[left],
+);
 
 /** The four capabilities that are one action from Home, offered as chips on an empty query. */
 const rowId = (entryId: string) => `search-row-${entryId.replace(/[^a-zA-Z0-9-]/g, "-")}`;

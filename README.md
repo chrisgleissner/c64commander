@@ -22,7 +22,7 @@ Control and manage a Commodore 64 Ultimate from Android, iOS, or a self-hosted w
 - **Configuration**: Browse and edit the complete C64 Ultimate configuration.
 - **Diagnostics**: Review connection health, activity, traces, and latency.
 - **Multiple devices**: Save several devices, check their health, and switch between them.
-- **Appearance styles**: Seven colour styles on top of the Light/Dark theme, or match your C64 Ultimate's own Color Scheme.
+- **Appearance styles**: Seven color styles on top of the Light/Dark theme, or match your C64 Ultimate's own Color Scheme.
 
 ## Getting Started
 
@@ -92,30 +92,30 @@ C64 Commander reconnects to saved devices automatically on later launches.
 
 ### Home
 
-Home opens on search, then **Quick Actions** — one grid in four bands: watch (Live View, Game, Input), listen (SID Radio, the last tune, what you played recently), operate (Menu, Pause, the RAM snapshots), and last the ones that interrupt the machine. Below that are the cards for lighting, drives, printer, SID mixer, streams, and configuration snapshots, and the system information last.
+Home opens on search, then **Quick Actions** — one grid in four bands: watch (Live, Game, Input), listen (Radio, Last, Recent), operate (Menu, Pause, Backup, Restore), and last the ones that interrupt the machine: Reset, and a Power tile holding Reboot, Power Cycle and Power Off. Every tile is one word on one line, so the grid is three rows rather than four. Below that are the cards for lighting, drives, printer, SID mixer, streams, and configuration snapshots, and the system information last.
 
-With nothing connected, Home does not become a wall of "Not available": search stays where it is, Radio, Last tune and Recent are drawn on their own because none of them needs a machine, a card explains how to connect one, and the device cards are drawn as titles with their contents put away until one answers.
+With nothing connected, Home does not become a wall of "Not available": search stays where it is, the promoted tiles are drawn on their own — Radio, Last and Recent need no machine at all, and Live is listed greyed with the reason rather than hidden — a card explains how to connect one, and the device cards are drawn as titles with their contents put away until one answers.
 
 <table>
   <tr>
     <td><img src="docs/img/app/home/00-overview-light.png" alt="C64 Commander intro" width="360"/></td>
-    <td><img src="docs/img/app/home/sections/01-quick-actions.png" alt="Home search field and quick actions (Light)" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/01-quick-actions-to-live-view.png" alt="Home search field and quick actions (Light)" width="360"/></td>
     <td><img src="docs/img/app/home/01-overview-dark.png" alt="Home top row and quick actions (Dark)" width="360"/></td>
   </tr>
   <tr>
     <td><img src="docs/img/app/home/sections/05-video-to-audio.png" alt="Home sections from video through audio" width="360"/></td>
-    <td><img src="docs/img/app/home/sections/10-lighting-to-keyboard-light.png" alt="Home sections through lighting" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/09-lighting-to-keyboard-light.png" alt="Home sections through lighting" width="360"/></td>
     <td><img src="docs/img/app/home/sections/12-drives-to-printers.png" alt="Home sections from drives through printers" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="docs/img/app/home/sections/15-streams-to-system-info.png" alt="Home sections from streams through system info" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/14-streams-to-system-info.png" alt="Home sections from streams through system info" width="360"/></td>
     <td><img src="docs/img/app/home/dialogs/05-lighting-studio-medium.png" alt="Lighting Studio bottom sheet" width="360"/></td>
     <td><img src="docs/img/app/home/03-demo-mode-interstitial.png" alt="Demo Mode interstitial" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="docs/img/app/home/dialogs/01-save-ram-dialog.png" alt="Save RAM type selection" width="360"/></td>
-    <td><img src="docs/img/app/home/dialogs/02-save-ram-custom-range.png" alt="Save RAM custom ranges" width="360"/></td>
-    <td><img src="docs/img/app/home/dialogs/03-snapshot-manager.png" alt="Load RAM snapshot manager" width="360"/></td>
+    <td><img src="docs/img/app/home/dialogs/01-save-ram-dialog.png" alt="Backup snapshot type selection" width="360"/></td>
+    <td><img src="docs/img/app/home/dialogs/02-save-ram-custom-range.png" alt="Backup custom ranges" width="360"/></td>
+    <td><img src="docs/img/app/home/dialogs/03-snapshot-manager.png" alt="Restore snapshot manager" width="360"/></td>
   </tr>
 </table>
 
@@ -309,7 +309,7 @@ Long-press the top-right status badge to view saved devices, compare their healt
 
 ## Appearance Styles
 
-Pick one of seven colour styles under **Settings > Appearance > Style**, on top of the existing Light/Dark theme. Two of them are dark only. **Match my device** follows your C64 Ultimate's own Color Scheme instead, read on connect rather than polled. A style changes colour, corner rounding, and shading only — never layout or type size, and never the colours that show what the hardware is doing.
+Pick one of seven color styles under **Settings > Appearance > Style**, on top of the existing Light/Dark theme. Two of them are dark only. **Match my device** follows your C64 Ultimate's own Color Scheme instead, read on connect rather than polled. A style changes color, corner rounding, and shading only — never layout or type size, and never the colors that show what the hardware is doing.
 
 <table>
   <thead>

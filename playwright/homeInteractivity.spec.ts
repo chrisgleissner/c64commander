@@ -262,7 +262,9 @@ test.describe("Home interactions", () => {
 
     await machineControls.getByRole("button", { name: "Reset", exact: true }).click();
     await confirmMachineAction(page, "Reset");
-    await machineControls.getByRole("button", { name: "Reboot", exact: true }).click();
+    // Reboot is a row of the Power sheet now, not a tile of its own.
+    await machineControls.getByTestId("home-power-actions").click();
+    await page.getByTestId("home-power-action-reboot").click();
     await confirmMachineAction(page, "Reboot");
     await machineControls.getByRole("button", { name: "Menu", exact: true }).click();
     // HARD20-009: opening the menu mirrors machine-execution paused state onto
@@ -276,7 +278,9 @@ test.describe("Home interactions", () => {
     await expect(resumeButton).toBeVisible();
     await resumeButton.click();
 
-    await machineControls.getByRole("button", { name: "Power Off", exact: true }).click();
+    // Power Off is a row of the Power sheet now, not a tile of its own.
+    await machineControls.getByTestId("home-power-actions").click();
+    await page.getByTestId("home-power-action-power-off").click();
     const powerOffDialog = page.getByRole("dialog", { name: "Confirm power off" });
     await expect(powerOffDialog).toBeVisible();
     await powerOffDialog.getByRole("button", { name: "Power Off", exact: true }).click();
@@ -322,7 +326,8 @@ test.describe("Home interactions", () => {
       (req) => req.method === "PUT" && req.url.startsWith("/v1/machine:reboot"),
     ).length;
 
-    const rebootClearMemory = page.getByTestId("home-machine-inline-rebootClearMemory");
+    await page.getByTestId("home-power-actions").click();
+    const rebootClearMemory = page.getByTestId("home-power-action-rebootClearMemory");
     await expect(rebootClearMemory).toHaveCount(1, { timeout: 15000 });
     await rebootClearMemory.scrollIntoViewIfNeeded();
     await expect(rebootClearMemory).toBeVisible({ timeout: 15000 });
@@ -358,7 +363,8 @@ test.describe("Home interactions", () => {
       (window as Window & { __c64uTracing?: { clearTraces?: () => void } }).__c64uTracing?.clearTraces?.(),
     );
 
-    const powerCycle = page.getByTestId("home-power-cycle");
+    await page.getByTestId("home-power-actions").click();
+    const powerCycle = page.getByTestId("home-power-action-power-cycle");
     await expect(powerCycle).toBeVisible({ timeout: 15000 });
     await expect(powerCycle).toBeEnabled();
     await powerCycle.click();
@@ -447,7 +453,8 @@ test.describe("Home interactions", () => {
       await systemInfo.click();
       await expect(page.getByTestId("home-system-core")).toHaveCount(0);
 
-      const powerCycle = page.getByTestId("home-power-cycle");
+      await page.getByTestId("home-power-actions").click();
+      const powerCycle = page.getByTestId("home-power-action-power-cycle");
       await expect(powerCycle).toBeVisible({ timeout: 30000 });
       await expect(powerCycle).toBeEnabled({ timeout: 15000 });
       await powerCycle.click();

@@ -501,9 +501,10 @@ This model prioritizes clarity, predictability, and long-term maintainability.
 **Home Page (HomePage.tsx)**
 
 - Compact machine control grid (4-column layout) with:
-  - Reset, Reboot, Menu, Pause, Resume
-  - Reboot (Clear RAM), Save RAM, Load RAM
-  - Power Off with accidental-tap protection
+  - Live, Game, Input, then Radio, Last, Recent
+  - Menu, Pause / Resume, Backup, Restore
+  - Reset, and a Power tile holding Reboot, Reboot (Clear RAM), Power Cycle and Power Off,
+    each with its own confirmation
 - RAM dump folder panel (current folder + Change Folder)
 - Configuration quick actions sized to match machine control cards
 - Drive status cards with navigation to Disks page
