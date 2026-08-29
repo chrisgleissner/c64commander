@@ -45,6 +45,27 @@ describe("a config focus request made before the Config page mounts", () => {
     unsubscribe();
   });
 
+  /*
+   * Delivering through the event must also claim the latch. A config result activated from Config
+   * itself reaches its subscriber directly, and the latch stayed armed for the rest of its five
+   * seconds — so leaving the page and coming back inside the window moved focus a second time, on a
+   * page the user had since scrolled somewhere else.
+   */
+  it("is claimed by that subscriber, so a later mount gets nothing", () => {
+    const live: ConfigItemFocusRequest[] = [];
+    const stopLive = subscribeConfigItemFocus((request) => live.push(request));
+
+    requestConfigItemFocus("Audio Mixer", "Vol UltiSid 1");
+    expect(live).toHaveLength(1);
+    stopLive();
+
+    const remounted: ConfigItemFocusRequest[] = [];
+    const stopRemounted = subscribeConfigItemFocus((request) => remounted.push(request));
+
+    expect(remounted, "the request was already delivered; it must not move focus again").toEqual([]);
+    stopRemounted();
+  });
+
   it("expires, so a stale request cannot move focus later", () => {
     vi.useFakeTimers();
     try {

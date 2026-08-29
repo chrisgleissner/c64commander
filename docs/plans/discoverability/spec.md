@@ -942,6 +942,24 @@ live. "Snapshot" stays the noun in the dialogs, the library and the manual.
 - `docs/ux-guidelines.md`, `docs/ux-interactions.md` and `docs/features-by-page.md` all named tiles
   by labels that had changed.
 
+### The latch fix from round 3 covered only half the path
+
+Round 3's defect 3 — "the section-open latch was re-delivered rather than claimed" — was fixed by
+having a mounting subscriber claim the request. That covers a request nobody was listening for.
+
+It does not cover a request that reached a subscriber through the EVENT. `requestSectionOpen` arms
+the latch and then dispatches; when the target page is already mounted — activating a Home result
+while on Home — the handler runs and the latch stays armed for the rest of its five seconds. Close
+that card by hand, tab away and back inside the window, and the remounted subscriber claims the
+stale request and reopens it. `CollapsibleSection` persists an open, so the close is lost. This is
+the same user-visible defect round 3 recorded as fixed, reachable by the other route.
+
+`requestConfigItemFocus` has the identical shape and the identical gap: focus moved a second time on
+a page the reader had since scrolled elsewhere.
+
+Delivering the event now claims the latch as well. Both tests fail with the source fix reverted and
+the tests kept.
+
 ### Two smaller ones
 
 - Three search subtitles and one tour step used British spellings ("colours", "colour scheme"),
