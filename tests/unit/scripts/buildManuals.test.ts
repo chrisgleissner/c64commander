@@ -31,7 +31,7 @@ describe("manual generator", () => {
     expect(c64uRemote).toContain("HVSC preparation");
     // HVSC ships on in the keypad edition too, so the manual states that rather than telling the
     // reader to go and switch on a library the app already has.
-    expect(c64uRemote).toContain("On by default. You can turn it off in Settings → Stable Features.");
+    expect(c64uRemote).toContain("On by default. Turn it off under **HVSC downloads** in Settings → Stable Features.");
     expect(c64uRemote).not.toMatch(/lighting/i);
 
     expect(c64Commander).toContain("# C64 Commander Manual");
@@ -39,7 +39,9 @@ describe("manual generator", () => {
     // C64 Commander is illustrated at medium, C64U Remote at compact.
     expect(c64Commander).toContain("profiles/medium/04-app-ready.png");
     expect(c64Commander).toContain("HVSC preparation");
-    expect(c64Commander).toContain("On by default. You can turn it off in Settings → Stable Features.");
+    expect(c64Commander).toContain(
+      "On by default. Turn it off under **HVSC downloads** in Settings → Stable Features.",
+    );
   });
 
   it("embeds screenshots from its own display profile only, one profile per manual", async () => {
@@ -167,7 +169,7 @@ describe("manual generator", () => {
     );
     expect(c64Commander).toContain("Enter a hostname such as `c64u`, `u64`, or `u2`");
     expect(c64Commander).toContain(
-      "Leave it on Auto. It starts Conservative while it identifies the device and firmware, then chooses the appropriate profile. See Device Safety Modes.",
+      "Leave it on Auto. It reads the model and the firmware, then chooses the profile that suits them. See Device Safety Modes.",
     );
     expect(c64Commander).toContain("Files and folders available on the device running the app.");
     expect(c64Commander).not.toContain("running the app running the app");
@@ -236,9 +238,9 @@ describe("manual generator", () => {
 
     // Balanced firmware guidance is edition-specific: C64U Remote names only the
     // Commodore 64 Ultimate 1.2.0 line; the broad edition also names the 3.15 line.
-    expect(c64uRemote).toContain("| Balanced | Up to 2 | A Commodore 64 Ultimate on firmware 1.2.0 or newer. |");
+    expect(c64uRemote).toContain("| Balanced | Up to 2 | A Commodore 64 Ultimate on firmware later than 1.1.0. |");
     expect(c64Commander).toContain(
-      "| Balanced | Up to 2 | A Commodore 64 Ultimate on firmware 1.2.0 or newer, or an Ultimate 64-family device on 3.15 or newer. |",
+      "| Balanced | Up to 2 | A Commodore 64 Ultimate on firmware later than 1.1.0, or an Ultimate 64-family device on 3.14d or newer. |",
     );
 
     // C64U Remote must not leak broad-edition machines into the new content.
@@ -267,7 +269,7 @@ describe("manual generator", () => {
     // C64 Commander is the broad edition: it also names the Ultimate 64 family
     // (firmware 3.15) and explains the Ultimate-II CIA 1 hardware limit.
     expect(c64Commander).toContain(
-      "or an Ultimate 64, Ultimate 64 Elite, or Ultimate 64 Elite II on firmware **3.15** or newer",
+      "and with Ultimate 64, Ultimate 64 Elite and Ultimate 64 Elite II firmware **3.15**",
     );
     expect(c64Commander).toContain("it cannot change the state of the C64's CIA 1 input chip");
 

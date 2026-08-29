@@ -77,16 +77,18 @@ A healthy badge at the top right confirms that the active device is responding. 
 
 ### The Header Badge
 
-The badge at the top right says how the current device is: healthy, degraded, unhealthy, or offline. Tap it to open Diagnostics. While the app is offline, the same tap also tries the connection again. Long-press the badge, press `#`, or use the Quick Menu to open the Device Switcher.
+The badge at the top right says how the current device is: healthy, degraded, unhealthy, or offline. Tap it to open Diagnostics. While the app is offline, the same tap also tries the connection again. Long-press the badge, press `#`, or use the Quick menu to open **Switch device**.
 
 ### Finding Your Way
 
-Search covers the whole app: every page, every card, every setting the app owns, every setting your machine reports, and every tune, disk and program you have. Type two or three letters and pick what you want.
+Search covers the whole app: every page, every card, every setting the app owns, your disk collection, the HVSC archive, and the tunes you have liked or played recently. Type two or three letters and pick what you want.
+
+Your machine's own settings join in once the Config page has read them, so open **Config** first if you are hunting for a device setting by name.
 
 Open it in any of three ways:
 
 - Tap the **search field** at the top of Home.
-- Choose **Search**, the first entry of the **Quick Menu**.
+- Choose **Search**, the first entry of the **Quick menu**.
 - Press **`7`**, which works even with directional navigation switched off.
 
 Keep typing while you look: Up and Down move through the results and leave your text alone. OK opens the selected result, and Back closes search. Results are grouped, best match first, so typing `radio` offers you **Start SID Radio** ahead of any tune with the word in its title.
@@ -126,21 +128,21 @@ At the foot of the page, the system strip tells you which app build, device and 
 
 The **Game** and **Input** tiles open the second-screen joystick and keyboard for the C64. Both have their own walkthrough in [Remote Input](#remote-input), later in this guide.
 
-Two more actions can join the **Power** sheet: **Reboot (Clr Mem)**, which wipes memory on the way, and **Power Cycle**. Both use the Telnet menu service and start out switched off. Enable Telnet on your device, then turn them on in **Settings → Experimental Features**.
+Two more actions can join the **Power** sheet: **Reboot (Clr Mem)**, which wipes memory on the way, and **Power Cycle**. Both reach the machine through the Telnet menu service, so switch Telnet on at the device first. Their own switches are **Home clear-RAM reboot action** and **Home power cycle action**, in **Settings → Experimental Features**.
 
 Directly below sits **Live View**, which brings the sound and the picture of the running machine into the app. It is a card like the ones below it and starts closed, so tap its header to reach the switches inside; while it is playing, a **Reset** in that header stops both feeds without opening it. It has a chapter of its own later on.
 
 Keep going and the rest of Home is a set of cards, and tapping a header opens or closes one.
 
-**CPU & RAM** holds the processor speed, turbo behavior and the RAM expansion. **Video** holds the output mode, resolution and scan lines, and **Audio**, directly below it, the SID mixer's channel strips. **Ports** holds the joystick swap, the serial bus, the cartridge preference and the user port. **User Interface** rounds the group out, and, on a machine that has them, so do the case and keyboard lights.
+**CPU & RAM** holds the processor speed, turbo behavior and the RAM expansion. **Ports** follows, with the joystick swap, the serial bus, the cartridge preference and the user port. **Video** holds the output mode, resolution and scan lines, and **Audio**, directly below it, the SID mixer's channel strips. **User Interface** rounds the group out, and, on a machine that has them, so do the case and keyboard lights.
 
-Some cards start open and some start closed, and the app remembers what you left open. On the compact display profile, opening one card closes the others, so the list of titles stays on screen. **Expand all sections** and **Collapse all sections** in the Quick Menu do the whole page at once. Everything here is in Config as well; these cards save you the search.
+Some cards start open and some start closed, and the app remembers what you left open. On the compact display profile, opening one card closes the others, so the list of titles stays on screen. **Expand all sections** and **Collapse all sections** in the Quick menu do the whole page at once. Everything here is in Config as well; these cards save you the search.
 
 **With no C64 connected**, Home rearranges for you. The search field stays where it is, and so do Radio, Last, Recent and Live, drawn on their own below a card explaining how to connect one. The first three need no machine. Live does, so it is grayed and reads "Needs a connected C64 Ultimate".
 
 The machine's controls and cards are drawn as titles with nothing inside them, under a line saying so, and the system strip drops to the app version alone. Whichever cards you had open are open again the moment your C64 answers. A brief network hiccup will not shuffle the page under you: the app waits a few seconds before rearranging, and returns the instant your machine is back.
 
-The remaining cards cover drives, the printer, streams, and **Config actions**. That last one holds **Save**, which writes the current settings into flash on the Commodore 64 Ultimate so they survive a power cycle, along with Load, Reset, Revert, and the app's own named configuration snapshots.
+The remaining cards cover drives, the printer, streams, and **Config**. That last one holds **Save**, which writes the current settings into flash on the Commodore 64 Ultimate so they survive a power cycle, along with Load, Reset, Revert, and the app's own named configuration snapshots.
 
 ### Play
 
@@ -188,7 +190,7 @@ Disks is where the drives and your disk images live.
 
 ![Disks overview](../../img/app/disks/profiles/compact/01-overview.png)
 
-The page has three drive cards: **Drive A**, **Drive B**, and a **Soft IEC** drive that reads loose files straight from a folder rather than from a disk image. Each card turns its drive on or off, sets its bus ID and type, mounts and ejects, and resets.
+The page has three drive cards: **Drive A**, **Drive B**, and a **Soft IEC Drive** that reads loose files straight from a folder rather than from a disk image. Each card turns its drive on or off, sets its bus ID and type, mounts and ejects, and resets.
 
 Power and the mounted disk stay on the card header, so you can see and change both without opening the card. **Drive A** starts open and the other two start closed. Below them, **Add disks** builds a collection from the sources you have.
 
@@ -232,7 +234,7 @@ Settings controls app behavior and saved connection details.
 
 Settings is a list of chapters rather than one long page of controls. Each heading says in one line what its chapter decides, so you can find the right one without reading the others. **Connection** is open on your first visit; the rest start closed, and whatever you leave open is still open next time.
 
-The chapters are **Appearance**, **Connection**, **Diagnostics**, **Play and Disk**, **Stable Features**, **Experimental Features**, **SID Radio**, **HVSC**, **Online Archive**, **Device Safety**, **Notifications**, and **About**. The two feature chapters show how many of their switches are on, 3/7 for example, so you can tell at a glance without opening them.
+The chapters are **Appearance**, **Connection**, **Diagnostics**, **Play and Disk**, **Stable Features**, **Experimental Features**, **SID Radio**, **HVSC**, **Online Archive**, **Device Safety**, **Notifications**, and **About**. The two feature chapters show how many of their switches are on, **8/9 on** for example, so you can tell at a glance without opening them. **HVSC** and **Online Archive** disappear if you switch their features off.
 
 If the device is hard to reach, start in **Connection**. If it answers but feels fragile, start in **Device Safety**.
 
@@ -258,7 +260,7 @@ There are seven:
 
 **Text size** enlarges every part of the app. Choose **Default**, or **Large**, which is 15 percent larger. Reach for it when the app is harder to read than you would like; the display profile beside it changes the layout rather than the type. If the tab bar along the bottom runs out of room it scrolls sideways, and reaching a page another way scrolls that tab into view.
 
-**Card descriptions** is the one-line summary under each card's title, on every page built from cards. It starts off, because on a small screen it costs about half the height of every closed card; turn it on if you would rather read what a card holds than remember it. The Quick Menu switches the same thing on and off without leaving the page you are on.
+**Card descriptions** is the one-line summary under each card's title, on every page built from cards. It starts off, because on a small screen it costs about half the height of every closed card; turn it on if you would rather read what a card holds than remember it. The Quick menu switches the same thing on and off without leaving the page you are on.
 
 **Diagnostics** opens the diagnostics panel and switches debug logging on. It also carries **Settings transfer**, which lives here despite the name.
 
@@ -284,7 +286,7 @@ Docs is the built-in help page, the short version of this manual, always with yo
 
 ![Docs overview](../../img/app/docs/profiles/compact/01-overview.png)
 
-It covers setup, Home, Play, Disks, Config, Settings, Diagnostics and disk swapping, and ends with links to the official device manuals and reference material.
+It covers setup, Home, Play, Disks, Config, Settings, Diagnostics and disk swapping.
 
 ### Diagnostics
 
@@ -302,11 +304,11 @@ For a closer look, see [Reading Diagnostics](#reading-diagnostics) and [Sharing 
 
 ### Device Switching
 
-Device Switcher is for homes with more than one saved Commodore 64 Ultimate.
+**Switch device** is for homes with more than one saved Commodore 64 Ultimate.
 
 ![Device switcher](../../img/app/diagnostics/switch-device/profiles/compact/01-picker.png)
 
-Open it from the badge long-press, `#`, or Quick Menu. Expand a row for more detail.
+Open it from the badge long-press, `#`, or Quick menu. Expand a row for more detail.
 
 See [Switching Between Devices](#switching-between-devices) in the In Depth chapter for the full story.
 
@@ -331,12 +333,12 @@ Preferred path: use startup discovery first, then manual host entry if discovery
 4. Use **Save & Connect** after changing the active device.
 5. Remove any device that is no longer on your network.
 
-Preferred path: Settings for editing, Device Switcher for choosing.
+Preferred path: Settings for editing, **Switch device** for choosing.
 
 ### Reboot and Carry On
 
 1. Open **Home**.
-2. Choose **Reboot**.
+2. Choose **Power**, then **Reboot**.
 3. Confirm.
 4. Watch the badge until the device returns healthy.
 
@@ -430,7 +432,7 @@ Preferred path: adjust drive setup before mounting.
 1. Try Home's own cards first: CPU & RAM, Video, Audio, Ports, User Interface.
 2. If the setting is not there, open **Config** and search.
 3. Change the value.
-4. Use **Save** in the Config actions card if the change should survive a device reboot or power cycle, unless **Keep device settings after a restart** is already on.
+4. Use **Save** in the **Config** card if the change should survive a device reboot or power cycle, unless **Keep device settings after a restart** is already on.
 
 Preferred path: Home for common settings; Config for the full tree.
 
@@ -515,7 +517,7 @@ A C64 can have more than one SID chip. **Home → Audio** gives you a **master v
 
 ### SID Radio
 
-The High Voltage SID Collection holds around sixty thousand files and close to ninety thousand tunes, far too many to browse. SID Radio plays it like a radio station: pick a mood, or a tune you already like, and the app keeps finding more music of the same kind.
+The High Voltage SID Collection holds around sixty thousand files, and more tunes than that, since many files hold several. That is far too many to browse. SID Radio plays it like a radio station: pick a mood, or a tune you already like, and the app keeps finding more music of the same kind.
 
 There is no playlist to build, and nothing is downloaded as you listen. Once the collection is on your device, the app already knows which tunes resemble one another.
 
@@ -610,11 +612,11 @@ Move around the picture however suits you. On a touchscreen, **pinch** to zoom, 
 
 A small map in the corner shows which part you are looking at, and dragging its rectangle moves you elsewhere at once. Switch on **Follow** and the view drifts along on its own to wherever the action is, which keeps the cursor in sight as you type.
 
-**Lock on** keeps the view on your character while you play. Press and hold your character on the screen, or, with no touchscreen, line the crosshair at the middle of the view up on it with the direction keys and press **OK**.
+Locking the view onto your character keeps it in sight while you play. Press and hold your character on the screen, or, with no touchscreen, line the crosshair at the middle of the view up on it with the direction keys and press **OK**.
 
 The view then travels with that one character while enemies move around it. It holds on through flashing, color changes, animation, fast movement, a wrap around the screen edge, and a moment out of sight.
 
-The status line reads **Hold on your character** until something is locked, then **Locked on**. To let go, tap the status line, ask for the whole screen back, or press **OK** again. The view returns to ordinary following.
+The status line reads **Hold on your character** until something is locked, then **Locked on**. **Looking…** means it is still searching, and **Lost it** that the character has gone; both are normal. To let go, tap the status line, ask for the whole screen back, or press **OK** again. The view returns to ordinary following.
 
 ![The immersive screen in Remote Input](../../img/app/home/remote-input/profiles/compact/06-av-mirror-immersive.png)
 
@@ -624,7 +626,7 @@ When you steer your phone with a physical keypad, those same keys can drive the 
 
 **Blue**, marked **“C64”**, means your keys go straight to the machine. **Amber**, marked **“View”**, means they zoom and pan the picture instead.
 
-Press `*` or the **menu key**, or the on-screen **Fit** button, to change between the two. You are never stranded in front of a frozen game: adjusting the view returns to driving on its own after a short pause. While the border is amber, the keypad moves the view like this:
+Press `*` or the **menu key**, or the on-screen button that reads **Fit** on the way in and **Done** on the way back, to change between the two. You are never stranded in front of a frozen game: adjusting the view returns to driving on its own after a short pause. While the border is amber, the keypad moves the view like this:
 
 | Key | What it does |
 | --- | --- |
@@ -634,7 +636,8 @@ Press `*` or the **menu key**, or the on-screen **Fit** button, to change betwee
 | **6**, or D-pad right | Pan right |
 | **3** or **9** | Zoom in |
 | **1** or **7** | Zoom out |
-| **0**, **5**, or the center/OK key | Fit the whole screen back on |
+| **0** or **5** | Fit the whole screen back on |
+| the **center/OK** key | Lock the view onto what is under the crosshair, or let it go |
 | the **menu** key | Return to driving the C64 |
 
 In **Game Mode**, while the border is blue and the keys are driving the C64, `#` brings the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again, so the picture and the sound can be turned off and on without a touchscreen.
@@ -672,7 +675,7 @@ The sound and the picture cross the network as two separate streams, so **More**
 
 #### Checking the sound and picture yourself
 
-Under Live View are three checks you can run whenever something seems off. They come with the app; **A/V Sync tests** in Settings → Experimental Features hides them if you would rather not see them.
+Under Live View are three checks you can run whenever something seems off. They come with the app; **A/V sync tests** in Settings → Experimental Features hides them if you would rather not see them.
 
 - **A/V sync** and **Tap latency** answer *when*: how far apart the sound and picture are, and how long it takes a keypress to come back to you.
 - **Tone & color ladder** answers *what*. It plays a short tune on your C64, a scale from C3 up to C4 and back at half a second a note, and changes the screen color on every note, stepping through all sixteen C64 colors as it goes. Because the C64 changes the note and the color at the very same instant, anything that arrives out of step arrived that way across your network.
@@ -760,7 +763,7 @@ The mapping turns with your phone. Hold it like a gamepad and the keys follow, s
 
 Where you are lying down, or the sensor cannot tell which way up the phone is, the **Orientation** control in Game Mode's toolbar pins the mapping. Choose **Auto**, **0°**, **90°** or **270°**; the choice holds for as long as the sheet is open, and is not remembered afterwards.
 
-To use different keys, open **Settings → Play and Disk → Joystick keys**. It offers **Diamond (8-centered)**, which is the arrangement above, **Classic T9** (2, 4, 6 and 8 with 5 as fire), and **Custom**, where you press the key you want for each direction. You only ever set it up upright; every other way round follows from that.
+To use different keys, open **Settings → Play and Disk → Joystick keys**. It offers **Diamond (8-centred)**, which is the arrangement above, **Classic T9** (2, 4, 6 and 8 with 5 as fire), and **Custom**, where you press the key you want for each direction. You only ever set it up upright; every other way round follows from that.
 
 Leave with **Exit**, at the top of the Game Mode toolbar, or your device's Back button. Both release everything you were holding. Closing the sheet also stops the picture and sound if Game Mode was what started them, and leaves them running if they were already on before you arrived.
 
@@ -768,7 +771,7 @@ Leave with **Exit**, at the top of the Game Mode toolbar, or your device's Back 
 
 ![Remote Input keyboard mode](../../img/app/home/remote-input/03-keyboard-compact.png)
 
-Full Joystick relay uses the device's `machine:input` REST endpoint. It needs a Commodore 64 Ultimate running firmware **1.2.0** or newer. On older firmware the app automatically falls back to **Keys** only.
+Full Joystick relay uses the device's `machine:input` REST endpoint. The app asks your machine for it and takes the answer as it comes: where the endpoint replies, the **Joystick** tab appears; where it does not, the app falls back to **Keys** only. In practice the endpoint arrives with Commodore 64 Ultimate firmware **1.2.0**.
 
 That fallback types by placing characters into the C64's KERNAL keyboard buffer. It is ideal for BASIC, where you can type commands, `LOAD`, and `RUN`, but most games read the keyboard and joystick hardware directly and will not respond to it. RUN/STOP and RESTORE are also unavailable in the fallback.
 
@@ -778,7 +781,7 @@ Nothing you are holding is left stuck on the real C64. Everything is released wh
 
 At any moment you can tap **Release All** to let go of every key and button at once.
 
-_Availability: on by default. You can turn it off in Settings → Stable Features._
+_Availability: on by default. Turn it off under **Remote Input** in Settings → Stable Features._
 
 ### File Sources
 
@@ -823,7 +826,7 @@ The **Soft IEC** drive is the other way in. Point it at a folder on the device a
 
 ### Content Explorer
 
-Content Explorer reaches the programs *inside* a disk image and starts them safely. Each part is optional: turn on the ones you want in **Settings**, and the rest stay out of the way. Searching inside images builds on Disk Explorer, so switch that on first.
+Content Explorer is this guide's name for four features that reach the programs *inside* a disk image and start them safely. Each has its own switch in Settings, and the line at the end of each section below tells you whether it is on already. Searching inside images builds on Disk Explorer, so that one has to be on too.
 
 #### Looking Inside a Disk
 
@@ -837,7 +840,7 @@ Each launchable file offers three actions:
 
 Only a proper **PRG** program can be launched directly. Other file types show a short note explaining why they cannot, and an unclosed "splat" file, one that was never finished being written, cannot be launched either.
 
-_Availability: on by default. You can turn it off in Settings → Stable Features._
+_Availability: on by default. Turn it off under **Disk Explorer** in Settings → Stable Features._
 
 #### Launch Safety
 
@@ -851,13 +854,13 @@ One further option sits in **Settings → Play and Disk**: **Answer cartridge bo
 
 Turn it on to choose the **menu key** (F1 to F8, RETURN, or SPACE; F7 to start with) and a **boot settle** time in milliseconds, between 1000 and 8000 (2800 to start with). The app then presses that key after the reset to clear the menu. Leave it off unless you have such a cartridge.
 
-_Availability: on by default. You can turn it off in Settings → Stable Features._
+_Availability: on by default. Turn it off under **Launch Safety** in Settings → Stable Features._
 
 #### Searching Inside Disk Images
 
-By default, searching your media matches disk images by their file name. Turn on **Search inside disk images**, in **Settings → Play and Disk**, and search also reaches the programs *inside* your `.d64`, `.d71`, and `.d81` images. A match found inside a disk is shown as **DISK → PROGRAM**, so you can see exactly which disk holds the program you want, then Run or Load it like any other.
+By default, searching your media matches disk images by their file name. Switch **In-image search** on in **Settings → Experimental Features**, and a **Search inside disk images** row appears in **Settings → Play and Disk**. Turn that on and search also reaches the programs *inside* your `.d64`, `.d71`, and `.d81` images. A match found inside a disk is shown as **DISK → PROGRAM**, so you can see exactly which disk holds the program you want, then Run or Load it like any other.
 
-_Availability: off to begin with. Turn it on in Settings → Experimental Features._
+_Availability: off to begin with. Turn it on under **In-image search** in Settings → Experimental Features._
 
 #### Creating a Blank Disk
 
@@ -867,7 +870,7 @@ A D64 lets you set the number of **tracks**, 35 to 41, and 35 is the usual answe
 
 Last, type the **storage folder** on the device. It starts at `/USB0`; the top-level `/` lists drives and holds no files. **Create & mount** builds the image, adds it to your collection, and mounts it in Drive A, ready to write to.
 
-_Availability: on by default. You can turn it off in Settings → Stable Features._
+_Availability: on by default. Turn it off under **New disk** in Settings → Stable Features._
 
 ### RAM Snapshots
 
@@ -891,7 +894,7 @@ It writes only the bytes the snapshot holds, and leaves the CIA timers alone so 
 
 The same library edits comments and removes snapshots you have finished with.
 
-_Availability: on by default. You can turn it off in Settings → Stable Features._
+_Availability: on by default. Turn it off under **RAM snapshots** in Settings → Stable Features._
 
 ### The Virtual Printer
 
@@ -913,13 +916,13 @@ Beside it are **Load** from flash, **Reset** to the factory settings, and **Reve
 
 ### Switching Between Devices
 
-If you have saved more than one Commodore 64 Ultimate, the Device Switcher lets you hop between them without opening Settings.
+If you have saved more than one Commodore 64 Ultimate, **Switch device** lets you hop between them without opening Settings.
 
 Open it in any of three ways, whenever more than one device is saved:
 
 - **Long-press the header badge** (a short tap opens Diagnostics instead).
 - Press **`#`** on a hardware keyboard or keypad.
-- Choose **Switch device** in the Quick Menu.
+- Choose **Switch device** in the Quick menu.
 
 The switcher checks each saved device for you, and looks again every ten seconds while it is open. Each row carries the name, a status pill reading **Selected**, **Verifying**, **Offline** or **Mismatch**, a health badge, and a short line such as how many checks passed or when the device was last seen. The device you are on is highlighted.
 
@@ -927,7 +930,7 @@ Tap the chevron to open a row and read the checks one by one, which tells a slee
 
 Tap a device to switch to it. Before anything else the app safely lets go of any input you were holding on the old device, stops tracking its playback and pause state, retargets to the new device's address and ports, and then checks that the new device answers. While that happens the target shows a **Verifying** pill; once it responds, it becomes the active device.
 
-Saved devices are created and edited in **Settings → Connection**, under **Saved devices**. Add one, edit its **Device name**, **Hostname / IP** and its **HTTP**, **FTP** and **Telnet** ports, give it a **Network Password**, or delete one you have finished with.
+Saved devices are created and edited in **Settings → Connection**, under **Saved devices**. Add one, edit its **Device name**, **C64U hostname / IP** and its **HTTP**, **FTP** and **Telnet** ports, give it a **Network Password**, or delete one you have finished with.
 
 **Save & Connect** waits for the device to answer before keeping it. With a single device saved there is nothing to switch to, and the switcher stays out of your way.
 
@@ -945,7 +948,7 @@ On a machine with lights, the case light or the keyboard, you will see them **pu
 - The **Filters** bar says how much of the activity you are looking at and opens the filter editor. Filter by device, by kind of activity (Problems, Actions, Logs, Traces), by what raised it (App, REST, FTP, Telnet), or by severity (Errors, Warnings, Info). The editor also holds five one-tap shortcuts: **Errors only**, **Problems only**, **REST**, **FTP**, and **Reset**.
 - The **Activity** list gathers problems, actions, logs, and traces together. Tap any row to expand it for the full details.
 
-The three-dot menu in the corner holds the rest: connection details, health history, latency, the REST, FTP and Config heat maps, config drift, decision state, and a way straight to **Manage devices**, alongside Share and Clear. To send any of it on for help, see the next section.
+The three-dot menu in the corner holds the rest: connection details, health history, latency, the REST, FTP and Config heat maps, config drift, decision state, **Key Explorer**, and a way straight to **Manage devices**, alongside Share and Clear. To send any of it on for help, see the next section.
 
 ### Sharing a Diagnostics Report
 
@@ -1016,7 +1019,7 @@ Some controls appear only when the connected device reports support. Others are 
 
 The **Joystick** tab appears only when the connected device supports the `machine:input` endpoint. **Keys** is always available.
 
-- Confirm the Commodore 64 Ultimate is running firmware 1.2.0 or newer.
+- Confirm the Commodore 64 Ultimate is running firmware 1.2.0 or newer, which is where the endpoint arrives.
 - If the device is password-protected, enter its password in Settings; both Joystick and Keys need it.
 - Otherwise the app stays in **Keys** mode and types through the C64 keyboard buffer, which suits BASIC but not most games.
 
@@ -1037,15 +1040,15 @@ Preferred locations are marked first.
 | Connect to a device | **Startup discovery**, Settings → Connection | Use startup discovery first. Use Settings for later edits. |
 | Manual host/IP entry | **No C64 found** at startup, Settings → Connection | Startup prompt is fastest on first run; Settings is best for saved-device maintenance. |
 | Network password | **Startup prompt or auth popup**, Settings → Connection | The app asks only when needed. |
-| Switch saved device | **Header badge long-press / `#`**, Settings → Connection | Use Device Switcher for fast switching; Settings for editing. |
+| Switch saved device | **Header badge long-press / `#`**, Settings → Connection | Use **Switch device** for fast switching; Settings for editing. |
 | Menu / Pause / Reset | **Home → Quick Actions** | The everyday controls. |
 | Reboot | **Home → Quick Actions → Power** | In the Power sheet, with the other heavier controls. |
 | Power Off | **Home → Quick Actions → Power** | Shown where the device can do it. Turning it back on needs the machine itself. |
-| Power Cycle | **Home → Quick Actions → Power** | On by default. You can turn it off in Settings → Experimental Features. |
-| Clear-RAM reboot | **Home → Quick Actions → Power** | On by default. You can turn it off in Settings → Experimental Features. |
-| Backup / Restore | **Home → Quick Actions** | On by default. You can turn it off in Settings → Stable Features. |
+| Power Cycle | **Home → Quick Actions → Power** | On by default. Turn it off under **Home power cycle action** in Settings → Experimental Features. |
+| Clear-RAM reboot | **Home → Quick Actions → Power** | On by default. Turn it off under **Home clear-RAM reboot action** in Settings → Experimental Features. |
+| Backup / Restore | **Home → Quick Actions** | On by default. Turn it off under **RAM snapshots** in Settings → Stable Features. |
 | Game Mode | **Home → Quick Actions**, Play (while an item plays), `0` | In the first band of Quick Actions, labeled **Game**. Opens the controller with the picture and sound as you last left them. |
-| Remote Input | **Home → Quick Actions**, Play (while an item plays) | On by default. You can turn it off in Settings → Stable Features. Joystick needs a Commodore 64 Ultimate on firmware 1.2.0 or newer; otherwise only Keys are available. |
+| Remote Input | **Home → Quick Actions**, Play (while an item plays) | On by default. Turn it off under **Remote Input** in Settings → Stable Features. Joystick appears where the machine offers the `machine:input` endpoint, which arrives with firmware 1.2.0; otherwise only Keys are available. |
 | CPU speed and turbo | **Home → CPU & RAM**, Config | Home is preferred for common changes. |
 | Video mode and scan lines | **Home → Video**, Config | Home is preferred. |
 | Joystick, serial bus, cartridge, user port | **Home → Ports**, Config | Home is preferred. |
@@ -1057,28 +1060,28 @@ Preferred locations are marked first.
 | Printer controls | **Home → Printers**, Config | Home is preferred. |
 | SID mixer | **Home → Audio**, Config → Audio Mixer | Home is preferred for live mixing. |
 | Streams | **Home → Streams**, Config | Visible when the device exposes streaming support. |
-| Save/load device config | **Home → Config actions** | Save writes the current settings to flash. Turn on Keep device settings after a restart to do it automatically. |
-| App-stored config snapshots | **Home → Config actions** | Named snapshots kept by the app, apart from the device flash. |
-| Disk Explorer (launch a program inside a disk) | **Disks → disk menu → Open (Disk Explorer)** | On by default. You can turn it off in Settings → Stable Features. |
-| Create a blank disk | **Disks → New disk** | On by default. You can turn it off in Settings → Stable Features. |
-| Search inside disk images | **Settings → Play and Disk** | Off to begin with. Turn it on in Settings → Experimental Features. |
-| Launch Safety (cartridge parking) | Automatic; boot-menu answer in **Settings → Play and Disk** | On by default. You can turn it off in Settings → Stable Features. |
-| Live View (hear and see the machine) | **Home → Live View**, Play, Remote Input | On by default. You can turn it off in Settings → Stable Features. |
-| Live View: Listen | **Home → Live View**; switch in Settings → Experimental Features | On by default. You can turn it off in Settings → Experimental Features. |
-| Live View: Watch | **Home → Live View**; switch in Settings → Experimental Features | On by default. You can turn it off in Settings → Experimental Features. |
-| Live View checks (A/V sync, tap latency, tone ladder) | **Home → Live View** | On by default. You can turn it off in Settings → Experimental Features. |
-| Advanced config file actions | **Home → Config actions** | Off to begin with. Turn it on in Settings → Experimental Features. |
-| Advanced drive shortcuts | **Home → Drives** | Off to begin with. Turn it on in Settings → Experimental Features. |
-| Advanced printer shortcuts | **Home → Printers** | Off to begin with. Turn it on in Settings → Experimental Features. |
+| Save/load device config | **Home → Config** | Save writes the current settings to flash. Turn on Keep device settings after a restart to do it automatically. |
+| App-stored config snapshots | **Home → Config** | Named snapshots kept by the app, apart from the device flash. |
+| Disk Explorer (launch a program inside a disk) | **Disks → disk menu → Open (Disk Explorer)** | On by default. Turn it off under **Disk Explorer** in Settings → Stable Features. |
+| Create a blank disk | **Disks → New disk** | On by default. Turn it off under **New disk** in Settings → Stable Features. |
+| Search inside disk images | **Settings → Play and Disk**, once In-image search is on | Off to begin with. Turn it on under **In-image search** in Settings → Experimental Features. |
+| Launch Safety (cartridge parking) | Automatic; boot-menu answer in **Settings → Play and Disk** | On by default. Turn it off under **Launch Safety** in Settings → Stable Features. |
+| Live View (hear and see the machine) | **Home → Live View**, Play, Remote Input | On by default. Turn it off under **Live View** in Settings → Stable Features. |
+| Live View: Listen | **Home → Live View**; switch in Settings → Experimental Features | On by default. Turn it off under **Audio Mirror** in Settings → Experimental Features. |
+| Live View: Watch | **Home → Live View**; switch in Settings → Experimental Features | On by default. Turn it off under **Video Mirror** in Settings → Experimental Features. |
+| Live View checks (A/V sync, tap latency, tone ladder) | **Home → Live View** | On by default. Turn it off under **A/V sync tests** in Settings → Experimental Features. |
+| Advanced config file actions | **Home → Config** | Off to begin with. Turn it on under **Home advanced config actions** in Settings → Experimental Features. |
+| Advanced drive shortcuts | **Home → Drives** | Off to begin with. Turn it on under **Home drive shortcut actions** in Settings → Experimental Features. |
+| Advanced printer shortcuts | **Home → Printers** | Off to begin with. Turn it on under **Home printer shortcut actions** in Settings → Experimental Features. |
 | Full configuration tree | **Config** | Use search, open a category, edit rows. |
 | Add playlist items | **Play → Add items** | Sources: Local, C64U, HVSC, CommoServe. |
 | Playback controls | **Play** | Play, stop, pause, previous and next, shuffle, repeat, reshuffle, volume. |
 | Sleep timer, default duration, songlengths file | **Play** | Beneath the transport controls. |
 | Per-item playback config | **Play → item menu** | Apply a device configuration before one playlist item runs. |
-| HVSC preparation | **Play → Add items**, card at the foot of Play | On by default. You can turn it off in Settings → Stable Features. Settings → HVSC holds the mirror and the update check. |
+| HVSC preparation | **Play → Add items**, card at the foot of Play | On by default. Turn it off under **HVSC downloads** in Settings → Stable Features. Settings → HVSC holds the mirror and the update check. |
 | SID Radio | **Play → SID Radio** | Endless stations of similar tunes. Settings → SID Radio tunes it. |
-| CommoServe | **Play → Add items**, Disks → Add disks, Settings → Online Archive | On by default. You can turn it off in Settings → Stable Features. |
-| Background playback scheduling | **Play**, Android app permissions | On by default. You can turn it off in Settings → Experimental Features. |
+| CommoServe | **Play → Add items**, Disks → Add disks, Settings → Online Archive | On by default. Turn it off under **CommoServe** in Settings → Stable Features. |
+| Background playback scheduling | **Play**, Android app permissions | On by default. Turn it off under **Background Execution** in Settings → Experimental Features. |
 | Display profile, theme, style, text size, card descriptions, orientation | **Settings → Appearance** | Screenshots in this manual use the compact profile, the smallest screen the app supports. |
 | Settings transfer (export and import) | **Settings → Diagnostics** | App settings, feature switches and safety tuning. Saved devices and passwords stay behind. |
 | Notification style and duration | **Settings → Notifications** | Show everything, or errors alone. |
@@ -1091,7 +1094,7 @@ Preferred locations are marked first.
 
 ### Keyboard and Directional Input Reference
 
-On by default. You can turn it off in Settings → Experimental Features. Directional navigation answers to D-pad keys, arrow keys, and hardware keyboards.
+On by default. Turn it off under **Keyboard and keypad navigation** in Settings → Experimental Features. Directional navigation answers to D-pad keys, arrow keys, and hardware keyboards.
 
 While you are steering by keys, a bar along the bottom tells you where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Activate, Edit, Select, Toggle, Adjust or Switch in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.
  While you are steering by keys, a bar along the bottom shows where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Activate, Edit, Select, Toggle, Adjust or Switch in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.
@@ -1104,9 +1107,9 @@ While you are steering by keys, a bar along the bottom tells you where you are a
 | Left / Right | Adjust sliders, tabs, and segmented controls. Otherwise move to a nearby control. |
 | OK / Center / Enter | Enter a group, open a select, press a button, or toggle a switch. |
 | Back / Escape | Close the top dialog, leave a field, leave a group, or go back. |
-| Menu / Context Menu | Open the focused item menu; if none exists, open the Quick Menu. |
+| Menu / Context Menu | Open the focused item menu; if none exists, open the Quick menu. |
 
-The rule is simple: **OK goes in, Back comes out**. On a desktop keyboard **F1** and **F2** act as soft keys, and F1 follows the same way out as Back; on a keypad handset F1 and F3 are the transport keys instead (below).
+The rule is simple: **OK goes in, Back comes out**. **F2** acts as the Menu soft key, and **F1** and **F3** are the transport keys on every keyboard (below).
 
 #### Number Keys
 
@@ -1139,7 +1142,7 @@ Press either from any page and the app takes you to Play and does it there. **Th
 | Key | Outside text fields | Inside text fields |
 | --- | --- | --- |
 | `*` | Open Diagnostics | Cycle separators such as `.`, `:`, `-`, `_`, `/` in host fields |
-| `#` | Open Device Switcher | Toggle T9 mode |
+| `#` | Open **Switch device** | Toggle T9 mode |
 
 #### T9 Text Entry
 
@@ -1153,15 +1156,15 @@ Use T9 in text fields such as hostnames and filters.
 
 For hostnames, this makes entries such as `c64u` and `192.168.1.64` practical without a touchscreen.
 
-#### Quick Menu
+#### Quick menu
 
-There are two ways in. Press **Menu** when the selected control has no menu of its own, and the Quick Menu lists the six pages, each with the number key that reaches it directly, followed by Game Mode on `0`, Diagnostics on `*`, and the Device Switcher on `#` when more than one device is saved.
+There are two ways in. Press **Menu** when the selected control has no menu of its own, and the Quick menu lists the six pages, each with the number key that reaches it directly, followed by Game Mode on `0`, Diagnostics on `*`, and **Switch device** on `#` when more than one device is saved.
 
-Every page also carries a three-dot **Quick Menu** button in the top bar, beside the health badge. Opened that way, the menu leaves out the page jumps and gives you the actions for the page you are on.
+Every page also carries a three-dot **Quick menu** button in the top bar, beside the health badge. Opened that way, the menu leaves out the page jumps and gives you the actions for the page you are on.
 
 **Search** is the first entry, whichever way you open the menu.
 
-On a page built from cards, both ways in also offer **Expand all sections**, **Collapse all sections**, and **Show card descriptions**. Both section entries are always listed, so the one you want is in the same place every time; whichever of the two would do nothing is shown but unavailable.
+On a page built from cards, both ways in also offer **Expand all sections**, **Collapse all sections**, and **Show card descriptions**, which reads **Hide card descriptions** once they are on. Both section entries are always listed, so the one you want is in the same place every time; whichever of the two would do nothing is shown but unavailable.
 
 ### File and Source Reference
 
@@ -1169,8 +1172,8 @@ On a page built from cards, both ways in also offer **Expand all sections**, **C
 | --- | --- | --- |
 | Local | Play, Disks | Files and folders available on your phone. |
 | C64U | Play, Disks | Files on the Commodore 64 Ultimate through FTP. |
-| HVSC | Play | On by default. You can turn it off in Settings → Stable Features. SID library browsing after preparation. |
-| CommoServe | Play, Disks | On by default. You can turn it off in Settings → Stable Features. Online archive search. |
+| HVSC | Play | On by default. Turn it off under **HVSC downloads** in Settings → Stable Features. SID library browsing after preparation. |
+| CommoServe | Play, Disks | On by default. Turn it off under **CommoServe** in Settings → Stable Features. Online archive search. |
 
 Supported playback/import types include SID, MOD, PRG, CRT, D64, G64, D71, G71, and D81. Disk collection workflows focus on disk images: D64, G64, D71, G71, and D81.
 
@@ -1202,7 +1205,7 @@ Set the mode in **Settings → Device Safety**. Higher concurrency is faster but
 | --- | --- | --- |
 | Auto | Chosen for you | The one to leave it on. Reads the firmware and picks Conservative or Balanced, and stays on Conservative until it knows. |
 | Relaxed | Up to 3 | The device and network have proved fast and steady, and you accept the higher risk. Asks you to confirm. |
-| Balanced | Up to 2 | A Commodore 64 Ultimate on firmware 1.2.0 or newer. |
+| Balanced | Up to 2 | A Commodore 64 Ultimate on firmware later than 1.1.0. |
 | Conservative | 1 at a time | A first setup, Wi-Fi, or firmware you do not yet trust. The safest of the five. |
 | Troubleshooting | 1 at a time | You are chasing a fault and want the extra debug logging. |
 

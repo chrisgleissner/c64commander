@@ -547,10 +547,10 @@ const featureSettingGroup = (feature) => (feature.group === "stable" ? "Stable F
 const featureAvailability = (feature) => {
   if (!feature?.isMentionable) return null;
   if (feature.enabled && feature.isUserToggleable) {
-    return `On by default. You can turn it off in Settings → ${featureSettingGroup(feature)}.`;
+    return `On by default. Turn it off under **${feature.title}** in Settings → ${featureSettingGroup(feature)}.`;
   }
   if (feature.enabled) return "Always on in this edition.";
-  return `Off to begin with. Turn it on in Settings → ${featureSettingGroup(feature)}.`;
+  return `Off to begin with. Turn it on under **${feature.title}** in Settings → ${featureSettingGroup(feature)}.`;
 };
 
 const includeFeature = (features, id) => Boolean(features[id]?.isMentionable);
@@ -624,8 +624,8 @@ const supportedMachinesSection = ({ appName, variant }) =>
 // than the earliest build that carries them.
 const balancedFirmwareNote = (variant) =>
   isC64uRemoteVariant(variant)
-    ? "A Commodore 64 Ultimate on firmware 1.2.0 or newer."
-    : "A Commodore 64 Ultimate on firmware 1.2.0 or newer, or an Ultimate 64-family device on 3.15 or newer.";
+    ? "A Commodore 64 Ultimate on firmware later than 1.1.0."
+    : "A Commodore 64 Ultimate on firmware later than 1.1.0, or an Ultimate 64-family device on 3.14d or newer.";
 
 // What Auto resolves to, per `resolveAutoSafetyMode`. A machine it has not yet
 // identified — and, in the broad edition, every Ultimate-II — stays on
@@ -633,12 +633,12 @@ const balancedFirmwareNote = (variant) =>
 const autoSafetyModeNote = (variant) =>
   isC64uRemoteVariant(variant)
     ? "The one to leave it on. Reads the firmware and picks Conservative or Balanced, and stays on Conservative until it knows."
-    : "The one to leave it on. Reads the model and firmware and picks Conservative or Balanced. Anything it has not yet identified, and every Ultimate-II, stays on Conservative.";
+    : "The one to leave it on. Reads the model and firmware and picks Conservative or Balanced. Every Ultimate-II stays on Conservative, and so does a machine whose firmware it cannot yet read. A model it does not recognise at all starts on Balanced.";
 
 const deviceSafetyGuidance = (variant) =>
   isC64uRemoteVariant(variant)
     ? "Leave it on Auto. Auto keeps a Commodore 64 Ultimate on Conservative until its firmware is known to be safe. See Device Safety Modes."
-    : "Leave it on Auto. It starts Conservative while it identifies the device and firmware, then chooses the appropriate profile. See Device Safety Modes.";
+    : "Leave it on Auto. It reads the model and the firmware, then chooses the profile that suits them. See Device Safety Modes.";
 
 const safeDeviceUseIntro = ({ appName, variant }) =>
   `${appName} uses normal REST, FTP, and Telnet requests, but ${targetDeviceShortName(
@@ -697,18 +697,18 @@ const remoteInputFallbackExplainer =
 
 const remoteInputJoystickFirmware = (variant) =>
   isC64uRemoteVariant(variant)
-    ? `Full Joystick relay uses the device's \`machine:input\` REST endpoint. It needs a Commodore 64 Ultimate running firmware **1.2.0** or newer. On older firmware the app automatically falls back to **Keys** only.\n\n${remoteInputFallbackExplainer}\n\nIf the device is password-protected, enter its password in Settings first, because both Joystick and Keys need it.`
-    : `Full Joystick relay uses the device's \`machine:input\` REST endpoint. It needs recent firmware: a Commodore 64 Ultimate on firmware **1.2.0** or newer, or an Ultimate 64, Ultimate 64 Elite, or Ultimate 64 Elite II on firmware **3.15** or newer.\n\nThe Ultimate-II cannot relay a joystick at all: as a cartridge it cannot change the state of the C64's CIA 1 input chip, so it has no \`machine:input\` support. On the Ultimate-II, and on any device running older firmware, the app automatically falls back to **Keys** only.\n\n${remoteInputFallbackExplainer}\n\nIf the device is password-protected, enter its password in Settings first, because both Joystick and Keys need it.`;
+    ? `Full Joystick relay uses the device's \`machine:input\` REST endpoint. The app asks your machine for it and takes the answer as it comes: where the endpoint replies, the **Joystick** tab appears; where it does not, the app falls back to **Keys** only. In practice the endpoint arrives with Commodore 64 Ultimate firmware **1.2.0**.\n\n${remoteInputFallbackExplainer}\n\nIf the device is password-protected, enter its password in Settings first, because both Joystick and Keys need it.`
+    : `Full Joystick relay uses the device's \`machine:input\` REST endpoint. The app asks your machine for it and takes the answer as it comes: where the endpoint replies, the **Joystick** tab appears; where it does not, the app falls back to **Keys** only. In practice the endpoint arrives with Commodore 64 Ultimate firmware **1.2.0**, and with Ultimate 64, Ultimate 64 Elite and Ultimate 64 Elite II firmware **3.15**.\n\nThe Ultimate-II cannot relay a joystick at all: as a cartridge it cannot change the state of the C64's CIA 1 input chip, so it has no \`machine:input\` support. ${remoteInputFallbackExplainer}\n\nIf the device is password-protected, enter its password in Settings first, because both Joystick and Keys need it.`;
 
 const remoteInputFirmwareShort = (variant) =>
   isC64uRemoteVariant(variant)
-    ? "Joystick needs a Commodore 64 Ultimate on firmware 1.2.0 or newer; otherwise only Keys are available."
-    : "Joystick needs firmware 1.2.0 or newer on a Commodore 64 Ultimate, or 3.15 or newer on an Ultimate 64; otherwise only Keys are available.";
+    ? "Joystick appears where the machine offers the `machine:input` endpoint, which arrives with firmware 1.2.0; otherwise only Keys are available."
+    : "Joystick appears where the machine offers the `machine:input` endpoint, which arrives with firmware 1.2.0 on a Commodore 64 Ultimate and 3.15 on an Ultimate 64; otherwise only Keys are available.";
 
 const remoteInputTroubleshootFirmware = (variant) =>
   isC64uRemoteVariant(variant)
-    ? "- Confirm the Commodore 64 Ultimate is running firmware 1.2.0 or newer."
-    : "- Confirm the firmware supports it: a Commodore 64 Ultimate on 1.2.0 or newer, or an Ultimate 64 on 3.15 or newer. The Ultimate-II has no joystick relay.";
+    ? "- Confirm the Commodore 64 Ultimate is running firmware 1.2.0 or newer, which is where the endpoint arrives."
+    : "- Confirm the firmware offers the endpoint: it arrives with 1.2.0 on a Commodore 64 Ultimate and 3.15 on an Ultimate 64. The Ultimate-II has no joystick relay at all.";
 
 const featureRows = ({ features, variant }) => {
   const rows = [
@@ -726,7 +726,7 @@ const featureRows = ({ features, variant }) => {
     [
       "Switch saved device",
       "**Header badge long-press / `#`**, Settings → Connection",
-      "Use Device Switcher for fast switching; Settings for editing.",
+      "Use **Switch device** for fast switching; Settings for editing.",
     ],
     ["Menu / Pause / Reset", "**Home → Quick Actions**", "The everyday controls."],
     ["Reboot", "**Home → Quick Actions → Power**", "In the Power sheet, with the other heavier controls."],
@@ -807,12 +807,12 @@ const featureRows = ({ features, variant }) => {
     ["Streams", "**Home → Streams**, Config", "Visible when the device exposes streaming support."],
     [
       "Save/load device config",
-      "**Home → Config actions**",
+      "**Home → Config**",
       "Save writes the current settings to flash. Turn on Keep device settings after a restart to do it automatically.",
     ],
     [
       "App-stored config snapshots",
-      "**Home → Config actions**",
+      "**Home → Config**",
       "Named snapshots kept by the app, apart from the device flash.",
     ],
   );
@@ -830,7 +830,7 @@ const featureRows = ({ features, variant }) => {
   if (includeFeature(features, "in_image_search_enabled")) {
     rows.push([
       "Search inside disk images",
-      "**Settings → Play and Disk**",
+      "**Settings → Play and Disk**, once In-image search is on",
       featureAvailability(features.in_image_search_enabled),
     ]);
   }
@@ -873,7 +873,7 @@ const featureRows = ({ features, variant }) => {
   if (includeFeature(features, "home_telnet_config_actions_enabled")) {
     rows.push([
       "Advanced config file actions",
-      "**Home → Config actions**",
+      "**Home → Config**",
       featureAvailability(features.home_telnet_config_actions_enabled),
     ]);
   }
@@ -1023,11 +1023,11 @@ const renderKeyboardReference = ({ features, variant }) => {
         ["Left / Right", "Adjust sliders, tabs, and segmented controls. Otherwise move to a nearby control."],
         ["OK / Center / Enter", "Enter a group, open a select, press a button, or toggle a switch."],
         ["Back / Escape", "Close the top dialog, leave a field, leave a group, or go back."],
-        ["Menu / Context Menu", "Open the focused item menu; if none exists, open the Quick Menu."],
+        ["Menu / Context Menu", "Open the focused item menu; if none exists, open the Quick menu."],
       ],
     ),
     "",
-    "The rule is simple: **OK goes in, Back comes out**. On a desktop keyboard **F1** and **F2** act as soft keys, and F1 follows the same way out as Back; on a keypad handset F1 and F3 are the transport keys instead (below).",
+    "The rule is simple: **OK goes in, Back comes out**. **F2** acts as the Menu soft key, and **F1** and **F3** are the transport keys on every keyboard (below).",
     "",
     "#### Number Keys",
     "",
@@ -1075,7 +1075,7 @@ const renderKeyboardReference = ({ features, variant }) => {
         ],
         [
           "`#`",
-          "Open Device Switcher",
+          "Open **Switch device**",
           variant.runtime.defaultT9InputEnabled ? "Toggle T9 mode" : "Type `#` when the field accepts it",
         ],
       ],
@@ -1101,15 +1101,15 @@ const renderKeyboardReference = ({ features, variant }) => {
 
   sections.push(
     "",
-    "#### Quick Menu",
+    "#### Quick menu",
     "",
-    "There are two ways in. Press **Menu** when the selected control has no menu of its own, and the Quick Menu lists the six pages, each with the number key that reaches it directly, followed by Game Mode on `0`, Diagnostics on `*`, and the Device Switcher on `#` when more than one device is saved.",
+    "There are two ways in. Press **Menu** when the selected control has no menu of its own, and the Quick menu lists the six pages, each with the number key that reaches it directly, followed by Game Mode on `0`, Diagnostics on `*`, and **Switch device** on `#` when more than one device is saved.",
     "",
-    "Every page also carries a three-dot **Quick Menu** button in the top bar, beside the health badge. Opened that way, the menu leaves out the page jumps and gives you the actions for the page you are on.",
+    "Every page also carries a three-dot **Quick menu** button in the top bar, beside the health badge. Opened that way, the menu leaves out the page jumps and gives you the actions for the page you are on.",
     "",
     "**Search** is the first entry, whichever way you open the menu.",
     "",
-    "On a page built from cards, both ways in also offer **Expand all sections**, **Collapse all sections**, and **Show card descriptions**. Both section entries are always listed, so the one you want is in the same place every time; whichever of the two would do nothing is shown but unavailable.",
+    "On a page built from cards, both ways in also offer **Expand all sections**, **Collapse all sections**, and **Show card descriptions**, which reads **Hide card descriptions** once they are on. Both section entries are always listed, so the one you want is in the same place every time; whichever of the two would do nothing is shown but unavailable.",
   );
 
   return sections.join("\n");
@@ -1211,16 +1211,18 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "### The Header Badge",
     "",
-    "The badge at the top right says how the current device is: healthy, degraded, unhealthy, or offline. Tap it to open Diagnostics. While the app is offline, the same tap also tries the connection again. Long-press the badge, press `#`, or use the Quick Menu to open the Device Switcher.",
+    "The badge at the top right says how the current device is: healthy, degraded, unhealthy, or offline. Tap it to open Diagnostics. While the app is offline, the same tap also tries the connection again. Long-press the badge, press `#`, or use the Quick menu to open **Switch device**.",
     "",
     "### Finding Your Way",
     "",
-    "Search covers the whole app: every page, every card, every setting the app owns, every setting your machine reports, and every tune, disk and program you have. Type two or three letters and pick what you want.",
+    "Search covers the whole app: every page, every card, every setting the app owns, your disk collection, the HVSC archive, and the tunes you have liked or played recently. Type two or three letters and pick what you want.",
+    "",
+    "Your machine's own settings join in once the Config page has read them, so open **Config** first if you are hunting for a device setting by name.",
     "",
     "Open it in any of three ways:",
     "",
     "- Tap the **search field** at the top of Home.",
-    "- Choose **Search**, the first entry of the **Quick Menu**.",
+    "- Choose **Search**, the first entry of the **Quick menu**.",
     "- Press **`7`**, which works even with directional navigation switched off.",
     "",
     "Keep typing while you look: Up and Down move through the results and leave your text alone. OK opens the selected result, and Back closes search. Results are grouped, best match first, so typing `radio` offers you **Start SID Radio** ahead of any tune with the word in its title.",
@@ -1264,7 +1266,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
         ]
       : []),
-    "Two more actions can join the **Power** sheet: **Reboot (Clr Mem)**, which wipes memory on the way, and **Power Cycle**. Both use the Telnet menu service and start out switched off. Enable Telnet on your device, then turn them on in **Settings → Experimental Features**.",
+    "Two more actions can join the **Power** sheet: **Reboot (Clr Mem)**, which wipes memory on the way, and **Power Cycle**. Both reach the machine through the Telnet menu service, so switch Telnet on at the device first. Their own switches are **Home clear-RAM reboot action** and **Home power cycle action**, in **Settings → Experimental Features**.",
     "",
     ...(includeFeature(features, "audio_mirror_enabled") || includeFeature(features, "video_mirror_enabled")
       ? [
@@ -1278,19 +1280,19 @@ export const renderManualMarkdown = ({ variant, features }) => {
     // such hardware.
     `Keep going and the rest of Home is a set of cards, and tapping a header opens or closes one.`,
     "",
-    `**CPU & RAM** holds the processor speed, turbo behavior and the RAM expansion. **Video** holds the output mode, resolution and scan lines, and **Audio**, directly below it, the SID mixer's channel strips. **Ports** holds the joystick swap, the serial bus, the cartridge preference and the user port. **User Interface** rounds the group out, and${
+    `**CPU & RAM** holds the processor speed, turbo behavior and the RAM expansion. **Ports** follows, with the joystick swap, the serial bus, the cartridge preference and the user port. **Video** holds the output mode, resolution and scan lines, and **Audio**, directly below it, the SID mixer's channel strips. **User Interface** rounds the group out, and${
       isC64uRemoteVariant(variant)
         ? ", on a machine that has them, so do the case and keyboard lights"
         : ", on a machine that has them, so does **Lighting**, for the case and keyboard lights"
     }.`,
     "",
-    "Some cards start open and some start closed, and the app remembers what you left open. On the compact display profile, opening one card closes the others, so the list of titles stays on screen. **Expand all sections** and **Collapse all sections** in the Quick Menu do the whole page at once. Everything here is in Config as well; these cards save you the search.",
+    "Some cards start open and some start closed, and the app remembers what you left open. On the compact display profile, opening one card closes the others, so the list of titles stays on screen. **Expand all sections** and **Collapse all sections** in the Quick menu do the whole page at once. Everything here is in Config as well; these cards save you the search.",
     "",
     '**With no C64 connected**, Home rearranges for you. The search field stays where it is, and so do Radio, Last, Recent and Live, drawn on their own below a card explaining how to connect one. The first three need no machine. Live does, so it is grayed and reads "Needs a connected C64 Ultimate".',
     "",
     "The machine's controls and cards are drawn as titles with nothing inside them, under a line saying so, and the system strip drops to the app version alone. Whichever cards you had open are open again the moment your C64 answers. A brief network hiccup will not shuffle the page under you: the app waits a few seconds before rearranging, and returns the instant your machine is back.",
     "",
-    `The remaining cards cover drives, the printer, streams, and **Config actions**. That last one holds **Save**, which writes the current settings into flash on ${targetDeviceShortName(
+    `The remaining cards cover drives, the printer, streams, and **Config**. That last one holds **Save**, which writes the current settings into flash on ${targetDeviceShortName(
       variant,
     )} so they survive a power cycle, along with Load, Reset, Revert, and the app's own named configuration snapshots.`,
     "",
@@ -1340,7 +1342,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Disks overview", profile, "disks/profiles/{profile}/01-overview.png"),
     "",
-    "The page has three drive cards: **Drive A**, **Drive B**, and a **Soft IEC** drive that reads loose files straight from a folder rather than from a disk image. Each card turns its drive on or off, sets its bus ID and type, mounts and ejects, and resets.",
+    "The page has three drive cards: **Drive A**, **Drive B**, and a **Soft IEC Drive** that reads loose files straight from a folder rather than from a disk image. Each card turns its drive on or off, sets its bus ID and type, mounts and ejects, and resets.",
     "",
     "Power and the mounted disk stay on the card header, so you can see and change both without opening the card. **Drive A** starts open and the other two start closed. Below them, **Add disks** builds a collection from the sources you have.",
     "",
@@ -1380,7 +1382,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Settings is a list of chapters rather than one long page of controls. Each heading says in one line what its chapter decides, so you can find the right one without reading the others. **Connection** is open on your first visit; the rest start closed, and whatever you leave open is still open next time.",
     "",
-    "The chapters are **Appearance**, **Connection**, **Diagnostics**, **Play and Disk**, **Stable Features**, **Experimental Features**, **SID Radio**, **HVSC**, **Online Archive**, **Device Safety**, **Notifications**, and **About**. The two feature chapters show how many of their switches are on, 3/7 for example, so you can tell at a glance without opening them.",
+    "The chapters are **Appearance**, **Connection**, **Diagnostics**, **Play and Disk**, **Stable Features**, **Experimental Features**, **SID Radio**, **HVSC**, **Online Archive**, **Device Safety**, **Notifications**, and **About**. The two feature chapters show how many of their switches are on, **8/9 on** for example, so you can tell at a glance without opening them. **HVSC** and **Online Archive** disappear if you switch their features off.",
     "",
     "If the device is hard to reach, start in **Connection**. If it answers but feels fragile, start in **Device Safety**.",
     "",
@@ -1409,7 +1411,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "**Text size** enlarges every part of the app. Choose **Default**, or **Large**, which is 15 percent larger. Reach for it when the app is harder to read than you would like; the display profile beside it changes the layout rather than the type. If the tab bar along the bottom runs out of room it scrolls sideways, and reaching a page another way scrolls that tab into view.",
     "",
-    "**Card descriptions** is the one-line summary under each card's title, on every page built from cards. It starts off, because on a small screen it costs about half the height of every closed card; turn it on if you would rather read what a card holds than remember it. The Quick Menu switches the same thing on and off without leaving the page you are on.",
+    "**Card descriptions** is the one-line summary under each card's title, on every page built from cards. It starts off, because on a small screen it costs about half the height of every closed card; turn it on if you would rather read what a card holds than remember it. The Quick menu switches the same thing on and off without leaving the page you are on.",
     "",
     "**Diagnostics** opens the diagnostics panel and switches debug logging on. It also carries **Settings transfer**, which lives here despite the name.",
     "",
@@ -1441,7 +1443,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Docs overview", profile, "docs/profiles/{profile}/01-overview.png"),
     "",
-    "It covers setup, Home, Play, Disks, Config, Settings, Diagnostics and disk swapping, and ends with links to the official device manuals and reference material.",
+    isC64uRemoteVariant(variant)
+      ? "It covers setup, Home, Play, Disks, Config, Settings, Diagnostics and disk swapping."
+      : "It covers setup, Home, Play, Disks, Config, Settings, Diagnostics and disk swapping, and ends with links to the official device manuals and reference material.",
     "",
     "### Diagnostics",
     "",
@@ -1460,12 +1464,12 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "### Device Switching",
     "",
     isC64uRemoteVariant(variant)
-      ? "Device Switcher is for homes with more than one saved Commodore 64 Ultimate."
-      : "Device Switcher is for homes with more than one saved Ultimate-family device.",
+      ? "**Switch device** is for homes with more than one saved Commodore 64 Ultimate."
+      : "**Switch device** is for homes with more than one saved Ultimate-family device.",
     "",
     image("Device switcher", profile, "diagnostics/switch-device/profiles/{profile}/01-picker.png"),
     "",
-    "Open it from the badge long-press, `#`, or Quick Menu. Expand a row for more detail.",
+    "Open it from the badge long-press, `#`, or Quick menu. Expand a row for more detail.",
     "",
     "See [Switching Between Devices](#switching-between-devices) in the In Depth chapter for the full story.",
     "",
@@ -1490,12 +1494,12 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "4. Use **Save & Connect** after changing the active device.",
     "5. Remove any device that is no longer on your network.",
     "",
-    "Preferred path: Settings for editing, Device Switcher for choosing.",
+    "Preferred path: Settings for editing, **Switch device** for choosing.",
     "",
     "### Reboot and Carry On",
     "",
     "1. Open **Home**.",
-    "2. Choose **Reboot**.",
+    "2. Choose **Power**, then **Reboot**.",
     "3. Confirm.",
     "4. Watch the badge until the device returns healthy.",
     "",
@@ -1599,7 +1603,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     }.`,
     "2. If the setting is not there, open **Config** and search.",
     "3. Change the value.",
-    "4. Use **Save** in the Config actions card if the change should survive a device reboot or power cycle, unless **Keep device settings after a restart** is already on.",
+    "4. Use **Save** in the **Config** card if the change should survive a device reboot or power cycle, unless **Keep device settings after a restart** is already on.",
     "",
     "Preferred path: Home for common settings; Config for the full tree.",
     "",
@@ -1688,7 +1692,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "### SID Radio",
     "",
-    "The High Voltage SID Collection holds around sixty thousand files and close to ninety thousand tunes, far too many to browse. SID Radio plays it like a radio station: pick a mood, or a tune you already like, and the app keeps finding more music of the same kind.",
+    "The High Voltage SID Collection holds around sixty thousand files, and more tunes than that, since many files hold several. That is far too many to browse. SID Radio plays it like a radio station: pick a mood, or a tune you already like, and the app keeps finding more music of the same kind.",
     "",
     "There is no playlist to build, and nothing is downloaded as you listen. Once the collection is on your device, the app already knows which tunes resemble one another.",
     "",
@@ -1781,7 +1785,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "Your C64 can send its own sound and picture out across your network, and Live View brings them straight back into the app, so you can hear a tune or watch the screen without wiring up a speaker or a second television.",
           "",
-          "It is one shared session. Start it in a single place and it keeps playing wherever you go; there is never a second copy fighting for the same stream. You will find it just below the Quick Actions on **Home**, as a card that starts closed; tap its header to open it. Inside are two switches:",
+          `It is one shared session. Start it in a single place and it keeps playing wherever you go; there is never a second copy fighting for the same stream. You will find it just below the Quick Actions on **Home**, as a card that starts closed; tap its header to open it.${isC64uRemoteVariant(variant) ? "" : " The card appears only where the machine can stream, so an Ultimate-II cartridge does not offer it."} Inside are two switches:`,
           "",
           ...(includeFeature(features, "audio_mirror_enabled")
             ? [
@@ -1810,11 +1814,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "A small map in the corner shows which part you are looking at, and dragging its rectangle moves you elsewhere at once. Switch on **Follow** and the view drifts along on its own to wherever the action is, which keeps the cursor in sight as you type.",
                 "",
-                "**Lock on** keeps the view on your character while you play. Press and hold your character on the screen, or, with no touchscreen, line the crosshair at the middle of the view up on it with the direction keys and press **OK**.",
+                "Locking the view onto your character keeps it in sight while you play. Press and hold your character on the screen, or, with no touchscreen, line the crosshair at the middle of the view up on it with the direction keys and press **OK**.",
                 "",
                 "The view then travels with that one character while enemies move around it. It holds on through flashing, color changes, animation, fast movement, a wrap around the screen edge, and a moment out of sight.",
                 "",
-                "The status line reads **Hold on your character** until something is locked, then **Locked on**. To let go, tap the status line, ask for the whole screen back, or press **OK** again. The view returns to ordinary following.",
+                "The status line reads **Hold on your character** until something is locked, then **Locked on**. **Looking…** means it is still searching, and **Lost it** that the character has gone; both are normal. To let go, tap the status line, ask for the whole screen back, or press **OK** again. The view returns to ordinary following.",
                 "",
                 image(
                   "The immersive screen in Remote Input",
@@ -1830,7 +1834,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "**Blue**, marked **“C64”**, means your keys go straight to the machine. **Amber**, marked **“View”**, means they zoom and pan the picture instead.",
                 "",
-                "Press `*` or the **menu key**, or the on-screen **Fit** button, to change between the two. You are never stranded in front of a frozen game: adjusting the view returns to driving on its own after a short pause. While the border is amber, the keypad moves the view like this:",
+                "Press `*` or the **menu key**, or the on-screen button that reads **Fit** on the way in and **Done** on the way back, to change between the two. You are never stranded in front of a frozen game: adjusting the view returns to driving on its own after a short pause. While the border is amber, the keypad moves the view like this:",
                 "",
                 "| Key | What it does |",
                 "| --- | --- |",
@@ -1840,7 +1844,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "| **6**, or D-pad right | Pan right |",
                 "| **3** or **9** | Zoom in |",
                 "| **1** or **7** | Zoom out |",
-                "| **0**, **5**, or the center/OK key | Fit the whole screen back on |",
+                "| **0** or **5** | Fit the whole screen back on |",
+                "| the **center/OK** key | Lock the view onto what is under the crosshair, or let it go |",
                 "| the **menu** key | Return to driving the C64 |",
                 "",
                 "In **Game Mode**, while the border is blue and the keys are driving the C64, `#` brings the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again, so the picture and the sound can be turned off and on without a touchscreen.",
@@ -1878,7 +1883,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "#### Checking the sound and picture yourself",
                 "",
-                "Under Live View are three checks you can run whenever something seems off. They come with the app; **A/V Sync tests** in Settings → Experimental Features hides them if you would rather not see them.",
+                "Under Live View are three checks you can run whenever something seems off. They come with the app; **A/V sync tests** in Settings → Experimental Features hides them if you would rather not see them.",
                 "",
                 "- **A/V sync** and **Tap latency** answer *when*: how far apart the sound and picture are, and how long it takes a keypress to come back to you.",
                 "- **Tone & color ladder** answers *what*. It plays a short tune on your C64, a scale from C3 up to C4 and back at half a second a note, and changes the screen color on every note, stepping through all sixteen C64 colors as it goes. Because the C64 changes the note and the color at the very same instant, anything that arrives out of step arrived that way across your network.",
@@ -1994,12 +1999,12 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "Where you are lying down, or the sensor cannot tell which way up the phone is, the **Orientation** control in Game Mode's toolbar pins the mapping. Choose **Auto**, **0°**, **90°** or **270°**; the choice holds for as long as the sheet is open, and is not remembered afterwards.",
                 "",
-                "To use different keys, open **Settings → Play and Disk → Joystick keys**. It offers **Diamond (8-centered)**, which is the arrangement above, **Classic T9** (2, 4, 6 and 8 with 5 as fire), and **Custom**, where you press the key you want for each direction. You only ever set it up upright; every other way round follows from that.",
+                "To use different keys, open **Settings → Play and Disk → Joystick keys**. It offers **Diamond (8-centred)**, which is the arrangement above, **Classic T9** (2, 4, 6 and 8 with 5 as fire), and **Custom**, where you press the key you want for each direction. You only ever set it up upright; every other way round follows from that.",
               ]
             : [
                 "#### Steering with a physical keyboard",
                 "",
-                "**Settings → Play and Disk → Joystick keys** decides which keys steer. **Classic T9** uses 2, 4, 6 and 8 with 5 as fire, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centered)** uses the four keys around 8, with 8 itself as fire. **Custom** lets you press the key you want for each direction. A hardware D-pad always steers as well, whatever you choose here.\n\nThe mapping turns with your device, so you only ever set it up one way up. Where the sensor cannot tell which way up the device is, the **Orientation** control in Game Mode's toolbar pins the mapping to **Auto**, **0°**, **90°** or **270°**.",
+                "**Settings → Play and Disk → Joystick keys** decides which keys steer. **Classic T9** uses 2, 4, 6 and 8 with 5 as fire, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centred)** uses the four keys around 8, with 8 itself as fire. **Custom** lets you press the key you want for each direction. A hardware D-pad always steers as well, whatever you choose here.\n\nThe mapping turns with your device, so you only ever set it up one way up. Where the sensor cannot tell which way up the device is, the **Orientation** control in Game Mode's toolbar pins the mapping to **Auto**, **0°**, **90°** or **270°**.",
               ]),
           "",
           "Leave with **Exit**, at the top of the Game Mode toolbar, or your device's Back button. Both release everything you were holding. Closing the sheet also stops the picture and sound if Game Mode was what started them, and leaves them running if they were already on before you arrived.",
@@ -2077,7 +2082,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
       ? [
           "### Content Explorer",
           "",
-          "Content Explorer reaches the programs *inside* a disk image and starts them safely. Each part is optional: turn on the ones you want in **Settings**, and the rest stay out of the way. Searching inside images builds on Disk Explorer, so switch that on first.",
+          "Content Explorer is this guide's name for four features that reach the programs *inside* a disk image and start them safely. Each has its own switch in Settings, and the line at the end of each section below tells you whether it is on already. Searching inside images builds on Disk Explorer, so that one has to be on too.",
           "",
           ...(includeFeature(features, "disk_explorer_enabled")
             ? [
@@ -2119,7 +2124,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
             ? [
                 "#### Searching Inside Disk Images",
                 "",
-                "By default, searching your media matches disk images by their file name. Turn on **Search inside disk images**, in **Settings → Play and Disk**, and search also reaches the programs *inside* your `.d64`, `.d71`, and `.d81` images. A match found inside a disk is shown as **DISK → PROGRAM**, so you can see exactly which disk holds the program you want, then Run or Load it like any other.",
+                "By default, searching your media matches disk images by their file name. Switch **In-image search** on in **Settings → Experimental Features**, and a **Search inside disk images** row appears in **Settings → Play and Disk**. Turn that on and search also reaches the programs *inside* your `.d64`, `.d71`, and `.d81` images. A match found inside a disk is shown as **DISK → PROGRAM**, so you can see exactly which disk holds the program you want, then Run or Load it like any other.",
                 "",
                 availabilityNote(features.in_image_search_enabled),
                 "",
@@ -2197,13 +2202,13 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `If you have saved more than one ${
       isC64uRemoteVariant(variant) ? "Commodore 64 Ultimate" : "device"
-    }, the Device Switcher lets you hop between them without opening Settings.`,
+    }, **Switch device** lets you hop between them without opening Settings.`,
     "",
     "Open it in any of three ways, whenever more than one device is saved:",
     "",
     "- **Long-press the header badge** (a short tap opens Diagnostics instead).",
     "- Press **`#`** on a hardware keyboard or keypad.",
-    "- Choose **Switch device** in the Quick Menu.",
+    "- Choose **Switch device** in the Quick menu.",
     "",
     "The switcher checks each saved device for you, and looks again every ten seconds while it is open. Each row carries the name, a status pill reading **Selected**, **Verifying**, **Offline** or **Mismatch**, a health badge, and a short line such as how many checks passed or when the device was last seen. The device you are on is highlighted.",
     "",
@@ -2211,7 +2216,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Tap a device to switch to it. Before anything else the app safely lets go of any input you were holding on the old device, stops tracking its playback and pause state, retargets to the new device's address and ports, and then checks that the new device answers. While that happens the target shows a **Verifying** pill; once it responds, it becomes the active device.",
     "",
-    "Saved devices are created and edited in **Settings → Connection**, under **Saved devices**. Add one, edit its **Device name**, **Hostname / IP** and its **HTTP**, **FTP** and **Telnet** ports, give it a **Network Password**, or delete one you have finished with.",
+    "Saved devices are created and edited in **Settings → Connection**, under **Saved devices**. Add one, edit its **Device name**, **C64U hostname / IP** and its **HTTP**, **FTP** and **Telnet** ports, give it a **Network Password**, or delete one you have finished with.",
     "",
     "**Save & Connect** waits for the device to answer before keeping it. With a single device saved there is nothing to switch to, and the switcher stays out of your way.",
     "",
@@ -2229,7 +2234,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "- The **Filters** bar says how much of the activity you are looking at and opens the filter editor. Filter by device, by kind of activity (Problems, Actions, Logs, Traces), by what raised it (App, REST, FTP, Telnet), or by severity (Errors, Warnings, Info). The editor also holds five one-tap shortcuts: **Errors only**, **Problems only**, **REST**, **FTP**, and **Reset**.",
     "- The **Activity** list gathers problems, actions, logs, and traces together. Tap any row to expand it for the full details.",
     "",
-    "The three-dot menu in the corner holds the rest: connection details, health history, latency, the REST, FTP and Config heat maps, config drift, decision state, and a way straight to **Manage devices**, alongside Share and Clear. To send any of it on for help, see the next section.",
+    "The three-dot menu in the corner holds the rest: connection details, health history, latency, the REST, FTP and Config heat maps, config drift, decision state, **Key Explorer**, and a way straight to **Manage devices**, alongside Share and Clear. To send any of it on for help, see the next section.",
     "",
     "### Sharing a Diagnostics Report",
     "",
@@ -2578,7 +2583,7 @@ const INDEX_TERMS = [
   { term: "default duration", match: ["**default duration**"] },
   { term: "Demo Mode", match: ["Demo Mode"] },
   { term: "Device Safety", match: ["Device Safety"] },
-  { term: "Device Switcher", match: ["Device Switcher"] },
+  { term: "Switch device", match: ["**Switch device**", "Switch device"] },
   { term: "devices, saved", match: ["Saved devices", "saved devices"] },
   { term: "Diagnostics", match: ["Reading Diagnostics"] },
   { term: "discovery", match: ["Discovery finds nothing", "Discover devices"] },
@@ -2616,7 +2621,7 @@ const INDEX_TERMS = [
   { term: "IP address", match: ["IP address"] },
   { term: "JIFFY probe", match: ["JIFFY"] },
   { term: "joystick", match: ["**Joystick**"] },
-  { term: "joystick keys", match: ["Classic T9", "Diamond (8-centered)"] },
+  { term: "joystick keys", match: ["Classic T9", "Diamond (8-centred)"] },
   { term: "KERNAL", match: ["**KERNAL**", "Classic KERNAL load"] },
   { term: "Key Explorer", match: ["Key Explorer"] },
   { term: "keyboard, on-screen", match: ["**Keys**"] },
@@ -2629,7 +2634,7 @@ const INDEX_TERMS = [
   { term: "Listen", match: ["turns the sound on", "Listen"] },
   { term: "Live View", match: ["Live View"] },
   { term: "Local files", match: ["**Local**"] },
-  { term: "Lock on", match: ["**Lock on**"] },
+  { term: "locking the view", match: ["Locked on"] },
   { term: "low-latency audio", match: ["Low-latency audio"] },
   { term: "machines, supported", match: ["Supported Machines", "Your C64 Ultimate"] },
   { term: "Match my device", match: ["**Match my device**"] },
@@ -2659,7 +2664,7 @@ const INDEX_TERMS = [
   { term: "printer", match: ["The Virtual Printer", "**Home → Printers**"] },
   { term: "Quick Actions", match: ["Quick Actions"] },
   { term: "quick keys", match: ["quick keys"] },
-  { term: "Quick Menu", match: ["Quick Menu"] },
+  { term: "Quick menu", match: ["Quick menu"] },
   { term: "RAM expansion", match: ["RAM expansion"] },
   { term: "RAM snapshots", match: ["RAM Snapshots", "**Backup**", "**Restore**"] },
   { term: "RASTER probe", match: ["RASTER"] },
