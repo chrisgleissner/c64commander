@@ -1,0 +1,175 @@
+% =====================================================================
+%  Print design for the C64 Commander / C64U Remote manuals.
+%
+%  The reference is the 1982 Commodore 64 User's Guide: a friendly book
+%  a reader settles into, not a datasheet. What that means in practice:
+%  a warm oldstyle body face at a comfortable measure, a grotesque sans
+%  for anything structural, one accent hue per chapter carried through
+%  the opener, the running head and the index, and enough air that a
+%  page never looks like work.
+%
+%  Body:     TeX Gyre Pagella (Palatino) - warm, generous, made for books
+%  Headings: TeX Gyre Heros (Helvetica)  - the era's own structural sans
+%  Code:     TeX Gyre Cursor (Courier)   - what a C64 listing looks like
+% =====================================================================
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{tgpagella}
+\renewcommand{\sfdefault}{qhv}
+\renewcommand{\ttdefault}{qcr}
+\usepackage[activate={true,nocompatibility},final,tracking=true,factor=1100,stretch=12,shrink=12]{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{ragged2e}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+% `calc` also gives pandoc's longtable column specs their \real macro.
+\usepackage{calc}
+\usepackage{eso-pic}
+\usepackage[hidelinks]{hyperref}
+\tcbuselibrary{skins,breakable}
+
+% ---------------------------------------------------------------- page
+% 210 - 30 - 45 leaves a 135 mm measure: about 70 characters a line at
+% 11 pt, which is the range long-form text is set in. The inner margin
+% is the narrower of the two because the gutter of a bound book eats
+% part of it.
+\setstocksize{297mm}{210mm}
+\settrimmedsize{297mm}{210mm}{*}
+\settypeblocksize{225mm}{135mm}{*}
+\setlrmargins{30mm}{*}{*}
+\setulmargins{32mm}{*}{*}
+\setheadfoot{14pt}{26pt}
+\setheaderspaces{*}{16pt}{*}
+\checkandfixthelayout
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.62\baselineskip}
+\linespread{1.06}
+\raggedbottom
+\sloppybottom
+\midsloppy
+
+% -------------------------------------------------------------- colour
+% One hue per chapter, in the order the chapters run. Warm enough to sit
+% on a cream page, distinct enough to tell chapters apart at a glance.
+\definecolor{c64ink}{HTML}{1C1B19}
+\definecolor{c64muted}{HTML}{5C5952}
+\definecolor{c64rule}{HTML}{D8D2C6}
+\definecolor{c64paper}{HTML}{FBF9F4}
+\definecolor{chapA}{HTML}{2A6F97}
+\definecolor{chapB}{HTML}{1F7A6D}
+\definecolor{chapC}{HTML}{6D597A}
+\definecolor{chapD}{HTML}{B5651D}
+\definecolor{chapE}{HTML}{8A6A3B}
+\definecolor{chapF}{HTML}{40655E}
+\definecolor{chapG}{HTML}{9C4722}
+\definecolor{chapH}{HTML}{A4243B}
+\definecolor{chapI}{HTML}{34568B}
+\colorlet{accent}{chapA}
+
+% Rotates the accent as each chapter opens, so the opener, the headings,
+% the figure labels and the running head of one chapter always agree.
+\newcounter{accentindex}
+\newcommand{\rotateaccent}{%
+  \stepcounter{accentindex}%
+  \ifcase\numexpr\value{accentindex}-1\relax
+    \colorlet{accent}{chapA}\or\colorlet{accent}{chapB}\or\colorlet{accent}{chapC}%
+    \or\colorlet{accent}{chapD}\or\colorlet{accent}{chapE}\or\colorlet{accent}{chapF}%
+    \or\colorlet{accent}{chapG}\or\colorlet{accent}{chapH}\or\colorlet{accent}{chapI}%
+  \else\colorlet{accent}{chapA}\fi}
+
+\pagecolor{c64paper}
+\color{c64ink}
+
+% ------------------------------------------------------------ headings
+% A chapter opens on a fresh recto with the number set large and pale in
+% the chapter's own hue, the title beneath it, and a rule the width of
+% the measure. The eye lands on the title, then the rule sends it into
+% the text.
+\makeatletter
+\makechapterstyle{c64}{%
+  \setlength{\beforechapskip}{0pt}
+  \setlength{\midchapskip}{6pt}
+  \setlength{\afterchapskip}{26pt}
+  \renewcommand{\chapnamefont}{\normalfont}
+  \renewcommand{\chapnumfont}{\sffamily\bfseries\fontsize{54}{54}\selectfont\color{accent}}
+  \renewcommand{\chaptitlefont}{\sffamily\bfseries\fontsize{25}{29}\selectfont\color{c64ink}}
+  \renewcommand{\printchaptername}{}
+  \renewcommand{\chapternamenum}{}
+  \renewcommand{\printchapternum}{\rotateaccent\chapnumfont\thechapter}
+  \renewcommand{\afterchapternum}{\par\vskip\midchapskip}
+  \renewcommand{\printchaptertitle}[1]{\chaptitlefont ##1\par
+    \vskip 10pt {\color{accent}\rule{\textwidth}{2pt}}}
+}
+\makeatother
+\chapterstyle{c64}
+
+\setsecheadstyle{\sffamily\bfseries\fontsize{14.5}{18}\selectfont\color{c64ink}\raggedright}
+\setsubsecheadstyle{\sffamily\bfseries\fontsize{11.8}{15}\selectfont\color{accent}\raggedright}
+\setsubsubsecheadstyle{\sffamily\bfseries\fontsize{10.6}{14}\selectfont\color{c64muted}\raggedright}
+\setbeforesecskip{-1.5\onelineskip}
+\setaftersecskip{0.4\onelineskip}
+\setsecnumdepth{subsection}
+\maxsecnumdepth{subsection}
+\renewcommand{\thesection}{\thechapter.\arabic{section}}
+
+% -------------------------------------------------------- running head
+\makepagestyle{c64page}
+\makeevenhead{c64page}{\sffamily\small\color{c64muted}\thepage}{}{\sffamily\small\color{c64muted}\leftmark}
+\makeoddhead{c64page}{\sffamily\small\color{c64muted}\rightmark}{}{\sffamily\small\color{c64muted}\thepage}
+\makeheadrule{c64page}{\textwidth}{0.4pt}
+\makeevenfoot{c64page}{}{}{}
+\makeoddfoot{c64page}{}{}{}
+\makepsmarks{c64page}{%
+  \createmark{chapter}{both}{shownumber}{}{\quad}
+  \createmark{section}{right}{shownumber}{}{\quad}}
+\pagestyle{c64page}
+\copypagestyle{chapter}{empty}
+
+% --------------------------------------------------------------- lists
+\setlist[itemize]{leftmargin=1.1em,itemsep=0.15\baselineskip,topsep=0.2\baselineskip,parsep=0pt}
+\setlist[enumerate]{leftmargin=1.5em,itemsep=0.15\baselineskip,topsep=0.2\baselineskip,parsep=0pt}
+\renewcommand{\labelitemi}{\textcolor{accent}{\rule[0.25ex]{0.42em}{0.42em}}}
+
+% ------------------------------------------------------------- figures
+% Screenshots are phone captures: tall, and unreadable if stretched to
+% the measure. \screenshot picks a width from the shape of the file, and
+% the frame keeps a light-mode capture from bleeding into the page.
+\usepackage[font={sf,small,color=c64muted},labelfont={color=accent,bf},labelsep=period,skip=7pt]{caption}
+\newcommand{\screenshot}[2]{%
+  \begingroup
+  \setlength{\fboxsep}{0pt}\setlength{\fboxrule}{0.6pt}%
+  \textcolor{c64rule}{\fbox{\includegraphics[width=#1]{#2}}}%
+  \endgroup}
+
+% -------------------------------------------------------------- tables
+% Sans, a touch smaller than the body, with a tinted header band. No
+% vertical rules: they fence the reader in and buy nothing.
+\newcommand{\tablehead}[1]{\sffamily\bfseries\small\color{c64ink}#1}
+\renewcommand{\arraystretch}{1.28}
+\setlength{\tabcolsep}{7pt}
+
+% ------------------------------------------------------------ callouts
+\newtcolorbox{manualnote}[1][]{%
+  enhanced, breakable, sharp corners, boxrule=0pt,
+  leftrule=2.4pt, colframe=accent, colback=accent!5!c64paper,
+  left=10pt, right=10pt, top=8pt, bottom=8pt,
+  fontupper=\small, #1}
+
+% --------------------------------------------------------------- index
+% A letter heading in the chapter accent, so the index reads as part of the
+% same book rather than as an appendix bolted on.
+\newcommand{\indexletter}[1]{%
+  \par\vspace{11pt}%
+  {\sffamily\bfseries\normalsize\color{accent}#1}%
+  \par\vspace{2pt}{\color{c64rule}\rule{\linewidth}{0.4pt}}\par\vspace{4pt}}
+\renewcommand{\preindexhook}{\small}
+
+% ---------------------------------------------------------------- misc
+\newcommand{\tightpar}{\vspace{-0.35\baselineskip}}
+\hyphenpenalty=200
+\tolerance=1600
+\emergencystretch=1.2em

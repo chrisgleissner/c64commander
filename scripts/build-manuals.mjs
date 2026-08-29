@@ -2555,7 +2555,7 @@ const wrapFigures = (html, manualDir) => {
  * Matching is case-sensitive and anchored on word boundaries, so "Play" does not
  * catch "playlist" or "played".
  */
-const INDEX_TERMS = [
+export const INDEX_TERMS = [
   { term: "A/V sync check", match: ["A/V sync"] },
   { term: "About this tune", match: ["**About this tune**"] },
   { term: "Appearance settings", match: ["**Appearance**"] },

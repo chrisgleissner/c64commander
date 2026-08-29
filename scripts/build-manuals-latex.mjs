@@ -1,0 +1,335 @@
+#!/usr/bin/env node
+/**
+ * Spike: a print-quality PDF of the manual, set with LaTeX.
+ *
+ * The shipping PDF is laid out by Paged.js in a headless Chromium. That is a
+ * good browser doing its best at typesetting; this is a typesetter. What the
+ * difference buys, and why the spike exists at all:
+ *
+ *   - real hyphenation and justification, so a 135 mm measure has no rivers
+ *     and no line ends a word short;
+ *   - microtype, which nudges margins and letter spacing so the text block
+ *     reads as one grey field rather than a ragged one;
+ *   - float placement, so a screenshot moves to where it fits instead of
+ *     leaving half a page blank;
+ *   - a real index, collated and page-numbered by makeindex rather than by a
+ *     two-pass measure of the browser's own layout.
+ *
+ * The prose comes from `renderManualMarkdown` unchanged, so both pipelines
+ * always describe the same app.
+ *
+ * Requires: pandoc, pdflatex, makeindex, and the TeX Gyre fonts.
+ */
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { buildManualContexts, renderManualMarkdown, INDEX_TERMS } from "./build-manuals.mjs";
+
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.resolve(scriptDir, "..");
+const preambleFile = path.join(scriptDir, "latex/preamble.tex");
+
+const escapeTex = (value) =>
+  value
+    .replace(/\\/g, "\\textbackslash{}")
+    .replace(/([&%$#_{}])/g, "\\$1")
+    .replace(/~/g, "\\textasciitilde{}")
+    .replace(/\^/g, "\\textasciicircum{}");
+
+/** makeindex reads `!` as a subentry, `@` as a sort key and `|` as an encap. */
+const escapeIndex = (value) => escapeTex(value).replace(/([!@|])/g, '"$1');
+
+/**
+ * Marks the first mention of each index term in each section of the markdown.
+ *
+ * The same rule the HTML pipeline follows: once per section, not once per
+ * occurrence, because an index entry that lists the same page six times helps
+ * nobody. Marking happens on the markdown rather than the LaTeX so that the
+ * needle is matched against the words a reader sees, not against a stream of
+ * macros. `\index{...}` survives pandoc untouched under `+raw_tex`.
+ */
+const markIndexTerms = (markdown) => {
+  const lines = markdown.split("\n");
+  const seen = new Set();
+  let inFence = false;
+
+  return lines
+    .map((line) => {
+      if (line.startsWith("```")) {
+        inFence = !inFence;
+        return line;
+      }
+      if (inFence) return line;
+      if (/^#{1,4}\s/.test(line)) {
+        seen.clear();
+        return line;
+      }
+      if (line.startsWith("|") || line.startsWith("![")) return line;
+
+      let output = line;
+      INDEX_TERMS.forEach((entry, index) => {
+        if (entry.see || seen.has(index)) return;
+        for (const phrase of entry.match) {
+          const needle = phrase.replace(/\*\*/g, "");
+          const at = output.indexOf(needle);
+          if (at < 0) continue;
+          const before = output[at - 1];
+          const after = output[at + needle.length];
+          if ((before && /[\w-]/.test(before)) || (after && /[\w]/.test(after))) continue;
+          const cut = at + needle.length;
+          output = `${output.slice(0, cut)}\\index{${escapeIndex(entry.term)}}${output.slice(cut)}`;
+          seen.add(index);
+          break;
+        }
+      });
+      return output;
+    })
+    .join("\n");
+};
+
+/** Intrinsic pixel size of a PNG, from its IHDR chunk. */
+const pngSize = (absolutePath) => {
+  try {
+    const buffer = fs.readFileSync(absolutePath);
+    if (buffer.length < 24 || buffer.readUInt32BE(0) !== 0x89504e47) return null;
+    return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Picks a printed width from the shape of the picture.
+ *
+ * A phone screenshot is roughly 3:4 and belongs in a narrow column; stretched
+ * to the measure it prints one control per inch and looks like a mistake. A
+ * photograph of the hardware is wide and is unreadable in the same column.
+ */
+const figureWidth = (absolutePath) => {
+  const size = pngSize(absolutePath);
+  if (!size) return "0.62\\linewidth";
+  const ratio = size.width / size.height;
+  if (ratio < 0.62) return "0.38\\linewidth";
+  if (ratio < 0.95) return "0.52\\linewidth";
+  if (ratio < 1.5) return "0.72\\linewidth";
+  return "0.94\\linewidth";
+};
+
+/**
+ * Everything pandoc cannot know about this particular book.
+ *
+ * Each rewrite is a presentation decision the markdown has no way to carry:
+ * how wide a screenshot prints, that a table head is sans, that the first
+ * paragraph after a heading should not be indented away from it.
+ */
+const dressLatex = (tex, manualDir) => {
+  let output = tex;
+
+  // Screenshots: sized by shape, framed, and centred in their own float.
+  output = output.replace(/\\includegraphics(\[[^\]]*\])?\{([^}]+)\}/g, (full, options, src) => {
+    // Absolute, because the build directory sits deeper than the markdown's own
+    // `../../img/...` paths would resolve from.
+    const absolute = path.resolve(manualDir, src);
+    return `\\screenshot{${figureWidth(absolute)}}{${absolute}}`;
+  });
+
+  // Pandoc's figures are `\begin{figure}` + `\centering`; keep them from
+  // drifting to the end of a chapter.
+  output = output.replace(/\\begin\{figure\}/g, "\\begin{figure}[htbp]");
+
+  // Table heads in sans, and booktabs rules instead of the default.
+  output = output.replace(/\\toprule\\noalign\{\}/g, "\\toprule\\noalign{}");
+  output = output.replace(/\\begin\{longtable\}/g, "\\small\\begin{longtable}");
+  output = output.replace(/\\end\{longtable\}/g, "\\end{longtable}\\normalsize");
+
+  // `\tightlist` from pandoc fights the list spacing set in the preamble.
+  output = output.replace(/\\tightlist\n?/g, "");
+
+  return output;
+};
+
+const coverTex = ({ productName, subtitle, launchImage, logo, edition, buildDate }) => `
+% The cover follows the 1982 guide's instinct: one strong band of colour, the
+% name of the machine large enough to read across a room, and a picture of the
+% thing itself. Everything else waits until page one.
+\\begin{titlingpage}
+\\thispagestyle{empty}
+\\AddToShipoutPictureBG*{%
+  \\AtPageUpperLeft{\\raisebox{-38mm}{\\color{accent}\\rule{\\paperwidth}{7mm}}}%
+  \\AtPageLowerLeft{\\raisebox{24mm}{\\color{accent!25!c64paper}\\rule{\\paperwidth}{2.4mm}}}}
+\\begin{center}
+\\vspace*{34mm}
+${logo ? `\\includegraphics[height=16mm]{${logo}}\\par\\vspace{10mm}` : ""}
+{\\sffamily\\fontsize{10.5}{13}\\selectfont\\color{c64muted}\\lsstyle\\MakeUppercase{User Manual}\\par}
+\\vspace{7mm}
+{\\sffamily\\bfseries\\fontsize{44}{48}\\selectfont\\color{c64ink}${escapeTex(productName)}\\par}
+\\vspace{8mm}
+{\\fontsize{13.5}{19}\\selectfont\\color{c64muted}\\parbox{116mm}{\\centering ${escapeTex(subtitle)}}\\par}
+\\vspace{11mm}
+${launchImage ? `\\screenshot{0.36\\linewidth}{${launchImage}}\\par\\vspace{9mm}` : ""}
+{\\sffamily\\small\\color{c64muted}Edition ${escapeTex(edition)}\\quad\\textbullet\\quad ${escapeTex(buildDate)}\\par}
+\\end{center}
+\\end{titlingpage}
+
+\\thispagestyle{empty}
+\\vspace*{\\fill}
+{\\sffamily\\bfseries\\large\\color{c64ink}${escapeTex(productName)}\\par}
+{\\sffamily\\color{c64muted}User Manual\\par}
+\\vspace{3mm}{\\color{accent}\\rule{28mm}{2pt}\\par}
+\\vspace{6mm}
+{\\small This manual describes ${escapeTex(productName)} as released in the edition below. The app is under
+active development, so a later release may add controls this edition does not describe; the manual is
+reissued with each release.\\par}
+\\vspace{7mm}
+{\\small\\begin{tabular}{@{}p{26mm}p{82mm}@{}}
+\\textsf{\\bfseries Edition} & ${escapeTex(edition)} \\\\
+\\textsf{\\bfseries Published} & ${escapeTex(buildDate)} \\\\
+\\textsf{\\bfseries Set in} & TeX Gyre Pagella and TeX Gyre Heros \\\\
+\\end{tabular}\\par}
+\\vspace{9mm}
+{\\footnotesize\\color{c64muted}Copyright \\textcopyright{} 2026 Christian Gleissner. Commodore, the Commodore
+logo, C64 and Commodore 64 are trademarks of their respective owners. Every screenshot in this manual is
+captured from the running app rather than drawn, so what is printed here is what the app puts on screen.\\par}
+\\vspace*{\\fill}
+\\clearpage
+`;
+
+const buildOne = async (context, outputDir) => {
+  const { variant, manualDir, title, subtitle, appVersion } = context;
+  const productName = title.replace(/\s+Manual$/, "");
+  const markdown = renderManualMarkdown(context);
+
+  // Everything before the first real chapter is the title block and the in-app
+  // contents list. The print edition replaces both with a cover and a
+  // page-numbered Table of Contents, so they are dropped from the body.
+  const bodyStart = markdown.search(/\n## (?!Table of Contents)/);
+  const preamble = bodyStart >= 0 ? markdown.slice(0, bodyStart) : "";
+  const body = bodyStart >= 0 ? markdown.slice(bodyStart) : markdown;
+  const launchMatch = /!\[[^\]]*]\(([^)]+)\)/.exec(preamble);
+
+  const marked = markIndexTerms(body);
+  const markdownFile = path.join(outputDir, `${variant.exportedFileBasename}-body.md`);
+  await writeFile(markdownFile, marked, "utf8");
+
+  const texBody = execFileSync(
+    "pandoc",
+    [
+      markdownFile,
+      "--from=markdown+raw_tex+pipe_tables+backtick_code_blocks",
+      "--to=latex",
+      "--top-level-division=chapter",
+      // The body starts at `##`, because `#` was the title block the print
+      // edition replaces with a cover. Lifting every heading one level makes
+      // those `##` chapters rather than sections.
+      "--shift-heading-level-by=-1",
+      "--wrap=preserve",
+      "--no-highlight",
+    ],
+    { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+  );
+
+  const logoPath = path.join(rootDir, "variants/assets", variant.id, "logo.png");
+  const preambleText = await readFile(preambleFile, "utf8");
+
+  const document = `\\documentclass[11pt,a4paper,twoside,openright]{memoir}
+${preambleText}
+\\usepackage{imakeidx}
+\\makeindex[title=Index,columns=2,intoc,options={-s ${path.join(outputDir, "index.ist")}}]
+
+\\begin{document}
+\\frenchspacing
+${coverTex({
+  productName,
+  subtitle,
+  launchImage: launchMatch ? path.resolve(manualDir, launchMatch[1]) : null,
+  logo: fs.existsSync(logoPath) ? logoPath : null,
+  edition: appVersion,
+  buildDate: new Date().toLocaleDateString("en-GB", { year: "numeric", month: "long" }),
+})}
+
+\\cleardoublepage
+\\begingroup
+\\renewcommand{\\cftchapterfont}{\\sffamily\\bfseries\\color{c64ink}}
+\\renewcommand{\\cftchapterpagefont}{\\sffamily\\bfseries\\color{c64ink}}
+\\renewcommand{\\cftsectionfont}{\\color{c64muted}}
+\\renewcommand{\\cftsectionpagefont}{\\color{c64muted}}
+\\setlength{\\cftbeforechapterskip}{9pt}
+\\settocdepth{section}
+\\tableofcontents*
+\\endgroup
+\\cleardoublepage
+
+\\pagestyle{c64page}
+${dressLatex(texBody, manualDir)}
+
+\\cleardoublepage
+\\rotateaccent
+\\printindex
+\\end{document}
+`;
+
+  // makeindex style: letter headings, sans, and no page-number dots.
+  await writeFile(
+    path.join(outputDir, "index.ist"),
+    [
+      'headings_flag 1',
+      'heading_prefix "  \\\\indexletter{"',
+      'heading_suffix "}\\\\nopagebreak\\n"',
+      'delim_0 ", "',
+      'delim_1 ", "',
+      'delim_2 ", "',
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  const texFile = path.join(outputDir, `${variant.exportedFileBasename}-manual.tex`);
+  await writeFile(texFile, document, "utf8");
+
+  const run = (command, args) =>
+    execFileSync(command, args, { cwd: outputDir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+
+  const latexArgs = ["-interaction=nonstopmode", "-halt-on-error", "-file-line-error", path.basename(texFile)];
+  for (const pass of [1, 2]) {
+    try {
+      run("pdflatex", latexArgs);
+    } catch (error) {
+      const log = `${error.stdout ?? ""}`;
+      const first = log.split("\n").filter((line) => /^[^\s]+\.tex:\d+:|^! /.test(line))[0];
+      throw new Error(`pdflatex pass ${pass} failed for ${variant.id}: ${first ?? "see log"}`);
+    }
+    if (pass === 1) {
+      try {
+        run("makeindex", ["-q", "-s", "index.ist", `${variant.exportedFileBasename}-manual.idx`]);
+      } catch {
+        // No \index marks landed; the index is simply omitted.
+      }
+    }
+  }
+  run("pdflatex", latexArgs);
+
+  return path.join(outputDir, `${variant.exportedFileBasename}-manual.pdf`);
+};
+
+const main = async () => {
+  const contexts = await buildManualContexts();
+  const outputRoot = path.join(rootDir, "docs/manual/latex");
+  await rm(outputRoot, { recursive: true, force: true });
+
+  for (const context of contexts) {
+    const outputDir = path.join(outputRoot, context.variant.id);
+    await mkdir(outputDir, { recursive: true });
+    const pdf = await buildOne(context, outputDir);
+    console.log(`Generated ${path.relative(rootDir, pdf)}`);
+  }
+};
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
+    process.exitCode = 1;
+  });
+}
