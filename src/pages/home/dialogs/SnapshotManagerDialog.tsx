@@ -275,7 +275,8 @@ export function SnapshotManagerDialog({
       <AppSheetContent className="overflow-hidden p-0" data-testid="snapshot-manager-dialog">
         <div className="flex h-full min-h-0 flex-col">
           <AppSheetHeader>
-            <AppSheetTitle>Load RAM</AppSheetTitle>
+            {/* Named for the tile that opens it. */}
+            <AppSheetTitle>Restore</AppSheetTitle>
             <AppSheetDescription className={compact ? "hidden" : undefined}>
               Select a snapshot to restore.
             </AppSheetDescription>

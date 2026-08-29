@@ -74,11 +74,18 @@ export function QuickActionCard({
       data-testid={dataTestId}
       className={cn(
         "quick-action",
-        // `px-1`, not the `p-2.5` this used to be on both axes. Horizontal padding is width the
-        // label could have had, and these tiles carry one word that cannot wrap: at the largest
-        // Text size "Manage" needed 93px against an 89px box, and the medium profile forced onto a
-        // 320px screen left "Pause" 54px for a word needing 56px. Vertical padding is unchanged.
-        compact ? "gap-1.5 px-1 py-2.5 min-h-[86px]" : null,
+        // `px-0.5`, not the `p-2.5` this used to be on both axes. Horizontal padding is width the
+        // label could have had, and these tiles carry one word that cannot wrap, so a word wider
+        // than the box is cut rather than wrapped. The medium profile at 393px draws four 69.6px
+        // tracks, which left 58.6px for the label: "Resume" needed 61.4px and "Manage" 61.7px, and
+        // both shipped cut. Two pixels a side is enough to keep the text off the rounded border.
+        //
+        // The vertical sizes are what they are because every label here is now one word on one
+        // line. A grid row stretches to its tallest tile, so a single wrapped label used to add
+        // 21.6px to all four tiles beside it: the medium 393px row measured 112.3px against the
+        // 86px floor. With nothing wrapping, the floor is what decides, and 64px sits above the
+        // 44px touch minimum while staying under the ~70px the content needs on its own.
+        compact ? "gap-1 px-0.5 py-2 min-h-[64px]" : null,
         variantClasses[variant],
         disabled ? "opacity-50 cursor-not-allowed" : null,
         className,
@@ -86,7 +93,7 @@ export function QuickActionCard({
     >
       <div
         className={cn(
-          compact ? "p-1.5" : "p-2",
+          compact ? "p-1" : "p-2",
           "rounded-lg",
           variant === "danger"
             ? "bg-destructive/10 text-destructive"

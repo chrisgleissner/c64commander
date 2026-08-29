@@ -131,7 +131,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
     developer_only: false,
     group: "stable",
     title: "RAM snapshots",
-    description: "Show Save RAM and Load RAM actions on Home.",
+    description: "Show the Backup and Restore actions on Home.",
   },
   {
     id: "home_telnet_reu_snapshot_enabled",

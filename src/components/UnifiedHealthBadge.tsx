@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { HealthCheckDetailView } from "@/components/diagnostics/HealthCheckDetailView";
@@ -257,16 +257,7 @@ function PickerHealthStatusBadge({
           <span className="shrink-0 whitespace-pre" aria-hidden="true">
             {" "}
           </span>
-          <span
-            className={cn(
-              "inline-flex h-[1em] w-[1em] shrink-0 items-center justify-center align-middle font-sans text-[0.95rem] leading-none transform-gpu",
-              glyphColor,
-              HEALTH_GLYPH_VISUAL_CLASS[healthState],
-              HEALTH_GLYPH_ALIGNMENT_CLASS[healthState],
-            )}
-          >
-            {badgeText.glyph}
-          </span>
+          <HealthStateShape state={healthState} className="text-[0.95rem]" />
           {badgeText.countLabel ? (
             <>
               <span className="shrink-0 whitespace-pre" aria-hidden="true">
@@ -302,21 +293,60 @@ const HEALTH_COLOR: Record<HealthState, string> = {
   Unavailable: "text-muted-foreground",
 };
 
-const HEALTH_GLYPH_VISUAL_CLASS: Record<HealthState, string> = {
-  Healthy: "scale-[1.42]",
-  Degraded: "scale-100",
-  Unhealthy: "scale-100",
-  Idle: "scale-[1.08]",
-  Unavailable: "scale-[1.08]",
+/**
+ * The badge shape, drawn rather than typed.
+ *
+ * `HEALTH_GLYPHS` stays the model's word for each state — it is what `getBadgeLabel` and the
+ * Diagnostics header put in a line of text — but the badge cannot render it as a character. The
+ * five characters are drawn at wildly different sizes by whichever font supplies them, and Inter,
+ * which the stack names first, ships with none of them. So the badge scaled the character up to
+ * an optical size measured against one machine's fallback font. On the font CI and the Android
+ * WebView actually fall back to, `●` fills its em box, and 1.42× of that overflowed the row on
+ * every side; the row clips its overflow, so the circle was drawn with its top and both sides
+ * sliced off. An SVG is the same size on every device and never leaves its own box.
+ */
+const HEALTH_SHAPE: Record<HealthState, ReactNode> = {
+  Healthy: <circle cx="12" cy="12" r="8" fill="currentColor" />,
+  Degraded: <path d="M12 3.2 21.6 20.4H2.4Z" fill="currentColor" />,
+  Unhealthy: <path d="M12 2.6 21.4 12 12 21.4 2.6 12Z" fill="currentColor" />,
+  Idle: <circle cx="12" cy="12" r="7.2" fill="none" stroke="currentColor" strokeWidth="2.4" />,
+  Unavailable: (
+    <circle
+      cx="12"
+      cy="12"
+      r="7.2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeDasharray="0.1 5.2"
+    />
+  ),
 };
 
-const HEALTH_GLYPH_ALIGNMENT_CLASS: Record<HealthState, string> = {
-  Healthy: "translate-y-[-0.11em]",
-  Degraded: "translate-y-[-0.03em]",
-  Unhealthy: "translate-y-[-0.02em]",
-  Idle: "translate-y-[-0.06em]",
-  Unavailable: "translate-y-[-0.05em]",
-};
+function HealthStateShape({
+  state,
+  className,
+  overlayCritical = false,
+}: {
+  state: HealthState;
+  className?: string;
+  /** Marks the shape for the overlay audit, which checks nothing covers the badge. */
+  overlayCritical?: boolean;
+}) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={cn("h-[1.25em] w-[1.25em] shrink-0", HEALTH_COLOR[state], className)}
+      aria-hidden="true"
+      focusable="false"
+      data-health-shape={state}
+      data-overlay-critical={overlayCritical ? "badge" : undefined}
+    >
+      {HEALTH_SHAPE[state]}
+    </svg>
+  );
+}
 
 type Props = {
   className?: string;
@@ -601,17 +631,7 @@ export function UnifiedHealthBadge({ className }: Props) {
                 </span>
               </>
             )}
-            <span
-              className={cn(
-                "inline-flex h-[1em] w-[1em] shrink-0 items-center justify-center align-middle font-sans text-[1rem] leading-none transform-gpu",
-                glyphColor,
-                HEALTH_GLYPH_VISUAL_CLASS[state],
-                HEALTH_GLYPH_ALIGNMENT_CLASS[state],
-              )}
-              data-overlay-critical="badge"
-            >
-              {badgeText.glyph}
-            </span>
+            <HealthStateShape state={state} className="text-[1rem]" overlayCritical />
             {badgeText.countLabel ? (
               <>
                 <span className="shrink-0 whitespace-pre" aria-hidden="true">

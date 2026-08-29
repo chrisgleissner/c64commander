@@ -194,3 +194,29 @@ it("is claimed by the first subscriber, not re-delivered to the next", () => {
   stopSecond();
   resetSectionOpenLatchForTests();
 });
+
+/*
+ * The other half of the same defect.
+ *
+ * The claim above covers a request nobody was listening for. A request activated from the page that
+ * already shows the section reaches its subscriber through the EVENT, and the latch stayed armed
+ * for the rest of its five seconds — so closing that card by hand and tabbing away and back inside
+ * the window still reopened it, and CollapsibleSection persists an open.
+ */
+it("is claimed by a subscriber that was already listening, so a later mount gets nothing", () => {
+  resetSectionOpenLatchForTests();
+  const live: Array<[string, string]> = [];
+  const stopLive = subscribeSectionOpenRequest((scope, id) => live.push([scope, id]));
+
+  requestSectionOpen("home", "quick-actions");
+  expect(live).toEqual([["home", "quick-actions"]]);
+
+  // The page unmounts on a tab change and mounts again inside the window.
+  stopLive();
+  const remounted: Array<[string, string]> = [];
+  const stopRemounted = subscribeSectionOpenRequest((scope, id) => remounted.push([scope, id]));
+
+  expect(remounted, "the request was already delivered; it must not open the card again").toEqual([]);
+  stopRemounted();
+  resetSectionOpenLatchForTests();
+});

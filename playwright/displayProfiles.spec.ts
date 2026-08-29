@@ -574,7 +574,7 @@ test.describe("display profiles", () => {
     const dialog = page.getByTestId("snapshot-manager-dialog");
     await expect(dialog).toBeVisible();
 
-    const title = dialog.getByText("Load RAM", { exact: true });
+    const title = dialog.getByText("Restore", { exact: true });
     const filterInput = dialog.getByTestId("snapshot-filter-input");
     const firstRow = page.getByTestId("snapshot-row").first();
     await filterInput.focus();

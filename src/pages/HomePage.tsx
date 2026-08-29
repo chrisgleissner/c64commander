@@ -1295,7 +1295,12 @@ function HomePageContent() {
 
           {/* The same tiles, and the same grid, standing alone while the machine's own controls are
               put away. No heading: they are the same kind of thing as the actions below, and a
-              banner of their own is what over-weighted the standalone player before. */}
+              banner of their own is what over-weighted the standalone player before.
+
+              All four, Live View included, even though it is the one that needs a machine. It is
+              drawn greyed with "Needs a connected C64 Ultimate" rather than dropped, which is the
+              same rule the search overlay follows: a capability that vanishes when it is
+              unavailable teaches nothing about what the app can do. */}
           {offlineArrangement ? (
             <ProfileActionGrid
               compactColumns={2}

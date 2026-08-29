@@ -728,10 +728,11 @@ const featureRows = ({ features, variant }) => {
       "**Header badge long-press / `#`**, Settings → Connection",
       "Use Device Switcher for fast switching; Settings for editing.",
     ],
-    ["Menu / Pause / Reset / Reboot", "**Home → Quick Actions**", "The everyday controls."],
+    ["Menu / Pause / Reset", "**Home → Quick Actions**", "The everyday controls."],
+    ["Reboot", "**Home → Quick Actions → Power**", "In the Power sheet, with the other heavier controls."],
     [
       "Power Off",
-      "**Home → Quick Actions**",
+      "**Home → Quick Actions → Power**",
       "Shown where the device can do it. Turning it back on needs the machine itself.",
     ],
   ];
@@ -739,19 +740,19 @@ const featureRows = ({ features, variant }) => {
   if (includeFeature(features, "home_telnet_power_cycle_enabled")) {
     rows.push([
       "Power Cycle",
-      "**Home → Quick Actions**",
+      "**Home → Quick Actions → Power**",
       featureAvailability(features.home_telnet_power_cycle_enabled),
     ]);
   }
   if (includeFeature(features, "home_telnet_clear_ram_reboot_enabled")) {
     rows.push([
       "Clear-RAM reboot",
-      "**Home → Quick Actions**",
+      "**Home → Quick Actions → Power**",
       featureAvailability(features.home_telnet_clear_ram_reboot_enabled),
     ]);
   }
   if (includeFeature(features, "ram_snapshots_enabled")) {
-    rows.push(["Save / Load RAM", "**Home → Quick Actions**", featureAvailability(features.ram_snapshots_enabled)]);
+    rows.push(["Backup / Restore", "**Home → Quick Actions**", featureAvailability(features.ram_snapshots_enabled)]);
   }
   if (includeFeature(features, "remote_input_enabled")) {
     rows.push([
@@ -1241,9 +1242,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     image("Home overview", profile, "home/profiles/{profile}/01-overview.png"),
     "",
-    "Start at the top. The search field comes first, and under it **Quick Actions** \u2014 one grid holding the machine's own controls together with three tiles that need no C64 at all. **Radio** starts a SID Radio station, thousands of tunes played on this device with no network and no hardware. **Last tune** picks up the last tune where it stopped, and names it \u2014 two words, because the machine's own Pause control renames itself to Resume while the C64 is paused. **Recent** is the way back to anything you have opened before. **Live View**, which does need a machine, goes to the card that brings its picture and sound into the app. A tile you cannot use right now is still there, greyed, saying what it is waiting for.",
+    "Start at the top. The search field comes first, and under it **Quick Actions** \u2014 one grid holding the machine's own controls together with three tiles that need no C64 at all. **Radio** starts a SID Radio station, thousands of tunes played on this device with no network and no hardware. **Last** picks up the last tune where it stopped and names it underneath \u2014 one word, because the machine's own Pause control renames itself to Resume while the C64 is paused, and two buttons called Resume in one grid would mean two different things. **Recent** is the way back to anything you have opened before. **Live**, which does need a machine, goes to the card that brings its picture and sound into the app. Every tile carries one word: the grid is four columns wide on a phone, and a label that wraps to a second line makes every tile in its row taller. A tile you cannot use right now is still there, greyed, saying what it is waiting for.",
     "",
-    "Quick Actions is one grid in four bands. **Watch** comes first \u2014 Live View, Game and Input, three ways to use the C64 from here. **Listen** follows: Radio, Last tune and Recent, the three that need no C64 at all. Then the **operational** tiles \u2014 Menu, Pause/Resume and the RAM snapshot actions \u2014 and last, in their own band, the ones that interrupt whatever the machine is doing: Reset, Reboot, and Power Off where the device supports it. Nothing that stops your C64 sits next to something that does not. The system strip, which confirms which app build, device and firmware you are using, is at the foot of the page: it is read when something is wrong or before an upgrade, and not otherwise.",
+    "Quick Actions is one grid in four bands. **Watch** comes first \u2014 Live, Game and Input, three ways to use the C64 from here. **Listen** follows: Radio, Last and Recent, the three that need no C64 at all. Then the **operational** tiles \u2014 Menu, Pause/Resume, and **Backup** and **Restore** for the machine's memory. Last, in their own band, the two that interrupt whatever the machine is doing: **Reset**, and **Power**. Nothing that stops your C64 sits next to something that does not. Reset has a tile of its own because it is one of the controls you reach for most; Power gathers the heavier ones \u2014 Reboot, Power Cycle where the device supports it, and Power Off \u2014 behind a single tap, since restarting or switching off the Ultimate is something you do at the end of a session rather than during one. Each still asks you to confirm before it runs. The system strip, which confirms which app build, device and firmware you are using, is at the foot of the page: it is read when something is wrong or before an upgrade, and not otherwise.",
     "",
     ...(includeFeature(features, "remote_input_enabled")
       ? [
@@ -1271,7 +1272,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Which of these start open and which start closed is chosen once, for a first-time visit, in favor of the cards most people touch every session; every card is closed or opened the same way, by tapping its header, and the app remembers what you left open from then on — a card you never use can stay out of the way, and one you always want stays exactly where you put it. On the compact display profile, where there is the least room, opening one card closes the others, so the list of titles stays on screen around whatever is open. **Expand all sections** and **Collapse all sections** in the Quick Menu do the whole page at once. Everything here is in Config as well; these cards just save you the search.",
     "",
-    "**With no C64 connected**, Home rearranges. The search field stays where it is, and so do Radio, Last tune and Recent, because none of them needs a machine \u2014 they are drawn on their own, below a card explaining how to connect one. The machine's controls and its cards are drawn as titles with nothing inside them, under a line saying so, and the system information at the foot of the page drops to the app version alone. Nothing is lost: whichever cards you had open are open again the moment your C64 answers. The app waits a few seconds before rearranging, so a brief network hiccup does not shuffle the page under you, and it goes back the instant the machine is there again.",
+    "**With no C64 connected**, Home rearranges. The search field stays where it is, and so do the four promoted tiles \u2014 Radio, Last, Recent and Live \u2014 drawn on their own below a card explaining how to connect one. Three of them need no machine at all. Live does, so it is drawn greyed, saying \"Needs a connected C64 Ultimate\" \u2014 the same rule search follows, because a capability that disappears when it is unavailable teaches you nothing about what the app can do. The machine's controls and its cards are drawn as titles with nothing inside them, under a line saying so, and the system information at the foot of the page drops to the app version alone. Nothing is lost: whichever cards you had open are open again the moment your C64 answers. The app waits a few seconds before rearranging, so a brief network hiccup does not shuffle the page under you, and it goes back the instant the machine is there again.",
     "",
     `The remaining cards cover drives, the printer, streams, and **Config actions**. That last one holds **Save**, which writes the current settings into flash on ${targetDeviceShortName(
       variant,
@@ -2068,9 +2069,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
             variant,
           )} so you can put it back later. It is the nearest thing the app has to a save-and-restore button for programs that have none of their own.`,
           "",
-          "Both live in **Home → Quick Actions**: **Save RAM** to capture, **Load RAM** to put it back. The device must be connected and idle. The app pauses the machine while the memory crosses the network and starts it again afterwards, so a running program carries on undisturbed.",
+          "Both live in **Home → Quick Actions**: **Backup** to capture, **Restore** to put it back. The words are the ones Datel's own Action Replay manual used for this on a real C64 — it made backups by taking a snapshot of memory — and they keep the tiles clear of the **Save** and **Load** on the Config card, which write your machine's settings rather than its memory. The device must be connected and idle. The app pauses the machine while the memory crosses the network and starts it again afterwards, so a running program carries on undisturbed.",
           "",
-          "When you tap **Save RAM**, the app asks which region of memory to capture:",
+          "When you tap **Backup**, the app asks which region of memory to capture:",
           "",
           "- **CPU + RAM snapshot** freezes the running program and stores the whole 64K of memory together with the processor's registers, so it can pick up exactly where it left off. It suits BASIC and unhurried programs; a fast game may not resume cleanly. Not every machine or every program will give up its processor state, and when that happens the app says so and points you at a Program snapshot instead. Once in a while a program stays frozen afterwards, and the app tells you that too — restore it, or reset the machine.",
           "- **Program Snapshot** stores almost all of memory (everything but the stack). A good all-round choice.",
@@ -2082,7 +2083,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
             variant,
           )}, not on the C64. Each is named from its type and the date and time, and if something is playing its title becomes the label. Add or change a **Comment** on any snapshot afterwards. The app keeps a hundred and drops the oldest once that fills.`,
           "",
-          "**Load RAM** opens your snapshot library. Filter it by name or by type, then tap a snapshot to put it back. The app asks you to confirm, because restoring overwrites the matching memory on the C64. It writes only the bytes the snapshot holds, and leaves the CIA timers alone so the cursor keeps its usual blink. A CPU + RAM snapshot resumes the program where it stopped; where that proves impossible the app restores the memory alone and says so. Note that a CPU + RAM snapshot is filed under **Program** in the library, since that is what it holds. The same library edits comments and removes snapshots you have finished with.",
+          "**Restore** opens your snapshot library. Filter it by name or by type, then tap a snapshot to put it back. The app asks you to confirm, because restoring overwrites the matching memory on the C64. It writes only the bytes the snapshot holds, and leaves the CIA timers alone so the cursor keeps its usual blink. A CPU + RAM snapshot resumes the program where it stopped; where that proves impossible the app restores the memory alone and says so. Note that a CPU + RAM snapshot is filed under **Program** in the library, since that is what it holds. The same library edits comments and removes snapshots you have finished with.",
           "",
           availabilityNote(features.ram_snapshots_enabled),
           "",
@@ -2294,7 +2295,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "### Snapshot Types and Memory Ranges",
     "",
-    `**Save RAM** offers these capture types. The app keeps up to 100 snapshots on your ${appDeviceName(
+    `**Backup** offers these capture types. The app keeps up to 100 snapshots on your ${appDeviceName(
       variant,
     )} and drops the oldest once that fills.`,
     "",
@@ -2529,7 +2530,7 @@ const INDEX_TERMS = [
   { term: "printer", match: ["The Virtual Printer", "**Home → Printers**"] },
   { term: "Quick Actions", match: ["Quick Actions"] },
   { term: "Quick Menu", match: ["Quick Menu"] },
-  { term: "RAM snapshots", match: ["RAM Snapshots", "**Save RAM**", "**Load RAM**"] },
+  { term: "RAM snapshots", match: ["RAM Snapshots", "**Backup**", "**Restore**"] },
   { term: "RASTER probe", match: ["RASTER"] },
   { term: "Release All", match: ["**Release All**"] },
   { term: "Remote Input", match: ["### Remote Input", "**Remote Input**"] },

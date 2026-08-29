@@ -24,6 +24,14 @@ import {
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { QuickActionCard } from "@/components/QuickActionCard";
 import { ProfileActionGrid } from "@/components/layout/PageContainer";
+import {
+  AppSheet,
+  AppSheetBody,
+  AppSheetContent,
+  AppSheetDescription,
+  AppSheetHeader,
+  AppSheetTitle,
+} from "@/components/ui/app-surface";
 import { publishMachineInterrupt } from "@/lib/deviceInteraction/machineInterrupt";
 import {
   MachineActionConfirmationDialog,
@@ -131,6 +139,7 @@ export function MachineControls({
   // second word only repeated what the icon and the tile's own position already say.
   const effectiveBusy = machineTaskBusy || telnetBusy;
   const [pendingDestructiveAction, setPendingDestructiveAction] = useState<PendingDestructiveAction | null>(null);
+  const [powerSheetOpen, setPowerSheetOpen] = useState(false);
   const machineGuardsRef = useRef({ isConnected: status.isConnected, effectiveBusy: false, powerCycleDisabled: true });
   const canRunPowerCycle = typeof onPowerCycle === "function";
   const showPowerCycle = powerCycleVisible ?? canRunPowerCycle;
@@ -198,6 +207,94 @@ export function MachineControls({
     (action) => action !== remoteInputAction && !promotedActions.includes(action),
   );
   const destructiveExtraActions = extraActions.filter((action) => action.variant === "danger");
+
+  /**
+   * The rows of the Power sheet, in increasing severity.
+   *
+   * Each keeps the confirmation it had as a tile — the fold changes where an action is reached
+   * from, not what it asks before running. Power Off is the one whose confirmation lives on Home
+   * (`PowerOffDialog`) rather than in `MachineActionConfirmationDialog`, so it runs `onPowerOff`
+   * directly and that dialog still asks.
+   */
+  const powerActions: {
+    id: string;
+    label: string;
+    icon: LucideIcon;
+    consequence: string;
+    disabled: boolean;
+    loading: boolean;
+    activate: () => void;
+  }[] = [
+    {
+      id: "reboot",
+      label: "Reboot",
+      icon: Power,
+      consequence: "Reboots the C64 Ultimate and interrupts the current session.",
+      disabled: !status.isConnected || effectiveBusy,
+      loading: rebootLoading,
+      activate: () =>
+        openDestructiveConfirmation({
+          actionName: "Reboot",
+          consequence: "This reboots the C64 Ultimate and interrupts the current session.",
+          run: onReboot,
+          isDisabled: () => !machineGuardsRef.current.isConnected || machineGuardsRef.current.effectiveBusy,
+        }),
+    },
+    ...destructiveExtraActions.map((action) => ({
+      id: action.id,
+      label: action.label,
+      icon: action.icon ?? RefreshCw,
+      consequence: REBOOT_CLEAR_MEMORY_ACTION_IDS.has(action.id)
+        ? "Reboots the C64 Ultimate, clears memory, and interrupts the current session."
+        : (action.reason ?? "Interrupts whatever the C64 is doing."),
+      disabled: Boolean(action.disabled),
+      loading: Boolean(action.loading),
+      activate: () => {
+        if (!REBOOT_CLEAR_MEMORY_ACTION_IDS.has(action.id)) {
+          void action.onSelect();
+          return;
+        }
+        openDestructiveConfirmation({
+          actionName: action.label,
+          consequence: "This reboots the C64 Ultimate, clears memory, and interrupts the current session.",
+          run: action.onSelect,
+          isDisabled: () => Boolean(action.disabled),
+        });
+      },
+    })),
+    ...(showPowerCycle
+      ? [
+          {
+            id: "power-cycle",
+            label: "Power Cycle",
+            icon: RefreshCw,
+            consequence: "Cuts the power and restores it, interrupting the current session.",
+            disabled: powerCycleDisabled,
+            loading: powerCycleLoading,
+            activate: () =>
+              openDestructiveConfirmation({
+                actionName: "Power Cycle",
+                consequence: "This power-cycles the C64 Ultimate and interrupts the current session.",
+                run: () => onPowerCycle?.(),
+                isDisabled: () => machineGuardsRef.current.powerCycleDisabled,
+              }),
+          },
+        ]
+      : []),
+    ...(powerOffVisible
+      ? [
+          {
+            id: "power-off",
+            label: "Power Off",
+            icon: PowerOff,
+            consequence: "Turns the C64 Ultimate off. It has to be switched on by hand afterwards.",
+            disabled: !status.isConnected || effectiveBusy,
+            loading: controls.powerOff.isPending,
+            activate: () => void onPowerOff(),
+          },
+        ]
+      : []),
+  ];
 
   const renderExtraAction = (action: MachineExtraAction, focusOrder: number) => {
     const Icon = action.icon ?? RefreshCw;
@@ -290,9 +387,22 @@ export function MachineControls({
             {otherSafeExtraActions.map((action, index) => renderExtraAction(action, 130 + index * 2))}
             {ramActionsVisible ? (
               <>
+                {/*
+                  "Backup" and "Restore", not "Save RAM" and "Load RAM".
+                  Both old labels were two words, which wrapped and so made every tile in the row
+                  21.6px taller, and "Load RAM" was wrong besides: it opens the snapshot library,
+                  it does not load anything. Neither could be shortened to "Snapshot", the word the
+                  dialogs and the library use for the thing being written — at four columns it
+                  needs 72.3px against 58.6px of tile, and one word cannot wrap, so it is cut.
+                  Backup is the verb Datel's own Action Replay manual uses for exactly this
+                  operation on exactly this machine ("makes backups by taking a snapshot of the
+                  whole of the computer's memory"), it pairs with Restore without explanation, and
+                  neither word is on a Config tile, which is where a user's other Save and Load
+                  live. "Snapshot" stays the noun everywhere else.
+                */}
                 <QuickActionCard
                   icon={Download}
-                  label="Save RAM"
+                  label="Backup"
                   dataTestId="home-save-ram"
                   focusId="home-machine-save-ram"
                   focusOrder={150}
@@ -302,7 +412,7 @@ export function MachineControls({
                 />
                 <QuickActionCard
                   icon={Upload}
-                  label="Load RAM"
+                  label="Restore"
                   dataTestId="home-load-ram"
                   focusId="home-machine-load-ram"
                   focusOrder={160}
@@ -339,59 +449,25 @@ export function MachineControls({
               disabled={!status.isConnected || effectiveBusy}
               loading={controls.reset.isPending}
             />
+            {/*
+              Reset keeps its own tile; everything that reboots or cuts power is behind this one.
+              Reset is among the most-reached controls in the app and has to stay one tap. The
+              other four are not: rebooting or powering down the Ultimate is a thing you do at the
+              end of a session, not during one, and as four red tiles they were a third of the
+              grid and the largest block of it a first-time reader met.
+            */}
             <QuickActionCard
               icon={Power}
-              label="Reboot"
+              label="Power"
               variant="danger"
               className="border-destructive/40 bg-destructive/[0.04]"
-              focusId="home-machine-reboot"
+              dataTestId="home-power-actions"
+              focusId="home-machine-power"
               focusOrder={180}
-              onClick={() =>
-                openDestructiveConfirmation({
-                  actionName: "Reboot",
-                  consequence: "This reboots the C64 Ultimate and interrupts the current session.",
-                  run: onReboot,
-                  isDisabled: () => !machineGuardsRef.current.isConnected || machineGuardsRef.current.effectiveBusy,
-                })
-              }
-              disabled={!status.isConnected || effectiveBusy}
-              loading={rebootLoading}
+              onClick={() => setPowerSheetOpen(true)}
+              disabled={powerActions.every((action) => action.disabled)}
+              loading={powerActions.some((action) => action.loading)}
             />
-            {destructiveExtraActions.map((action, index) => renderExtraAction(action, 190 + index * 2))}
-            {showPowerCycle ? (
-              <QuickActionCard
-                icon={RefreshCw}
-                label="Power Cycle"
-                variant="danger"
-                className="border-destructive/40 bg-destructive/[0.04]"
-                dataTestId="home-power-cycle"
-                focusId="home-machine-power-cycle"
-                focusOrder={200}
-                onClick={() =>
-                  openDestructiveConfirmation({
-                    actionName: "Power Cycle",
-                    consequence: "This power-cycles the C64 Ultimate and interrupts the current session.",
-                    run: () => onPowerCycle?.(),
-                    isDisabled: () => machineGuardsRef.current.powerCycleDisabled,
-                  })
-                }
-                disabled={powerCycleDisabled}
-                loading={powerCycleLoading}
-              />
-            ) : null}
-            {powerOffVisible ? (
-              <QuickActionCard
-                icon={PowerOff}
-                label="Power Off"
-                variant="danger"
-                className="border-destructive/30 bg-destructive/[0.03] opacity-80"
-                focusId="home-machine-power-off"
-                focusOrder={210}
-                onClick={() => void onPowerOff()}
-                disabled={!status.isConnected || effectiveBusy}
-                loading={controls.powerOff.isPending}
-              />
-            ) : null}
           </ProfileActionGrid>
           {disabledCapabilityNotes.length > 0 ? (
             <div className="space-y-1" data-testid="home-machine-capability-notes">
@@ -404,6 +480,43 @@ export function MachineControls({
           ) : null}
         </div>
       </CollapsibleSection>
+      <AppSheet open={powerSheetOpen} onOpenChange={setPowerSheetOpen}>
+        <AppSheetContent className="overflow-hidden p-0 sm:w-[min(100vw-2rem,32rem)]" data-testid="home-power-sheet">
+          <AppSheetHeader>
+            <AppSheetTitle>Power</AppSheetTitle>
+            <AppSheetDescription>
+              Each of these interrupts whatever the C64 is doing. You are asked to confirm first.
+            </AppSheetDescription>
+          </AppSheetHeader>
+          <AppSheetBody className="space-y-2 px-4 py-4 sm:px-5">
+            {powerActions.map((action) => {
+              const Icon = action.icon;
+              return (
+                <button
+                  key={action.id}
+                  type="button"
+                  data-testid={`home-power-action-${action.id}`}
+                  className="flex w-full min-h-11 items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/[0.04] px-3 py-2 text-left transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={action.disabled || action.loading}
+                  onClick={() => {
+                    // Closed first, so the confirmation dialog is not opened behind this sheet.
+                    setPowerSheetOpen(false);
+                    action.activate();
+                  }}
+                >
+                  <Icon className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-hidden />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-foreground">
+                      {action.loading ? `${action.label}…` : action.label}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">{action.consequence}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </AppSheetBody>
+        </AppSheetContent>
+      </AppSheet>
       <MachineActionConfirmationDialog
         open={pendingDestructiveAction !== null}
         action={pendingDestructiveAction}

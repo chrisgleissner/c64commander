@@ -239,6 +239,18 @@ export const subscribeSectionOpenRequest = (handler: (scope: string, id: string)
   const listener = (event: Event) => {
     const detail = (event as CustomEvent<SectionOpenRequestDetail>).detail;
     if (!detail) return;
+    /*
+     * Delivering the event also claims the latch.
+     *
+     * The latch exists for the case where nobody is listening yet. When a subscriber IS mounted —
+     * activating a Home result while already on Home — the event reaches it AND the latch stayed
+     * armed for the rest of its five seconds, so the very re-delivery the claim below prevents was
+     * still reachable through the other path: open the card by search, close it by hand, tab away
+     * and back inside the window, and it opened itself again and persisted that.
+     */
+    if (pendingSectionOpen?.scope === detail.scope && pendingSectionOpen.id === detail.id) {
+      pendingSectionOpen = null;
+    }
     handler(detail.scope, detail.id);
   };
   window.addEventListener(SECTION_OPEN_REQUEST_EVENT, listener);

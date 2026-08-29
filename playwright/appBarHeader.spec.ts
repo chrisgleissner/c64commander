@@ -55,11 +55,15 @@ test.describe("app bar header", () => {
 
       const badge = page.getByTestId("unified-health-badge");
       await expect(badge).toBeVisible();
-      // The glyph stays — it is what the badge is for, and its colour carries the state — while
+      // The shape stays — it is what the badge is for, and its colour carries the state — while
       // the status word and the host are not drawn. innerText reports what is actually rendered.
       const drawn = ((await badge.innerText()) ?? "").trim();
       expect(drawn, "the header badge must not draw the status word").not.toMatch(/healthy|offline|unavailable/i);
-      expect(drawn.length, "the glyph must still be drawn").toBeGreaterThan(0);
+      // The shape is an <svg>, so it is measured rather than read out of the text.
+      const shape = badge.locator("svg[data-health-shape]");
+      await expect(shape, "the health shape must still be drawn").toBeVisible();
+      const shapeBox = await shape.boundingBox();
+      expect(shapeBox?.width ?? 0, "the health shape must have a drawn size").toBeGreaterThan(0);
 
       // One line, drawn whole. Wrapping is what the status word was costing.
       const title = page.locator("header .c64-header").first();
@@ -74,6 +78,59 @@ test.describe("app bar header", () => {
       });
       expect(lines.rects, "the page title must render on one line").toBe(1);
       expect(lines.box).toBeGreaterThanOrEqual(Math.ceil(lines.text));
+    });
+
+    /**
+     * No ancestor of the health shape cuts a piece off it.
+     *
+     * Up to 0.10.0-rc2 the shape was a text character scaled up by 1.42x inside a box sized to the
+     * unscaled character, and every ancestor between it and the button clips its overflow. On the
+     * font CI and the Android WebView fall back to, that put roughly a quarter of the healthy
+     * circle outside the row on the top and both sides, and the badge drew a flat-topped shape
+     * instead of a circle. This measures the drawn shape against every clipping box above it, so
+     * the same mistake in any form is caught wherever it is made.
+     */
+    test(`draws the health shape whole, uncut by any clipping ancestor, at the ${scaleId} text size @layout`, async ({
+      page,
+    }) => {
+      await page.addInitScript((id: string) => localStorage.setItem("c64u_text_scale", id), scaleId);
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      await settle(page);
+
+      const shape = page.locator('[data-panel-position="1"] [data-testid="unified-health-badge"] svg');
+      await expect(shape).toBeVisible();
+
+      const cuts = await shape.evaluate((svg) => {
+        const shapeRect = svg.getBoundingClientRect();
+        const cuts: string[] = [];
+        for (let node = svg.parentElement; node; node = node.parentElement) {
+          const style = getComputedStyle(node);
+          if (style.overflowX === "visible" && style.overflowY === "visible") {
+            if (node.tagName === "HEADER") break;
+            continue;
+          }
+          const clip = node.getBoundingClientRect();
+          const over = {
+            top: clip.top - shapeRect.top,
+            bottom: shapeRect.bottom - clip.bottom,
+            left: clip.left - shapeRect.left,
+            right: shapeRect.right - clip.right,
+          };
+          for (const [side, amount] of Object.entries(over)) {
+            // Half a pixel of rounding is not a cut; anything more is drawn and then thrown away.
+            if (amount > 0.5) {
+              cuts.push(
+                `${node.tagName}.${node.className.toString().split(" ")[0]} cuts ${amount.toFixed(1)}px off ` +
+                  `the ${side} of the shape`,
+              );
+            }
+          }
+          if (node.tagName === "HEADER") break;
+        }
+        return cuts;
+      });
+
+      expect(cuts, cuts.join("\n")).toEqual([]);
     });
   }
 });

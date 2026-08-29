@@ -100,20 +100,22 @@ export const useListenActions = (): ListenAction[] => {
     const byId: Record<string, Omit<Tile, "entryId">> = {
       "action.sid-radio": { icon: Radio, label: t("home.tile.radio", "Radio") },
       /*
-       * "Last tune", not "Resume". Two constraints meet here. The machine's own Pause control
-       * renames itself to Resume while the C64 is paused, and both tiles are in one grid now, so
-       * "Resume" alone would be two buttons of the same name meaning different things. And the
-       * word "Resume" does not fit: at four columns on a 320px screen the layout audit measured it
-       * needing 64px in a 59px tile. "Last" and "tune" each fit, and with the play glyph above them
-       * the tile reads as what it does.
+       * "Last", not "Resume" and not "Last tune". The machine's own Pause control renames itself
+       * to Resume while the C64 is paused, and both tiles are in one grid now, so "Resume" alone
+       * would be two buttons of the same name meaning different things. "Last tune" then fitted
+       * only by wrapping to two lines, and a grid row is as tall as its tallest tile, so those two
+       * words cost every tile in the row 21.6px. With the play glyph above it and the tune's own
+       * name on the line below when there is one, "Last" reads as what it does.
        */
-      "action.resume-session": { icon: Play, label: t("home.tile.resume", "Last tune"), detail: sessionLabel },
+      "action.resume-session": { icon: Play, label: t("home.tile.resume", "Last"), detail: sessionLabel },
       "action.recently-played": {
         icon: History,
         label: t("home.tile.recent", "Recent"),
         detail: recentCount > 0 ? `${recentCount}` : null,
       },
-      "home.section.live-view": { icon: Monitor, label: t("home.tile.liveView", "Live View") },
+      // "Live", not "Live View": the second word wrapped at four columns and took the whole row
+      // with it. The monitor glyph above it already says which kind of live.
+      "home.section.live-view": { icon: Monitor, label: t("home.tile.liveView", "Live") },
     };
     return PROMOTED_ENTRY_IDS.flatMap((entryId) => {
       const tile = byId[entryId];

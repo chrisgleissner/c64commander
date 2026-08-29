@@ -1282,14 +1282,17 @@ describe("HomePage SID status", () => {
     };
     renderHomePage();
 
-    fireEvent.click(screen.getByRole("button", { name: /^power off$/i }));
+    // Power Off is a row of the Power sheet now, not a tile of its own.
+    fireEvent.click(screen.getByTestId("home-power-actions"));
+    fireEvent.click(screen.getByTestId("home-power-action-power-off"));
     expect(machineControlPayloadRef.current.powerOff.mutateAsync).not.toHaveBeenCalled();
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText(/cannot be powered on again via software/i)).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: /^cancel$/i }));
     expect(machineControlPayloadRef.current.powerOff.mutateAsync).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: /^power off$/i }));
+    fireEvent.click(screen.getByTestId("home-power-actions"));
+    fireEvent.click(screen.getByTestId("home-power-action-power-off"));
     fireEvent.click(
       within(screen.getByRole("dialog")).getByRole("button", {
         name: /^power off$/i,
@@ -1319,7 +1322,7 @@ describe("HomePage SID status", () => {
     /*
      * Watch, listen, operate, careful. Live View leads with Game and Input — all three are ways to
      * use the machine from here — then the music trio, then the operational tiles, then the ones
-     * that interrupt the machine. Radio stands immediately before Last tune and Recent, which is
+     * that interrupt the machine. Radio stands immediately before Last and Recent, which is
      * what makes those two readable without a longer label.
      *
      * Game and Input are absent here: remote_input_enabled is forced off above so the count is
@@ -1330,21 +1333,26 @@ describe("HomePage SID status", () => {
         .getAllByRole("button")
         .map((button) => button.textContent),
     ).toEqual([
-      "Live ViewLive View is turned off in Settings",
+      "LiveLive View is turned off in Settings",
       "Radio",
-      "Last tune",
+      "Last",
       "Recent",
       "Menu",
       "Pause",
-      "Save RAM",
-      "Load RAM",
+      "Backup",
+      "Restore",
       "Reset",
-      "Reboot",
-      "Power Off",
+      "Power",
     ]);
     expect(within(machineControls).getAllByRole("button", { name: /^pause$/i })).toHaveLength(1);
     expect(within(machineControls).queryByRole("button", { name: /^resume$/i })).toBeNull();
-    expect(within(machineControls).queryByRole("button", { name: /^power cycle$/i })).toBeNull();
+    // Reboot, Power Cycle and Power Off are rows of the Power sheet the last tile opens.
+    fireEvent.click(within(machineControls).getByTestId("home-power-actions"));
+    const powerRows = Array.from(
+      screen.getByTestId("home-power-sheet").querySelectorAll("button[data-testid^='home-power-action-']"),
+    ).map((button) => button.getAttribute("data-testid"));
+    expect(powerRows).toEqual(["home-power-action-reboot", "home-power-action-power-off"]);
+    fireEvent.keyDown(document.body, { key: "Escape" });
 
     fireEvent.click(within(machineControls).getByRole("button", { name: /^pause$/i }));
 
@@ -2408,7 +2416,7 @@ describe("HomePage offline arrangement", () => {
      */
     const resume = screen.getByTestId("home-tile-action.resume-session");
     expect(resume).toBeDisabled();
-    expect(resume.textContent).toBe("Last tune");
+    expect(resume.textContent).toBe("Last");
 
     // Disabled, but with no line of its own: "Nothing has been opened yet" only restates a greyed
     // tile labelled Recent, and a line under every tile is what made this row look heavier than

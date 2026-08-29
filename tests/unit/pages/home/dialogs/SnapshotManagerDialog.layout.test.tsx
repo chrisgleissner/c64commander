@@ -55,7 +55,7 @@ describe("SnapshotManagerDialog", () => {
       </DisplayProfileProvider>,
     );
 
-    const header = screen.getByText("Load RAM").closest("div[class*='border-b']");
+    const header = screen.getByText("Restore").closest("div[class*='border-b']");
     const headerRow = document.querySelector('[data-interstitial-header-row="true"]');
     const filters = screen.getByTestId("snapshot-type-filters").parentElement;
     const body = screen.getByTestId("snapshot-list");
@@ -92,7 +92,7 @@ describe("SnapshotManagerDialog", () => {
       </DisplayProfileProvider>,
     );
 
-    const header = screen.getByText("Load RAM").closest("div[class*='border-b']");
+    const header = screen.getByText("Restore").closest("div[class*='border-b']");
     const headerRow = document.querySelector('[data-interstitial-header-row="true"]');
     const filters = screen.getByTestId("snapshot-type-filters").parentElement;
     const body = screen.getByTestId("snapshot-list");

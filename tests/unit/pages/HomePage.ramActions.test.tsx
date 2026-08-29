@@ -248,6 +248,18 @@ const confirmMachineAction = (name: string) => {
   fireEvent.click(within(dialog).getByRole("button", { name: "Confirm" }));
 };
 
+/**
+ * Opens the Power sheet and returns it.
+ *
+ * Reboot, Reboot (Clr Mem), Power Cycle and Power Off are rows of this sheet rather than tiles of
+ * the grid. A test that asserts one of them is ABSENT has to open the sheet too, or it passes
+ * because the sheet is closed rather than because the row is gone.
+ */
+const openPowerSheet = () => {
+  fireEvent.click(screen.getByTestId("home-power-actions"));
+  return screen.getByTestId("home-power-sheet");
+};
+
 vi.mock("@/hooks/use-toast", () => ({
   toast: toastSpy,
   useToast: () => ({ toasts: [], dismiss: vi.fn() }),
@@ -555,7 +567,7 @@ describe("HomePage RAM actions", () => {
   it("runs quick reboot through REST without telnet", async () => {
     renderHomePage();
 
-    fireEvent.click(screen.getByRole("button", { name: /^reboot$/i }));
+    fireEvent.click(within(openPowerSheet()).getByTestId("home-power-action-reboot"));
     confirmMachineAction("Reboot");
 
     await waitFor(() => expect(rebootKeepRamSpy).toHaveBeenCalled(), { timeout: 5000 });
@@ -578,21 +590,23 @@ describe("HomePage RAM actions", () => {
     featureFlagsRef.current.home_telnet_clear_ram_reboot_enabled = true;
     renderHomePage();
 
-    expect(screen.getByRole("button", { name: /^reboot$/i })).toBeInTheDocument();
-    expect(await screen.findByTestId("home-machine-inline-rebootClearMemory")).toHaveTextContent(
-      /^Reboot \(Clr Mem\)$/,
-    );
+    const sheet = openPowerSheet();
+    expect(within(sheet).getByTestId("home-power-action-reboot")).toBeInTheDocument();
+    expect(within(sheet).getByTestId("home-power-action-rebootClearMemory")).toHaveTextContent(/^Reboot \(Clr Mem\)/);
   });
 
-  it("disables reboot while a telnet action is already busy", () => {
+  it("disables the Power tile while a telnet action is already busy", () => {
     telnetState.isBusy = true;
     renderHomePage();
 
-    const rebootButton = screen.getByRole("button", { name: /^reboot$/i });
-    expect(rebootButton).toBeDisabled();
+    // Every row of the Power sheet is disabled while Telnet is busy, so the tile that opens it is
+    // disabled too rather than offering a sheet with nothing usable in it.
+    const powerTile = screen.getByTestId("home-power-actions");
+    expect(powerTile).toBeDisabled();
 
-    fireEvent.click(rebootButton);
+    fireEvent.click(powerTile);
 
+    expect(screen.queryByTestId("home-power-sheet")).toBeNull();
     expect(executeTelnetActionSpy).not.toHaveBeenCalled();
     expect(rebootKeepRamSpy).not.toHaveBeenCalled();
   });
@@ -601,7 +615,7 @@ describe("HomePage RAM actions", () => {
     featureFlagsRef.current.home_telnet_power_cycle_enabled = true;
     renderHomePage();
 
-    fireEvent.click(screen.getByRole("button", { name: /^power cycle$/i }));
+    fireEvent.click(within(openPowerSheet()).getByTestId("home-power-action-power-cycle"));
     confirmMachineAction("Power Cycle");
 
     await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("powerCycle"), { timeout: 5000 });
@@ -624,15 +638,16 @@ describe("HomePage RAM actions", () => {
 
     renderHomePage();
 
-    expect(screen.getByRole("button", { name: /^power cycle$/i })).toBeInTheDocument();
-    expect(screen.getByTestId("home-machine-inline-rebootClearMemory")).toBeInTheDocument();
+    const sheet = openPowerSheet();
+    expect(within(sheet).getByTestId("home-power-action-power-cycle")).toBeInTheDocument();
+    expect(within(sheet).getByTestId("home-power-action-rebootClearMemory")).toBeInTheDocument();
   });
 
   it("runs clear-ram reboot through telnet when the flag is enabled", async () => {
     featureFlagsRef.current.home_telnet_clear_ram_reboot_enabled = true;
     renderHomePage();
 
-    fireEvent.click(screen.getByTestId("home-machine-inline-rebootClearMemory"));
+    fireEvent.click(within(openPowerSheet()).getByTestId("home-power-action-rebootClearMemory"));
     confirmMachineAction("Reboot (Clr Mem)");
 
     await waitFor(() => expect(executeTelnetActionSpy).toHaveBeenCalledWith("rebootClearMemory"), { timeout: 5000 });
@@ -642,7 +657,7 @@ describe("HomePage RAM actions", () => {
   it("hides clear-ram reboot when the flag is off", () => {
     renderHomePage();
 
-    expect(screen.queryByTestId("home-machine-inline-rebootClearMemory")).toBeNull();
+    expect(within(openPowerSheet()).queryByTestId("home-power-action-rebootClearMemory")).toBeNull();
   });
 
   it("hides clear-ram reboot when telnet is unavailable", () => {
@@ -650,14 +665,14 @@ describe("HomePage RAM actions", () => {
     telnetState.isAvailable = false;
     renderHomePage();
 
-    expect(screen.queryByTestId("home-machine-inline-rebootClearMemory")).toBeNull();
+    expect(within(openPowerSheet()).queryByTestId("home-power-action-rebootClearMemory")).toBeNull();
   });
 
   it("hides telnet-only home controls when telnet is unavailable", () => {
     telnetState.isAvailable = false;
     renderHomePage();
 
-    expect(screen.queryByRole("button", { name: /^power cycle$/i })).toBeNull();
+    expect(within(openPowerSheet()).queryByTestId("home-power-action-power-cycle")).toBeNull();
     expect(screen.queryByTestId("home-config-clear-flash")).toBeNull();
   });
 
@@ -685,14 +700,14 @@ describe("HomePage RAM actions", () => {
 
     renderHomePage();
 
-    expect(screen.queryByRole("button", { name: /^power cycle$/i })).toBeNull();
+    expect(within(openPowerSheet()).queryByTestId("home-power-action-power-cycle")).toBeNull();
     expect(screen.queryByTestId("home-machine-note-powerCycle")).toBeNull();
   });
 
-  it("opens Save RAM dialog when Save RAM button is clicked", async () => {
+  it("opens the Backup dialog when the Backup button is clicked", async () => {
     renderHomePage();
 
-    fireEvent.click(screen.getByRole("button", { name: /save ram/i }));
+    fireEvent.click(screen.getByTestId("home-save-ram"));
 
     await waitFor(() => expect(screen.getByTestId("save-ram-dialog")).toBeInTheDocument());
   }, 15000);
@@ -731,7 +746,7 @@ describe("HomePage RAM actions", () => {
   it("saves program snapshot and shows toast when Program type is selected", async () => {
     renderHomePage();
 
-    fireEvent.click(screen.getByRole("button", { name: /save ram/i }));
+    fireEvent.click(screen.getByTestId("home-save-ram"));
     await waitFor(() => expect(screen.getByTestId("save-ram-dialog")).toBeInTheDocument());
 
     fireEvent.click(screen.getByTestId("save-ram-type-program"));
@@ -754,7 +769,7 @@ describe("HomePage RAM actions", () => {
   it("captures a CPU+RAM snapshot when the CPU+RAM type is selected", async () => {
     renderHomePage();
 
-    fireEvent.click(screen.getByRole("button", { name: /save ram/i }));
+    fireEvent.click(screen.getByTestId("home-save-ram"));
     await waitFor(() => expect(screen.getByTestId("save-ram-dialog")).toBeInTheDocument());
 
     fireEvent.click(screen.getByTestId("save-ram-type-cpu"));
@@ -765,10 +780,10 @@ describe("HomePage RAM actions", () => {
     );
   }, 15000);
 
-  it("opens Snapshot Manager dialog when Load RAM button is clicked", async () => {
+  it("opens Snapshot Manager dialog when the Restore button is clicked", async () => {
     renderHomePage();
 
-    fireEvent.click(screen.getByRole("button", { name: /load ram/i }));
+    fireEvent.click(screen.getByTestId("home-load-ram"));
 
     await waitFor(() => expect(screen.getByTestId("snapshot-manager-dialog")).toBeInTheDocument());
   }, 15000);
@@ -776,7 +791,7 @@ describe("HomePage RAM actions", () => {
   it("shows empty state in Snapshot Manager when no snapshots exist", async () => {
     renderHomePage();
 
-    fireEvent.click(screen.getByRole("button", { name: /load ram/i }));
+    fireEvent.click(screen.getByTestId("home-load-ram"));
 
     await waitFor(() => expect(screen.getByTestId("snapshot-empty")).toBeInTheDocument());
   }, 15000);

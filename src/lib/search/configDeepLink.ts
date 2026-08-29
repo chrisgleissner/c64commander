@@ -49,7 +49,14 @@ export const subscribeConfigItemFocus = (handler: (request: ConfigItemFocusReque
   if (typeof window === "undefined") return () => undefined;
   const listener = (event: Event) => {
     const detail = (event as CustomEvent<ConfigItemFocusRequest>).detail;
-    if (detail) handler(detail);
+    if (!detail) return;
+    // Delivering the event also claims the latch, for the reason given on the section-open latch in
+    // `collapsibleSectionStore.ts`: a request that reached a mounted subscriber must not still be
+    // waiting to reach the next one.
+    if (pendingFocus?.request.category === detail.category && pendingFocus.request.itemName === detail.itemName) {
+      pendingFocus = null;
+    }
+    handler(detail);
   };
   window.addEventListener(CONFIG_ITEM_FOCUS_EVENT, listener);
   // Claimed, not merely read: leaving it in place re-delivered it on every remount inside the

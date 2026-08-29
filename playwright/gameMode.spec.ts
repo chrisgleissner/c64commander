@@ -135,9 +135,11 @@ test.describe("Game Mode", () => {
     // The tiles carry one word each. What this test is about is their POSITION, so it reads the
     // labels the tiles actually print rather than the features' full names. The grid opens on the
     // three ways to use the machine from here, in this order.
-    expect(labels.slice(0, 3).map((label) => label.trim())).toEqual(["Live View", "Game", "Input"]);
+    expect(labels.slice(0, 3).map((label) => label.trim())).toEqual(["Live", "Game", "Input"]);
 
-    const destructive = ["Reset", "Reboot", "Reboot (Clr Mem)", "Power Cycle", "Power Off"];
+    // Reboot, Power Cycle and Power Off are rows of the Power sheet now, so the grid's own
+    // destructive tiles are Reset and the Power tile that opens that sheet.
+    const destructive = ["Reset", "Power"];
     const trimmed = labels.map((label) => label.trim());
     const firstDestructive = trimmed.findIndex((label) => destructive.includes(label));
     const lastSafe = trimmed.reduce((last, label, index) => (destructive.includes(label) ? last : index), -1);
