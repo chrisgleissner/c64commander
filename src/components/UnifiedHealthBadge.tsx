@@ -627,11 +627,19 @@ export function UnifiedHealthBadge({ className }: Props) {
             ) : null}
             {badgeText.trailingLabel ? (
               <>
-                <span className="shrink-0 whitespace-pre" aria-hidden="true">
+                <span className="app-chrome-badge-status shrink-0 whitespace-pre" aria-hidden="true">
                   {" "}
                 </span>
+                {/*
+                  Dropped on a narrow header, like the host above it. "UNHEALTHY" is nine wide
+                  letters and it is the third thing saying the same as the glyph's colour and the
+                  problem count beside it, so on a phone it spends the page title's width to repeat
+                  what is already on screen. Hidden in CSS (`app-chrome-badge-status`) rather than
+                  by asking for the compact contract, so the model still describes what the badge
+                  means and the header decides what it has room to draw.
+                */}
                 <span
-                  className="truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
+                  className="app-chrome-badge-status truncate text-xs font-semibold uppercase tracking-[0.14em] text-foreground"
                   data-overlay-critical="badge"
                 >
                   {badgeText.trailingLabel}

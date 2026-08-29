@@ -23,7 +23,8 @@ export type DiagnosticsPanelKey =
   | "decision-state"
   | "rest-heatmap"
   | "ftp-heatmap"
-  | "config-heatmap";
+  | "config-heatmap"
+  | "key-explorer";
 
 export type DiagnosticsOpenRequest = {
   preset: DiagnosticsEntryPreset;

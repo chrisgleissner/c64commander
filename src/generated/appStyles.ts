@@ -48,7 +48,11 @@ export interface AppStyleModeTokens {
 }
 
 export interface AppStyle {
-  /** Stable, persisted setting value. Never renamed once shipped (spec.md section 6.4). */
+  /**
+   * The persisted setting value. Changing it is a rename, not a retirement: the old id is declared
+   * under `renamed_from:` in the YAML and appears in APP_STYLE_RENAMES, which the storage read
+   * maps through. An id that is dropped with neither declaration fails the compile.
+   */
   readonly id: string;
   readonly name: string;
   readonly description: string;
@@ -59,9 +63,9 @@ export interface AppStyle {
 
 export const APP_STYLES: readonly AppStyle[] = [
   {
-    id: "modem-grey",
-    name: "Modem Grey",
-    description: "Neutral default. Today's palette, cleaned up.",
+    id: "cool-grey",
+    name: "Cool Grey",
+    description: "Neutral, blue-leaning grey. The app's default.",
     modes: ["light", "dark"] as const,
     light: {
       radius: "12px",
@@ -163,9 +167,9 @@ export const APP_STYLES: readonly AppStyle[] = [
     },
   },
   {
-    id: "petrol-teal",
-    name: "Petrol Teal",
-    description: "The translucent teal shell. Coral key in both modes.",
+    id: "ocean-teal",
+    name: "Ocean Teal",
+    description: "Deep blue-green with a warm coral highlight.",
     modes: ["light", "dark"] as const,
     light: {
       radius: "10px",
@@ -326,9 +330,9 @@ export const APP_STYLES: readonly AppStyle[] = [
     },
   },
   {
-    id: "full-sun",
-    name: "Full Sun",
-    description: "Maximum contrast, keypad first. Heavy edges, no fill games.",
+    id: "high-contrast",
+    name: "High Contrast",
+    description: "Maximum legibility. Heavy edges, strong text, no soft fills.",
     modes: ["light", "dark"] as const,
     light: {
       radius: "0px",
@@ -380,14 +384,25 @@ export const APP_STYLES: readonly AppStyle[] = [
 ];
 
 /** The style every app installs with, and the fallback for an unknown stored id (spec.md section 7.1). */
-export const DEFAULT_APP_STYLE_ID = "modem-grey";
+export const DEFAULT_APP_STYLE_ID = "cool-grey";
 
 /** "Match my device" (spec.md section 7.4): the Ultimate's own Color Scheme name -> app style id. */
 export const DEVICE_SCHEME_TO_STYLE_ID: Readonly<Record<string, string>> = {
   "Ultimate Black": "vault-black",
-  "Commodore Blue": "modem-grey",
-  "Commodore 1": "modem-grey",
-  "Commodore 2": "modem-grey",
-  "Commodore 3": "modem-grey",
-  "C128 Style": "petrol-teal",
+  "Commodore Blue": "cool-grey",
+  "Commodore 1": "cool-grey",
+  "Commodore 2": "cool-grey",
+  "Commodore 3": "cool-grey",
+  "C128 Style": "ocean-teal",
+};
+
+/**
+ * Retired id -> the live id that replaced it, from every `renamed_from:` in the YAML. Applied at
+ * the storage read (useAppStyle) and to the gallery's ?style= parameter, so a stored or bookmarked
+ * old id resolves to the style it names instead of falling back to the default.
+ */
+export const APP_STYLE_RENAMES: Readonly<Record<string, string>> = {
+  "modem-grey": "cool-grey",
+  "petrol-teal": "ocean-teal",
+  "full-sun": "high-contrast",
 };

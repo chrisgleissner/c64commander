@@ -18,6 +18,7 @@ import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { getDocsExternalResourceLinks } from "@/lib/docs/externalResources";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { variant } from "@/generated/variant";
+import { TourRestartCard } from "@/components/tour/TourRestartCard";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import type { FeatureFlags } from "@/lib/config/featureFlags";
 
@@ -172,6 +173,10 @@ export default function DocsPage() {
           gap at 16px, so this is the one page that opts out of the profile spacing. Both are
           kept where the page was tuned; on compact the profile's padding applies again. */}
       <PageContainer className={profile === "compact" ? "space-y-2" : "py-6 space-y-4"}>
+        {/* First, because someone on Docs is looking for a way in and the tour is the shortest
+            one. Restartable at any time, which is the point of section 8's D10. */}
+        <TourRestartCard />
+
         {docSections.map((section, index) => (
           <motion.div
             key={section.id}

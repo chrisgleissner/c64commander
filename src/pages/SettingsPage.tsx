@@ -25,6 +25,7 @@ import {
   Trash,
   Search,
   ShieldCheck,
+  Compass,
 } from "lucide-react";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
@@ -45,6 +46,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { requestTourStart } from "@/lib/tour/tourState";
 import { SidRadioSettingsSection } from "@/pages/settings/SidRadioSettingsSection";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -3381,6 +3383,16 @@ export default function SettingsPage() {
               <ExternalLink className="h-4 w-4" />
               {settingsDocumentationLink.label}
             </a>
+
+            <button
+              type="button"
+              className="flex min-h-11 items-center gap-2 text-sm text-primary hover:underline"
+              onClick={() => requestTourStart()}
+              data-testid="settings-about-take-the-tour"
+            >
+              <Compass className="h-4 w-4" />
+              Take the tour
+            </button>
 
             <button
               type="button"

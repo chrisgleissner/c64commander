@@ -87,6 +87,12 @@ const buildDriveTelnetActions = (
 };
 
 interface DriveManagerProps {
+  /**
+   * Draws the card's header without its body while Home is in its offline arrangement, WITHOUT
+   * writing to the section store, so the user's own open/closed choice survives (spec.md 6.2).
+   */
+  forceClosed?: boolean;
+
   isConnected: boolean;
   handleAction: (action: () => Promise<void>, description: string) => Promise<void>;
   machineTaskBusy: boolean;
@@ -100,6 +106,7 @@ interface DriveManagerProps {
 }
 
 export function DriveManager({
+  forceClosed,
   isConnected,
   handleAction,
   machineTaskBusy,
@@ -265,6 +272,7 @@ export function DriveManager({
     <CollapsibleSection
       scope="home"
       id="drives"
+      forceClosed={forceClosed}
       title="Drives"
       icon={HardDrive}
       defaultOpen

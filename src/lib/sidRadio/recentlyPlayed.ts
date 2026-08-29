@@ -21,17 +21,34 @@
 
 import { addErrorLog } from "@/lib/logging";
 
-/** One tune that has been heard, in the shape the row draws. */
+/** What kind of thing was opened. v1 held tunes only; the Home Recent tile shows all three. */
+export type RecentlyPlayedCategory = "sid" | "disk" | "program";
+
+/** One item that has been opened, in the shape the row draws. */
 export type RecentlyPlayedEntry = {
-  /** HVSC virtual path, which is also the identity — the same tune twice is one entry. */
+  /**
+   * Identity, and what the row is reopened by. For a tune this is the HVSC virtual path; for a disk
+   * or a program it is the source path the launcher takes. The same item twice is one entry.
+   */
   virtualPath: string;
   title: string;
   author: string | null;
   folder: string;
+  /** Absent on a v1 entry, which is why the migration writes "sid" onto every one of them. */
+  category: RecentlyPlayedCategory;
+  /**
+   * Where the item came from, when it is not the HVSC archive.
+   *
+   * Both halves are needed to reopen it: `source` is the play-source kind the router dispatches on,
+   * and `sourceId` names which configured source of that kind, because a device can have several
+   * local roots and the kind alone cannot say which tree the path belongs to.
+   */
+  source?: string;
+  sourceId?: string;
   songNr?: number;
   subsongCount?: number;
   durationMs?: number;
-  /** When it was last heard, so the list can be ordered and shown newest first. */
+  /** When it was last opened, so the list can be ordered and shown newest first. */
   playedAt: number;
 };
 
@@ -44,7 +61,9 @@ export type RecentlyPlayedEntry = {
  */
 export const RECENTLY_PLAYED_LIMIT = 25;
 
-const STORAGE_KEY = "c64u_recently_played:v1";
+const STORAGE_KEY = "c64u_recently_played:v2";
+/** Read once and migrated: every v1 entry was a tune, so each gets category "sid". */
+const LEGACY_STORAGE_KEY = "c64u_recently_played:v1";
 
 const folderOf = (virtualPath: string): string => {
   const index = virtualPath.lastIndexOf("/");
@@ -72,6 +91,9 @@ export const toRecentlyPlayedEntry = (input: {
   virtualPath: string;
   title: string;
   author?: string | null;
+  category?: RecentlyPlayedCategory;
+  source?: string;
+  sourceId?: string;
   songNr?: number;
   subsongCount?: number;
   durationMs?: number;
@@ -81,29 +103,47 @@ export const toRecentlyPlayedEntry = (input: {
   title: input.title,
   author: input.author ?? null,
   folder: folderOf(input.virtualPath),
+  category: input.category ?? "sid",
+  ...(input.source === undefined ? {} : { source: input.source }),
+  ...(input.sourceId === undefined ? {} : { sourceId: input.sourceId }),
   ...(input.songNr === undefined ? {} : { songNr: input.songNr }),
   ...(input.subsongCount === undefined ? {} : { subsongCount: input.subsongCount }),
   ...(input.durationMs === undefined ? {} : { durationMs: input.durationMs }),
   playedAt: input.playedAt ?? Date.now(),
 });
 
-export const loadRecentlyPlayed = (): RecentlyPlayedEntry[] => {
-  if (typeof localStorage === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    // Filtered rather than trusted: this is read at startup, and one malformed row from an older
-    // build must not take the list with it.
-    return parsed.filter(
-      (entry): entry is RecentlyPlayedEntry =>
-        Boolean(entry) && typeof (entry as RecentlyPlayedEntry).virtualPath === "string",
-    );
-  } catch (error) {
-    addErrorLog("Failed to read recently played", { error: (error as Error).message });
-    return [];
-  }
+const CATEGORIES = new Set<string>(["sid", "disk", "program"]);
+
+/**
+ * Reads one stored row, filling in what v1 did not have. Filtered rather than trusted: this is read
+ * at startup, and one malformed row from an older build must not take the list with it.
+ */
+const parseEntry = (value: unknown): RecentlyPlayedEntry | null => {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Partial<RecentlyPlayedEntry>;
+  if (typeof row.virtualPath !== "string") return null;
+  return {
+    virtualPath: row.virtualPath,
+    title: typeof row.title === "string" ? row.title : row.virtualPath,
+    author: typeof row.author === "string" ? row.author : null,
+    folder: typeof row.folder === "string" ? row.folder : folderOf(row.virtualPath),
+    // Absent on every v1 row, which held tunes only.
+    category: typeof row.category === "string" && CATEGORIES.has(row.category) ? row.category : "sid",
+    ...(typeof row.source === "string" ? { source: row.source } : {}),
+    ...(typeof row.sourceId === "string" ? { sourceId: row.sourceId } : {}),
+    ...(typeof row.songNr === "number" ? { songNr: row.songNr } : {}),
+    ...(typeof row.subsongCount === "number" ? { subsongCount: row.subsongCount } : {}),
+    ...(typeof row.durationMs === "number" ? { durationMs: row.durationMs } : {}),
+    playedAt: typeof row.playedAt === "number" ? row.playedAt : 0,
+  };
+};
+
+const readRows = (key: string): RecentlyPlayedEntry[] => {
+  const raw = localStorage.getItem(key);
+  if (!raw) return [];
+  const parsed = JSON.parse(raw) as unknown;
+  if (!Array.isArray(parsed)) return [];
+  return parsed.map(parseEntry).filter((entry): entry is RecentlyPlayedEntry => entry !== null);
 };
 
 export const saveRecentlyPlayed = (entries: readonly RecentlyPlayedEntry[]): void => {
@@ -116,7 +156,27 @@ export const saveRecentlyPlayed = (entries: readonly RecentlyPlayedEntry[]): voi
   }
 };
 
+export const loadRecentlyPlayed = (): RecentlyPlayedEntry[] => {
+  if (typeof localStorage === "undefined") return [];
+  try {
+    const current = readRows(STORAGE_KEY);
+    if (localStorage.getItem(STORAGE_KEY) !== null) return current;
+
+    // v1 -> v2, once. The legacy key is removed as soon as it has been copied, so a row the user
+    // later removes cannot come back on the next read.
+    const legacy = readRows(LEGACY_STORAGE_KEY);
+    if (localStorage.getItem(LEGACY_STORAGE_KEY) === null) return current;
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    saveRecentlyPlayed(legacy);
+    return legacy;
+  } catch (error) {
+    addErrorLog("Failed to read recently played", { error: (error as Error).message });
+    return [];
+  }
+};
+
 export const clearRecentlyPlayed = (): void => {
   if (typeof localStorage === "undefined") return;
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(LEGACY_STORAGE_KEY);
 };

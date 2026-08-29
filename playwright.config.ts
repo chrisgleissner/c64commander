@@ -14,6 +14,8 @@ const probeEnv = "VITE_ENABLE_TEST_PROBES=1 ";
 const skipBuild = process.env.PLAYWRIGHT_SKIP_BUILD === "1";
 const explicitWorkers = process.env.PLAYWRIGHT_WORKERS?.trim();
 const parsedWorkers = explicitWorkers && /^[0-9]+$/.test(explicitWorkers) ? Number(explicitWorkers) : undefined;
+import { TOUR_STATE_KEY, TOUR_TAKEN_STATE } from "./playwright/tourState";
+
 const serverPort = Number(process.env.PLAYWRIGHT_PORT ?? "4173");
 const cpuCount = os.cpus().length;
 const defaultWorkers = process.env.CI === "true" ? Math.min(4, Math.max(1, cpuCount)) : 1;
@@ -111,6 +113,24 @@ export default defineConfig({
   projects: getActiveProjects(),
   use: {
     baseURL: `http://127.0.0.1:${serverPort}`,
+    /*
+     * Every context starts with the first-run tour already taken.
+     *
+     * The tour is a full-screen dialog that opens on a launch where nothing has been recorded, which
+     * is every test, and it intercepts the clicks the test is there to make. seedUiMocks writes the
+     * same key, but the specs that build their own state — an offline device, a particular dialog —
+     * do not call it, and each of those had to remember on its own. Setting it on the context is one
+     * place instead of one per spec. playwright/tour.spec.ts clears it again for the first load.
+     */
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: `http://127.0.0.1:${serverPort}`,
+          localStorage: [{ name: TOUR_STATE_KEY, value: TOUR_TAKEN_STATE }],
+        },
+      ],
+    },
     trace: traceMode,
     screenshot: screenshotMode,
     video: videoMode,

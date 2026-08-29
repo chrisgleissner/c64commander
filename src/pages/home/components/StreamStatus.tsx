@@ -18,10 +18,16 @@ import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useAvMirror } from "@/hooks/useAvMirror";
 
 interface StreamStatusProps {
+  /**
+   * Draws the card's header without its body while Home is in its offline arrangement, WITHOUT
+   * writing to the section store, so the user's own open/closed choice survives (spec.md 6.2).
+   */
+  forceClosed?: boolean;
+
   isConnected: boolean;
 }
 
-export function StreamStatus({ isConnected }: StreamStatusProps) {
+export function StreamStatus({ forceClosed, isConnected }: StreamStatusProps) {
   const { profile } = useDisplayProfile();
   const { configWritePending, updateConfigValue } = useSharedConfigActions();
   // Live View shares the device's VIC/Audio feeds. While it is receiving one, it takes
@@ -45,7 +51,14 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
   } = useStreamData(isConnected, configWritePending, updateConfigValue);
 
   return (
-    <CollapsibleSection scope="home" id="streams" title="Streams" icon={Waves} testId="home-stream-status">
+    <CollapsibleSection
+      scope="home"
+      id="streams"
+      forceClosed={forceClosed}
+      title="Streams"
+      icon={Waves}
+      testId="home-stream-status"
+    >
       <div className="space-y-2">
         {streamControlEntries.map((entry) => {
           const draft = streamDrafts[entry.key] ?? {

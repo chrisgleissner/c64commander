@@ -25,6 +25,9 @@
  *               speaker neither muted nor loud. Every later stage misreads a bad rig as a defect.
  *   input       A held direction keeps moving the C64, and the key-to-direction mapping survives
  *               rotation. Needs the CIA at the far end of the relay.
+ *   search-latency
+ *               Keystroke to painted list in the search overlay, 120 samples, p95 under 100 ms.
+ *               Needs the real handset: a shared CI runner cannot settle a latency budget.
  *   wire        What the Ultimate SENDS, measured on the host's own link. Rules the network in or
  *               out BEFORE anything is blamed on the app — the single most common wrong turn here.
  *   av-clarity  The tone ladder as it comes out of the phone's speaker, graded per note for
@@ -65,6 +68,7 @@ import { promisify } from "node:util";
 import { writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { percentile } from "./percentile.mjs";
 
 const execFileAsync = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -167,15 +171,28 @@ const js = async (expression) => {
  * it exists to catch. A fresh install starts with both off, so a gate that assumed the mirror was
  * already live graded silence and reported it as a parse failure.
  */
-/** Read Listen and Watch without changing them, so the run can put them back. */
+/**
+ * Read Listen and Watch without changing them, so the run can put them back.
+ *
+ * The card has to be OPENED first, the same way setMirror already does it: Live View is a
+ * collapsible card, its toggles are not in the tree while it is closed, and Home now also draws
+ * every device card closed while nothing is connected. A card left closed reported the toggles as
+ * missing, which reads as a broken build rather than as a rig that is not talking to its machine.
+ */
 const readMirror = async () => {
   const state = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
 const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
 q("tab-home")?.click();await wait(1800);
 const card=q("live-view-card"); if(!card) return JSON.stringify({error:"the Live View card is not on Home"});
 card.scrollIntoView({block:"center"});await wait(300);
-return JSON.stringify({audio:q("av-audio-toggle")?.getAttribute("aria-pressed")==="true",
-  video:q("av-video-toggle")?.getAttribute("aria-pressed")==="true"});})()`);
+if(card.getAttribute("data-force-closed")==="true")
+  return JSON.stringify({error:"Home is in its offline arrangement, so the Live View card cannot open - the rig is not connected to its C64"});
+const toggle=card.querySelector('button[aria-expanded="false"][aria-controls]');
+if(toggle){toggle.click();await wait(800);card.scrollIntoView({block:"center"});await wait(400);}
+const audio=q("av-audio-toggle"), video=q("av-video-toggle");
+if(!audio||!video) return JSON.stringify({error:"the mirror toggles are not on the Live View card"});
+return JSON.stringify({audio:audio.getAttribute("aria-pressed")==="true",
+  video:video.getAttribute("aria-pressed")==="true"});})()`);
   if (state.error) throw new Error(state.error);
   return { audio: state.audio, video: state.video };
 };
@@ -189,6 +206,8 @@ q("tab-home")?.click();await wait(2000);
 const card=q("live-view-card");
 if(!card) return JSON.stringify({error:"the Live View card is not on Home"});
 card.scrollIntoView({block:"center"});await wait(400);
+if(card.getAttribute("data-force-closed")==="true")
+  return JSON.stringify({error:"Home is in its offline arrangement, so the Live View card cannot open - the rig is not connected to its C64"});
 // Live View is a collapsible card and is closed on a first visit, so the mirror toggles are not
 // in the tree until it is opened. The toggle is a button that says it is not expanded.
 const toggle=card.querySelector('button[aria-expanded="false"][aria-controls]');
@@ -759,6 +778,20 @@ const preflight = async () => {
    */
   await silenceC64();
 
+  /*
+   * Get the first-run tour out of the way.
+   *
+   * It is a full-screen overlay that opens on a launch where nothing has been recorded, which is
+   * exactly what a fresh `--install-apk` leaves behind. `input` taps through `adb shell input` at
+   * real screen coordinates, so a tour still up eats every one of them and the stage reports a
+   * machine that never moved — rig state read as a broken machine:input path.
+   */
+  const tour = await js(`(()=>{const o=document.querySelector('[data-testid="tour-overlay"]');
+if(!o) return JSON.stringify({dismissed:false});
+document.querySelector('[data-testid="tour-skip"]')?.click();
+return JSON.stringify({dismissed:true});})()`);
+  const tourNote = tour?.dismissed ? ", skipped the first-run tour" : "";
+
   const volume = await readVolume();
   if (volume.speaker > MAX_VOLUME) {
     throw new Error(
@@ -780,7 +813,7 @@ const preflight = async () => {
   }
   return (
     `device ${attached.length}, route ${page.route}, speaker volume ${volume.speaker}, ` +
-    `mirror audio=${initialMirror.audio} video=${initialMirror.video}${masterNote}`
+    `mirror audio=${initialMirror.audio} video=${initialMirror.video}${masterNote}${tourNote}`
   );
 };
 
@@ -838,6 +871,70 @@ const main = async () => {
     if (!rotation.ok) throw new Error(`rotation: ${rotation.out.trim().split("\n").slice(-3).join(" | ")}`);
     const moved = number(hold.out, /kept moving rather than stopping after one cell\s+\((\d+) cells\)/, "cells moved");
     return `held direction moved ${moved} cells; ${number(rotation.out, /(\d+)\/\d+ checks passed/, "rotation checks")} rotation checks passed`;
+  });
+
+  /*
+   * Keystroke to painted list, on the phone (spec.md section 5.5).
+   *
+   * The budget only means anything measured here. A wall-clock threshold inside Vitest is a flake
+   * generator on a shared runner, and the deterministic work gate beside it proves the algorithm has
+   * not gone quadratic — not what this handset does with it. Twenty samples could not establish a
+   * p95 either: it would be one of the two worst observations. So: 120 samples, thirty rounds of a
+   * four-character query, p95 under 100 ms.
+   */
+  await stage("search-latency", false, async () => {
+    const opened = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+const w=window; w.__c64uSearchLatencyProbe=true; w.__c64uSearchLatencySamples=[];
+const q=(id)=>document.querySelector('[data-testid="'+id+'"]');
+q("tab-home")?.click(); await wait(1200);
+q("home-search-field")?.click(); await wait(900);
+return JSON.stringify({opened: q("search-input") !== null});})()`);
+    if (!opened?.opened) throw new Error("the search overlay did not open");
+
+    /*
+     * Five rounds per eval, not thirty in one.
+     *
+     * bughunt-cdp gives Runtime.evaluate 15 s, and thirty rounds at 120 ms a keystroke is past
+     * twenty — the first version of this stage failed on that timeout rather than on the budget.
+     */
+    for (let batch = 0; batch < 6; batch += 1) {
+      const round = await js(`(async()=>{const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+const input=document.querySelector('[data-testid="search-input"]');
+if(!input) return JSON.stringify({error:"the search field went away mid-run"});
+const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,"value").set;
+const type=async(text)=>{setter.call(input,text);
+  input.dispatchEvent(new Event("input",{bubbles:true})); await wait(120);};
+const WORD="radio";
+for(let round=0;round<5;round+=1){
+  for(let n=1;n<=4;n+=1) await type(WORD.slice(0,n));
+  // Clearing the box draws the promoted chips rather than a result list, which is a different
+  // amount of work — so the probe is off for it and only the four typed characters are sampled.
+  window.__c64uSearchLatencyProbe=false; await type(""); await wait(80);
+  window.__c64uSearchLatencyProbe=true;
+}
+return JSON.stringify({count:(window.__c64uSearchLatencySamples||[]).length});})()`);
+      if (round?.error) throw new Error(round.error);
+    }
+
+    const measured = await js(`(()=>{const w=window;
+const samples=(w.__c64uSearchLatencySamples||[]).slice(); w.__c64uSearchLatencyProbe=false;
+document.querySelector('[data-testid="search-close"]')?.click();
+return JSON.stringify({samples});})()`);
+
+    const samples = Array.isArray(measured?.samples) ? measured.samples : [];
+    if (samples.length < 120) {
+      throw new Error(`only ${samples.length} of the 120 samples were recorded; a p95 needs all of them`);
+    }
+    const sorted = [...samples].sort((left, right) => left - right);
+    const at = (fraction) => percentile(samples, fraction);
+    const p95 = at(0.95);
+    // The whole distribution in the message, not only the number that failed: a p95 over budget
+    // with a healthy p50 is a tail to chase, and one with a p50 already close is a different fault.
+    const shape =
+      `${sorted.length} samples, p50 ${at(0.5).toFixed(1)} ms, p90 ${at(0.9).toFixed(1)} ms, ` +
+      `p95 ${p95.toFixed(1)} ms, max ${sorted[sorted.length - 1].toFixed(1)} ms`;
+    if (p95 > 100) throw new Error(`keystroke to painted list is over budget (100 ms at p95): ${shape}`);
+    return shape;
   });
 
   // The sender, on the host's own link. Silent: it only listens.

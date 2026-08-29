@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Filter, MoreHorizontal, Share2, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -98,6 +98,7 @@ import { HeatMapPopup } from "./HeatMapPopup";
 import { HealthCheckDetailView } from "./HealthCheckDetailView";
 import { HealthHistoryPopup } from "./HealthHistoryPopup";
 import { LatencyAnalysisPopup } from "./LatencyAnalysisPopup";
+import { KeyExplorerPopup } from "./KeyExplorerPopup";
 
 export type EvidenceType = "Problems" | "Actions" | "Logs" | "Traces";
 type SeverityFilter = "All" | "Errors" | "Warnings" | "Info";
@@ -1042,11 +1043,20 @@ export function DiagnosticsDialog({
   const [connectionHostError, setConnectionHostError] = useState<string | null>(null);
   const [connectionPortError, setConnectionPortError] = useState<string | null>(null);
   const [latencyOpen, setLatencyOpen] = useState(false);
+  const [keyExplorerOpen, setKeyExplorerOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [configDriftOpen, setConfigDriftOpen] = useState(false);
   const [decisionStateOpen, setDecisionStateOpen] = useState(false);
   const [heatMapVariant, setHeatMapVariant] = useState<HeatMapVariant | null>(null);
   const [overflowOpen, setOverflowOpen] = useState(false);
+  /*
+   * Where the compact overflow panel starts, measured from the button it belongs to.
+   *
+   * It used to be a fixed 5.25rem from the top of the viewport, which is the sheet header's height
+   * on one set of type metrics: raising the compact header's line-height by 4px was enough to put
+   * the panel over its own trigger, so the tap that should have closed it was swallowed instead.
+   */
+  const [overflowPanelTop, setOverflowPanelTop] = useState<number | null>(null);
   const overflowTriggerRef = useRef<HTMLButtonElement>(null);
   const longPressTimerRef = useRef<number | null>(null);
   const longPressHandledRef = useRef(false);
@@ -1230,6 +1240,7 @@ export function DiagnosticsDialog({
     setConnectionHostError(null);
     setConnectionPortError(null);
     setLatencyOpen(false);
+    setKeyExplorerOpen(false);
     setHistoryOpen(false);
     setConfigDriftOpen(false);
     setDecisionStateOpen(false);
@@ -1267,6 +1278,7 @@ export function DiagnosticsDialog({
       setFiltersOpen(false);
       setConnectionOpen(false);
       setLatencyOpen(false);
+      setKeyExplorerOpen(false);
       setHistoryOpen(false);
       setConfigDriftOpen(false);
       setDecisionStateOpen(false);
@@ -1299,6 +1311,7 @@ export function DiagnosticsDialog({
     if (!open || !requestedPanel) return;
     setHeaderExpanded(requestedPanel === "overview");
     setLatencyOpen(requestedPanel === "latency");
+    setKeyExplorerOpen(requestedPanel === "key-explorer");
     setHistoryOpen(requestedPanel === "history");
     setConfigDriftOpen(requestedPanel === "config-drift");
     setDecisionStateOpen(requestedPanel === "decision-state");
@@ -1536,6 +1549,17 @@ export function DiagnosticsDialog({
         className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
         onClick={() => {
           setOverflowOpen(false);
+          setKeyExplorerOpen(true);
+        }}
+        data-testid="open-key-explorer-screen"
+      >
+        Key Explorer
+      </button>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs whitespace-normal hover:bg-muted"
+        onClick={() => {
+          setOverflowOpen(false);
           setHistoryOpen(true);
         }}
         data-testid="open-timeline-screen"
@@ -1646,6 +1670,17 @@ export function DiagnosticsDialog({
   // second tap on the ⋯ button would be swallowed as an outside-dismiss instead of toggling the menu
   // shut via its own onClick. We keep the trigger pointer-interactive (below) and exclude it here so a
   // repeat tap toggles cleanly (single close), while every other outside tap still dismisses + absorbs.
+  useLayoutEffect(() => {
+    if (!overflowOpen) return undefined;
+    const measure = () => {
+      const rect = overflowTriggerRef.current?.getBoundingClientRect();
+      if (rect) setOverflowPanelTop(rect.bottom + 8);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [overflowOpen]);
+
   const overflowPanel = overflowOpen ? (
     <DismissableLayer
       asChild
@@ -1661,6 +1696,11 @@ export function DiagnosticsDialog({
       {profile === "compact" ? (
         <div
           className="fixed inset-x-4 top-[5.25rem] z-[220] max-h-[min(16rem,calc(100dvh-7rem))] overflow-y-auto overscroll-contain rounded-lg border border-border bg-background py-1 shadow-elev-2"
+          style={
+            overflowPanelTop === null
+              ? undefined
+              : { top: overflowPanelTop, maxHeight: `min(16rem, calc(100dvh - ${overflowPanelTop + 16}px))` }
+          }
           data-testid="diagnostics-overflow-panel"
         >
           {overflowPanelContent}
@@ -1910,6 +1950,7 @@ export function DiagnosticsDialog({
         actionSummaries={actionSummaries}
       />
       {open && latencyOpen ? <LatencyAnalysisPopup open onClose={() => setLatencyOpen(false)} /> : null}
+      {open && keyExplorerOpen ? <KeyExplorerPopup open onClose={() => setKeyExplorerOpen(false)} /> : null}
       {open && historyOpen ? (
         <HealthHistoryPopup open onClose={() => setHistoryOpen(false)} history={healthHistory} />
       ) : null}

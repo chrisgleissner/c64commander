@@ -13,7 +13,10 @@ import {
   TEXT_SCALE_VARIABLE,
   applyTextScaleToDocument,
   isTextScaleId,
+  LARGEST_TEXT_SCALE_ID,
   MAX_TEXT_SCALE,
+  normalizeTextScaleId,
+  RETIRED_TEXT_SCALE_IDS,
   resolveTextScale,
 } from "@/lib/textScale";
 
@@ -41,7 +44,7 @@ describe("text scale", () => {
     // An unbounded scale breaks every layout at once. The largest option is the cap.
     const largest = Math.max(...TEXT_SCALE_OPTIONS.map((option) => option.scale));
     expect(largest).toBeLessThanOrEqual(MAX_TEXT_SCALE);
-    expect(resolveTextScale("largest")).toBe(MAX_TEXT_SCALE);
+    expect(resolveTextScale("large")).toBe(MAX_TEXT_SCALE);
   });
 
   it("increases monotonically through the options", () => {
@@ -66,15 +69,36 @@ describe("text scale", () => {
     // one every time the profile is evaluated, so a setting written there would be
     // silently overwritten and the control would appear to do nothing. Writing a
     // separate multiplier that the `html` rule composes gives each variable one owner.
-    applyTextScaleToDocument("larger");
+    applyTextScaleToDocument("large");
     const root = document.documentElement;
-    expect(root.style.getPropertyValue(TEXT_SCALE_VARIABLE)).toBe("1.3");
+    expect(root.style.getPropertyValue(TEXT_SCALE_VARIABLE)).toBe("1.15");
     expect(root.style.getPropertyValue("--display-profile-root-font-size")).toBe("");
-    expect(root.dataset.textScale).toBe("larger");
+    expect(root.dataset.textScale).toBe("large");
 
     applyTextScaleToDocument("rubbish");
     expect(root.style.getPropertyValue(TEXT_SCALE_VARIABLE)).toBe("1");
     expect(root.dataset.textScale).toBe(DEFAULT_TEXT_SCALE_ID);
+  });
+
+  /*
+   * "Larger" (1.3) and "Largest" (1.5) shipped before the cap. On a 392 CSS-pixel handset 1.3 hid
+   * half of every Config section title behind a two-line clamp and pushed a tab off the bar, and
+   * 1.5 cut the page title itself. They are gone, but a user who picked one still has it in
+   * storage, and reading it back as the default would take their text down two steps.
+   */
+  it("resolves a retired id to the largest size still offered", () => {
+    for (const retired of RETIRED_TEXT_SCALE_IDS) {
+      expect(normalizeTextScaleId(retired)).toBe(LARGEST_TEXT_SCALE_ID);
+      expect(resolveTextScale(retired)).toBe(MAX_TEXT_SCALE);
+    }
+    expect(normalizeTextScaleId("not-a-scale")).toBe(DEFAULT_TEXT_SCALE_ID);
+  });
+
+  it("offers no size the layout cannot draw whole", () => {
+    // Measured on the handset across all six pages: 1.15 renders every label, 1.3 does not.
+    for (const option of TEXT_SCALE_OPTIONS) {
+      expect(option.scale).toBeLessThanOrEqual(1.15);
+    }
   });
 
   it("does nothing, rather than throwing, when there is no document", () => {

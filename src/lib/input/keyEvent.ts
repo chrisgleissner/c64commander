@@ -51,7 +51,13 @@ export type SemanticAction =
   | "activate"
   | "openMenu"
   | "closeMenu"
-  | "toggleInputMode";
+  | "toggleInputMode"
+  /* Reserved for the Commodore key once its emitted code is known (spec.md section 9.3). `7` is
+     served by the dedicated search listener, outside the keypad provider, so the search key does
+     not disappear when keypad navigation is switched off. */
+  | "openSearch"
+  | "mediaPlayPause"
+  | "mediaNext";
 
 /** Every {@link SemanticAction}, useful for exhaustiveness checks and tests. */
 export const SEMANTIC_ACTIONS: readonly SemanticAction[] = [
@@ -84,6 +90,9 @@ export const SEMANTIC_ACTIONS: readonly SemanticAction[] = [
   "openMenu",
   "closeMenu",
   "toggleInputMode",
+  "openSearch",
+  "mediaPlayPause",
+  "mediaNext",
 ];
 
 const DIGIT_ACTIONS: readonly SemanticAction[] = [
@@ -180,6 +189,17 @@ export const findBinding = (keymap: Keymap, event: KeyEventLike): KeyBinding | n
   }
   return null;
 };
+
+/**
+ * The Android hardware Back key, which no keymap binding can express.
+ *
+ * It arrives as `{ key: "Escape", code: "", keyCode: 0 }`. `code` is empty and `keyCode` is 0, and
+ * spec.md section 9.3 forbids binding `keyCode: 0` — doing so would swallow every event that
+ * reports no key code at all. So it is recognised here instead, by all three fields together, and
+ * every handler that means "Back closes this" has to ask.
+ */
+export const isDeviceBackKey = (event: KeyEventLike): boolean =>
+  event.key === "Escape" && event.code === "" && event.keyCode === 0;
 
 /** Resolves a {@link KeyEventLike} to a {@link SemanticAction} via the keymap. */
 export const resolveSemanticAction = (keymap: Keymap, event: KeyEventLike): SemanticAction | null =>

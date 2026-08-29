@@ -13,6 +13,8 @@ Control and manage a Commodore 64 Ultimate from Android, iOS, or a self-hosted w
 
 - **Cross-platform**: Android and iOS apps, plus a self-hosted Docker web app for Windows, macOS, and Linux.
 - **Device support**: Works with the C64 Ultimate, Ultimate 64 Elite I/II, and Ultimate-II+(L) cartridges.
+- **Search**: Find any page, setting, action, tune or disk by name. Three ways in — the field at the top of Home, the Quick menu, or the `7` key. A result you cannot use yet is still listed, with the reason.
+- **Guided tour**: A first-run walk through every part of the app — playing music with nothing attached, playlists and where content comes from, disks, connecting and controlling a machine, watching and steering it, its configuration, getting around with a keypad, the built-in guides, and appearance. It drives the real app rather than showing pictures of it, and is skippable at any step and restartable from Docs or Settings > About.
 - **Dashboard**: Control the machine, drives, printer, SID mixer, lighting, and streams from one page.
 - **Playlists and SID Radio**: Play programs and SID music from local files, device storage, HVSC, or CommoServe.
 - **Remote Input and Live View**: Use an on-screen joystick or keyboard, and stream audio or video from the running machine.
@@ -90,21 +92,23 @@ C64 Commander reconnects to saved devices automatically on later launches.
 
 ### Home
 
-Control the machine, quick actions, lighting, drives, printer, SID mixer, streams, and configuration snapshots.
+Home opens on search, then **Quick Actions** — one grid in four bands: watch (Live View, Game, Input), listen (SID Radio, the last tune, what you played recently), operate (Menu, Pause, the RAM snapshots), and last the ones that interrupt the machine. Below that are the cards for lighting, drives, printer, SID mixer, streams, and configuration snapshots, and the system information last.
+
+With nothing connected, Home does not become a wall of "Not available": search stays where it is, Radio, Last tune and Recent are drawn on their own because none of them needs a machine, a card explains how to connect one, and the device cards are drawn as titles with their contents put away until one answers.
 
 <table>
   <tr>
     <td><img src="docs/img/app/home/00-overview-light.png" alt="C64 Commander intro" width="360"/></td>
-    <td><img src="docs/img/app/home/sections/01-system-info-to-quick-actions.png" alt="Home top row and quick actions (Light)" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/01-quick-actions.png" alt="Home search field and quick actions (Light)" width="360"/></td>
     <td><img src="docs/img/app/home/01-overview-dark.png" alt="Home top row and quick actions (Dark)" width="360"/></td>
   </tr>
   <tr>
     <td><img src="docs/img/app/home/sections/05-video-to-audio.png" alt="Home sections from video through audio" width="360"/></td>
-    <td><img src="docs/img/app/home/sections/09-lighting-to-keyboard-light.png" alt="Home sections through lighting" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/10-lighting-to-keyboard-light.png" alt="Home sections through lighting" width="360"/></td>
     <td><img src="docs/img/app/home/sections/12-drives-to-printers.png" alt="Home sections from drives through printers" width="360"/></td>
   </tr>
   <tr>
-    <td><img src="docs/img/app/home/sections/14-streams-to-config.png" alt="Home sections from streams through config" width="360"/></td>
+    <td><img src="docs/img/app/home/sections/15-streams-to-system-info.png" alt="Home sections from streams through system info" width="360"/></td>
     <td><img src="docs/img/app/home/dialogs/05-lighting-studio-medium.png" alt="Lighting Studio bottom sheet" width="360"/></td>
     <td><img src="docs/img/app/home/03-demo-mode-interstitial.png" alt="Demo Mode interstitial" width="360"/></td>
   </tr>
@@ -234,6 +238,7 @@ Create blank disks, inspect disk images, launch individual programs, search insi
   <tr>
     <td><img src="docs/img/app/disks/content-explorer/01-new-disk.png" alt="New disk dialog: create a formatted blank D64/D71/D81/DNP image on the device" width="360"/></td>
     <td><img src="docs/img/app/settings/content-explorer/01-launch-safety.png" alt="Settings: search inside disk images and answer a cartridge boot menu after reset" width="360"/></td>
+    <td width="360"></td>
   </tr>
 </table>
 
@@ -309,13 +314,13 @@ Pick one of seven colour styles under **Settings > Appearance > Style**, on top 
 <table>
   <thead>
     <tr>
-      <th align="left">Modem Grey (default)</th>
+      <th align="left">Cool Grey (default)</th>
       <th align="left">Breadbin Beige</th>
       <th align="left">Vault Black (dark only)</th>
     </tr>
   </thead>
   <tr>
-    <td><img src="docs/img/app/styles/showcase-modem-grey-light.png" alt="Home in Modem Grey, the default style" width="360"/></td>
+    <td><img src="docs/img/app/styles/showcase-cool-grey-light.png" alt="Home in Cool Grey, the default style" width="360"/></td>
     <td><img src="docs/img/app/styles/showcase-breadbin-beige-light.png" alt="Home in Breadbin Beige" width="360"/></td>
     <td><img src="docs/img/app/styles/showcase-vault-black-dark.png" alt="Home in Vault Black, one of the two dark-only styles" width="360"/></td>
   </tr>
@@ -361,7 +366,11 @@ The layout adapts to the screen size: Small for phones, Standard for large phone
 
 Use a hardware keyboard, D-pad, joystick, or numeric keypad to navigate the app. The highlighted control shows the current selection. Use Up/Down to move, OK/Enter to activate, and Back/Escape to close or return.
 
-Disable this under **Settings > Experimental > Keyboard and keypad navigation** for touch-only use. T9 text entry is used only in keypad-first mode; hardware keyboard input remains unchanged.
+`1`–`6` jump to the six pages, `7` opens search, `0` starts Game Mode, `*` opens Diagnostics and `#` opens the device switcher. On a keypad handset `F1` is play/pause and `F3` is next tune, from any page. `7` keeps working even with keypad navigation switched off, because search is how you get around when the keys are not doing it for you.
+
+**Diagnostics > Key Explorer** reports what any key you press actually sends — the `key`, `code` and `keyCode`, and what the app resolves it to. It records the key's identity only, never a typed character.
+
+Disable directional navigation under **Settings > Experimental > Keyboard and keypad navigation** for touch-only use. T9 text entry is used only in keypad-first mode; hardware keyboard input remains unchanged.
 
 ## Troubleshooting
 

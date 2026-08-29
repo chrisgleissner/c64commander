@@ -1,6 +1,13 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { readSectionStates, writeSectionState } from "@/lib/ui/collapsibleSectionStore";
+import {
+  SECTION_OPEN_LATCH_TTL_MS,
+  readSectionStates,
+  requestSectionOpen,
+  resetSectionOpenLatchForTests,
+  subscribeSectionOpenRequest,
+  writeSectionState,
+} from "@/lib/ui/collapsibleSectionStore";
 
 const OPEN_SECTIONS_KEY = "c64u_open_sections";
 const LEGACY_SETTINGS_KEY = "c64u_settings_open_sections";
@@ -118,4 +125,72 @@ describe("collapsibleSectionStore", () => {
 
     expect(readSectionStates("settings")).toEqual(new Map([["appearance", true]]));
   });
+});
+
+describe("a request made before the section exists", () => {
+  afterEach(() => {
+    resetSectionOpenLatchForTests();
+  });
+
+  /*
+   * Nearly every caller asks for a section on a page it is about to navigate to, and React Router
+   * commits that navigation asynchronously. Dispatching alone reached nobody: the section stayed
+   * shut and the search resolver waited for an element that was never rendered.
+   */
+  it("reaches a subscriber that mounts afterwards", () => {
+    const seen: Array<[string, string]> = [];
+    requestSectionOpen("settings", "connection");
+
+    const unsubscribe = subscribeSectionOpenRequest((scope, id) => seen.push([scope, id]));
+
+    expect(seen).toEqual([["settings", "connection"]]);
+    unsubscribe();
+  });
+
+  it("still reaches a subscriber that was already listening, exactly once", () => {
+    const seen: Array<[string, string]> = [];
+    const unsubscribe = subscribeSectionOpenRequest((scope, id) => seen.push([scope, id]));
+
+    requestSectionOpen("settings", "connection");
+
+    expect(seen).toEqual([["settings", "connection"]]);
+    unsubscribe();
+  });
+
+  it("expires, so a request cannot open a section minutes later", () => {
+    vi.useFakeTimers();
+    try {
+      requestSectionOpen("settings", "connection");
+      vi.advanceTimersByTime(SECTION_OPEN_LATCH_TTL_MS + 1);
+
+      const seen: Array<[string, string]> = [];
+      const unsubscribe = subscribeSectionOpenRequest((scope, id) => seen.push([scope, id]));
+
+      expect(seen).toEqual([]);
+      unsubscribe();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+/*
+ * Navigating away from Home and back within the window remounts every section. Leaving the request
+ * in place re-delivered it to each of them, so a card the user had closed by hand in the meantime
+ * opened itself again — and CollapsibleSection persists an open, so the close was lost.
+ */
+it("is claimed by the first subscriber, not re-delivered to the next", () => {
+  resetSectionOpenLatchForTests();
+  const first: Array<[string, string]> = [];
+  const second: Array<[string, string]> = [];
+
+  requestSectionOpen("home", "drives");
+  const stopFirst = subscribeSectionOpenRequest((scope, id) => first.push([scope, id]));
+  const stopSecond = subscribeSectionOpenRequest((scope, id) => second.push([scope, id]));
+
+  expect(first).toEqual([["home", "drives"]]);
+  expect(second).toEqual([]);
+  stopFirst();
+  stopSecond();
+  resetSectionOpenLatchForTests();
 });

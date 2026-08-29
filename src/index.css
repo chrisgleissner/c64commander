@@ -178,15 +178,9 @@
     /* Shape and elevation (spec.md docs/plans/appearance-styles/spec.md section 5.1) */
     --radius-panel: calc(var(--radius) + 4px);
     --edge-width: 1px;
-    --shadow-1:
-      0 1px 2px 0 rgb(0 0 0 / 0.06),
-      0 1px 1px -1px rgb(0 0 0 / 0.04);
-    --shadow-2:
-      0 4px 8px -2px rgb(0 0 0 / 0.1),
-      0 2px 4px -2px rgb(0 0 0 / 0.08);
-    --shadow-3:
-      0 16px 32px -8px rgb(0 0 0 / 0.18),
-      0 6px 12px -6px rgb(0 0 0 / 0.12);
+    --shadow-1: 0 1px 2px 0 rgb(0 0 0 / 0.06), 0 1px 1px -1px rgb(0 0 0 / 0.04);
+    --shadow-2: 0 4px 8px -2px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.08);
+    --shadow-3: 0 16px 32px -8px rgb(0 0 0 / 0.18), 0 6px 12px -6px rgb(0 0 0 / 0.12);
     --ring-style: solid;
     --app-bar-band: none;
 
@@ -709,8 +703,19 @@ button:focus-visible,
  * dropped first. See the comment beside `app-chrome-badge-host` in `UnifiedHealthBadge`.
  */
 @media (max-width: 430px) {
-  .app-chrome-badge-host {
+  .app-chrome-badge-host,
+  .app-chrome-badge-status {
     display: none;
+  }
+
+  /*
+   * What is left is the glyph and the problem count, and neither can be shortened: the badge
+   * carries `min-w-0` so the host can give way, which with the host gone let flexbox squeeze
+   * whatever remained. The floor is its content width but never more than the row, so content
+   * wider than the header still gives way rather than pushing the row past the screen edge.
+   */
+  .app-chrome-badge {
+    min-width: min(fit-content, 100%);
   }
 }
 
@@ -829,9 +834,16 @@ button:focus-visible,
      medium scale: medium renders text-xl at 24px, so compact needs 24 / 16 = 1.5rem to match.
      `displayProfiles.spec.ts` asserts the two stay within 0.1px of each other, which is what
      catches this drifting when either profile's sizes change. */
+  /*
+   * 1.267, not the 1.1 this had. The header is line-clamped, so its box is a whole number of line
+   * boxes and anything outside them is cut: at 1.1 the line box was 26px against the 28px the font
+   * actually draws, which took the descender off the "y" in "Play files" on every compact screen
+   * and at every text size. The ratio is what matters, so both sides stay in rem; 1.2 was still a
+   * pixel short at the Large text size, where the same font draws 34px into a 33px line.
+   */
   :root[data-display-profile="compact"] :where(.c64-header[class~="text-xl"]) {
     font-size: 1.5rem;
-    line-height: 1.65rem;
+    line-height: 1.9rem;
   }
 
   /*
@@ -1290,4 +1302,22 @@ button:focus-visible,
    frame still reserving the old height and the dead band moves instead of going. */
 :root[data-display-profile="compact"] .tab-bar {
   padding-bottom: var(--app-chrome-rail-padding-y);
+}
+
+/* The landing highlight search, the Home quick actions and the tour all leave on whatever they
+   reached (spec.md section 5.12). Outline and box-shadow only, never a border or a size: the
+   element must not move under the finger that is about to touch it. */
+[data-search-landed="true"] {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px hsl(var(--ring) / 0.25);
+  border-radius: var(--radius);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-search-landed="true"] {
+    transition:
+      outline-color 150ms ease-out,
+      box-shadow 150ms ease-out;
+  }
 }

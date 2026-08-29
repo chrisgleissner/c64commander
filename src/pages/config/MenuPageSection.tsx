@@ -9,6 +9,7 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FolderOpen, RefreshCw } from "lucide-react";
+import { configCategorySectionId } from "@/lib/search/configDeepLink";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { Button } from "@/components/ui/button";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
@@ -71,7 +72,9 @@ export function MenuPageSection({
     [blocks],
   );
 
-  const slug = page.label.toLowerCase().replace(/\s+/g, "-");
+  // The same rule the config deep link resolves a section id with: a drift between the two is a
+  // search result that navigates and then waits out the resolver's ceiling on an id nothing renders.
+  const slug = configCategorySectionId(page.label);
   const headerFocusRef = useFocusItem<HTMLButtonElement>({
     id: `config-menu-page-${slug}`,
     order: focusOrder,

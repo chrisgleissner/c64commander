@@ -120,11 +120,26 @@ const tourHome = async (page: Page) => {
 
   await pauseAtTop(page);
 
-  const systemInfo = page.getByTestId("home-system-info");
-  await systemInfo.click();
+  // Home now opens on search and on what works with no C64 attached, with the machine below them
+  // and the version line below that; the walk follows that order down the page.
+  await page.getByTestId("home-search-field").click();
+  await expect(page.getByTestId("search-overlay")).toBeVisible();
+  await page.waitForTimeout(SHORT_PAUSE_MS);
+  await page.getByTestId("search-input").fill("radio");
+  await page.waitForTimeout(SHORT_PAUSE_MS);
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("search-overlay")).toBeHidden();
+  await page.waitForTimeout(SHORT_PAUSE_MS);
+
+  await smoothScrollToLocator(page, page.getByTestId("home-machine-controls"), 1200);
   await page.waitForTimeout(SHORT_PAUSE_MS);
 
   await smoothScrollToLocator(page, page.getByTestId("home-machine-controls"), 1800);
+  await page.waitForTimeout(SHORT_PAUSE_MS);
+
+  const systemInfo = page.getByTestId("home-system-info");
+  await smoothScrollToLocator(page, systemInfo, 1200);
+  await systemInfo.click();
   await page.waitForTimeout(SHORT_PAUSE_MS);
 
   // "Quick Config" dissolved into separate collapsible cards. Video, Ports and CPU & RAM
@@ -275,7 +290,14 @@ const tourDocs = async (page: Page) => {
   await expect(page.getByRole("heading", { name: /docs/i })).toBeVisible();
   await pauseAtTop(page);
 
-  const buttons = page.locator("main button").filter({ hasText: /^[A-Za-z]/ });
+  // The disclosure buttons, opened and closed again to show what is behind them. The tour card at
+  // the top of Docs is excluded: clicking it starts the guided tour, whose full-screen overlay then
+  // covers the rest of the walkthrough.
+  const buttons = page
+    .locator("main button")
+    .filter({ hasText: /^[A-Za-z]/ })
+    .filter({ hasNot: page.locator("[data-testid=docs-tour-start]") })
+    .and(page.locator(":not([data-testid=docs-tour-start])"));
   const count = await buttons.count();
   for (let index = 0; index < Math.min(3, count); index += 1) {
     const button = buttons.nth(index);

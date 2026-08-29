@@ -97,13 +97,15 @@ import { NowPlayingRanking } from "@/pages/playFiles/components/NowPlayingRankin
 import { useCurrentTuneMd5 } from "@/pages/playFiles/hooks/useCurrentTuneMd5";
 import { useSidRadioFlags } from "@/lib/sidRadio/useSidRadioFlags";
 import { LikedTunesSheet } from "@/pages/playFiles/components/LikedTunesSheet";
+import { usePlayDeepLinks, useTransportCommands } from "@/pages/playFiles/hooks/usePlayDeepLinks";
+import { remoteInputRequestBus, transportCommandBus } from "@/lib/input/latchedCommandBus";
 import { useSidRadio } from "@/pages/playFiles/hooks/useSidRadio";
 import { SidRadioChip } from "@/pages/playFiles/components/SidRadioChip";
 import { SidRadioLauncherSheet } from "@/pages/playFiles/components/SidRadioLauncherSheet";
 import { HvscSearchSheet } from "@/pages/playFiles/components/HvscSearchSheet";
 import { TuneListSheet } from "@/pages/playFiles/components/TuneListSheet";
 import type { HvscSearchHit } from "@/pages/playFiles/hooks/useHvscArchiveSearch";
-import { buildFoundTuneItem, insertAfterCurrent } from "@/pages/playFiles/insertTuneNext";
+import { buildFoundTuneItem, buildRecentPlaylistItem, insertAfterCurrent } from "@/pages/playFiles/insertTuneNext";
 import { expandSubsongs, hasAllTunesQueued, MIN_TUNES_TO_EXPAND } from "@/pages/playFiles/expandSubsongs";
 import { md548ForVirtualPath } from "@/lib/sidRadio/md5PathIndex";
 import {
@@ -111,6 +113,7 @@ import {
   saveRecentlyPlayed,
   toRecentlyPlayedEntry,
   withRecentlyPlayed,
+  type RecentlyPlayedEntry,
 } from "@/lib/sidRadio/recentlyPlayed";
 import { useLikedTuneCount } from "@/lib/sidRadio/useLikedTuneCount";
 import { recordSkip } from "@/lib/sidRadio/sidRadioStats";
@@ -329,6 +332,22 @@ export default function PlayFilesPage() {
   const { value: lightingStudioEnabled } = useFeatureFlag("lighting_studio_enabled");
   const { value: remoteInputEnabled } = useFeatureFlag("remote_input_enabled");
   const [remoteInputSheetOpen, setRemoteInputSheetOpen] = useState(false);
+  /*
+   * The Remote Input request, claimed here as well as on Home.
+   *
+   * The search handler publishes and navigates to Home only when the current page is neither Home
+   * nor Play, on the stated grounds that both own a sheet. Only Home subscribed, so activating the
+   * result from Play published a command nobody claimed: no navigation, no sheet, and the latch
+   * expired five seconds later. The claim inside the handler is what stops the mount-time drain
+   * delivering it a second time.
+   */
+  useEffect(() => {
+    if (remoteInputRequestBus.takePending() !== null) setRemoteInputSheetOpen(true);
+    return remoteInputRequestBus.subscribe(() => {
+      remoteInputRequestBus.takePending();
+      setRemoteInputSheetOpen(true);
+    });
+  }, []);
   const [likedTunesSheetOpen, setLikedTunesSheetOpen] = useState(false);
   const [sidRadioLauncherOpen, setSidRadioLauncherOpen] = useState(false);
   const [hvscSearchOpen, setHvscSearchOpen] = useState(false);
@@ -596,6 +615,30 @@ export default function PlayFilesPage() {
   useEffect(() => {
     handleNextRef.current = handleNext;
   }, [handleNext]);
+
+  // Home's tiles and the search overlay send this page here to do one thing (spec.md 6.3).
+  usePlayDeepLinks({
+    openRadioLauncher: () => setSidRadioLauncherOpen(true),
+    // Recently played is the empty state of the archive search sheet, which is where that list has
+    // always lived; a second list of the same rows would be a second idea of what a result is.
+    openRecentlyPlayed: () => setHvscSearchOpen(true),
+    openFindATune: (seed) => {
+      setHvscSearchSeed(seed ?? null);
+      setHvscSearchOpen(true);
+    },
+    openLikedTunes: () => setLikedTunesSheetOpen(true),
+    resumeSession: () => transportCommandBus.publish("play"),
+  });
+
+  // F1 and F3 from anywhere, delivered through the latch (spec.md 9.5). Held until the stored
+  // playlist has been restored: usePlaybackPersistence reads it in an effect declared below this
+  // one, so a command drained on mount ran against an empty playlist and did nothing.
+  useTransportCommands((command) => {
+    if (command === "next") void handleNext();
+    else if (command === "play") {
+      if (!isPlaying) void handlePlay();
+    } else void handlePauseResume();
+  }, playlist.length > 0);
   const sleepTimer = useSleepTimer({
     onExpire: () => {
       void handleStop();
@@ -1584,16 +1627,27 @@ export default function PlayFilesPage() {
    * second row.
    */
   useEffect(() => {
-    if (!currentItem || !isSongCategory(currentItem.category)) return;
-    const virtualPath = currentItem.request.source === "hvsc" ? currentItem.path : null;
-    if (!virtualPath) return;
+    if (!currentItem || !currentItem.path) return;
+    // Whatever was opened, not only an archive tune. The row is reopened by this path, so a disk or
+    // a program carries the source it came from as well; only an archive tune has a path that is
+    // meaningful on its own. Recording tunes alone was why Recent stayed empty for anyone who
+    // played programs and disks, which the store has had a category for all along.
+    const isArchiveTune = isSongCategory(currentItem.category) && currentItem.request.source === "hvsc";
+    const category =
+      currentItem.category === "disk" ? "disk" : isSongCategory(currentItem.category) ? "sid" : "program";
     saveRecentlyPlayed(
       withRecentlyPlayed(
         loadRecentlyPlayed(),
         toRecentlyPlayedEntry({
-          virtualPath,
+          virtualPath: currentItem.path,
           title: currentDisplay?.title ?? currentItem.label,
           author: currentItemCredits.author,
+          category,
+          // Both halves of where it came from: the kind the router dispatches on, and which
+          // configured source of that kind. A device can have several local roots, and "local"
+          // alone cannot say which tree the path belongs to.
+          ...(isArchiveTune ? {} : { source: currentItem.request.source }),
+          ...(isArchiveTune || !currentItem.sourceId ? {} : { sourceId: currentItem.sourceId }),
           songNr: currentItem.request.songNr,
           subsongCount: currentItem.subsongCount,
           durationMs: currentItem.durationMs,
@@ -1635,6 +1689,17 @@ export default function PlayFilesPage() {
   const playFoundTune = useCallback(
     (hit: HvscSearchHit) => {
       const item = buildFoundTuneItem(hit);
+      const { items, index } = insertAfterCurrent(playlist, currentIndex, item);
+      void startPlaylist(items, index, { replaceQueue: true });
+    },
+    [currentIndex, playlist, startPlaylist],
+  );
+
+  // The same path for a disk or a program out of Recent: its stored source kind and id are what
+  // turn a remembered path back into something the router can dispatch.
+  const playRecentItem = useCallback(
+    (entry: RecentlyPlayedEntry) => {
+      const item = buildRecentPlaylistItem(entry);
       const { items, index } = insertAfterCurrent(playlist, currentIndex, item);
       void startPlaylist(items, index, { replaceQueue: true });
     },
@@ -2940,6 +3005,7 @@ export default function PlayFilesPage() {
               if (!open) setHvscSearchSeed(null);
             }}
             onPlay={playFoundTune}
+            onPlayRecent={playRecentItem}
             onStartStation={startStationFromFoundTune}
             canSeedStation={canSeedStationFrom}
             stationActive={sidRadio.active}

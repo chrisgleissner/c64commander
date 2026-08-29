@@ -13,7 +13,7 @@ import {
   saveHvscBrowseIndexSnapshot,
 } from "@/lib/hvsc/hvscBrowseIndexStore";
 import { readDataFileText } from "@/lib/hvsc/hvscFilesystem";
-import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
+import { isHvscInstalled } from "@/lib/hvsc/hvscStateStore";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
 import {
@@ -61,8 +61,6 @@ let activeLoad: Promise<void> | null = null;
 // in-flight load, so a post-ingestion force:true is never swallowed by a
 // pre-commit (un-forced) load that discovered nothing.
 let pendingForcedReload: Promise<void> | null = null;
-
-const isHvscInstalled = () => loadHvscState().installedVersion > 0;
 
 const decodeBase64Text = (raw: string) => {
   try {

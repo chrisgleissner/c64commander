@@ -46,11 +46,14 @@ fallback, and the legacy Android key code).
 | **Menu**              | `MENU` 82            | `openMenu`        | Right soft-key "Menu": focused item's context menu, else the **Quick Menu** (jump-to-page / Game Mode / Diagnostics / Switch device).                                                                                                                             |
 | **Left soft key**     | `SOFTLEFT` 1         | `softLeft`        | Follows the Back chain (Back/Exit/Close/Done).                                                                                                                                                                                                                    |
 | **Right soft key**    | `SOFTRIGHT` 2        | `softRight`       | Opens current item/scope menu.                                                                                                                                                                                                                                    |
-| **1–9**               | `KEYCODE_1..9` 8–16  | `digit1`–`digit9` | In a text field: T9 entry. Outside a field: **jump to tab 1–6** (Home/Play/Disks/Config/Settings/Docs); 7–9 unbound at app level.                                                                                                                                 |
+| **1–9**               | `KEYCODE_1..9` 8–16  | `digit1`–`digit9` | In a text field: T9 entry. Outside a field: **jump to tab 1–6** (Home/Play/Disks/Config/Settings/Docs); **7 opens Search**, on its own listener so it survives `keypad_input_enabled = off`; 8–9 unbound at app level.                                                                                                                                 |
 | **0**                 | `KEYCODE_0` 7        | `digit0`          | In a text field: T9 entry. Outside a field: **enter Game Mode** (starts the remembered Watch/Listen and opens the sheet ready to play). Inside the Remote Input sheet it is a joystick direction, which the open-overlay exclusion keeps this shortcut away from. |
 | **✱ (star)**          | `STAR` 17            | `star`            | In a hostname field: cycle separators `. : - _ /`. Otherwise **open Diagnostics**.                                                                                                                                                                                |
 | **# (pound)**         | `POUND` 18           | `hash`            | In a text field: toggle T9 mode. Otherwise **open the Device Switcher** (= badge long-press).                                                                                                                                                                     |
 | (desktop equiv.)      | `ESCAPE` 111 / `Esc` | `escape`          | Dismiss overlay / ascend — **never navigates the route** (only Back/soft-left do).                                                                                                                                                                                |
+| **F1**                | —                    | `mediaPlayPause`  | Play / pause the transport, from any page. Bound in the **keypad profile only**, so a desktop keyboard keeps `F1 → softLeft`. Latched across the navigation to Play.                                                                                             |
+| **F3**                | —                    | `mediaNext`       | Next tune, from any page. Keypad profile only, so a desktop keyboard keeps `F3 → toggleInputMode`.                                                                                                                                                                |
+| **Commodore**         | unknown              | —                 | **Not bound.** Its emitted code is unknown, and a guessed real code would shadow a key that already works. Intended action once known: open Search. See Diagnostics → Key Explorer.                                                                                |
 
 Desktop/Bluetooth-keyboard equivalents (`defaultKeyboard` profile): Arrows =
 D-pad, Space = OK/center, Enter = enter, Tab/Shift+Tab = next/previous field,
@@ -157,6 +160,20 @@ not-connected / empty / single-device).
 
 ### 4.1 Home (`/`)
 
+- **Search field** — button — `home-search-field` — R✅ I✅ — looks like a field, is a
+  button: tapping it opens the full-screen search overlay (§5.0) rather than searching in
+  place, so results get the whole screen instead of the strip above the keyboard
+- **Tour: device steps offer** — `home-tour-device-steps-offer` — R✅ I✅
+  `[visible once, after a first connection, when the tour's device steps ran without one]` —
+  Show me (`home-tour-device-steps-start`) / dismiss (`home-tour-device-steps-dismiss`)
+- **Listen and play** (`home-listen-and-play`) — four tiles, each disabled with its reason
+  rather than hidden:
+  - Radio — button — `home-tile-action.sid-radio` — R✅ I✅ `[disabled: SID Radio is off in Settings]`
+  - Resume — button — `home-tile-action.resume-session` — R✅ I✅ `[disabled: nothing has been played yet]`
+  - Recent — button — `home-tile-action.recently-played` — R✅ I✅ `[disabled: nothing has been opened yet]`
+  - Live View — button — `home-tile-home.section.live-view` — R✅ I✅ `[disabled: no device, or Live View off]`
+- **Connect a C64** (`home-connect-c64`) — button — `home-connect-c64-setup` — R✅ I✅
+  `[visible only in the offline arrangement, in place of Quick Actions]`
 - **Header**
   - Quick menu — button — `app-bar-quick-menu` — R✅ I✅
   - Status badge — button — `unified-health-badge` — R✅ I✅
@@ -520,13 +537,15 @@ single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
   button — `settings-roms-fetch` — R✅ I✅ ; Remove — button —
   `settings-roms-remove` — R✅ I✅ `[disabled: no ROMs stored]`
 - **Notifications**: visibility — select — R✅ I✅ ; duration — slider — R✅ I✅
-- **Build/info**: REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅
+- **Build/info**: Take the tour — button — `settings-about-take-the-tour` — R✅ I✅ ;
+  REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅
   (`c64u-remote`: C64U User Guide — link — `settings-about-c64u-user-guide`
   — R✅ I✅) ; Open source licenses — button — R✅ I✅ (sub-route
   `/settings/open-source-licenses`)
 
 ### 4.6 Docs (`/docs`)
 
+- Take the tour — card `docs-tour-card`, button `docs-tour-start` — R✅ I✅ — first on the page
 - Section toggles: Getting Started, Home, Play files, Disks & Drives, Swapping
   Disks, Config, Settings, Diagnostics — button — `docs-toggle-*` — R✅ I✅
 - External links: Ultimate Documentation, REST API Reference, Ultimate 64
@@ -537,6 +556,39 @@ single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
 ---
 
 ## 5. Overlays / dialogs (transient scopes)
+
+### 5.0 Search overlay (`search-overlay`)
+
+Opened by three doors — the Home field, the Quick Menu's top entry
+(`keypad-quick-menu-search`), and the `7` key — all of which reach one component.
+
+- Search box — text — `search-input` — R✅ I✅ — a `combobox` over
+  `#search-results-listbox`. **The overlay owns its own keys and skips the focus ring**
+  (`data-key-nav-skip` on the root and on the list): Up/Down move
+  `aria-activedescendant` while DOM focus STAYS in the field, Enter activates the active
+  row, Escape and Back close. The ring's own Up/Down inside a dialog move real DOM focus,
+  which would take the user out of the field on the first press.
+- Close — button — `search-close` — R✅ I✅
+- Result row — `search-result-<entry id>` — R✅ I✅ — `role="option"`, at least 44 px, with
+  the group folded into its accessible name. A row whose requirements are unmet is
+  `aria-disabled` and carries the reason; activating it goes to the setting that would
+  enable it.
+- More in a group — button — `search-more-<group>` — R✅ I✅ `[at most five rows per group]`
+- Promoted chips (empty query) — `search-chip-<entry id>` — R✅ I✅
+- Recent searches (empty query) — `search-recent` — R✅ I✅
+- Empty state — `search-empty`, with `search-empty-play` — R✅ I✅
+
+### 5.0.1 Tour overlay (`tour-overlay`)
+
+- Skip / Back / Next — buttons — `tour-skip` / `tour-back` / `tour-next` — R✅ I✅ — all 44 px.
+  Keypad: Left/Right are Back/Next, OK is Next, Back skips.
+- `tour-progress` says `Step n of 8`; `tour-spotlight` is the union of the step's anchors,
+  and `data-tour-degraded="true"` marks a step that could not reach one.
+
+### 5.0.2 Key Explorer (`key-explorer-popup`)
+
+Under Diagnostics (`open-key-explorer-screen`). Copy as text — `key-explorer-copy` — R✅ I✅ ;
+Clear — `key-explorer-clear` — R✅ I✅. Records key identity only, never a typed character.
 
 When an app dialog / sheet / Radix menu opens, it becomes the active scope and
 its controls are discovered the same way (Up/Down within, OK activates, Back/Esc

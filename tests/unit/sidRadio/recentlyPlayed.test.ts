@@ -131,3 +131,131 @@ describe("storage", () => {
     expect(loadRecentlyPlayed()).toEqual([]);
   });
 });
+
+describe("v1 to v2 migration", () => {
+  /*
+   * A real v1 payload: no `category`, because v1 held HVSC tunes and nothing else. The Home Recent
+   * tile lists disks and programs too, so every migrated row has to become a tune explicitly rather
+   * than by the reader assuming what an absent field meant.
+   */
+  const V1_PAYLOAD = [
+    {
+      virtualPath: "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
+      title: "Commando",
+      author: "Rob Hubbard",
+      folder: "/MUSICIANS/H/Hubbard_Rob",
+      songNr: 1,
+      subsongCount: 3,
+      durationMs: 214000,
+      playedAt: 1735689600000,
+    },
+    {
+      virtualPath: "/MUSICIANS/G/Galway_Martin/Wizball.sid",
+      title: "Wizball",
+      author: "Martin Galway",
+      folder: "/MUSICIANS/G/Galway_Martin",
+      playedAt: 1735689500000,
+    },
+  ];
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("reads a v1 payload once and writes it back as v2 with category sid", () => {
+    localStorage.setItem("c64u_recently_played:v1", JSON.stringify(V1_PAYLOAD));
+
+    const migrated = loadRecentlyPlayed();
+
+    expect(migrated).toHaveLength(2);
+    expect(migrated.map((entry) => entry.category)).toEqual(["sid", "sid"]);
+    expect(migrated[0]).toMatchObject({
+      virtualPath: "/MUSICIANS/H/Hubbard_Rob/Commando.sid",
+      title: "Commando",
+      author: "Rob Hubbard",
+      songNr: 1,
+      subsongCount: 3,
+      durationMs: 214000,
+      playedAt: 1735689600000,
+    });
+    expect(JSON.parse(localStorage.getItem("c64u_recently_played:v2") ?? "[]")).toHaveLength(2);
+  });
+
+  it("removes the v1 key, so a row removed after the migration cannot come back", () => {
+    localStorage.setItem("c64u_recently_played:v1", JSON.stringify(V1_PAYLOAD));
+    loadRecentlyPlayed();
+    expect(localStorage.getItem("c64u_recently_played:v1")).toBeNull();
+
+    saveRecentlyPlayed([]);
+    expect(loadRecentlyPlayed()).toEqual([]);
+  });
+
+  it("leaves an existing v2 list alone rather than re-importing v1 over it", () => {
+    localStorage.setItem("c64u_recently_played:v1", JSON.stringify(V1_PAYLOAD));
+    localStorage.setItem(
+      "c64u_recently_played:v2",
+      JSON.stringify([
+        {
+          virtualPath: "/local/game.d64",
+          title: "Game",
+          author: null,
+          folder: "/local",
+          category: "disk",
+          playedAt: 1,
+        },
+      ]),
+    );
+
+    const loaded = loadRecentlyPlayed();
+
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].category).toBe("disk");
+  });
+
+  it("carries a disk and a program through unchanged", () => {
+    saveRecentlyPlayed([
+      toRecentlyPlayedEntry({ virtualPath: "/local/game.d64", title: "Game", category: "disk", sourceId: "local" }),
+      toRecentlyPlayedEntry({ virtualPath: "/local/tool.prg", title: "Tool", category: "program" }),
+    ]);
+
+    expect(loadRecentlyPlayed().map((entry) => entry.category)).toEqual(["disk", "program"]);
+    expect(loadRecentlyPlayed()[0].sourceId).toBe("local");
+  });
+
+  it("defaults an entry built with no category to a tune", () => {
+    expect(toRecentlyPlayedEntry({ virtualPath: "/a/b.sid", title: "B" }).category).toBe("sid");
+  });
+
+  it("drops a malformed row without taking the list with it", () => {
+    localStorage.setItem(
+      "c64u_recently_played:v2",
+      JSON.stringify([{ nope: true }, null, { virtualPath: "/a/b.sid", title: "B", playedAt: 5 }]),
+    );
+    expect(loadRecentlyPlayed().map((entry) => entry.virtualPath)).toEqual(["/a/b.sid"]);
+  });
+});
+
+/*
+ * A disk or a program is reopened by its source path, and the router dispatches on the source KIND.
+ * Storing the id alone left a row that could be listed and not opened; storing the kind alone could
+ * not say which of several configured local roots the path belongs to.
+ */
+describe("where a non-archive row came from", () => {
+  it("keeps both the source kind and the source id", () => {
+    const entry = toRecentlyPlayedEntry({
+      virtualPath: "/Games/Elite.d64",
+      title: "Elite",
+      category: "disk",
+      source: "local",
+      sourceId: "local-source-2",
+    });
+
+    expect(entry.source).toBe("local");
+    expect(entry.sourceId).toBe("local-source-2");
+
+    saveRecentlyPlayed([entry]);
+    const [readBack] = loadRecentlyPlayed();
+    expect(readBack.source).toBe("local");
+    expect(readBack.sourceId).toBe("local-source-2");
+  });
+});

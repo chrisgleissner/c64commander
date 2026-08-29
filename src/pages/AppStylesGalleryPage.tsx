@@ -57,6 +57,7 @@ import {
 import { SelectableActionList, type ActionListItem } from "@/components/lists/SelectableActionList";
 import { toast } from "@/hooks/use-toast";
 import { APP_STYLES, DEFAULT_APP_STYLE_ID, type AppStyleMode } from "@/generated/appStyles";
+import { applyStyleRename } from "@/lib/appStyles/renames";
 import { HEALTH_TIMELINE_STATE_COLORS } from "@/lib/diagnostics/healthHistoryTimeline";
 
 /**
@@ -98,7 +99,10 @@ const GallerySection = ({ slug, title, children }: { slug: string; title: string
 
 export default function AppStylesGalleryPage() {
   const [searchParams] = useSearchParams();
-  const requestedStyleId = searchParams.get("style") ?? DEFAULT_APP_STYLE_ID;
+  const rawStyleId = searchParams.get("style") ?? DEFAULT_APP_STYLE_ID;
+  // A ?style= from a README, a manual or a bookmark predates the renames, so it maps through the
+  // same table the storage read uses rather than silently falling back to the first style.
+  const requestedStyleId = applyStyleRename(rawStyleId);
   const requestedMode = (searchParams.get("mode") as AppStyleMode | null) ?? "light";
   const style = useMemo(
     () => APP_STYLES.find((candidate) => candidate.id === requestedStyleId) ?? APP_STYLES[0],

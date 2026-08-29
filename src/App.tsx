@@ -33,7 +33,11 @@ import { FeatureFlagsProvider, useFeatureFlag, useFeatureFlags } from "@/hooks/u
 import { FocusNavigationProvider, type KeypadShortcutHandlers } from "@/hooks/useFocusNavigation";
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
+import { createTransportShortcut } from "@/lib/input/transportShortcuts";
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
+import { SearchKeyListener } from "@/components/search/SearchKeyListener";
+import { SearchOverlayHost } from "@/components/search/SearchOverlayHost";
+import { TourHost } from "@/components/tour/TourHost";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
 import { requestDeviceSwitcherOpen, requestQuickMenuOpen } from "@/lib/input/keypadCommands";
 import { GAME_MODE_HOST_PATHS, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
@@ -254,6 +258,10 @@ const KEYPAD_FOCUS_PROFILE_ID = "keypad";
 const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const { flags } = useFeatureFlags();
+  const transportShortcutOptions = useMemo(
+    () => ({ navigate: (path: string) => navigate(path), currentPath: () => window.location.pathname }),
+    [navigate],
+  );
   const shortcuts = useMemo<KeypadShortcutHandlers>(
     () => ({
       jumpToTab: (index) => {
@@ -263,6 +271,9 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
       openDiagnostics: () => requestDiagnosticsOpen("header"),
       openDeviceSwitcher: () => requestDeviceSwitcherOpen(),
       openQuickMenu: () => requestQuickMenuOpen(),
+      // F1 and F3, built by the shared factory so the test drives this wiring and not a copy.
+      mediaPlayPause: createTransportShortcut("playPause", transportShortcutOptions),
+      mediaNext: createTransportShortcut("next", transportShortcutOptions),
       openGameMode: flags.remote_input_enabled
         ? () => {
             // The sheet is mounted by Home and Play, so a request raised anywhere
@@ -273,7 +284,7 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
           }
         : undefined,
     }),
-    [navigate, flags.remote_input_enabled],
+    [navigate, flags.remote_input_enabled, transportShortcutOptions],
   );
   return (
     <FocusNavigationProvider
@@ -309,6 +320,12 @@ const AppRoutes = () => {
             <TraceContextBridge />
             <GlobalDiagnosticsOverlay />
             <KeypadQuickMenu />
+            {/* The search key has its OWN window listener rather than a keypad shortcut, so it
+                still works when FocusNavigationProvider is mounted disabled — which is what
+                keypad_input_enabled: false does (spec.md D11). */}
+            <SearchKeyListener />
+            <SearchOverlayHost />
+            <TourHost />
             <ConnectionController />
             <DemoModeInterstitial />
             <DeviceDiscoveryInterstitial />

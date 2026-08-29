@@ -700,6 +700,15 @@ export const getSavedDevicesSnapshot = (): SavedDevicesSnapshot => {
 
 export const getSavedDevicesStorageKey = () => STORAGE_KEY;
 
+/**
+ * Test seam. The snapshot is cached on the first read, and that read happens as soon as anything
+ * imports a module that touches the store — which is before a test file's own seed runs. Dropping
+ * the cache makes the next read take what the test wrote.
+ */
+export const resetSavedDevicesCacheForTests = () => {
+  snapshot = null;
+};
+
 export const getSelectedSavedDevice = () => {
   const current = getSavedDevicesSnapshot();
   return current.devices.find((device) => device.id === current.selectedDeviceId) ?? current.devices[0] ?? null;

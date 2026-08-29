@@ -38,6 +38,14 @@ const defaultState = (): HvscState => ({
   updates: {},
 });
 
+/**
+ * Whether the archive is installed, which is the one question three unrelated callers ask of this
+ * store. `installedVersion` is 0 until an import has completed, and the value is what every
+ * "needs HVSC" gate turns on: a search entry's requirement, a Home tile's availability, and whether
+ * song lengths can be discovered at all. It was written out separately in each of them.
+ */
+export const isHvscInstalled = (): boolean => loadHvscState().installedVersion > 0;
+
 export const loadHvscState = (): HvscState => {
   if (typeof localStorage === "undefined") return defaultState();
   const raw = localStorage.getItem(STORAGE_KEY);

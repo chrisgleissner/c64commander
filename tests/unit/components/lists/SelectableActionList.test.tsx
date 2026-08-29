@@ -65,6 +65,39 @@ describe("SelectableActionList", () => {
     expect(card).toHaveClass("p-3");
   });
 
+  it("bounds the expanded view-all sheet by the sheet's own top clearance", () => {
+    localStorage.clear();
+    setViewportWidth(1280);
+
+    render(
+      <DisplayProfileProvider>
+        <SelectableActionList
+          title="Files"
+          items={items}
+          emptyLabel="No files"
+          selectedCount={0}
+          allSelected={false}
+          onToggleSelectAll={vi.fn()}
+          maxVisible={1}
+          viewAllTitle="All files"
+        />
+      </DisplayProfileProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "View all" }));
+
+    /*
+     * The sheet is positioned with an explicit `top`, so `bottom-0` no longer constrains an
+     * explicit height: the height is measured downwards from that top. Subtracting the top
+     * clearance is what keeps the bottom edge on screen. Restoring the previous
+     * `max-h-[calc(100dvh-2rem)]` puts the bottom of this sheet below the viewport on a short
+     * landscape screen, which is what the layout overflow matrix caught.
+     */
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.className).toContain("max-h-[calc(100dvh-var(--app-sheet-top-clearance,2rem))]");
+    expect(dialog.className).not.toContain("max-h-[calc(100dvh-2rem)]");
+  });
+
   it("keeps section headers while filtering and uses the shared view-all sheet", () => {
     localStorage.clear();
     setViewportWidth(1280);

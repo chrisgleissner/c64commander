@@ -7,9 +7,11 @@
  */
 
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import HomePage from "../../../src/pages/HomePage";
+import { resetSavedDevicesCacheForTests } from "@/lib/savedDevices/store";
+import { readSectionStates } from "@/lib/ui/collapsibleSectionStore";
 import { clearRamDumpFolderConfig, saveRamDumpFolderConfig } from "../../../src/lib/config/ramDumpFolderStore";
 import * as ramDumpStorage from "../../../src/lib/machine/ramDumpStorage";
 import {
@@ -34,6 +36,8 @@ const featureFlagsRef = vi.hoisted(() => ({
 vi.mock("@/hooks/useFeatureFlags", () => ({
   useFeatureFlag: (key: string) => ({ value: featureFlagsRef.current[key] ?? true }),
   useFeatureFlagValue: (key: string) => featureFlagsRef.current[key] ?? true,
+  // Read by Home's Listen and play block, which resolves its tiles through the search registry.
+  useFeatureFlags: () => ({ flags: featureFlagsRef.current }),
 }));
 
 const {
@@ -671,6 +675,50 @@ vi.mock("@/hooks/useInteractiveConfigWrite", () => ({
   useInteractiveConfigWrite: () => ({ write: interactiveWriteMockRef.current, isPending: false }),
 }));
 
+/**
+ * A device that has connected before, so Home draws its CONNECTED arrangement even while the
+ * status says disconnected. The offline arrangement needs either an untouched bootstrap default or
+ * eight continuous seconds unreachable (spec.md section 7.2), and every test here but the offline
+ * ones is about the connected page.
+ */
+const seedPreviouslyConnectedDevice = () => {
+  localStorage.setItem(
+    "c64u_saved_devices:v1",
+    JSON.stringify({
+      version: 1,
+      selectedDeviceId: "seeded",
+      devices: [
+        {
+          id: "seeded",
+          name: "Test C64",
+          nameSource: "USER",
+          host: "192.168.1.64",
+          type: "",
+          typeSource: "USER",
+          httpPort: 80,
+          ftpPort: 21,
+          telnetPort: 23,
+          lastKnownProduct: null,
+          lastKnownHostname: null,
+          lastKnownUniqueId: null,
+          lastSuccessfulConnectionAt: "2026-01-01T00:00:00.000Z",
+          lastUsedAt: "2026-01-01T00:00:00.000Z",
+          hasPassword: false,
+        },
+      ],
+      summaries: {},
+      summaryLru: [],
+      hasEverHadMultipleDevices: false,
+    }),
+  );
+};
+
+// At module scope: the saved-devices store caches its snapshot on the FIRST read, and that read
+// happens inside the first render, so seeding from beforeEach would be too late for a store that
+// another module had already touched at import time.
+seedPreviouslyConnectedDevice();
+resetSavedDevicesCacheForTests();
+
 beforeEach(() => {
   resetMachineExecution();
   toastSpy.mockReset();
@@ -1250,7 +1298,7 @@ describe("HomePage SID status", () => {
     await waitFor(() => expect(machineControlPayloadRef.current.powerOff.mutateAsync).toHaveBeenCalled());
   });
 
-  it("renders exactly seven machine controls with one pause-resume control", async () => {
+  it("renders the machine controls and the promoted actions in one grid, with one pause-resume control", async () => {
     featureFlagsRef.current.home_telnet_reu_snapshot_enabled = false;
     // remote_input_enabled is default-on in the real registry (Remote Input is no
     // longer developer-only); force it off here so the Remote Control overflow
@@ -1268,12 +1316,32 @@ describe("HomePage SID status", () => {
     renderHomePage();
 
     const machineControls = screen.getByTestId("home-machine-controls");
-    expect(within(machineControls).getAllByRole("button")).toHaveLength(7);
+    /*
+     * Watch, listen, operate, careful. Live View leads with Game and Input — all three are ways to
+     * use the machine from here — then the music trio, then the operational tiles, then the ones
+     * that interrupt the machine. Radio stands immediately before Last tune and Recent, which is
+     * what makes those two readable without a longer label.
+     *
+     * Game and Input are absent here: remote_input_enabled is forced off above so the count is
+     * about the machine controls rather than the Remote Input pair.
+     */
     expect(
       within(machineControls)
         .getAllByRole("button")
         .map((button) => button.textContent),
-    ).toEqual(["Menu", "Pause", "Save RAM", "Load RAM", "Reset", "Reboot", "Power Off"]);
+    ).toEqual([
+      "Live ViewLive View is turned off in Settings",
+      "Radio",
+      "Last tune",
+      "Recent",
+      "Menu",
+      "Pause",
+      "Save RAM",
+      "Load RAM",
+      "Reset",
+      "Reboot",
+      "Power Off",
+    ]);
     expect(within(machineControls).getAllByRole("button", { name: /^pause$/i })).toHaveLength(1);
     expect(within(machineControls).queryByRole("button", { name: /^resume$/i })).toBeNull();
     expect(within(machineControls).queryByRole("button", { name: /^power cycle$/i })).toBeNull();
@@ -2230,5 +2298,139 @@ describe("HomePage streaming capability gate", () => {
     };
     renderHomePage();
     expect(screen.getByTestId("home-stream-status")).toBeTruthy();
+  });
+});
+
+describe("HomePage offline arrangement", () => {
+  /*
+   * With nothing connected and the selected device never yet set up, Home is not a wall of
+   * "Not available": it leads with search and with what works on this device alone, offers the one
+   * thing there is to do, and draws the machine cards as headers with no bodies.
+   */
+  const seedUntouchedBootstrapDefault = () => {
+    localStorage.setItem(
+      "c64u_saved_devices:v1",
+      JSON.stringify({
+        version: 1,
+        selectedDeviceId: "bootstrap",
+        devices: [
+          {
+            id: "bootstrap",
+            name: "c64u",
+            nameSource: "INFERRED",
+            host: "c64u",
+            type: "",
+            typeSource: "INFERRED",
+            httpPort: 80,
+            ftpPort: 21,
+            telnetPort: 23,
+            lastKnownProduct: null,
+            lastKnownHostname: null,
+            lastKnownUniqueId: null,
+            lastSuccessfulConnectionAt: null,
+            lastUsedAt: null,
+            hasPassword: false,
+          },
+        ],
+        summaries: {},
+        summaryLru: [],
+        hasEverHadMultipleDevices: false,
+      }),
+    );
+    resetSavedDevicesCacheForTests();
+  };
+
+  beforeEach(() => {
+    seedUntouchedBootstrapDefault();
+    statusPayloadRef.current = { isConnected: false, isConnecting: false, deviceInfo: null };
+  });
+
+  afterEach(() => {
+    seedPreviouslyConnectedDevice();
+    resetSavedDevicesCacheForTests();
+  });
+
+  // Search first, then the actions. The promoted actions live in the machine's grid rather than a
+  // section of their own: this app is a remote control first, and a banner over the standalone
+  // player over-weighted it — and with Live View among them the banner's claim was not even true.
+  it("leads with the search field, then the promoted actions", () => {
+    renderWithRouter(<HomePage />);
+    expect(screen.getByTestId("home-search-field")).toBeInTheDocument();
+    expect(screen.queryByTestId("home-listen-and-play")).toBeNull();
+    expect(screen.getByTestId("home-tile-action.sid-radio")).toBeInTheDocument();
+  });
+
+  it("offers the Connect a C64 card in place of the machine quick actions", () => {
+    renderWithRouter(<HomePage />);
+    expect(screen.getByTestId("home-connect-c64")).toBeInTheDocument();
+    expect(screen.getByTestId("home-connect-c64-setup")).toBeInTheDocument();
+  });
+
+  it("shows the app version only, not two rows both saying Not connected", () => {
+    renderWithRouter(<HomePage />);
+    expect(screen.getByTestId("home-system-version")).toBeInTheDocument();
+    expect(screen.queryByTestId("home-system-device")).toBeNull();
+    expect(screen.queryByTestId("home-system-firmware")).toBeNull();
+  });
+
+  it("renders the device section HEADERS, with their bodies closed", () => {
+    renderWithRouter(<HomePage />);
+    for (const sectionId of ["cpu-ram", "ports", "video", "drives", "printers", "config-actions"]) {
+      expect(screen.getByTestId(`home-section-toggle-${sectionId}`), sectionId).toBeInTheDocument();
+      expect(document.getElementById(`home-section-body-${sectionId}`), sectionId).toBeNull();
+    }
+  });
+
+  it("says once, above the closed cards, why they are closed", () => {
+    renderWithRouter(<HomePage />);
+    expect(screen.getByTestId("home-offline-sections-note").textContent).toContain(
+      "Connect a C64 Ultimate to reach its settings",
+    );
+  });
+
+  it("does not write to the section store while the cards are drawn closed", () => {
+    renderWithRouter(<HomePage />);
+    // A user who had Drives open must find it open again when their machine comes back.
+    expect(readSectionStates("home").get("drives")).toBeUndefined();
+    expect(readSectionStates("home").get("cpu-ram")).toBeUndefined();
+  });
+
+  it("offers the four promoted tiles, each disabled with its reason where it cannot run", () => {
+    renderWithRouter(<HomePage />);
+    for (const entryId of ["action.sid-radio", "action.resume-session", "action.recently-played"]) {
+      expect(screen.getByTestId(`home-tile-${entryId}`), entryId).toBeInTheDocument();
+    }
+    /*
+     * Greyed with no sentence under it. "Nothing has been played yet" restates a tile already
+     * labelled Resume and names nothing to act on, and it ran past the bottom of the card. A
+     * reason that DOES point somewhere — a device to connect, a switch to turn on — is still
+     * shown, which the Live View assertions below cover.
+     */
+    const resume = screen.getByTestId("home-tile-action.resume-session");
+    expect(resume).toBeDisabled();
+    expect(resume.textContent).toBe("Last tune");
+
+    // Disabled, but with no line of its own: "Nothing has been opened yet" only restates a greyed
+    // tile labelled Recent, and a line under every tile is what made this row look heavier than
+    // the machine's actions. A reason that says something — a device, or a switch — is still shown.
+    const recent = screen.getByTestId("home-tile-action.recently-played");
+    expect(recent).toBeDisabled();
+    expect(recent.textContent).toBe("Recent");
+  });
+
+  it("keeps the Live View tile listed, disabled, rather than hiding it", () => {
+    featureFlagsRef.current.live_view_enabled = true;
+    renderWithRouter(<HomePage />);
+    const tile = screen.getByTestId("home-tile-home.section.live-view");
+    expect(tile).toBeDisabled();
+    expect(tile.textContent).toContain("Needs a connected C64 Ultimate");
+  });
+
+  it("names the switch on the Live View tile when Live View itself is turned off", () => {
+    featureFlagsRef.current.live_view_enabled = false;
+    renderWithRouter(<HomePage />);
+    const tile = screen.getByTestId("home-tile-home.section.live-view");
+    expect(tile).toBeDisabled();
+    expect(tile.textContent).toContain("turned off in Settings");
   });
 });

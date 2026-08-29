@@ -58,6 +58,8 @@ import {
   type TerminologyOverlay,
 } from "@/lib/config/menuMapping";
 import { MenuPageSection } from "@/pages/config/MenuPageSection";
+import { configCategorySectionId, subscribeConfigItemFocus } from "@/lib/search/configDeepLink";
+import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
 import { UnroutedCategorySections } from "@/pages/config/UnroutedCategorySections";
 
 type ConfigListItem = {
@@ -191,7 +193,7 @@ function CategorySection({
   // d-pad + center. No-op in the default variant (no provider) and unchanged for
   // pointer/touch. The header `<button>` activates by click, toggling the section.
   const categoryHeaderFocusRef = useFocusItem<HTMLButtonElement>({
-    id: `config-category-${categoryName.toLowerCase().replace(/\s+/g, "-")}`,
+    id: `config-category-${configCategorySectionId(categoryName)}`,
     order: focusOrder,
     group: "config-categories",
   });
@@ -205,7 +207,7 @@ function CategorySection({
   // group action; every open section also shows Refresh. Used to gate keypad
   // focus-ring registration of those CTAs below.
   const hasCategoryGroupAction = isAudioMixer || isClockSettings;
-  const categorySlug = categoryName.toLowerCase().replace(/\s+/g, "-");
+  const categorySlug = configCategorySectionId(categoryName);
   const [soloState, dispatchSolo] = useReducer(soloReducer, { soloItem: null });
   const [audioConfiguredItems, setAudioConfiguredItems] = useState<ConfigListItem[]>([]);
   const audioConfiguredRef = useRef<ConfigListItem[]>([]);
@@ -785,17 +787,17 @@ function CategorySection({
       })),
     [audioConfiguredItems, authoritativeValues, categoryName, isAudioMixer, items],
   );
-  const sectionId = `config-section-${categoryName.toLowerCase().replace(/\s+/g, "-")}`;
+  const sectionId = `config-section-${configCategorySectionId(categoryName)}`;
 
   return (
     <CollapsibleSection
       scope="config"
-      id={categoryName.toLowerCase().replace(/\s+/g, "-")}
+      id={configCategorySectionId(categoryName)}
       title={displayTitle ?? categoryName}
       summary={groupLabel ?? undefined}
       icon={FolderOpen}
       headerRef={categoryHeaderFocusRef}
-      toggleTestId={`config-category-${categoryName.toLowerCase().replace(/\s+/g, "-")}`}
+      toggleTestId={`config-category-${configCategorySectionId(categoryName)}`}
       bodyId={sectionId}
       onOpenChange={setIsOpen}
       onToggleClick={wrapUserEvent(() => undefined, "toggle", "ConfigSection", { title: categoryName }, "ConfigHeader")}
@@ -925,6 +927,17 @@ const flattenMenuPages = (hierarchy: MenuHierarchy): MenuPageEntry[] => {
   return entries;
 };
 
+/** Every REST category a menu page reads from, so a deep link can find the card that holds one. */
+const restCategoriesOfPage = (page: MenuNode): Set<string> => {
+  const categories = new Set<string>();
+  const walk = (node: MenuNode) => {
+    if (node.kind === "item" && node.rest) categories.add(node.rest.category);
+    for (const child of node.children ?? []) walk(child);
+  };
+  walk(page);
+  return categories;
+};
+
 // The single REST category a page reads from when it is a flat, single-category page
 // (used to delegate the Audio Mixer page to the specialized CategorySection).
 const soleRestCategory = (page: MenuNode): string | null => {
@@ -980,6 +993,25 @@ export default function ConfigBrowserPage() {
         entry.page.label.toLowerCase().includes(query) || (entry.groupLabel ?? "").toLowerCase().includes(query),
     );
   }, [menuPages, searchQuery]);
+
+  /*
+   * Global search deep-links to one live item (spec.md section 5.9). Which card holds it depends
+   * on the mode: a menu page can read several categories, a REST-grouped card is the category. The
+   * item's own row carries data-config-item, so the resolver takes it from here once it renders.
+   */
+  useEffect(
+    () =>
+      subscribeConfigItemFocus(({ category }) => {
+        const owningPage = menuPages.find((entry) => restCategoriesOfPage(entry.page).has(category));
+        // Through the shared rule for both, so the deep link and the section it is looking for
+        // cannot drift apart: a menu page slugs its label the same way a category slugs its name.
+        const sectionId = owningPage
+          ? configCategorySectionId(owningPage.page.label)
+          : configCategorySectionId(category);
+        requestSectionOpen("config", sectionId);
+      }),
+    [menuPages],
+  );
 
   const liveCategories = categoriesData?.categories ?? [];
   // Categories whose unclaimed items smart-routing cannot place on any menu page (an

@@ -40,6 +40,12 @@ import { formatDbValue, formatPanValue } from "@/lib/ui/sliderValueFormat";
 import { SID_SLIDER_STEP } from "../constants";
 
 interface AudioMixerProps {
+  /**
+   * Draws the card's header without its body while Home is in its offline arrangement, WITHOUT
+   * writing to the section store, so the user's own open/closed choice survives (spec.md 6.2).
+   */
+  forceClosed?: boolean;
+
   isConnected: boolean;
   machineTaskBusy: boolean;
   runMachineTask: (taskId: string, action: () => Promise<void>, title: string, desc?: string) => Promise<void>;
@@ -107,7 +113,7 @@ function MasterVolumeControl({
   );
 }
 
-export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: AudioMixerProps) {
+export function AudioMixer({ forceClosed, isConnected, machineTaskBusy, runMachineTask }: AudioMixerProps) {
   const api = getC64API();
   const trace = useActionTrace("AudioMixer");
   const { configOverrides, configWritePending, updateConfigValue, resolveConfigValue } = useSharedConfigActions();
@@ -263,6 +269,7 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
     <CollapsibleSection
       scope="home"
       id="audio"
+      forceClosed={forceClosed}
       title="Audio"
       icon={Volume2}
       testId="home-sid-status"

@@ -40,6 +40,14 @@ type MachineExtraAction = {
   reason?: string | null;
   variant?: "default" | "danger" | "success";
   className?: string;
+  /** A word about what this action has, when there is one — the tune Resume would restore. */
+  description?: string | null;
+  /**
+   * Overrides the generated testid and focus id. The promoted music actions keep the ids they had
+   * as their own section, because the tour spotlights them and the screenshot corpus names them.
+   */
+  testId?: string;
+  focusId?: string;
 };
 
 type PendingDestructiveAction = MachineActionConfirmation & {
@@ -50,6 +58,12 @@ type PendingDestructiveAction = MachineActionConfirmation & {
 const REBOOT_CLEAR_MEMORY_ACTION_IDS = new Set(["rebootClearMemory"]);
 
 export interface MachineControlsProps {
+  /**
+   * Draws the card's header without its body while Home is in its offline arrangement, WITHOUT
+   * writing to the section store, so the user's own open/closed choice survives (spec.md 6.2).
+   */
+  forceClosed?: boolean;
+
   status: { isConnected: boolean; isConnecting: boolean };
   machineTaskBusy: boolean;
   machineExecutionState: "running" | "paused" | "unknown";
@@ -85,6 +99,7 @@ export interface MachineControlsProps {
 }
 
 export function MachineControls({
+  forceClosed,
   status,
   machineTaskBusy,
   machineExecutionState,
@@ -160,7 +175,28 @@ export function MachineControls({
    * on a four-column grid that placed it on the far side of the row from its pair.
    */
   const remoteInputAction = safeExtraActions.find((action) => action.id === "openRemoteInput") ?? null;
-  const otherSafeExtraActions = safeExtraActions.filter((action) => action !== remoteInputAction);
+  /*
+   * The promoted actions are a contiguous run at the end of the safe tiles.
+   *
+   * They used to be their own section above this one. This app is a remote control first and a
+   * standalone player second, so a banner of its own over-weighted the second. Radio immediately
+   * before Resume and Recent is what makes those two readable: proximity does the work a longer
+   * label would, and every tile here stays one word.
+   */
+  const promotedActions = safeExtraActions.filter((action) => action.id.startsWith("promoted."));
+  /*
+   * The grid reads watch, listen, operate, careful.
+   *
+   * Live View leads with Game and Input: all three are ways to use the machine from here, and
+   * keeping them together is the whole point of the first band. The music trio follows as its own
+   * band. Then the operational tiles, and the ones that interrupt the machine last, as they always
+   * were. Nothing that stops your C64 sits next to something that does not.
+   */
+  const watchActions = promotedActions.filter((action) => action.id === "promoted.home.section.live-view");
+  const listenActions = promotedActions.filter((action) => !watchActions.includes(action));
+  const otherSafeExtraActions = safeExtraActions.filter(
+    (action) => action !== remoteInputAction && !promotedActions.includes(action),
+  );
   const destructiveExtraActions = extraActions.filter((action) => action.variant === "danger");
 
   const renderExtraAction = (action: MachineExtraAction, focusOrder: number) => {
@@ -171,8 +207,9 @@ export function MachineControls({
         key={action.id}
         icon={Icon}
         label={action.loading ? `${action.label}…` : action.label}
-        dataTestId={`home-machine-inline-${action.id}`}
-        focusId={`home-machine-${action.id}`}
+        description={action.description ?? undefined}
+        dataTestId={action.testId ?? `home-machine-inline-${action.id}`}
+        focusId={action.focusId ?? `home-machine-${action.id}`}
         focusOrder={focusOrder}
         onClick={() => {
           if (!requiresConfirmation) {
@@ -199,6 +236,7 @@ export function MachineControls({
       <CollapsibleSection
         scope="home"
         id="quick-actions"
+        forceClosed={forceClosed}
         title="Quick Actions"
         icon={Zap}
         defaultOpen
@@ -213,9 +251,10 @@ export function MachineControls({
             cardDensity="compact"
             testId="home-machine-controls"
           >
-            {/* Frequent and safe first, destructive last in increasing severity, pairs
-                kept adjacent, and one focus group throughout — splitting the grid would
-                cost a keypad user a ring level to descend into. */}
+            {/* Watch, listen, operate, careful — destructive last in increasing severity, pairs kept
+                adjacent, and one focus group throughout: splitting the grid would cost a keypad
+                user a ring level to descend into. */}
+            {watchActions.map((action, index) => renderExtraAction(action, 90 + index * 2))}
             {gameModeVisible ? (
               <QuickActionCard
                 icon={Joystick}
@@ -228,6 +267,7 @@ export function MachineControls({
               />
             ) : null}
             {remoteInputAction ? renderExtraAction(remoteInputAction, 105) : null}
+            {listenActions.map((action, index) => renderExtraAction(action, 106 + index * 2))}
             <QuickActionCard
               icon={Menu}
               label="Menu"

@@ -1,8 +1,14 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Radio } from "lucide-react";
 
 import { CollapsibleSection } from "@/components/CollapsibleSection";
+import {
+  readSectionStates,
+  requestSectionOpen,
+  resetSectionOpenLatchForTests,
+  writeSectionState,
+} from "@/lib/ui/collapsibleSectionStore";
 
 vi.mock("framer-motion", async () => {
   // Everything the factory needs is declared INSIDE it: `vi.mock` is hoisted above module-level
@@ -46,6 +52,9 @@ describe("CollapsibleSection", () => {
   beforeEach(() => {
     localStorage.clear();
     mockProfile = "medium";
+    // The request outlives its dispatch by design, so a card mounted by the next test would drain
+    // the previous test's request. Production has no equivalent: one page, one navigation.
+    resetSectionOpenLatchForTests();
   });
 
   afterEach(() => {
@@ -406,5 +415,112 @@ describe("CollapsibleSection", () => {
 
     fireEvent.click(screen.getByTestId("home-section-toggle-cpu-ram"));
     await waitFor(() => expect(document.getElementById("home-section-body-cpu-ram")).toBeNull());
+  });
+
+  describe("requestSectionOpen", () => {
+    it("opens the card it names", async () => {
+      render(
+        <CollapsibleSection scope="home" id="drives" title="Drives" icon={Radio}>
+          <p>Drive A</p>
+        </CollapsibleSection>,
+      );
+      expect(document.getElementById("home-section-body-drives")).toBeNull();
+
+      act(() => requestSectionOpen("home", "drives"));
+      await waitFor(() => expect(document.getElementById("home-section-body-drives")).toBeInTheDocument());
+    });
+
+    it("leaves a card with a different scope or id alone", async () => {
+      render(
+        <CollapsibleSection scope="home" id="drives" title="Drives" icon={Radio}>
+          <p>Drive A</p>
+        </CollapsibleSection>,
+      );
+
+      act(() => requestSectionOpen("settings", "drives"));
+      act(() => requestSectionOpen("home", "printers"));
+      await waitFor(() => expect(document.getElementById("home-section-body-drives")).toBeNull());
+    });
+  });
+
+  describe("forceClosed", () => {
+    /*
+     * Home draws the device cards closed while nothing is connected. It must be presentation only:
+     * a user who had Drives open has to find it open again when their C64 comes back, so the
+     * override may not reach the section store.
+     */
+    it("suppresses the body of a card the user had opened", async () => {
+      const { rerender } = render(
+        <CollapsibleSection scope="home" id="drives" title="Drives" icon={Radio}>
+          <p>Drive A</p>
+        </CollapsibleSection>,
+      );
+      fireEvent.click(screen.getByTestId("home-section-toggle-drives"));
+      await waitFor(() => expect(document.getElementById("home-section-body-drives")).toBeInTheDocument());
+
+      rerender(
+        <CollapsibleSection scope="home" id="drives" title="Drives" icon={Radio} forceClosed>
+          <p>Drive A</p>
+        </CollapsibleSection>,
+      );
+      await waitFor(() => expect(document.getElementById("home-section-body-drives")).toBeNull());
+      expect(screen.getByTestId("home-section-toggle-drives")).toHaveAttribute("aria-expanded", "false");
+    });
+
+    it("does not change the persisted open state while it is applied", async () => {
+      const { rerender } = render(
+        <CollapsibleSection scope="home" id="drives" title="Drives" icon={Radio}>
+          <p>Drive A</p>
+        </CollapsibleSection>,
+      );
+      fireEvent.click(screen.getByTestId("home-section-toggle-drives"));
+      await waitFor(() => expect(readSectionStates("home").get("drives")).toBe(true));
+
+      rerender(
+        <CollapsibleSection scope="home" id="drives" title="Drives" icon={Radio} forceClosed>
+          <p>Drive A</p>
+        </CollapsibleSection>,
+      );
+      await waitFor(() => expect(document.getElementById("home-section-body-drives")).toBeNull());
+      expect(readSectionStates("home").get("drives")).toBe(true);
+    });
+
+    /*
+     * A tap on the header while the body is forced shut must not reach the store. Home draws the
+     * device cards closed while nothing is connected, and it has to give the reader back whatever
+     * they had open once a machine answers: writing the flipped value through meant a card the user
+     * had left open came back closed, after a tap that appeared to do nothing.
+     */
+    it("ignores a tap on the header, and puts the body straight back when the override lifts", async () => {
+      writeSectionState("home", "drives", true);
+      const { rerender } = render(
+        <CollapsibleSection scope="home" id="drives" title="Drives" icon={Radio} forceClosed>
+          <p>Drive A</p>
+        </CollapsibleSection>,
+      );
+      expect(document.getElementById("home-section-body-drives")).toBeNull();
+
+      fireEvent.click(screen.getByTestId("home-section-toggle-drives"));
+
+      expect(readSectionStates("home").get("drives")).toBe(true);
+      expect(document.getElementById("home-section-body-drives")).toBeNull();
+
+      rerender(
+        <CollapsibleSection scope="home" id="drives" title="Drives" icon={Radio}>
+          <p>Drive A</p>
+        </CollapsibleSection>,
+      );
+      await waitFor(() => expect(document.getElementById("home-section-body-drives")).toBeInTheDocument());
+    });
+
+    it("still renders the header, so anything addressing it by testid keeps working", () => {
+      render(
+        <CollapsibleSection scope="home" id="drives" title="Drives" icon={Radio} forceClosed>
+          <p>Drive A</p>
+        </CollapsibleSection>,
+      );
+      expect(screen.getByTestId("home-section-drives")).toBeInTheDocument();
+      expect(screen.getByTestId("home-section-toggle-drives")).toBeInTheDocument();
+    });
   });
 });

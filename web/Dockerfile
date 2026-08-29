@@ -15,6 +15,9 @@ COPY tailwind.config.ts ./
 COPY postcss.config.js ./
 COPY components.json ./
 COPY scripts ./scripts
+# The prebuild compiles search/search-index.yaml into src/generated/searchIndex.ts, so the source
+# has to be in the image; without it the build fails with ENOENT on /app/search/search-index.yaml.
+COPY search ./search
 COPY src ./src
 COPY public ./public
 COPY variants ./variants

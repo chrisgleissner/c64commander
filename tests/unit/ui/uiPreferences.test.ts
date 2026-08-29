@@ -121,24 +121,40 @@ describe("uiPreferences", () => {
     localStorage.clear();
     document.documentElement.style.removeProperty(TEXT_SCALE_VARIABLE);
 
-    setTextScaleId("larger");
+    setTextScaleId("large");
 
-    expect(localStorage.getItem(TEXT_SCALE_KEY)).toBe("larger");
-    expect(getTextScaleId()).toBe("larger");
-    expect(readTextScaleVariable()).toBe("1.3");
+    expect(localStorage.getItem(TEXT_SCALE_KEY)).toBe("large");
+    expect(getTextScaleId()).toBe("large");
+    expect(readTextScaleVariable()).toBe("1.15");
   });
 
   it("applies the stored text size at start-up", () => {
     // applyStoredTextScale runs once from the app entry point. A stored value that was
     // never applied would leave the app at the default size on every launch, which is
     // the failure the setting exists to prevent.
+    localStorage.setItem(TEXT_SCALE_KEY, "large");
+    document.documentElement.style.removeProperty(TEXT_SCALE_VARIABLE);
+
+    applyStoredTextScale();
+
+    expect(readTextScaleVariable()).toBe("1.15");
+    expect(document.documentElement.dataset.textScale).toBe("large");
+  });
+
+  /*
+   * "Larger" and "Largest" shipped before the cap and are still in users' storage. Reading one back
+   * as the default would take text DOWN two steps for the users who most wanted it up, so it reads
+   * back as the largest size still offered instead.
+   */
+  it("reads a retired text size back as the largest one still offered", () => {
     localStorage.setItem(TEXT_SCALE_KEY, "largest");
     document.documentElement.style.removeProperty(TEXT_SCALE_VARIABLE);
 
     applyStoredTextScale();
 
-    expect(readTextScaleVariable()).toBe("1.5");
-    expect(document.documentElement.dataset.textScale).toBe("largest");
+    expect(getTextScaleId()).toBe("large");
+    expect(readTextScaleVariable()).toBe("1.15");
+    expect(document.documentElement.dataset.textScale).toBe("large");
   });
 
   it("falls back to the default text size for a corrupt stored value", () => {

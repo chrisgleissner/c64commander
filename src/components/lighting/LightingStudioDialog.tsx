@@ -463,7 +463,7 @@ function LightingDeviceMockup({
   const keyboardSelected = keyboardSupported && selectedSurface === "keyboard";
   // --media-on-scrim, not --ring/--border: this stage stays dark in every theme and style, so the
   // strokes must too. Bound to --ring, the selected outline dropped to 1.7-2.0:1 against the stage
-  // in all five light palettes, and full-sun light's black --border was invisible on it.
+  // in all five light palettes, and high-contrast light's black --border was invisible on it.
   const caseStroke = caseSelected ? "hsl(var(--media-on-scrim) / 0.88)" : "hsl(var(--media-on-scrim) / 0.18)";
   const keyboardStroke = keyboardSelected ? "hsl(var(--media-on-scrim) / 0.84)" : "hsl(var(--media-on-scrim) / 0.22)";
   const mainKeyboardBounds = boundsInset(C64_PREVIEW_LAYOUT.keyboardMain.bounds);

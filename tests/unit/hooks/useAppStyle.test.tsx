@@ -8,7 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
-import { APP_STYLES, DEFAULT_APP_STYLE_ID } from "@/generated/appStyles";
+import { APP_STYLES, APP_STYLE_RENAMES, DEFAULT_APP_STYLE_ID } from "@/generated/appStyles";
 
 const themeContext = vi.hoisted(() => ({
   theme: "light" as "light" | "dark" | "system",
@@ -181,6 +181,36 @@ describe("useAppStyle", () => {
 
   describe("unknown-id fallback", () => {
     it("falls back to the default and clears the stale stored value", async () => {
+      localStorage.setItem(APP_STYLE_STORAGE_KEY, "not-a-real-style");
+      const { result } = renderHook(() => useAppStyle(null));
+      expect(result.current.styleId).toBe(DEFAULT_APP_STYLE_ID);
+      await vi.waitFor(() => {
+        expect(localStorage.getItem(APP_STYLE_STORAGE_KEY)).toBeNull();
+      });
+    });
+  });
+
+  describe("rename migration", () => {
+    it.each(Object.entries(APP_STYLE_RENAMES))(
+      "maps the stored id %s to %s at the read and writes it back",
+      (oldId, newId) => {
+        localStorage.setItem(APP_STYLE_STORAGE_KEY, oldId);
+        const { result } = renderHook(() => useAppStyle(null));
+        expect(result.current.styleId).toBe(newId);
+        expect(result.current.storedStyleId).toBe(newId);
+        expect(localStorage.getItem(APP_STYLE_STORAGE_KEY)).toBe(newId);
+      },
+    );
+
+    it("declares a rename for every id this release retired", () => {
+      expect(APP_STYLE_RENAMES).toEqual({
+        "modem-grey": "cool-grey",
+        "petrol-teal": "ocean-teal",
+        "full-sun": "high-contrast",
+      });
+    });
+
+    it("leaves an id that is not a rename alone, so the unknown-id fallback still runs", async () => {
       localStorage.setItem(APP_STYLE_STORAGE_KEY, "not-a-real-style");
       const { result } = renderHook(() => useAppStyle(null));
       expect(result.current.styleId).toBe(DEFAULT_APP_STYLE_ID);

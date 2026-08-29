@@ -76,6 +76,19 @@ const validConfig = () => ({
   },
 });
 
+/**
+ * The base config plus one extra key per named style, creating "second-style" as a copy of the
+ * base one when it is not already declared. Keeps the renamed_from cases readable.
+ */
+const configWithStyles = (overrides: Record<string, Record<string, unknown>>) => {
+  const config = validConfig() as unknown as { styles: Record<string, Record<string, unknown>> };
+  const template = config.styles["test-style"];
+  for (const [id, extra] of Object.entries(overrides)) {
+    config.styles[id] = { ...(config.styles[id] ?? template), ...extra };
+  }
+  return config;
+};
+
 const writeYaml = (dir: string, config: unknown) => {
   const yamlPath = path.join(dir, "appearance-styles.yaml");
   writeFileSync(yamlPath, yaml.dump(config), "utf8");
@@ -176,12 +189,57 @@ describe("compile-styles", () => {
       expect(() => loadConfig({ yamlPath })).toThrow(/default_style .* is not one of the declared styles/);
     });
 
-    it("rejects a style id disappearing without a retired: entry", () => {
+    it("rejects a style id disappearing without a retired: or renamed_from: entry", () => {
       const dir = createTempDir();
       const yamlPath = writeYaml(dir, validConfig());
       const tsOutputPath = path.join(dir, "appStyles.ts");
       writeFileSync(tsOutputPath, 'id: "test-style",\nid: "old-style",\n', "utf8");
-      expect(() => loadConfig({ yamlPath, tsOutputPath })).toThrow(/disappeared without a "retired:" entry: old-style/);
+      expect(() => loadConfig({ yamlPath, tsOutputPath })).toThrow(/disappeared without a .* entry: old-style/);
+    });
+
+    it("treats a renamed_from: declaration as notice that the old id went away", () => {
+      const dir = createTempDir();
+      const yamlPath = writeYaml(dir, configWithStyles({ "test-style": { renamed_from: ["old-style"] } }));
+      const tsOutputPath = path.join(dir, "appStyles.ts");
+      writeFileSync(tsOutputPath, 'id: "test-style",\nid: "old-style",\n', "utf8");
+      const config = loadConfig({ yamlPath, tsOutputPath });
+      expect(config.renames).toEqual({ "old-style": "test-style" });
+      /*
+       * And that the map reaches the file the app imports. The rename is only useful because
+       * useAppStyle reads APP_STYLE_RENAMES at startup, so a map built correctly and then not
+       * emitted would drop every stored old id back to the default with nothing to show for it.
+       */
+      expect(renderTs(config)).toContain('"old-style": "test-style"');
+    });
+
+    it("rejects a renamed_from: value that is still a live style id", () => {
+      const dir = createTempDir();
+      const yamlPath = writeYaml(dir, configWithStyles({ "second-style": { renamed_from: ["test-style"] } }));
+      expect(() => loadConfig({ yamlPath, tsOutputPath: path.join(dir, "a.ts") })).toThrow(
+        /renamed_from lists "test-style", which is still a live style id/,
+      );
+    });
+
+    it("rejects the same renamed_from: value claimed by two styles", () => {
+      const dir = createTempDir();
+      const yamlPath = writeYaml(
+        dir,
+        configWithStyles({
+          "test-style": { renamed_from: ["old-style"] },
+          "second-style": { renamed_from: ["old-style"] },
+        }),
+      );
+      expect(() => loadConfig({ yamlPath, tsOutputPath: path.join(dir, "a.ts") })).toThrow(
+        /renamed_from "old-style" is claimed by both/,
+      );
+    });
+
+    it("rejects a renamed_from: that is not a non-empty array of kebab-case ids", () => {
+      const dir = createTempDir();
+      const yamlPath = writeYaml(dir, configWithStyles({ "test-style": { renamed_from: [] } }));
+      expect(() => loadConfig({ yamlPath, tsOutputPath: path.join(dir, "a.ts") })).toThrow(
+        /renamed_from must be a non-empty array/,
+      );
     });
 
     it("allows a style id disappearing when it is listed under retired:", () => {

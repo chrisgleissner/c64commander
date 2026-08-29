@@ -570,7 +570,9 @@ export const SelectableActionList = ({
           <AppSheetContent
             className={cn(
               "p-0 overflow-hidden",
-              profile === "expanded" ? "w-[min(88vw,64rem)] h-[min(88dvh,64rem)] max-h-[calc(100dvh-2rem)]" : "",
+              profile === "expanded"
+                ? "w-[min(88vw,64rem)] h-[min(88dvh,64rem)] max-h-[calc(100dvh-var(--app-sheet-top-clearance,2rem))]"
+                : "",
             )}
           >
             <div className="flex h-full min-h-0 flex-col min-w-0 relative" data-testid="action-list-view-all">

@@ -26,6 +26,8 @@ const featureFlagsRef = vi.hoisted(() => ({
 vi.mock("@/hooks/useFeatureFlags", () => ({
   useFeatureFlagValue: () => false,
   useFeatureFlag: (key: string) => ({ value: featureFlagsRef.current[key] ?? true }),
+  // Read by Home's Listen and play block, which resolves its tiles through the search registry.
+  useFeatureFlags: () => ({ flags: featureFlagsRef.current }),
 }));
 
 const {

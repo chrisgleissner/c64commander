@@ -124,10 +124,10 @@ const {
   mockRefreshDeviceColorScheme: vi.fn(async () => undefined),
   appStyleStateRef: {
     current: {
-      storedStyleId: "modem-grey" as string | null,
+      storedStyleId: "cool-grey" as string | null,
       isMatchMyDevice: false,
       matchedDeviceStyleId: null as string | null,
-      styleId: "modem-grey",
+      styleId: "cool-grey",
       mode: "light" as "light" | "dark",
       themeClamped: false,
     },
@@ -727,10 +727,10 @@ beforeEach(() => {
     lastProbeFailedAtMs: null,
   };
   appStyleStateRef.current = {
-    storedStyleId: "modem-grey",
+    storedStyleId: "cool-grey",
     isMatchMyDevice: false,
     matchedDeviceStyleId: null,
-    styleId: "modem-grey",
+    styleId: "cool-grey",
     mode: "light",
     themeClamped: false,
   };
@@ -1759,23 +1759,23 @@ describe("SettingsPage", () => {
     });
 
     it("highlights the currently selected style", () => {
-      appStyleStateRef.current.storedStyleId = "petrol-teal";
-      appStyleStateRef.current.styleId = "petrol-teal";
+      appStyleStateRef.current.storedStyleId = "ocean-teal";
+      appStyleStateRef.current.styleId = "ocean-teal";
       renderSettingsPage();
 
-      expect(screen.getByTestId("settings-app-style-petrol-teal")).toHaveClass("bg-primary");
-      expect(screen.getByTestId("settings-app-style-modem-grey")).not.toHaveClass("bg-primary");
+      expect(screen.getByTestId("settings-app-style-ocean-teal")).toHaveClass("bg-primary");
+      expect(screen.getByTestId("settings-app-style-cool-grey")).not.toHaveClass("bg-primary");
     });
 
     it("highlights the resolved default style when nothing has been stored yet", () => {
       // Fresh install: no stored id, so the compiled default is what is on screen and the row
       // for it has to read as selected rather than leaving the whole group looking unset.
       appStyleStateRef.current.storedStyleId = null;
-      appStyleStateRef.current.styleId = "modem-grey";
+      appStyleStateRef.current.styleId = "cool-grey";
       renderSettingsPage();
 
-      expect(screen.getByTestId("settings-app-style-modem-grey")).toHaveClass("bg-primary");
-      expect(screen.getByTestId("settings-app-style-petrol-teal")).not.toHaveClass("bg-primary");
+      expect(screen.getByTestId("settings-app-style-cool-grey")).toHaveClass("bg-primary");
+      expect(screen.getByTestId("settings-app-style-ocean-teal")).not.toHaveClass("bg-primary");
     });
 
     it("calls setStyleId when a style row is clicked", () => {
@@ -1840,7 +1840,7 @@ describe("SettingsPage", () => {
       renderSettingsPage();
 
       expect(screen.getByTestId("settings-app-style-match-status")).toHaveTextContent(
-        /The device hasn't reported a Color Scheme yet — using Modem Grey until it connects or you refresh the connection\./,
+        /The device hasn't reported a Color Scheme yet — using Cool Grey until it connects or you refresh the connection\./,
       );
     });
 
@@ -1879,14 +1879,14 @@ describe("SettingsPage", () => {
     const card = screen.getByTestId("settings-text-size");
     expect(within(card).getByTestId("settings-text-size-default")).toHaveClass("bg-primary");
 
-    fireEvent.click(within(card).getByTestId("settings-text-size-larger"));
+    fireEvent.click(within(card).getByTestId("settings-text-size-large"));
 
     // Written, so the size survives a restart.
-    expect(localStorage.getItem(TEXT_SCALE_KEY)).toBe("larger");
+    expect(localStorage.getItem(TEXT_SCALE_KEY)).toBe("large");
     // Applied, so it takes effect on the spot rather than at the next launch.
-    expect(document.documentElement.style.getPropertyValue("--text-scale")).toBe("1.3");
+    expect(document.documentElement.style.getPropertyValue("--text-scale")).toBe("1.15");
     // Reflected back, so the highlighted option is the one actually in force.
-    expect(within(card).getByTestId("settings-text-size-larger")).toHaveClass("bg-primary");
+    expect(within(card).getByTestId("settings-text-size-large")).toHaveClass("bg-primary");
     expect(within(card).getByTestId("settings-text-size-default")).not.toHaveClass("bg-primary");
   });
 
