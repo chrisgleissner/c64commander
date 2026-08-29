@@ -12,11 +12,32 @@
 %  Headings: TeX Gyre Heros (Helvetica)  - the era's own structural sans
 %  Code:     TeX Gyre Cursor (Courier)   - what a C64 listing looks like
 % =====================================================================
-\usepackage[T1]{fontenc}
-\usepackage[utf8]{inputenc}
-\usepackage{tgpagella}
-\renewcommand{\sfdefault}{qhv}
-\renewcommand{\ttdefault}{qcr}
+%
+%  Fonts are chosen by engine. Under LuaLaTeX the book is set in IBM Plex, the
+%  same family the app itself uses, so the printed page and the screen are one
+%  design. Under pdfLaTeX, which cannot load a system OpenType face, it falls
+%  back to the TeX Gyre revivals: Pagella for the body, Heros for headings.
+%  Both are real book faces, so the fallback is a change of dress, not of
+%  quality.
+\usepackage{iftex}
+\ifLuaTeX
+  \usepackage{fontspec}
+  \defaultfontfeatures{Path=/usr/share/fonts/truetype/ibm-plex/, Extension=.ttf, Ligatures=TeX}
+  \setmainfont{IBMPlexSerif-Regular}[
+    BoldFont=IBMPlexSerif-SemiBold,
+    ItalicFont=IBMPlexSerif-Italic,
+    BoldItalicFont=IBMPlexSerif-SemiBoldItalic]
+  \setsansfont{IBMPlexSans-Regular}[
+    BoldFont=IBMPlexSans-SemiBold,
+    ItalicFont=IBMPlexSans-Italic]
+  \setmonofont{IBMPlexMono-Regular}[BoldFont=IBMPlexMono-SemiBold, Scale=0.90]
+\else
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{tgpagella}
+  \renewcommand{\sfdefault}{qhv}
+  \renewcommand{\ttdefault}{qcr}
+\fi
 \usepackage[activate={true,nocompatibility},final,tracking=true,factor=1100,stretch=12,shrink=12]{microtype}
 \usepackage{xcolor}
 \usepackage{graphicx}

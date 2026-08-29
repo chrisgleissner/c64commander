@@ -151,6 +151,23 @@ const dressLatex = (tex, manualDir) => {
   return output;
 };
 
+/**
+ * True when LuaLaTeX can load an OpenType font, which needs luaotfload.
+ *
+ * A TeX Live install without it still ships the `lualatex` binary, and that
+ * binary dies at the first `\setmainfont` rather than at startup, so the
+ * only honest test is to compile something that loads a face.
+ */
+const luaTexUsable = () => {
+  try {
+    execFileSync("kpsewhich", ["luaotfload.sty"], { stdio: "ignore" });
+    execFileSync("kpsewhich", ["luaotfload-main.lua"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const coverTex = ({ productName, subtitle, launchImage, logo, edition, buildDate }) => `
 % The cover follows the 1982 guide's instinct: one strong band of colour, the
 % name of the machine large enough to read across a room, and a picture of the
@@ -275,7 +292,7 @@ ${dressLatex(texBody, manualDir)}
   await writeFile(
     path.join(outputDir, "index.ist"),
     [
-      'headings_flag 1',
+      "headings_flag 1",
       'heading_prefix "  \\\\indexletter{"',
       'heading_suffix "}\\\\nopagebreak\\n"',
       'delim_0 ", "',
@@ -293,13 +310,17 @@ ${dressLatex(texBody, manualDir)}
     execFileSync(command, args, { cwd: outputDir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
   const latexArgs = ["-interaction=nonstopmode", "-halt-on-error", "-file-line-error", path.basename(texFile)];
+  // LuaLaTeX where it can actually load a system OpenType face, which is what
+  // lets the book be set in IBM Plex like the app. A LuaTeX without luaotfload
+  // fails at the first \setmainfont, so it has to be probed rather than assumed.
+  const engine = luaTexUsable() ? "lualatex" : "pdflatex";
   for (const pass of [1, 2]) {
     try {
-      run("pdflatex", latexArgs);
+      run(engine, latexArgs);
     } catch (error) {
       const log = `${error.stdout ?? ""}`;
       const first = log.split("\n").filter((line) => /^[^\s]+\.tex:\d+:|^! /.test(line))[0];
-      throw new Error(`pdflatex pass ${pass} failed for ${variant.id}: ${first ?? "see log"}`);
+      throw new Error(`${engine} pass ${pass} failed for ${variant.id}: ${first ?? "see log"}`);
     }
     if (pass === 1) {
       try {
@@ -309,7 +330,7 @@ ${dressLatex(texBody, manualDir)}
       }
     }
   }
-  run("pdflatex", latexArgs);
+  run(engine, latexArgs);
 
   return path.join(outputDir, `${variant.exportedFileBasename}-manual.pdf`);
 };
