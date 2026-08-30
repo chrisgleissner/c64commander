@@ -94,13 +94,17 @@
 % Rotates the accent as each chapter opens, so the opener, the headings,
 % the figure labels and the running head of one chapter always agree.
 \newcounter{accentindex}
+% `\xglobal` is xcolor's own global prefix; a plain \global is ignored by
+% \colorlet, which is otherwise local to the group the chapter head
+% is set in: without it the opener takes the new hue and every figure caption,
+% subheading and bullet in the chapter that follows stays on the old one.
 \newcommand{\rotateaccent}{%
   \stepcounter{accentindex}%
   \ifcase\numexpr\value{accentindex}-1\relax
-    \colorlet{accent}{chapA}\or\colorlet{accent}{chapB}\or\colorlet{accent}{chapC}%
-    \or\colorlet{accent}{chapD}\or\colorlet{accent}{chapE}\or\colorlet{accent}{chapF}%
-    \or\colorlet{accent}{chapG}\or\colorlet{accent}{chapH}\or\colorlet{accent}{chapI}%
-  \else\colorlet{accent}{chapA}\fi}
+    \xglobal\colorlet{accent}{chapA}\or\xglobal\colorlet{accent}{chapB}\or\xglobal\colorlet{accent}{chapC}%
+    \or\xglobal\colorlet{accent}{chapD}\or\xglobal\colorlet{accent}{chapE}\or\xglobal\colorlet{accent}{chapF}%
+    \or\xglobal\colorlet{accent}{chapG}\or\xglobal\colorlet{accent}{chapH}\or\xglobal\colorlet{accent}{chapI}%
+  \else\xglobal\colorlet{accent}{chapA}\fi}
 
 \pagecolor{c64paper}
 \color{c64ink}

@@ -235,7 +235,10 @@ const buildOne = async (context, outputDir) => {
     "pandoc",
     [
       markdownFile,
-      "--from=markdown+raw_tex+pipe_tables+backtick_code_blocks",
+      // `-tex_math_dollars`: the manual writes C64 addresses as $0000-$FFFF, and
+      // with math enabled pandoc reads the pair as an equation and sets the
+      // digits in Computer Modern italics.
+      "--from=markdown+raw_tex+pipe_tables+backtick_code_blocks-tex_math_dollars",
       "--to=latex",
       "--top-level-division=chapter",
       // The body starts at `##`, because `#` was the title block the print
