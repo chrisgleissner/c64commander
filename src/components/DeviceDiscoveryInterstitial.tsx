@@ -98,7 +98,12 @@ export function DeviceDiscoveryInterstitial() {
   const shouldOffer =
     deviceDiscovery.phase === "complete" &&
     isAutomaticDiscoveryTrigger(deviceDiscovery.trigger) &&
-    connection.state !== "DEMO_ACTIVE";
+    connection.state !== "DEMO_ACTIVE" &&
+    // A scan that found nothing must not interrupt a connected app: "No C64 found" is
+    // untrue once a probe has reached the device, and the modal scrim blocks the page
+    // the user is on. The candidate picker stays exempt so a background reconnect
+    // cannot yank away a choice the user is in the middle of making.
+    (hasCandidates || connection.state !== "REAL_CONNECTED");
   const open = shouldOffer && dismissedKey !== discoveryKey;
 
   const dismissCurrentDiscovery = () => {
