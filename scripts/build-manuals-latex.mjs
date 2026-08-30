@@ -504,7 +504,21 @@ ${dressLatex(texBody, manualDir)}
   return path.join(outputDir, `${variant.exportedFileBasename}-manual.pdf`);
 };
 
+/**
+ * `--check-engine` prints the engine this machine would use, and stops.
+ *
+ * The release workflow has to know before it starts whether the toolchain it is
+ * standing on can finish the job, and the only honest answer is the one this
+ * script would give itself. Anything else duplicates `luaTexUsable` in a second
+ * language and drifts from it: the first copy checked one font file where this
+ * one checks nine.
+ */
 const main = async () => {
+  if (process.argv.includes("--check-engine")) {
+    console.log(luaTexUsable() ? "lualatex" : "pdflatex");
+    return;
+  }
+
   const contexts = await buildManualContexts();
   const outputRoot = path.join(rootDir, "docs/manual/latex");
   await rm(outputRoot, { recursive: true, force: true });
