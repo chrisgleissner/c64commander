@@ -10,9 +10,17 @@ import type {
   DeviceDiscoveryPlugin,
   NativeDeviceDiscoveryOptions,
   NativeDeviceDiscoveryResult,
+  NativeNetworkStatus,
 } from "@/lib/native/deviceDiscovery";
 
 export class DeviceDiscoveryWeb implements DeviceDiscoveryPlugin {
+  // A browser cannot read the interface table, and `navigator.onLine` reports
+  // "an interface exists", not "a LAN is reachable" — too weak to route a user
+  // into the simulated device on.
+  async getNetworkStatus(): Promise<NativeNetworkStatus> {
+    return { online: true, supported: false };
+  }
+
   async discover(_options: NativeDeviceDiscoveryOptions): Promise<NativeDeviceDiscoveryResult> {
     // Test seam (E2E specs / screenshot capture only): when a mock result is
     // injected on `window`, return it so the discovery flow + interstitial can be

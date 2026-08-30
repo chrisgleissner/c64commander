@@ -39,8 +39,18 @@ export type NativeDeviceDiscoveryResult = {
   unsupported?: boolean;
 };
 
+/**
+ * `supported` is false wherever the platform cannot answer the question; callers
+ * must then treat connectivity as unknown rather than as offline.
+ */
+export type NativeNetworkStatus = {
+  online: boolean;
+  supported: boolean;
+};
+
 export type DeviceDiscoveryPlugin = {
   discover(options: NativeDeviceDiscoveryOptions): Promise<NativeDeviceDiscoveryResult>;
+  getNetworkStatus(): Promise<NativeNetworkStatus>;
 };
 
 export const DeviceDiscovery = registerPlugin<DeviceDiscoveryPlugin>("DeviceDiscovery", {

@@ -90,6 +90,58 @@ class DeviceDiscoveryPlugin : Plugin() {
     }
   }
 
+  // Answered inline rather than on `executor`: that executor is serialised behind a
+  // LAN scan that may run for seconds, and a connectivity answer that late is useless.
+  @PluginMethod
+  fun getNetworkStatus(call: PluginCall) {
+    val payload = JSObject()
+    payload.put("supported", true)
+    payload.put("online", hasRoutableNetworkInterface())
+    call.resolve(payload)
+  }
+
+  internal data class NetworkInterfaceSnapshot(
+    val isUp: Boolean,
+    val isLoopback: Boolean,
+    val addresses: List<InetAddress>,
+  )
+
+  // A link-local (fe80::) or loopback address cannot reach an Ultimate, so an
+  // interface holding only those is not a network the app can discover on.
+  internal fun hasRoutableAddress(interfaces: List<NetworkInterfaceSnapshot>): Boolean =
+    interfaces.any { snapshot ->
+      snapshot.isUp &&
+        !snapshot.isLoopback &&
+        snapshot.addresses.any { address ->
+          !address.isLoopbackAddress && !address.isLinkLocalAddress && !address.isAnyLocalAddress
+        }
+    }
+
+  // Reported online on failure: a wrong "offline" would divert a user with real
+  // hardware into the simulated device, which is worse than an unnecessary probe.
+  private fun hasRoutableNetworkInterface(): Boolean =
+    try {
+      hasRoutableAddress(readNetworkInterfaceSnapshots())
+    } catch (error: Exception) {
+      AppLogger.warn(
+        context,
+        logTag,
+        "Failed to read network interfaces for connectivity status; reporting online",
+        "DeviceDiscoveryPlugin",
+        error,
+      )
+      true
+    }
+
+  private fun readNetworkInterfaceSnapshots(): List<NetworkInterfaceSnapshot> =
+    Collections.list(NetworkInterface.getNetworkInterfaces()).map { networkInterface ->
+      NetworkInterfaceSnapshot(
+        isUp = networkInterface.isUp,
+        isLoopback = networkInterface.isLoopback,
+        addresses = Collections.list(networkInterface.inetAddresses),
+      )
+    }
+
   internal fun parseKnownHosts(call: PluginCall): List<String> {
     val array = call.getArray("knownHosts") ?: return emptyList()
     val hosts = mutableListOf<String>()

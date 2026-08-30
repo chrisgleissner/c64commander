@@ -602,6 +602,19 @@ closes). Examples: machine-action confirmations (Reset/Reboot/Power Off),
 config Save/Load/Manage, RAM snapshot manager, song selector, drive-status
 details, item/disk pickers, Diagnostics dialog, Open source licenses page.
 
+**Demo Mode dialog** (`demo-interstitial-*`, a modal decision interstitial shown at
+most once per session when a probe fails **while the device has a network** and the
+`demo_mode_enabled` flag plus the Demo Mode setting are both on): attempted hostname
+— text — `demo-interstitial-hostname` — display only ; C64U hostname / IP — text input
+— `demo-interstitial-host-input` — R✅ I✅ ; host error — text —
+`demo-interstitial-host-error` — display only `[only after a rejected hostname]` ;
+Retry connection — button — `demo-interstitial-retry` — R✅ I✅ ; Save & retry — button
+— `demo-interstitial-save-retry` — R✅ I✅ ; Continue in Demo Mode — button —
+`demo-interstitial-continue` — R✅ I✅. It is **not** shown when the simulated device
+starts by itself because the platform reports no network at all: there is no host to
+offer and no decision to take, so that path enters Demo Mode directly and the route to
+real hardware stays in **Settings → Device → Connection**.
+
 **Automatic device discovery dialog** (`startup-discovered-device-*`, shown after
 startup/resume discovery completes while no configured device is reachable):
 Use — button — `startup-use-discovered-device-*` — R✅ I✅ ; Save — button —

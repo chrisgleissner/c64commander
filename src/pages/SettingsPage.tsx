@@ -1666,7 +1666,7 @@ export default function SettingsPage() {
                         ? "Real device detected during probe."
                         : lastProbeFailedAtMs
                           ? "No real device detected in recent probe."
-                          : "Waiting for initial probe."}
+                          : (connectionSnapshot.lastProbeError ?? "Waiting for initial probe.")}
                     </HelperText>
                   ) : null}
                 </div>

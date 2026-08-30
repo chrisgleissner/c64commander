@@ -92,6 +92,7 @@ export function DemoModeInterstitial() {
           <div className="flex flex-col gap-2 w-full sm:flex-row sm:justify-end">
             <Button
               variant="outline"
+              data-testid="demo-interstitial-retry"
               onClick={() => {
                 dismissDemoInterstitial();
                 void discoverConnection("manual");
@@ -99,11 +100,12 @@ export function DemoModeInterstitial() {
             >
               Retry connection
             </Button>
-            <Button variant="secondary" onClick={handleSaveAndRetry}>
+            <Button variant="secondary" data-testid="demo-interstitial-save-retry" onClick={handleSaveAndRetry}>
               Save & retry
             </Button>
             <Button
               variant="default"
+              data-testid="demo-interstitial-continue"
               onClick={() => {
                 void pinDemoModeByUserChoice();
               }}

@@ -142,16 +142,22 @@ describe("DocsPage", () => {
     }
   });
 
-  it("mentions Demo Mode only while the flag that offers it is on", () => {
+  it("always says the app runs with no network, and mentions Demo Mode only while its flag is on", () => {
     featureFlagsRef.flags = { demo_mode_enabled: true };
     const { unmount } = render(<DocsPage />);
     fireEvent.click(screen.getByTestId("docs-toggle-getting-started"));
-    expect(screen.getByText(/Automatic Demo Mode/)).toBeInTheDocument();
+    expect(screen.getByText(/With no network at all/)).toBeInTheDocument();
+    expect(screen.getByText(/Demo Mode can also offer/)).toBeInTheDocument();
     unmount();
 
+    // CollapsibleSection persists open/closed state, so without this the second click
+    // would close the card the first one opened and the negative assertion below would
+    // pass against an unrendered section rather than an absent sentence.
+    localStorage.clear();
     featureFlagsRef.flags = { demo_mode_enabled: false };
     render(<DocsPage />);
     fireEvent.click(screen.getByTestId("docs-toggle-getting-started"));
-    expect(screen.queryByText(/Automatic Demo Mode/)).not.toBeInTheDocument();
+    expect(screen.getByText(/With no network at all/)).toBeInTheDocument();
+    expect(screen.queryByText(/Demo Mode can also offer/)).not.toBeInTheDocument();
   });
 });

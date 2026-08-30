@@ -65,6 +65,12 @@ import {
 } from "@/lib/savedDevices/store";
 import { startDeviceDiscovery } from "@/lib/deviceDiscovery/discoveryManager";
 import type { DeviceDiscoveryTrigger } from "@/lib/deviceDiscovery/types";
+import {
+  isDeviceConfirmedOffline,
+  readNativeNetworkStatus,
+  shouldStartDemoModeForOfflineDevice,
+} from "@/lib/connection/offlineStartup";
+import { isNativePlatform } from "@/lib/native/platform";
 
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
 export type DiscoveryTrigger = "startup" | "manual" | "settings" | "background" | "switch" | "resume";
@@ -92,6 +98,7 @@ export type ConnectionSnapshot = Readonly<{
 const STARTUP_PROBE_INTERVAL_MS = 700;
 const PROBE_REQUEST_TIMEOUT_MS = 2500;
 export const AUTH_REQUIRED_PROBE_ERROR = "Password required";
+export const NO_NETWORK_PROBE_ERROR = "No network connection on this device.";
 
 const isTestProbeEnabled = () => {
   const env = import.meta.env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
@@ -133,6 +140,35 @@ const isRuntimeUsingTestTarget = (runtimeBaseUrl: string) => {
 const isDemoModeAvailable = () => featureFlagManager.getSnapshot().flags.demo_mode_enabled;
 
 const isDemoModeRequested = () => isDemoModeAvailable() && loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
+
+type DemoFallbackReason = "setting" | "no-network";
+
+/**
+ * No network leaves nothing but the simulated device to fall back to, so a failed probe
+ * stays in Demo Mode rather than an empty offline app. With a network only the Demo Mode
+ * setting produces one, so an unreachable device still reads as a failure. "no-network"
+ * outranks "setting" because the interstitial it suppresses asks which host to try.
+ */
+const resolveDemoFallbackReason = async (): Promise<DemoFallbackReason | null> => {
+  if (isSmokeModeEnabled()) return null;
+  if (await isDeviceConfirmedOffline()) return "no-network";
+  return isDemoModeRequested() ? "setting" : null;
+};
+
+const applyDemoFallback = async (trigger: DiscoveryTrigger, reason: DemoFallbackReason | null) => {
+  if (!reason) {
+    await transitionToOfflineNoDemo(trigger);
+    return;
+  }
+  await transitionToDemoActive(trigger, { showInterstitial: reason === "setting" });
+};
+
+const shouldAutoStartOfflineDemoMode = async () =>
+  shouldStartDemoModeForOfflineDevice({
+    networkStatus: await readNativeNetworkStatus(),
+    nativePlatform: isNativePlatform(),
+    realDeviceSessionActive: stickyRealDeviceLock || snapshot.state === "REAL_CONNECTED",
+  });
 
 const toDeviceDiscoveryTrigger = (trigger: DiscoveryTrigger): DeviceDiscoveryTrigger => {
   if (trigger === "settings") return "settings";
@@ -930,7 +966,7 @@ const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
 const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
   trigger !== "background" && !demoInterstitialShownThisSession;
 
-const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
+const transitionToDemoActive = async (trigger: DiscoveryTrigger, options: { showInterstitial?: boolean } = {}) => {
   if (stickyRealDeviceLock) {
     addLog("warn", "Sticky real-device lock active; skipping demo mode transition", { trigger });
     await transitionToOfflineNoDemo(trigger);
@@ -941,7 +977,7 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
 
   // Show the interstitial early so the UI responds immediately while the mock
   // server is still starting up.
-  const shouldShowInterstitial = shouldShowDemoInterstitial(trigger);
+  const shouldShowInterstitial = options.showInterstitial !== false && shouldShowDemoInterstitial(trigger);
   if (shouldShowInterstitial) {
     demoInterstitialShownThisSession = true;
     sessionStorage.setItem(DEMO_INTERSTITIAL_SESSION_KEY, "1");
@@ -1048,7 +1084,7 @@ const transitionToSmokeMockConnected = async (trigger: DiscoveryTrigger) => {
 const handleProbeOutcome = async (
   trigger: DiscoveryTrigger,
   ok: boolean,
-  autoDemoEnabled: boolean,
+  demoFallbackReason: DemoFallbackReason | null,
   isCurrentRun: () => boolean,
 ) => {
   if (!isCurrentRun()) return;
@@ -1068,14 +1104,20 @@ const handleProbeOutcome = async (
   if (isSmokeModeEnabled()) {
     console.warn("C64U_PROBE_FAILED", JSON.stringify({ trigger }));
   }
-  if (autoDemoEnabled) {
-    await transitionToDemoActive(trigger);
-  } else {
-    await transitionToOfflineNoDemo(trigger);
-  }
+  await applyDemoFallback(trigger, demoFallbackReason);
 };
 
 const isManualDiscoveryTrigger = (trigger: DiscoveryTrigger) => trigger === "manual" || trigger === "settings";
+
+let backgroundProbeSuppressedWhileOffline = false;
+
+// Announced on the edge only: a five-second background schedule would otherwise
+// repeat one sentence until it crowded everything else out of the log.
+const noteBackgroundProbeSuppressedWhileOffline = (suppressed: boolean) => {
+  if (suppressed === backgroundProbeSuppressedWhileOffline) return;
+  backgroundProbeSuppressedWhileOffline = suppressed;
+  addLog("info", suppressed ? "Background probing paused: no network" : "Background probing resumed: network back");
+};
 
 /**
  * Centralized discovery entry point used for:
@@ -1124,6 +1166,17 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
     return;
   }
 
+  // A first launch with no network reaches the simulated device directly: no LAN
+  // scan, no saved-host probe, and no prompt to answer. Startup only, so a device
+  // that later becomes unreachable is still reported rather than replaced.
+  if (trigger === "startup" && (await shouldAutoStartOfflineDemoMode())) {
+    if (!discoveryRun.isCurrent()) return;
+    addLog("info", "Startup found no network; starting the simulated device without discovery", { trigger });
+    setSnapshot({ lastProbeError: NO_NETWORK_PROBE_ERROR });
+    await transitionToDemoActive(trigger, { showInterstitial: false });
+    return;
+  }
+
   if (trigger === "manual") {
     transitionTo("DISCOVERING", trigger);
     const manualProbeTimeoutMs = Math.max(1000, loadDiscoveryProbeTimeoutMs()) + 1000;
@@ -1149,15 +1202,22 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
         if (!discoveryRun.isCurrent()) return;
       }
     }
-    await handleProbeOutcome(trigger, ok, isDemoModeRequested(), discoveryRun.isCurrent);
+    await handleProbeOutcome(trigger, ok, await resolveDemoFallbackReason(), discoveryRun.isCurrent);
     return;
   }
 
   if (trigger === "background") {
     if (snapshot.state !== "DEMO_ACTIVE" && snapshot.state !== "OFFLINE_NO_DEMO") return;
+    // The slot is claimed before the first await so an overlapping background call
+    // still returns at the `activeDiscovery` guard above instead of racing this one.
     const abort = new AbortController();
     activeDiscovery = { abort, cancel: () => abort.abort() };
     try {
+      if (await isDeviceConfirmedOffline()) {
+        noteBackgroundProbeSuppressedWhileOffline(true);
+        return;
+      }
+      noteBackgroundProbeSuppressedWhileOffline(false);
       setSnapshot({ lastDiscoveryTrigger: trigger });
       const ok = await probeOnce({ signal: abort.signal });
       setSnapshot({ lastProbeAtMs: Date.now() });
@@ -1219,11 +1279,7 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
     }
     if (!discoveryRun.isCurrent()) return;
     setSnapshot({ lastProbeFailedAtMs: Date.now() });
-    if (isDemoModeRequested()) {
-      await transitionToDemoActive(trigger);
-    } else {
-      await transitionToOfflineNoDemo(trigger);
-    }
+    await applyDemoFallback(trigger, await resolveDemoFallbackReason());
   };
   const windowTimer = globalThis.setTimeout(() => {
     void (async () => {
@@ -1332,6 +1388,7 @@ export async function initializeConnectionManager() {
   cancelActiveDiscovery();
   activeManualDiscovery = null;
   lastManualDiscoveryFallbackAtMs = 0;
+  backgroundProbeSuppressedWhileOffline = false;
   applyFuzzModeDefaults();
   await initializeSmokeMode();
   await featureFlagManager.load();

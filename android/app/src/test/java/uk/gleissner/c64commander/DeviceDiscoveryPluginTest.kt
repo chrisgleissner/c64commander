@@ -562,4 +562,70 @@ class DeviceDiscoveryPluginTest {
     assertTrue(latch.await(5, TimeUnit.SECONDS))
     assertEquals(0, payload!!.getInt("scannedHosts"))
   }
+
+  @Test
+  fun `reports offline when every interface holds only loopback or link-local addresses`() {
+    val interfaces = listOf(
+      DeviceDiscoveryPlugin.NetworkInterfaceSnapshot(
+        isUp = true,
+        isLoopback = true,
+        addresses = listOf(InetAddress.getByName("127.0.0.1")),
+      ),
+      DeviceDiscoveryPlugin.NetworkInterfaceSnapshot(
+        isUp = true,
+        isLoopback = false,
+        addresses = listOf(InetAddress.getByName("fe80::744f:f0ff:fef4:ec7b")),
+      ),
+    )
+
+    assertFalse(plugin.hasRoutableAddress(interfaces))
+  }
+
+  @Test
+  fun `reports online when an interface holds a routable address`() {
+    val interfaces = listOf(
+      DeviceDiscoveryPlugin.NetworkInterfaceSnapshot(
+        isUp = true,
+        isLoopback = true,
+        addresses = listOf(InetAddress.getByName("127.0.0.1")),
+      ),
+      DeviceDiscoveryPlugin.NetworkInterfaceSnapshot(
+        isUp = true,
+        isLoopback = false,
+        addresses = listOf(InetAddress.getByName("192.168.1.208")),
+      ),
+    )
+
+    assertTrue(plugin.hasRoutableAddress(interfaces))
+  }
+
+  @Test
+  fun `reports offline when the only routable address sits on a downed interface`() {
+    val interfaces = listOf(
+      DeviceDiscoveryPlugin.NetworkInterfaceSnapshot(
+        isUp = false,
+        isLoopback = false,
+        addresses = listOf(InetAddress.getByName("192.168.1.208")),
+      ),
+    )
+
+    assertFalse(plugin.hasRoutableAddress(interfaces))
+  }
+
+  @Test
+  fun `getNetworkStatus answers on the calling thread so a running LAN scan cannot delay it`() {
+    val call = mock(PluginCall::class.java)
+    var payload: JSObject? = null
+    doAnswer { invocation ->
+      payload = invocation.getArgument(0) as JSObject
+      null
+    }.`when`(call).resolve(any())
+
+    plugin.getNetworkStatus(call)
+
+    val resolved = payload
+    assertNotNull(resolved)
+    assertTrue(resolved!!.getBoolean("supported"))
+    assertTrue(resolved.has("online"))
+  }
 }
