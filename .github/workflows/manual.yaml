@@ -96,10 +96,16 @@ jobs:
             echo "$variant: $(pdfinfo "$PDF" | awk '/Pages/{print $2}') pages, $SIZE bytes"
           done
 
+      # `github.ref_name` is `391/merge` on a pull request, and an artifact name
+      # cannot contain a slash.
+      - name: Name the artifact
+        id: name
+        run: echo "slug=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
+
       - name: Upload the manual
         uses: actions/upload-artifact@v4
         with:
-          name: manual-${{ github.ref_name }}
+          name: manual-${{ steps.name.outputs.slug }}
           path: docs/manual/latex/*/*.pdf
           retention-days: 7
           if-no-files-found: error
