@@ -26,7 +26,12 @@ import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { buildManualContexts, renderManualMarkdown, INDEX_TERMS } from "./build-manuals.mjs";
+import {
+  assertSingleDisplayProfile,
+  buildManualContexts,
+  renderManualMarkdown,
+  INDEX_TERMS,
+} from "./build-manuals.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(scriptDir, "..");
@@ -307,7 +312,7 @@ const luaTexUsable = () => {
   return PLEX_FACES.every((face) => fs.existsSync(path.join(PLEX_DIR, face)));
 };
 
-const coverTex = ({ productName, subtitle, launchImage, logo, edition, buildDate }) => `
+const coverTex = ({ productName, subtitle, launchImage, logo, edition, buildDate, typeface }) => `
 % The cover follows the 1982 guide's instinct: one strong band of colour, the
 % name of the machine large enough to read across a room, and a picture of the
 % thing itself. Everything else waits until page one.
@@ -343,7 +348,7 @@ reissued with each release.\\par}
 {\\small\\begin{tabular}{@{}p{26mm}p{82mm}@{}}
 \\textsf{\\bfseries Edition} & ${escapeTex(edition)} \\\\
 \\textsf{\\bfseries Published} & ${escapeTex(buildDate)} \\\\
-\\textsf{\\bfseries Set in} & TeX Gyre Pagella and TeX Gyre Heros \\\\
+\\textsf{\\bfseries Set in} & ${escapeTex(typeface)} \\\\
 \\end{tabular}\\par}
 \\vspace{9mm}
 {\\footnotesize\\color{c64muted}Copyright \\textcopyright{} 2026 Christian Gleissner. Commodore, the Commodore
@@ -357,6 +362,18 @@ const buildOne = async (context, outputDir) => {
   const { variant, manualDir, title, subtitle, appVersion } = context;
   const productName = title.replace(/\s+Manual$/, "");
   const markdown = renderManualMarkdown(context);
+
+  // The same guard the shipping pipeline runs. Every app screenshot a manual
+  // embeds must come from that manual's own display profile; without this an
+  // edition can be published showing another edition's screen size, and the
+  // failure is invisible in the output because the picture is simply a
+  // different shape.
+  assertSingleDisplayProfile(markdown, variant.id === "c64u-remote" ? "compact" : "medium", variant.id);
+
+  // Decided before the document is assembled, not just before it is run: the
+  // colophon names the family the book is set in, and that follows the engine.
+  const engine = luaTexUsable() ? "lualatex" : "pdflatex";
+  const typeface = engine === "lualatex" ? "IBM Plex Serif and IBM Plex Sans" : "TeX Gyre Pagella and TeX Gyre Heros";
 
   // Everything before the first real chapter is the title block and the in-app
   // contents list. The print edition replaces both with a cover and a
@@ -407,6 +424,7 @@ ${coverTex({
   logo: fs.existsSync(logoPath) ? logoPath : null,
   edition: appVersion,
   buildDate: new Date().toLocaleDateString("en-GB", { year: "numeric", month: "long" }),
+  typeface,
 })}
 
 \\cleardoublepage
@@ -457,10 +475,6 @@ ${dressLatex(texBody, manualDir)}
     execFileSync(command, args, { cwd: outputDir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
   const latexArgs = ["-interaction=nonstopmode", "-halt-on-error", "-file-line-error", path.basename(texFile)];
-  // LuaLaTeX where it can actually load a system OpenType face, which is what
-  // lets the book be set in IBM Plex like the app. A LuaTeX without luaotfload
-  // fails at the first \setmainfont, so it has to be probed rather than assumed.
-  const engine = luaTexUsable() ? "lualatex" : "pdflatex";
   for (const pass of [1, 2]) {
     try {
       run(engine, latexArgs);
