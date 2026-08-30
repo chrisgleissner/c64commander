@@ -11,6 +11,15 @@ name: manual
 
 on:
   workflow_dispatch:
+  # On any change that can alter the book or how it is built. This is the only
+  # place the hosted-runner build gets exercised before a tag depends on it.
+  pull_request:
+    paths:
+      - "build"
+      - "scripts/build-manuals.mjs"
+      - "scripts/build-manuals-latex.mjs"
+      - "scripts/latex/**"
+      - ".github/workflows/manual.yaml"
   push:
     tags:
       - "[0-9]+.[0-9]+.[0-9]+"
