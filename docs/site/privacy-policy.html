@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Policy — C64 Commander</title>
+    <meta
+      name="description"
+      content="How C64 Commander handles your data: what it stores on your device, what it never collects, and every network request it makes."
+    />
+    <!--
+      Self-contained on purpose. A privacy policy that pulls a webfont from a
+      third party sends the reader's address to that third party in the act of
+      telling them their address is not sent anywhere.
+    -->
+    <style>
+      :root {
+        color-scheme: light dark;
+        --ink: #1c1b19;
+        --muted: #5c5952;
+        --rule: #dcd6ca;
+        --paper: #fbf9f4;
+        --accent: #2a6f97;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #eceae4;
+          --muted: #a5a096;
+          --rule: #3a3833;
+          --paper: #161513;
+          --accent: #7fb4d4;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font:
+          16px/1.65 ui-serif,
+          Georgia,
+          "Times New Roman",
+          serif;
+        -webkit-text-size-adjust: 100%;
+      }
+      .page {
+        max-width: 43rem;
+        margin: 0 auto;
+        padding: 3rem 1.25rem 5rem;
+      }
+      header {
+        border-bottom: 2px solid var(--accent);
+        padding-bottom: 1rem;
+        margin-bottom: 2rem;
+      }
+      h1,
+      h2 {
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        line-height: 1.25;
+      }
+      h1 {
+        font-size: 1.9rem;
+        margin: 0 0 0.4rem;
+      }
+      h2 {
+        font-size: 1.15rem;
+        margin: 2.4rem 0 0.6rem;
+      }
+      .effective {
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin: 0;
+      }
+      p,
+      li {
+        margin: 0.75rem 0;
+      }
+      ul {
+        padding-left: 1.2rem;
+      }
+      a {
+        color: var(--accent);
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.92em;
+      }
+      strong {
+        font-weight: 600;
+      }
+      footer {
+        margin-top: 3rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--rule);
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+      @media print {
+        body {
+          background: #fff;
+          color: #000;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header>
+        <h1>Privacy Policy</h1>
+        <p class="effective">C64 Commander &middot; effective 30 August 2026</p>
+      </header>
+
+      <h2>The short version</h2>
+      <p>
+        C64 Commander has no accounts, no analytics, and no servers of its own. It does not collect, transmit, or share
+        personal data. Everything it remembers, it remembers on your device, and the only machine it talks to without
+        being asked is your own C64 Ultimate on your own network.
+      </p>
+
+      <h2>What is stored on your device</h2>
+      <p>C64 Commander keeps a small amount of data locally, to do its job:</p>
+      <ul>
+        <li><strong>Saved devices</strong>: the name, address and ports of each C64 Ultimate you connect to.</li>
+        <li>
+          <strong>Device passwords</strong>, where your machine asks for one. These are held in the platform's secure
+          storage.
+        </li>
+        <li>
+          <strong>Your settings and your library</strong>: appearance, playback preferences, playlists, disk
+          collections, and any tunes you have marked as liked.
+        </li>
+        <li><strong>Logs and diagnostics</strong>, kept so you can see what the app did when something goes wrong.</li>
+        <li><strong>Music you download</strong>, if you choose to install the High Voltage SID Collection.</li>
+        <li>
+          <strong>A copy of your machine's KERNAL and BASIC ROMs</strong>, if you play SID music on this device. The app
+          reads them from your own C64 Ultimate, because many tunes will not play without them. They stay on your
+          device, are never uploaded, and are never included in a diagnostics report.
+        </li>
+      </ul>
+      <p>
+        None of this is sent to the developer or to anyone else. Clearing the app's data or uninstalling it removes all
+        of it.
+      </p>
+
+      <h2>What is never collected</h2>
+      <ul>
+        <li>Personal identifiers of any kind.</li>
+        <li>Analytics, usage metrics or behavioural tracking.</li>
+        <li>Automatic crash reporting.</li>
+        <li>Advertising identifiers.</li>
+        <li>Accounts, logins or profiles. There are none to create.</li>
+      </ul>
+
+      <h2>Every network request the app makes</h2>
+      <p>This is the complete list.</p>
+      <ul>
+        <li>
+          <strong>Your C64 Ultimate.</strong> The app talks to the machine you configured, over your local network, to
+          read its state, change its settings, transfer files and carry its sound and picture. This is the app's whole
+          purpose and it happens continuously while connected.
+        </li>
+        <li>
+          <strong>The High Voltage SID Collection</strong>, only when you ask for it. The app downloads the archive from
+          a public mirror, <code>hvsc.brona.dk</code> by default, and you can point it at another under
+          <strong>Settings &rarr; HVSC</strong>. What comes back is music files and the archive's own documentation.
+          Nothing about you is sent.
+        </li>
+        <li>
+          <strong>An online archive of disks and programs</strong>, only when you search it. The address is yours to set
+          under <strong>Settings &rarr; Online Archive</strong>, and it defaults to
+          <code>commoserve.files.commodore.net</code>. Your search terms go to whichever server you have configured.
+        </li>
+        <li><strong>Links you tap.</strong> Documentation and support links open in your browser and leave the app.</li>
+      </ul>
+      <p>
+        There is no other outbound traffic. The mobile app requests no fonts, scripts or resources from third-party
+        sites; it carries everything it draws. A self-hosted web build is the one exception: run in a browser rather
+        than installed as an app, it fetches its two typefaces from Google Fonts, which necessarily tells Google the
+        address of the machine asking.
+      </p>
+
+      <h2>Diagnostics you choose to share</h2>
+      <p>
+        The app can package its logs into a file for you to send on when you are reporting a problem. That only ever
+        happens when you ask for it. The file holds recent activity, errors, your app version, your device model, and
+        the name, address and firmware of the C64 Ultimate you are connected to.
+      </p>
+      <p>Your device password is never in it. Its network address can be, so share the file with people you trust.</p>
+
+      <h2>Platform telemetry</h2>
+      <p>
+        C64 Commander sends no crash reports or diagnostics anywhere. Your operating system and app store may still
+        collect crash information at the system level, according to the settings on your device, and that is outside the
+        app's control.
+      </p>
+
+      <h2>Children</h2>
+      <p>C64 Commander is not directed at children and does not knowingly collect information about them.</p>
+
+      <h2>Third-party software</h2>
+      <p>
+        The app is built on open-source libraries. The full list, with licences, ships with the source at
+        <a href="https://github.com/chrisgleissner/c64commander/blob/main/THIRD_PARTY_NOTICES.md"
+          >THIRD_PARTY_NOTICES.md</a
+        >.
+      </p>
+
+      <h2>Changes</h2>
+      <p>
+        If this policy changes, the new version is published here and replaces the previous one. The effective date at
+        the top tells you which version you are reading.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Email <a href="mailto:apps@gleissner.uk">apps@gleissner.uk</a>, or open an issue at
+        <a href="https://github.com/chrisgleissner/c64commander/issues">github.com/chrisgleissner/c64commander/issues</a
+        >.
+      </p>
+
+      <footer><a href="./">C64 Commander</a></footer>
+    </main>
+  </body>
+</html>
