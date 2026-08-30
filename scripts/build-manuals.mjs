@@ -1226,6 +1226,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "- Press **`7`**, which works even with directional navigation switched off.",
     "",
     "Keep typing while you look: Up and Down move through the results and leave your text alone. OK opens the selected result, and Back closes search. Results are grouped, best match first, so typing `radio` offers you **Start SID Radio** ahead of any tune with the word in its title.",
+    "",
     image("Search, one query in", profile, "home/search/profiles/{profile}/01-overlay.png"),
     "",
     '**A result you cannot use yet is still listed, and it tells you what it needs:** "Needs a connected C64 Ultimate", "Needs the HVSC music collection installed", "Live View is turned off in Settings". Pick it and you go straight to the setting that turns it on.',

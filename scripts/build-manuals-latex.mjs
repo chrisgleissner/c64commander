@@ -178,6 +178,25 @@ const dressLatex = (tex, manualDir) => {
       `\\begin{manualfigure}\n${graphic.trim()}\n\\captionof{figure}{${caption.trim()}}\n\\end{manualfigure}`,
   );
 
+  // A picture pandoc read as inline, because its markdown line had no blank line
+  // above it, is still a picture: it would otherwise hang off the end of a line
+  // of prose, right-aligned, half outside the measure and with no caption. The
+  // markdown is the place to fix that, and was; this catches the next one.
+  //
+  // Applied only outside the blocks the rewrite above just made, so a screenshot
+  // that is already a proper figure is left alone.
+  output = output
+    .split(/(\\begin\{manualfigure\}[\s\S]*?\\end\{manualfigure\})/)
+    .map((part) =>
+      part.startsWith("\\begin{manualfigure}")
+        ? part
+        : part.replace(
+            /[ ]*\\screenshot\{([^}]*)\}\{([^}]*)\}/g,
+            (full, width, src) => `\n\n\\begin{manualfigure}\n\\screenshot{${width}}{${src}}\n\\end{manualfigure}\n\n`,
+          ),
+    )
+    .join("");
+
   // "Availability: on by default..." is the one line that tells a reader whether
   // the feature they just read about is even switched on. It was an italic
   // afterthought at the end of a section; as a callout it can be found while
