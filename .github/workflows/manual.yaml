@@ -48,16 +48,9 @@ jobs:
           node-version: 24
           cache: npm
 
-      # apt is the slow part of this job, so the archives are cached. The key
-      # carries the install script, which is where the package list lives, so a
-      # change to that list invalidates the cache rather than silently reusing
-      # an install that no longer matches.
-      - name: Cache the TeX packages
-        uses: actions/cache@v4
-        with:
-          path: /var/cache/apt/archives
-          key: manual-apt-${{ runner.os }}-${{ hashFiles('scripts/latex/install-deps.sh') }}
-
+      # No apt cache. The download is not the cost: 152 MB arrived in one second
+      # on a hosted runner, and every second of the install was dpkg unpacking.
+      # A cache here saved nothing and was one more thing to be stale.
       - name: Install the manual toolchain
         run: ./build --manual-deps
 

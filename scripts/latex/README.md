@@ -16,7 +16,7 @@ Output lands in `docs/manual/<variant>/` (Markdown, tracked) and
 ## Requirements
 
 `scripts/latex/install-deps.sh` holds the list and installs it on Ubuntu or
-Debian. Five TeX Live packages and pandoc, about 380 MB:
+Debian. Five TeX Live packages, poppler-utils, and pandoc:
 
 |                             |                                                                           |
 | --------------------------- | ------------------------------------------------------------------------- |
