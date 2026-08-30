@@ -476,6 +476,7 @@ ${dressLatex(texBody, manualDir)}
 
 \\cleardoublepage
 \\rotateaccent
+\\pagestyle{indexpage}
 \\printindex
 \\end{document}
 `;
@@ -537,10 +538,17 @@ const main = async () => {
   const outputRoot = path.join(rootDir, "docs/manual/latex");
   await rm(outputRoot, { recursive: true, force: true });
 
-  for (const context of contexts) {
-    const outputDir = path.join(outputRoot, context.variant.id);
-    await mkdir(outputDir, { recursive: true });
-    const pdf = await buildOne(context, outputDir);
+  // The editions are independent books in their own directories, and each is
+  // three sequential LaTeX passes that keep one core busy. Building them side by
+  // side halves the wall clock for nothing but a `Promise.all`.
+  const built = await Promise.all(
+    contexts.map(async (context) => {
+      const outputDir = path.join(outputRoot, context.variant.id);
+      await mkdir(outputDir, { recursive: true });
+      return buildOne(context, outputDir);
+    }),
+  );
+  for (const pdf of built) {
     console.log(`Generated ${path.relative(rootDir, pdf)}`);
   }
 };

@@ -303,6 +303,19 @@
   \par\vspace{2pt}{\color{c64rule}\rule{\linewidth}{0.4pt}}\par\vspace{4pt}}
 \renewcommand{\preindexhook}{\small}
 
+% The index carried the last chapter's running head, because no mark is set
+% after the final chapter sets one. Marks are the wrong tool here anyway: the
+% index is not a chapter and has nothing to mark. It gets a page style that says
+% what it is.
+\makepagestyle{indexpage}
+\makeevenhead{indexpage}{\sffamily\small\color{c64muted}\thepage}{}%
+  {\sffamily\small\color{accent}Index}
+\makeoddhead{indexpage}{\sffamily\small\color{accent}Index}{}%
+  {\sffamily\small\color{c64muted}\thepage}
+\makeheadrule{indexpage}{\textwidth}{0.4pt}
+\makeevenfoot{indexpage}{}{}{}
+\makeoddfoot{indexpage}{}{}{}
+
 % ---------------------------------------------------------------- misc
 \hyphenpenalty=200
 \tolerance=1600
