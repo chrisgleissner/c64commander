@@ -10,11 +10,15 @@
 # Live packages: the typefaces are vendored in this repository, so no TeX font
 # package is involved at all.
 #
-# pandoc comes from its own release rather than from apt. Ubuntu's package
-# unpacks 190 MB, a third of the whole install, because it drags in a Java PDF
-# stack the manual never touches. The upstream tarball is a 35 MB static binary
-# with no dependencies, and pinning it means every machine converts the Markdown
-# with the same converter.
+# pandoc comes from its own release rather than from apt, and lands beside this
+# script rather than in the system. Two reasons. Ubuntu's package unpacks 190 MB,
+# a third of the whole install, because it drags in a Java PDF stack the manual
+# never touches; the upstream tarball is a 35 MB static binary with nothing
+# behind it. And the version matters: pandoc 3.11 wraps images in a macro that
+# 3.1.3 does not emit, so a machine using its distribution's pandoc produced
+# LaTeX that failed to compile. Pinning one version, and preferring it over
+# whatever is on PATH, is what makes a local build and a CI build the same
+# build.
 #
 # Ubuntu and Debian only. On anything else, install the equivalents by hand; the
 # list below is short and the package names are conventional.
@@ -30,10 +34,12 @@ PACKAGES=(
 )
 
 PANDOC_VERSION=3.11
+PANDOC_BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bin/pandoc"
 
 have_everything() {
   command -v lualatex >/dev/null 2>&1 &&
-    command -v pandoc >/dev/null 2>&1 &&
+    [ -x "$PANDOC_BIN" ] &&
+    "$PANDOC_BIN" --version | head -1 | grep -q "pandoc $PANDOC_VERSION\$" &&
     command -v makeindex >/dev/null 2>&1 &&
     kpsewhich luaotfload.sty >/dev/null 2>&1 &&
     kpsewhich memoir.cls >/dev/null 2>&1 &&
@@ -42,24 +48,34 @@ have_everything() {
 }
 
 if have_everything; then
-  echo "manual toolchain already present: $(lualatex --version | head -1), $(pandoc --version | head -1)"
+  echo "manual toolchain already present: $(lualatex --version | head -1), $("$PANDOC_BIN" --version | head -1)"
   exit 0
 fi
 
 install_pandoc() {
-  command -v pandoc >/dev/null 2>&1 && return 0
+  if [ -x "$PANDOC_BIN" ] && "$PANDOC_BIN" --version | head -1 | grep -q "pandoc $PANDOC_VERSION\$"; then
+    return 0
+  fi
   echo "installing pandoc $PANDOC_VERSION"
   tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' RETURN
   url="https://github.com/jgm/pandoc/releases/download/$PANDOC_VERSION/pandoc-$PANDOC_VERSION-linux-amd64.tar.gz"
   curl --fail --silent --show-error --location --retry 3 --retry-delay 2 -o "$tmp/pandoc.tar.gz" "$url"
   tar -xzf "$tmp/pandoc.tar.gz" -C "$tmp"
-  $SUDO install -m 0755 "$tmp/pandoc-$PANDOC_VERSION/bin/pandoc" /usr/local/bin/pandoc
+  mkdir -p "$(dirname "$PANDOC_BIN")"
+  install -m 0755 "$tmp/pandoc-$PANDOC_VERSION/bin/pandoc" "$PANDOC_BIN"
+  rm -rf "$tmp"
 }
 
 SUDO=""
 if [ "$(id -u)" -ne 0 ]; then
   command -v sudo >/dev/null 2>&1 && SUDO="sudo"
+fi
+
+install_pandoc
+
+if have_everything; then
+  echo "manual toolchain ready: $(lualatex --version | head -1), $("$PANDOC_BIN" --version | head -1)"
+  exit 0
 fi
 
 if ! command -v apt-get >/dev/null 2>&1; then

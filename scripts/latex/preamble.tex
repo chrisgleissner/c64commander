@@ -29,6 +29,13 @@
 %  fontconfig database, which a minimal TeX Live in CI does not have.
 %
 %  %%FONTDIR%% is replaced with an absolute path by build-manuals-latex.mjs.
+% Pandoc 3.11 wraps every image in \pandocbounded, which its own template
+% defines and a hand-written preamble does not. It exists to shrink an oversized
+% picture into the text block; this build already sizes each screenshot from the
+% shape of its file, so the identity is right. Declared with \providecommand so
+% an older pandoc, which does not emit it, is unaffected.
+\providecommand{\pandocbounded}[1]{#1}
+
 \usepackage{fontspec}
 \defaultfontfeatures{Path=%%FONTDIR%%/, Extension=.ttf, Ligatures=TeX}
 \setmainfont{IBMPlexSerif-Regular}[
@@ -211,6 +218,13 @@
 % measure. \screenshot picks a width from the shape of the file; the hairline
 % frame keeps a light capture from bleeding into the page.
 \usepackage[font={sf,small,color=c64muted},labelfont={color=accent,bf},labelsep=period,skip=7pt]{caption}
+% Pandoc 3.11 writes `\def\LTcaptype{none}` before a longtable that has no
+% caption, and the caption package then looks `none` up as a counter. Pandoc's
+% own template declares it; a hand-written preamble has to.
+\makeatletter
+\@ifundefined{c@none}{\newcounter{none}}{}
+\makeatother
+
 \newcommand{\screenshot}[2]{%
   \begingroup
   \setlength{\fboxsep}{0pt}\setlength{\fboxrule}{0.6pt}%

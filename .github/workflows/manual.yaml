@@ -51,6 +51,15 @@ jobs:
       # No apt cache. The download is not the cost: 152 MB arrived in one second
       # on a hosted runner, and every second of the install was dpkg unpacking.
       # A cache here saved nothing and was one more thing to be stale.
+      # Worth caching, unlike the apt archives: this is a real download that does
+      # not come off a mirror at 122 MB/s, and its key is the version the build
+      # pins.
+      - name: Cache the pinned pandoc
+        uses: actions/cache@v4
+        with:
+          path: scripts/latex/bin
+          key: manual-pandoc-${{ runner.os }}-${{ hashFiles('scripts/latex/install-deps.sh') }}
+
       - name: Install the manual toolchain
         run: ./build --manual-deps
 

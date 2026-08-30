@@ -236,3 +236,4 @@ U64_INCIDENTS.md
 # committed by accident. Only the reusable, shareable skills/ directory is tracked.
 .claude/*
 !.claude/skills/
+scripts/latex/bin/

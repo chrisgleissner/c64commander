@@ -290,6 +290,21 @@ const dressLatex = (tex, manualDir) => {
 const fontsDir = path.join(scriptDir, "latex/fonts");
 
 /**
+ * The pinned pandoc, in preference to whatever is on PATH.
+ *
+ * Versions are not interchangeable here: 3.11 wraps every image in
+ * `\pandocbounded` and writes `\LTcaptype{none}` before an uncaptioned table,
+ * neither of which 3.1.3 emits. A machine using its distribution's pandoc
+ * produced LaTeX that would not compile. `./build --manual-deps` puts the pinned
+ * binary in `scripts/latex/bin`, and this prefers it, so a local build and a CI
+ * build are the same build.
+ */
+const pandocBin = (() => {
+  const pinned = path.join(scriptDir, "latex/bin/pandoc");
+  return fs.existsSync(pinned) ? pinned : "pandoc";
+})();
+
+/**
  * The manual is set with LuaLaTeX, and only with LuaLaTeX.
  *
  * There used to be a pdfLaTeX path that fell back to the TeX Gyre revivals when
@@ -301,7 +316,7 @@ const fontsDir = path.join(scriptDir, "latex/fonts");
  */
 const requireToolchain = () => {
   const missing = [];
-  for (const tool of ["lualatex", "pandoc", "makeindex"]) {
+  for (const tool of ["lualatex", "makeindex"]) {
     try {
       execFileSync("sh", ["-c", `command -v ${tool}`], { stdio: "ignore" });
     } catch {
@@ -312,6 +327,11 @@ const requireToolchain = () => {
     execFileSync("kpsewhich", ["luaotfload.sty"], { stdio: "ignore" });
   } catch {
     missing.push("luaotfload");
+  }
+  try {
+    execFileSync(pandocBin, ["--version"], { stdio: "ignore" });
+  } catch {
+    missing.push("pandoc");
   }
   if (missing.length > 0) {
     throw new Error(
@@ -394,7 +414,7 @@ const buildOne = async (context, outputDir) => {
   await writeFile(markdownFile, marked, "utf8");
 
   const texBody = execFileSync(
-    "pandoc",
+    pandocBin,
     [
       markdownFile,
       // `-tex_math_dollars`: the manual writes C64 addresses as $0000-$FFFF, and
@@ -408,7 +428,6 @@ const buildOne = async (context, outputDir) => {
       // those `##` chapters rather than sections.
       "--shift-heading-level-by=-1",
       "--wrap=preserve",
-      "--no-highlight",
     ],
     { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
   );
