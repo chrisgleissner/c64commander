@@ -163,9 +163,10 @@ describe("DeviceDiscoveryInterstitial", () => {
   it("does not show settings-triggered discovery results as a startup popup", () => {
     discoveryState = { ...discoveryState, trigger: "settings" };
 
-    const { container } = renderDialog();
+    renderDialog();
 
-    expect(container).toBeEmptyDOMElement();
+    // The dialog portals to document.body, so a container assertion would pass either way.
+    expect(screen.queryByText("Choose your C64")).not.toBeInTheDocument();
   });
 
   it("opens a manual host prompt when automatic startup discovery finds no devices", () => {
@@ -177,6 +178,16 @@ describe("DeviceDiscoveryInterstitial", () => {
     expect(screen.getByTestId("startup-manual-device-panel")).toBeInTheDocument();
     expect(screen.getByTestId("startup-manual-device-host-input")).toBeInTheDocument();
     expect(screen.getByTestId("startup-manual-device-connect")).toHaveTextContent("Connect");
+  });
+
+  it("does not prompt for a manual host once the app is connected to a real device", () => {
+    discoveryState = { ...discoveryState, candidates: [] };
+    connectionState = { state: "REAL_CONNECTED" };
+
+    renderDialog();
+
+    expect(screen.queryByText("No C64 found")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("startup-manual-device-panel")).not.toBeInTheDocument();
   });
 
   it("saves and selects a reachable manual host from the no-device startup dialog", async () => {
