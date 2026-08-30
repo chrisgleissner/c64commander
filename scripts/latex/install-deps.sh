@@ -22,6 +22,7 @@ PACKAGES=(
   texlive-luatex             # luaotfload, without which lualatex cannot load an OpenType face
   texlive-binaries           # makeindex
   pandoc                     # markdown to LaTeX
+  poppler-utils              # pdffonts and pdfinfo, which the build checks its own output with
 )
 
 have_everything() {
@@ -30,7 +31,8 @@ have_everything() {
     command -v makeindex >/dev/null 2>&1 &&
     kpsewhich luaotfload.sty >/dev/null 2>&1 &&
     kpsewhich memoir.cls >/dev/null 2>&1 &&
-    kpsewhich tcolorbox.sty >/dev/null 2>&1
+    kpsewhich tcolorbox.sty >/dev/null 2>&1 &&
+    command -v pdffonts >/dev/null 2>&1
 }
 
 if have_everything; then

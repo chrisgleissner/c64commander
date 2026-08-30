@@ -85,6 +85,10 @@ jobs:
               echo "$PDF is only $SIZE bytes; the manual should be a few megabytes" >&2
               exit 1
             fi
+            # Checked separately from its answer: a missing pdffonts reported
+            # "the fonts were not used", which is a different and misleading
+            # fault, and is how this step first failed.
+            command -v pdffonts >/dev/null 2>&1 || { echo "pdffonts is not installed" >&2; exit 1; }
             if ! pdffonts "$PDF" | grep -q IBMPlex; then
               echo "$PDF is not set in IBM Plex; the vendored fonts were not used" >&2
               exit 1
