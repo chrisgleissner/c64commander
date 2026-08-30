@@ -1226,6 +1226,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "- Press **`7`**, which works even with directional navigation switched off.",
     "",
     "Keep typing while you look: Up and Down move through the results and leave your text alone. OK opens the selected result, and Back closes search. Results are grouped, best match first, so typing `radio` offers you **Start SID Radio** ahead of any tune with the word in its title.",
+    "",
     image("Search, one query in", profile, "home/search/profiles/{profile}/01-overlay.png"),
     "",
     '**A result you cannot use yet is still listed, and it tells you what it needs:** "Needs a connected C64 Ultimate", "Needs the HVSC music collection installed", "Live View is turned off in Settings". Pick it and you go straight to the setting that turns it on.',
@@ -1308,7 +1309,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The picker stays inside the source you chose, so **Up** never escapes into somewhere else by accident. Tick files or folders and confirm. **Include subfolders** decides whether a ticked folder means that folder alone or everything beneath it, which is the difference between adding twelve files and adding twelve thousand.",
     "",
-    "One useful shortcut: if the only thing you have ticked is a single program, cartridge or disk, the confirm button reads **Play** instead of **Add to playlist**, and the machine starts it there and then.",
+    "> **Tip.** If the only thing you have ticked is a single program, cartridge or disk, the confirm button reads **Play** instead of **Add to playlist**, and the machine starts it there and then. A tune, several files, a whole folder, or a result from the online archive all keep queueing.",
     "",
     image("C64U file picker", profile, "play/import/profiles/{profile}/02-c64u-file-picker.png"),
     "",
@@ -1320,7 +1321,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "While it is short, stay on the main Play page. When it grows, open **View all**, which gives you room to scan, filter, select and remove without losing sight of the playback controls. How many rows appear before you need View all is up to you: **Settings → Play and Disk → List preview limit** starts at 50.",
     "",
-    "Add broadly, then filter narrowly. Add a whole folder, then type a few characters to narrow it down: the filter matches the title, the path, the source and the kind of file.",
+    "> **Tip.** Add broadly, then filter narrowly. Add a whole folder, then type a few characters to narrow it down: the filter matches the title, the path, the source and the kind of file.",
     "",
     "Filtering changes only what you can see, never the playlist itself. Clear the box and the full queue comes back.",
     "",
@@ -1431,7 +1432,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "**Keep device settings after a restart**, in **Settings → Device Safety**, changes that. With it on, every device setting the app changes is also written to the machine's own storage, so it survives a power cycle, exactly as though you had saved it from the machine's setup menu.",
     "",
-    "Turn it on deliberately. A setting that leaves the machine awkward to use will come back that way every time you switch on.",
+    "> **Take care.** Turn this on deliberately. A setting that leaves the machine awkward to use will come back that way every time you switch on.",
     "",
     `If that happens, hold **RESTORE** while you switch ${targetDeviceShortName(
       variant,
@@ -2555,7 +2556,7 @@ const wrapFigures = (html, manualDir) => {
  * Matching is case-sensitive and anchored on word boundaries, so "Play" does not
  * catch "playlist" or "played".
  */
-const INDEX_TERMS = [
+export const INDEX_TERMS = [
   { term: "A/V sync check", match: ["A/V sync"] },
   { term: "About this tune", match: ["**About this tune**"] },
   { term: "Appearance settings", match: ["**Appearance**"] },
