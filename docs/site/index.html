@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>C64 Commander</title>
+    <meta
+      name="description"
+      content="C64 Commander is a companion app for the C64 Ultimate: device configuration, control, and SID playback from your phone or tablet."
+    />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --ink: #1c1b19;
+        --muted: #5c5952;
+        --rule: #dcd6ca;
+        --paper: #fbf9f4;
+        --accent: #2a6f97;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #eceae4;
+          --muted: #a5a096;
+          --rule: #3a3833;
+          --paper: #161513;
+          --accent: #7fb4d4;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font:
+          16px/1.65 ui-serif,
+          Georgia,
+          "Times New Roman",
+          serif;
+        -webkit-text-size-adjust: 100%;
+      }
+      .page {
+        max-width: 43rem;
+        margin: 0 auto;
+        padding: 3rem 1.25rem 5rem;
+      }
+      header {
+        border-bottom: 2px solid var(--accent);
+        padding-bottom: 1rem;
+        margin-bottom: 2rem;
+      }
+      h1,
+      h2 {
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        line-height: 1.25;
+      }
+      h1 {
+        font-size: 2rem;
+        margin: 0 0 0.4rem;
+      }
+      h2 {
+        font-size: 1.15rem;
+        margin: 2.4rem 0 0.6rem;
+      }
+      .tagline {
+        color: var(--muted);
+        margin: 0;
+      }
+      p,
+      li {
+        margin: 0.7rem 0;
+      }
+      ul {
+        padding-left: 1.2rem;
+      }
+      a {
+        color: var(--accent);
+      }
+      footer {
+        margin-top: 3rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--rule);
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header>
+        <h1>C64 Commander</h1>
+        <p class="tagline">
+          Play SID music, run games and demos, mount disks, and control a C64 Ultimate from one app.
+        </p>
+      </header>
+
+      <h2>What it does</h2>
+      <ul>
+        <li>Finds your C64 Ultimate on the network and keeps an eye on its health.</li>
+        <li>Reaches every setting the machine has, and the everyday ones without searching.</li>
+        <li>
+          Plays SID music, programs, cartridges and disk images, from your own files, from the machine itself, or from
+          the free archives.
+        </li>
+        <li>Mounts and swaps disks, and rotates through a multi-disk title.</li>
+        <li>Brings the machine's picture and sound into the app, and sends your input back.</li>
+        <li>Explains itself when something will not answer, with health checks, logs and traces.</li>
+      </ul>
+
+      <h2>Privacy</h2>
+      <p>
+        No accounts, no analytics, no servers of its own. The
+        <a href="privacy-policy.html">privacy policy</a> lists every network request the app makes.
+      </p>
+
+      <h2>Support</h2>
+      <ul>
+        <li>Email: <a href="mailto:apps@gleissner.uk">apps@gleissner.uk</a></li>
+        <li>
+          Issues:
+          <a href="https://github.com/chrisgleissner/c64commander/issues"
+            >github.com/chrisgleissner/c64commander/issues</a
+          >
+        </li>
+        <li>
+          Source:
+          <a href="https://github.com/chrisgleissner/c64commander">github.com/chrisgleissner/c64commander</a>
+        </li>
+      </ul>
+
+      <footer>Licensed GPL-3.0-or-later.</footer>
+    </main>
+  </body>
+</html>
