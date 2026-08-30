@@ -112,10 +112,14 @@ const figureWidth = (absolutePath) => {
   const size = pngSize(absolutePath);
   if (!size) return "0.62\\linewidth";
   const ratio = size.width / size.height;
-  if (ratio < 0.62) return "0.38\\linewidth";
-  if (ratio < 0.95) return "0.52\\linewidth";
-  if (ratio < 1.5) return "0.72\\linewidth";
-  return "0.94\\linewidth";
+  // Deliberately modest. A phone capture set much larger than this is taller
+  // than half the text block, and two of them in one section then cannot share
+  // a page with the text that introduces them: LaTeX defers both, and the
+  // reader meets a pair of pictures on a page of their own.
+  if (ratio < 0.62) return "0.33\\linewidth";
+  if (ratio < 0.95) return "0.42\\linewidth";
+  if (ratio < 1.5) return "0.62\\linewidth";
+  return "0.88\\linewidth";
 };
 
 /**
@@ -125,25 +129,91 @@ const figureWidth = (absolutePath) => {
  * how wide a screenshot prints, that a table head is sans, that the first
  * paragraph after a heading should not be indented away from it.
  */
+/**
+ * Replaces `\macro{Label: body}` with a callout environment holding the body.
+ *
+ * Brace-counted rather than matched by regular expression: the body regularly
+ * contains `\textbf{...}`, and a non-greedy `}` stops at the inner one, which
+ * silently cuts the sentence in half and leaves a stray brace behind.
+ */
+const liftBalanced = (tex, opener, environment) => {
+  let output = "";
+  let rest = tex;
+  for (;;) {
+    const at = rest.indexOf(opener);
+    if (at < 0) return output + rest;
+    let depth = 1;
+    let cursor = at + opener.length;
+    while (cursor < rest.length && depth > 0) {
+      const character = rest[cursor];
+      if (character === "{" && rest[cursor - 1] !== "\\") depth += 1;
+      else if (character === "}" && rest[cursor - 1] !== "\\") depth -= 1;
+      cursor += 1;
+    }
+    const body = rest.slice(at + opener.length, cursor - 1).trim();
+    output += `${rest.slice(0, at)}\\begin{${environment}}\n${body}\n\\end{${environment}}`;
+    rest = rest.slice(cursor);
+  }
+};
+
 const dressLatex = (tex, manualDir) => {
   let output = tex;
 
-  // Screenshots: sized by shape, framed, and centred in their own float.
+  // Screenshots: sized by shape, framed, absolute-pathed because the build
+  // directory sits deeper than the markdown's own `../../img/...` would resolve
+  // from.
   output = output.replace(/\\includegraphics(\[[^\]]*\])?\{([^}]+)\}/g, (full, options, src) => {
-    // Absolute, because the build directory sits deeper than the markdown's own
-    // `../../img/...` paths would resolve from.
     const absolute = path.resolve(manualDir, src);
     return `\\screenshot{${figureWidth(absolute)}}{${absolute}}`;
   });
 
-  // Pandoc's figures are `\begin{figure}` + `\centering`; keep them from
-  // drifting to the end of a chapter.
-  output = output.replace(/\\begin\{figure\}/g, "\\begin{figure}[htbp]");
+  // A picture never floats. In a manual the screenshot IS the sentence before
+  // it, so pandoc's `figure` becomes a block that is set exactly where it was
+  // written. Left as floats, LaTeX defers them: a reader gets a picture at the
+  // top of a page whose text is overleaf, and four of them stacked on the page
+  // after that.
+  output = output.replace(
+    /\\begin\{figure\}(?:\[[^\]]*\])?\s*\\centering\s*([\s\S]*?)\\caption\{([\s\S]*?)\}([\s\S]*?)\\end\{figure\}/g,
+    (full, graphic, caption) =>
+      `\\begin{manualfigure}\n${graphic.trim()}\n\\captionof{figure}{${caption.trim()}}\n\\end{manualfigure}`,
+  );
 
-  // Table heads in sans, and booktabs rules instead of the default.
-  output = output.replace(/\\toprule\\noalign\{\}/g, "\\toprule\\noalign{}");
-  output = output.replace(/\\begin\{longtable\}/g, "\\small\\begin{longtable}");
-  output = output.replace(/\\end\{longtable\}/g, "\\end{longtable}\\normalsize");
+  // "Availability: on by default..." is the one line that tells a reader whether
+  // the feature they just read about is even switched on. It was an italic
+  // afterthought at the end of a section; as a callout it can be found while
+  // skimming.
+  output = liftBalanced(output, "\\emph{Availability:", "manualavail");
+
+  // Same for the "Preferred path" line that closes every flow in Everyday Flows.
+  output = output.replace(
+    /^Preferred path:\s*([\s\S]*?)(?=\n\n)/gm,
+    (full, body) => `\\begin{manualpath}\n${body.trim()}\n\\end{manualpath}`,
+  );
+
+  // A markdown blockquote is the manual's callout convention: `> **Tip.** ...`
+  // or `> **Take care.** ...`. The bold lead becomes the box label, so a reader
+  // skimming for advice finds it without reading the paragraph.
+  output = output.replace(
+    /\\begin\{quote\}\s*\\textbf\{([^}]+?)\.?\}\s*([\s\S]*?)\\end\{quote\}/g,
+    (full, label, body) => `\\begin{manualnote}[${label.replace(/\.$/, "")}]\n${body.trim()}\n\\end{manualnote}`,
+  );
+  output = output.replace(
+    /\\begin\{quote\}([\s\S]*?)\\end\{quote\}/g,
+    (full, body) => `\\begin{manualnote}\n${body.trim()}\n\\end{manualnote}`,
+  );
+
+  // The header row tinted in the chapter's hue. A reference table runs for
+  // pages, and the tint is what tells a reader at a glance which row is the
+  // heading when the table breaks across one.
+  output = output.replace(/\\toprule\\noalign\{\}\n/g, "\\toprule\\noalign{}\n\\rowcolor{accent!12!c64paper}\n");
+
+  // Table rules in the chapter's hue, and the whole table a step smaller so a
+  // wide reference table keeps to the measure.
+  output = output.replace(
+    /\\begin\{longtable\}/g,
+    "\\begingroup\\small\\arrayrulecolor{accent!55!c64ink}\\begin{longtable}",
+  );
+  output = output.replace(/\\end\{longtable\}/g, "\\end{longtable}\\endgroup");
 
   // `\tightlist` from pandoc fights the list spacing set in the preamble.
   output = output.replace(/\\tightlist\n?/g, "");
@@ -151,13 +221,6 @@ const dressLatex = (tex, manualDir) => {
   return output;
 };
 
-/**
- * True when LuaLaTeX can load an OpenType font, which needs luaotfload.
- *
- * A TeX Live install without it still ships the `lualatex` binary, and that
- * binary dies at the first `\setmainfont` rather than at startup, so the
- * only honest test is to compile something that loads a face.
- */
 const luaTexUsable = () => {
   try {
     execFileSync("kpsewhich", ["luaotfload.sty"], { stdio: "ignore" });

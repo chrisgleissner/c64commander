@@ -158,7 +158,7 @@ Choose **Add items**, which reads **Add more items** once there is something in 
 
 The picker stays inside the source you chose, so **Up** never escapes into somewhere else by accident. Tick files or folders and confirm. **Include subfolders** decides whether a ticked folder means that folder alone or everything beneath it, which is the difference between adding twelve files and adding twelve thousand.
 
-One useful shortcut: if the only thing you have ticked is a single program, cartridge or disk, the confirm button reads **Play** instead of **Add to playlist**, and the machine starts it there and then.
+> **Tip.** If the only thing you have ticked is a single program, cartridge or disk, the confirm button reads **Play** instead of **Add to playlist**, and the machine starts it there and then. A tune, several files, a whole folder, or a result from the online archive all keep queueing.
 
 ![C64U file picker](../../img/app/play/import/profiles/medium/02-c64u-file-picker.png)
 
@@ -170,7 +170,7 @@ A playlist can hold a single song, or become the queue for a whole evening.
 
 While it is short, stay on the main Play page. When it grows, open **View all**, which gives you room to scan, filter, select and remove without losing sight of the playback controls. How many rows appear before you need View all is up to you: **Settings → Play and Disk → List preview limit** starts at 50.
 
-Add broadly, then filter narrowly. Add a whole folder, then type a few characters to narrow it down: the filter matches the title, the path, the source and the kind of file.
+> **Tip.** Add broadly, then filter narrowly. Add a whole folder, then type a few characters to narrow it down: the filter matches the title, the path, the source and the kind of file.
 
 Filtering changes only what you can see, never the playlist itself. Clear the box and the full queue comes back.
 
@@ -278,7 +278,7 @@ A setting you change from the app reaches the connected Ultimate-family device a
 
 **Keep device settings after a restart**, in **Settings → Device Safety**, changes that. With it on, every device setting the app changes is also written to the machine's own storage, so it survives a power cycle, exactly as though you had saved it from the machine's setup menu.
 
-Turn it on deliberately. A setting that leaves the machine awkward to use will come back that way every time you switch on.
+> **Take care.** Turn this on deliberately. A setting that leaves the machine awkward to use will come back that way every time you switch on.
 
 If that happens, hold **RESTORE** while you switch the connected Ultimate-family device on. It starts with its default settings instead of the saved ones, which is enough to get you back to a working machine. Nothing is erased: your saved values are still there, so you can put the setting right and save it again.
 

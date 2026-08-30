@@ -1,24 +1,28 @@
 % =====================================================================
 %  Print design for the C64 Commander / C64U Remote manuals.
 %
-%  The reference is the 1982 Commodore 64 User's Guide: a friendly book
-%  a reader settles into, not a datasheet. What that means in practice:
-%  a warm oldstyle body face at a comfortable measure, a grotesque sans
-%  for anything structural, one accent hue per chapter carried through
-%  the opener, the running head and the index, and enough air that a
-%  page never looks like work.
+%  The reference is the 1982 Commodore 64 User's Guide: a book a reader
+%  settles into, not a datasheet. Three decisions carry most of the work.
 %
-%  Body:     TeX Gyre Pagella (Palatino) - warm, generous, made for books
-%  Headings: TeX Gyre Heros (Helvetica)  - the era's own structural sans
-%  Code:     TeX Gyre Cursor (Courier)   - what a C64 listing looks like
+%  1. A picture never floats. In a manual, a screenshot IS the sentence
+%     before it; letting LaTeX defer it to the next page, or stack four
+%     of them on one, breaks the instruction it belongs to. Every figure
+%     is set exactly where it was written.
+%  2. Every chapter owns a hue, and that hue is everywhere in it: the
+%     opener, the running head, the section numbers, the figure labels,
+%     the table head, the bullets, the callouts, and a thumb tab on the
+%     outer edge of every page. Riffle the book and you can see where
+%     you are.
+%  3. Guidance that the prose already carries - what a feature needs
+%     before it will work, which of two routes to prefer - is lifted out
+%     of the paragraph and set as a callout, so it can be found by
+%     someone skimming.
 % =====================================================================
-%
-%  Fonts are chosen by engine. Under LuaLaTeX the book is set in IBM Plex, the
-%  same family the app itself uses, so the printed page and the screen are one
-%  design. Under pdfLaTeX, which cannot load a system OpenType face, it falls
-%  back to the TeX Gyre revivals: Pagella for the body, Heros for headings.
-%  Both are real book faces, so the fallback is a change of dress, not of
-%  quality.
+
+%  Fonts are chosen by engine. Under LuaLaTeX the book is set in IBM Plex,
+%  the same family the app uses, so the printed page and the screen are one
+%  design. Under pdfLaTeX, which cannot load a system OpenType face, it
+%  falls back to the TeX Gyre revivals. Both are real book faces.
 \usepackage{iftex}
 \ifLuaTeX
   \usepackage{fontspec}
@@ -38,47 +42,48 @@
   \renewcommand{\sfdefault}{qhv}
   \renewcommand{\ttdefault}{qcr}
 \fi
+
 \usepackage[activate={true,nocompatibility},final,tracking=true,factor=1100,stretch=12,shrink=12]{microtype}
 \usepackage{xcolor}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{longtable}
 \usepackage{array}
+\usepackage{colortbl}
 \usepackage{ragged2e}
 \usepackage{enumitem}
 \usepackage{tcolorbox}
-% `calc` also gives pandoc's longtable column specs their \real macro.
+\usepackage{needspace}
 \usepackage{calc}
 \usepackage{eso-pic}
 \usepackage[hidelinks]{hyperref}
 \tcbuselibrary{skins,breakable}
 
 % ---------------------------------------------------------------- page
-% 210 - 30 - 45 leaves a 135 mm measure: about 70 characters a line at
-% 11 pt, which is the range long-form text is set in. The inner margin
-% is the narrower of the two because the gutter of a bound book eats
-% part of it.
+% 210 - 26 - 49 leaves a 135 mm measure: about 70 characters a line at
+% 11 pt. The outer margin is the wide one, which is where the thumb tabs
+% live and where a thumb rests when the book is open.
 \setstocksize{297mm}{210mm}
 \settrimmedsize{297mm}{210mm}{*}
-\settypeblocksize{225mm}{135mm}{*}
-\setlrmargins{30mm}{*}{*}
-\setulmargins{32mm}{*}{*}
-\setheadfoot{14pt}{26pt}
-\setheaderspaces{*}{16pt}{*}
+\settypeblocksize{228mm}{135mm}{*}
+\setlrmargins{26mm}{*}{*}
+\setulmargins{30mm}{*}{*}
+\setheadfoot{14pt}{28pt}
+\setheaderspaces{*}{15pt}{*}
 \checkandfixthelayout
 \setlength{\parindent}{0pt}
-\setlength{\parskip}{0.62\baselineskip}
-\linespread{1.06}
+\setlength{\parskip}{0.60\baselineskip}
+\linespread{1.05}
 \raggedbottom
-\sloppybottom
-\midsloppy
+\clubpenalty=10000
+\widowpenalty=10000
+\displaywidowpenalty=10000
+\brokenpenalty=10000
 
 % -------------------------------------------------------------- colour
-% One hue per chapter, in the order the chapters run. Warm enough to sit
-% on a cream page, distinct enough to tell chapters apart at a glance.
 \definecolor{c64ink}{HTML}{1C1B19}
 \definecolor{c64muted}{HTML}{5C5952}
-\definecolor{c64rule}{HTML}{D8D2C6}
+\definecolor{c64rule}{HTML}{DCD6CA}
 \definecolor{c64paper}{HTML}{FBF9F4}
 \definecolor{chapA}{HTML}{2A6F97}
 \definecolor{chapB}{HTML}{1F7A6D}
@@ -91,13 +96,11 @@
 \definecolor{chapI}{HTML}{34568B}
 \colorlet{accent}{chapA}
 
-% Rotates the accent as each chapter opens, so the opener, the headings,
-% the figure labels and the running head of one chapter always agree.
+% `\xglobal` is xcolor's own global prefix. A plain `\global` is ignored by
+% `\colorlet`, which is otherwise local to the group the chapter head is set
+% in: the opener would take the new hue and everything after it would stay on
+% chapter one's blue.
 \newcounter{accentindex}
-% `\xglobal` is xcolor's own global prefix; a plain \global is ignored by
-% \colorlet, which is otherwise local to the group the chapter head
-% is set in: without it the opener takes the new hue and every figure caption,
-% subheading and bullet in the chapter that follows stays on the old one.
 \newcommand{\rotateaccent}{%
   \stepcounter{accentindex}%
   \ifcase\numexpr\value{accentindex}-1\relax
@@ -109,25 +112,67 @@
 \pagecolor{c64paper}
 \color{c64ink}
 
+% ----------------------------------------------------------- thumb tabs
+% A printed manual's thumb index: one tab per chapter, stepped down the
+% outer edge, filled for the chapter you are in and ghosted for the rest.
+% Riffling the closed book shows the colour bands; a page on its own tells
+% you which chapter it came from without reading a word.
+\newcounter{tabloop}
+\newlength{\tabheight}\setlength{\tabheight}{17mm}
+\newlength{\tabwidth}\setlength{\tabwidth}{7mm}
+\newlength{\tabtop}\setlength{\tabtop}{48mm}
+\newcommand{\thumbcolour}[1]{%
+  \ifcase#1\relax
+    chapA\or chapA\or chapB\or chapC\or chapD\or chapE\or chapF\or chapG\or chapH\or chapI\else chapA\fi}
+\newcommand{\drawthumbtabs}{%
+  \ifnum\value{chapter}>0\relax
+  \setcounter{tabloop}{0}%
+  \loop\ifnum\value{tabloop}<9\relax
+    \stepcounter{tabloop}%
+    \edef\tabhue{\thumbcolour{\value{tabloop}}}%
+    \ifodd\value{page}%
+      \put(\LenToUnit{\dimexpr\paperwidth-\tabwidth\relax},%
+           \LenToUnit{\dimexpr-\tabtop-\value{tabloop}\tabheight\relax}){%
+        \ifnum\value{tabloop}=\value{chapter}
+          \textcolor{\tabhue}{\rule{\tabwidth}{\tabheight}}%
+        \else
+          \textcolor{\tabhue!16!c64paper}{\rule{\dimexpr\tabwidth-2.6mm\relax}{\tabheight}}%
+        \fi}%
+    \else
+      \put(0pt,\LenToUnit{\dimexpr-\tabtop-\value{tabloop}\tabheight\relax}){%
+        \ifnum\value{tabloop}=\value{chapter}
+          \textcolor{\tabhue}{\rule{\tabwidth}{\tabheight}}%
+        \else
+          \hspace*{2.6mm}\textcolor{\tabhue!16!c64paper}{\rule{\dimexpr\tabwidth-2.6mm\relax}{\tabheight}}%
+        \fi}%
+    \fi
+  \repeat\fi}
+\AddToShipoutPictureFG{\AtPageUpperLeft{\drawthumbtabs}}
+
 % ------------------------------------------------------------ headings
-% A chapter opens on a fresh recto with the number set large and pale in
-% the chapter's own hue, the title beneath it, and a rule the width of
-% the measure. The eye lands on the title, then the rule sends it into
-% the text.
+% The opener is a band of the chapter's colour with the number reversed
+% out of it, so a chapter break is unmistakable when flicking through.
 \makeatletter
 \makechapterstyle{c64}{%
-  \setlength{\beforechapskip}{0pt}
-  \setlength{\midchapskip}{6pt}
-  \setlength{\afterchapskip}{26pt}
+  \setlength{\beforechapskip}{-14mm}
+  \setlength{\midchapskip}{0pt}
+  \setlength{\afterchapskip}{30pt}
   \renewcommand{\chapnamefont}{\normalfont}
-  \renewcommand{\chapnumfont}{\sffamily\bfseries\fontsize{54}{54}\selectfont\color{accent}}
-  \renewcommand{\chaptitlefont}{\sffamily\bfseries\fontsize{25}{29}\selectfont\color{c64ink}}
+  \renewcommand{\chaptitlefont}{\sffamily\bfseries\fontsize{27}{31}\selectfont\color{c64ink}}
   \renewcommand{\printchaptername}{}
   \renewcommand{\chapternamenum}{}
-  \renewcommand{\printchapternum}{\rotateaccent\chapnumfont\thechapter}
-  \renewcommand{\afterchapternum}{\par\vskip\midchapskip}
+  \renewcommand{\printchapternum}{%
+    \rotateaccent
+    \begingroup
+      \setlength{\fboxsep}{0pt}%
+      \colorbox{accent}{\parbox[c][22mm][c]{\textwidth}{%
+        \hspace{7mm}\sffamily\bfseries\fontsize{40}{40}\selectfont\color{white}\thechapter
+        \hspace{5mm}\raisebox{2.2mm}{\sffamily\fontsize{10}{12}\selectfont\color{white!82}\lsstyle
+          \MakeUppercase{Chapter}}}}%
+    \endgroup\par\vskip 14pt}
+  \renewcommand{\afterchapternum}{}
   \renewcommand{\printchaptertitle}[1]{\chaptitlefont ##1\par
-    \vskip 10pt {\color{accent}\rule{\textwidth}{2pt}}}
+    \vskip 9pt {\color{accent}\rule{34mm}{2.6pt}}}
 }
 \makeatother
 \chapterstyle{c64}
@@ -140,11 +185,16 @@
 \setsecnumdepth{subsection}
 \maxsecnumdepth{subsection}
 \renewcommand{\thesection}{\thechapter.\arabic{section}}
+% The number in the chapter's hue, the words in ink: the eye finds the
+% number when scanning for a cross-reference and the title when reading.
+\setsecnumformat{\textcolor{accent}{\csname the#1\endcsname}\quad}
 
 % -------------------------------------------------------- running head
 \makepagestyle{c64page}
-\makeevenhead{c64page}{\sffamily\small\color{c64muted}\thepage}{}{\sffamily\small\color{c64muted}\leftmark}
-\makeoddhead{c64page}{\sffamily\small\color{c64muted}\rightmark}{}{\sffamily\small\color{c64muted}\thepage}
+\makeevenhead{c64page}{\sffamily\small\color{c64muted}\thepage}{}%
+  {\sffamily\small\color{accent}\leftmark}
+\makeoddhead{c64page}{\sffamily\small\color{accent}\rightmark}{}%
+  {\sffamily\small\color{c64muted}\thepage}
 \makeheadrule{c64page}{\textwidth}{0.4pt}
 \makeevenfoot{c64page}{}{}{}
 \makeoddfoot{c64page}{}{}{}
@@ -155,14 +205,15 @@
 \copypagestyle{chapter}{empty}
 
 % --------------------------------------------------------------- lists
-\setlist[itemize]{leftmargin=1.1em,itemsep=0.15\baselineskip,topsep=0.2\baselineskip,parsep=0pt}
-\setlist[enumerate]{leftmargin=1.5em,itemsep=0.15\baselineskip,topsep=0.2\baselineskip,parsep=0pt}
-\renewcommand{\labelitemi}{\textcolor{accent}{\rule[0.25ex]{0.42em}{0.42em}}}
+\setlist[itemize]{leftmargin=1.15em,itemsep=0.18\baselineskip,topsep=0.25\baselineskip,parsep=0pt}
+\setlist[enumerate]{leftmargin=1.6em,itemsep=0.18\baselineskip,topsep=0.25\baselineskip,parsep=0pt,
+  label=\textcolor{accent}{\bfseries\sffamily\arabic*.}}
+\renewcommand{\labelitemi}{\textcolor{accent}{\rule[0.24ex]{0.40em}{0.40em}}}
 
 % ------------------------------------------------------------- figures
-% Screenshots are phone captures: tall, and unreadable if stretched to
-% the measure. \screenshot picks a width from the shape of the file, and
-% the frame keeps a light-mode capture from bleeding into the page.
+% Screenshots are phone captures: tall, and unreadable if stretched to the
+% measure. \screenshot picks a width from the shape of the file; the hairline
+% frame keeps a light capture from bleeding into the page.
 \usepackage[font={sf,small,color=c64muted},labelfont={color=accent,bf},labelsep=period,skip=7pt]{caption}
 \newcommand{\screenshot}[2]{%
   \begingroup
@@ -170,23 +221,72 @@
   \textcolor{c64rule}{\fbox{\includegraphics[width=#1]{#2}}}%
   \endgroup}
 
+% A figure never floats.
+%
+% In a step-by-step guide the screenshot IS the sentence above it. Letting
+% LaTeX place it defers the picture to wherever it next fits: the reader meets
+% it at the top of a page whose instruction is overleaf, and two or three of
+% them stacked together after that. Both were tried here, with `[!ht]`, tuned
+% float fractions and a `\FloatBarrier` at every section; the pictures still
+% drifted, because four screenshots inside one section simply cannot all fit
+% beside their own text.
+%
+% So the picture is set exactly where it was written, and the price is paid in
+% white space at the foot of the occasional page. That is the cheaper mistake:
+% a short page costs a reader nothing, a picture attached to the wrong sentence
+% costs them the instruction.
+%
+% A `minipage` rather than `\needspace`: a minipage cannot be split, so LaTeX
+% breaks the page before it whenever it will not fit whole. `\needspace` only
+% reserves a fixed amount, and a screenshot taller than the reservation ran off
+% the foot of the page with its caption lost.
+\newenvironment{manualfigure}
+  {\par\vspace{0.5\baselineskip}\noindent\begin{minipage}{\linewidth}\centering}
+  {\end{minipage}\par\vspace{0.35\baselineskip}}
+
 % -------------------------------------------------------------- tables
-% Sans, a touch smaller than the body, with a tinted header band. No
-% vertical rules: they fence the reader in and buy nothing.
-\newcommand{\tablehead}[1]{\sffamily\bfseries\small\color{c64ink}#1}
-\renewcommand{\arraystretch}{1.28}
+\renewcommand{\arraystretch}{1.30}
 \setlength{\tabcolsep}{7pt}
+\newcommand{\theadrow}{\rowcolor{accent!10!c64paper}}
 
 % ------------------------------------------------------------ callouts
-\newtcolorbox{manualnote}[1][]{%
+% Guidance the prose already carries, lifted where a skimming reader will
+% find it. The label sits in the rule, so a run of callouts down a page
+% still reads as one kind of thing.
+\newtcolorbox{manualnote}[1][Tip]{%
   enhanced, breakable, sharp corners, boxrule=0pt,
-  leftrule=2.4pt, colframe=accent, colback=accent!5!c64paper,
-  left=10pt, right=10pt, top=8pt, bottom=8pt,
-  fontupper=\small, #1}
+  leftrule=2.6pt, colframe=accent, colback=accent!6!c64paper,
+  left=9pt, right=9pt, top=7pt, bottom=7pt,
+  before skip=0.7\baselineskip, after skip=0.7\baselineskip,
+  fontupper=\small,
+  overlay unbroken and first={%
+    \node[anchor=north west, inner sep=0pt, font=\sffamily\bfseries\fontsize{7.6}{9}\selectfont,
+          text=accent, xshift=9pt, yshift=-6pt] at (frame.north west) {\lsstyle\MakeUppercase{#1}};},
+  after title={}, top=17pt}
+
+\newtcolorbox{manualpath}{%
+  enhanced, breakable, sharp corners, boxrule=0pt,
+  leftrule=2.6pt, colframe=accent!70!c64ink, colback=accent!5!c64paper,
+  left=9pt, right=9pt, top=17pt, bottom=7pt,
+  before skip=0.7\baselineskip, after skip=0.7\baselineskip,
+  fontupper=\small,
+  overlay unbroken and first={%
+    \node[anchor=north west, inner sep=0pt, font=\sffamily\bfseries\fontsize{7.6}{9}\selectfont,
+          text=accent!70!c64ink, xshift=9pt, yshift=-6pt] at (frame.north west)
+      {\lsstyle\MakeUppercase{Preferred path}};}}
+
+\newtcolorbox{manualavail}{%
+  enhanced, breakable, sharp corners, boxrule=0pt,
+  leftrule=2.6pt, colframe=c64muted, colback=c64rule!30!c64paper,
+  left=9pt, right=9pt, top=17pt, bottom=7pt,
+  before skip=0.7\baselineskip, after skip=0.7\baselineskip,
+  fontupper=\small,
+  overlay unbroken and first={%
+    \node[anchor=north west, inner sep=0pt, font=\sffamily\bfseries\fontsize{7.6}{9}\selectfont,
+          text=c64muted, xshift=9pt, yshift=-6pt] at (frame.north west)
+      {\lsstyle\MakeUppercase{Availability}};}}
 
 % --------------------------------------------------------------- index
-% A letter heading in the chapter accent, so the index reads as part of the
-% same book rather than as an appendix bolted on.
 \newcommand{\indexletter}[1]{%
   \par\vspace{11pt}%
   {\sffamily\bfseries\normalsize\color{accent}#1}%
@@ -194,7 +294,6 @@
 \renewcommand{\preindexhook}{\small}
 
 % ---------------------------------------------------------------- misc
-\newcommand{\tightpar}{\vspace{-0.35\baselineskip}}
 \hyphenpenalty=200
 \tolerance=1600
 \emergencystretch=1.2em
