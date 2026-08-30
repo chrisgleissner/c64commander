@@ -18,7 +18,8 @@
  * The prose comes from `renderManualMarkdown` unchanged, so both pipelines
  * always describe the same app.
  *
- * Requires: pandoc, pdflatex, makeindex, and the TeX Gyre fonts.
+ * Requires pandoc, LuaLaTeX with luaotfload, and makeindex. `./build --manual`
+ * installs them if they are missing and then runs this.
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -286,30 +287,57 @@ const dressLatex = (tex, manualDir) => {
   return output;
 };
 
-const PLEX_DIR = "/usr/share/fonts/truetype/ibm-plex";
-const PLEX_FACES = [
-  "IBMPlexSerif-Regular.ttf",
-  "IBMPlexSerif-SemiBold.ttf",
-  "IBMPlexSerif-Italic.ttf",
-  "IBMPlexSerif-SemiBoldItalic.ttf",
-  "IBMPlexSans-Regular.ttf",
-  "IBMPlexSans-SemiBold.ttf",
-  "IBMPlexSans-Italic.ttf",
-  "IBMPlexMono-Regular.ttf",
-  "IBMPlexMono-SemiBold.ttf",
-];
+const fontsDir = path.join(scriptDir, "latex/fonts");
 
-const luaTexUsable = () => {
+/**
+ * The pinned pandoc, in preference to whatever is on PATH.
+ *
+ * Versions are not interchangeable here: 3.11 wraps every image in
+ * `\pandocbounded` and writes `\LTcaptype{none}` before an uncaptioned table,
+ * neither of which 3.1.3 emits. A machine using its distribution's pandoc
+ * produced LaTeX that would not compile. `./build --manual-deps` puts the pinned
+ * binary in `scripts/latex/bin`, and this prefers it, so a local build and a CI
+ * build are the same build.
+ */
+const pandocBin = (() => {
+  const pinned = path.join(scriptDir, "latex/bin/pandoc");
+  return fs.existsSync(pinned) ? pinned : "pandoc";
+})();
+
+/**
+ * The manual is set with LuaLaTeX, and only with LuaLaTeX.
+ *
+ * There used to be a pdfLaTeX path that fell back to the TeX Gyre revivals when
+ * IBM Plex could not be loaded. A silent fallback to another typeface is a worse
+ * outcome than a build that stops: the manual still came out, looking like a
+ * different book, and nothing in the file said so. The faces are vendored now,
+ * so the only way left to reach that fallback was a missing engine, which is a
+ * thing to install rather than to paper over.
+ */
+const requireToolchain = () => {
+  const missing = [];
+  for (const tool of ["lualatex", "makeindex"]) {
+    try {
+      execFileSync("sh", ["-c", `command -v ${tool}`], { stdio: "ignore" });
+    } catch {
+      missing.push(tool);
+    }
+  }
   try {
     execFileSync("kpsewhich", ["luaotfload.sty"], { stdio: "ignore" });
-    execFileSync("kpsewhich", ["luaotfload-main.lua"], { stdio: "ignore" });
   } catch {
-    return false;
+    missing.push("luaotfload");
   }
-  // The preamble asks for IBM Plex by absolute path under LuaLaTeX, so a machine
-  // with luaotfload but without those files would pick lualatex and then die at
-  // the first \\setmainfont, with the working pdfLaTeX path never tried.
-  return PLEX_FACES.every((face) => fs.existsSync(path.join(PLEX_DIR, face)));
+  try {
+    execFileSync(pandocBin, ["--version"], { stdio: "ignore" });
+  } catch {
+    missing.push("pandoc");
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `cannot typeset the manual; missing: ${missing.join(", ")}\nInstall the toolchain with: ./build --manual-deps`,
+    );
+  }
 };
 
 const coverTex = ({ productName, subtitle, launchImage, logo, edition, buildDate, typeface }) => `
@@ -370,10 +398,8 @@ const buildOne = async (context, outputDir) => {
   // different shape.
   assertSingleDisplayProfile(markdown, variant.id === "c64u-remote" ? "compact" : "medium", variant.id);
 
-  // Decided before the document is assembled, not just before it is run: the
-  // colophon names the family the book is set in, and that follows the engine.
-  const engine = luaTexUsable() ? "lualatex" : "pdflatex";
-  const typeface = engine === "lualatex" ? "IBM Plex Serif and IBM Plex Sans" : "TeX Gyre Pagella and TeX Gyre Heros";
+  const engine = "lualatex";
+  const typeface = "IBM Plex Serif and IBM Plex Sans";
 
   // Everything before the first real chapter is the title block and the in-app
   // contents list. The print edition replaces both with a cover and a
@@ -388,7 +414,7 @@ const buildOne = async (context, outputDir) => {
   await writeFile(markdownFile, marked, "utf8");
 
   const texBody = execFileSync(
-    "pandoc",
+    pandocBin,
     [
       markdownFile,
       // `-tex_math_dollars`: the manual writes C64 addresses as $0000-$FFFF, and
@@ -402,13 +428,14 @@ const buildOne = async (context, outputDir) => {
       // those `##` chapters rather than sections.
       "--shift-heading-level-by=-1",
       "--wrap=preserve",
-      "--no-highlight",
     ],
     { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
   );
 
   const logoPath = path.join(rootDir, "variants/assets", variant.id, "logo.png");
-  const preambleText = await readFile(preambleFile, "utf8");
+  // The preamble names the vendored faces by absolute path, which it cannot know
+  // for itself.
+  const preambleText = (await readFile(preambleFile, "utf8")).replaceAll("%%FONTDIR%%", fontsDir);
 
   const document = `\\documentclass[11pt,a4paper,twoside,openright]{memoir}
 ${preambleText}
@@ -449,6 +476,7 @@ ${dressLatex(texBody, manualDir)}
 
 \\cleardoublepage
 \\rotateaccent
+\\pagestyle{indexpage}
 \\printindex
 \\end{document}
 `;
@@ -504,29 +532,23 @@ ${dressLatex(texBody, manualDir)}
   return path.join(outputDir, `${variant.exportedFileBasename}-manual.pdf`);
 };
 
-/**
- * `--check-engine` prints the engine this machine would use, and stops.
- *
- * The release workflow has to know before it starts whether the toolchain it is
- * standing on can finish the job, and the only honest answer is the one this
- * script would give itself. Anything else duplicates `luaTexUsable` in a second
- * language and drifts from it: the first copy checked one font file where this
- * one checks nine.
- */
 const main = async () => {
-  if (process.argv.includes("--check-engine")) {
-    console.log(luaTexUsable() ? "lualatex" : "pdflatex");
-    return;
-  }
-
+  requireToolchain();
   const contexts = await buildManualContexts();
   const outputRoot = path.join(rootDir, "docs/manual/latex");
   await rm(outputRoot, { recursive: true, force: true });
 
-  for (const context of contexts) {
-    const outputDir = path.join(outputRoot, context.variant.id);
-    await mkdir(outputDir, { recursive: true });
-    const pdf = await buildOne(context, outputDir);
+  // The editions are independent books in their own directories, and each is
+  // three sequential LaTeX passes that keep one core busy. Building them side by
+  // side halves the wall clock for nothing but a `Promise.all`.
+  const built = await Promise.all(
+    contexts.map(async (context) => {
+      const outputDir = path.join(outputRoot, context.variant.id);
+      await mkdir(outputDir, { recursive: true });
+      return buildOne(context, outputDir);
+    }),
+  );
+  for (const pdf of built) {
     console.log(`Generated ${path.relative(rootDir, pdf)}`);
   }
 };

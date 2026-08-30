@@ -4,8 +4,6 @@ import fs from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright";
-import { marked } from "marked";
 import {
   parseFeatureFlagOverlaySource,
   parseVariantSource,
@@ -123,317 +121,6 @@ const addHeadingIds = (html, toc) => {
 const PAGE = { width: 210, height: 297, top: 24, bottom: 26, inner: 33, outer: 42 };
 const MEASURE_MM = PAGE.width - PAGE.inner - PAGE.outer;
 
-/**
- * The manual's faces, embedded rather than named.
- *
- * A font that is only *named* in CSS substitutes silently wherever it is not
- * installed, and a substituted face re-flows every line, every page break and
- * therefore every page number the Table of Contents quotes. These are committed,
- * subsetted WOFF2 files (see `scripts/vendor-manual-fonts.mjs`), so the PDF is
- * byte-comparable on any machine and the printer receives a self-contained file.
- *
- * IBM Plex Serif sets the prose: a text serif holds a long reading better on
- * paper than a screen sans does. IBM Plex Sans sets headings, tables and
- * captions, so the furniture stays visibly distinct from the prose. Both are one
- * family, which keeps the page coherent. DejaVu Sans is last in every stack as a
- * symbol fallback, and is reached only for a glyph Plex does not carry.
- */
-const FONT_FACES = [
-  { file: "plex-serif-regular.woff2", family: "Plex Serif", weight: 400, style: "normal" },
-  { file: "plex-serif-italic.woff2", family: "Plex Serif", weight: 400, style: "italic" },
-  { file: "plex-serif-semibold.woff2", family: "Plex Serif", weight: 600, style: "normal" },
-  { file: "plex-serif-semibolditalic.woff2", family: "Plex Serif", weight: 600, style: "italic" },
-  { file: "plex-sans-regular.woff2", family: "Plex Sans", weight: 400, style: "normal" },
-  { file: "plex-sans-italic.woff2", family: "Plex Sans", weight: 400, style: "italic" },
-  { file: "plex-sans-medium.woff2", family: "Plex Sans", weight: 500, style: "normal" },
-  { file: "plex-sans-semibold.woff2", family: "Plex Sans", weight: 600, style: "normal" },
-  { file: "plex-sans-bold.woff2", family: "Plex Sans", weight: 700, style: "normal" },
-  { file: "plex-mono-regular.woff2", family: "Plex Mono", weight: 400, style: "normal" },
-  { file: "plex-mono-semibold.woff2", family: "Plex Mono", weight: 600, style: "normal" },
-  { file: "symbols-fallback.woff2", family: "Manual Symbols", weight: 400, style: "normal" },
-];
-
-const fontsDir = path.join(scriptDir, "vendor/fonts");
-
-const renderFontFaceCss = async () => {
-  const faces = [];
-  for (const face of FONT_FACES) {
-    const bytes = await readFile(path.join(fontsDir, face.file));
-    faces.push(
-      `@font-face{font-family:"${face.family}";font-style:${face.style};font-weight:${face.weight};` +
-        `font-display:block;src:url(data:font/woff2;base64,${bytes.toString("base64")}) format("woff2")}`,
-    );
-  }
-  return faces.join("\n");
-};
-
-const SERIF = `"Plex Serif", "Manual Symbols", Georgia, serif`;
-const SANS = `"Plex Sans", "Manual Symbols", Arial, sans-serif`;
-const MONO = `"Plex Mono", "Manual Symbols", Consolas, monospace`;
-
-// Print CSS built on the CSS Paged Media model (rendered by the vendored Paged.js
-// polyfill, since headless Chromium alone supports neither running headers nor
-// Table-of-Contents page numbers). Named strings carry the current chapter into
-// the page header; target-counter fills the ToC page numbers; a per-page CSS
-// variable (--accent, set by a Paged.js handler) colors the header.
-const pdfCss = `
-  @page {
-    size: ${PAGE.width}mm ${PAGE.height}mm;
-    margin: ${PAGE.top}mm ${PAGE.outer}mm ${PAGE.bottom}mm ${PAGE.inner}mm;
-  }
-
-  /* Mirrored margins: the wide margin is always the outside edge, and the folio
-     and running head sit in the outside corners, where a thumb finds them in a
-     bound book. */
-  @page :right {
-    margin-left: ${PAGE.inner}mm;
-    margin-right: ${PAGE.outer}mm;
-    @top-right {
-      content: string(chapter);
-      font: 600 8pt ${SANS};
-      letter-spacing: 0.04em;
-      color: var(--accent, #6b6257);
-      vertical-align: bottom;
-      padding-bottom: 3mm;
-    }
-    @bottom-right { content: counter(page); font: 500 9pt ${SANS}; color: #3c3934; padding-top: 4mm; }
-  }
-  @page :left {
-    margin-left: ${PAGE.outer}mm;
-    margin-right: ${PAGE.inner}mm;
-    @top-left {
-      content: string(doctitle);
-      font: 400 8pt ${SANS};
-      letter-spacing: 0.04em;
-      color: #8a8177;
-      vertical-align: bottom;
-      padding-bottom: 3mm;
-    }
-    @bottom-left { content: counter(page); font: 500 9pt ${SANS}; color: #3c3934; padding-top: 4mm; }
-  }
-
-  /* Front matter carries no folio and no running head. The page counter is not
-     restarted for it, so the number printed on a body page is also the sheet
-     number a printer counts to — which is what makes the Table of Contents
-     usable at the bindery as well as by the reader. */
-  @page cover {
-    margin: 0;
-    @top-left { content: none } @top-right { content: none }
-    @bottom-left { content: none } @bottom-right { content: none }
-  }
-  @page imprint {
-    @top-left { content: none } @top-right { content: none }
-    @bottom-left { content: none } @bottom-right { content: none }
-  }
-  @page toc {
-    @top-right { content: none } @top-left { content: none }
-    @bottom-right { content: none } @bottom-left { content: none }
-  }
-  /* A chapter opening on a recto leaves a blank verso behind it. Paged.js tags
-     those pages (see the blank-page handler); strip their furniture so the
-     reader gets a genuinely blank page rather than a stray folio. */
-  .pagedjs_page.is-blank [class*="pagedjs_margin-"] { visibility: hidden; }
-
-  /* The page a chapter opens on already announces the chapter in 26 pt. A running
-     head saying the same thing three lines higher is repetition, so the opening
-     page keeps its folio and drops its head. */
-  .pagedjs_page.is-chapter-open [class*="pagedjs_margin-top"] { visibility: hidden; }
-
-  * { box-sizing: border-box; }
-  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body {
-    color: #1a1917;
-    font: 10.5pt/1.55 ${SERIF};
-    font-variant-numeric: oldstyle-nums proportional-nums;
-    margin: 0;
-    orphans: 3;
-    widows: 3;
-    /* Ragged right, not justified: Chromium in this build has no hyphenation
-       dictionary, and justifying an unhyphenated 135 mm measure opens rivers of
-       white space between the words. */
-    text-align: left;
-  }
-
-  /* ---- Cover ------------------------------------------------------------ */
-  .cover {
-    page: cover;
-    break-after: page;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    height: ${PAGE.height}mm;
-    text-align: center;
-    padding: 0 24mm;
-  }
-  .cover .logo { border: 0; box-shadow: none; margin: 0 0 10mm; max-height: 26mm; max-width: 70mm; }
-  .cover .eyebrow {
-    color: #8a8177;
-    font: 500 9.5pt ${SANS};
-    letter-spacing: 0.34em;
-    text-transform: uppercase;
-    margin: 0 0 7mm;
-  }
-  .cover h1 {
-    border: 0;
-    font: 600 38pt/1.06 ${SANS};
-    letter-spacing: -0.015em;
-    margin: 0;
-    color: #15130f;
-    string-set: doctitle content(text);
-  }
-  .cover .rule { width: 34mm; height: 2.5pt; border-radius: 2pt; background: #2a6f97; margin: 8mm 0 8mm; }
-  .cover .tagline { color: #4a453d; font-size: 13pt; line-height: 1.45; margin: 0; max-width: 118mm; }
-  .cover figure { margin: 12mm 0 0; }
-  .cover img { border: 0.75pt solid #d8d0c5; border-radius: 6px; margin: 0; max-height: 88mm; max-width: 72mm; }
-
-  /* ---- Imprint ---------------------------------------------------------- */
-  .imprint { page: imprint; break-after: page; font: 400 9pt/1.6 ${SANS}; color: #4a453d; }
-  .imprint h2 { border: 0; break-before: avoid; font: 600 11pt ${SANS}; color: #15130f; margin: 0 0 4mm; }
-  .imprint p { margin: 0 0 4mm; max-width: 118mm; }
-  .imprint dl { display: grid; grid-template-columns: 32mm 1fr; gap: 1.4mm 4mm; margin: 0 0 7mm; max-width: 118mm; }
-  .imprint dt { color: #8a8177; }
-  .imprint dd { color: #1a1917; margin: 0; }
-
-  /* ---- Contents --------------------------------------------------------- */
-  .toc { page: toc; break-after: page; }
-  .toc h2 { border: 0; font: 600 24pt ${SANS}; letter-spacing: -0.01em; margin: 0 0 9mm; color: #15130f; }
-  .toc ol { list-style: none; margin: 0; padding: 0; }
-  .toc li { margin: 0; break-inside: avoid; }
-  .toc a { display: flex; align-items: baseline; color: #1a1917; text-decoration: none; font-family: ${SANS}; }
-  .toc a .tnum { color: var(--accent, #245f9e); font-weight: 600; margin-right: 3.5mm; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
-  .toc a .ttl { flex: 0 0 auto; }
-  .toc a .leaderdots { flex: 1 1 auto; margin: 0 2mm; border-bottom: 0.6pt dotted #c9c0b2; transform: translateY(-1mm); }
-  .toc a::after {
-    content: target-counter(attr(href), page);
-    color: #6b6257;
-    font-variant-numeric: tabular-nums;
-    flex: 0 0 auto;
-  }
-  .toc .depth-2 { font-weight: 600; font-size: 12pt; margin-top: 6mm; border-left: 2.5pt solid var(--accent, #245f9e); padding-left: 3.5mm; }
-  .toc .depth-2 a { color: var(--accent, #15130f); }
-  .toc .depth-3 { font-size: 9.5pt; margin: 0.7mm 0 0.7mm 14mm; }
-
-  /* ---- Body ------------------------------------------------------------- */
-  main h1 { display: none; }
-  h2, h3, h4 { break-after: avoid; font-family: ${SANS}; }
-  .secnum { font-variant-numeric: tabular-nums lining-nums; }
-  main h2 {
-    /* Chapters open on a right-hand page, the way a bound book opens them. */
-    break-before: recto;
-    string-set: chapter content(text);
-    color: var(--accent, #15130f);
-    font: 600 26pt/1.1 ${SANS};
-    letter-spacing: -0.015em;
-    margin: 0 0 9mm;
-    padding-bottom: 4mm;
-    border-bottom: 2.5pt solid var(--accent, #ded8ce);
-  }
-  main h2 .secnum { display: block; font: 500 11pt ${SANS}; letter-spacing: 0.22em; opacity: 0.72; margin-bottom: 3mm; }
-  main h3 { font: 600 13pt/1.25 ${SANS}; margin: 8mm 0 2.5mm; color: #15130f; }
-  main h3 .secnum { color: var(--accent, #245f9e); margin-right: 2mm; }
-  main h4 { font: 600 10.5pt/1.3 ${SANS}; margin: 6mm 0 1.5mm; color: #2a2620; }
-  main h4 .secnum { color: var(--accent, #245f9e); margin-right: 1.6mm; }
-  p { margin: 0 0 3.2mm; }
-  ul, ol { margin: 0 0 3.6mm; padding-left: 6mm; }
-  li { margin: 1.4mm 0; padding-left: 0.6mm; }
-  li > p { margin: 0; }
-  a { color: #245f9e; text-decoration: none; }
-  strong { font-weight: 600; color: #15130f; }
-  em { font-style: italic; }
-
-  /* ---- Tables ----------------------------------------------------------- */
-  /* Horizontal rules only. A grid of boxes reads as a spreadsheet; open rows
-     read as a table, and the eye tracks along them without help. */
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    font: 400 8.8pt/1.42 ${SANS};
-    margin: 4mm 0 5mm;
-    border-top: 1.2pt solid #55504a;
-    border-bottom: 1.2pt solid #55504a;
-  }
-  thead { display: table-header-group; }
-  tr { break-inside: avoid; }
-  th, td { padding: 1.9mm 3mm 1.9mm 0; vertical-align: top; text-align: left; }
-  th:last-child, td:last-child { padding-right: 0; }
-  th { font-weight: 600; color: #15130f; border-bottom: 0.6pt solid #a9a296; }
-  tbody tr + tr td { border-top: 0.5pt solid #e2dcd2; }
-  td code { font-size: 0.92em; }
-
-  /* Tables keep to the text column exactly. An earlier version let them hang into
-     the wide outer margin to buy back 22 mm, mirrored per page side — which on a
-     verso put the table's left edge 22 mm outside the paragraph above it. The
-     reader's eye tracks down the left edge, so the offset read as a fault, and it
-     changed sides whenever a table split across a spread. Width is not worth
-     losing the alignment over. */
-
-  /* ---- Figures ---------------------------------------------------------- */
-  figure { break-inside: avoid; margin: 6mm 0 7mm; text-align: center; }
-  figure img {
-    border: 0.75pt solid #d8d0c5;
-    border-radius: 5px;
-    display: block;
-    margin: 0 auto;
-    max-height: 130mm;
-    max-width: 78mm;
-    object-fit: contain;
-  }
-  figure.wide img { max-width: ${MEASURE_MM}mm; max-height: 110mm; }
-  figcaption {
-    color: #6b6257;
-    font: 400 8.2pt/1.4 ${SANS};
-    margin: 2.6mm auto 0;
-    max-width: 108mm;
-  }
-  figcaption .figlabel { color: var(--accent, #55504a); font-weight: 600; }
-  img { max-width: 100%; }
-
-  /* ---- Index ------------------------------------------------------------ */
-  /* Two columns, because index entries are short and a full-measure line leaves
-     a hand's width of white between the term and its page numbers. */
-  .index { break-before: recto; }
-  .index h2 {
-    break-before: avoid;
-    border-bottom: 2.5pt solid #55504a;
-    color: #15130f;
-    font: 600 26pt/1.1 ${SANS};
-    letter-spacing: -0.015em;
-    margin: 0 0 8mm;
-    padding-bottom: 4mm;
-    string-set: chapter content(text);
-  }
-  .index ul { columns: 2; column-gap: 9mm; font-family: ${SANS}; font-size: 8.6pt; list-style: none; margin: 0; padding: 0; }
-  .index li { break-inside: avoid; margin: 0; }
-  .idx-letter {
-    break-after: avoid;
-    color: #8a8177;
-    font-size: 8pt;
-    font-weight: 600;
-    letter-spacing: 0.16em;
-    margin: 4mm 0 1.4mm;
-    text-transform: uppercase;
-  }
-  .idx-letter:first-child { margin-top: 0; }
-  .idx-letter { padding-left: 0; text-indent: 0; }
-  .idx-entry { line-height: 1.45; padding-left: 4mm; text-indent: -4mm; }
-  .idx-term { color: #1a1917; }
-  .idx-pages { color: #6b6257; font-variant-numeric: tabular-nums; }
-  .idx-see { color: #8a8177; font-style: italic; }
-  /* Marks are anchors only. They must not color, space or otherwise disturb the
-     prose they sit in. */
-  .idx { all: unset; }
-
-  code {
-    background: #f4f1ea;
-    border-radius: 3px;
-    font-family: ${MONO};
-    font-size: 0.86em;
-    padding: 0.6mm 1.2mm;
-    white-space: nowrap;
-  }
-`;
-
 const markdownToc = [
   "Welcome",
   "Before You Start",
@@ -478,39 +165,6 @@ const profileImage = (profile, imagePath) => `../../img/app/${imagePath.replace(
 
 const image = (alt, profile, imagePath) => `![${alt}](${profileImage(profile, imagePath)})`;
 const docsImage = (alt, imagePath) => `![${alt}](../../img/${imagePath})`;
-
-const dataUriForImage = async (imagePath, manualDir) => {
-  const absolutePath = path.resolve(manualDir, imagePath);
-  const relativeToRoot = path.relative(rootDir, absolutePath);
-  if (relativeToRoot.startsWith("..") || path.isAbsolute(relativeToRoot)) {
-    throw new Error(`manual image path escapes repository: ${imagePath}`);
-  }
-  const extension = path.extname(absolutePath).slice(1).toLowerCase();
-  const contentType =
-    extension === "jpg" || extension === "jpeg" ? "image/jpeg" : extension === "webp" ? "image/webp" : "image/png";
-  const imageBuffer = await readFile(absolutePath);
-  return `data:${contentType};base64,${imageBuffer.toString("base64")}`;
-};
-
-export const inlineImageSources = async (html, manualDir) => {
-  const imageSrcPattern = /<img([^>]*?)src="([^"]+)"([^>]*?)>/g;
-  const replacements = [];
-  for (const match of html.matchAll(imageSrcPattern)) {
-    const source = match[2];
-    if (/^(data:|https?:)/.test(source)) continue;
-    replacements.push({ full: match[0], source });
-  }
-
-  let rendered = html;
-  for (const replacement of replacements) {
-    const dataUri = await dataUriForImage(replacement.source, manualDir);
-    rendered = rendered.replace(
-      replacement.full,
-      replacement.full.replace(`src="${replacement.source}"`, `src="${dataUri}"`),
-    );
-  }
-  return rendered;
-};
 
 const table = (headers, rows) => {
   const header = `| ${headers.join(" | ")} |`;
@@ -633,7 +287,7 @@ const balancedFirmwareNote = (variant) =>
 const autoSafetyModeNote = (variant) =>
   isC64uRemoteVariant(variant)
     ? "The one to leave it on. Reads the firmware and picks Conservative or Balanced, and stays on Conservative until it knows."
-    : "The one to leave it on. Reads the model and firmware and picks Conservative or Balanced. Every Ultimate-II stays on Conservative, and so does a machine whose firmware it cannot yet read. A model it does not recognise at all starts on Balanced.";
+    : "The one to leave it on. Reads the model and firmware and picks Conservative or Balanced. Every Ultimate-II stays on Conservative, and so does a machine whose firmware it cannot yet read. A model it does not recognize at all starts on Balanced.";
 
 const deviceSafetyGuidance = (variant) =>
   isC64uRemoteVariant(variant)
@@ -698,7 +352,7 @@ const remoteInputFallbackExplainer =
 const remoteInputJoystickFirmware = (variant) =>
   isC64uRemoteVariant(variant)
     ? `Full Joystick relay uses the device's \`machine:input\` REST endpoint. The app asks your machine for it and takes the answer as it comes: where the endpoint replies, the **Joystick** tab appears; where it does not, the app falls back to **Keys** only. In practice the endpoint arrives with Commodore 64 Ultimate firmware **1.2.0**.\n\n${remoteInputFallbackExplainer}\n\nIf the device is password-protected, enter its password in Settings first, because both Joystick and Keys need it.`
-    : `Full Joystick relay uses the device's \`machine:input\` REST endpoint. The app asks your machine for it and takes the answer as it comes: where the endpoint replies, the **Joystick** tab appears; where it does not, the app falls back to **Keys** only. In practice the endpoint arrives with Commodore 64 Ultimate firmware **1.2.0**, and with Ultimate 64, Ultimate 64 Elite and Ultimate 64 Elite II firmware **3.15**.\n\nThe Ultimate-II cannot relay a joystick at all: as a cartridge it cannot change the state of the C64's CIA 1 input chip, so it has no \`machine:input\` support. ${remoteInputFallbackExplainer}\n\nIf the device is password-protected, enter its password in Settings first, because both Joystick and Keys need it.`;
+    : `Full Joystick relay uses the device's \`machine:input\` REST endpoint. The app asks your machine for it and takes the answer as it comes: where the endpoint replies, the **Joystick** tab appears; where it does not, the app falls back to **Keys** only. In practice the endpoint arrives with Commodore 64 Ultimate firmware **1.2.0**, and with Ultimate 64, Ultimate 64 Elite and Ultimate 64 Elite II firmware **3.15**.\n\nThe Ultimate-II cannot relay a joystick at all: as a cartridge it cannot change the state of the C64's CIA 1 input chip, so it has no \`machine:input\` support.\n\n${remoteInputFallbackExplainer}\n\nIf the device is password-protected, enter its password in Settings first, because both Joystick and Keys need it.`;
 
 const remoteInputFirmwareShort = (variant) =>
   isC64uRemoteVariant(variant)
@@ -1011,8 +665,7 @@ const renderKeyboardReference = ({ features, variant }) => {
     "",
     `${featureAvailability(features.keypad_input_enabled)} Directional navigation answers to D-pad keys, arrow keys, and hardware keyboards.`,
     "",
-    "While you are steering by keys, a bar along the bottom tells you where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Activate, Edit, Select, Toggle, Adjust or Switch in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.",
-    " While you are steering by keys, a bar along the bottom shows where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Activate, Edit, Select, Toggle, Adjust or Switch in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.",
+    "While you are steering by keys, a bar along the bottom shows where you are and what the keys under your thumb will do: Back, Exit, Done or Close on the left; Open, Activate, Edit, Select, Toggle, Adjust or Switch in the middle; Menu on the right where there is one; and, on Home and Play, a reminder that `0` starts Game Mode.",
     "",
     "#### Directional Pad",
     "",
@@ -1027,7 +680,7 @@ const renderKeyboardReference = ({ features, variant }) => {
       ],
     ),
     "",
-    "The rule is simple: **OK goes in, Back comes out**. **F2** acts as the Menu soft key, and **F1** and **F3** are the transport keys on every keyboard (below).",
+    "Two keys carry most of it: **OK goes in, Back comes out**. **F2** acts as the Menu soft key, and **F1** and **F3** are the transport keys on every keyboard (below).",
     "",
     "#### Number Keys",
     "",
@@ -1169,7 +822,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     ...supportedMachinesSection({ appName, variant }),
     "",
-    `Three things have to meet: ${
+    `Three things have to work together: ${
       isC64uRemoteVariant(variant) ? "your phone" : "the device running the app"
     }, ${targetDeviceShortName(variant)}, and the network between them.`,
     "",
@@ -1205,13 +858,15 @@ export const renderManualMarkdown = ({ variant, features }) => {
       ? "Enter a hostname such as `c64u` or an IP address such as `192.168.1.64`, then choose **Connect**. If the Commodore 64 Ultimate answers but requires a password, the same dialog asks for it before saving and connecting."
       : "Enter a hostname such as `c64u`, `u64`, or `u2`, or an IP address such as `192.168.1.64`, then choose **Connect**. If the device answers but requires a password, the same dialog asks for it before saving and connecting.",
     "",
-    "A healthy badge at the top right confirms that the active device is responding. You can scan again later from **Settings → Connection → Discover devices**.",
+    "Now watch the top right of the screen. A green badge there means the active device is answering, and you are ready to go on. You can scan again later from **Settings → Connection → Discover devices**.",
     "",
     "## Your First Tour",
     "",
+    "Start here if the app is new to you. This chapter goes through the app a page at a time and says what each page is for, beginning with two things you can reach from anywhere: the health badge in the corner, and search.",
+    "",
     "### The Header Badge",
     "",
-    "The badge at the top right says how the current device is: healthy, degraded, unhealthy, or offline. Tap it to open Diagnostics. While the app is offline, the same tap also tries the connection again. Long-press the badge, press `#`, or use the Quick menu to open **Switch device**.",
+    "The badge at the top right tells you how the connected device is doing: healthy, degraded, unhealthy, or offline. Tap it to open Diagnostics. While the app is offline, the same tap also tries the connection again. Long-press the badge, press `#`, or use the Quick menu to open **Switch device**.",
     "",
     "### Finding Your Way",
     "",
@@ -1257,16 +912,14 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The grid runs in four bands. **Watch** first: Live, Game and Input. **Listen** next: Radio, Last and Recent. Then the everyday controls: Menu, Pause/Resume, and **Backup** and **Restore** for the machine's memory. Last come **Reset** and **Power**, which interrupt whatever your C64 is doing.",
     "",
-    "Tap **Power** for **Reboot**, **Power Cycle** where your device supports it, and **Power Off**. Those, and **Reset**, ask you to confirm first.",
-    "",
-    "At the foot of the page, the system strip tells you which app build, device and firmware you are on. Check it before an upgrade, or when something is wrong.",
-    "",
     ...(includeFeature(features, "remote_input_enabled")
       ? [
           "The **Game** and **Input** tiles open the second-screen joystick and keyboard for the C64. Both have their own walkthrough in [Remote Input](#remote-input), later in this guide.",
           "",
         ]
       : []),
+    "Tap **Power** for **Reboot**, **Power Cycle** where your device supports it, and **Power Off**. Those, and **Reset**, ask you to confirm first.",
+    "",
     "Two more actions can join the **Power** sheet: **Reboot (Clr Mem)**, which wipes memory on the way, and **Power Cycle**. Both reach the machine through the Telnet menu service, so switch Telnet on at the device first. Their own switches are **Home clear-RAM reboot action** and **Home power cycle action**, in **Settings → Experimental Features**.",
     "",
     ...(includeFeature(features, "audio_mirror_enabled") || includeFeature(features, "video_mirror_enabled")
@@ -1281,21 +934,27 @@ export const renderManualMarkdown = ({ variant, features }) => {
     // such hardware.
     `Keep going and the rest of Home is a set of cards, and tapping a header opens or closes one.`,
     "",
-    `**CPU & RAM** holds the processor speed, turbo behavior and the RAM expansion. **Ports** follows, with the joystick swap, the serial bus, the cartridge preference and the user port. **Video** holds the output mode, resolution and scan lines, and **Audio**, directly below it, the SID mixer's channel strips. **User Interface** rounds the group out, and${
+    "**CPU & RAM** holds the processor speed, turbo behavior and the RAM expansion. **Ports** follows, with the joystick swap, the serial bus, the cartridge preference and the user port.",
+    "",
+    `**Video** holds the output mode, resolution and scan lines, and **Audio**, directly below it, the SID mixer's channel strips. **User Interface** rounds the group out, and${
       isC64uRemoteVariant(variant)
         ? ", on a machine that has them, so do the case and keyboard lights"
         : ", on a machine that has them, so does **Lighting**, for the case and keyboard lights"
     }.`,
     "",
-    "Some cards start open and some start closed, and the app remembers what you left open. On the compact display profile, opening one card closes the others, so the list of titles stays on screen. **Expand all sections** and **Collapse all sections** in the Quick menu do the whole page at once. Everything here is in Config as well; these cards save you the search.",
-    "",
-    '**With no C64 connected**, Home rearranges for you. The search field stays where it is, and so do Radio, Last, Recent and Live, drawn on their own below a card explaining how to connect one. The first three need no machine. Live does, so it is grayed and reads "Needs a connected C64 Ultimate".',
-    "",
-    "The machine's controls and cards are drawn as titles with nothing inside them, under a line saying so, and the system strip drops to the app version alone. Whichever cards you had open are open again the moment your C64 answers. A brief network hiccup will not shuffle the page under you: the app waits a few seconds before rearranging, and returns the instant your machine is back.",
-    "",
     `The remaining cards cover drives, the printer, streams, and **Config**. That last one holds **Save**, which writes the current settings into flash on ${targetDeviceShortName(
       variant,
     )} so they survive a power cycle, along with Load, Reset, Revert, and the app's own named configuration snapshots.`,
+    "",
+    "Some cards start open and some start closed, and the app remembers what you left open. On the compact display profile, opening one card closes the others, so the list of titles stays on screen. **Expand all sections** and **Collapse all sections** in the Quick menu do the whole page at once. Everything here is in Config as well; these cards save you the search.",
+    "",
+    "At the foot of the page, the system strip tells you which app build, device and firmware you are on. Check it before an upgrade, or when something is wrong.",
+    "",
+    '**With no C64 connected**, Home rearranges for you. The search field stays where it is, and so do Radio, Last, Recent and Live, drawn on their own below a card explaining how to connect one. The first three need no machine. Live does, so it is grayed and reads "Needs a connected C64 Ultimate".',
+    "",
+    "The machine's own controls and cards stay on the page as titles with nothing inside them, under a line that says why, and the system strip drops to the app version alone.",
+    "",
+    "Whichever cards you had open are open again the moment your C64 answers. A brief network hiccup will not shuffle the page under you either: the app waits a few seconds before rearranging, and returns the instant your machine is back.",
     "",
     "### Play",
     "",
@@ -1333,7 +992,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Each row has its own menu, holding the item's details and its **playback config**, a device configuration the app can apply before that one item runs. To take items out of the list, tick them and choose **Remove selected items**.",
     "",
-    "Playback carries on when you leave the app or lock the phone, and the playlist and your place in it are still there the next time you open it.",
+    `Playback carries on when you leave the app or lock your ${appDeviceName(
+      variant,
+    )}, and the playlist and your place in it are still there the next time you open it.`,
     "",
     "Play is the quick way to start a disk and see what it does. Disks is the place to go when the drives, the grouping or the collection itself is what you are after.",
     "",
@@ -1355,13 +1016,13 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Mounting is what the page is for. Choose the disk, choose the drive, mount it; **Eject** empties the drive again. Each disk's own menu also offers **Rename disk**, which changes how the collection lists it and leaves the file itself alone.",
     "",
-    "Drive settings sit beside the collection because they decide how a mounted image behaves. Bus ID, drive type, power, reset and the Soft IEC path all matter when a program expects a particular setup.",
+    "Drive settings sit beside the collection. Bus ID, drive type, power, reset and the Soft IEC path all decide how a mounted image behaves, and all matter when a program expects a particular setup.",
     "",
     "Come to Disks whenever more than one image is involved. The collection, its filters, the groups and the mounting are all on one page, so nothing sends you away halfway through.",
     "",
     "### Config",
     "",
-    "Config is the complete configuration tree.",
+    "Config holds every setting your machine has, laid out as one searchable tree.",
     "",
     image("Config overview", profile, "config/profiles/{profile}/01-overview.png"),
     "",
@@ -1373,7 +1034,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Config is where you look when you know a setting exists but not where the device menu keeps it. The search box narrows the tree to the pages and groups whose names match; open one to see its rows. After changing a value, let the write finish before changing a related one.",
     "",
-    "Config edits the live device, not a draft. Use it for the precise and the uncommon, and use the page controls for everything routine.",
+    "Config edits the live device, not a draft. Use it for a precise or uncommon setting, and use the page controls for everything routine.",
     "",
     "### Settings",
     "",
@@ -1389,7 +1050,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "**Connection** also holds your saved devices: their name, host, HTTP, FTP and Telnet ports, and network password. Saving checks that the web service answers before the device is kept; FTP and Telnet are stored as given and are tested by a health check.",
     "",
-    "**Appearance** is local to the app and never touches your C64. It sets the theme, the style, the text size, the display profile, card descriptions, whether the app runs full screen, and whether it follows the phone's rotation or stays in portrait or landscape.",
+    `**Appearance** is local to the app and never touches your C64. It sets the theme, the style, the text size, the display profile, card descriptions, whether the app runs full screen, and whether it turns with your ${appDeviceName(
+      variant,
+    )} or stays in portrait or landscape.`,
     "",
     "**Style** is a set of colors, corner rounding and shading, layered on top of **Theme**, which stays your light-or-dark switch. Pick a style, or choose **Match my device** to follow the Color Scheme your C64 Ultimate is set to.",
     "",
@@ -1400,7 +1063,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     table(
       ["Style", "What it is"],
       [
-        ["Cool Grey", "Neutral, blue-leaning grey. The one the app starts with."],
+        ["Cool Grey", "Neutral, with a cool blue lean. The one the app starts with."],
         ["Breadbin Beige", "The warm beige of the original case."],
         ["Ocean Teal", "Deep blue-green with a warm coral highlight."],
         ["Neon Pop", "Translucent covers by day, arcade cabinet by night."],
@@ -1410,9 +1073,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
       ],
     ),
     "",
-    "**Text size** enlarges every part of the app. Choose **Default**, or **Large**, which is 15 percent larger. Reach for it when the app is harder to read than you would like; the display profile beside it changes the layout rather than the type. If the tab bar along the bottom runs out of room it scrolls sideways, and reaching a page another way scrolls that tab into view.",
+    "**Text size** enlarges every part of the app. Choose **Default**, or **Large**, which is 15 percent larger. Reach for it when the app is harder to read than you would like; the display profile beside it changes the layout rather than the type.",
     "",
-    "**Card descriptions** is the one-line summary under each card's title, on every page built from cards. It starts off, because on a small screen it costs about half the height of every closed card; turn it on if you would rather read what a card holds than remember it. The Quick menu switches the same thing on and off without leaving the page you are on.",
+    "If the tab bar along the bottom runs out of room it scrolls sideways, and reaching a page another way scrolls that tab into view.",
+    "",
+    "**Card descriptions** is the one-line summary under each card's title, on every page built from cards. It starts off; turn it on if you would rather read what a card holds than remember it. On a small screen it costs about half the height of every closed card. The Quick menu switches the same thing on and off without leaving the page you are on.",
     "",
     "**Diagnostics** opens the diagnostics panel and switches debug logging on. It also carries **Settings transfer**, which lives here despite the name.",
     "",
@@ -1428,7 +1093,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `A setting you change from the app reaches ${targetDeviceShortName(
       variant,
-    )} at once: the colors, the video mode, the LED lights and the rest all change as you make them. By default that is as far as it goes: switch the machine off and on, and it comes back the way it was. Nothing you try from the app is permanent, which makes it a safe place to experiment.`,
+    )} at once: the colors, the video mode, the LED lights and the rest all change as you make them.`,
+    "",
+    "By default that is as far as it goes. Switch the machine off and on, and it comes back the way it was. Nothing you try from the app is permanent, which makes it a safe place to experiment.",
     "",
     "**Keep device settings after a restart**, in **Settings → Device Safety**, changes that. With it on, every device setting the app changes is also written to the machine's own storage, so it survives a power cycle, exactly as though you had saved it from the machine's setup menu.",
     "",
@@ -1440,7 +1107,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "### Docs",
     "",
-    "Docs is the built-in help page, the short version of this manual, always with you.",
+    "Docs is the built-in help page: the short version of this manual, carried on the device itself.",
     "",
     image("Docs overview", profile, "docs/profiles/{profile}/01-overview.png"),
     "",
@@ -1477,6 +1144,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     image("Device switcher expanded", profile, "diagnostics/switch-device/profiles/{profile}/02-picker-expanded.png"),
     "",
     "## Everyday Flows",
+    "",
+    "Each of these is a short recipe for something you will do often. The numbered steps are the whole job, and the line after them says which route to take when the app offers more than one.",
     "",
     "### Connect by Hand",
     "",
@@ -1661,7 +1330,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "- **C64**: your C64 plays it, through its own SID chip.",
     "- **Both**: your C64 plays it and also sends the sound across your network, so you hear it in both places.",
     "",
-    `**Both** is offered when Live View and its audio are switched on, and it takes itself away again if your C64 declines to send the sound. The sound leaves the machine over its **Ethernet** connection, so a C64 that is only on Wi-Fi cannot supply it. The output button appears for SID tunes alone, because programs and disks always run on the C64, which is the only machine that can run them.`,
+    "**Both** is offered when Live View and its audio are switched on, and it takes itself away again if your C64 declines to send the sound. The sound leaves the machine over its **Ethernet** connection, so a C64 that is only on Wi-Fi cannot supply it.",
+    "",
+    "The output button appears for SID tunes alone. Programs and disks always run on the C64, which is the only machine that can run them.",
     "",
     `To play music on its own, your ${appDeviceName(variant)} needs a copy of two programs built into every C64: the **KERNAL** and **BASIC** ROMs. Many tunes call into them, and without them those tunes start and then play nothing.`,
     "",
@@ -1679,9 +1350,17 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "#### The sound itself",
     "",
-    `**Volume** and **Mute** follow whichever machine is sounding: playing here, they change this tune alone and leave your ringer and notifications as they were; playing on the C64, they move the machine’s own mixer. Your ${appDeviceName(variant)} will either play a tune itself or play the sound sent from your C64, never both at once. Whichever you start last takes over.`,
+    "**Volume** and **Mute** follow whichever machine is making the sound: playing here, they change this tune alone and leave your ringer and notifications as they were; playing on the C64, they move the machine’s own mixer.",
     "",
-    `The rest is under **Settings → SID Radio**. **Crossfade** overlaps one tune into the next, both audible while the first fades away: **Off** for a clean cut, or **Short** (0.6s), **Medium** (1.5s), **Long** (3s), or **Longest** (4s). It starts at Off. Only your ${appDeviceName(variant)} can sound two tunes at once, so the control is grayed out while the output is set to the C64.`,
+    `Your ${appDeviceName(
+      variant,
+    )} will either play a tune itself or play the sound sent from your C64, never both at once. Whichever you start last takes over.`,
+    "",
+    "The rest is under **Settings → SID Radio**. **Crossfade** overlaps one tune into the next, both audible while the first fades away: **Off** for a clean cut, or **Short** (0.6s), **Medium** (1.5s), **Long** (3s), or **Longest** (4s). It starts at Off.",
+    "",
+    `Only your ${appDeviceName(
+      variant,
+    )} can sound two tunes at once, so the control is grayed out while the output is set to the C64.`,
     "",
     "There are two versions of the SID chip, the **6581** and the **8580**, and music written for one sounds a little different on the other. Most files say which the composer used, and those always play on the chip they name.",
     "",
@@ -1719,7 +1398,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "While a tune plays, a heart and a cross appear just above its title, at the right-hand edge of the card. Tap the **heart** to add it to your **Liked Tunes** list. Tap the **cross** to skip it: the station moves on immediately and avoids similar tunes. Both are optional; the station plays happily if you only listen.",
     "",
-    `Your choices stay on your ${appDeviceName(variant)}. They are attached to the music itself rather than to a file name, so they survive an update to the collection even if the tune has moved. **Liked Tunes** is an ordinary playable list: play it, shuffle it, or take a tune off it again. To start over, **Settings → SID Radio → Clear my rankings** removes every heart and cross at once.`,
+    `Your choices stay on your ${appDeviceName(variant)}. They are attached to the music itself rather than to a file name, so they survive an update to the collection even if the tune has moved.`,
+    "",
+    "**Liked Tunes** is an ordinary playable list: play it, shuffle it, or take a tune off it again. To start over, **Settings → SID Radio → Clear my rankings** removes every heart and cross at once.",
     "",
     "#### What a station will and will not do",
     "",
@@ -1739,7 +1420,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     'Any part of a word will do, in any case, and accents are ignored: "oorni" finds Lasse Öörni, "mando" finds Commando. Add a second word to narrow the search: "hubbard commando" matches both.',
     "",
-    "Tap a result and it plays immediately. Your station keeps its place and carries on when the tune ends. To hear more music like the one you found, tap the radio icon beside it, which appears for any tune the collection can start a station from. With nothing typed, the sheet lists what you have heard recently, which is how you find your way back to something that has already played.",
+    "Tap a result and it plays immediately. Your station keeps its place and carries on when the tune ends. To hear more music like the one you found, tap the radio icon beside it, which appears for any tune the collection can start a station from.",
+    "",
+    "With nothing typed, the sheet lists what you have heard recently, which is how you find your way back to something that has already played.",
     "",
     image(
       "Finding one tune by name, anywhere in the collection",
@@ -1765,7 +1448,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The line under the title comes from the SID file itself: the composer, the year and publisher, the chip it asks for, whether it was written for **PAL** or **NTSC**, which tune of the file is playing, and its length. Anything the file does not record is left out rather than guessed at.",
     "",
-    "Two things a SID file cannot record have been documented separately by the archive's editors. Both sit under **About this tune**, below the line described above. Tap it to open them and tap it again to fold them away; it starts folded so that the transport and the progress bar are still on screen on a small phone. It appears only for tunes the archive describes, which is about a third of them.",
+    "Two things a SID file cannot record have been documented separately by the archive's editors. Both sit under **About this tune**, below the line described above. That section appears only for tunes the archive describes, about a third of them.",
+    "",
+    "Tap it to open the pair, and tap it again to fold them away. It starts folded, so that the transport and the progress bar are still on screen on a small display.",
     "",
     "The first is whether a tune is an arrangement, and of whose music. Much C64 music is a cover of a pop record, a film score or an arcade original, and the name in the file is whoever wrote the C64 version.",
     "",
@@ -1786,7 +1471,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           "Your C64 can send its own sound and picture out across your network, and Live View brings them straight back into the app, so you can hear a tune or watch the screen without wiring up a speaker or a second television.",
           "",
-          `It is one shared session. Start it in a single place and it keeps playing wherever you go; there is never a second copy fighting for the same stream. You will find it just below the Quick Actions on **Home**, as a card that starts closed; tap its header to open it.${isC64uRemoteVariant(variant) ? "" : " The card appears only where the machine can stream, so an Ultimate-II cartridge does not offer it."} Inside are two switches:`,
+          "It is one shared session. Start it in a single place and it keeps playing wherever you go; there is never a second copy fighting for the same stream.",
+          "",
+          `You will find it just below the Quick Actions on **Home**, as a card that starts closed; tap its header to open it.${isC64uRemoteVariant(variant) ? "" : " The card appears only where the machine can stream, so an Ultimate-II cartridge does not offer it."} Inside are two switches:`,
           "",
           ...(includeFeature(features, "audio_mirror_enabled")
             ? [
@@ -1801,9 +1488,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "",
           image("Live View on Home", profile, "home/content-explorer/profiles/{profile}/01-live-view.png"),
           "",
-          `While the sound or the picture is playing, a **Reset** appears in the card's header and stops both of them, so the mirror can be turned off without opening the card again. And if what you started stops reaching ${appDeviceSubject(
+          "While the sound or the picture is playing, a **Reset** appears in the card's header and stops both of them, so the mirror can be turned off without opening the card again.",
+          "",
+          `And if what you started stops reaching ${appDeviceSubject(
             variant,
-          )}, because the network drops out or the machine is switched off, Live View reports that the stream stopped arriving rather than leaving a frozen picture under a switch that still reads as playing.`,
+          )}, because the network drops out or the machine is switched off, Live View says the stream stopped arriving rather than leaving a frozen picture under a switch that still reads as playing.`,
           "",
           ...(includeFeature(features, "video_mirror_enabled")
             ? [
@@ -1867,16 +1556,24 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 `Your C64 sends color *numbers* rather than colors, so something has to decide what shade to paint each one. That choice is **Screen colors**, the first row of the **Video** card on the Home page. It shows the palette in use and all sixteen of its colors; tap it to choose another.`,
                 "",
-                `A palette can apply in two places, and **Show on** decides which of them. It is the same question the Play page asks about a tune. **Local** changes the picture in Live View on your device and touches nothing else. **Remote** changes what ${targetDeviceShortName(variant)} itself draws, so the television in the room changes too. **Both** does each of them.`,
+                "A palette can apply in two places, and **Show on** decides which of them. It is the same question the Play page asks about a tune.",
                 "",
-                `The list starts with **Follow the C64**, which is where it begins: Live View paints whatever palette the machine is set to, so your phone and your television match. Below that are nine bundled palettes, warmer, cooler, monochrome and so on, each with all sixteen of its colors shown before you choose. Any palette already installed on ${targetDeviceShortName(variant)} is listed too, under **Already on this C64**.`,
+                `**Local** changes the picture in Live View on your ${appDeviceName(
+                  variant,
+                )} and touches nothing else. **Remote** changes what ${targetDeviceShortName(variant)} itself draws, so the television in the room changes too. **Both** does each of them.`,
+                "",
+                `The list starts with **Follow the C64**, which is where it begins: Live View paints whatever palette the machine is set to, so your ${appDeviceName(
+                  variant,
+                )} and your television match.`,
+                "",
+                `Below that are nine bundled palettes, warmer, cooler, monochrome and so on, each with all sixteen of its colors shown before you choose. Any palette already installed on ${targetDeviceShortName(variant)} is listed too, under **Already on this C64**.`,
                 "",
                 `Sending a palette to the machine copies a small file to its storage and changes the picture straight away. Whether it is still there after you switch the machine off is a separate question, answered by **Keep device settings after a restart** in **Settings → Device Safety**. See *Making settings stick*.`,
                 "",
-                "The **picture** is the demanding part, so you get a say in how much of it to draw. Open **Stats**, which appears under Live View while it is playing, and choose a **Video frame rate**:",
+                "The **picture** is the demanding part, and you get a say in how much of it to draw. Open **Stats**, which appears under Live View while it is playing, and choose a **Video frame rate**:",
                 "",
                 "- **Auto** plays every frame it can, eases off when your device is under strain, and climbs back to full speed as soon as there is room to spare. Leave it here.",
-                "- **100%**, **50%**, and **25%** cap the picture at the full rate, half, or a quarter of what the C64 is sending. A lower setting is gentler on the battery and on older phones and leaves more headroom for the game you are driving. Even at a manual cap the app will still drop below it for a moment if that is what it takes to keep the sound clean, because the sound always comes first.",
+                "- **100%**, **50%**, and **25%** cap the picture at the full rate, half, or a quarter of what the C64 is sending. A lower setting is gentler on the battery and on older hardware, and leaves more headroom for the game you are driving. Even at a manual cap the app will still drop below it for a moment if that is what it takes to keep the sound clean, because the sound always comes first.",
                 "",
                 "**Stats** also shows how the stream is doing, at a glance and over the last few minutes: the picture's frame rate, how full the audio buffer is, any packets lost on the network and how they were smoothed over, and the app's own load.",
                 "",
@@ -1907,7 +1604,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Your C64 can send what it is doing out across the network. **Home → Streams** offers three feeds: **VIC**, the picture; **Audio**, the sound of the SID; and **Debug**, a low-level trace for developers. Point a feed at an address, press **Start**, and it goes there; **Stop** ends it. The card appears when the connected device says it can stream.",
     "",
-    "Live View plays those same **VIC** and **Audio** feeds inside the app, and the two never fight over one stream. Turn Live View on and it takes charge of the feed it needs: that row wears a small **Live View** badge and stops accepting changes, so nothing here can pull the picture or the sound out from under it. Your own address is remembered, and the moment you stop Live View the row hands control back.",
+    "Live View plays those same **VIC** and **Audio** feeds inside the app, and the two never fight over one stream. Turn Live View on and it takes charge of the feed it needs: that row wears a small **Live View** badge and stops accepting changes, so nothing here can pull the picture or the sound out from under it.",
+    "",
+    "Your own address is remembered throughout, and the moment you stop Live View the row hands control back.",
     "",
     ...(includeFeature(features, "remote_input_enabled")
       ? [
@@ -1958,6 +1657,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
           "With the controls out of the way, three keys still reach everything. `#` brings RETURN, SPACE, the rest of the quick keys and the **Watch** and **Listen** switches up over the bottom of the picture, and puts them away again. `*`, or the menu key, changes between driving the C64 and adjusting the view. **Back** leaves.",
           "",
           "The floating **cog** button at the top of the picture brings the whole toolbar back, and **Show joystick** on that toolbar brings the on-screen joystick back.",
+          "",
           "Set the joystick to **Hidden** with the picture switched off and Game Mode has nothing to draw, so the space says so: it tells you the picture is off, and carries the **Watch** and **Listen** switches and the quick keys, all reachable without a touchscreen. The game keeps taking your keys the whole time. Turn **Watch** on and the picture takes the space instead.",
           "",
           "If you are playing on a television, turn **Watch** off once and Game Mode keeps opening without the picture. The controls take the space instead, so it is never blank.",
@@ -2005,7 +1705,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
             : [
                 "#### Steering with a physical keyboard",
                 "",
-                "**Settings → Play and Disk → Joystick keys** decides which keys steer. **Classic T9** uses 2, 4, 6 and 8 with 5 as fire, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centred)** uses the four keys around 8, with 8 itself as fire. **Custom** lets you press the key you want for each direction. A hardware D-pad always steers as well, whatever you choose here.\n\nThe mapping turns with your device, so you only ever set it up one way up. Where the sensor cannot tell which way up the device is, the **Orientation** control in Game Mode's toolbar pins the mapping to **Auto**, **0°**, **90°** or **270°**.",
+                "**Settings → Play and Disk → Joystick keys** decides which keys steer. **Classic T9** uses 2, 4, 6 and 8 with 5 as fire, and adds the diagonals on 1, 3, 7 and 9. **Diamond (8-centred)** uses the four keys around 8, with 8 itself as fire. **Custom** lets you press the key you want for each direction.\n\nA hardware D-pad always steers as well, whatever you choose here. The mapping turns with your device, so you only ever set it up one way up. Where the sensor cannot tell which way up the device is, the **Orientation** control in Game Mode's toolbar pins the mapping to **Auto**, **0°**, **90°** or **270°**.",
               ]),
           "",
           "Leave with **Exit**, at the top of the Game Mode toolbar, or your device's Back button. Both release everything you were holding. Closing the sheet also stops the picture and sound if Game Mode was what started them, and leaves them running if they were already on before you arrived.",
@@ -2056,7 +1756,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Turn a drive on or off with its power control. A drive must be **on** before it can mount anything.",
     "",
-    "Give it a **bus ID** so software can find it; the first drive is 8 by convention, and the device tells the app which numbers it will accept. Set its **type** to match the disk: a 1541 for D64 and G64, a 1571 for D71 (which reads D64 too), a 1581 for D81. This list also comes from the device, so a machine that offers more types shows them.",
+    "Give it a **bus ID** so software can find it; the first drive is 8 by convention, and the device tells the app which numbers it will accept.",
+    "",
+    "Set its **type** to match the disk: a 1541 for D64 and G64, a 1571 for D71 (which reads D64 too), a 1581 for D81. This list also comes from the device, so a machine that offers more types shows them.",
     "",
     "**Reset** restarts the drive's own processor, which is the gentlest way to bring a confused drive back without disturbing the C64.",
     "",
@@ -2066,7 +1768,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `A disk that already lives on ${targetDeviceShortName(
       variant,
-    )} mounts in place. A **Local** disk is copied across first, and whatever a program writes to it returns to your own file when you eject, so your high scores and saved games survive. A disk from the online archive has no file of yours to return to: its changes last only while the app is running, and ejecting it offers you **Save a local copy**.`,
+    )} mounts in place. A **Local** disk is copied across first, and whatever a program writes to it returns to your own file when you eject, so your high scores and saved games survive.`,
+    "",
+    "A disk from the online archive has no file of yours to return to: its changes last only while the app is running, and ejecting it offers you **Save a local copy**.",
     "",
     'There are two ways to start a disk once it is mounted, and **Settings → Play and Disk → Disk first-PRG load** chooses between them. **Classic KERNAL load** does what you would do at the keyboard: `LOAD"*",8,1` and `RUN`. **DMA** lifts the first program off the disk and writes it straight into memory, which is much quicker.',
     "",
@@ -2089,7 +1793,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
             ? [
                 "#### Looking Inside a Disk",
                 "",
-                "Mounting a disk image gives you the whole disk. Disk Explorer looks *inside* one, so you can pick a single program and start it. On **Disks**, open the menu of a `.d64`, `.d71` or `.d81` image and choose **Open (Disk Explorer)…**. The app lists every file on the disk with its type, its size in blocks, a padlock if it is write-protected, and, for a program, its load address.",
+                "Mounting a disk image gives you the whole disk. Disk Explorer looks *inside* one, so you can pick a single program and start it. On **Disks**, open the menu of a `.d64`, `.d71` or `.d81` image and choose **Open (Disk Explorer)…**.",
+                "",
+                "The app lists every file on the disk with its type, its size in blocks, a padlock if it is write-protected, and, for a program, its load address.",
                 "",
                 "Each launchable file offers three actions:",
                 "",
@@ -2125,7 +1831,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
             ? [
                 "#### Searching Inside Disk Images",
                 "",
-                "By default, searching your media matches disk images by their file name. Switch **In-image search** on in **Settings → Experimental Features**, and a **Search inside disk images** row appears in **Settings → Play and Disk**. Turn that on and search also reaches the programs *inside* your `.d64`, `.d71`, and `.d81` images. A match found inside a disk is shown as **DISK → PROGRAM**, so you can see exactly which disk holds the program you want, then Run or Load it like any other.",
+                "By default, searching your media matches disk images by their file name. Switch **In-image search** on in **Settings → Experimental Features**, and a **Search inside disk images** row appears in **Settings → Play and Disk**. Turn that on and search also reaches the programs *inside* your `.d64`, `.d71`, and `.d81` images.",
+                "",
+                "A match found inside a disk is shown as **DISK → PROGRAM**, so you can see exactly which disk holds the program you want, then Run or Load it like any other.",
                 "",
                 availabilityNote(features.in_image_search_enabled),
                 "",
@@ -2155,7 +1863,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
             variant,
           )} so you can put it back later. It is the nearest thing the app has to a save-and-restore button for programs that have none of their own.`,
           "",
-          "Both live in **Home → Quick Actions**: **Backup** to capture, **Restore** to put it back. Do not confuse them with **Save** and **Load** on the Config card, which write your machine's settings rather than its memory. Your device must be connected and idle. The app pauses the machine while the memory crosses the network and starts it again afterwards, so a running program carries on undisturbed.",
+          "Both live in **Home → Quick Actions**: **Backup** to capture, **Restore** to put it back. Do not confuse them with **Save** and **Load** on the Config card, which write your machine's settings rather than its memory.",
+          "",
+          "Your device must be connected and idle. The app pauses the machine while the memory crosses the network and starts it again afterwards, so a running program carries on undisturbed.",
           "",
           "When you tap **Backup**, the app asks which region of memory to capture:",
           "",
@@ -2228,12 +1938,12 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "The panel has three parts, from top to bottom:",
     "",
     "- The **health header** shows the state (Healthy, Degraded, Unhealthy or Offline), which device it refers to, and when it was last checked. Tap **Run health check** to test the connection now. The check tries the web, FTP and Telnet services, then three signals from the C64 itself: CONFIG, RASTER and JIFFY. Each reports its own result and timing, alongside the overall latency. Open the header to read them one by one.",
-    "",
-    "The CONFIG check does more than read. It nudges a live setting by a hair, reads it back to confirm the device applied the change, then puts the original value back.",
-    "",
-    "On a machine with lights, the case light or the keyboard, you will see them **pulse once** as it runs, a visible heartbeat that says the connection is alive. On a machine without lights it nudges a mixer volume instead, for about a twelfth of a second.",
     "- The **Filters** bar says how much of the activity you are looking at and opens the filter editor. Filter by device, by kind of activity (Problems, Actions, Logs, Traces), by what raised it (App, REST, FTP, Telnet), or by severity (Errors, Warnings, Info). The editor also holds five one-tap shortcuts: **Errors only**, **Problems only**, **REST**, **FTP**, and **Reset**.",
     "- The **Activity** list gathers problems, actions, logs, and traces together. Tap any row to expand it for the full details.",
+    "",
+    "The CONFIG probe is worth watching for. It does more than read: it nudges a live setting by a hair, reads it back to confirm the device applied the change, then puts the original value back.",
+    "",
+    "On a machine with lights, the case light or the keyboard, you will see them **pulse once** as the check runs, a visible heartbeat that says the connection is alive. On a machine without lights it nudges a mixer volume instead, for about a twelfth of a second.",
     "",
     "The three-dot menu in the corner holds the rest: connection details, health history, latency, the REST, FTP and Config heat maps, config drift, decision state, **Key Explorer**, and a way straight to **Manage devices**, alongside Share and Clear. To send any of it on for help, see the next section.",
     "",
@@ -2249,7 +1959,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "4. Open the three-dot menu and choose **Share all** for the full report, or **Share filtered** for a plain list of the rows you filtered to.",
     "5. Pick an app in your device's share sheet (mail, chat, or notes) to send or save the report.",
     "",
-    "**Share all** produces a small ZIP file holding the app's logs, traces, errors and recent actions, a health snapshot, and details of your app version, your phone, and the active C64: its name, host address and firmware. Your network password is never in it. Its hostname or IP address can be, so send it only to people you trust, or to support.",
+    `**Share all** produces a small ZIP file holding the app's logs, traces, errors and recent actions, a health snapshot, and details of your app version, your ${appDeviceName(
+      variant,
+    )}, and the active C64: its name, host address and firmware. Your network password is never in it. Its hostname or IP address can be, so send it only to people you trust, or to support.`,
     "",
     "Use **Clear all** afterwards for a clean slate. It asks you to confirm, then shows **Diagnostics cleared** when done.",
     "",
@@ -2270,6 +1982,8 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "The CPU speed setting can briefly drop the network while the device applies a clock change. Wait for the app to reconnect.",
     "",
     "## Troubleshooting",
+    "",
+    "Find your symptom below. If none of them fits, open Diagnostics: it keeps a record of what the app asked for and what came back, which is usually enough to show where the trouble is.",
     "",
     "### Discovery finds nothing",
     "",
@@ -2317,7 +2031,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "## Appendices",
     "",
-    "The rest of this guide is reference material for when you want the exact answer. Skim the tour to get going, then come back here for the specifics.",
+    "The rest of this guide is reference material, for the moments when you want the exact answer rather than the explanation behind it. The chapters above tell the story; these tables give the numbers, the defaults, and the exact place to look.",
     "",
     "### Feature Reference",
     "",
@@ -2480,65 +2194,6 @@ export const renderManualMarkdown = ({ variant, features }) => {
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trimEnd()}\n`;
-};
-
-const pagedPolyfillPath = path.join(scriptDir, "vendor/pagedjs/paged.polyfill.min.js");
-
-const escapeHtml = (value) =>
-  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-
-/**
- * Turns each standalone image into a numbered, captioned figure.
- *
- * A screenshot dropped into running text with nothing under it leaves the reader
- * to work out what they are being shown and gives the prose no way to refer to
- * it. The caption comes from the markdown alt text, which is already written as a
- * description, and the number restarts in each chapter (Figure 4.2 = the second
- * figure of chapter 4) so a figure can be cited from anywhere.
- *
- * Chapter tracking rides on the `data-chapter` attribute that {@link addHeadingIds}
- * has already stamped on every heading, so the two numbering systems cannot drift.
- */
-/**
- * Intrinsic pixel size of a PNG, read from its IHDR chunk.
- *
- * The figure width depends on the shape of the picture: a phone screenshot is
- * tall and belongs in a narrow column, while a photograph of a C64 screen is
- * wide and is unreadable at the same width. Returns null for anything that is
- * not a PNG, which falls back to the narrow default.
- */
-const pngDimensions = (absolutePath) => {
-  let buffer;
-  try {
-    buffer = fs.readFileSync(absolutePath);
-  } catch {
-    return null;
-  }
-  if (buffer.length < 24 || buffer.readUInt32BE(0) !== 0x89504e47) return null;
-  return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
-};
-
-const wrapFigures = (html, manualDir) => {
-  let chapter = 0;
-  let figure = 0;
-  return html.replace(/<h2[^>]*data-chapter="(\d+)"[^>]*>|<p>(<img\b[^>]*>)<\/p>/g, (full, headingChapter, img) => {
-    if (headingChapter !== undefined) {
-      if (Number(headingChapter) !== chapter) {
-        chapter = Number(headingChapter);
-        figure = 0;
-      }
-      return full;
-    }
-    figure += 1;
-    const alt = /\balt="([^"]*)"/.exec(img)?.[1] ?? "";
-    const source = /\bsrc="([^"]*)"/.exec(img)?.[1] ?? "";
-    const size = source ? pngDimensions(path.resolve(manualDir, source)) : null;
-    const wide = size && size.width > size.height ? " wide" : "";
-    const accent = chapterAccent(chapter);
-    const label = `<span class="figlabel">Figure ${chapter}.${figure}</span>`;
-    const caption = alt ? `${label}&ensp;${alt}` : label;
-    return `<figure class="fig${wide}" style="--accent:${accent}">${img}<figcaption>${caption}</figcaption></figure>`;
-  });
 };
 
 /**
@@ -2729,89 +2384,6 @@ export const INDEX_TERMS = [
  * run, so a match can never straddle a tag boundary and the wrap is always well
  * nested. Marks are inline spans carrying no style, so they cannot shift a line.
  */
-const markIndexTerms = (html) => {
-  const marks = [];
-  let section = "";
-  let markId = 0;
-  const seenInSection = new Set();
-
-  const marked = html.replace(/(<[^>]+>)|([^<]+)/g, (full, tag, text) => {
-    if (tag !== undefined) {
-      if (/^<h[234]\b/i.test(tag)) {
-        section = tag;
-        seenInSection.clear();
-      }
-      return tag;
-    }
-    let output = text;
-    for (const [index, entry] of INDEX_TERMS.entries()) {
-      if (entry.see) continue;
-      const key = `${index}`;
-      if (seenInSection.has(key)) continue;
-      for (const phrase of entry.match) {
-        const needle = phrase.replace(/\*\*/g, "");
-        const position = output.indexOf(needle);
-        if (position < 0) continue;
-        const before = output[position - 1];
-        const after = output[position + needle.length];
-        if ((before && /[\w-]/.test(before)) || (after && /[\w]/.test(after))) continue;
-        const id = `idx-${markId}`;
-        markId += 1;
-        marks.push({ id, entry: index });
-        output = `${output.slice(0, position)}<span class="idx" id="${id}">${needle}</span>${output.slice(
-          position + needle.length,
-        )}`;
-        seenInSection.add(key);
-        break;
-      }
-    }
-    return output;
-  });
-
-  return { html: marked, marks };
-};
-
-/** `[3, 4, 5, 9]` → `"3–5, 9"`. Consecutive pages read as a range, as in any book. */
-const formatPageList = (pages) => {
-  const sorted = [...new Set(pages)].sort((a, b) => a - b);
-  const runs = [];
-  for (const page of sorted) {
-    const last = runs.at(-1);
-    if (last && page === last.at(-1) + 1) last.push(page);
-    else runs.push([page]);
-  }
-  return runs.map((run) => (run.length > 1 ? `${run[0]}–${run.at(-1)}` : `${run[0]}`)).join(", ");
-};
-
-/**
- * Renders the index from the term list and the page each mark landed on.
- *
- * Entries whose term found nothing in this edition are dropped, and a `see`
- * pointing at a dropped entry is dropped with it — otherwise the keypad-only
- * terms would leave the broad edition's index pointing at nothing.
- */
-const renderIndexHtml = (pagesByEntry) => {
-  const resolved = INDEX_TERMS.map((entry, index) => ({ ...entry, pages: pagesByEntry.get(index) ?? [] })).filter(
-    (entry) => entry.see || entry.pages.length > 0,
-  );
-  const present = new Set(resolved.filter((entry) => !entry.see).map((entry) => entry.term));
-  const entries = resolved
-    .filter((entry) => !entry.see || present.has(entry.see))
-    .sort((a, b) => a.term.toLowerCase().localeCompare(b.term.toLowerCase(), "en"));
-
-  let letter = "";
-  const rows = entries.map((entry) => {
-    const initial = entry.term[0].toUpperCase();
-    const heading = initial === letter ? "" : `<li class="idx-letter">${escapeHtml(initial)}</li>`;
-    letter = initial;
-    const tail = entry.see
-      ? `<span class="idx-see">see ${escapeHtml(entry.see)}</span>`
-      : `<span class="idx-pages">${formatPageList(entry.pages)}</span>`;
-    return `${heading}<li class="idx-entry"><span class="idx-term">${escapeHtml(entry.term)}</span>, ${tail}</li>`;
-  });
-
-  return `<nav class="index" id="index"><h2>Index</h2><ul>${rows.join("")}</ul></nav>`;
-};
 
 /**
  * The colophon a bound manual carries on the back of its title page: which
@@ -2843,201 +2415,6 @@ const resolveEdition = () => {
     // No tags, or no git: fall through to the package version.
   }
   return JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8")).version;
-};
-
-const imprintHtml = ({ productName, appVersion, buildDate }) => `
-    <section class="imprint">
-      <h2>${escapeHtml(productName)} — User Manual</h2>
-      <p>
-        This manual describes ${escapeHtml(productName)} as released in the version below. The app is
-        under active development, so a later release may add controls this edition does not describe;
-        the manual is reissued with each release.
-      </p>
-      <dl>
-        <dt>Edition</dt><dd>${escapeHtml(appVersion)}</dd>
-        <dt>Published</dt><dd>${escapeHtml(buildDate)}</dd>
-      </dl>
-      <p>Copyright © 2026 Christian Gleissner.</p>
-      <p>
-        Commodore, the Commodore logo, C64 and Commodore 64 are trademarks of their respective owners.
-      </p>
-      <p>
-        Set in IBM Plex Serif and IBM Plex Sans. Every screenshot in this manual is captured from the
-        running app rather than drawn, so what is printed here is what the app puts on screen.
-      </p>
-    </section>`;
-
-/**
- * Lays the book out with Paged.js and hands back the page it was laid out on.
- *
- * Paged.js paginates the DOM and renders the CSS Paged Media features headless
- * Chromium lacks on its own — running headers, and the Table of Contents page
- * numbers. Shared by both passes so the two agree on every break; a layout that
- * differed between them would make the index cite the wrong pages.
- *
- * With `collectMarks`, also returns which printed page each index mark landed on.
- * The page counter is never reset, so a page's printed folio is its position in
- * the book.
- */
-const paginate = async ({ browser, html, collectMarks = false }) => {
-  const page = await browser.newPage();
-  await page.setContent(html, { waitUntil: "load" });
-  // Pagination measures text, so it has to run against the real faces. Without
-  // this the first layout is measured in a fallback font and every page break
-  // lands in the wrong place.
-  await page.evaluate(() => document.fonts.ready);
-  await page.evaluate(() => {
-    window.PagedConfig = { auto: false };
-  });
-  await page.addScriptTag({ path: pagedPolyfillPath });
-  await page.evaluate(async () => {
-    const Paged = window.Paged;
-    // Tints each page's running header with its chapter's accent color, and tags
-    // the two kinds of page whose furniture the stylesheet then strips.
-    class ChapterAccentHandler extends Paged.Handler {
-      constructor(chunker, polisher, caller) {
-        super(chunker, polisher, caller);
-        this.lastAccent = "";
-      }
-      afterPageLayout(pageElement) {
-        const content = pageElement.querySelector(".pagedjs_page_content");
-        const heading = content ? content.querySelector("[data-chapter]") : null;
-        if (heading) {
-          const accent = getComputedStyle(heading).getPropertyValue("--accent").trim();
-          if (accent) this.lastAccent = accent;
-        }
-        if (this.lastAccent) pageElement.style.setProperty("--accent", this.lastAccent);
-        // Pushing a chapter onto a recto leaves a blank verso behind it. The CSS
-        // `:blank` page selector is not honoured here, so the page is identified
-        // by having laid out nothing, and the stylesheet hides its furniture.
-        const empty = content && content.textContent.trim() === "" && !content.querySelector("img,svg,table");
-        if (empty) pageElement.classList.add("is-blank");
-        if (content && content.querySelector("h2[data-chapter]")) pageElement.classList.add("is-chapter-open");
-      }
-    }
-    Paged.registerHandlers(ChapterAccentHandler);
-    await window.PagedPolyfill.preview();
-  });
-
-  if (!collectMarks) return page;
-
-  const marks = await page.evaluate(() => {
-    const found = {};
-    document.querySelectorAll(".pagedjs_page").forEach((pageElement, index) => {
-      pageElement.querySelectorAll(".idx[id]").forEach((mark) => {
-        // Paged.js copies content into each page as it fragments, so a mark can
-        // appear more than once. The first page it lands on is where the reader
-        // will find it.
-        if (found[mark.id] === undefined) found[mark.id] = index + 1;
-      });
-    });
-    return found;
-  });
-  await page.close();
-  return new Map(Object.entries(marks));
-};
-
-const renderPdf = async ({ markdownFile, pdfFile, manualDir, title, subtitle, variant, appVersion }) => {
-  const markdown = await readText(markdownFile);
-  // Everything before the first real chapter is the title block (title, subtitle,
-  // launch image) and the in-app contents list. The PDF replaces both with a cover
-  // and a page-numbered Table of Contents, so drop them from the flowing body.
-  const firstSectionIdx = markdown.search(/\n## (?!Table of Contents)/);
-  const preamble = firstSectionIdx >= 0 ? markdown.slice(0, firstSectionIdx) : "";
-  const bodyMarkdown = firstSectionIdx >= 0 ? markdown.slice(firstSectionIdx) : markdown;
-  const toc = buildToc(markdown);
-  marked.setOptions({ gfm: true });
-  const parsed = markIndexTerms(wrapFigures(addHeadingIds(await marked.parse(bodyMarkdown), toc), manualDir));
-  const body = await inlineImageSources(parsed.html, manualDir);
-
-  const productName = title.replace(/\s+Manual$/, "");
-  const launchMatch = /!\[([^\]]*)]\(([^)]+)\)/.exec(preamble);
-  const coverImage = launchMatch
-    ? `<figure><img alt="${escapeHtml(launchMatch[1])}" src="${await dataUriForImage(
-        launchMatch[2],
-        manualDir,
-      )}"></figure>`
-    : "";
-  const logoPath = path.join(rootDir, "variants/assets", variant.id, "logo.png");
-  const logo = fs.existsSync(logoPath)
-    ? `<img class="logo" alt="" src="data:image/png;base64,${(await readFile(logoPath)).toString("base64")}">`
-    : "";
-  const coverHtml = `
-    <section class="cover">
-      ${logo}
-      <p class="eyebrow">User Manual</p>
-      <h1>${escapeHtml(productName)}</h1>
-      <div class="rule"></div>
-      <p class="tagline">${escapeHtml(subtitle)}</p>
-      ${coverImage}
-    </section>
-    ${imprintHtml({
-      productName,
-      appVersion,
-      buildDate: new Date().toLocaleDateString("en-GB", { year: "numeric", month: "long" }),
-    })}`;
-
-  const tocHtml = `
-    <nav class="toc">
-      <h2>Contents</h2>
-      <ol>${toc
-        .filter((entry) => entry.depth === 2 || entry.depth === 3)
-        .map(
-          (entry) =>
-            `<li class="depth-${entry.depth}" style="--accent:${chapterAccent(entry.chapter)}"><a href="#${
-              entry.id
-            }"><span class="tnum">${entry.number}</span><span class="ttl">${entry.title}</span><span class="leaderdots"></span></a></li>`,
-        )
-        .join("")}<li class="depth-2" style="--accent:${chapterAccent(
-        toc.filter((entry) => entry.depth === 2).length,
-      )}"><a href="#index"><span class="tnum"></span><span class="ttl">Index</span><span class="leaderdots"></span></a></li></ol>
-    </nav>`;
-
-  const fontCss = await renderFontFaceCss();
-  const buildHtml = (indexHtml) => `<!doctype html>
-    <html lang="en-GB">
-      <head>
-        <meta charset="utf-8">
-        <title>${escapeHtml(title)}</title>
-        <style>${fontCss}</style>
-        <style>${pdfCss}</style>
-      </head>
-      <body>
-        ${coverHtml}
-        ${tocHtml}
-        <main>${body}${indexHtml}</main>
-      </body>
-    </html>`;
-
-  const browser = await chromium.launch();
-  try {
-    // The index has to know which page each term landed on, and a page number only
-    // exists once the book has been laid out. So it is laid out twice: once with a
-    // placeholder index to read the page numbers off the marks, then again with the
-    // real one. The index sits last, so nothing ahead of it moves between the two
-    // passes and the numbers collected in the first pass stay true in the second.
-    // The placeholder carries the same entries as the finished index, so the two
-    // passes also agree on how many pages the index itself occupies.
-    const placeholder = renderIndexHtml(new Map(parsed.marks.map((mark) => [mark.entry, [0]])));
-    const pagesByMark = await paginate({ browser, html: buildHtml(placeholder), collectMarks: true });
-
-    const pagesByEntry = new Map();
-    for (const mark of parsed.marks) {
-      const printedPage = pagesByMark.get(mark.id);
-      if (printedPage === undefined) continue;
-      if (!pagesByEntry.has(mark.entry)) pagesByEntry.set(mark.entry, []);
-      pagesByEntry.get(mark.entry).push(printedPage);
-    }
-
-    const page = await paginate({ browser, html: buildHtml(renderIndexHtml(pagesByEntry)) });
-    await page.pdf({
-      path: pdfFile,
-      printBackground: true,
-      preferCSSPageSize: true,
-    });
-  } finally {
-    await browser.close();
-  }
 };
 
 const readOverlay = async ({ variantId, featureIds }) => {
@@ -3125,12 +2502,8 @@ export const buildManuals = async () => {
       context.variant.id,
     );
     await writeFile(context.markdownFile, markdown, "utf8");
-    await renderPdf(context);
     await writeFile(path.join(context.manualDir, ".last-build"), `Generated ${new Date().toISOString()}\n`, "utf8");
-    outputs.push({
-      markdown: path.relative(rootDir, context.markdownFile),
-      pdf: path.relative(rootDir, context.pdfFile),
-    });
+    outputs.push({ markdown: path.relative(rootDir, context.markdownFile) });
   }
 
   return outputs;
@@ -3140,7 +2513,6 @@ const main = async () => {
   const outputs = await buildManuals();
   outputs.forEach((output) => {
     console.log(`Generated ${output.markdown}`);
-    console.log(`Generated ${output.pdf}`);
   });
 };
 

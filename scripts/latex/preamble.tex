@@ -19,29 +19,33 @@
 %     someone skimming.
 % =====================================================================
 
-%  Fonts are chosen by engine. Under LuaLaTeX the book is set in IBM Plex,
-%  the same family the app uses, so the printed page and the screen are one
-%  design. Under pdfLaTeX, which cannot load a system OpenType face, it
-%  falls back to the TeX Gyre revivals. Both are real book faces.
-\usepackage{iftex}
-\ifLuaTeX
-  \usepackage{fontspec}
-  \defaultfontfeatures{Path=/usr/share/fonts/truetype/ibm-plex/, Extension=.ttf, Ligatures=TeX}
-  \setmainfont{IBMPlexSerif-Regular}[
-    BoldFont=IBMPlexSerif-SemiBold,
-    ItalicFont=IBMPlexSerif-Italic,
-    BoldItalicFont=IBMPlexSerif-SemiBoldItalic]
-  \setsansfont{IBMPlexSans-Regular}[
-    BoldFont=IBMPlexSans-SemiBold,
-    ItalicFont=IBMPlexSans-Italic]
-  \setmonofont{IBMPlexMono-Regular}[BoldFont=IBMPlexMono-SemiBold, Scale=0.90]
-\else
-  \usepackage[T1]{fontenc}
-  \usepackage[utf8]{inputenc}
-  \usepackage{tgpagella}
-  \renewcommand{\sfdefault}{qhv}
-  \renewcommand{\ttdefault}{qcr}
-\fi
+%  The book is set in IBM Plex, the family the app itself uses, so the printed
+%  page and the screen are one design.
+%
+%  The faces are vendored under `fonts/` and loaded by path rather than by name.
+%  Two reasons. A font installed on the machine is a font that can be absent or
+%  a different version on someone else's, and the manual would then set in
+%  whatever fontconfig picked without saying so. And loading by name needs a
+%  fontconfig database, which a minimal TeX Live in CI does not have.
+%
+%  %%FONTDIR%% is replaced with an absolute path by build-manuals-latex.mjs.
+% Pandoc 3.11 wraps every image in \pandocbounded, which its own template
+% defines and a hand-written preamble does not. It exists to shrink an oversized
+% picture into the text block; this build already sizes each screenshot from the
+% shape of its file, so the identity is right. Declared with \providecommand so
+% an older pandoc, which does not emit it, is unaffected.
+\providecommand{\pandocbounded}[1]{#1}
+
+\usepackage{fontspec}
+\defaultfontfeatures{Path=%%FONTDIR%%/, Extension=.ttf, Ligatures=TeX}
+\setmainfont{IBMPlexSerif-Regular}[
+  BoldFont=IBMPlexSerif-SemiBold,
+  ItalicFont=IBMPlexSerif-Italic,
+  BoldItalicFont=IBMPlexSerif-SemiBoldItalic]
+\setsansfont{IBMPlexSans-Regular}[
+  BoldFont=IBMPlexSans-SemiBold,
+  ItalicFont=IBMPlexSans-Italic]
+\setmonofont{IBMPlexMono-Regular}[BoldFont=IBMPlexMono-SemiBold, Scale=0.90]
 
 \usepackage[activate={true,nocompatibility},final,tracking=true,factor=1100,stretch=12,shrink=12]{microtype}
 \usepackage{xcolor}
@@ -214,6 +218,13 @@
 % measure. \screenshot picks a width from the shape of the file; the hairline
 % frame keeps a light capture from bleeding into the page.
 \usepackage[font={sf,small,color=c64muted},labelfont={color=accent,bf},labelsep=period,skip=7pt]{caption}
+% Pandoc 3.11 writes `\def\LTcaptype{none}` before a longtable that has no
+% caption, and the caption package then looks `none` up as a counter. Pandoc's
+% own template declares it; a hand-written preamble has to.
+\makeatletter
+\@ifundefined{c@none}{\newcounter{none}}{}
+\makeatother
+
 \newcommand{\screenshot}[2]{%
   \begingroup
   \setlength{\fboxsep}{0pt}\setlength{\fboxrule}{0.6pt}%
@@ -291,6 +302,19 @@
   {\sffamily\bfseries\normalsize\color{accent}#1}%
   \par\vspace{2pt}{\color{c64rule}\rule{\linewidth}{0.4pt}}\par\vspace{4pt}}
 \renewcommand{\preindexhook}{\small}
+
+% The index carried the last chapter's running head, because no mark is set
+% after the final chapter sets one. Marks are the wrong tool here anyway: the
+% index is not a chapter and has nothing to mark. It gets a page style that says
+% what it is.
+\makepagestyle{indexpage}
+\makeevenhead{indexpage}{\sffamily\small\color{c64muted}\thepage}{}%
+  {\sffamily\small\color{accent}Index}
+\makeoddhead{indexpage}{\sffamily\small\color{accent}Index}{}%
+  {\sffamily\small\color{c64muted}\thepage}
+\makeheadrule{indexpage}{\textwidth}{0.4pt}
+\makeevenfoot{indexpage}{}{}{}
+\makeoddfoot{indexpage}{}{}{}
 
 % ---------------------------------------------------------------- misc
 \hyphenpenalty=200

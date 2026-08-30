@@ -33,6 +33,8 @@ RUN_SMOKE_ANDROID_REAL=false
 RUN_TEST_DEVICE_SWITCH_SOAK=false
 RUN_FORMAT=true
 RUN_DUMP_C64U_CONFIG=false
+RUN_MANUAL=false
+MANUAL_DEPS_ONLY=false
 RUN_DUMP_C64_TELNET_SCREENS=false
 RUN_CONTRACT_TEST=false
 RUN_CONTRACT_REPLAY=false
@@ -157,6 +159,8 @@ Build domain (default build only):
   --device-id <id>         Device ID for adb (optional). If omitted, auto-selects the sole real device or sole 9B0* device.
 
 Test modifiers (require one --test-* primary action):
+  --manual                 Build the user manual (installs the TeX toolchain if missing)
+  --manual-deps            Install the manual toolchain and stop
   --coverage               Run coverage pipeline (unit + e2e)
   --validate-evidence      Validate Playwright evidence structure
   --record-traces          Record golden traces during Playwright runs
@@ -969,6 +973,14 @@ while [[ $# -gt 0 ]]; do
       set_primary_action "emulator" "$1"
       shift
       ;;
+    --manual)
+      set_primary_action "manual" "$1"
+      shift
+      ;;
+    --manual-deps)
+      set_primary_action "manual-deps" "$1"
+      shift
+      ;;
     --dump-c64u-config)
       set_primary_action "dump-c64u-config" "$1"
       shift
@@ -1314,7 +1326,7 @@ if [[ -z "$PRIMARY_ACTION" ]]; then
   PRIMARY_ACTION="build"
 fi
 
-if [[ "$PRIMARY_ACTION" == "emulator" || "$PRIMARY_ACTION" == "dump-c64u-config" || "$PRIMARY_ACTION" == "dump-c64-telnet-screens" ]]; then
+if [[ "$PRIMARY_ACTION" == "emulator" || "$PRIMARY_ACTION" == "dump-c64u-config" || "$PRIMARY_ACTION" == "dump-c64-telnet-screens" || "$PRIMARY_ACTION" == "manual" || "$PRIMARY_ACTION" == "manual-deps" ]]; then
   if [[ ${#BUILD_FLAGS[@]} -gt 0 || ${#TEST_MODIFIERS[@]} -gt 0 || ${#TEST_APK_FLAGS[@]} -gt 0 || ${#FUZZ_FLAGS[@]} -gt 0 || ${#CONTRACT_FLAGS[@]} -gt 0 || ${#TARGET_FLAGS[@]} -gt 0 || ${#DOCKER_FLAGS[@]} -gt 0 ]]; then
     echo "Tooling actions must run in isolation" >&2
     exit 1
@@ -1447,6 +1459,8 @@ RUN_SMOKE_ANDROID_EMULATOR=false
 RUN_SMOKE_ANDROID_REAL=false
 RUN_EMULATOR=false
 RUN_DUMP_C64U_CONFIG=false
+RUN_MANUAL=false
+MANUAL_DEPS_ONLY=false
 RUN_DUMP_C64_TELNET_SCREENS=false
 RUN_DOCKER_BUILD=false
 RUN_DOCKER_START=false
@@ -1580,6 +1594,17 @@ case "$PRIMARY_ACTION" in
   emulator)
     RUN_EMULATOR=true
     ;;
+  manual|manual-deps)
+    RUN_INSTALL=false
+    RUN_BUILD=false
+    RUN_TEST=false
+    RUN_APK=false
+    RUN_FORMAT=false
+    RUN_MANUAL=true
+    if [[ "$PRIMARY_ACTION" == "manual-deps" ]]; then
+      MANUAL_DEPS_ONLY=true
+    fi
+    ;;
   dump-c64u-config)
     RUN_DUMP_C64U_CONFIG=true
     ;;
@@ -1623,6 +1648,20 @@ fi
 if [[ "$RUN_EMULATOR" == "true" ]]; then
   log "Starting Android emulator flow"
   "$ROOT_DIR/scripts/android-emulator.sh"
+  exit 0
+fi
+
+if [[ "$RUN_MANUAL" == "true" ]]; then
+  # The installer is a no-op when the toolchain is already there, so this is
+  # safe to run every time and means a first-time contributor needs one command.
+  bash "$ROOT_DIR/scripts/latex/install-deps.sh"
+  if [[ "$MANUAL_DEPS_ONLY" == "true" ]]; then
+    exit 0
+  fi
+  # The Markdown first: the LaTeX pipeline typesets what that generator emits,
+  # so building the PDF from a stale Markdown would print yesterday's manual.
+  node "$ROOT_DIR/scripts/build-manuals.mjs"
+  node "$ROOT_DIR/scripts/build-manuals-latex.mjs"
   exit 0
 fi
 

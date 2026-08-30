@@ -1,0 +1,142 @@
+name: manual
+
+# Typesets the user manual and attaches the print edition to the release.
+#
+# Runs on a hosted runner, on purpose. The manual used to be laid out by a
+# headless browser, which meant it could only be built where Playwright already
+# was; it is typeset with LuaLaTeX now, and the whole point of vendoring the
+# fonts and pinning a five-package TeX Live install is that any machine can
+# produce the same book. If this job needs a self-hosted runner, something has
+# regressed.
+
+on:
+  workflow_dispatch:
+  # On any change that can alter the book or how it is built. This is the only
+  # place the hosted-runner build gets exercised before a tag depends on it.
+  pull_request:
+    paths:
+      - "build"
+      - "scripts/build-manuals.mjs"
+      - "scripts/build-manuals-latex.mjs"
+      - "scripts/latex/**"
+      - ".github/workflows/manual.yaml"
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+-rc[0-9]+"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: manual-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  manual:
+    name: Manual | Typeset and attach
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The manual stamps its edition from `git describe`.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # No apt cache. The download is not the cost: 152 MB arrived in one second
+      # on a hosted runner, and every second of the install was dpkg unpacking.
+      # A cache here saved nothing and was one more thing to be stale.
+      # Worth caching, unlike the apt archives: this is a real download that does
+      # not come off a mirror at 122 MB/s, and its key is the version the build
+      # pins.
+      - name: Cache the pinned pandoc
+        uses: actions/cache@v4
+        with:
+          path: scripts/latex/bin
+          key: manual-pandoc-${{ runner.os }}-${{ hashFiles('scripts/latex/install-deps.sh') }}
+
+      - name: Install the manual toolchain
+        run: ./build --manual-deps
+
+      - run: npm ci --prefer-offline
+
+      - name: Typeset the manual
+        run: |
+          set -euo pipefail
+          npm run variant:generate
+          node scripts/build-manuals.mjs
+          node scripts/build-manuals-latex.mjs
+
+      # Proof that the book came out whole, checked here rather than by eye. A
+      # truncated PDF is the failure that gets published without anyone opening
+      # it, and the wrong typeface is the failure nobody notices at all.
+      - name: Check the typeset output
+        run: |
+          set -euo pipefail
+          for variant in c64commander c64u-remote; do
+            PDF="docs/manual/latex/$variant/$variant-manual.pdf"
+            [ -s "$PDF" ] || { echo "$PDF was not produced" >&2; exit 1; }
+            head -c 5 "$PDF" | grep -q '%PDF-' || { echo "$PDF is not a PDF" >&2; exit 1; }
+            SIZE="$(stat -c %s "$PDF")"
+            if [ "$SIZE" -lt 500000 ]; then
+              echo "$PDF is only $SIZE bytes; the manual should be a few megabytes" >&2
+              exit 1
+            fi
+            # Checked separately from its answer: a missing pdffonts reported
+            # "the fonts were not used", which is a different and misleading
+            # fault, and is how this step first failed.
+            command -v pdffonts >/dev/null 2>&1 || { echo "pdffonts is not installed" >&2; exit 1; }
+            if ! pdffonts "$PDF" | grep -q IBMPlex; then
+              echo "$PDF is not set in IBM Plex; the vendored fonts were not used" >&2
+              exit 1
+            fi
+            echo "$variant: $(pdfinfo "$PDF" | awk '/Pages/{print $2}') pages, $SIZE bytes"
+          done
+
+      # `github.ref_name` is `391/merge` on a pull request, and an artifact name
+      # cannot contain a slash.
+      - name: Name the artifact
+        id: name
+        run: echo "slug=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the manual
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-${{ steps.name.outputs.slug }}
+          path: docs/manual/latex/*/*.pdf
+          retention-days: 7
+          if-no-files-found: error
+
+      # Only the broad edition is attached here. The other edition is published
+      # from its own repository, which builds it from this same source.
+      - name: Attach the manual to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # The release is created by the android workflow on this same push, so
+          # it may not exist for the first minute or two. Wait for it rather than
+          # racing it, and say so plainly if it never appears.
+          for attempt in $(seq 1 30); do
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "no release for $TAG after 15 minutes; not attaching the manual" >&2
+              exit 1
+            fi
+            sleep 30
+          done
+
+          cp "docs/manual/latex/c64commander/c64commander-manual.pdf" \
+            "c64commander-$TAG-manual.pdf"
+          gh release upload "$TAG" "c64commander-$TAG-manual.pdf" --clobber
+          echo "::notice::attached c64commander-$TAG-manual.pdf to $TAG"
