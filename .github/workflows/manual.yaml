@@ -36,7 +36,7 @@ jobs:
   manual:
     name: Manual | Typeset and attach
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
         with:
@@ -122,15 +122,19 @@ jobs:
         run: |
           set -euo pipefail
 
-          # The release is created by the android workflow on this same push, so
-          # it may not exist for the first minute or two. Wait for it rather than
-          # racing it, and say so plainly if it never appears.
-          for attempt in $(seq 1 30); do
+          # The release is created by the android workflow on this same push,
+          # from a job that waits on the whole test and packaging chain. Recent
+          # tag builds took 35 minutes end to end, so the release does not
+          # appear for roughly half an hour. Wait an hour before giving up:
+          # typesetting the book takes about three minutes, and the rest of this
+          # job is spent waiting for something to attach it to.
+          for attempt in $(seq 1 120); do
             if gh release view "$TAG" >/dev/null 2>&1; then
+              echo "release $TAG exists after $(( attempt * 30 / 60 )) minutes"
               break
             fi
-            if [ "$attempt" -eq 30 ]; then
-              echo "no release for $TAG after 15 minutes; not attaching the manual" >&2
+            if [ "$attempt" -eq 120 ]; then
+              echo "no release for $TAG after 60 minutes; not attaching the manual" >&2
               exit 1
             fi
             sleep 30
