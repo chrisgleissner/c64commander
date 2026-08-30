@@ -1,0 +1,121 @@
+name: manual
+
+# Typesets the user manual and attaches the print edition to the release.
+#
+# Runs on a hosted runner, on purpose. The manual used to be laid out by a
+# headless browser, which meant it could only be built where Playwright already
+# was; it is typeset with LuaLaTeX now, and the whole point of vendoring the
+# fonts and pinning a five-package TeX Live install is that any machine can
+# produce the same book. If this job needs a self-hosted runner, something has
+# regressed.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+-rc[0-9]+"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: manual-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  manual:
+    name: Manual | Typeset and attach
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The manual stamps its edition from `git describe`.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # apt is the slow part of this job, so the archives are cached. The key
+      # carries the install script, which is where the package list lives, so a
+      # change to that list invalidates the cache rather than silently reusing
+      # an install that no longer matches.
+      - name: Cache the TeX packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: manual-apt-${{ runner.os }}-${{ hashFiles('scripts/latex/install-deps.sh') }}
+
+      - name: Install the manual toolchain
+        run: ./build --manual-deps
+
+      - run: npm ci --prefer-offline
+
+      - name: Typeset the manual
+        run: |
+          set -euo pipefail
+          npm run variant:generate
+          node scripts/build-manuals.mjs
+          node scripts/build-manuals-latex.mjs
+
+      # Proof that the book came out whole, checked here rather than by eye. A
+      # truncated PDF is the failure that gets published without anyone opening
+      # it, and the wrong typeface is the failure nobody notices at all.
+      - name: Check the typeset output
+        run: |
+          set -euo pipefail
+          for variant in c64commander c64u-remote; do
+            PDF="docs/manual/latex/$variant/$variant-manual.pdf"
+            [ -s "$PDF" ] || { echo "$PDF was not produced" >&2; exit 1; }
+            head -c 5 "$PDF" | grep -q '%PDF-' || { echo "$PDF is not a PDF" >&2; exit 1; }
+            SIZE="$(stat -c %s "$PDF")"
+            if [ "$SIZE" -lt 500000 ]; then
+              echo "$PDF is only $SIZE bytes; the manual should be a few megabytes" >&2
+              exit 1
+            fi
+            if ! pdffonts "$PDF" | grep -q IBMPlex; then
+              echo "$PDF is not set in IBM Plex; the vendored fonts were not used" >&2
+              exit 1
+            fi
+            echo "$variant: $(pdfinfo "$PDF" | awk '/Pages/{print $2}') pages, $SIZE bytes"
+          done
+
+      - name: Upload the manual
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-${{ github.ref_name }}
+          path: docs/manual/latex/*/*.pdf
+          retention-days: 7
+          if-no-files-found: error
+
+      # Only the broad edition is attached here. The other edition is published
+      # from its own repository, which builds it from this same source.
+      - name: Attach the manual to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # The release is created by the android workflow on this same push, so
+          # it may not exist for the first minute or two. Wait for it rather than
+          # racing it, and say so plainly if it never appears.
+          for attempt in $(seq 1 30); do
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "no release for $TAG after 15 minutes; not attaching the manual" >&2
+              exit 1
+            fi
+            sleep 30
+          done
+
+          cp "docs/manual/latex/c64commander/c64commander-manual.pdf" \
+            "c64commander-$TAG-manual.pdf"
+          gh release upload "$TAG" "c64commander-$TAG-manual.pdf" --clobber
+          echo "::notice::attached c64commander-$TAG-manual.pdf to $TAG"

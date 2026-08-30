@@ -66,9 +66,9 @@ agents/coverage-agents.xml
 
 # Locally generated manuals
 docs/manual/**/*.pdf
+docs/manual/latex/
 docs/manual/**/.last-build
 # LaTeX spike: everything under here is build output
-docs/manual/latex/
 
 # SID Radio similarity bundle — fetched at build time by scripts/fetch-sidcorr.mjs
 # (verified against the committed pin in src/lib/sidRadio/sidcorrRelease.ts), never committed.

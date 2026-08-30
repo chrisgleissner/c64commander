@@ -3,7 +3,6 @@ import path from "node:path";
 import {
   assertSingleDisplayProfile,
   buildManualContexts,
-  inlineImageSources,
   renderManualMarkdown,
 } from "../../../scripts/build-manuals.mjs";
 
@@ -279,10 +278,4 @@ describe("manual generator", () => {
     expect(c64uRemote).not.toContain("3.15");
   });
 
-  it("inlines relative screenshot references before PDF rendering", async () => {
-    const manualDir = path.resolve("docs/manual/c64u-remote");
-    const html = '<img alt="Home" src="../../img/app/home/profiles/compact/01-overview.png">';
-
-    await expect(inlineImageSources(html, manualDir)).resolves.toMatch(/^<img alt="Home" src="data:image\/png;base64,/);
-  });
 });
