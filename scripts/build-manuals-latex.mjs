@@ -54,9 +54,10 @@ const escapeIndex = (value) => escapeTex(value).replace(/([!@|])/g, '"$1');
 const markIndexTerms = (markdown) => {
   const lines = markdown.split("\n");
   const seen = new Set();
+  const placed = new Set();
   let inFence = false;
 
-  return lines
+  const marked = lines
     .map((line) => {
       if (line.startsWith("```")) {
         inFence = !inFence;
@@ -82,13 +83,32 @@ const markIndexTerms = (markdown) => {
           const cut = at + needle.length;
           output = `${output.slice(0, cut)}\\index{${escapeIndex(entry.term)}}${output.slice(cut)}`;
           seen.add(index);
+          placed.add(entry.term);
           break;
         }
       });
       return output;
     })
     .join("\n");
+
+  return { markdown: marked, placed };
 };
+
+/**
+ * The index's cross-references, as makeindex `see` records.
+ *
+ * `\index{X|see{Y}}` prints "X, see Y" and no page number, which is what a
+ * pointer entry is for. They are emitted once, in a group of their own, because
+ * a cross-reference belongs to the book rather than to any page of it.
+ *
+ * A pointer whose target never appeared in this edition is dropped with it: the
+ * keypad edition has no Lighting, so "lighting studio, see Lighting" would send
+ * a reader to an entry that is not there.
+ */
+const indexCrossReferences = (placed) =>
+  INDEX_TERMS.filter((entry) => entry.see && placed.has(entry.see))
+    .map((entry) => `\\index{${escapeIndex(entry.term)}|see{${escapeIndex(entry.see)}}}`)
+    .join("\n");
 
 /** Intrinsic pixel size of a PNG, from its IHDR chunk. */
 const pngSize = (absolutePath) => {
@@ -136,7 +156,7 @@ const figureWidth = (absolutePath) => {
  * contains `\textbf{...}`, and a non-greedy `}` stops at the inner one, which
  * silently cuts the sentence in half and leaves a stray brace behind.
  */
-const liftBalanced = (tex, opener, environment) => {
+const liftBalanced = (tex, opener, environment, shouldLift = () => true) => {
   let output = "";
   let rest = tex;
   for (;;) {
@@ -151,7 +171,12 @@ const liftBalanced = (tex, opener, environment) => {
       cursor += 1;
     }
     const body = rest.slice(at + opener.length, cursor - 1).trim();
-    output += `${rest.slice(0, at)}\\begin{${environment}}\n${body}\n\\end{${environment}}`;
+    output += rest.slice(0, at);
+    output += shouldLift(body)
+      ? `\\begin{${environment}}\n${body}\n\\end{${environment}}`
+      : // Left as the emphasised sentence it already was, rather than dropped:
+        // the fact is still worth having, it just does not warrant a box.
+        `\\emph{Availability: ${body}}`;
     rest = rest.slice(cursor);
   }
 };
@@ -201,13 +226,29 @@ const dressLatex = (tex, manualDir) => {
   // the feature they just read about is even switched on. It was an italic
   // afterthought at the end of a section; as a callout it can be found while
   // skimming.
-  output = liftBalanced(output, "\\emph{Availability:", "manualavail");
+  // Only the availability lines that ask something of the reader become callouts.
+  //
+  // "On by default" and "Always on in this edition" tell someone that the thing
+  // they just read about already works. Set as a boxed callout beside every
+  // feature, that is a page of furniture saying nothing, and it devalues the
+  // boxes that do carry an instruction. Those lines stay as ordinary prose.
+  //
+  // "Off to begin with. Turn it on under X in Settings" is different: a reader
+  // who does not act on it will go looking for a control that is not there.
+  output = liftBalanced(output, "\\emph{Availability:", "manualavail", (body) => /^Off to begin with/i.test(body));
 
   // Same for the "Preferred path" line that closes every flow in Everyday Flows.
-  output = output.replace(
-    /^Preferred path:\s*([\s\S]*?)(?=\n\n)/gm,
-    (full, body) => `\\begin{manualpath}\n${body.trim()}\n\\end{manualpath}`,
-  );
+  // Same test for the "Preferred path" line that closes every flow. Most carry a
+  // real steer - which source to use for which file, what a filter does and does
+  // not change - and those become callouts. The short ones only restate the step
+  // list directly above them ("Diagnostics from the badge."), and a box around a
+  // restatement is furniture. Eight words is where the two groups separate.
+  output = output.replace(/^Preferred path:\s*([\s\S]*?)(?=\n\n)/gm, (full, body) => {
+    const text = body.trim();
+    return text.split(/\s+/).length >= 8
+      ? `\\begin{manualpath}\n${text}\n\\end{manualpath}`
+      : `\\emph{Preferred path:} ${text}`;
+  });
 
   // A markdown blockquote is the manual's callout convention: `> **Tip.** ...`
   // or `> **Take care.** ...`. The bold lead becomes the box label, so a reader
@@ -240,14 +281,30 @@ const dressLatex = (tex, manualDir) => {
   return output;
 };
 
+const PLEX_DIR = "/usr/share/fonts/truetype/ibm-plex";
+const PLEX_FACES = [
+  "IBMPlexSerif-Regular.ttf",
+  "IBMPlexSerif-SemiBold.ttf",
+  "IBMPlexSerif-Italic.ttf",
+  "IBMPlexSerif-SemiBoldItalic.ttf",
+  "IBMPlexSans-Regular.ttf",
+  "IBMPlexSans-SemiBold.ttf",
+  "IBMPlexSans-Italic.ttf",
+  "IBMPlexMono-Regular.ttf",
+  "IBMPlexMono-SemiBold.ttf",
+];
+
 const luaTexUsable = () => {
   try {
     execFileSync("kpsewhich", ["luaotfload.sty"], { stdio: "ignore" });
     execFileSync("kpsewhich", ["luaotfload-main.lua"], { stdio: "ignore" });
-    return true;
   } catch {
     return false;
   }
+  // The preamble asks for IBM Plex by absolute path under LuaLaTeX, so a machine
+  // with luaotfload but without those files would pick lualatex and then die at
+  // the first \\setmainfont, with the working pdfLaTeX path never tried.
+  return PLEX_FACES.every((face) => fs.existsSync(path.join(PLEX_DIR, face)));
 };
 
 const coverTex = ({ productName, subtitle, launchImage, logo, edition, buildDate }) => `
@@ -309,7 +366,7 @@ const buildOne = async (context, outputDir) => {
   const body = bodyStart >= 0 ? markdown.slice(bodyStart) : markdown;
   const launchMatch = /!\[[^\]]*]\(([^)]+)\)/.exec(preamble);
 
-  const marked = markIndexTerms(body);
+  const { markdown: marked, placed } = markIndexTerms(body);
   const markdownFile = path.join(outputDir, `${variant.exportedFileBasename}-body.md`);
   await writeFile(markdownFile, marked, "utf8");
 
@@ -365,6 +422,11 @@ ${coverTex({
 \\cleardoublepage
 
 \\pagestyle{c64page}
+% The index's cross-references. They print no page number, so where they are
+% raised does not matter - but it has to be somewhere that still ships a page.
+% printindex closes the idx stream before it typesets, so a mark raised after
+% the last cleardoublepage is silently dropped.
+${indexCrossReferences(placed)}
 ${dressLatex(texBody, manualDir)}
 
 \\cleardoublepage
@@ -408,10 +470,18 @@ ${dressLatex(texBody, manualDir)}
       throw new Error(`${engine} pass ${pass} failed for ${variant.id}: ${first ?? "see log"}`);
     }
     if (pass === 1) {
-      try {
-        run("makeindex", ["-q", "-s", "index.ist", `${variant.exportedFileBasename}-manual.idx`]);
-      } catch {
-        // No \index marks landed; the index is simply omitted.
+      // No `.idx` means the pass laid down no `\index` marks at all, which is a
+      // legitimate state for a document with no index. A `.idx` that makeindex
+      // then refuses, or a makeindex that is not installed, is not: swallowing
+      // that publishes a manual whose index is silently missing.
+      const idxFile = `${variant.exportedFileBasename}-manual.idx`;
+      if (fs.existsSync(path.join(outputDir, idxFile))) {
+        try {
+          run("makeindex", ["-q", "-s", "index.ist", idxFile]);
+        } catch (error) {
+          const detail = `${error.stderr ?? ""}${error.stdout ?? ""}`.trim().split("\n")[0];
+          throw new Error(`makeindex failed for ${variant.id}: ${detail || error.message}`);
+        }
       }
     }
   }
