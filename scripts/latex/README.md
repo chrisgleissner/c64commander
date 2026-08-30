@@ -19,37 +19,53 @@ browser doing its best at typesetting. This is a typesetter. Four things change:
   difference between an even grey text block and one with rivers in it.
 - **microtype.** Margin kerning and small optical adjustments to letter and word
   spacing, which no browser does.
-- **Floats.** A screenshot that does not fit moves to where it does, instead of
-  leaving a third of a page blank.
 - **The index.** `makeindex` collates and merges the page numbers. The Paged.js
   index has to lay the book out twice to read page numbers off its own marks.
+- **A thumb index.** Chapter tabs down the outer edge, which needs a shipout
+  hook and a page-parity test.
 
 ## Design
 
-The reference is the 1982 *Commodore 64 User's Guide*: a book to settle into.
+The reference is the C64's own 1982 user's guide: a book to settle into.
 
-| | |
-| --- | --- |
-| Body | TeX Gyre Pagella (Palatino), 11 pt on a 135 mm measure, about 70 characters a line |
-| Headings | TeX Gyre Heros (Helvetica), the era's own structural sans |
-| Code | TeX Gyre Cursor (Courier) |
-| Page | A4, mirrored margins, the inner one narrower because the gutter eats it |
-| Colour | One hue per chapter, carried through the opener, the headings, the figure labels and the index letters |
+|          |                                                                                                                                                                                           |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Body     | IBM Plex Serif under LuaLaTeX, TeX Gyre Pagella under pdfLaTeX                                                                                                                            |
+| Headings | IBM Plex Sans, or TeX Gyre Heros                                                                                                                                                          |
+| Code     | IBM Plex Mono, or TeX Gyre Cursor                                                                                                                                                         |
+| Page     | A4, mirrored margins, 135 mm measure, about 70 characters a line                                                                                                                          |
+| Colour   | One hue per chapter, carried through the opener, the thumb tab, the running head, the section numbers, the bullets, the figure labels, the callouts, the table head and the index letters |
 
-`preamble.tex` holds all of it. The pipeline in `../build-manuals-latex.mjs`
-converts the markdown with pandoc, sizes each screenshot from the shape of its
-PNG, and marks index terms from the same `INDEX_TERMS` table the shipping
-pipeline uses.
+### Two decisions worth knowing about
+
+**A figure never floats.** In a step-by-step guide the screenshot _is_ the
+sentence above it. Floats were tried with `[!ht]`, a `\FloatBarrier` at every
+section and subsection, `totalnumber` capped and the placement fractions opened
+up; pictures still drifted, because four screenshots inside one section cannot
+all fit beside their own text. Figures are now set exactly where they were
+written, inside an unbreakable `minipage` so a page breaks before one rather
+than through it. The price is white space at the foot of the occasional page.
+
+**Callouts come from the prose, not from new text.** Three sources: the
+`_Availability: ..._` line that closes a feature section, the `Preferred path:`
+line that closes a flow, and any markdown blockquote. `> **Tip.** ...` and
+`> **Take care.** ...` are the convention; the bold lead becomes the box label.
 
 ## Requirements
 
-`pandoc`, `pdflatex`, `makeindex`, and TeX Live's `tex-gyre`, `memoir`,
-`microtype`, `tcolorbox`, `imakeidx`, `eso-pic` and `caption`. Not wired into CI:
-this is a spike.
+`pandoc`, `makeindex`, and either `lualatex` with `luaotfload` and the IBM Plex
+TTFs in `/usr/share/fonts/truetype/ibm-plex/`, or `pdflatex` with `tex-gyre`.
+Plus TeX Live's `memoir`, `microtype`, `tcolorbox`, `imakeidx`, `eso-pic`,
+`caption`, `colortbl` and `etoolbox`. `texlive-full` covers all of it.
+
+The engine is chosen at build time: `luaTexUsable()` probes for `luaotfload`,
+because a TeX Live without it still ships the `lualatex` binary and that binary
+starts fine and then dies at the first `\setmainfont`.
 
 ## Known gaps
 
-- The running head on the index pages still reads the last chapter's name.
-- Callout boxes (`manualnote`) are defined but the markdown has nothing that maps
-  to them yet.
-- Nothing checks the LaTeX output against the Paged.js output.
+- The running head on the index pages carries the last chapter's name.
+- Nothing checks the LaTeX output against the Paged.js output, and nothing runs
+  this in CI.
+- The thumb tabs assume nine chapters. A tenth would reuse the first hue and
+  run off the foot of the tab column.
