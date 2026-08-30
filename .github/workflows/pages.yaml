@@ -1,10 +1,25 @@
 name: pages
 
+# Publishes docs/site to GitHub Pages, then checks that the pages it promised
+# actually answer.
+#
+# The check is not ceremony. The privacy policy was published as Markdown and
+# converted to HTML by Jekyll; when the site moved to docs/site and switched to
+# a workflow build, which serves files verbatim, the .html URL started returning
+# 404 and stayed that way for two months without anything noticing. A deploy
+# that reports success is not evidence that a URL resolves, so this workflow
+# asks for the URLs.
+
 on:
   push:
     branches: ["main"]
     paths:
       - "docs/site/**"
+      - ".github/workflows/pages.yaml"
+  # Weekly, so the site cannot rot quietly between changes. The failure that
+  # started this was invisible precisely because nobody was touching the files.
+  schedule:
+    - cron: "17 6 * * 1"
   workflow_dispatch:
 
 concurrency:
@@ -19,6 +34,8 @@ permissions:
 jobs:
   deploy:
     name: Deploy docs/site to GitHub Pages
+    # A scheduled run is a health check on what is already live, not a redeploy.
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -39,3 +56,62 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  verify:
+    name: Check the published pages resolve
+    needs: deploy
+    # Runs after a deploy, and on the schedule, where there is no deploy to wait
+    # for.
+    if: always() && (needs.deploy.result == 'success' || github.event_name == 'schedule')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Fetch every page the site promises
+        env:
+          BASE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: |
+          set -euo pipefail
+
+          # Keep this list in step with tests/unit/ci/pagesSiteContracts.test.ts,
+          # which asserts the same pages exist in the repository before they are
+          # ever published.
+          PAGES=(
+            "/"
+            "/privacy-policy.html"
+          )
+
+          failed=0
+          for page in "${PAGES[@]}"; do
+            url="$BASE$page"
+
+            # A fresh deployment takes a few seconds to reach the edge, so a
+            # single 404 is not yet a verdict.
+            for attempt in $(seq 1 10); do
+              code="$(curl --silent --show-error --location --max-time 30 -o /tmp/page.html -w '%{http_code}' "$url" || echo 000)"
+              [ "$code" = "200" ] && break
+              [ "$attempt" -eq 10 ] || sleep 15
+            done
+
+            if [ "$code" != "200" ]; then
+              echo "::error::$url returned HTTP $code"
+              failed=1
+              continue
+            fi
+
+            # A 200 that serves raw Markdown is the exact failure this guards
+            # against, so check what came back, not just that something did.
+            if ! grep -qi '<html' /tmp/page.html; then
+              echo "::error::$url returned HTTP 200 but the body is not HTML"
+              failed=1
+              continue
+            fi
+
+            echo "$url -> 200, $(wc -c < /tmp/page.html) bytes of HTML"
+          done
+
+          if [ "$failed" -ne 0 ]; then
+            echo "the published site is not serving every page it promises" >&2
+            exit 1
+          fi
+          echo "::notice::the published site serves every page it promises"
