@@ -196,6 +196,19 @@ describe("startup with no network on the device", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("does not scan when entering Demo Mode re-routes the API and re-triggers discovery", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+    await discoverConnection("settings");
+
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+    expect(startDeviceDiscovery).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("connects to the real device once the network comes back", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");

@@ -1166,12 +1166,13 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
     return;
   }
 
-  // A first launch with no network reaches the simulated device directly: no LAN
-  // scan, no saved-host probe, and no prompt to answer. Startup only, so a device
-  // that later becomes unreachable is still reported rather than replaced.
-  if (trigger === "startup" && (await shouldAutoStartOfflineDemoMode())) {
+  // With no network there is nothing to discover, so every foreground trigger
+  // reaches the simulated device directly: no LAN scan, no saved-host probe, and
+  // no prompt to answer. A session that has already reached real hardware is
+  // excluded, so its device becoming unreachable is still reported as a failure.
+  if (trigger !== "background" && (await shouldAutoStartOfflineDemoMode())) {
     if (!discoveryRun.isCurrent()) return;
-    addLog("info", "Startup found no network; starting the simulated device without discovery", { trigger });
+    addLog("info", "No network on this device; using the simulated device without discovery", { trigger });
     setSnapshot({ lastProbeError: NO_NETWORK_PROBE_ERROR });
     await transitionToDemoActive(trigger, { showInterstitial: false });
     return;
