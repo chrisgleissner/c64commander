@@ -1,20 +1,6 @@
 {
   "mcpServers": {
     "mobile-mcp": { "type": "stdio", "command": "npx", "args": ["-y", "@mobilenext/mobile-mcp@latest"], "env": {} },
-    "droidmind": {
-      "type": "stdio",
-      "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/hyperb1iss/droidmind",
-        "--with",
-        "mcp<2",
-        "droidmind",
-        "--transport",
-        "stdio"
-      ],
-      "env": {}
-    },
     "c64bridge": {
       "type": "stdio",
       "command": "npx",

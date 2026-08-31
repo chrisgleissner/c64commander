@@ -16,7 +16,7 @@ import {
   medianEnvelopeRms,
 } from "../../stream/index.js";
 import { discoverPlaybackMirror } from "../../testDataDiscovery.js";
-import { DroidmindClient } from "../droidmindClient.js";
+import { DroidctlClient } from "../droidctlClient.js";
 import { findVisibleTextContaining, parseBoundsCenter, parseUiNodes } from "../appFirstUi.js";
 import {
   ensureDeviceUnlocked,
@@ -92,7 +92,7 @@ function isStorageRootSegment(segment: string | undefined): boolean {
 }
 
 export async function openPlaybackSourceSegments(
-  client: DroidmindClient,
+  client: DroidctlClient,
   serial: string,
   sourceSegments: readonly string[],
   openSegments: typeof openPathSegments = openPathSegments,
@@ -115,7 +115,7 @@ export async function openPlaybackSourceSegments(
   }
 }
 
-async function addSidPlaylist(client: DroidmindClient, serial: string, targets: PlaybackTargets): Promise<void> {
+async function addSidPlaylist(client: DroidctlClient, serial: string, targets: PlaybackTargets): Promise<void> {
   await openAddItemsDialog(client, serial);
   await chooseSource(client, serial, C64U_SOURCE_LABELS);
   await openPlaybackSourceSegments(client, serial, targets.sourceSegments);
@@ -145,7 +145,7 @@ async function captureAudioEvidence(c64uHost: string, artifactDir: string, suffi
   });
 }
 
-async function maybeClearPlaylist(client: DroidmindClient, serial: string): Promise<void> {
+async function maybeClearPlaylist(client: DroidctlClient, serial: string): Promise<void> {
   const cleared = await tapByText(client, serial, "Clear playlist");
   if (cleared) {
     await new Promise((resolve) => setTimeout(resolve, 600));
@@ -190,7 +190,7 @@ async function waitForUiTextContaining(
 }
 
 export async function tapVisibleText(
-  client: DroidmindClient,
+  client: DroidctlClient,
   serial: string,
   labels: readonly string[],
 ): Promise<string> {
@@ -211,7 +211,7 @@ export async function tapVisibleText(
 }
 
 async function runHvscLifecycle(
-  client: DroidmindClient,
+  client: DroidctlClient,
   serial: string,
   mode: HvscWorkflowMode,
 ): Promise<{
@@ -265,7 +265,7 @@ async function runHvscLifecycle(
 }
 
 async function runHvscPlaylistPlayback(
-  client: DroidmindClient,
+  client: DroidctlClient,
   ctx: Parameters<ValidationCase["run"]>[0],
   mode: HvscWorkflowMode,
 ): Promise<{
@@ -332,11 +332,11 @@ async function runHvscWorkflowCase(
     recoveryActions: [] as string[],
   };
 
-  const droidmind = new DroidmindClient();
+  const droidctl = new DroidctlClient();
 
   try {
-    await droidmind.connect();
-    const playback = await runHvscPlaylistPlayback(droidmind, ctx, mode);
+    await droidctl.connect();
+    const playback = await runHvscPlaylistPlayback(droidctl, ctx, mode);
     const audioAnalysis = requireAudioFeatures(playback.audioCapture.analysis, `hvsc ${mode} workflow`);
     const rms = Number(audioAnalysis.rms ?? 0);
     const packetCount = Number(audioAnalysis.stats?.packetCount ?? 0);
@@ -489,7 +489,7 @@ async function runHvscWorkflowCase(
       explorationTrace: trace,
     };
   } finally {
-    await droidmind.close();
+    await droidctl.close();
   }
 }
 
@@ -663,7 +663,7 @@ export const appFirstPlaybackContinuity: ValidationCase = {
       recoveryActions: [] as string[],
     };
 
-    const droidmind = new DroidmindClient();
+    const droidctl = new DroidctlClient();
     const playlistScreenshotPath = path.join(ctx.artifactDir, "af-playback-continuity.png");
 
     try {
@@ -685,12 +685,12 @@ export const appFirstPlaybackContinuity: ValidationCase = {
         notes: `sidPath=${targets.sidPath}; candidates=${targets.sidCandidates.join(", ")}`,
       });
 
-      await droidmind.connect();
-      await launchAppForeground(droidmind, ctx.serial);
-      await navigateToRoute(droidmind, ctx.serial, "/play");
-      await setDurationSeconds(droidmind, ctx.serial, 20);
-      await addSidPlaylist(droidmind, ctx.serial, targets);
-      await tapByResourceId(droidmind, ctx.serial, "playlist-play");
+      await droidctl.connect();
+      await launchAppForeground(droidctl, ctx.serial);
+      await navigateToRoute(droidctl, ctx.serial, "/play");
+      await setDurationSeconds(droidctl, ctx.serial, 20);
+      await addSidPlaylist(droidctl, ctx.serial, targets);
+      await tapByResourceId(droidctl, ctx.serial, "playlist-play");
 
       const initialTrack = await waitForTrackLabel(
         ctx.serial,
@@ -713,19 +713,19 @@ export const appFirstPlaybackContinuity: ValidationCase = {
         notes: `Started playback for ${targets.sidCandidates[0]} -> ${targets.sidCandidates[1]}`,
       });
 
-      await navigateToRoute(droidmind, ctx.serial, "/settings");
-      await navigateToRoute(droidmind, ctx.serial, "/");
-      await navigateToRoute(droidmind, ctx.serial, "/play");
-      await droidmind.pressKey(ctx.serial, 3);
+      await navigateToRoute(droidctl, ctx.serial, "/settings");
+      await navigateToRoute(droidctl, ctx.serial, "/");
+      await navigateToRoute(droidctl, ctx.serial, "/play");
+      await droidctl.pressKey(ctx.serial, 3);
       await new Promise((resolve) => setTimeout(resolve, 1200));
-      await launchAppForeground(droidmind, ctx.serial);
-      await droidmind.startApp(ctx.serial, "com.android.settings", ".Settings");
+      await launchAppForeground(droidctl, ctx.serial);
+      await droidctl.startApp(ctx.serial, "com.android.settings", ".Settings");
       await new Promise((resolve) => setTimeout(resolve, 1200));
-      await launchAppForeground(droidmind, ctx.serial);
-      await navigateToRoute(droidmind, ctx.serial, "/play");
+      await launchAppForeground(droidctl, ctx.serial);
+      await navigateToRoute(droidctl, ctx.serial, "/play");
 
       const recoveredTrack = await readTopmostTrackLabel(ctx.serial, targets.sidCandidates);
-      await droidmind.screenshotToFile(ctx.serial, playlistScreenshotPath);
+      await droidctl.screenshotToFile(ctx.serial, playlistScreenshotPath);
       const continuityAudio = await captureAudioEvidence(ctx.c64uHost, ctx.artifactDir, "continuity-audio");
       const logcat = await capturePlaybackLogcat(ctx.serial, ctx.artifactDir, "continuity-logcat.txt");
 
@@ -834,7 +834,7 @@ export const appFirstPlaybackContinuity: ValidationCase = {
         explorationTrace: trace,
       };
     } finally {
-      await droidmind.close();
+      await droidctl.close();
     }
   },
 };
@@ -868,14 +868,14 @@ export const appFirstPlaylistAutoAdvance: ValidationCase = {
       recoveryActions: [] as string[],
     };
 
-    const droidmind = new DroidmindClient();
+    const droidctl = new DroidctlClient();
     const screenshotPath = path.join(ctx.artifactDir, "af-playback-autoskip.png");
 
     try {
       const targets = await discoverPlaybackTargets(ctx.c64uHost);
-      await droidmind.connect();
-      await launchAppForeground(droidmind, ctx.serial);
-      await navigateToRoute(droidmind, ctx.serial, "/play");
+      await droidctl.connect();
+      await launchAppForeground(droidctl, ctx.serial);
+      await navigateToRoute(droidctl, ctx.serial, "/play");
 
       await ctx.store.recordStep({
         runId: ctx.runId,
@@ -890,9 +890,9 @@ export const appFirstPlaylistAutoAdvance: ValidationCase = {
         notes: `sidPath=${targets.sidPath}; candidates=${targets.sidCandidates.join(", ")}`,
       });
 
-      await setDurationSeconds(droidmind, ctx.serial, 5);
-      await addSidPlaylist(droidmind, ctx.serial, targets);
-      await tapByResourceId(droidmind, ctx.serial, "playlist-play");
+      await setDurationSeconds(droidctl, ctx.serial, 5);
+      await addSidPlaylist(droidctl, ctx.serial, targets);
+      await tapByResourceId(droidctl, ctx.serial, "playlist-play");
       const initialTrack = await waitForTrackLabel(
         ctx.serial,
         targets.sidCandidates[0],
@@ -914,14 +914,14 @@ export const appFirstPlaylistAutoAdvance: ValidationCase = {
         notes: `Duration forced to 5s for ${targets.sidCandidates[0]} -> ${targets.sidCandidates[1]}`,
       });
 
-      await droidmind.pressKey(ctx.serial, 3);
+      await droidctl.pressKey(ctx.serial, 3);
       await new Promise((resolve) => setTimeout(resolve, 600));
-      await droidmind.pressKey(ctx.serial, 26);
+      await droidctl.pressKey(ctx.serial, 26);
       await new Promise((resolve) => setTimeout(resolve, 7000));
-      await droidmind.pressKey(ctx.serial, 26);
-      await ensureDeviceUnlocked(droidmind, ctx.serial);
-      await launchAppForeground(droidmind, ctx.serial);
-      await navigateToRoute(droidmind, ctx.serial, "/play");
+      await droidctl.pressKey(ctx.serial, 26);
+      await ensureDeviceUnlocked(droidctl, ctx.serial);
+      await launchAppForeground(droidctl, ctx.serial);
+      await navigateToRoute(droidctl, ctx.serial, "/play");
 
       const advancedTrack = await waitForTrackLabel(
         ctx.serial,
@@ -932,7 +932,7 @@ export const appFirstPlaylistAutoAdvance: ValidationCase = {
       );
       const autoSkipLogcat = await capturePlaybackLogcat(ctx.serial, ctx.artifactDir, "autoskip-logcat.txt");
       const autoSkipAudio = await captureAudioEvidence(ctx.c64uHost, ctx.artifactDir, "autoskip-audio");
-      await droidmind.screenshotToFile(ctx.serial, screenshotPath);
+      await droidctl.screenshotToFile(ctx.serial, screenshotPath);
 
       const rms = Number(autoSkipAudio.analysis.rms ?? 0);
       const watchdogScheduled = /Scheduled dueAtMs watchdog/i.test(autoSkipLogcat.text);
@@ -1037,7 +1037,7 @@ export const appFirstPlaylistAutoAdvance: ValidationCase = {
         explorationTrace: trace,
       };
     } finally {
-      await droidmind.close();
+      await droidctl.close();
     }
   },
 };
@@ -1069,7 +1069,7 @@ export const appFirstPlaybackMuteLatency: ValidationCase = {
       recoveryActions: [] as string[],
     };
 
-    const droidmind = new DroidmindClient();
+    const droidctl = new DroidctlClient();
     const preMuteScreenshotPath = path.join(ctx.artifactDir, "af-playback-mute-before.png");
     const mutedScreenshotPath = path.join(ctx.artifactDir, "af-playback-muted.png");
     const unmutedScreenshotPath = path.join(ctx.artifactDir, "af-playback-unmuted.png");
@@ -1081,15 +1081,15 @@ export const appFirstPlaybackMuteLatency: ValidationCase = {
         `${ts()} Observed: discovered SID candidates ${targets.sidCandidates.join(", ")} under ${targets.sidPath}`,
       );
 
-      await droidmind.connect();
-      await launchAppForeground(droidmind, ctx.serial);
-      await navigateToRoute(droidmind, ctx.serial, "/play");
-      await maybeClearPlaylist(droidmind, ctx.serial);
-      await setDurationSeconds(droidmind, ctx.serial, 30);
-      await addSidPlaylist(droidmind, ctx.serial, targets);
-      await tapByResourceId(droidmind, ctx.serial, "playlist-play");
+      await droidctl.connect();
+      await launchAppForeground(droidctl, ctx.serial);
+      await navigateToRoute(droidctl, ctx.serial, "/play");
+      await maybeClearPlaylist(droidctl, ctx.serial);
+      await setDurationSeconds(droidctl, ctx.serial, 30);
+      await addSidPlaylist(droidctl, ctx.serial, targets);
+      await tapByResourceId(droidctl, ctx.serial, "playlist-play");
       await waitForTrackLabel(ctx.serial, targets.sidCandidates[0], targets.sidCandidates, 12, 800);
-      await droidmind.screenshotToFile(ctx.serial, preMuteScreenshotPath);
+      await droidctl.screenshotToFile(ctx.serial, preMuteScreenshotPath);
 
       const muteCaptureStartedAt = Date.now();
       const muteCapturePromise = captureAndAnalyzeStream({
@@ -1100,14 +1100,14 @@ export const appFirstPlaybackMuteLatency: ValidationCase = {
       });
       await new Promise((resolve) => setTimeout(resolve, CAPTURE_PRE_ROLL_MS));
       const muteTapAtMs = Date.now() - muteCaptureStartedAt;
-      const muteTapped = await tapByResourceIdOrLabel(droidmind, ctx.serial, "volume-mute", [
+      const muteTapped = await tapByResourceIdOrLabel(droidctl, ctx.serial, "volume-mute", [
         expectedMuteToggleLabel("mute"),
       ]);
       if (!muteTapped) {
         throw new Error("Could not tap the Play mute button.");
       }
       const muteButtonFlipped = await waitForVisibleButtonLabel(ctx.serial, "Unmute", 8, 250, "volume-mute");
-      await droidmind.screenshotToFile(ctx.serial, mutedScreenshotPath);
+      await droidctl.screenshotToFile(ctx.serial, mutedScreenshotPath);
       const muteCapture = await muteCapturePromise;
       const muteMetrics = analyzeMuteTransition(
         requireAudioFeatures(muteCapture.analysis, "mute transition"),
@@ -1123,14 +1123,14 @@ export const appFirstPlaybackMuteLatency: ValidationCase = {
       });
       await new Promise((resolve) => setTimeout(resolve, CAPTURE_PRE_ROLL_MS));
       const unmuteTapAtMs = Date.now() - unmuteCaptureStartedAt;
-      const unmuteTapped = await tapByResourceIdOrLabel(droidmind, ctx.serial, "volume-mute", [
+      const unmuteTapped = await tapByResourceIdOrLabel(droidctl, ctx.serial, "volume-mute", [
         expectedMuteToggleLabel("unmute"),
       ]);
       if (!unmuteTapped) {
         throw new Error("Could not tap the Play unmute button.");
       }
       const unmuteButtonFlipped = await waitForVisibleButtonLabel(ctx.serial, "Mute", 8, 250, "volume-mute");
-      await droidmind.screenshotToFile(ctx.serial, unmutedScreenshotPath);
+      await droidctl.screenshotToFile(ctx.serial, unmutedScreenshotPath);
       const unmuteCapture = await unmuteCapturePromise;
       const unmuteMetrics = analyzeUnmuteTransition(
         requireAudioFeatures(unmuteCapture.analysis, "unmute transition"),
@@ -1276,7 +1276,7 @@ export const appFirstPlaybackMuteLatency: ValidationCase = {
         explorationTrace: trace,
       };
     } finally {
-      await droidmind.close();
+      await droidctl.close();
     }
   },
 };

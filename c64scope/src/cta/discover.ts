@@ -11,7 +11,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { resolvePreferredPhysicalTestDeviceSerial } from "../deviceRegistry.js";
 import { runCtaCensus } from "./ctaCensus.js";
-import { DroidmindClient } from "../validation/droidmindClient.js";
+import { DroidctlClient } from "../validation/droidctlClient.js";
 import { resolveWorkspaceRoot, timestampId } from "../fullAppCoverageExecutor.js";
 
 const APP_PACKAGE = "uk.gleissner.c64commander";
@@ -62,7 +62,7 @@ export async function main(): Promise<void> {
   const serial = options.serial ?? (await resolvePreferredPhysicalTestDeviceSerial());
   const runId = `cta-discover-${timestampId()}`;
   const artifactRoot = path.join(resolveWorkspaceRoot(), "c64scope", "artifacts", "cta-discover", runId);
-  const client = new DroidmindClient();
+  const client = new DroidctlClient();
 
   try {
     if (options.startApp) {

@@ -112,7 +112,23 @@ const MIC_DEVICE = arg("device", "plughw:CARD=SF558,DEV=0");
 const TMP = arg("tmp", "/tmp");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const adb = (args) => execFileAsync("adb", args, { maxBuffer: 1 << 22 });
+
+/*
+ * Every adb call carries -s. Through this helper the gate runs `input keyevent`,
+ * which changes the phone's media volume, and `wm size`; with a CI emulator
+ * attached alongside the phone, a bare adb call can pick the wrong one.
+ * ANDROID_SERIAL is honoured so the environment variable adb itself respects
+ * also works here.
+ */
+const SERIAL = arg("serial", process.env.ANDROID_SERIAL ?? "");
+const adb = (args) => {
+  // Checked here, not at module load: this file exports pure parsers that unit
+  // tests import on a machine with no device and no serial set.
+  if (!SERIAL) {
+    throw new Error("merge_gate: --serial <serial> (or ANDROID_SERIAL) is required; refusing to pick a device");
+  }
+  return execFileAsync("adb", ["-s", SERIAL, ...args], { maxBuffer: 1 << 22 });
+};
 
 const run = async (command, args, { timeoutMs = 600_000, env } = {}) => {
   try {

@@ -23,7 +23,7 @@ It does not exist to replace the app, the mobile controller, or `c64bridge`.
 `c64scope` must not:
 
 - extend `c64bridge`
-- extend the mobile controller, currently `droidmind`
+- extend the mobile controller, `droidctl`
 - proxy or rename peer-server tools
 - become a generic Android UI automation server
 - become a direct C64 control server
@@ -33,7 +33,7 @@ It does not exist to replace the app, the mobile controller, or `c64bridge`.
 
 The LLM uses three peer servers directly:
 
-1. mobile controller, currently `droidmind`
+1. mobile controller, `droidctl`
 2. `c64bridge`
 3. `c64scope`
 

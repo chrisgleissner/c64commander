@@ -19,7 +19,7 @@ import { createBaselineState, type StateLedger } from "./stateLedger.js";
 import { CtaStateGraph, stateKey, type CtaStateNode } from "./stateGraph.js";
 import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "../deviceRegistry.js";
 import { resolveWorkspaceRoot, timestampId } from "../fullAppCoverageExecutor.js";
-import { DroidmindClient } from "../validation/droidmindClient.js";
+import { DroidctlClient } from "../validation/droidctlClient.js";
 import { APP_PACKAGE, gitSha, readFlagValue } from "./runnerCommon.js";
 
 export interface CtaRunnerArgs {
@@ -148,7 +148,7 @@ export async function main(): Promise<void> {
   const artifactDir = args.artifactDir ?? path.join(workspaceRoot, "c64scope", "artifacts", runId);
   const checkpoint = new CheckpointJournal(path.join(artifactDir, "checkpoint.jsonl"));
   const graph = new CtaStateGraph();
-  const client = new DroidmindClient();
+  const client = new DroidctlClient();
 
   try {
     await mkdir(path.join(artifactDir, "inventory"), { recursive: true });
@@ -163,7 +163,7 @@ export async function main(): Promise<void> {
     );
     if (!capabilityCheck.satisfied) {
       throw new Error(
-        `DroidMind capability preflight failed: ${capabilityCheck.missing.map((item) => item.id).join(", ")}`,
+        `droidctl capability preflight failed: ${capabilityCheck.missing.map((item) => item.id).join(", ")}`,
       );
     }
 

@@ -67,7 +67,7 @@ export interface InstallResult {
 export interface DetachedHandle {
   readonly argv: readonly string[];
   /** Signals the local child, waits for it to close, and returns what it wrote to stderr. */
-  stop(signal: NodeJS.Signals): Promise<{ stderr: string; code: number | null }>;
+  stop(signal: NodeJS.Signals): Promise<{ stderr: string; code: number | null; timedOut?: boolean }>;
 }
 
 export type CapabilitySupport = "supported" | "unsupported" | "unknown";

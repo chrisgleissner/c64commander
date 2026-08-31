@@ -15,6 +15,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   AdbTransport,
+  quoteForRemoteShell,
   type RawExecOutcome,
   type RawExecRequest,
   type RawSpawnHandle,
@@ -116,6 +117,37 @@ describe("every targeted invocation carries -s", () => {
     const recorder = recordingTransport(() => ok("payload"));
     await recorder.transport.pullBinary(TARGET, "/sdcard/x.png");
     expect(recorder.requests[0]?.args).toEqual(["-s", "9B0EXAMPLE", "exec-out", "cat", "/sdcard/x.png"]);
+  });
+});
+
+describe("remote shell quoting", () => {
+  it("leaves a bare token alone and quotes anything the device shell would re-split", () => {
+    expect(quoteForRemoteShell("uiautomator")).toBe("uiautomator");
+    expect(quoteForRemoteShell("/sdcard/Download/droidctl-ui.xml")).toBe("/sdcard/Download/droidctl-ui.xml");
+    expect(quoteForRemoteShell("--time-limit")).toBe("--time-limit");
+    expect(quoteForRemoteShell("dumpsys window | grep x")).toBe("'dumpsys window | grep x'");
+    expect(quoteForRemoteShell("it's here")).toBe(`'it'\\''s here'`);
+    expect(quoteForRemoteShell("")).toBe("''");
+  });
+
+  it("keeps a multi-word sh -c script as one remote argument", async () => {
+    const recorder = recordingTransport(() => ok("512"));
+    const script = "if [ -f /sdcard/x.xml ]; then wc -c < /sdcard/x.xml; else echo 0; fi";
+
+    await recorder.transport.exec(TARGET, ["sh", "-c", script]);
+
+    // adb joins argv into one command line, so an unquoted script would reach the
+    // device as `sh -c if` plus positional words and the settle poll would read 0.
+    expect(recorder.requests[0]?.args).toEqual(["-s", "9B0EXAMPLE", "shell", "sh", "-c", `'${script}'`]);
+  });
+
+  it("quotes text passed to input text and a path with a space", async () => {
+    const recorder = recordingTransport(() => ok(""));
+    await recorder.transport.exec(TARGET, ["input", "text", "hello world"]);
+    await recorder.transport.pullBinary(TARGET, "/sdcard/My Files/shot.png");
+
+    expect(recorder.requests[0]?.args.slice(3)).toEqual(["input", "text", "'hello world'"]);
+    expect(recorder.requests[1]?.args.slice(3)).toEqual(["cat", "'/sdcard/My Files/shot.png'"]);
   });
 });
 

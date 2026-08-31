@@ -10,7 +10,7 @@ This file defines how autonomous runs reuse the observability already present in
 | --- | --- | --- |
 | `c64scope` session, capture, assertions, artifacts | `c64scope` | A/V-sensitive physical evidence |
 | App logs, traces, action summaries, diagnostics ZIP | C64 Commander app | Async workflow proof and failure attribution |
-| Android screenshots, logcat, staged files | mobile controller, currently `droidmind` | Runtime and UI corroboration |
+| Android screenshots, logcat, staged files | mobile controller, `droidctl`            | Runtime and UI corroboration |
 | REST/FTP snapshots and RAM/state refs | app path or `c64bridge` gap-fill | Hardware-visible state corroboration |
 | Playwright traces, videos, screenshots, golden traces | existing web E2E | Reusable expected UI flows and evidence patterns |
 | Maestro screenshots and native-flow scripts | existing Maestro suite | Native affordance seeds and Android/iOS route knowledge |

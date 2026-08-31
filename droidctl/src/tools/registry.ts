@@ -18,7 +18,7 @@ import { inputModule } from "./modules/input.js";
 import { targetModule } from "./modules/target.js";
 import type { ToolDescriptor, ToolExecutionContext, ToolModule, ToolRunResult } from "./types.js";
 
-interface RegisteredTool {
+export interface RegisteredTool {
   readonly module: ToolModule;
   readonly descriptor: ToolDescriptor;
 }
@@ -32,16 +32,20 @@ export const modules: readonly ToolModule[] = [
   deviceModule,
 ];
 
-const toolMap = new Map<string, RegisteredTool>();
-
-for (const module of modules) {
-  for (const descriptor of module.describeTools()) {
-    if (toolMap.has(descriptor.name)) {
-      throw new Error(`Duplicate tool name detected while registering modules: ${descriptor.name}`);
+export function indexModules(source: readonly ToolModule[]): Map<string, RegisteredTool> {
+  const index = new Map<string, RegisteredTool>();
+  for (const module of source) {
+    for (const descriptor of module.describeTools()) {
+      if (index.has(descriptor.name)) {
+        throw new Error(`Duplicate tool name detected while registering modules: ${descriptor.name}`);
+      }
+      index.set(descriptor.name, { module, descriptor });
     }
-    toolMap.set(descriptor.name, { module, descriptor });
   }
+  return index;
 }
+
+const toolMap = indexModules(modules);
 
 export function listToolDescriptors(): readonly ToolDescriptor[] {
   return Array.from(toolMap.values(), (entry) => entry.descriptor);

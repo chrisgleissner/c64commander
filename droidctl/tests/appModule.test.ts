@@ -125,7 +125,7 @@ describe("droid_app.uninstall_app", () => {
   });
 });
 
-describe("droid_app.launch_app", () => {
+describe("droid_app.start_app", () => {
   it("parses TotalTime from am start -W and reports the resumed activity", async () => {
     const transport = new FakeTransport();
     transport.respondTo("am start", { stdout: "Status: ok\nActivity: pkg/.Main\nTotalTime: 812\nWaitTime: 830\n" });
@@ -135,7 +135,7 @@ describe("droid_app.launch_app", () => {
     const { ctx } = await createTestContext({ transport });
 
     const result = await invoke(
-      "droid_app.launch_app",
+      "droid_app.start_app",
       { targetId: "adb:TESTSERIAL01", package: PACKAGE, waitForResume: true },
       ctx,
     );
@@ -151,7 +151,7 @@ describe("droid_app.launch_app", () => {
     const { ctx } = await createTestContext({ transport });
 
     await invoke(
-      "droid_app.launch_app",
+      "droid_app.start_app",
       { targetId: "adb:TESTSERIAL01", package: PACKAGE, viaLauncherIntent: true },
       ctx,
     );
@@ -166,7 +166,7 @@ describe("droid_app.launch_app", () => {
     const { ctx } = await createTestContext({ transport });
 
     const result = await invoke(
-      "droid_app.launch_app",
+      "droid_app.start_app",
       { targetId: "adb:TESTSERIAL01", package: PACKAGE, waitForResume: true },
       ctx,
     );
@@ -180,7 +180,7 @@ describe("droid_app.launch_app", () => {
     transport.respondTo("am start", { stdout: "Error: Activity class {pkg/.Missing} does not exist." });
     const { ctx } = await createTestContext({ transport });
 
-    const result = await invoke("droid_app.launch_app", { targetId: "adb:TESTSERIAL01", package: PACKAGE }, ctx);
+    const result = await invoke("droid_app.start_app", { targetId: "adb:TESTSERIAL01", package: PACKAGE }, ctx);
     expect(result.ok).toBe(false);
     expect(result.error.message).toMatch(/am start reported an error/);
   });

@@ -412,11 +412,27 @@ export const captureModule = defineToolModule({
             devicePath: recording.devicePath,
             localPath,
             stderr: stopped.stderr,
+            exitCode: stopped.code,
+            timedOut: stopped.timedOut === true,
             reason: error instanceof Error ? error.message : String(error),
           };
         }
 
         const payload = await readFile(localPath);
+        if (payload.length === 0) {
+          await unlink(localPath).catch(() => undefined);
+          return {
+            stopped: true,
+            pulled: false,
+            recordingId: args.recordingId,
+            devicePath: recording.devicePath,
+            localPath,
+            stderr: stopped.stderr,
+            exitCode: stopped.code,
+            timedOut: stopped.timedOut === true,
+            reason: `screenrecord wrote no data: ${stopped.stderr.trim() || "no stderr from the recorder"}`,
+          };
+        }
         try {
           assertMp4Signature(payload, localPath);
         } catch (error) {

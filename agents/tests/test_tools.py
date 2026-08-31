@@ -172,7 +172,7 @@ def test_openhands_stdio_servers_returns_three(patched_env: RuntimePaths) -> Non
     assert len(servers) == 3
     names = [s["name"] for s in servers]
     assert "c64scope" in names
-    assert "droidmind" in names
+    assert "droidctl" in names
     assert "c64bridge" in names
 
 
@@ -181,9 +181,9 @@ def test_openhands_stdio_servers_c64scope_uses_node(patched_env: RuntimePaths) -
     assert servers["c64scope"]["command"] == "node"
 
 
-def test_openhands_stdio_servers_droidmind_uses_uv(patched_env: RuntimePaths) -> None:
+def test_openhands_stdio_servers_droidctl_uses_node(patched_env: RuntimePaths) -> None:
     servers = {s["name"]: s for s in openhands_stdio_servers()}
-    assert servers["droidmind"]["command"] == "uv"
+    assert servers["droidctl"]["command"] == "node"
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +198,9 @@ def test_verify_local_tool_paths_all_present(patched_env: RuntimePaths) -> None:
     bridge_dir = patched_env.repo_root / "c64bridge" / "dist"
     bridge_dir.mkdir(parents=True)
     (bridge_dir / "mcp-server.js").write_text("// ok")
-    (patched_env.repo_root / "droidmind").mkdir(parents=True)
+    droidctl_scripts = patched_env.repo_root / "droidctl" / "scripts"
+    droidctl_scripts.mkdir(parents=True)
+    (droidctl_scripts / "start.mjs").write_text("// ok")
 
     verify_local_tool_paths()  # Must not raise.
 
@@ -210,8 +212,10 @@ def test_verify_local_tool_paths_missing_raises(patched_env: RuntimePaths) -> No
 
 
 def test_verify_local_tool_paths_partial_missing(patched_env: RuntimePaths) -> None:
-    # Only droidmind present → the other two are missing.
-    (patched_env.repo_root / "droidmind").mkdir(parents=True)
+    # Only droidctl present → the other two are missing.
+    droidctl_scripts = patched_env.repo_root / "droidctl" / "scripts"
+    droidctl_scripts.mkdir(parents=True)
+    (droidctl_scripts / "start.mjs").write_text("// ok")
     with pytest.raises(RuntimeError, match="Required tool paths are missing"):
         verify_local_tool_paths()
 

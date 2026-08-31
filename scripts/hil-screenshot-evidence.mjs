@@ -7,13 +7,27 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { execFile } from "node:child_process";
-import { mkdir, readFile, writeFile, copyFile } from "node:fs/promises";
+import { mkdir, readFile, copyFile } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 
-const execFileAsync = promisify(execFile);
+/*
+ * droidctl/dist is a build artifact and is gitignored, so this import is lazy:
+ * importing it at module load would break any consumer that only wants the pure
+ * helpers in this file on a tree that has not been built.
+ */
+const loadDroidctl = async () => {
+  try {
+    return await import("../droidctl/dist/server.js");
+  } catch (error) {
+    throw new Error(
+      `Unable to load droidctl; run "npm run droid:build" first. Underlying error: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+};
 
 const DEFAULT_REVIEW_WIDTH = 480;
 const DEFAULT_MAX_DIMENSION = 1999;
@@ -65,38 +79,43 @@ export const createReviewScreenshot = async (rawPath, reviewPath, options = {}) 
   };
 };
 
-export const captureAndroidScreenshot = async ({ serial, rawPath }) => {
-  const args = [];
-  if (serial) {
-    args.push("-s", serial);
+const callDroidctl = async (runtime, name, args) => {
+  const result = await runtime.toolRegistry.invoke(name, args);
+  const envelope = JSON.parse(result.content[0].text);
+  if (!envelope.ok) {
+    throw new Error(`${name} failed [${envelope.error.code}]: ${envelope.error.message}`);
   }
-  args.push("exec-out", "screencap", "-p");
-  const { stdout } = await execFileAsync("adb", args, {
-    encoding: "buffer",
-    maxBuffer: 16 * 1024 * 1024,
-  });
-  await mkdir(path.dirname(rawPath), { recursive: true });
-  await writeFile(rawPath, stdout);
-  return rawPath;
+  return envelope.data;
 };
 
-export const captureUiDump = async ({ serial, xmlPath }) => {
-  const dumpArgs = [];
-  const catArgs = [];
-  if (serial) {
-    dumpArgs.push("-s", serial);
-    catArgs.push("-s", serial);
-  }
-  dumpArgs.push("shell", "uiautomator", "dump", "/sdcard/c64commander-ui.xml");
-  catArgs.push("exec-out", "cat", "/sdcard/c64commander-ui.xml");
-  await execFileAsync("adb", dumpArgs);
-  const { stdout } = await execFileAsync("adb", catArgs, {
-    encoding: "buffer",
-    maxBuffer: 4 * 1024 * 1024,
+/*
+ * Device capture runs through droidctl: it carries the explicit -s, the PNG
+ * signature check at capture time, and the settle-and-retry loop around the UI
+ * dump. It writes raw/<name>.png and review/<name>-review.png into outDir, which
+ * is the layout this script already produced.
+ */
+export const captureThroughDroidctl = async ({ target, outDir, name, reviewWidth, maxDimension, uiDump }) => {
+  const { createDroidctlServerRuntime } = await loadDroidctl();
+  const runtime = createDroidctlServerRuntime({ artifactRoot: path.join(outDir, "droidctl-runs") });
+  const shot = await callDroidctl(runtime, "droid_capture.screenshot", {
+    targetId: target,
+    name,
+    runRoot: outDir,
+    ...(reviewWidth === undefined ? {} : { reviewWidth }),
+    ...(maxDimension === undefined ? {} : { maxDimension }),
   });
-  await mkdir(path.dirname(xmlPath), { recursive: true });
-  await writeFile(xmlPath, stdout);
-  return xmlPath;
+
+  let uiDumpPath = null;
+  if (uiDump) {
+    const hierarchy = await callDroidctl(runtime, "droid_capture.ui_hierarchy", {
+      targetId: target,
+      name,
+      runRoot: outDir,
+    });
+    uiDumpPath = hierarchy.xmlPath;
+  }
+
+  return { ...shot, uiDumpPath };
 };
 
 const parseArgs = (argv) => {
@@ -115,7 +134,7 @@ const parseArgs = (argv) => {
       index += 1;
       return value;
     };
-    if (arg === "--serial") parsed.serial = readValue();
+    if (arg === "--target") parsed.target = readValue();
     else if (arg === "--out-dir") parsed.outDir = readValue();
     else if (arg === "--name") parsed.name = readValue();
     else if (arg === "--input") parsed.input = readValue();
@@ -131,40 +150,40 @@ export const runCli = async (argv = process.argv.slice(2)) => {
   const args = parseArgs(argv);
   const rawDir = path.join(args.outDir, "raw");
   const reviewDir = path.join(args.outDir, "review");
-  const uiDir = path.join(args.outDir, "ui");
   const rawPath = path.join(rawDir, `${args.name}.png`);
   const reviewPath = path.join(reviewDir, `${args.name}-review.png`);
 
-  await mkdir(rawDir, { recursive: true });
-  if (args.input) {
-    await copyFile(args.input, rawPath);
-  } else {
-    await captureAndroidScreenshot({ serial: args.serial, rawPath });
+  if (!args.input && !args.target) {
+    throw new Error("--target <targetId> is required for a device capture; there is no default target");
   }
 
+  if (!args.input) {
+    const captured = await captureThroughDroidctl({
+      target: args.target,
+      outDir: args.outDir,
+      name: args.name,
+      reviewWidth: args.reviewWidth,
+      maxDimension: args.maxDimension,
+      uiDump: args.uiDump,
+    });
+    await readFile(captured.rawPath);
+    console.log(JSON.stringify(captured, null, 2));
+    return captured;
+  }
+
+  await mkdir(rawDir, { recursive: true });
+  await copyFile(args.input, rawPath);
   const result = await createReviewScreenshot(rawPath, reviewPath, {
     reviewWidth: args.reviewWidth,
     maxDimension: args.maxDimension,
   });
-
-  const output = {
-    ...result,
-    uiDumpPath: null,
-  };
-
-  if (args.uiDump) {
-    output.uiDumpPath = await captureUiDump({
-      serial: args.serial,
-      xmlPath: path.join(uiDir, `${args.name}.xml`),
-    });
-  }
-
+  const output = { ...result, uiDumpPath: null };
   await readFile(output.rawPath);
   console.log(JSON.stringify(output, null, 2));
   return output;
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   runCli().catch((error) => {
     console.error(error instanceof Error ? error.stack || error.message : String(error));
     process.exitCode = 1;

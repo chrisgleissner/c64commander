@@ -118,12 +118,12 @@ describe("droid_input.swipe", () => {
   });
 });
 
-describe("droid_input.type_text", () => {
+describe("droid_input.input_text", () => {
   it("sends the text", async () => {
     const transport = new FakeTransport();
     const { ctx } = await createTestContext({ transport });
 
-    const result = await invoke("droid_input.type_text", { targetId: TARGET, text: "hello" }, ctx);
+    const result = await invoke("droid_input.input_text", { targetId: TARGET, text: "hello" }, ctx);
     expect(result.data.characters).toBe(5);
     expect(transport.execArgvLines()).toContain("input text hello");
   });

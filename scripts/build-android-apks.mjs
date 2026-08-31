@@ -236,8 +236,13 @@ export const findApk = (basename, { preferCollected = false } = {}) => {
   return null;
 };
 
+/*
+ * Requires an explicit serial. The steps this feeds include `uninstall`,
+ * `install -r -d` and `pm clear`, and an emulator can be running beside the
+ * device under test, so "exactly one is connected, use it" could land a
+ * destructive step on whatever that emulator was doing.
+ */
 const resolveDeviceSerial = (explicit) => {
-  if (explicit) return explicit;
   const out = execFileSync("adb", ["devices"], { cwd: REPO_ROOT, encoding: "utf8" });
   const serials = out
     .split("\n")
@@ -245,9 +250,18 @@ const resolveDeviceSerial = (explicit) => {
     .map((line) => line.trim())
     .filter((line) => /\tdevice$/.test(line))
     .map((line) => line.split("\t")[0]);
-  if (serials.length === 1) return serials[0];
-  if (serials.length === 0) throw new Error("no adb device connected; pass --device <serial>");
-  throw new Error(`multiple adb devices connected (${serials.join(", ")}); pass --device <serial>`);
+
+  if (!explicit) {
+    throw new Error(
+      serials.length === 0
+        ? "no adb device connected; pass --device <serial>"
+        : `--device <serial> is required; connected: ${serials.join(", ")}`,
+    );
+  }
+  if (!serials.includes(explicit)) {
+    throw new Error(`adb device ${explicit} is not connected; connected: ${serials.join(", ") || "none"}`);
+  }
+  return explicit;
 };
 
 const executeAdbStep = (step) => {

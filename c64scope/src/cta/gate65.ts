@@ -12,7 +12,7 @@ import { pathToFileURL } from "node:url";
 import { summarizeCoverage, toCoverageCsv, toCoverageJson, type CtaCoverageRecord } from "./coverage.js";
 import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "../deviceRegistry.js";
 import { resolveWorkspaceRoot, timestampId } from "../fullAppCoverageExecutor.js";
-import { DroidmindClient } from "../validation/droidmindClient.js";
+import { DroidctlClient } from "../validation/droidctlClient.js";
 import {
   type Bounds,
   centerX,
@@ -72,7 +72,7 @@ export async function main(): Promise<void> {
   await mkdir(path.join(artifactDir, "screenshots"), { recursive: true });
   await mkdir(path.join(artifactDir, "hierarchies"), { recursive: true });
 
-  const client = new DroidmindClient();
+  const client = new DroidctlClient();
   const steps: string[] = [];
   const coverageRecords: CtaCoverageRecord[] = [];
   let idSeq = 0;

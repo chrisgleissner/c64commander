@@ -26,6 +26,22 @@ import type {
 
 export const DEFAULT_EXEC_TIMEOUT_MS = 30_000;
 export const DEFAULT_MAX_BYTES = 32 * 1024 * 1024;
+export const DETACHED_STOP_TIMEOUT_MS = 15_000;
+
+/**
+ * `adb shell` joins its arguments into one command line and lets the device's
+ * shell re-split it, so an argument containing a space or a metacharacter must
+ * arrive already quoted. Without this, `sh -c "if [ -f x ]; then ...; fi"` is
+ * re-parsed as `sh -c if` plus positional words.
+ */
+const SAFE_BARE_TOKEN = /^[A-Za-z0-9_@%+=:,./-]+$/;
+
+export function quoteForRemoteShell(argument: string): string {
+  if (argument.length > 0 && SAFE_BARE_TOKEN.test(argument)) {
+    return argument;
+  }
+  return `'${argument.replace(/'/g, `'\\''`)}'`;
+}
 
 /**
  * The single argument builder. Pure so a test can assert `-s <serial>` is always
@@ -96,12 +112,35 @@ export const nodeExecRunner: RawExecRunner = (request) =>
 
 export const nodeSpawnRunner: RawSpawnRunner = (request) => {
   const child = spawn(request.file, [...request.args], { stdio: ["ignore", "pipe", "pipe"] });
+  // A child that has already exited must still notify a late listener, or a stop
+  // that arrives after the failure waits on a "close" event that has been and gone.
+  let closed = false;
+  let closeCode: number | null = null;
+  const listeners: ((code: number | null) => void)[] = [];
+  child.once("close", (code) => {
+    closed = true;
+    closeCode = code;
+    for (const listener of listeners.splice(0)) {
+      listener(code);
+    }
+  });
+  child.once("error", () => {
+    closed = true;
+    closeCode = null;
+    for (const listener of listeners.splice(0)) {
+      listener(null);
+    }
+  });
   return {
     kill(signal) {
       child.kill(signal);
     },
     onClose(listener) {
-      child.once("close", (code) => listener(code));
+      if (closed) {
+        listener(closeCode);
+        return;
+      }
+      listeners.push(listener);
     },
     onStderr(listener) {
       child.stderr?.on("data", (chunk: Buffer) => listener(chunk.toString("utf8")));
@@ -122,14 +161,14 @@ const ADB_TOOL_SUPPORT: Readonly<Record<string, "supported">> = {
   "droid_target.describe_target": "supported",
   "droid_app.install_app": "supported",
   "droid_app.uninstall_app": "supported",
-  "droid_app.launch_app": "supported",
+  "droid_app.start_app": "supported",
   "droid_app.stop_app": "supported",
   "droid_app.clear_app_data": "supported",
   "droid_app.write_app_file": "supported",
   "droid_app.read_app_file": "supported",
   "droid_input.tap": "supported",
   "droid_input.swipe": "supported",
-  "droid_input.type_text": "supported",
+  "droid_input.input_text": "supported",
   "droid_input.press_key": "supported",
   "droid_capture.screenshot": "supported",
   "droid_capture.ui_hierarchy": "supported",
@@ -227,7 +266,7 @@ export class AdbTransport implements Transport {
     // `exec-out` keeps a binary payload byte-exact; `shell` would translate newlines
     // and corrupt a PNG (scripts/hil-screenshot-evidence.mjs:67-79).
     const channel = opts.encoding === "buffer" ? "exec-out" : "shell";
-    const result = await this.invoke(target, [channel, ...argv], opts);
+    const result = await this.invoke(target, [channel, ...argv.map(quoteForRemoteShell)], opts);
     if (opts.throwOnNonZeroExit && result.exitCode !== 0) {
       throw new ToolExecutionError(`Command failed on ${target.targetId}: ${argv.join(" ")}`, {
         details: { exitCode: result.exitCode, stderr: result.stderr, argv: [...argv] },
@@ -237,7 +276,7 @@ export class AdbTransport implements Transport {
   }
 
   spawnShell(target: ResolvedTarget, argv: readonly string[]): DetachedHandle {
-    const args = adbArgs(target.serial, ["shell", ...argv]);
+    const args = adbArgs(target.serial, ["shell", ...argv.map(quoteForRemoteShell)]);
     const handle = this.spawnRunner({ file: this.adbPath, args });
     let stderr = "";
     handle.onStderr((chunk) => {
@@ -247,14 +286,21 @@ export class AdbTransport implements Transport {
       argv: [this.adbPath, ...args],
       stop: (signal) =>
         new Promise((resolve) => {
-          handle.onClose((code) => resolve({ stderr, code }));
+          // Bounded: a child that ignores the signal must not hang the caller.
+          const timer = setTimeout(() => resolve({ stderr, code: null, timedOut: true }), DETACHED_STOP_TIMEOUT_MS);
+          handle.onClose((code) => {
+            clearTimeout(timer);
+            resolve({ stderr, code });
+          });
           handle.kill(signal);
         }),
     };
   }
 
   async pullBinary(target: ResolvedTarget, remotePath: string): Promise<Buffer> {
-    const result = await this.invoke(target, ["exec-out", "cat", remotePath], { encoding: "buffer" });
+    const result = await this.invoke(target, ["exec-out", "cat", quoteForRemoteShell(remotePath)], {
+      encoding: "buffer",
+    });
     if (result.exitCode !== 0) {
       throw new ToolExecutionError(`Unable to read ${remotePath} from ${target.targetId}.`, {
         details: { exitCode: result.exitCode, stderr: result.stderr },

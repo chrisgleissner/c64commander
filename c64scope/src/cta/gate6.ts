@@ -12,7 +12,7 @@ import { pathToFileURL } from "node:url";
 import { summarizeCoverage, toCoverageCsv, toCoverageJson, type CtaCoverageRecord } from "./coverage.js";
 import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "../deviceRegistry.js";
 import { resolveWorkspaceRoot, timestampId } from "../fullAppCoverageExecutor.js";
-import { DroidmindClient } from "../validation/droidmindClient.js";
+import { DroidctlClient } from "../validation/droidctlClient.js";
 import {
   type Bounds,
   centerX,
@@ -78,7 +78,7 @@ export function parseGate6Args(args: readonly string[]): Gate6Args {
 // stored orientation preference. Uses screen-height-proportional swipe coordinates so it
 // works regardless of current orientation (portrait or landscape).
 // Must be called while the app is running (any tab).
-async function restorePortraitViaAppSettings(client: DroidmindClient, serial: string, settleMs: number): Promise<void> {
+async function restorePortraitViaAppSettings(client: DroidctlClient, serial: string, settleMs: number): Promise<void> {
   await client.pressKey(serial, KEY.TAB_SETTINGS);
   await delay(settleMs);
 
@@ -114,14 +114,14 @@ async function restorePortraitViaAppSettings(client: DroidmindClient, serial: st
 // Restore portrait mode: set system rotation AND navigate the app to Settings→Portrait.
 // The system setting alone is insufficient because the app reads its own stored preference
 // on launch and overrides the system rotation. Both steps are required.
-async function forcePortrait(client: DroidmindClient, serial: string, settleMs: number): Promise<void> {
+async function forcePortrait(client: DroidctlClient, serial: string, settleMs: number): Promise<void> {
   await client.shell(serial, "settings put system accelerometer_rotation 0");
   await client.shell(serial, "settings put system user_rotation 0");
   await delay(500);
   await restorePortraitViaAppSettings(client, serial, settleMs);
 }
 
-async function launchFresh(client: DroidmindClient, serial: string, settleMs: number): Promise<void> {
+async function launchFresh(client: DroidctlClient, serial: string, settleMs: number): Promise<void> {
   await client.pressKey(serial, KEY.HOME_KEY);
   await delay(800);
   await client.startApp(serial, APP_PACKAGE);
@@ -139,7 +139,7 @@ export async function main(): Promise<void> {
   await mkdir(path.join(artifactDir, "screenshots"), { recursive: true });
   await mkdir(path.join(artifactDir, "hierarchies"), { recursive: true });
 
-  const client = new DroidmindClient();
+  const client = new DroidctlClient();
   const steps: string[] = [];
   const coverageRecords: CtaCoverageRecord[] = [];
   let idSeq = 0;

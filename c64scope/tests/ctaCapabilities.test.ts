@@ -7,31 +7,34 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { checkCapabilities, requiredDroidmindCapabilities } from "../src/cta/capabilities.js";
+import { checkCapabilities, requiredDroidctlCapabilities } from "../src/cta/capabilities.js";
+
+const allTools = requiredDroidctlCapabilities.map((requirement) => ({ name: requirement.toolName }));
 
 describe("CTA MCP capability checks", () => {
-  it("passes when all required DroidMind tools and actions are present", () => {
-    const result = checkCapabilities([
-      { name: "android-device", inputSchema: { properties: { action: { enum: ["list_devices"] } } } },
-      { name: "android-app", inputSchema: { properties: { action: { enum: ["start_app", "stop_app"] } } } },
-      {
-        name: "android-ui",
-        inputSchema: { properties: { action: { enum: ["tap", "swipe", "press_key", "input_text"] } } },
-      },
-      { name: "android-shell" },
-      { name: "android-screenshot" },
+  it("requires exactly the droidctl tools the gate runners call", () => {
+    expect(requiredDroidctlCapabilities.map((entry) => entry.toolName)).toEqual([
+      "droid_target.list_targets",
+      "droid_app.start_app",
+      "droid_app.stop_app",
+      "droid_input.tap",
+      "droid_input.swipe",
+      "droid_input.press_key",
+      "droid_input.input_text",
+      "droid_device.run_shell",
+      "droid_capture.ui_hierarchy",
+      "droid_capture.screenshot",
     ]);
-
-    expect(result).toEqual({ satisfied: true, missing: [] });
   });
 
-  it("reports missing tools and missing enumerated actions", () => {
+  it("passes when every required droidctl tool is present", () => {
+    expect(checkCapabilities(allTools)).toEqual({ satisfied: true, missing: [] });
+  });
+
+  it("reports each missing tool by id, so preflight still fails loudly", () => {
     const result = checkCapabilities(
-      [
-        { name: "android-device", inputSchema: { properties: { action: { enum: ["list_devices"] } } } },
-        { name: "android-ui", inputSchema: { properties: { action: { enum: ["tap"] } } } },
-      ],
-      requiredDroidmindCapabilities,
+      [{ name: "droid_target.list_targets" }, { name: "droid_input.tap" }],
+      requiredDroidctlCapabilities,
     );
 
     expect(result.satisfied).toBe(false);
@@ -42,7 +45,24 @@ describe("CTA MCP capability checks", () => {
       "ui-key",
       "ui-text",
       "shell-read",
+      "ui-hierarchy",
       "screenshot",
     ]);
+  });
+
+  it("still honours an enumerated action when a requirement names one", () => {
+    const withAction = [{ id: "legacy", toolName: "multi-tool", action: "tap" }];
+    expect(
+      checkCapabilities(
+        [{ name: "multi-tool", inputSchema: { properties: { action: { enum: ["swipe"] } } } }],
+        withAction,
+      ).satisfied,
+    ).toBe(false);
+    expect(
+      checkCapabilities(
+        [{ name: "multi-tool", inputSchema: { properties: { action: { enum: ["tap"] } } } }],
+        withAction,
+      ).satisfied,
+    ).toBe(true);
   });
 });

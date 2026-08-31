@@ -47,6 +47,11 @@ export interface DroidctlRuntimeOptions {
   transports?: readonly Transport[];
 }
 
+/** Every adb invocation is journalled into the run's commands.jsonl. */
+export function createDefaultTransports(artifacts: ArtifactStore): Transport[] {
+  return [new AdbTransport({ onCommand: (record) => artifacts.recordCommand(record) }), new SshTransport()];
+}
+
 export function createDroidctlServerRuntime(options: DroidctlRuntimeOptions = {}) {
   const logger = createLogger("droidctl");
   const artifacts = new ArtifactStore({
@@ -54,12 +59,7 @@ export function createDroidctlServerRuntime(options: DroidctlRuntimeOptions = {}
     ...(options.runId === undefined ? {} : { runId: options.runId }),
   });
   const recordings = new RecordingStore();
-  const transports = new TransportRegistry(
-    options.transports ?? [
-      new AdbTransport({ onCommand: (record) => artifacts.recordCommand(record) }),
-      new SshTransport(),
-    ],
-  );
+  const transports = new TransportRegistry(options.transports ?? createDefaultTransports(artifacts));
   const toolRegistry = createToolRegistry({ transports, artifacts, recordings, logger });
 
   const server = new Server(

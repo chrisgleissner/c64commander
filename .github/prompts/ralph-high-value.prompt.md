@@ -14,7 +14,7 @@ Read `ralph.prompt.md` as the base operational contract. This prompt INHERITS, u
 
 - RALPH ROBIN RUNTIME CONTRACT (provider rotation, capacity, suspension, no duplicate agents, Ralph Robin owns scheduling).
 - TOOL ACCESS AND MCP AGENCY / NO-HIL-PEER RULE (peer availability is proven by the tool namespace or safe discovery calls, never inferred from provider identity or shell-command absence).
-- NON-NEGOTIABLE CONSTRAINTS (droidmind is the primary product controller; app-first validation; c64bridge is setup/read-back/recovery only and never replaces app-path proof; c64scope for A/V/stream/timing; c64u-first; build/deploy is setup, not proof; no hiding/downgrading/reclassifying any release-relevant warning or error; a verdict implying "no work remains" is invalid when `droidmind_cta_action_count=0`).
+- NON-NEGOTIABLE CONSTRAINTS (droidctl is the primary product controller; app-first validation; c64bridge is setup/read-back/recovery only and never replaces app-path proof; c64scope for A/V/stream/timing; c64u-first; build/deploy is setup, not proof; no hiding/downgrading/reclassifying any release-relevant warning or error; a verdict implying "no work remains" is invalid when `droidctl_cta_action_count=0`).
 - CURRENT EXPECTED CONTEXT and PIXEL 4 BUILD, DEPLOY, AND APK IDENTITY (Pixel serial `9B081FFAZ001WX`; package `uk.gleissner.c64commander`; a current-build product verdict requires installed APK identity == current source identity; volatile values — device IPs, firmware, passwords, peer health — live in the digest/continuation prompt and MUST be re-verified, never hard-coded).
 - C64U SAFETY AND TRAFFIC (prefer c64u; u64 only with a recorded reason + c64u follow-up; app-induced c64u degradation is a C64 Commander defect until a non-app cause is proven; on a c64u dropout, pivot to diagnostics-mining rather than ending early).
 - PROTECTED LAYOUT INVARIANTS — KNOWN-FALSE DEFECTS (never re-open; never add a tab-bar reserve to `.page-shell`; never edit `tests/unit/pageShellClearance.test.ts`).
@@ -108,7 +108,7 @@ GATE 3 — PURITY (zero errors of any kind, attributable to the flow)
 
 HIGH-VALUE FLOW CATALOGUE
 
-These flows are the app's core value and its highest-risk seams, derived from the High-Risk Behaviour Map (`docs/features-by-page.md` §7) and the C64U interaction surface (§5). Each is a complete Pixel-4→C64U journey. Drive app-first through droidmind; verify with the strongest practical oracle; measure latency per step; repeat per the profile; mine all evidence surfaces after every cycle; restore state.
+These flows are the app's core value and its highest-risk seams, derived from the High-Risk Behaviour Map (`docs/features-by-page.md` §7) and the C64U interaction surface (§5). Each is a complete Pixel-4→C64U journey. Drive app-first through droidctl; verify with the strongest practical oracle; measure latency per step; repeat per the profile; mine all evidence surfaces after every cycle; restore state.
 
 HVF-1 — CONNECT & STAY CONNECTED (§7 risk #4; the gateway — validate first when connection is in doubt)
 - CTAs: cold app launch → `ConnectionController` discovery (`/v1/info`) → Home `ConnectivityIndicator` shows Connected + correct target; reconnect stressors: (a) background ~30 s → foreground; (b) Settings → `Save & Connect`; (c) Retry discovery; (d) Home `Reboot` (REST, core-only reset — `/Temp` survives; this is a non-destructive reconnect stressor, NOT a physical power cycle and must never be treated as one) then confirm REST re-establishes cleanly. Also exercise the app-bar long-press `Switch device` picker's passive health check as a connectivity oracle.
@@ -211,8 +211,8 @@ FAST-PATH STARTUP
 2. Read the injected Ralph Robin runtime context and current capacity.
 3. Perform MANDATORY RE-FAMILIARIZATION + STALE-EVIDENCE INVALIDATION: read `docs/agentic/STATE_DIGEST.md` (if present, under its reread conditions), the `docs/agentic/HVF_LEDGER.md` rows for candidate flows, any OPEN HVF defect in `docs/agentic/BUGS_FOUND.md`, the latest `PLANS.md`/`WORKLOG.md` loop sections, and the relevant `docs/features-by-page.md` route section when the digest is stale — so you neither repeat completed current-build work nor trust stale evidence.
 4. Determine the current branch fresh from `git status` (never assume it) and establish current source/APK identity; if installed identity differs, build/deploy the debug APK and re-confirm before any current-build gate assertion. Demote every ledger `GREEN` whose recorded Build identity ≠ current identity (or whose flow surface changed since) to `NO_CURRENT_BUILD_EVIDENCE` before selecting a flow.
-5. Discover droidmind, c64scope, c64bridge through the actual tool namespace or safe status/list calls — never from provider name or shell-command absence.
-6. Launch/foreground the app through droidmind; capture UI tree + screenshot.
+5. Discover droidctl, c64scope, c64bridge through the actual tool namespace or safe status/list calls — never from provider name or shell-command absence.
+6. Launch/foreground the app through droidctl; capture UI tree + screenshot.
 7. Select exactly one HVF; confirm its live route wiring, control bounds, and (for HVF-5) the capability tier.
 8. Execute the flow to the three-gate bar across the repetition profile; on any gate failure run the FIX-TO-GREEN loop; then write consolidated evidence and hand off.
 
@@ -222,7 +222,7 @@ FIX-TO-GREEN LOOP (WHEN AN HVF FAILS A GATE)
 
 The deliverable of a failing loop is a fixed flow, not a filed observation. Be aggressive but bounded; inherit the base FIX LOOP mechanics:
 
-1. Capture the failing repetition precisely: which run, which step, which gate, exact latency/log/trace evidence, exact droidmind coordinates and oracle read-backs. A money-flow defect must be reproducible.
+1. Capture the failing repetition precisely: which run, which step, which gate, exact latency/log/trace evidence, exact droidctl coordinates and oracle read-backs. A money-flow defect must be reproducible.
 2. Record it in `docs/agentic/BUGS_FOUND.md` (severity, repro, evidence, suspected root cause, status) and the HVF ledger row.
 3. Identify the smallest root cause; inspect firmware (`/home/chris/dev/c64/1541ultimate`) only when endpoint/device semantics matter. Respect every reverted-fix landmine and protected invariant — never reintroduce a settled-wrong fix.
 4. Implement the smallest safe root-cause fix at source (React/TS/Capacitor/native/transport). Do not paper over a symptom; a flow that stops failing by luck is not fixed.
@@ -255,11 +255,11 @@ FINAL RESPONSE FORMAT
 - GATE 1 RELIABILITY: repetitions passed/attempted; permutations run (cold-start / background / lock / reboot-reconnect / device-switch / rapid-repeat); any failing run described.
 - GATE 2 SPEED: per-key-step p50 and worst-case vs budget; any over-budget or degrading-with-repetition finding.
 - GATE 3 PURITY: logcat inspected yes/no + app-package lines found and attribution; Diagnostics export pulled+analyzed yes/no + path; Errors-tab / Latency-analysis findings; any UI-vs-diagnostics discrepancy or c64u degradation.
-- `droidmind_cta_action_count`: integer (total driven actions across repetitions).
+- `droidctl_cta_action_count`: integer (total driven actions across repetitions).
 - Repetitions of the full flow: integer. Actuation-verified vs synthetic-only.
 - Fix/redeploy/re-prove status; code changed yes/no; build/deploy yes/no + command.
 - High-level tests run: yes/no + command + justification. Coverage: no unless user-requested.
-- droidmind / c64scope / c64bridge used: yes/no each.
+- droidctl / c64scope / c64bridge used: yes/no each.
 - HVF ledger updated yes/no + path; state digest refreshed yes/no.
 - First-touch/pre-action blocker: none, or the exact allowed blocker.
 - Reason the repetition minimum was not met, if applicable.
@@ -269,7 +269,7 @@ FINAL RESPONSE FORMAT
 - Runtime context/source; initial % remaining; last % remaining; continuation decision.
 
 ## Work completed
-- State files updated; docs read; files inspected/changed; firmware inspected if any; build/deploy/test commands + reasons; droidmind/c64scope/c64bridge actions; per-repetition latency, log, trace, A/V evidence; cleanup/restores.
+- State files updated; docs read; files inspected/changed; firmware inspected if any; build/deploy/test commands + reasons; droidctl/c64scope/c64bridge actions; per-repetition latency, log, trace, A/V evidence; cleanup/restores.
 
 ## Findings
 - Money-flow defects found / fixed / ruled out; gate results per repetition; reliability/speed/purity trends across repetitions; oracle adequacy; regression-tripwire status for the selected flow.
@@ -280,7 +280,7 @@ FINAL RESPONSE FORMAT
 ## Remaining risk
 - HVFs not yet at three-gate green on the current build; open money-flow defects; c64u follow-up status; missing c64scope/register evidence; latency/reliability gaps.
 
-If `droidmind_cta_action_count` is `0`, the response MUST name the allowed pre-action blocker with concrete evidence, or it is non-compliant. An `HVF GREEN` verdict is invalid unless the full repetition profile ran and all three gates held (or an allowed reduced-repetition reason is recorded with the partial evidence).
+If `droidctl_cta_action_count` is `0`, the response MUST name the allowed pre-action blocker with concrete evidence, or it is non-compliant. An `HVF GREEN` verdict is invalid unless the full repetition profile ran and all three gates held (or an allowed reduced-repetition reason is recorded with the partial evidence).
 
 RELEASE-KNOWN-CLEAN EXIT CRITERIA (HIGH-VALUE VARIANT)
 
@@ -300,4 +300,4 @@ FORBIDDEN SLOW / WEAK PATTERNS (IN ADDITION TO THE BASE PROMPT'S)
 
 START NOW
 
-Change to `/home/chris/dev/c64/c64commander`. Run FAST-PATH STARTUP. Read `docs/agentic/STATE_DIGEST.md` first, then `ralph.prompt.md` for the inherited operational contract, then `docs/agentic/HVF_LEDGER.md` and any OPEN money-flow defect, and the selected flow's `docs/features-by-page.md` section when the digest is stale. Discover droidmind, c64scope, and c64bridge through the actual tool namespace or safe calls. Confirm current-build APK identity (build/deploy if stale). Append one compact `Ralph loop iteration` entry to `PLANS.md` and `WORKLOG.md` noting this is the HIGH-VALUE variant, the selected HVF, and the exact three-gate stop criteria. Select EXACTLY ONE High-Value Flow, confirm its live wiring (and capability tier for HVF-5), drive its full Pixel-4→C64U journey through droidmind, and take it to the MONEY-FLOW RELEASE BAR: run the full repetition profile (including the required cold-start and lifecycle/reconnect permutations), measure latency on every run, and mine logcat + the pulled Diagnostics export + request traces + c64scope after every run. On any RELIABILITY, SPEED, or PURITY gate failure, run the FIX-TO-GREEN loop: root-cause it, fix at source, redeploy, and re-prove the whole gate. Restore device state (UltiSID 0 dB, eject test disks, release held input, close sessions). Update `docs/agentic/HVF_LEDGER.md`, refresh the digest, and hand off via the continuation prompt. Do not widen beyond the one flow, do not declare the flow green on a single run, and do not run coverage or low-level tests unless the user asked.
+Change to `/home/chris/dev/c64/c64commander`. Run FAST-PATH STARTUP. Read `docs/agentic/STATE_DIGEST.md` first, then `ralph.prompt.md` for the inherited operational contract, then `docs/agentic/HVF_LEDGER.md` and any OPEN money-flow defect, and the selected flow's `docs/features-by-page.md` section when the digest is stale. Discover droidctl, c64scope, and c64bridge through the actual tool namespace or safe calls. Confirm current-build APK identity (build/deploy if stale). Append one compact `Ralph loop iteration` entry to `PLANS.md` and `WORKLOG.md` noting this is the HIGH-VALUE variant, the selected HVF, and the exact three-gate stop criteria. Select EXACTLY ONE High-Value Flow, confirm its live wiring (and capability tier for HVF-5), drive its full Pixel-4→C64U journey through droidctl, and take it to the MONEY-FLOW RELEASE BAR: run the full repetition profile (including the required cold-start and lifecycle/reconnect permutations), measure latency on every run, and mine logcat + the pulled Diagnostics export + request traces + c64scope after every run. On any RELIABILITY, SPEED, or PURITY gate failure, run the FIX-TO-GREEN loop: root-cause it, fix at source, redeploy, and re-prove the whole gate. Restore device state (UltiSID 0 dB, eject test disks, release held input, close sessions). Update `docs/agentic/HVF_LEDGER.md`, refresh the digest, and hand off via the continuation prompt. Do not widen beyond the one flow, do not declare the flow green on a single run, and do not run coverage or low-level tests unless the user asked.

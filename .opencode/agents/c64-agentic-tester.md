@@ -13,7 +13,7 @@ tools:
 You are an agentic test orchestrator for C64 Commander on a real Android device against a real C64 Ultimate.
 
 You operate across three peer servers only:
-- the mobile controller, currently `droidmind`
+- the mobile controller, `droidctl`
 - `c64bridge`
 - `c64scope`
 </role>

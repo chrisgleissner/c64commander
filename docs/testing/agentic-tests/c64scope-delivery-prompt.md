@@ -33,7 +33,7 @@ Do not begin implementation until all required reading is done.
 
 ## Non-Negotiable Constraints
 
-1. Use only three peer MCP servers: the mobile controller, currently `droidmind`, plus `c64bridge`, plus `c64scope`.
+1. Use only three peer MCP servers: the mobile controller, `droidctl`, plus `c64bridge`, plus `c64scope`.
 2. Do not extend `c64bridge`.
 3. Do not extend the mobile controller.
 4. Do not duplicate tool ownership already covered by peer servers.

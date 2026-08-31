@@ -14,7 +14,7 @@ import { recordedAction } from "./replay.js";
 import { redactSecretLiterals } from "./redaction.js";
 import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "../deviceRegistry.js";
 import { resolveWorkspaceRoot, timestampId } from "../fullAppCoverageExecutor.js";
-import { DroidmindClient } from "../validation/droidmindClient.js";
+import { DroidctlClient } from "../validation/droidctlClient.js";
 import {
   type Bounds,
   centerX,
@@ -93,7 +93,7 @@ export async function main(): Promise<void> {
   await mkdir(path.join(artifactDir, "hierarchies"), { recursive: true });
   await mkdir(path.join(artifactDir, "replays"), { recursive: true });
 
-  const client = new DroidmindClient();
+  const client = new DroidctlClient();
   const steps: string[] = [];
   const recordedActions: RecordedAction[] = [];
 

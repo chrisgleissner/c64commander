@@ -12,7 +12,7 @@ const codexHome = process.env.CODEX_HOME ? path.resolve(process.env.CODEX_HOME) 
 const codexUserConfigPath = path.join(codexHome, "config.toml");
 const claudeUserConfigPath = path.join(os.homedir(), ".claude.json");
 
-const serverNames = ["mobile-mcp", "droidmind", "c64bridge", "c64scope", "droidctl"];
+const serverNames = ["mobile-mcp", "c64bridge", "c64scope", "droidctl"];
 const managedStart = "# BEGIN C64 Commander agentic MCP servers";
 const managedEnd = "# END C64 Commander agentic MCP servers";
 
@@ -21,12 +21,6 @@ const sharedServers = {
     type: "stdio",
     command: "npx",
     args: ["-y", "@mobilenext/mobile-mcp@latest"],
-    env: {},
-  },
-  droidmind: {
-    type: "stdio",
-    command: "uvx",
-    args: ["--from", "git+https://github.com/hyperb1iss/droidmind", "droidmind", "--transport", "stdio"],
     env: {},
   },
   c64bridge: {

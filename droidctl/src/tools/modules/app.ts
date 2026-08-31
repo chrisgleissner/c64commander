@@ -40,7 +40,7 @@ const uninstallSchema = z
   .object({ targetId: targetIdSchema, package: packageSchema, tolerateMissing: z.boolean().optional() })
   .strict();
 
-const launchSchema = z
+const startAppSchema = z
   .object({
     targetId: targetIdSchema,
     package: packageSchema,
@@ -192,7 +192,7 @@ export const appModule = defineToolModule({
       }),
     },
     {
-      name: "droid_app.launch_app",
+      name: "droid_app.start_app",
       description:
         "Launch the application, by explicit activity with am start -W, or through the launcher intent. Returns the " +
         "resumed activity and, when am start reported it, the measured total start time.",
@@ -211,8 +211,8 @@ export const appModule = defineToolModule({
         required: ["targetId", "package"],
         additionalProperties: false,
       },
-      argsSchema: launchSchema,
-      execute: defineExecute(launchSchema, async (args, ctx) => {
+      argsSchema: startAppSchema,
+      execute: defineExecute(startAppSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
         let totalTimeMs: number | null = null;
 

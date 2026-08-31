@@ -24,8 +24,8 @@ Begin every iteration in this exact order. Do not expand startup beyond what the
 3. Read `docs/agentic/STATE_DIGEST.md` if present (see STATE DIGEST MECHANISM).
 4. Read only what the digest does not already cover: the latest `Ralph loop iteration` section in `PLANS.md`, the latest relevant `WORKLOG.md` entries, open blocker/high/medium entries in `docs/agentic/BUGS_FOUND.md`, and the `docs/agentic/CTA_LEDGER.md` rows for your candidate families.
 5. Verify `git status` and source/APK identity only as needed for a current-build HIL claim.
-6. Discover HIL tools (droidmind, c64scope, c64bridge) through the actual tool namespace or safe discovery/status/list calls — never from provider name or shell-command absence.
-7. Launch or foreground the app on the Pixel 4 through droidmind.
+6. Discover HIL tools (droidctl, c64scope, c64bridge) through the actual tool namespace or safe discovery/status/list calls — never from provider name or shell-command absence.
+7. Launch or foreground the app on the Pixel 4 through droidctl.
 8. Capture the current UI tree and a screenshot.
 9. Select exactly one probe family and enumerate its visible controls.
 10. Execute the probe pack (visible-control exhaustion + required adversarial transitions + diagnostics/log sweep + cleanup), then write consolidated evidence and hand off.
@@ -46,13 +46,13 @@ Read the digest first if present. Read full state files or agentic docs only whe
 
 Otherwise read only: the latest `PLANS.md` loop section; the latest relevant `WORKLOG.md` entries; open blocker/high/medium bugs; `docs/agentic/CTA_LEDGER.md` rows for the selected family; the relevant `docs/features-by-page.md` route section; and the relevant agentic safety/oracle/action sections.
 
-At finalization, refresh the digest compactly so the next loop starts fast. The digest records: latest loop number and verdict; branch, source identity, and installed APK identity; droidmind/c64scope/c64bridge availability; c64u/u64 reachability and firmware; open blocker/high/medium defects; a one-line per-family ledger status summary; the next recommended probe family; and the commit/heads + key file mtimes the digest reflects (so staleness is detectable). Do not let digest maintenance become a documentation-only loop.
+At finalization, refresh the digest compactly so the next loop starts fast. The digest records: latest loop number and verdict; branch, source identity, and installed APK identity; droidctl/c64scope/c64bridge availability; c64u/u64 reachability and firmware; open blocker/high/medium defects; a one-line per-family ledger status summary; the next recommended probe family; and the commit/heads + key file mtimes the digest reflects (so staleness is detectable). Do not let digest maintenance become a documentation-only loop.
 
 RALPH ROBIN RUNTIME CONTRACT
 
 This prompt runs under [ralph-robin](https://github.com/chrisgleissner/llm-tools#ralph-robin), which round-robins this prompt between LLM providers by availability. If a `RALPH ROBIN RUNTIME CONTEXT` block is prepended, it is authoritative ONLY for provider selection, rotation, capacity, session-window, suspension, and continuation scheduling. It is not evidence that any MCP peer server or tool is unavailable. Provider identity is not tool capability.
 
-1. Use the provider selected by the injected context. If that provider has droidmind, c64scope, c64bridge, shell, repo, Android, or network tools, use them normally regardless of provider name.
+1. Use the provider selected by the injected context. If that provider has droidctl, c64scope, c64bridge, shell, repo, Android, or network tools, use them normally regardless of provider name.
 2. Evaluate stop thresholds against the current selected provider, not a provider named in historical notes.
 3. Do not run provider-specific `llm-scheduler --suspend-until-ready` or similar while the current Ralph-selected provider is usable. Ralph Robin owns provider rotation and suspension.
 4. Do not launch, schedule, or fork another autonomous agent against this repo, Pixel, c64u, u64, or state files.
@@ -62,18 +62,18 @@ This prompt runs under [ralph-robin](https://github.com/chrisgleissner/llm-tools
 
 TOOL ACCESS AND MCP AGENCY
 
-Never infer that droidmind, c64scope, c64bridge, adb, shell, or repo tools are unavailable from any of these alone: provider name, Codex vs Claude, the Ralph-Robin-selected provider, absence of a shell executable named like the peer server, historical notes, prior provider limitations, or absence of scheduler commands.
+Never infer that droidctl, c64scope, c64bridge, adb, shell, or repo tools are unavailable from any of these alone: provider name, Codex vs Claude, the Ralph-Robin-selected provider, absence of a shell executable named like the peer server, historical notes, prior provider limitations, or absence of scheduler commands.
 
 Determine peer-server availability only from the actual tool namespace/capability list exposed to the current model, or by attempting a safe no-op/status/list/discovery call through the relevant tool interface. If a peer tool is available, use it. If shell is available, use it for repo, Android, REST, and log work where appropriate. Record each discovery attempt and result in the consolidated WORKLOG block. Do not classify HIL as blocked until concrete discovery attempts are recorded as failed.
 
 Once the required tools are present, the selected provider must execute the HIL probe pack. Provider identity is irrelevant.
 
-For UI-tree/element-bounds enumeration you may use droidmind UI tools or mobile-mcp element listing as a read-only accuracy aid. All product actions (taps, drags, toggles, text, navigation, lifecycle) must be driven through droidmind.
+For UI-tree/element-bounds enumeration you may use droidctl UI tools or mobile-mcp element listing as a read-only accuracy aid. All product actions (taps, drags, toggles, text, navigation, lifecycle) must be driven through droidctl.
 
 NON-NEGOTIABLE CONSTRAINTS (DO NOT WEAKEN)
 
-1. droidmind is the primary Android product controller; every UI/app-owned product verdict requires a droidmind-driven action.
-2. App-first product validation is mandatory: when the app can perform an action, droidmind must drive the app to perform it.
+1. droidctl is the primary Android product controller; every UI/app-owned product verdict requires a droidctl-driven action.
+2. App-first product validation is mandatory: when the app can perform an action, droidctl must drive the app to perform it.
 3. c64bridge supports setup, state reads, stream-endpoint setup, calibration, corroboration, and emergency recovery only. It must not start/stop media, build queues, reset/reboot/mount/mutate, or replace app-path product proof.
 4. c64scope is required, when practical, for A/V, playback, stream, latency, and timing behavior.
 5. c64u is the primary target for every C64U-safe flow.
@@ -86,7 +86,7 @@ NON-NEGOTIABLE CONSTRAINTS (DO NOT WEAKEN)
 12. HIL peer availability is determined by actual tool namespace/capability or safe discovery calls, never by provider identity or absence of shell commands.
 13. Direct REST/FTP/Telnet or c64bridge-only mutation must not replace app-driven user action.
 14. Unsafe c64u reset/destructive actions must remain guarded or blocked; do not force an unsafe path unless the objective is a dedicated safety proof whose expected result is guard-blocked.
-15. A final CLEAN/CLOSED verdict (or any wording implying no work remains) is invalid when `droidmind_cta_action_count=0`, unless an allowed pre-action blocker is proven and named with concrete evidence.
+15. A final CLEAN/CLOSED verdict (or any wording implying no work remains) is invalid when `droidctl_cta_action_count=0`, unless an allowed pre-action blocker is proven and named with concrete evidence.
 16. Never re-open or "fix" a defect listed under PROTECTED LAYOUT INVARIANTS — KNOWN-FALSE DEFECTS. Those hypotheses are settled correct behaviour; rediscovering one is a false positive. In particular, never add a tab-bar-height reserve to `.page-shell`, and never edit `tests/unit/pageShellClearance.test.ts` to permit one.
 
 CURRENT EXPECTED CONTEXT
@@ -116,7 +116,7 @@ PROTECTED LAYOUT INVARIANTS — KNOWN-FALSE DEFECTS (DO NOT "FIX")
 Some defect hypotheses have already been investigated, "fixed", and proven wrong. Do NOT re-open or re-fix them. Treat them as settled, correct behaviour; a probe that rediscovers one is a FALSE POSITIVE, not a defect.
 
 1. ".page-shell sits under the fixed tab bar" is FALSE. The scroll viewport that hosts `.page-shell` is the `SwipeNavigationLayer` container, sized `height: calc(100dvh - var(--app-tab-bar-reserved-height))`; it already ends exactly at the fixed tab bar's top. The `.page-shell` box must NEVER reserve the tab-bar height itself — not as `padding-bottom` (this was BUG-066), not as `margin-bottom` (this was BUG-072), not via any other property. Such a reserve double-counts the tab bar and leaves a visible dead gap one tab-bar tall below the page content and above the tab bar. This exact regression has been introduced and reverted TWICE under this prompt; do not make it a third.
-   - If a bottom control appears to misroute taps to a tab, the cause is NOT page-shell clearance. The page scrolls (a failed swipe is not "no scroll"); re-measure the real UI tree, compare the actual element bounds against the tab-bar bounds, and capture the exact droidmind tap coordinates before concluding anything. Do not touch `.page-shell` bottom spacing or the `SwipeNavigationLayer` height to "fix" it.
+   - If a bottom control appears to misroute taps to a tab, the cause is NOT page-shell clearance. The page scrolls (a failed swipe is not "no scroll"); re-measure the real UI tree, compare the actual element bounds against the tab-bar bounds, and capture the exact droidctl tap coordinates before concluding anything. Do not touch `.page-shell` bottom spacing or the `SwipeNavigationLayer` height to "fix" it.
    - `tests/unit/pageShellClearance.test.ts` fails if any `--app-tab-bar-reserved-height` reserve reappears inside `.page-shell`. Never edit that test to permit the reserve.
 
 Before ANY edit to `src/index.css` `.page-shell`, the `SwipeNavigationLayer` viewport height, or tab-bar / safe-area layout, run `npx vitest run tests/unit/pageShellClearance.test.ts` and keep it green. This narrow regression test is the cheapest useful check for a layout change and is explicitly allowed (and required) here under HIGH-LEVEL TESTS ONLY item (5).
@@ -129,7 +129,7 @@ SESSION CAPACITY, CHECKPOINTS, AND ACTION BUDGETS
 
 Use the injected Ralph Robin runtime context for capacity. Checkpoint capacity — silently, without prose restatement — at these moments only: startup; before source edits; before build/deploy; before starting a large HIL probe pack; immediately after a defect is found; before finalization. Restate the interpretation in WORKLOG only when capacity changed materially or crossed a threshold below.
 
-Action budgets — minimum and target meaningful production CTA/control actions per loop. A "meaningful production CTA/control action" is a droidmind-driven user interaction with a production surface (tap, long press, slider drag/release, toggle, selector change, text entry, dialog confirm/cancel, item-menu action, route/tab navigation, Android Back, background/foreground, lock/unlock). Setup operations do not count (see PROBE-PACK EXECUTION SEQUENCE).
+Action budgets — minimum and target meaningful production CTA/control actions per loop. A "meaningful production CTA/control action" is a droidctl-driven user interaction with a production surface (tap, long press, slider drag/release, toggle, selector change, text entry, dialog confirm/cancel, item-menu action, route/tab navigation, Android Back, background/foreground, lock/unlock). Setup operations do not count (see PROBE-PACK EXECUTION SEQUENCE).
 
 - `>= 40%` capacity: minimum 8 actions; target 12 to 20; include at least one adversarial transition when safe; fix/redeploy/validate is allowed and may cover multiple closely related defects sharing a root cause.
 - `20% to 39%`: minimum 5 actions; target 6 to 10; no broad discovery beyond the selected family; one focused fix with redeploy and narrow validation is allowed.
@@ -169,8 +169,8 @@ Build candidates from `docs/agentic/CTA_LEDGER.md` first, then unchecked Require
 
 Score candidate families (higher wins):
 
-- `+18`: CTA ledger is missing/stale for a route AND droidmind can exercise a safe family slice this loop.
-- `+17`: feature overview has unchecked Required Tests rows for a production route reachable via droidmind.
+- `+18`: CTA ledger is missing/stale for a route AND droidctl can exercise a safe family slice this loop.
+- `+17`: feature overview has unchecked Required Tests rows for a production route reachable via droidctl.
 - `+16`: a mandatory, safe, incomplete physical-device-matrix row exists.
 - `+15`: safe Pixel 4 HIL directly exercises a current release-known-clean gap.
 - `+14`: can discover, validate, or close a real-device CTA defect.
@@ -214,9 +214,9 @@ PROBE-PACK EXECUTION SEQUENCE
 
 After fast-path startup, before any handoff/closure decision, execute the probe pack unless an allowed pre-action blocker is already proven.
 
-1. Foreground or launch the app through droidmind.
+1. Foreground or launch the app through droidctl.
 2. Capture entry screenshot + UI tree; enumerate and classify visible controls (VISIBLE-CONTROL EXHAUSTION).
-3. For each `SAFE_TO_EXERCISE` control, drive the action through droidmind and observe UI feedback at ≈200 ms, ≈1 second, and completion when practical.
+3. For each `SAFE_TO_EXERCISE` control, drive the action through droidctl and observe UI feedback at ≈200 ms, ≈1 second, and completion when practical.
 4. Verify each effect with the strongest practical oracle: UI-only route/control → screenshot/UI tree + browser console/logcat/diagnostics; device state → c64bridge read-back as support only; playback/stream/timing/A/V → c64scope when practical; c64u-safe device effect → c64u first, u64 only with recorded reason + c64u follow-up.
 5. Perform at least one required adversarial-but-safe transition for the family (see ADVERSARIAL-BUT-SAFE INTERACTIONS).
 6. After the batch — and again at family entry for a baseline — run the full sweep defined in DEVICE LOG & IN-APP DIAGNOSTICS EVIDENCE (mandatory): package-filtered Android logcat, the in-app Diagnostics dialog tabs, a pulled-and-analyzed Diagnostics "Share all" export, browser/WebView console, request traces, peer-server output, c64scope artifacts, and c64bridge output. Correlate every surface with the actions just performed; treat any app-package error/warning, silent failure, or UI-versus-diagnostics discrepancy as a defect candidate, never as background noise.
@@ -225,27 +225,27 @@ After fast-path startup, before any handoff/closure decision, execute the probe 
 
 These never count as meaningful product actions: `adb dumpsys` package/focus checks; `./scripts/resolve-version.sh`; logcat sampling without a preceding app action; peer health/status/list calls; static source inspection; creating or editing state files; build/deploy alone; c64bridge-only mutation or read-back; direct REST/FTP/Telnet not initiated by the app path.
 
-If no hardware-affecting CTA is safe without setup, exhaust a UI-only production family (Settings diagnostics/theme, Docs accordions, Open Source Licenses close/back, route navigation, Not Found). UI-only work driven by droidmind on the Pixel 4 is still a product action. Record why a higher-risk hardware family was deferred.
+If no hardware-affecting CTA is safe without setup, exhaust a UI-only production family (Settings diagnostics/theme, Docs accordions, Open Source Licenses close/back, route navigation, Not Found). UI-only work driven by droidctl on the Pixel 4 is still a product action. Record why a higher-risk hardware family was deferred.
 
 DEVICE LOG & IN-APP DIAGNOSTICS EVIDENCE (MANDATORY EACH LOOP)
 
 This is the highest-yield bug-detection surface and is mandatory every loop, not optional. Historically the strongest defects (stale/false toasts, cold-start DEGRADED, playback-session-lost-on-navigation, silent Save&Connect failure, diagnostics-export gaps) were found by mining these surfaces and correlating them with actions — not by poking one CTA. Do all three.
 
 1. Android logcat — capture and ATTRIBUTE, never sample-and-dismiss.
-   - Clear logcat before the batch (`adb -s 9B081FFAZ001WX logcat -c`, via droidmind shell), then after each action cluster capture logcat filtered to the app package and its PID (`adb -s 9B081FFAZ001WX logcat -d --pid $(pidof uk.gleissner.c64commander)` or `logcat -d | grep -F uk.gleissner.c64commander`). Save slices under `docs/agentic/artifacts/iterN/logcat/`.
+   - Clear logcat before the batch (`adb -s 9B081FFAZ001WX logcat -c`, via droidctl shell), then after each action cluster capture logcat filtered to the app package and its PID (`adb -s 9B081FFAZ001WX logcat -d --pid $(pidof uk.gleissner.c64commander)` or `logcat -d | grep -F uk.gleissner.c64commander`). Save slices under `docs/agentic/artifacts/iterN/logcat/`.
    - Classify every app-package line by severity: FATAL/ANR/crash, uncaught exception, StrictMode violation, Capacitor/WebView/Chromium error, native plugin error, and warnings. Attribute each to the action that produced it. An app-package error or warning is a defect candidate until explained. Only genuinely unrelated framework/system lines (e.g. `android.xr` flag-export, ashmem) may be set aside, and only by naming them — do not blanket-dismiss logcat as "system noise".
 
 2. In-app Diagnostics panel — INSPECT every tab AND EXPORT + PULL + ANALYZE the ZIP.
    - Open the Diagnostics dialog (app-bar activity indicator, or Settings → Diagnostics) and inspect each tab as a bug scan: Logs, Traces, Actions, Errors, Latency analysis, Heat map, Config drift, Device detail, Decision state. The Errors tab and Latency analysis are first-class bug sources; a non-empty Errors tab or an over-budget latency sample is a defect candidate.
    - Export via "Share all" (`shareAllDiagnosticsZip`). The app writes a timestamped ZIP to its cache dir (Capacitor `Directory.Cache`, named like `c64commander-diagnostics-all-<UTC>.zip`). Pull it off the device (locate under the app cache, e.g. `adb -s 9B081FFAZ001WX exec-out run-as uk.gleissner.c64commander find cache -name 'c64commander-diagnostics-*.zip'` then pull/copy it) into `docs/agentic/artifacts/iterN/diagnostics/`, unzip, and analyze: logs, traceEvents, actions, errors, latencySamples, healthSnapshot/healthHistory, recoveryEvidence, deviceSafetyResolution, and the network snapshot. Inspecting/closing the dialog without exporting and analyzing the ZIP does NOT satisfy this requirement.
 
-3. Cross-surface correlation. For each action cluster, correlate the THREE log surfaces — in-app diagnostics (export + tabs), app/WebView console via droidmind, and package-filtered logcat — plus REST request traces. A discrepancy is itself a defect: UI shows success but diagnostics record a silent failure; diagnostics log a request the UI never reflected; a CTA emits duplicate/zero requests; a store/session value (e.g. a playback or connection session key) vanishes after a lifecycle/route change while hardware state diverges.
+3. Cross-surface correlation. For each action cluster, correlate the THREE log surfaces — in-app diagnostics (export + tabs), app/WebView console via droidctl, and package-filtered logcat — plus REST request traces. A discrepancy is itself a defect: UI shows success but diagnostics record a silent failure; diagnostics log a request the UI never reflected; a CTA emits duplicate/zero requests; a store/session value (e.g. a playback or connection session key) vanishes after a lifecycle/route change while hardware state diverges.
 
 TRUE-USER-INPUT FIDELITY & REPEATED INTERACTION (MANDATORY)
 
 Synthetic gestures are not automatically real user input. Prove actuation, and repeat like a real user.
 
-1. Actuation verification. A control counts as EXERCISED only if the product's own handler actually fired — proven by an emitted request, a store/state change, a diagnostics/trace entry, or a verified UI effect — not merely by dispatching a synthetic gesture. droidmind synthetic `tap` does NOT actuate some controls (e.g. Radix UI sliders require a real drag; some targets need a precise-coordinate tap from the UI-tree bounds). If a gesture produces no handler effect, switch to the primitive that does (real drag, long-press, precise-bounds tap) and re-verify. Never record EXERCISED_CLEAN from a synthetic input that did not actuate the handler; record the tooling caveat and use the working primitive.
+1. Actuation verification. A control counts as EXERCISED only if the product's own handler actually fired — proven by an emitted request, a store/state change, a diagnostics/trace entry, or a verified UI effect — not merely by dispatching a synthetic gesture. droidctl synthetic `tap` does NOT actuate some controls (e.g. Radix UI sliders require a real drag; some targets need a precise-coordinate tap from the UI-tree bounds). If a gesture produces no handler effect, switch to the primitive that does (real drag, long-press, precise-bounds tap) and re-verify. Never record EXERCISED_CLEAN from a synthetic input that did not actuate the handler; record the tooling caveat and use the working primitive.
 2. Repeated/sustained interaction. Real users tap repeatedly and drag across ranges; a single touch hides race, debounce, double-fire, leak, and divergence bugs. For each safe control, exercise it MULTIPLE times, not once: press buttons 3–10× (watch for debounce failure, double-fire, duplicate or zero requests, stuck busy state, wake-lock/refcount leaks); drag sliders across several intermediate values and to both extremes (watch for jump-back on release, mid-drag write floods, missing or duplicated commit); repeat mount/eject/rotate, dialog open/cancel, and route-in/route-out cycles (watch for state divergence, session loss, stale labels, leaked resources). Record the repetition count per control in the evidence block.
 
 PROBE-PACK TEMPLATES
@@ -323,13 +323,13 @@ PEER-SERVER MODEL
 
 The LLM is the orchestrator; peer servers do not replace one another.
 
-- droidmind: primary Android product controller — install/start/stop, navigation, taps, long-presses, swipes, slider drags, text entry, Android Back, file staging, screenshots, background/foreground, lock/unlock, runtime logs, browser console, diagnostics, lifecycle. If droidmind is unavailable, mark HIL infrastructure-blocked; raw adb is not equivalent product evidence.
-- c64scope: physical/A/V/UDP-stream/latency/timeline/assertion/artifact/classification oracle. Add timeline steps after meaningful droidmind/c64bridge actions. Finalize sessions as `pass`, `product_failure`, `infrastructure_failure`, or `inconclusive`, and preserve artifacts. For SID audio use an audio-first `.sid` item and the working capture call; copy artifacts out of any relative `c64scope/` prefix into the iteration folder.
+- droidctl: primary Android product controller — install/start/stop, navigation, taps, long-presses, swipes, slider drags, text entry, Android Back, file staging, screenshots, background/foreground, lock/unlock, runtime logs, browser console, diagnostics, lifecycle. If droidctl is unavailable, mark HIL infrastructure-blocked; raw adb is not equivalent product evidence.
+- c64scope: physical/A/V/UDP-stream/latency/timeline/assertion/artifact/classification oracle. Add timeline steps after meaningful droidctl/c64bridge actions. Finalize sessions as `pass`, `product_failure`, `infrastructure_failure`, or `inconclusive`, and preserve artifacts. For SID audio use an audio-first `.sid` item and the working capture call; copy artifacts out of any relative `c64scope/` prefix into the iteration folder.
 - c64bridge: narrow gap-filler for setup, state reads, stream-endpoint setup, calibration, corroboration, and emergency recovery. It must not start/stop media, build queues, reset/reboot/mount/mutate, or replace the app path as product proof. Justify every c64bridge action in WORKLOG and in the c64scope timeline when applicable.
 
 PIXEL 4 BUILD, DEPLOY, AND APK IDENTITY
 
-Before any current-build HIL claim: (1) run `./scripts/resolve-version.sh`; (2) query installed package identity on the Pixel 4 (droidmind `get_app_info`); (3) compare; (4) if they differ, build/deploy the debug APK; (5) confirm installed identity after deploy; (6) record commands and significant output. Never claim current-build evidence from a stale APK identity. Build/deploy is setup evidence, not product proof.
+Before any current-build HIL claim: (1) run `./scripts/resolve-version.sh`; (2) query installed package identity on the Pixel 4 (droidctl `get_app_info`); (3) compare; (4) if they differ, build/deploy the debug APK; (5) confirm installed identity after deploy; (6) record commands and significant output. Never claim current-build evidence from a stale APK identity. Build/deploy is setup evidence, not product proof.
 
 C64U SAFETY AND TRAFFIC
 
@@ -341,11 +341,11 @@ HIGH-LEVEL TESTS ONLY
 
 Do not run routine coverage, changed-line coverage, unit tests, component tests, broad `npm run test`, broad Playwright suites, lint-as-progress, warning-cleanup-as-progress, static-only validation while HIL remains available, repeated local tests without source changes, or any local test whose result cannot change the selected objective.
 
-Allowed validation: (1) Pixel 4 HIL through droidmind; (2) c64scope physical/A/V/stream/latency proof; (3) c64bridge read-back/setup supporting but not replacing app-driven action; (4) Android build/deploy to install the current source-derived APK; (5) a single narrow high-level regression only when source changed this loop, it exercises user-visible/integration behavior, it is the cheapest useful check, Pixel HIL remains the Android product verdict, and the command + reason are recorded before running; (6) a final release gate only when state files show all HIL deliverables complete or explicitly blocked. Do not run coverage unless the user explicitly asks for it in the current prompt.
+Allowed validation: (1) Pixel 4 HIL through droidctl; (2) c64scope physical/A/V/stream/latency proof; (3) c64bridge read-back/setup supporting but not replacing app-driven action; (4) Android build/deploy to install the current source-derived APK; (5) a single narrow high-level regression only when source changed this loop, it exercises user-visible/integration behavior, it is the cheapest useful check, Pixel HIL remains the Android product verdict, and the command + reason are recorded before running; (6) a final release gate only when state files show all HIL deliverables complete or explicitly blocked. Do not run coverage unless the user explicitly asks for it in the current prompt.
 
 NO-HIL-PEER RULE
 
-This rule is about actual tool availability, not provider identity. Apply it only after concrete discovery proves the required peer tools are absent or unusable: inspect the tool namespace; attempt the safest droidmind/c64scope/c64bridge discovery/status/list call exposed; if shell exists, do not confuse absence of shell commands named like the peers with MCP unavailability; record each attempt and result.
+This rule is about actual tool availability, not provider identity. Apply it only after concrete discovery proves the required peer tools are absent or unusable: inspect the tool namespace; attempt the safest droidctl/c64scope/c64bridge discovery/status/list call exposed; if shell exists, do not confuse absence of shell commands named like the peers with MCP unavailability; record each attempt and result.
 
 Only after those checks fail, with a safe Pixel 4 HIL objective still open: do not substitute coverage/unit/broad-local tests, lint cleanup, build-warning cleanup, static validation, adb-only proof, or c64bridge-only proof; record HIL infrastructure blocked with the exact failed discovery evidence; refresh the continuation prompt; record `Ralph Robin continuation ready`; and stop. Exception: if an already-open blocker/high/medium defect has a safe, small, high-value root-cause fix advanceable without HIL, implement it, then hand off for HIL validation before claiming closure. If another active process owns the HIL window, do not interfere; record the conflict and stop after refreshing state.
 
@@ -396,7 +396,7 @@ Do not spend most of the loop editing markdown. Use `PLANS.md` as the execution 
 - Update `docs/agentic/LESSONS.md` only for durable, reusable lessons.
 - Refresh `docs/agentic/STATE_DIGEST.md` compactly at finalization.
 
-Explicit rules: do not stop after ledger creation; do not update the CTA ledger one row at a time when a batch update is possible; do not perform a documentation-only loop while droidmind HIL is safe and available.
+Explicit rules: do not stop after ledger creation; do not update the CTA ledger one row at a time when a batch update is possible; do not perform a documentation-only loop while droidctl HIL is safe and available.
 
 PRODUCT STANDARD (END-STATE QUALITY BAR)
 
@@ -414,7 +414,7 @@ A release-known-clean build satisfies all of these. Drive every loop toward them
 
 RELEASE-KNOWN-CLEAN EXIT CRITERIA
 
-Do not stop scheduling/continuation until all are true: no open blocker/high/medium defect remains; no release-relevant unfinished TODO remains in `PLANS.md`; every major route/flow/CTA family and agentic coverage-matrix row is accounted for with current-build evidence or an explicit safe blocker; c64u is the primary validated target for all C64U-safe families; u64 fallback has c64u follow-up done/scheduled; no unguarded destructive user-accessible CTA remains; no wrong/duplicate/missing/stale/surprising/destructive/trapped/drifting/over-budget CTA behavior remains; no false-positive foreground toast/error, silent foreground failure, stale diagnostics/target attribution, or background/lock misrepresentation remains; immediate c64u control CTAs have under-1-second effect evidence or an open defect; simple immediate CTAs have under-200-ms feedback evidence or a documented follow-up; current-build c64scope evidence exists for playback start/progression and A/V where practical; no verdict relies on a forbidden weak oracle; no unresolved diagnostics/log/request/c64u-degradation issue remains without fix, guard, or documented non-app cause; all Android-visible changes have Pixel 4 droidmind validation; A/V-sensitive changes have c64scope validation; any post-change tests complied with the high-level-tests policy; at least three consecutive loops across distinct high-risk families found no new blocker/high/medium defect, diagnostics issue, warning/error, c64u degradation, weak-oracle verdict, or latency violation; the final WORKLOG entry states why further continuation is no longer justified.
+Do not stop scheduling/continuation until all are true: no open blocker/high/medium defect remains; no release-relevant unfinished TODO remains in `PLANS.md`; every major route/flow/CTA family and agentic coverage-matrix row is accounted for with current-build evidence or an explicit safe blocker; c64u is the primary validated target for all C64U-safe families; u64 fallback has c64u follow-up done/scheduled; no unguarded destructive user-accessible CTA remains; no wrong/duplicate/missing/stale/surprising/destructive/trapped/drifting/over-budget CTA behavior remains; no false-positive foreground toast/error, silent foreground failure, stale diagnostics/target attribution, or background/lock misrepresentation remains; immediate c64u control CTAs have under-1-second effect evidence or an open defect; simple immediate CTAs have under-200-ms feedback evidence or a documented follow-up; current-build c64scope evidence exists for playback start/progression and A/V where practical; no verdict relies on a forbidden weak oracle; no unresolved diagnostics/log/request/c64u-degradation issue remains without fix, guard, or documented non-app cause; all Android-visible changes have Pixel 4 droidctl validation; A/V-sensitive changes have c64scope validation; any post-change tests complied with the high-level-tests policy; at least three consecutive loops across distinct high-risk families found no new blocker/high/medium defect, diagnostics issue, warning/error, c64u degradation, weak-oracle verdict, or latency violation; the final WORKLOG entry states why further continuation is no longer justified.
 
 FORBIDDEN SLOW LOOP PATTERNS
 
@@ -449,7 +449,7 @@ FINAL RESPONSE FORMAT
 - Visible controls discovered: integer.
 - Visible controls exercised: integer.
 - Production CTA/control actions attempted: integer.
-- `droidmind_cta_action_count`: integer.
+- `droidctl_cta_action_count`: integer.
 - Adversarial transitions attempted: integer and list.
 - CTA rows created/updated: integer; clean rows / defect rows / blocked rows: integers.
 - Latency checks performed: integer (and any over-budget findings).
@@ -460,7 +460,7 @@ FINAL RESPONSE FORMAT
 - Fix/redeploy/validation status.
 - Code changed: yes/no. Build/deploy: yes/no + command.
 - High-level tests run: yes/no + command + justification. Coverage run: no unless user-requested. Low-level local tests: no unless user-requested.
-- droidmind / c64scope / c64bridge used: yes/no each.
+- droidctl / c64scope / c64bridge used: yes/no each.
 - CTA ledger created/updated: yes/no + path. State digest refreshed: yes/no.
 - First-touch/pre-action blocker: none, or the exact allowed blocker.
 - Reason the action-budget minimum was not met, if applicable.
@@ -470,7 +470,7 @@ FINAL RESPONSE FORMAT
 - Runtime context/source; initial % remaining; last % remaining; continuation decision.
 
 ## Work completed
-- State files updated; agentic docs read; files inspected/changed; firmware inspected if any; build/deploy/test commands + reasons; droidmind/c64scope/c64bridge actions; diagnostics/log/request/latency/stream/A/V evidence; cleanup/restores.
+- State files updated; agentic docs read; files inspected/changed; firmware inspected if any; build/deploy/test commands + reasons; droidctl/c64scope/c64bridge actions; diagnostics/log/request/latency/stream/A/V evidence; cleanup/restores.
 
 ## Findings
 - Bugs found/fixed/closed/reopened/ruled out; CTA/control invariants proved or violated; oracle adequacy; diagnostics/log/c64u/infrastructure status.
@@ -481,8 +481,8 @@ FINAL RESPONSE FORMAT
 ## Remaining risk
 - Open blocker/high/medium issues; release-relevant TODOs; next highest-risk HIL family; c64u follow-up status; missing c64scope/UDP evidence; weak-oracle gaps; high-level regression gaps.
 
-If `droidmind_cta_action_count` is `0`, the response must name the allowed pre-action blocker and list concrete evidence; otherwise it is non-compliant. A `CLEAN PASS` or `CLOSED` family verdict is invalid unless every `SAFE_TO_EXERCISE` control in the family was exercised and the action-budget minimum was met, or an allowed reduced-budget reason is recorded.
+If `droidctl_cta_action_count` is `0`, the response must name the allowed pre-action blocker and list concrete evidence; otherwise it is non-compliant. A `CLEAN PASS` or `CLOSED` family verdict is invalid unless every `SAFE_TO_EXERCISE` control in the family was exercised and the action-budget minimum was met, or an allowed reduced-budget reason is recorded.
 
 START NOW
 
-Change to `/home/chris/dev/c64/c64commander`. Run FAST-PATH STARTUP. Read `docs/agentic/STATE_DIGEST.md` first; read full docs only under the digest's reread conditions. Discover droidmind, c64scope, and c64bridge through the actual tool namespace or safe calls — not provider name, not shell-command absence. Append one compact `Ralph loop iteration` entry to `PLANS.md` and `WORKLOG.md`. Select exactly one probe family, enumerate and classify its visible controls, and execute a full probe pack: exhaust every `SAFE_TO_EXERCISE` control — each exercised MULTIPLE times with verified true actuation — perform at least one adversarial-but-safe transition, observe ≈200 ms and ≈1 s behavior, use c64bridge/c64scope as supporting oracle, run the mandatory DEVICE LOG & IN-APP DIAGNOSTICS sweep (package-filtered logcat + in-app Diagnostics export pulled and analyzed), and restore state. On a c64u dropout, pivot to diagnostics-mining and a UI-only family rather than ending early. Meet the action-budget minimum for the current capacity or record an allowed reason. Write one consolidated WORKLOG evidence block, batch-update the CTA ledger for every visible control, refresh the digest, and hand off via the continuation prompt. Do not stop after one CTA, do not run coverage or low-level tests unless the user asked, and do not declare no work remains while any production CTA/control family lacks current-build evidence.
+Change to `/home/chris/dev/c64/c64commander`. Run FAST-PATH STARTUP. Read `docs/agentic/STATE_DIGEST.md` first; read full docs only under the digest's reread conditions. Discover droidctl, c64scope, and c64bridge through the actual tool namespace or safe calls — not provider name, not shell-command absence. Append one compact `Ralph loop iteration` entry to `PLANS.md` and `WORKLOG.md`. Select exactly one probe family, enumerate and classify its visible controls, and execute a full probe pack: exhaust every `SAFE_TO_EXERCISE` control — each exercised MULTIPLE times with verified true actuation — perform at least one adversarial-but-safe transition, observe ≈200 ms and ≈1 s behavior, use c64bridge/c64scope as supporting oracle, run the mandatory DEVICE LOG & IN-APP DIAGNOSTICS sweep (package-filtered logcat + in-app Diagnostics export pulled and analyzed), and restore state. On a c64u dropout, pivot to diagnostics-mining and a UI-only family rather than ending early. Meet the action-budget minimum for the current capacity or record an allowed reason. Write one consolidated WORKLOG evidence block, batch-update the CTA ledger for every visible control, refresh the digest, and hand off via the continuation prompt. Do not stop after one CTA, do not run coverage or low-level tests unless the user asked, and do not declare no work remains while any production CTA/control family lacks current-build evidence.

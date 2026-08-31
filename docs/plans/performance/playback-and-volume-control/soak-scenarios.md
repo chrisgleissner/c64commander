@@ -59,7 +59,7 @@ entire run.
 - **Cadence**: continuous drag with no release for 5 seconds, then 1
   second rest, then repeat. Each drag covers the full slider range
   end-to-end at finger speed comparable to a real user. The agent
-  uses `droidmind` continuous swipe semantics.
+  uses `droidctl` continuous swipe semantics.
 - **Duration**: 2 minutes (~24 sweep cycles).
 - **Oracle**: 60 fps screen recording. Any inter-frame gap >= 100 ms
   with thumb stationary while the recorded pointer is in flight is a
@@ -206,7 +206,7 @@ Use this as a sanity check during Phase 5 deploy validation.
 ## How the agent runs these
 
 The agent in `agent-prompt.md` opens the app on the Pixel 4 over
-`droidmind`, navigates to the Play page, and executes scenarios in
+`droidctl`, navigates to the Play page, and executes scenarios in
 the order V1 -> V2 -> V3 -> V4 -> P1 -> P2 -> P3 -> P4 -> P5. Each
 scenario writes its artifacts under `runs/<runId>/oracles/` and
 appends a summary line to `runs/<runId>/steps.ndjson`. The agent

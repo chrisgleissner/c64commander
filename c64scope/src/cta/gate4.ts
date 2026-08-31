@@ -11,7 +11,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "../deviceRegistry.js";
 import { resolveWorkspaceRoot, timestampId } from "../fullAppCoverageExecutor.js";
-import { DroidmindClient } from "../validation/droidmindClient.js";
+import { DroidctlClient } from "../validation/droidctlClient.js";
 import { type Bounds, centerX, centerY, delay, findTextContaining, findVisibleBoundsByText } from "./uiHelpers.js";
 import { APP_PACKAGE, captureState, gitSha, readFlagValue, scrollUntilVisible } from "./runnerCommon.js";
 
@@ -59,7 +59,7 @@ export async function main(): Promise<void> {
   await mkdir(path.join(artifactDir, "screenshots"), { recursive: true });
   await mkdir(path.join(artifactDir, "hierarchies"), { recursive: true });
 
-  const client = new DroidmindClient();
+  const client = new DroidctlClient();
   const steps: string[] = [];
 
   function addStep(msg: string): void {

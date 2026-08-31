@@ -12,7 +12,7 @@ import { pathToFileURL } from "node:url";
 import { summarizeCoverage, toCoverageCsv, toCoverageJson, type CtaCoverageRecord } from "./coverage.js";
 import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "../deviceRegistry.js";
 import { resolveWorkspaceRoot, timestampId } from "../fullAppCoverageExecutor.js";
-import { DroidmindClient } from "../validation/droidmindClient.js";
+import { DroidctlClient } from "../validation/droidctlClient.js";
 import { type Bounds, centerX, centerY, delay, findTextContaining, findVisibleBoundsByText } from "./uiHelpers.js";
 import { APP_PACKAGE, captureState, gitSha, readFlagValue, scrollUntilVisible } from "./runnerCommon.js";
 
@@ -59,7 +59,7 @@ export function parseGate5Args(args: readonly string[]): Gate5Args {
 // Tap a visible appearance button (identified by text) on the current Settings scroll position.
 // Returns the bounds it tapped, or null if the button was not found at current scroll position.
 async function tapAppearanceButton(
-  client: DroidmindClient,
+  client: DroidctlClient,
   serial: string,
   xml: string,
   buttonText: string,
@@ -83,7 +83,7 @@ export async function main(): Promise<void> {
   await mkdir(path.join(artifactDir, "screenshots"), { recursive: true });
   await mkdir(path.join(artifactDir, "hierarchies"), { recursive: true });
 
-  const client = new DroidmindClient();
+  const client = new DroidctlClient();
   const steps: string[] = [];
   const coverageRecords: CtaCoverageRecord[] = [];
   let idSeq = 0;

@@ -11,7 +11,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "../deviceRegistry.js";
 import { resolveWorkspaceRoot, timestampId } from "../fullAppCoverageExecutor.js";
-import { DroidmindClient } from "../validation/droidmindClient.js";
+import { DroidctlClient } from "../validation/droidctlClient.js";
 import { summarizeCoverage, toCoverageCsv, toCoverageJson, type CtaCoverageRecord } from "./coverage.js";
 import { runCtaCensus } from "./ctaCensus.js";
 import { buildReplaySpec, recordedAction, replayCommand, type RecordedAction } from "./replay.js";
@@ -99,7 +99,7 @@ export async function main(): Promise<void> {
   const sha = await gitSha(workspaceRoot);
   const runId = `cta-${timestampId()}-pixel4-${args.target}-${sha}`;
   const artifactDir = args.artifactDir ?? path.join(workspaceRoot, "c64scope", "artifacts", runId);
-  const client = new DroidmindClient();
+  const client = new DroidctlClient();
   const coverageRecords: CtaCoverageRecord[] = [];
   const runtimeInventory: Record<string, string[]> = {};
   const routeResults: Array<{
@@ -126,7 +126,7 @@ export async function main(): Promise<void> {
     );
     if (!capabilityCheck.satisfied) {
       throw new Error(
-        `DroidMind capability preflight failed: ${capabilityCheck.missing.map((item) => item.id).join(", ")}`,
+        `droidctl capability preflight failed: ${capabilityCheck.missing.map((item) => item.id).join(", ")}`,
       );
     }
 

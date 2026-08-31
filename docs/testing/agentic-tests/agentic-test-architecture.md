@@ -37,13 +37,13 @@ The LLM is the only orchestrator. The MCP servers remain peers.
 
 | Role                     | Current implementation | Owns                                                                                     | Must not own                                                    |
 | ------------------------ | ---------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Mobile controller        | `droidmind` on Android | App lifecycle, UI interaction, screenshots, log access, file staging, diagnostics access | Direct C64 control outside the app path, physical verdict logic |
+| Mobile controller        | `droidctl` on Android  | App lifecycle, UI interaction, screenshots, log access, file staging, diagnostics access | Direct C64 control outside the app path, physical verdict logic |
 | Direct C64 gap filler    | `c64bridge`            | Stream start/stop, RAM/state reads, emergency recovery, calibration-only direct control  | Primary product-validation control path                         |
 | Physical evidence server | `c64scope`             | Capture, signal analysis, session timeline, artifact packaging, A/V assertions           | Android control, direct C64 control                             |
 
 Important note:
 
-- The architecture is controller-neutral even though the current controller implementation is `droidmind`.
+- The architecture is controller-neutral even though the current controller implementation is `droidctl`.
 - A future iOS controller such as `mobile-mcp` is acceptable if it can satisfy the same interface-level role.
 
 ## App-First Product-Validation Rule
@@ -163,7 +163,7 @@ The mobile controller role is defined in interface terms:
 
 Current mapping:
 
-- Android implementation: `droidmind`
+- Android implementation: `droidctl`
 
 Future compatibility:
 
