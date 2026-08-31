@@ -63,6 +63,8 @@ describe("droid_app.install_app", () => {
   it("names the uninstall-first remedy on a signature mismatch", async () => {
     const transport = new FakeTransport();
     transport.installResult = {
+      installed: false,
+      signatureMismatch: true,
       stdout: "",
       stderr: "adb: failed to install app.apk: Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]",
       exitCode: 1,
@@ -136,7 +138,7 @@ describe("droid_app.start_app", () => {
 
     const result = await invoke(
       "droid_app.start_app",
-      { targetId: "adb:TESTSERIAL01", package: PACKAGE, waitForResume: true },
+      { targetId: "adb:TESTSERIAL01", package: PACKAGE, waitForResume: true, resumeTimeoutMs: 150 },
       ctx,
     );
 
@@ -167,7 +169,7 @@ describe("droid_app.start_app", () => {
 
     const result = await invoke(
       "droid_app.start_app",
-      { targetId: "adb:TESTSERIAL01", package: PACKAGE, waitForResume: true },
+      { targetId: "adb:TESTSERIAL01", package: PACKAGE, waitForResume: true, resumeTimeoutMs: 150 },
       ctx,
     );
 

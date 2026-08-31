@@ -7,6 +7,7 @@
  */
 
 import { TransportUnavailableError } from "../tools/errors.js";
+import { ALL_TOOL_NAMES } from "../tools/toolNames.js";
 import type {
   CapabilitySupport,
   DetachedHandle,
@@ -83,33 +84,17 @@ export const SSH_TRANSPORT_PROBES: readonly { id: string; question: string; chec
 
 const UNKNOWN: CapabilitySupport = "unknown";
 
-const SSH_TOOL_SUPPORT: Readonly<Record<string, CapabilitySupport>> = {
-  "droid_target.list_targets": UNKNOWN,
-  "droid_target.describe_target": UNKNOWN,
-  "droid_app.install_app": UNKNOWN,
-  "droid_app.uninstall_app": UNKNOWN,
-  "droid_app.start_app": UNKNOWN,
-  "droid_app.stop_app": UNKNOWN,
-  "droid_app.clear_app_data": UNKNOWN,
-  "droid_app.write_app_file": UNKNOWN,
-  "droid_app.read_app_file": UNKNOWN,
-  "droid_input.tap": UNKNOWN,
-  "droid_input.swipe": UNKNOWN,
-  "droid_input.input_text": UNKNOWN,
-  "droid_input.press_key": UNKNOWN,
-  "droid_capture.screenshot": UNKNOWN,
-  "droid_capture.ui_hierarchy": UNKNOWN,
+const SSH_EXPLICIT: Readonly<Record<string, CapabilitySupport>> = {
+  "droid_capture.logcat": "supported",
+  "droid_device.run_shell": "supported",
   "droid_capture.start_recording": "unsupported",
   "droid_capture.stop_recording": "unsupported",
-  "droid_capture.logcat": "supported",
-  "droid_assert.assert_visible": UNKNOWN,
-  "droid_assert.assert_not_visible": UNKNOWN,
-  "droid_device.prepare_device": UNKNOWN,
-  "droid_device.run_shell": "supported",
-  "droid_device.forward_webview": UNKNOWN,
-  "droid_device.push_file": UNKNOWN,
-  "droid_device.pull_file": UNKNOWN,
 };
+
+/** Everything not explicitly settled is unknown, never assumed to work. */
+const SSH_TOOL_SUPPORT: Readonly<Record<string, CapabilitySupport>> = Object.fromEntries(
+  ALL_TOOL_NAMES.map((name) => [name, SSH_EXPLICIT[name] ?? UNKNOWN]),
+);
 
 const SSH_NOTES: Readonly<Record<string, string>> = {
   "droid_target.list_targets": "Needs a connection method: probes Q2 and Q4.",

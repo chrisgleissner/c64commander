@@ -7,16 +7,20 @@
  */
 
 import { ToolExecutionError } from "../tools/errors.js";
+import { ALL_TOOL_NAMES } from "../tools/toolNames.js";
 import type {
+  CapabilitySupport,
   DetachedHandle,
   ExecOptions,
   ExecResult,
   InstallOptions,
   InstallResult,
+  RemoteEndpoint,
   ResolvedTarget,
   TargetInfo,
   Transport,
   TransportCapabilities,
+  TransportKind,
 } from "./types.js";
 
 export interface FakeExecReply {
@@ -40,15 +44,25 @@ export interface FakeCall {
  * test asserts on the sequence of device operations, not only on the result.
  */
 export class FakeTransport implements Transport {
-  readonly kind = "adb" as const;
   readonly calls: FakeCall[] = [];
   readonly pushed: { localPath: string; remotePath: string }[] = [];
   readonly pulled: { remotePath: string; localPath: string }[] = [];
   readonly forwards: { localPort: number; remote: string }[] = [];
-  readonly spawned: { argv: readonly string[]; stopSignals: NodeJS.Signals[] }[] = [];
+  readonly spawned: { argv: readonly string[]; stopSignals: ("graceful" | "immediate")[] }[] = [];
 
+  kind: TransportKind = "adb";
+  toolSupport: Record<string, CapabilitySupport> = Object.fromEntries(
+    ALL_TOOL_NAMES.map((name) => [name, "supported" as CapabilitySupport]),
+  );
+  notes: Record<string, string> = {};
   targets: TargetInfo[];
-  installResult: InstallResult = { stdout: "Success\n", stderr: "", exitCode: 0, argv: ["adb", "install"] };
+  installResult: InstallResult = {
+    installed: true,
+    stdout: "Success\n",
+    stderr: "",
+    exitCode: 0,
+    argv: ["adb", "install"],
+  };
   spawnStopStderr = "";
   pullPayloads = new Map<string, Buffer>();
   listTargetsError: Error | null = null;
@@ -73,8 +87,9 @@ export class FakeTransport implements Transport {
     return this.calls.filter((call) => call.kind === "exec").map((call) => call.argv.join(" "));
   }
 
+  /** Mirrors a real backend: every tool it can serve is listed explicitly. */
   capabilities(): TransportCapabilities {
-    return { transport: "adb", tools: {}, notes: {} };
+    return { transport: this.kind, tools: { ...this.toolSupport }, notes: { ...this.notes } };
   }
 
   async listTargets(): Promise<TargetInfo[]> {
@@ -114,12 +129,12 @@ export class FakeTransport implements Transport {
 
   spawnShell(target: ResolvedTarget, argv: readonly string[]): DetachedHandle {
     this.calls.push({ kind: "spawn", targetId: target.targetId, argv });
-    const entry = { argv, stopSignals: [] as NodeJS.Signals[] };
+    const entry = { argv, stopSignals: [] as ("graceful" | "immediate")[] };
     this.spawned.push(entry);
     return {
       argv: ["adb", "-s", target.serial, "shell", ...argv],
-      stop: async (signal) => {
-        entry.stopSignals.push(signal);
+      stop: async (mode) => {
+        entry.stopSignals.push(mode);
         return { stderr: this.spawnStopStderr, code: 0 };
       },
     };
@@ -160,9 +175,10 @@ export class FakeTransport implements Transport {
     return this.installResult;
   }
 
-  async forwardPort(target: ResolvedTarget, localPort: number, remote: string): Promise<void> {
-    this.calls.push({ kind: "forward", targetId: target.targetId, argv: ["forward", `tcp:${localPort}`, remote] });
-    this.forwards.push({ localPort, remote });
+  async forwardPort(target: ResolvedTarget, localPort: number, remote: RemoteEndpoint): Promise<void> {
+    const spec = remote.kind === "abstractSocket" ? `localabstract:${remote.name}` : `tcp:${remote.port}`;
+    this.calls.push({ kind: "forward", targetId: target.targetId, argv: ["forward", `tcp:${localPort}`, spec] });
+    this.forwards.push({ localPort, remote: spec });
   }
 
   async removeForward(target: ResolvedTarget, localPort: number): Promise<void> {

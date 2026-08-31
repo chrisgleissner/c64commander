@@ -12,6 +12,7 @@ import { z } from "zod";
 import { ToolExecutionError, ToolValidationError } from "../errors.js";
 import {
   defineExecute,
+  delay,
   expectSuccess,
   packageField,
   packageSchema,
@@ -46,6 +47,7 @@ const startAppSchema = z
     package: packageSchema,
     activity: z.string().min(1).optional(),
     waitForResume: z.boolean().optional(),
+    resumeTimeoutMs: z.number().int().positive().optional(),
     viaLauncherIntent: z.boolean().optional(),
   })
   .strict();
@@ -80,6 +82,22 @@ export function resolveAppFilePath(relativePath: string): string {
     );
   }
   return normalized.startsWith("files/") ? normalized : `files/${normalized}`;
+}
+
+/**
+ * Budgets are in bytes, and a plain string slice counts UTF-16 units, so it
+ * overshoots on multi-byte text. Cutting the buffer instead can split a
+ * character, so the cut is moved back to the last boundary at or under the cap.
+ */
+export function truncateUtf8(payload: Buffer, maxBytes: number): Buffer {
+  if (payload.length <= maxBytes) {
+    return payload;
+  }
+  let end = maxBytes;
+  while (end > 0 && (payload[end]! & 0xc0) === 0x80) {
+    end -= 1;
+  }
+  return payload.subarray(0, end);
 }
 
 function detectRunAsRefusal(stdout: string, stderr: string): string | null {
@@ -134,14 +152,14 @@ export const appModule = defineToolModule({
         });
 
         const output = `${install.stdout}\n${install.stderr}`;
-        if (/INSTALL_FAILED_UPDATE_INCOMPATIBLE/.test(output)) {
+        if (install.signatureMismatch) {
           throw new ToolExecutionError(
             `Install of ${args.package} was refused as INSTALL_FAILED_UPDATE_INCOMPATIBLE: the installed copy was ` +
               `signed with a different key. Call droid_app.uninstall_app for ${args.package} first, then install again.`,
             { details: { package: args.package, stdout: install.stdout, stderr: install.stderr } },
           );
         }
-        if (install.exitCode !== 0 || !/Success/.test(output)) {
+        if (!install.installed) {
           throw new ToolExecutionError(`Install of ${args.apkPath} failed: ${output.trim()}`, {
             details: { exitCode: install.exitCode, stdout: install.stdout, stderr: install.stderr },
           });
@@ -203,6 +221,7 @@ export const appModule = defineToolModule({
           package: packageField,
           activity: { type: "string", description: "Activity name, e.g. .MainActivity. Default .MainActivity." },
           waitForResume: { type: "boolean", description: "Poll dumpsys until the package is the resumed activity." },
+          resumeTimeoutMs: { type: "number", description: "Deadline for that poll in milliseconds. Default 15000." },
           viaLauncherIntent: {
             type: "boolean",
             description: "Use monkey with the LAUNCHER category instead of am start.",
@@ -245,11 +264,24 @@ export const appModule = defineToolModule({
           totalTimeMs = total ? Number(total[1]) : null;
         }
 
-        const activities = await handle.transport.exec(handle.target, ["dumpsys", "activity", "activities"]);
-        const resumed = /(?:ResumedActivity|mResumedActivity)[^\n]*?([A-Za-z0-9_.]+\/[A-Za-z0-9_.$]+)/.exec(
-          activities.stdout,
-        );
-        const resumedActivity = resumed?.[1] ?? null;
+        /*
+         * `am start -W` returns when the activity is launched, which on a WebView
+         * app precedes the window actually resuming, so a single read races a
+         * cold start.
+         */
+        const deadline = Date.now() + (args.waitForResume ? (args.resumeTimeoutMs ?? 15_000) : 0);
+        let resumedActivity: string | null = null;
+        for (;;) {
+          const activities = await handle.transport.exec(handle.target, ["dumpsys", "activity", "activities"]);
+          resumedActivity =
+            /(?:ResumedActivity|mResumedActivity)[^\n]*?([A-Za-z0-9_.]+\/[A-Za-z0-9_.$]+)/.exec(
+              activities.stdout,
+            )?.[1] ?? null;
+          if (resumedActivity?.startsWith(`${args.package}/`) || Date.now() >= deadline) {
+            break;
+          }
+          await delay(250);
+        }
 
         if (args.waitForResume && (resumedActivity === null || !resumedActivity.startsWith(`${args.package}/`))) {
           throw new ToolExecutionError(
@@ -389,9 +421,15 @@ export const appModule = defineToolModule({
           );
         }
 
-        const bytes = Buffer.byteLength(result.stdout, "utf8");
-        const content = args.maxBytes === undefined ? result.stdout : result.stdout.slice(0, args.maxBytes);
-        return { content, bytes, truncated: content.length < result.stdout.length, path: target };
+        const full = Buffer.from(result.stdout, "utf8");
+        const clipped = args.maxBytes === undefined ? full : truncateUtf8(full, args.maxBytes);
+        return {
+          content: clipped.toString("utf8"),
+          bytes: clipped.length,
+          totalBytes: full.length,
+          truncated: clipped.length < full.length,
+          path: target,
+        };
       }),
     },
   ],

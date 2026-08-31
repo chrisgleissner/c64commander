@@ -18,6 +18,8 @@ import {
   targetIdField,
   targetIdSchema,
 } from "../common.js";
+import { describeTarget } from "../../deviceInfo.js";
+import { ToolExecutionError } from "../errors.js";
 import { captureUiHierarchy, screenFromHierarchy, writeScreenshot } from "./capture.js";
 import { defineToolModule, type ToolExecutionContext } from "../types.js";
 
@@ -51,8 +53,12 @@ const XML_ENTITIES: Readonly<Record<string, string>> = {
   "&apos;": "'",
 };
 
+/** Android's serialiser escapes newline, carriage return and tab numerically. */
 function decodeXml(value: string): string {
-  return value.replace(/&(?:amp|lt|gt|quot|apos);/g, (entity) => XML_ENTITIES[entity] ?? entity);
+  return value
+    .replace(/&#x([0-9a-fA-F]+);/g, (_m, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_m, dec: string) => String.fromCodePoint(Number.parseInt(dec, 10)))
+    .replace(/&(?:amp|lt|gt|quot|apos);/g, (entity) => XML_ENTITIES[entity] ?? entity);
 }
 
 function attribute(fragment: string, name: string): string {
@@ -243,7 +249,13 @@ async function runAssertion(
     attempts += 1;
     const capture = await captureUiHierarchy(handle);
     xml = capture.xml;
-    screen = screenFromHierarchy(xml) ?? { width: 0, height: 0 };
+    /*
+     * A zero-sized screen makes every node fail requireOnScreen, which silently
+     * turns assert_not_visible into "always passes" - including for the
+     * error-boundary title it exists to catch. Fall back to the device's own
+     * geometry, and refuse rather than guess if that is unavailable too.
+     */
+    screen = screenFromHierarchy(xml) ?? (await screenFromDevice(handle));
     outcome = evaluateMatches(parseNodes(xml), args.match, screen, { requireEnabled, requireOnScreen });
     const satisfied = expectPresent ? outcome.passed : !outcome.passed;
     if (satisfied || Date.now() >= deadline) {
@@ -262,6 +274,18 @@ async function runAssertion(
     matches: outcome.candidates,
     evidence,
   };
+}
+
+async function screenFromDevice(handle: ResolvedTargetHandle): Promise<Screen> {
+  const description = await describeTarget(handle.transport, handle.target, handle.info);
+  if (!description.screen.width || !description.screen.height) {
+    throw new ToolExecutionError(
+      `The UI hierarchy from ${handle.target.targetId} carried no bounds and the device reported no screen size, ` +
+        "so visibility cannot be decided. Refusing to report an assertion result.",
+      { details: { targetId: handle.target.targetId } },
+    );
+  }
+  return { width: description.screen.width, height: description.screen.height };
 }
 
 async function writeEvidence(

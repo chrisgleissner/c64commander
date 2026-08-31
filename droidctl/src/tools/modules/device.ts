@@ -271,7 +271,7 @@ export const deviceModule = defineToolModule({
         if (args.replaceExisting !== false) {
           await handle.transport.removeForward(handle.target, args.localPort);
         }
-        await handle.transport.forwardPort(handle.target, args.localPort, `localabstract:${socket}`);
+        await handle.transport.forwardPort(handle.target, args.localPort, { kind: "abstractSocket", name: socket });
         const pid = /_(\d+)$/.exec(socket)?.[1] ?? null;
         return { localPort: args.localPort, socket, pid, package: args.package };
       }),

@@ -66,11 +66,18 @@ describe("ArtifactStore", () => {
   it("honours a per-call runRoot while keeping the index in the run directory", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "droidctl-artifacts-"));
     const other = await mkdtemp(path.join(os.tmpdir(), "droidctl-elsewhere-"));
-    const store = new ArtifactStore({ root, runId: "dc-FIXED" });
+    const store = new ArtifactStore({ root, runId: "dc-FIXED", allowedRunRoots: [os.tmpdir()] });
 
     const entry = store.write("droid_capture.screenshot", "adb:X", "raw", "a.png", Buffer.from("d"), other);
     expect(entry.path).toBe(path.join(other, "raw", "a.png"));
     expect(store.index()).toHaveLength(1);
+  });
+
+  it("refuses a runRoot outside the permitted roots", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "droidctl-artifacts-"));
+    const store = new ArtifactStore({ root, runId: "dc-FIXED", allowedRunRoots: [] });
+    expect(() => store.pathFor("raw", "a.png", "/etc")).toThrow(/outside the permitted artifact roots/);
+    expect(() => store.pathFor("raw", "a.png", path.join(root, "dc-FIXED", "sub"))).not.toThrow();
   });
 
   it("appends one JSON line per transport invocation, naming the target", async () => {

@@ -173,7 +173,7 @@ describe("droid_capture recording", () => {
     );
 
     expect(stopped.data).toMatchObject({ stopped: true, pulled: true, bytes: 4096 });
-    expect(transport.spawned[0]?.stopSignals).toEqual(["SIGINT"]);
+    expect(transport.spawned[0]?.stopSignals).toEqual(["graceful"]);
     expect((await stat(stopped.data.localPath)).size).toBe(4096);
     expect(transport.execArgvLines()).toContain("rm -f /sdcard/droidctl-walk.mp4");
   });

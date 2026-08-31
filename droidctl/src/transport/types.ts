@@ -58,16 +58,30 @@ export interface InstallOptions {
 }
 
 export interface InstallResult {
+  /** Decided by the backend, not by the caller regexing its stdout. */
+  readonly installed: boolean;
+  /** Set when the backend recognised a signature mismatch on reinstall. */
+  readonly signatureMismatch?: boolean;
   readonly stdout: string;
   readonly stderr: string;
   readonly exitCode: number;
   readonly argv: readonly string[];
 }
 
+/**
+ * What to forward to, described rather than spelled in one transport's grammar.
+ * adb renders this as `localabstract:<name>`; another backend tunnels it its own way.
+ */
+export type RemoteEndpoint =
+  { readonly kind: "abstractSocket"; readonly name: string } | { readonly kind: "tcp"; readonly port: number };
+
 export interface DetachedHandle {
   readonly argv: readonly string[];
-  /** Signals the local child, waits for it to close, and returns what it wrote to stderr. */
-  stop(signal: NodeJS.Signals): Promise<{ stderr: string; code: number | null; timedOut?: boolean }>;
+  /**
+   * Ends the detached command. "graceful" must let the tool flush its output;
+   * how that is delivered is the backend's business.
+   */
+  stop(mode: "graceful" | "immediate"): Promise<{ stderr: string; code: number | null; timedOut?: boolean }>;
 }
 
 export type CapabilitySupport = "supported" | "unsupported" | "unknown";
@@ -100,7 +114,7 @@ export interface Transport {
   pullFile(target: ResolvedTarget, remotePath: string, localPath: string): Promise<number>;
   pushFile(target: ResolvedTarget, localPath: string, remotePath: string): Promise<number>;
   installPackage(target: ResolvedTarget, apkPath: string, opts: InstallOptions): Promise<InstallResult>;
-  forwardPort(target: ResolvedTarget, localPort: number, remote: string): Promise<void>;
+  forwardPort(target: ResolvedTarget, localPort: number, remote: RemoteEndpoint): Promise<void>;
   removeForward(target: ResolvedTarget, localPort: number): Promise<void>;
   capabilities(): TransportCapabilities;
 }

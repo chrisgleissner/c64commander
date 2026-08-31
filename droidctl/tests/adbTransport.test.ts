@@ -9,7 +9,7 @@
  * so every assertion is about the argument vector the code builds.
  */
 
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -90,7 +90,7 @@ describe("every targeted invocation carries -s", () => {
     await recorder.transport.exec(TARGET, ["screencap", "-p"], { encoding: "buffer" });
     await recorder.transport.installPackage(TARGET, "/tmp/app.apk", { allowDowngrade: true, grantPermissions: true });
     await recorder.transport.pushFile(TARGET, localPath, "/sdcard/file.bin");
-    await recorder.transport.forwardPort(TARGET, 9222, "localabstract:webview_devtools_remote_1");
+    await recorder.transport.forwardPort(TARGET, 9222, { kind: "abstractSocket", name: "webview_devtools_remote_1" });
     await recorder.transport.removeForward(TARGET, 9222);
 
     expect(recorder.requests).toHaveLength(6);
@@ -188,16 +188,35 @@ describe("adb transport results", () => {
     const localPath = path.join(dir, "f");
     await writeFile(localPath, "x");
     await expect(recorder.transport.pushFile(TARGET, localPath, "/sdcard/f")).rejects.toThrow(/adb push failed/);
-    await expect(recorder.transport.forwardPort(TARGET, 1, "localabstract:x")).rejects.toThrow(/adb forward failed/);
+    await expect(recorder.transport.forwardPort(TARGET, 1, { kind: "abstractSocket", name: "x" })).rejects.toThrow(
+      /adb forward failed/,
+    );
     await expect(recorder.transport.pullBinary(TARGET, "/sdcard/x")).rejects.toThrow(/Unable to read/);
   });
 
-  it("writes a pulled payload to a local file", async () => {
-    const recorder = recordingTransport(() => ok("body"));
+  it("streams a file through adb pull rather than buffering it through exec-out", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "droidctl-adb-pull-"));
     const localPath = path.join(dir, "out.bin");
-    expect(await recorder.transport.pullFile(TARGET, "/sdcard/out.bin", localPath)).toBe(4);
-    expect(await readFile(localPath, "utf8")).toBe("body");
+    // adb writes the file itself, so the fake runner does that on its behalf.
+    const recorder = recordingTransport(() => ok("1 file pulled."));
+    recorder.transport = new AdbTransport({
+      exec: async (request) => {
+        recorder.requests.push(request);
+        await writeFile(localPath, Buffer.alloc(200_000, 7));
+        return ok("1 file pulled.");
+      },
+    });
+
+    expect(await recorder.transport.pullFile(TARGET, "/sdcard/out.bin", localPath)).toBe(200_000);
+    expect(recorder.requests[0]?.args).toEqual(["-s", "9B0EXAMPLE", "pull", "/sdcard/out.bin", localPath]);
+  });
+
+  it("reports an adb pull that claimed success but wrote nothing", async () => {
+    const recorder = recordingTransport(() => ok("1 file pulled."));
+    const dir = await mkdtemp(path.join(os.tmpdir(), "droidctl-adb-pull-empty-"));
+    await expect(recorder.transport.pullFile(TARGET, "/sdcard/x", path.join(dir, "absent"))).rejects.toThrow(
+      /wrote nothing/,
+    );
   });
 
   it("reports the byte count adb printed on a push", async () => {
@@ -239,10 +258,10 @@ describe("the command journal", () => {
 });
 
 describe("detached screenrecord", () => {
-  it("spawns adb shell with the serial and stops the local child with the given signal", async () => {
+  it("spawns adb shell with the serial and turns a graceful stop into SIGINT", async () => {
     const spawnCalls: string[][] = [];
-    let stderrListener: ((chunk: string) => void) | null = null;
-    let closeListener: ((code: number | null) => void) | null = null;
+    let stderrListener: ((chunk: string) => void) | undefined;
+    let closeListener: ((code: number | null) => void) | undefined;
     const signals: NodeJS.Signals[] = [];
 
     const handle: RawSpawnHandle = {
@@ -256,7 +275,6 @@ describe("detached screenrecord", () => {
       onStderr(listener) {
         stderrListener = listener;
       },
-      killed: false,
     };
 
     const transport = new AdbTransport({
@@ -268,7 +286,7 @@ describe("detached screenrecord", () => {
 
     const detached = transport.spawnShell(TARGET, ["screenrecord", "--time-limit", "10", "/sdcard/x.mp4"]);
     stderrListener?.("warning: something\n");
-    const stopped = await detached.stop("SIGINT");
+    const stopped = await detached.stop("graceful");
 
     expect(spawnCalls[0]?.slice(0, 3)).toEqual(["-s", "9B0EXAMPLE", "shell"]);
     expect(signals).toEqual(["SIGINT"]);

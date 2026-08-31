@@ -25,7 +25,7 @@ import { evaluateMatches, parseNodes } from "../src/tools/modules/assert.js";
 import { nodeSpawnRunner } from "../src/transport/adb.js";
 import { FakeTransport } from "../src/transport/fake.js";
 import type { TransportCapabilities } from "../src/transport/types.js";
-import { createTestContext, invoke } from "./support/harness.js";
+import { createTestContext, invoke, withDeviceDefaults } from "./support/harness.js";
 
 const TARGET = "adb:TESTSERIAL01";
 const PACKAGE = "uk.gleissner.c64commander";
@@ -145,7 +145,13 @@ describe("hierarchy parsing edge cases", () => {
 describe("install failure shapes", () => {
   it("fails when adb exits zero but never printed Success", async () => {
     const transport = new FakeTransport();
-    transport.installResult = { stdout: "Performing Streamed Install\n", stderr: "", exitCode: 0, argv: [] };
+    transport.installResult = {
+      installed: false,
+      stdout: "Performing Streamed Install\n",
+      stderr: "",
+      exitCode: 0,
+      argv: [],
+    };
     const { ctx } = await createTestContext({ transport });
     const dir = await mkdtemp(path.join(os.tmpdir(), "droidctl-apk-"));
     const apkPath = path.join(dir, "app.apk");
@@ -489,7 +495,7 @@ describe("remaining guards", () => {
 
     const result = await invoke(
       "droid_app.start_app",
-      { targetId: TARGET, package: PACKAGE, waitForResume: true },
+      { targetId: TARGET, package: PACKAGE, waitForResume: true, resumeTimeoutMs: 150 },
       ctx,
     );
     expect(result.error.message).toMatch(/\(resumed: none\)/);
@@ -541,25 +547,50 @@ describe("remaining guards", () => {
     expect(outcome.candidates[0]?.rejectedBy).toBeNull();
   });
 
-  it("uses a zero screen rectangle when the hierarchy has no bounds at all", async () => {
+  it("refuses rather than passing an assertion when no screen rectangle can be established", async () => {
     const transport = new FakeTransport();
     transport.respondTo("wc -c", { stdout: "5\n" });
     transport.respondTo("cat /sdcard/Download/droidctl-ui.xml", { stdout: "<hierarchy></hierarchy>" });
+    transport.respondTo("getprop", { stdout: "" });
+    transport.respondTo("wm size", { stdout: "" });
+    transport.respondTo("wm density", { stdout: "" });
+    const { ctx } = await createTestContext({ transport });
+
+    // The dangerous shape: a 0x0 screen fails requireOnScreen for every node, so
+    // assert_not_visible would report a clean pass with the node right there.
+    const negative = await invoke(
+      "droid_assert.assert_not_visible",
+      { targetId: TARGET, name: "noscreen", match: { text: "Something went wrong" } },
+      ctx,
+    );
+    expect(negative.ok).toBe(false);
+    expect(negative.error.message).toMatch(/visibility cannot be decided/);
+  });
+
+  it("falls back to the device geometry when the hierarchy carries no bounds", async () => {
+    const transport = new FakeTransport();
+    transport.respondTo("wc -c", { stdout: "5\n" });
+    transport.respondTo("cat /sdcard/Download/droidctl-ui.xml", {
+      stdout: '<hierarchy><node text="Something went wrong" class="T" enabled="true" /></hierarchy>',
+    });
+    transport.respondTo("getprop", { stdout: "[ro.build.version.sdk]: [33]" });
+    transport.respondTo("wm size", { stdout: "Physical size: 1080x2280\n" });
+    transport.respondTo("wm density", { stdout: "Physical density: 440\n" });
     transport.respondTo("screencap -p", {
-      stdoutBytes: (await import("../src/png.js")).encodePng({
-        width: 4,
-        height: 4,
-        pixels: Buffer.alloc(64, 3),
-      }),
+      stdoutBytes: (await import("../src/png.js")).encodePng({ width: 4, height: 4, pixels: Buffer.alloc(64, 3) }),
     });
     const { ctx } = await createTestContext({ transport });
 
-    const result = await invoke(
-      "droid_assert.assert_visible",
-      { targetId: TARGET, name: "noscreen", match: { text: "anything" } },
+    const negative = await invoke(
+      "droid_assert.assert_not_visible",
+      { targetId: TARGET, name: "crashtext", match: { text: "Something went wrong" } },
       ctx,
     );
-    expect(result.data.screen).toEqual({ width: 0, height: 0 });
+    expect(negative.data.screen).toEqual({ width: 1080, height: 2280 });
+    // The node has no bounds, so it is still not visible - but that verdict now
+    // comes from a real screen rectangle rather than from 0x0.
+    expect(negative.data.passed).toBe(true);
+    expect(negative.data.matches[0].rejectedBy).toBe("requireOnScreen");
   });
 
   it("writes failure evidence into an explicit runRoot", async () => {
@@ -712,7 +743,7 @@ describe("the last guards", () => {
     const handle = transport.spawnShell({ targetId: "adb:X", transport: "adb", serial: "X" }, ["screenrecord"]);
 
     const stopped = await Promise.race([
-      handle.stop("SIGINT"),
+      handle.stop("graceful"),
       new Promise((resolve) => setTimeout(() => resolve("still waiting"), 200)),
     ]);
     // The bounded wait is 15s, so within 200ms the promise must still be pending:
@@ -725,6 +756,8 @@ describe("the last guards", () => {
     await expect(
       nodeExecRunner({ file: "node", args: ["-e", "process.exit(0)"], timeoutMs: 5000, maxBytes: 1024 }),
     ).resolves.toMatchObject({ exitCode: 0 });
+    // Oversized output is truncated by the caller, not fatal to the runner: a
+    // 135 MB recording pull must not die on an exec buffer.
     await expect(
       nodeExecRunner({
         file: "node",
@@ -732,6 +765,300 @@ describe("the last guards", () => {
         timeoutMs: 5000,
         maxBytes: 16,
       }),
+    ).resolves.toMatchObject({ exitCode: 0 });
+    await expect(
+      nodeExecRunner({
+        file: path.join(os.tmpdir(), "droidctl-absent-binary"),
+        args: [],
+        timeoutMs: 5000,
+        maxBytes: 16,
+      }),
     ).rejects.toThrow();
+  });
+});
+
+describe("hardening found by the adversarial review", () => {
+  it("truncates an oversized payload instead of failing the call", async () => {
+    const { AdbTransport } = await import("../src/transport/adb.js");
+    const transport = new AdbTransport({
+      exec: async () => ({ stdout: Buffer.alloc(5000, 0x61), stderr: "", exitCode: 0 }),
+    });
+    const result = await transport.exec({ targetId: "adb:X", transport: "adb", serial: "X" }, ["logcat"], {
+      maxBytes: 16,
+    });
+    expect(result.stdout).toHaveLength(16);
+    expect(result.truncated).toBe(true);
+  });
+
+  it("reports a killed adb child as a timeout, not a device error", async () => {
+    const { AdbTransport } = await import("../src/transport/adb.js");
+    const transport = new AdbTransport({
+      exec: async () => ({ stdout: Buffer.alloc(0), stderr: "", exitCode: -1, timedOut: true }),
+    });
+    await expect(
+      transport.exec({ targetId: "adb:X", transport: "adb", serial: "X" }, ["uiautomator", "dump"]),
+    ).rejects.toMatchObject({ code: "timeout" });
+  });
+
+  it("renders an abstract socket and a TCP endpoint into adb's own forward grammar", async () => {
+    const { AdbTransport } = await import("../src/transport/adb.js");
+    const requests: string[][] = [];
+    const transport = new AdbTransport({
+      exec: async (request) => {
+        requests.push([...request.args]);
+        return { stdout: Buffer.alloc(0), stderr: "", exitCode: 0 };
+      },
+    });
+    const target = { targetId: "adb:X", transport: "adb" as const, serial: "X" };
+    await transport.forwardPort(target, 1, { kind: "abstractSocket", name: "sock" });
+    await transport.forwardPort(target, 2, { kind: "tcp", port: 5555 });
+    expect(requests.map((r) => r.slice(3))).toEqual([
+      ["tcp:1", "localabstract:sock"],
+      ["tcp:2", "tcp:5555"],
+    ]);
+  });
+
+  it("turns an immediate stop into SIGKILL and a graceful one into SIGINT", async () => {
+    const { AdbTransport } = await import("../src/transport/adb.js");
+    const signals: NodeJS.Signals[] = [];
+    const make = () => {
+      let onClose: ((code: number | null) => void) | undefined;
+      return {
+        handle: {
+          kill(signal: NodeJS.Signals) {
+            signals.push(signal);
+            onClose?.(0);
+          },
+          onClose(listener: (code: number | null) => void) {
+            onClose = listener;
+          },
+          onStderr() {},
+        },
+      };
+    };
+    const transport = new AdbTransport({ spawn: () => make().handle });
+    const target = { targetId: "adb:X", transport: "adb" as const, serial: "X" };
+    await transport.spawnShell(target, ["screenrecord"]).stop("graceful");
+    await transport.spawnShell(target, ["screenrecord"]).stop("immediate");
+    expect(signals).toEqual(["SIGINT", "SIGKILL"]);
+  });
+
+  it("decides install success in the backend rather than by regexing its stdout", async () => {
+    const { AdbTransport } = await import("../src/transport/adb.js");
+    const outcomes = [
+      { text: "Success\n", installed: true, mismatch: false },
+      { text: "Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]", installed: false, mismatch: true },
+      { text: "Performing Streamed Install\n", installed: false, mismatch: false },
+    ];
+    for (const outcome of outcomes) {
+      const transport = new AdbTransport({
+        exec: async () => ({ stdout: Buffer.from(outcome.text), stderr: "", exitCode: 0 }),
+      });
+      const result = await transport.installPackage(
+        { targetId: "adb:X", transport: "adb", serial: "X" },
+        "/tmp/a.apk",
+        {},
+      );
+      expect({ installed: result.installed, mismatch: result.signatureMismatch }).toEqual({
+        installed: outcome.installed,
+        mismatch: outcome.mismatch,
+      });
+    }
+  });
+
+  it("refuses a tool the transport does not list at all", async () => {
+    const transport = withDeviceDefaults(new FakeTransport());
+    transport.toolSupport = { "droid_input.tap": "supported", "droid_target.describe_target": "supported" };
+    const { ctx } = await createTestContext({ transport });
+
+    const allowed = await invoke("droid_input.tap", { targetId: TARGET, x: 1, y: 1 }, ctx);
+    expect(allowed.ok).toBe(true);
+
+    const refused = await invoke("droid_app.stop_app", { targetId: TARGET, package: PACKAGE }, ctx);
+    expect(refused.ok).toBe(false);
+    expect(refused.error.code).toBe("unsupported_on_transport");
+    expect(refused.error.message).toMatch(/not listed in the adb transport's capability map/);
+  });
+
+  it("polls for the resumed activity instead of reading it once", async () => {
+    const transport = new FakeTransport();
+    transport.respondTo("am start", { stdout: "Status: ok\nTotalTime: 5\n" });
+    let reads = 0;
+    transport.respond((argv) =>
+      argv.join(" ").startsWith("dumpsys activity activities")
+        ? { stdout: ++reads < 3 ? "nothing yet" : `mResumedActivity: ${PACKAGE}/.MainActivity` }
+        : undefined,
+    );
+    const { ctx } = await createTestContext({ transport });
+
+    const result = await invoke(
+      "droid_app.start_app",
+      { targetId: TARGET, package: PACKAGE, waitForResume: true, resumeTimeoutMs: 4000 },
+      ctx,
+    );
+    expect(result.ok).toBe(true);
+    expect(reads).toBeGreaterThanOrEqual(3);
+  });
+
+  it("accepts a logcat with content when no package was named", async () => {
+    const transport = new FakeTransport();
+    transport.respondTo("logcat -d", { stdout: "some line\n" });
+    const { ctx } = await createTestContext({ transport });
+
+    const result = await invoke(
+      "droid_capture.logcat",
+      { targetId: TARGET, mode: "dump", requireRuntimeContent: true },
+      ctx,
+    );
+    expect(result.ok).toBe(true);
+    expect(result.data.lineCount).toBe(1);
+  });
+
+  it("counts a byte budget in bytes, not UTF-16 units", async () => {
+    const transport = new FakeTransport();
+    transport.respondTo("cat 'files/e.txt'", { stdout: "€€€€€" });
+    const { ctx } = await createTestContext({ transport });
+
+    const result = await invoke(
+      "droid_app.read_app_file",
+      { targetId: TARGET, package: PACKAGE, relativePath: "e.txt", maxBytes: 4 },
+      ctx,
+    );
+    // Three bytes, not four: the cut moves back to a character boundary rather
+    // than splitting the euro sign and emitting a replacement character.
+    expect(result.data).toMatchObject({ content: "\u20ac", bytes: 3, totalBytes: 15, truncated: true });
+    expect(Buffer.byteLength(result.data.content, "utf8")).toBeLessThanOrEqual(4);
+  });
+
+  it("decodes the numeric character references Android emits for newline and tab", () => {
+    const nodes = parseNodes(
+      '<hierarchy><node text="line&#10;two&#9;tabbed&#x41;" class="T" enabled="true" /></hierarchy>',
+    );
+    expect(nodes[0]?.text).toBe("line\ntwo\ttabbedA");
+  });
+
+  it("reports an undecodable screenshot as a tool error, not an internal one", async () => {
+    const transport = new FakeTransport();
+    const broken = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(40)]);
+    transport.respondTo("screencap -p", { stdoutBytes: broken });
+    const { ctx } = await createTestContext({ transport });
+
+    const result = await invoke("droid_capture.screenshot", { targetId: TARGET, name: "broken" }, ctx);
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe("device_error");
+    expect(result.error.message).toMatch(/could not be decoded/);
+  });
+});
+
+describe("residual guards after the hardening", () => {
+  const target = { targetId: "adb:X", transport: "adb" as const, serial: "X" };
+
+  it("reports a failing adb pull and a failing logcat dump", async () => {
+    const { AdbTransport } = await import("../src/transport/adb.js");
+    const failing = new AdbTransport({
+      exec: async () => ({ stdout: Buffer.alloc(0), stderr: "remote object does not exist", exitCode: 1 }),
+    });
+    await expect(failing.pullFile(target, "/sdcard/x.mp4", path.join(os.tmpdir(), "x.mp4"))).rejects.toThrow(
+      /adb pull of .* failed/,
+    );
+
+    const transport = new FakeTransport();
+    transport.respondTo("logcat -d", { exitCode: 1, stderr: "device offline" });
+    const { ctx } = await createTestContext({ transport });
+    const dump = await invoke("droid_capture.logcat", { targetId: TARGET, mode: "dump" }, ctx);
+    expect(dump.ok).toBe(false);
+    expect(dump.error.message).toMatch(/logcat -d failed/);
+  });
+
+  it("rejects a spawn failure that is not a signal kill", async () => {
+    const { nodeExecRunner } = await import("../src/transport/adb.js");
+    await expect(
+      nodeExecRunner({ file: path.join(os.tmpdir(), "droidctl-missing-bin"), args: [], timeoutMs: 2000, maxBytes: 64 }),
+    ).rejects.toThrow();
+  });
+
+  it("keeps a pulled MP4 that carries a valid ftyp box and deletes the device copy", async () => {
+    const transport = new FakeTransport();
+    const { ctx } = await createTestContext({ transport });
+    const started = await invoke("droid_capture.start_recording", { targetId: TARGET, name: "kept" }, ctx);
+    const mp4 = Buffer.alloc(2048);
+    mp4.write("ftyp", 4, "ascii");
+    transport.pullPayloads.set("/sdcard/droidctl-kept.mp4", mp4);
+
+    const stopped = await invoke(
+      "droid_capture.stop_recording",
+      { targetId: TARGET, recordingId: started.data.recordingId },
+      ctx,
+    );
+    expect(stopped.data).toMatchObject({ pulled: true, bytes: 2048 });
+    expect(transport.execArgvLines()).toContain("rm -f /sdcard/droidctl-kept.mp4");
+  });
+
+  it("fails requireRuntimeContent when the named package never appears", async () => {
+    const transport = new FakeTransport();
+    transport.respondTo("pidof", { stdout: "" });
+    transport.respondTo("logcat -d", { stdout: "unrelated chatter\n" });
+    const { ctx } = await createTestContext({ transport });
+
+    const result = await invoke(
+      "droid_capture.logcat",
+      { targetId: TARGET, mode: "dump", package: PACKAGE, requireRuntimeContent: true },
+      ctx,
+    );
+    expect(result.ok).toBe(false);
+    expect(result.error.message).toMatch(/no runtime content/);
+  });
+
+  it("returns the payload untouched when it fits the byte budget", async () => {
+    const { truncateUtf8 } = await import("../src/tools/modules/app.js");
+    expect(truncateUtf8(Buffer.from("abc"), 10).toString()).toBe("abc");
+    expect(truncateUtf8(Buffer.from("abcdef"), 3).toString()).toBe("abc");
+    // A cut landing exactly on a boundary is not moved back.
+    expect(truncateUtf8(Buffer.from("€€"), 3).toString()).toBe("€");
+  });
+});
+
+describe("the last three branches", () => {
+  it("selects the upper-left predictor when Paeth prefers it", async () => {
+    const { decodePng, encodePng } = await import("../src/png.js");
+    // A checkerboard drives Paeth through all three predictor choices.
+    const size = 6;
+    const pixels = Buffer.alloc(size * size * 4);
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        const o = (y * size + x) * 4;
+        const v = (x * 97 + y * 211) % 256;
+        pixels[o] = v;
+        pixels[o + 1] = 255 - v;
+        pixels[o + 2] = (v * 3) % 256;
+        pixels[o + 3] = 255;
+      }
+    }
+    expect(decodePng(encodePng({ width: size, height: size, pixels })).pixels).toEqual(pixels);
+  });
+
+  it("names a size override with no density override in the refusal", async () => {
+    const transport = new FakeTransport();
+    transport.respondTo("getprop", { stdout: "[ro.build.version.sdk]: [33]" });
+    transport.respondTo("getprop sys.boot_completed", { stdout: "1\n" });
+    transport.respondTo("wm size", { stdout: "Physical size: 1080x2280\nOverride size: 480x640\n" });
+    transport.respondTo("wm density", { stdout: "Physical density: 440\n" });
+    transport.respondTo("settings get global", { stdout: "1.0\n" });
+    transport.respondTo("dumpsys", { stdout: "" });
+    const { ctx } = await createTestContext({ transport });
+
+    const result = await invoke("droid_device.prepare_device", { targetId: TARGET, requireNativeGeometry: true }, ctx);
+    expect(result.error.message).toMatch(/size=480x640, density=none/);
+  });
+
+  it("propagates a non-zero exit as an error when the caller asked it to", async () => {
+    const transport = new FakeTransport();
+    const { ctx } = await createTestContext({ transport });
+    const handle = await ctx.transports.resolve(TARGET);
+    transport.respondTo("false", { exitCode: 3, stderr: "no" });
+
+    await expect(handle.transport.exec(handle.target, ["false"], { throwOnNonZeroExit: true })).rejects.toThrow(
+      /Command failed on adb:TESTSERIAL01/,
+    );
   });
 });

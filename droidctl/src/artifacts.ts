@@ -55,6 +55,8 @@ export function sanitizeArtifactName(name: string): string {
 export interface ArtifactStoreOptions {
   readonly root?: string;
   readonly runId?: string;
+  /** Extra directories a caller-supplied runRoot may live under. */
+  readonly allowedRunRoots?: readonly string[];
 }
 
 /**
@@ -65,18 +67,24 @@ export interface ArtifactStoreOptions {
 export class ArtifactStore {
   readonly runId: string;
   readonly runDir: string;
+  private readonly root: string;
+  private readonly extraRoots: readonly string[];
   private readonly artifacts: ArtifactEntry[] = [];
   private commandCount = 0;
 
   constructor(options: ArtifactStoreOptions = {}) {
     const root =
       options.root ?? process.env["DROIDCTL_ARTIFACT_ROOT"] ?? path.join(process.cwd(), "artifacts", "droidctl");
+    this.root = root;
+    // The working tree by default: that covers a peer server's artifact
+    // directory and a script's --out, while still refusing /etc.
+    this.extraRoots = (options.allowedRunRoots ?? [process.cwd()]).map((entry) => path.resolve(entry));
     this.runId = options.runId ?? createRunId();
     this.runDir = path.join(root, this.runId);
   }
 
   pathFor(category: ArtifactCategory, filename: string, runRoot?: string): string {
-    const base = runRoot ? path.resolve(runRoot) : this.runDir;
+    const base = runRoot ? this.resolveRunRoot(runRoot) : this.runDir;
     const dir = path.join(base, ...category.split("/"));
     mkdirSync(dir, { recursive: true });
     return path.join(dir, filename);
@@ -107,6 +115,21 @@ export class ArtifactStore {
     this.artifacts.push(entry);
     this.writeIndex();
     return entry;
+  }
+
+  /**
+   * A caller-supplied runRoot is a write target, so it is confined to the
+   * artifact root or an explicitly allowed prefix rather than taken on trust.
+   */
+  resolveRunRoot(runRoot: string): string {
+    const resolved = path.resolve(runRoot);
+    const allowed = [path.resolve(this.root), ...this.extraRoots];
+    if (!allowed.some((prefix) => resolved === prefix || resolved.startsWith(prefix + path.sep))) {
+      throw new Error(
+        `runRoot ${JSON.stringify(runRoot)} is outside the permitted artifact roots (${allowed.join(", ")}).`,
+      );
+    }
+    return resolved;
   }
 
   recordCommand(record: CommandRecord): void {

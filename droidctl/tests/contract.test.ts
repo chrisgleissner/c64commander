@@ -10,7 +10,7 @@
  * is covered the day it is added.
  */
 
-import Ajv from "ajv";
+import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import { ToolValidationError } from "../src/tools/errors.js";
 import { listToolDescriptors } from "../src/tools/registry.js";
