@@ -154,7 +154,8 @@ export function DriveCard({
             onClick={onMountedPathClick || onPathClick}
             disabled={!isConnected || pathPending}
             className={cn(
-              "min-h-11 min-w-0 flex-1 basis-full text-left font-medium text-foreground hover:underline sm:basis-auto",
+              "min-h-11 min-w-0 flex-1 text-left font-medium text-foreground hover:underline",
+              profile === "expanded" ? "basis-auto" : "basis-full",
               /*
                * A path is elided; a sentence wraps.
                *
