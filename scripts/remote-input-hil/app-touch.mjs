@@ -1,5 +1,5 @@
 // Drives the C64 Commander Remote Input UI with REAL Android touch events
-// (adb input = the same pipeline DroidMind uses), locating controls by their
+// (adb input = the same pipeline droidctl uses), locating controls by their
 // data-testid via CDP and converting CSS rects to physical screen pixels.
 import { execFileSync } from "node:child_process";
 import { connect } from "./cdp.mjs";

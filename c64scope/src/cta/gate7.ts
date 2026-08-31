@@ -12,7 +12,7 @@ import { pathToFileURL } from "node:url";
 import { summarizeCoverage, toCoverageCsv, toCoverageJson, type CtaCoverageRecord } from "./coverage.js";
 import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "../deviceRegistry.js";
 import { resolveWorkspaceRoot, timestampId } from "../fullAppCoverageExecutor.js";
-import { DroidmindClient } from "../validation/droidmindClient.js";
+import { DroidctlClient } from "../validation/droidctlClient.js";
 import {
   type Bounds,
   centerX,
@@ -81,7 +81,7 @@ export function parseGate7Args(args: readonly string[]): Gate7Args {
 // Clear a focused EditText and type a new value.
 // Taps the field to focus, moves to end, backspaces 30 chars, then types the new value.
 async function clearAndType(
-  client: DroidmindClient,
+  client: DroidctlClient,
   serial: string,
   fieldBounds: Bounds,
   newValue: string,
@@ -118,7 +118,7 @@ function isConnected(xml: string): boolean {
 // Run one R2 connection mutation scenario: navigate→baseline→mutate→verify error→restore→verify reconnect.
 // Returns "PASS" if all three phases (mutated error + restore + reconnect) succeed, else "BLOCKED".
 async function runConnectionScenario(
-  client: DroidmindClient,
+  client: DroidctlClient,
   serial: string,
   artifactDir: string,
   scenario: ScenarioSpec,
@@ -337,7 +337,7 @@ export async function main(): Promise<void> {
   await mkdir(path.join(artifactDir, "screenshots"), { recursive: true });
   await mkdir(path.join(artifactDir, "hierarchies"), { recursive: true });
 
-  const client = new DroidmindClient();
+  const client = new DroidctlClient();
   const steps: string[] = [];
   const coverageRecords: CtaCoverageRecord[] = [];
   let idSeq = 0;

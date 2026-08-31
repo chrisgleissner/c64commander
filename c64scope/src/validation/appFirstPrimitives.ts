@@ -16,7 +16,7 @@ import {
   parseBoundsCenter,
   parseUiNodes,
 } from "./appFirstUi.js";
-import { DroidmindClient } from "./droidmindClient.js";
+import { DroidctlClient } from "./droidctlClient.js";
 
 export const APP_PACKAGE = "uk.gleissner.c64commander";
 export const APP_ACTIVITY = ".MainActivity";
@@ -76,7 +76,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function maybeDismissFocusedInput(client: DroidmindClient, serial: string): Promise<void> {
+async function maybeDismissFocusedInput(client: DroidctlClient, serial: string): Promise<void> {
   if (typeof client.pressKey !== "function") {
     return;
   }
@@ -97,7 +97,7 @@ async function maybeDismissFocusedInput(client: DroidmindClient, serial: string)
   await sleep(500);
 }
 
-async function dismissConnectionStatusOverlay(client: DroidmindClient, serial: string): Promise<void> {
+async function dismissConnectionStatusOverlay(client: DroidctlClient, serial: string): Promise<void> {
   const xml = await dumpUiHierarchy(serial);
   const nodes = parseUiNodes(xml);
   const overlayVisible = findVisibleText(nodes, "Connection Status");
@@ -119,7 +119,7 @@ async function dismissConnectionStatusOverlay(client: DroidmindClient, serial: s
   await sleep(600);
 }
 
-async function isKeyguardShowing(client: DroidmindClient, serial: string): Promise<boolean> {
+async function isKeyguardShowing(client: DroidctlClient, serial: string): Promise<boolean> {
   const windowDump = await client.shell(serial, "dumpsys window | grep isKeyguardShowing");
   return windowDump.includes("isKeyguardShowing=true");
 }
@@ -132,7 +132,7 @@ function routeLabel(route: string): string {
   return label;
 }
 
-export async function ensureDeviceUnlocked(client: DroidmindClient, serial: string): Promise<void> {
+export async function ensureDeviceUnlocked(client: DroidctlClient, serial: string): Promise<void> {
   if (!(await isKeyguardShowing(client, serial))) {
     return;
   }
@@ -155,19 +155,19 @@ export async function ensureDeviceUnlocked(client: DroidmindClient, serial: stri
   throw new Error("Device remained locked after app-first unlock attempts.");
 }
 
-export async function launchAppForeground(client: DroidmindClient, serial: string): Promise<void> {
+export async function launchAppForeground(client: DroidctlClient, serial: string): Promise<void> {
   await ensureDeviceUnlocked(client, serial);
   await client.startApp(serial, APP_PACKAGE, APP_ACTIVITY);
   await sleep(1500);
 }
 
-export async function restartApp(client: DroidmindClient, serial: string): Promise<void> {
+export async function restartApp(client: DroidctlClient, serial: string): Promise<void> {
   await client.stopApp(serial, APP_PACKAGE);
   await sleep(300);
   await launchAppForeground(client, serial);
 }
 
-export async function tapByText(client: DroidmindClient, serial: string, text: string): Promise<boolean> {
+export async function tapByText(client: DroidctlClient, serial: string, text: string): Promise<boolean> {
   const xml = await dumpUiHierarchy(serial);
   const nodes = parseUiNodes(xml);
   const node = findVisibleText(nodes, text);
@@ -185,7 +185,7 @@ export async function tapByText(client: DroidmindClient, serial: string, text: s
   return true;
 }
 
-export async function tapByTextContaining(client: DroidmindClient, serial: string, text: string): Promise<boolean> {
+export async function tapByTextContaining(client: DroidctlClient, serial: string, text: string): Promise<boolean> {
   const xml = await dumpUiHierarchy(serial);
   const nodes = parseUiNodes(xml);
   const node = findVisibleTextContaining(nodes, text);
@@ -204,7 +204,7 @@ export async function tapByTextContaining(client: DroidmindClient, serial: strin
 }
 
 export async function tapByResourceId(
-  client: DroidmindClient,
+  client: DroidctlClient,
   serial: string,
   resourceIdSuffix: string,
 ): Promise<boolean> {
@@ -226,7 +226,7 @@ export async function tapByResourceId(
 }
 
 export async function tapByResourceIdOrLabel(
-  client: DroidmindClient,
+  client: DroidctlClient,
   serial: string,
   resourceIdSuffix: string,
   labels: readonly string[],
@@ -279,7 +279,7 @@ function findBottomTabByResourceId(
   return null;
 }
 
-export async function navigateToRoute(client: DroidmindClient, serial: string, route: string): Promise<void> {
+export async function navigateToRoute(client: DroidctlClient, serial: string, route: string): Promise<void> {
   const tabLabel = routeLabel(route);
   const tabResourceId = TAB_RESOURCE_ID_BY_ROUTE[route];
   let lastError: Error | null = null;

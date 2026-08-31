@@ -22,7 +22,7 @@ import {
 } from "./keypadCanary.js";
 import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "../deviceRegistry.js";
 import { resolveWorkspaceRoot, timestampId } from "../fullAppCoverageExecutor.js";
-import { DroidmindClient } from "../validation/droidmindClient.js";
+import { DroidctlClient } from "../validation/droidctlClient.js";
 import { delay } from "./uiHelpers.js";
 import { APP_PACKAGE, gitSha, readFlagValue } from "./runnerCommon.js";
 
@@ -68,7 +68,7 @@ export function parseKeypadCanaryArgs(args: readonly string[]): KeypadCanaryArgs
 }
 
 async function runStep(
-  client: DroidmindClient,
+  client: DroidctlClient,
   serial: string,
   artifactDir: string,
   step: KeypadCanaryStep,
@@ -106,7 +106,7 @@ export async function main(): Promise<void> {
   const sha = await gitSha(workspaceRoot);
   const runId = `cta-${timestampId()}-pixel4-${args.target}-${sha}`;
   const artifactDir = args.artifactDir ?? path.join(workspaceRoot, "c64scope", "artifacts", runId);
-  const client = new DroidmindClient();
+  const client = new DroidctlClient();
 
   try {
     await mkdir(path.join(artifactDir, "screenshots"), { recursive: true });

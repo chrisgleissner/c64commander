@@ -17,7 +17,7 @@ import {
   parseUiNodes,
 } from "./appFirstUi.js";
 import { tapByResourceId, tapByText, tapByTextContaining } from "./appFirstPrimitives.js";
-import { DroidmindClient } from "./droidmindClient.js";
+import { DroidctlClient } from "./droidctlClient.js";
 
 const SOURCE_OPTION_RESOURCE_IDS: Record<string, string> = {
   c64u: "import-option-c64u",
@@ -78,7 +78,7 @@ function findPickerActionNode(
 }
 
 async function tapPickerAction(
-  client: DroidmindClient,
+  client: DroidctlClient,
   serial: string,
   candidates: readonly string[],
 ): Promise<boolean> {
@@ -231,12 +231,12 @@ async function waitForPickerFullyReady(serial: string, retries: number, delayMs:
   return false;
 }
 
-async function swipePickerContents(client: DroidmindClient, serial: string): Promise<void> {
+async function swipePickerContents(client: DroidctlClient, serial: string): Promise<void> {
   await client.swipe(serial, 540, 1620, 540, 1080, 260);
   await sleep(300);
 }
 
-async function dismissConnectionStatusOverlay(client: DroidmindClient, serial: string): Promise<void> {
+async function dismissConnectionStatusOverlay(client: DroidctlClient, serial: string): Promise<void> {
   const closed =
     (await tapByResourceId(client, serial, "connection-status-close")) || (await tapByText(client, serial, "Close"));
 
@@ -245,7 +245,7 @@ async function dismissConnectionStatusOverlay(client: DroidmindClient, serial: s
   }
 }
 
-export async function openAddItemsDialog(client: DroidmindClient, serial: string): Promise<void> {
+export async function openAddItemsDialog(client: DroidctlClient, serial: string): Promise<void> {
   await dismissConnectionStatusOverlay(client, serial);
   const opened =
     (await tapByResourceId(client, serial, "add-items-to-playlist")) ||
@@ -258,7 +258,7 @@ export async function openAddItemsDialog(client: DroidmindClient, serial: string
   }
 }
 
-export async function chooseSource(client: DroidmindClient, serial: string, labels: readonly string[]): Promise<void> {
+export async function chooseSource(client: DroidctlClient, serial: string, labels: readonly string[]): Promise<void> {
   for (const label of labels) {
     const normalizedLabel = label.trim().toLowerCase();
     const resourceId = SOURCE_OPTION_RESOURCE_IDS[normalizedLabel];
@@ -327,7 +327,7 @@ export async function chooseSource(client: DroidmindClient, serial: string, labe
 }
 
 export async function openPathSegments(
-  client: DroidmindClient,
+  client: DroidctlClient,
   serial: string,
   segments: readonly string[],
 ): Promise<void> {
@@ -379,7 +379,7 @@ export async function openPathSegments(
   }
 }
 
-export async function tapCheckboxForText(client: DroidmindClient, serial: string, label: string): Promise<void> {
+export async function tapCheckboxForText(client: DroidctlClient, serial: string, label: string): Promise<void> {
   const xml = await dumpUiHierarchy(serial);
   const nodes = parseUiNodes(xml);
   const node = findVisibleText(nodes, label);
@@ -418,14 +418,14 @@ export async function tapCheckboxForText(client: DroidmindClient, serial: string
   );
 }
 
-export async function confirmAddItems(client: DroidmindClient, serial: string): Promise<void> {
+export async function confirmAddItems(client: DroidctlClient, serial: string): Promise<void> {
   const confirmed = await tapByText(client, serial, "Add to playlist");
   if (!confirmed) {
     throw new Error("Could not confirm the Add items dialog.");
   }
 }
 
-export async function setDurationSeconds(client: DroidmindClient, serial: string, seconds: number): Promise<void> {
+export async function setDurationSeconds(client: DroidctlClient, serial: string, seconds: number): Promise<void> {
   const xml = await dumpUiHierarchy(serial);
   const nodes = parseUiNodes(xml);
   const inputNode = findFirstNodeByClass(nodes, "android.widget.EditText");

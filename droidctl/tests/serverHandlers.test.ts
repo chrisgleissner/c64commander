@@ -20,7 +20,7 @@ type RequestHandler = (
 ) => Promise<unknown>;
 
 function getHandler(runtime: ReturnType<typeof createDroidctlServerRuntime>, method: string): RequestHandler {
-  const handlers = (runtime.server as { _requestHandlers: Map<string, RequestHandler> })._requestHandlers;
+  const handlers = (runtime.server as unknown as { _requestHandlers: Map<string, RequestHandler> })._requestHandlers;
   const handler = handlers.get(method);
   if (!handler) {
     throw new Error(`Missing handler for ${method}`);

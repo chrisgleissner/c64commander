@@ -10,7 +10,7 @@
  * is covered the day it is added.
  */
 
-import Ajv from "ajv";
+import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import { ToolValidationError } from "../src/tools/errors.js";
 import { listToolDescriptors } from "../src/tools/registry.js";
@@ -122,7 +122,7 @@ describe("tool contract", () => {
       [
         "droid_app.clear_app_data",
         "droid_app.install_app",
-        "droid_app.launch_app",
+        "droid_app.start_app",
         "droid_app.read_app_file",
         "droid_app.stop_app",
         "droid_app.uninstall_app",
@@ -142,7 +142,7 @@ describe("tool contract", () => {
         "droid_input.press_key",
         "droid_input.swipe",
         "droid_input.tap",
-        "droid_input.type_text",
+        "droid_input.input_text",
         "droid_target.describe_target",
         "droid_target.list_targets",
       ].sort(),

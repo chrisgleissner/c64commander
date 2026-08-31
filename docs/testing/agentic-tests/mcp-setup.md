@@ -5,7 +5,7 @@ agentic-test docs and in `docs/plans/hardening/ralph/ralph.md`:
 
 | Server       | Role                                                                        | Launcher                                                                             |
 | ------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `droidmind`  | Android app controller for Pixel 4 product validation                       | `uvx --from git+https://github.com/hyperb1iss/droidmind droidmind --transport stdio` |
+| `droidctl`   | Android app controller for Pixel 4 product validation                       | `node droidctl/scripts/start.mjs`                                                   |
 | `c64scope`   | Physical A/V, UDP stream, timing, timeline, and artifact oracle             | `node c64scope/scripts/start.mjs`                                                    |
 | `c64bridge`  | Narrow C64U/U64 setup, state, stream, calibration, and emergency gap filler | `npx -y c64bridge@latest`                                                            |
 | `mobile-mcp` | Future-compatible mobile controller option                                  | `npx -y @mobilenext/mobile-mcp@latest`                                               |

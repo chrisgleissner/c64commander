@@ -336,7 +336,7 @@ Workflows live in `.github/workflows/`. Read them before claiming CI covers some
 ### Exception: Ralph / Productionization HIL loop
 
 When the active prompt is a Ralph, productionization, hardening,
-device-stabilization, Pixel 4 HIL, droidmind, c64scope, or no-coverage device-loop
+device-stabilization, Pixel 4 HIL, droidctl, c64scope, or no-coverage device-loop
 prompt, do not run `npm run test:coverage` merely because code changes exist.
 
 For these loops:
@@ -346,7 +346,7 @@ For these loops:
 - Coverage and changed-line coverage are finalization or PR-convergence gates only.
 - Do not run coverage while a HIL-capable process is active or while HIL deliverables
   remain open.
-- If this provider lacks droidmind/c64scope and another process owns the HIL window,
+- If this provider lacks droidctl/c64scope and another process owns the HIL window,
   do not select code/build/coverage validation work. Update handoff state if needed,
   then stop or schedule the peer-enabled continuation.
 - Run coverage only when the selected objective is explicitly final PR/release

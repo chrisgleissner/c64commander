@@ -36,11 +36,16 @@ describe("the ssh transport stub", () => {
     for (const [name, run] of operations) {
       await expect(Promise.resolve().then(run), name).rejects.toMatchObject({ code: "transport_unavailable" });
     }
-    expect(() => transport.spawnShell(TARGET, ["screenrecord"])).toThrow(/not implemented/);
+    expect(() => transport.spawnShell()).toThrow(/not implemented/);
   });
 
   it("names the check that would settle each open question in the refusal", async () => {
-    const error = await transport.listTargets().catch((caught: Error) => caught);
+    const error = await transport.listTargets().then(
+      () => {
+        throw new Error("expected listTargets to reject");
+      },
+      (caught: Error) => caught,
+    );
     for (const probe of SSH_TRANSPORT_PROBES) {
       expect(error.message).toContain(probe.id);
       expect(error.message).toContain(probe.check);

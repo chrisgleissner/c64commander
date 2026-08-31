@@ -75,8 +75,17 @@ export async function resolveTarget(ctx: ToolExecutionContext, targetId: string)
 export function requireCapability(handle: ResolvedTargetHandle, toolName: string): void {
   const capabilities = handle.transport.capabilities();
   const support = capabilities.tools[toolName];
-  if (support === "supported" || support === undefined) {
+  if (support === "supported") {
     return;
+  }
+  // An unlisted tool is unverified on that transport, so it is refused rather
+  // than allowed: fail-open here would let a backend silently no-op.
+  if (support === undefined) {
+    throw new UnsupportedOnTransportError(
+      handle.transport.kind,
+      toolName,
+      `${toolName} is not listed in the ${handle.transport.kind} transport's capability map, so it is unverified there.`,
+    );
   }
   const note = capabilities.notes[toolName];
   throw new UnsupportedOnTransportError(

@@ -777,8 +777,8 @@ Synchronization notes:
 | -------------------------------------------- | ----------- | ---------- | ------- | --------------------------------------------------------------------------------------- |
 | Home controls and config snapshots           | Strong      | Strong     | Partial | Good for real-hardware validation of machine/reset/stream/device effects                |
 | Play import and playlist management          | Strong      | Strong     | Strong  | Very strong; combines UI, files, and observable audio/video outcomes                    |
-| Playback timing and lock/background behavior | Strong      | Strong     | Strong  | Best validated with DroidMind + C64 Scope on real devices                               |
-| Disk library and drive mount sync            | Strong      | Strong     | Weak    | Good for DroidMind + C64 Bridge when UI mount fails or needs recovery                   |
+| Playback timing and lock/background behavior | Strong      | Strong     | Strong  | Best validated with droidctl + C64 Scope on real devices                               |
+| Disk library and drive mount sync            | Strong      | Strong     | Weak    | Good for droidctl + C64 Bridge when UI mount fails or needs recovery                   |
 | Config editing and audio-mixer solo          | Strong      | Strong     | Weak    | Good for deterministic UI/state exploration; hardware needed for real effect validation |
 | Settings, diagnostics, and persistence       | Strong      | Strong     | Strong  | Good for cross-session/stateful exploration                                             |
 | HVSC lifecycle                               | Very strong | Strong     | Strong  | Best candidate for long-running agentic hardware workflows                              |
@@ -815,7 +815,7 @@ Features especially suitable for LLM-driven exploratory testing:
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | UI-only validation          | Use routed pages, tab bar, dialogs, list filtering, diagnostics dialog, and static Docs/Open Source Licenses pages                                                                                                               |
 | Requires hardware           | Machine controls, real playback, disk mount/eject, stream start/stop, config writes with observable device effect, and non-demo connection flows                                                                                 |
-| Requires DroidMind          | Lock/unlock, backgrounding, picker interactions, repeated taps, scrolls, and device-level state setup on Android                                                                                                                 |
+| Requires droidctl           | Lock/unlock, backgrounding, picker interactions, repeated taps, scrolls, and device-level state setup on Android                                                                                                                 |
 | Requires C64 Bridge         | Direct device recovery, alternate mount/play operations when the UI path is blocked, and validation of device-side state independent of UI                                                                                       |
 | Best use of C64 Scope       | Playback start/stop verification, auto-advance confirmation, stream output checks, and visual confirmation that mounted/autostarted content reached the device                                                                   |
 | Good first exploration path | `Settings -> save/connect`, `Play -> import local/C64U item -> play -> lock/unlock`, `Disks -> mount/eject/rotate`, `Play -> HVSC lifecycle`, `Home -> machine/stream/SID controls`                                              |

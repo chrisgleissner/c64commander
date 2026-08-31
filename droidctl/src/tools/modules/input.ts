@@ -46,7 +46,7 @@ const swipeSchema = z
   })
   .strict();
 
-const typeTextSchema = z.object({ targetId: targetIdSchema, text: z.string().min(1) }).strict();
+const inputTextSchema = z.object({ targetId: targetIdSchema, text: z.string().min(1) }).strict();
 
 const pressKeySchema = z
   .object({
@@ -195,7 +195,7 @@ export const inputModule = defineToolModule({
       }),
     },
     {
-      name: "droid_input.type_text",
+      name: "droid_input.input_text",
       description: "Type text through adb input text. The keypad target has no IME, so prefer press_key there.",
       inputSchema: {
         type: "object",
@@ -203,8 +203,8 @@ export const inputModule = defineToolModule({
         required: ["targetId", "text"],
         additionalProperties: false,
       },
-      argsSchema: typeTextSchema,
-      execute: defineExecute(typeTextSchema, async (args, ctx) => {
+      argsSchema: inputTextSchema,
+      execute: defineExecute(inputTextSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
         const result = await handle.transport.exec(handle.target, ["input", "text", args.text]);
         expectSuccess(result, "input text");

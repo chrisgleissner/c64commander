@@ -7,16 +7,20 @@
  */
 
 import { execFile, spawn } from "node:child_process";
-import { writeFile } from "node:fs/promises";
+import { mkdir, stat } from "node:fs/promises";
+import path from "node:path";
 import { ToolExecutionError } from "../tools/errors.js";
+import { ALL_TOOL_NAMES } from "../tools/toolNames.js";
 import { nowIso } from "../types.js";
 import type {
+  CapabilitySupport,
   CommandSink,
   DetachedHandle,
   ExecOptions,
   ExecResult,
   InstallOptions,
   InstallResult,
+  RemoteEndpoint,
   ResolvedTarget,
   TargetInfo,
   TargetState,
@@ -26,6 +30,23 @@ import type {
 
 export const DEFAULT_EXEC_TIMEOUT_MS = 30_000;
 export const DEFAULT_MAX_BYTES = 32 * 1024 * 1024;
+export const DETACHED_STOP_TIMEOUT_MS = 15_000;
+export const MAXBUFFER_HEADROOM = 4 * 1024 * 1024;
+
+/**
+ * `adb shell` joins its arguments into one command line and lets the device's
+ * shell re-split it, so an argument containing a space or a metacharacter must
+ * arrive already quoted. Without this, `sh -c "if [ -f x ]; then ...; fi"` is
+ * re-parsed as `sh -c if` plus positional words.
+ */
+const SAFE_BARE_TOKEN = /^[A-Za-z0-9_@%+=:,./-]+$/;
+
+export function quoteForRemoteShell(argument: string): string {
+  if (argument.length > 0 && SAFE_BARE_TOKEN.test(argument)) {
+    return argument;
+  }
+  return `'${argument.replace(/'/g, `'\\''`)}'`;
+}
 
 /**
  * The single argument builder. Pure so a test can assert `-s <serial>` is always
@@ -44,6 +65,7 @@ export interface RawExecOutcome {
   readonly stdout: Buffer;
   readonly stderr: string;
   readonly exitCode: number;
+  readonly timedOut?: boolean;
 }
 
 export interface RawExecRequest {
@@ -74,10 +96,25 @@ export const nodeExecRunner: RawExecRunner = (request) =>
     const child = execFile(
       request.file,
       [...request.args],
-      { timeout: request.timeoutMs, maxBuffer: request.maxBytes, encoding: "buffer" },
+      // Headroom over maxBytes so an oversized payload is truncated by the caller
+      // rather than killed by the runtime: execFile treats maxBuffer as fatal.
+      { timeout: request.timeoutMs, maxBuffer: request.maxBytes + MAXBUFFER_HEADROOM, encoding: "buffer" },
       (error, stdout, stderr) => {
         const stderrText = Buffer.isBuffer(stderr) ? stderr.toString("utf8") : String(stderr ?? "");
+        // A timeout kills the child with a signal and no numeric exit code; the
+        // message says only "Command failed", so the signal is what identifies it.
+        const killed = Boolean(error && (error as { killed?: boolean }).killed);
+        const signal = error ? ((error as { signal?: string }).signal ?? null) : null;
         if (error && typeof (error as { code?: unknown }).code !== "number") {
+          if (killed && signal) {
+            resolve({
+              stdout: Buffer.isBuffer(stdout) ? stdout : Buffer.alloc(0),
+              stderr: stderrText,
+              exitCode: -1,
+              timedOut: true,
+            });
+            return;
+          }
           reject(error);
           return;
         }
@@ -96,12 +133,35 @@ export const nodeExecRunner: RawExecRunner = (request) =>
 
 export const nodeSpawnRunner: RawSpawnRunner = (request) => {
   const child = spawn(request.file, [...request.args], { stdio: ["ignore", "pipe", "pipe"] });
+  // A child that has already exited must still notify a late listener, or a stop
+  // that arrives after the failure waits on a "close" event that has been and gone.
+  let closed = false;
+  let closeCode: number | null = null;
+  const listeners: ((code: number | null) => void)[] = [];
+  child.once("close", (code) => {
+    closed = true;
+    closeCode = code;
+    for (const listener of listeners.splice(0)) {
+      listener(code);
+    }
+  });
+  child.once("error", () => {
+    closed = true;
+    closeCode = null;
+    for (const listener of listeners.splice(0)) {
+      listener(null);
+    }
+  });
   return {
     kill(signal) {
       child.kill(signal);
     },
     onClose(listener) {
-      child.once("close", (code) => listener(code));
+      if (closed) {
+        listener(closeCode);
+        return;
+      }
+      listeners.push(listener);
     },
     onStderr(listener) {
       child.stderr?.on("data", (chunk: Buffer) => listener(chunk.toString("utf8")));
@@ -117,33 +177,9 @@ export interface AdbTransportOptions {
   readonly defaultTimeoutMs?: number;
 }
 
-const ADB_TOOL_SUPPORT: Readonly<Record<string, "supported">> = {
-  "droid_target.list_targets": "supported",
-  "droid_target.describe_target": "supported",
-  "droid_app.install_app": "supported",
-  "droid_app.uninstall_app": "supported",
-  "droid_app.launch_app": "supported",
-  "droid_app.stop_app": "supported",
-  "droid_app.clear_app_data": "supported",
-  "droid_app.write_app_file": "supported",
-  "droid_app.read_app_file": "supported",
-  "droid_input.tap": "supported",
-  "droid_input.swipe": "supported",
-  "droid_input.type_text": "supported",
-  "droid_input.press_key": "supported",
-  "droid_capture.screenshot": "supported",
-  "droid_capture.ui_hierarchy": "supported",
-  "droid_capture.start_recording": "supported",
-  "droid_capture.stop_recording": "supported",
-  "droid_capture.logcat": "supported",
-  "droid_assert.assert_visible": "supported",
-  "droid_assert.assert_not_visible": "supported",
-  "droid_device.prepare_device": "supported",
-  "droid_device.run_shell": "supported",
-  "droid_device.forward_webview": "supported",
-  "droid_device.push_file": "supported",
-  "droid_device.pull_file": "supported",
-};
+const ADB_TOOL_SUPPORT: Readonly<Record<string, CapabilitySupport>> = Object.fromEntries(
+  ALL_TOOL_NAMES.map((name) => [name, "supported" as CapabilitySupport]),
+);
 
 export function parseAdbDevices(stdout: string): TargetInfo[] {
   const targets: TargetInfo[] = [];
@@ -227,7 +263,7 @@ export class AdbTransport implements Transport {
     // `exec-out` keeps a binary payload byte-exact; `shell` would translate newlines
     // and corrupt a PNG (scripts/hil-screenshot-evidence.mjs:67-79).
     const channel = opts.encoding === "buffer" ? "exec-out" : "shell";
-    const result = await this.invoke(target, [channel, ...argv], opts);
+    const result = await this.invoke(target, [channel, ...argv.map(quoteForRemoteShell)], opts);
     if (opts.throwOnNonZeroExit && result.exitCode !== 0) {
       throw new ToolExecutionError(`Command failed on ${target.targetId}: ${argv.join(" ")}`, {
         details: { exitCode: result.exitCode, stderr: result.stderr, argv: [...argv] },
@@ -237,7 +273,7 @@ export class AdbTransport implements Transport {
   }
 
   spawnShell(target: ResolvedTarget, argv: readonly string[]): DetachedHandle {
-    const args = adbArgs(target.serial, ["shell", ...argv]);
+    const args = adbArgs(target.serial, ["shell", ...argv.map(quoteForRemoteShell)]);
     const handle = this.spawnRunner({ file: this.adbPath, args });
     let stderr = "";
     handle.onStderr((chunk) => {
@@ -245,16 +281,24 @@ export class AdbTransport implements Transport {
     });
     return {
       argv: [this.adbPath, ...args],
-      stop: (signal) =>
+      stop: (mode) =>
         new Promise((resolve) => {
-          handle.onClose((code) => resolve({ stderr, code }));
+          const signal: NodeJS.Signals = mode === "graceful" ? "SIGINT" : "SIGKILL";
+          // Bounded: a child that ignores the signal must not hang the caller.
+          const timer = setTimeout(() => resolve({ stderr, code: null, timedOut: true }), DETACHED_STOP_TIMEOUT_MS);
+          handle.onClose((code) => {
+            clearTimeout(timer);
+            resolve({ stderr, code });
+          });
           handle.kill(signal);
         }),
     };
   }
 
   async pullBinary(target: ResolvedTarget, remotePath: string): Promise<Buffer> {
-    const result = await this.invoke(target, ["exec-out", "cat", remotePath], { encoding: "buffer" });
+    const result = await this.invoke(target, ["exec-out", "cat", quoteForRemoteShell(remotePath)], {
+      encoding: "buffer",
+    });
     if (result.exitCode !== 0) {
       throw new ToolExecutionError(`Unable to read ${remotePath} from ${target.targetId}.`, {
         details: { exitCode: result.exitCode, stderr: result.stderr },
@@ -263,10 +307,29 @@ export class AdbTransport implements Transport {
     return result.stdoutBytes;
   }
 
+  /*
+   * Real `adb pull`, not `exec-out cat`: adb streams to disk, so a recording
+   * larger than the exec buffer still arrives. A 180 s capture at 6 Mbit/s is
+   * about 135 MB, far past any sane in-memory cap.
+   */
   async pullFile(target: ResolvedTarget, remotePath: string, localPath: string): Promise<number> {
-    const bytes = await this.pullBinary(target, remotePath);
-    await writeFile(localPath, bytes);
-    return bytes.length;
+    await mkdir(path.dirname(localPath), { recursive: true });
+    const result = await this.invoke(target, ["pull", remotePath, localPath], { timeoutMs: 300_000 });
+    if (result.exitCode !== 0) {
+      throw new ToolExecutionError(
+        `adb pull of ${remotePath} failed: ${result.stderr.trim() || result.stdout.trim()}`,
+        {
+          details: { exitCode: result.exitCode, stderr: result.stderr, remotePath },
+        },
+      );
+    }
+    const info = await stat(localPath).catch(() => null);
+    if (!info) {
+      throw new ToolExecutionError(`adb pull reported success but wrote nothing to ${localPath}.`, {
+        details: { remotePath, localPath },
+      });
+    }
+    return info.size;
   }
 
   async pushFile(target: ResolvedTarget, localPath: string, remotePath: string): Promise<number> {
@@ -289,11 +352,20 @@ export class AdbTransport implements Transport {
     const result = await this.invoke(target, ["install", ...flags, apkPath], {
       timeoutMs: opts.timeoutMs ?? 300_000,
     });
-    return { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode, argv: result.argv };
+    const output = `${result.stdout}\n${result.stderr}`;
+    return {
+      installed: result.exitCode === 0 && /Success/.test(output),
+      signatureMismatch: /INSTALL_FAILED_UPDATE_INCOMPATIBLE/.test(output),
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: result.exitCode,
+      argv: result.argv,
+    };
   }
 
-  async forwardPort(target: ResolvedTarget, localPort: number, remote: string): Promise<void> {
-    const result = await this.invoke(target, ["forward", `tcp:${localPort}`, remote], {});
+  async forwardPort(target: ResolvedTarget, localPort: number, remote: RemoteEndpoint): Promise<void> {
+    const spec = remote.kind === "abstractSocket" ? `localabstract:${remote.name}` : `tcp:${remote.port}`;
+    const result = await this.invoke(target, ["forward", `tcp:${localPort}`, spec], {});
     if (result.exitCode !== 0) {
       throw new ToolExecutionError(`adb forward failed for tcp:${localPort}: ${result.stderr.trim()}`, {
         details: { exitCode: result.exitCode, stderr: result.stderr },
@@ -347,6 +419,14 @@ export class AdbTransport implements Transport {
     }
     const durationMs = Date.now() - startedAt;
     this.record(target, args, outcome.exitCode, durationMs, outcome.stdout.length);
+    if (outcome.timedOut) {
+      throw new ToolExecutionError(
+        `adb ${rest.join(" ")} timed out after ${opts.timeoutMs ?? this.defaultTimeoutMs} ms on ${
+          target?.targetId ?? "the adb server"
+        }.`,
+        { code: "timeout", details: { argv: [this.adbPath, ...args], durationMs } },
+      );
+    }
     return { ...outcome, durationMs, argv: [this.adbPath, ...args] };
   }
 

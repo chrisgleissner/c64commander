@@ -30,7 +30,7 @@ Each iteration does:
 1. Analyze and fix via OpenHands
 2. Build the Android app
 3. Deploy it to the connected Android device
-4. Validate through the Android app using `droidmind` and `c64scope`
+4. Validate through the Android app using `droidctl` and `c64scope`
 5. Collect evidence and classify the iteration as `PASS`, `FAIL`, or `BLOCKED`
 
 ## Repository paths
@@ -61,7 +61,7 @@ uv pip install --python .venv pytest pytest-cov
 
 ## Notes
 
-- `adb`, `gradle`, `droidmind`, `c64scope`, and `c64bridge` are available to
+- `adb`, `gradle`, `droidctl`, `c64scope`, and `c64bridge` are available to
   OpenHands through shell commands.
 - The wrapper itself uses `c64scope` for the app-first validation pass.
 - The loop keeps changes small and relies on existing project tooling.

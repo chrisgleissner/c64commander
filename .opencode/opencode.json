@@ -11,19 +11,6 @@
       "enabled": true,
       "env": {}
     },
-    "droidmind": {
-      "type": "local",
-      "command": [
-        "uvx",
-        "--from",
-        "git+https://github.com/hyperb1iss/droidmind",
-        "droidmind",
-        "--transport",
-        "stdio"
-      ],
-      "enabled": true,
-      "env": {}
-    },
     "c64bridge": {
       "type": "local",
       "command": [
@@ -42,6 +29,15 @@
       ],
       "enabled": true,
       "env": {}
+    },
+    "droidctl": {
+      "type": "local",
+      "command": [
+        "node",
+        "droidctl/scripts/start.mjs"
+      ],
+      "enabled": true,
+      "environment": {}
     }
   }
 }

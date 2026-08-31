@@ -29,7 +29,7 @@ export async function createTestContext(
 ): Promise<TestContext> {
   const artifactRoot = await mkdtemp(path.join(os.tmpdir(), "droidctl-test-"));
   const transport = options.transport ?? new FakeTransport();
-  const artifacts = new ArtifactStore({ root: artifactRoot, runId: "dc-TEST" });
+  const artifacts = new ArtifactStore({ root: artifactRoot, runId: "dc-TEST", allowedRunRoots: [os.tmpdir()] });
   const ctx: ToolExecutionContext = {
     transports: new TransportRegistry([transport, ...(options.extraTransports ?? [])]),
     artifacts,
@@ -48,12 +48,16 @@ const moduleFor = (name: string) => {
   return found;
 };
 
-// Tool results are heterogeneous JSON envelopes; tests read them structurally.
-export async function invoke(
-  name: string,
-  args: unknown,
-  ctx: ToolExecutionContext,
-): Promise<Record<string, never> & { [key: string]: any }> {
+/** The envelope every tool returns. Tests read `data` and `error` structurally. */
+export interface ToolEnvelope {
+  ok: boolean;
+  runId: string;
+  timestamp: string;
+  data: Record<string, any>;
+  error: Record<string, any>;
+}
+
+export async function invoke(name: string, args: unknown, ctx: ToolExecutionContext): Promise<ToolEnvelope> {
   const result = await moduleFor(name).invoke(name, args, ctx);
   return JSON.parse(result.content[0]?.text ?? "{}");
 }

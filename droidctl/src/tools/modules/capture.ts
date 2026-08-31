@@ -224,7 +224,15 @@ export async function writeScreenshot(
     });
   }
 
-  const review = createReviewPng(bytes, options);
+  let review: ReturnType<typeof createReviewPng>;
+  try {
+    review = createReviewPng(bytes, options);
+  } catch (error) {
+    throw new ToolExecutionError(
+      `Captured PNG for ${safeName} could not be decoded: ${error instanceof Error ? error.message : String(error)}`,
+      { details: { targetId: handle.target.targetId, bytes: bytes.length } },
+    );
+  }
   const raw = ctx.artifacts.write(tool, handle.target.targetId, "raw", `${safeName}.png`, bytes, options.runRoot);
   const reviewEntry = ctx.artifacts.write(
     tool,
@@ -395,8 +403,9 @@ export const captureModule = defineToolModule({
           );
         }
 
-        // SIGINT asks the local adb child to end screenrecord cleanly so the MP4 flushes.
-        const stopped = await recording.process.stop("SIGINT");
+        // A graceful stop must let screenrecord flush the MP4; how the backend
+        // delivers that is its own business.
+        const stopped = await recording.process.stop("graceful");
         ctx.recordings.delete(args.recordingId);
         await delay(500);
 
@@ -412,11 +421,27 @@ export const captureModule = defineToolModule({
             devicePath: recording.devicePath,
             localPath,
             stderr: stopped.stderr,
+            exitCode: stopped.code,
+            timedOut: stopped.timedOut === true,
             reason: error instanceof Error ? error.message : String(error),
           };
         }
 
         const payload = await readFile(localPath);
+        if (payload.length === 0) {
+          await unlink(localPath).catch(() => undefined);
+          return {
+            stopped: true,
+            pulled: false,
+            recordingId: args.recordingId,
+            devicePath: recording.devicePath,
+            localPath,
+            stderr: stopped.stderr,
+            exitCode: stopped.code,
+            timedOut: stopped.timedOut === true,
+            reason: `screenrecord wrote no data: ${stopped.stderr.trim() || "no stderr from the recorder"}`,
+          };
+        }
         try {
           assertMp4Signature(payload, localPath);
         } catch (error) {
@@ -504,7 +529,8 @@ export const captureModule = defineToolModule({
 
         const lines = dump.stdout.split(/\r?\n/).filter((line) => line.length > 0);
         if (args.requireRuntimeContent) {
-          const hasRuntime = pid ? lines.length > 0 : lines.some((line) => args.package && line.includes(args.package));
+          const hasRuntime =
+            args.package && !pid ? lines.some((line) => line.includes(args.package!)) : lines.length > 0;
           if (!hasRuntime) {
             throw new ToolExecutionError(
               `logcat capture contained no runtime content (pid=${pid ?? "unresolved"}, bytes=${dump.stdout.length}).`,

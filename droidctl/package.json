@@ -14,11 +14,12 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "check": "npm run build && npm run test",
+    "check": "npm run build && npm run typecheck:tests && npm run test",
     "mcp": "node dist/index.js",
     "smoke-device": "node scripts/smoke-device.mjs",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "typecheck:tests": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

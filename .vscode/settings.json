@@ -30,7 +30,8 @@
     "android-mcp-server": true,
     "c64bridge": true,
     "c64stream": true,
-    "droidmind": true,
+    "droidctl/artifacts": true,
+    "droidctl/dist": true,
     "mobile-mcp": true,
     "test-data": true,
     "vivipi": true
@@ -52,7 +53,8 @@
     "android-mcp-server/**": true,
     "c64bridge/**": true,
     "c64stream/**": true,
-    "droidmind/**": true,
+    "droidctl/artifacts/**": true,
+    "droidctl/dist/**": true,
     "mobile-mcp/**": true,
     "test-data/**": true,
     "vivipi/**": true
@@ -74,7 +76,8 @@
     "android-mcp-server/**": true,
     "c64bridge/**": true,
     "c64stream/**": true,
-    "droidmind/**": true,
+    "droidctl/artifacts/**": true,
+    "droidctl/dist/**": true,
     "mobile-mcp/**": true,
     "test-data/**": true,
     "vivipi/**": true

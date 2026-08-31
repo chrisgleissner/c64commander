@@ -236,7 +236,7 @@ As described in section 2 (items 2a, 2b). This is the only major feature with ze
 
 ## 7. Agentic tests (real hardware)
 
-These require a real Android device + real C64 Ultimate and use c64bridge/c64scope/droidmind.
+These require a real Android device + real C64 Ultimate and use c64bridge/c64scope/droidctl.
 
 | # | Test | Scope | What it proves | Est. time |
 |---|------|-------|---------------|-----------|

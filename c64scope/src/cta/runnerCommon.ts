@@ -11,7 +11,7 @@ import { execFile } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { DroidmindClient } from "../validation/droidmindClient.js";
+import { DroidctlClient } from "../validation/droidctlClient.js";
 import { redactSecretLiterals } from "./redaction.js";
 import { type Bounds, centerY, delay, getScreenSize, isVisible } from "./uiHelpers.js";
 
@@ -38,7 +38,7 @@ export async function gitSha(workspaceRoot: string): Promise<string> {
 }
 
 export async function captureState(
-  client: DroidmindClient,
+  client: DroidctlClient,
   serial: string,
   artifactDir: string,
   stepId: string,
@@ -56,7 +56,7 @@ export function redactUiHierarchySecrets(xml: string, secrets: readonly string[]
 }
 
 // Scroll to top: swipe finger DOWN (content moves up) several times to reach the top.
-export async function scrollToTop(client: DroidmindClient, serial: string, count = 4): Promise<void> {
+export async function scrollToTop(client: DroidctlClient, serial: string, count = 4): Promise<void> {
   for (let i = 0; i < count; i++) {
     const { width, height } = getScreenSize(await client.captureUiHierarchy(serial));
     const x = Math.round(width / 2);
@@ -69,7 +69,7 @@ export async function scrollToTop(client: DroidmindClient, serial: string, count
 // Scroll DOWN until the finder returns a visible element (no safe-zone constraint).
 // Used by gate3-5 style runners that don't worry about nav-bar overlap.
 export async function scrollUntilVisible(
-  client: DroidmindClient,
+  client: DroidctlClient,
   serial: string,
   artifactDir: string,
   stepPrefix: string,
@@ -93,7 +93,7 @@ export async function scrollUntilVisible(
 // Scroll DOWN until the finder returns a visible element whose center is above safeTapMaxY.
 // Used by gate6-7 style runners to avoid tapping behind the Android navigation bar.
 export async function scrollUntilInSafeZone(
-  client: DroidmindClient,
+  client: DroidctlClient,
   serial: string,
   artifactDir: string,
   stepPrefix: string,

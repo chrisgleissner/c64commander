@@ -17,6 +17,16 @@ import { isApplicationScoped, requiresTarget } from "../src/tools/policy.js";
 import { listToolDescriptors } from "../src/tools/registry.js";
 import { createTestContext, invoke } from "./support/harness.js";
 
+/** Returns the rejection, typed, so a test can read its code and details. */
+async function rejection(promise: Promise<unknown>): Promise<TargetResolutionError> {
+  try {
+    await promise;
+  } catch (error) {
+    return error as TargetResolutionError;
+  }
+  throw new Error("expected the call to reject, but it resolved");
+}
+
 function generateArgumentVectors(): string[][] {
   const words = ["shell", "input", "tap", "-r", "--time-limit", "/sdcard/x y.png", "", "pm", "list", "packages"];
   const vectors: string[][] = [[]];
@@ -110,7 +120,7 @@ describe("targeting: 5. a colliding target id is an error, not a pick", () => {
     const registry = new TransportRegistry([transport]);
 
     await expect(registry.resolve("adb:DUPLICATE")).rejects.toBeInstanceOf(TargetResolutionError);
-    const error = await registry.resolve("adb:DUPLICATE").catch((caught: TargetResolutionError) => caught);
+    const error = await rejection(registry.resolve("adb:DUPLICATE"));
     expect(error.code).toBe("ambiguous_target");
     expect((error.details?.["candidates"] as unknown[]).length).toBe(2);
   });
@@ -119,7 +129,7 @@ describe("targeting: 5. a colliding target id is an error, not a pick", () => {
     const transport = new FakeTransport([defaultTarget({ targetId: "adb:ONLYONE", serial: "ONLYONE" })]);
     const registry = new TransportRegistry([transport]);
 
-    const error = await registry.resolve("adb:SOMETHINGELSE").catch((caught: TargetResolutionError) => caught);
+    const error = await rejection(registry.resolve("adb:SOMETHINGELSE"));
     expect(error.code).toBe("target_not_found");
     expect(error.details?.["availableTargetIds"]).toEqual(["adb:ONLYONE"]);
   });
@@ -128,7 +138,7 @@ describe("targeting: 5. a colliding target id is an error, not a pick", () => {
     const transport = new FakeTransport([defaultTarget({ targetId: "adb:9B081FFAZ001WX", serial: "9B081FFAZ001WX" })]);
     const registry = new TransportRegistry([transport]);
 
-    const error = await registry.resolve("adb:9B0").catch((caught: TargetResolutionError) => caught);
+    const error = await rejection(registry.resolve("adb:9B0"));
     expect(error.code).toBe("target_not_found");
   });
 });

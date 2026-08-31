@@ -57,17 +57,10 @@ def openhands_stdio_servers() -> list[dict[str, object]]:
             "args": [str(PATHS.repo_root / "c64scope" / "dist" / "index.js")],
         },
         {
-            "name": "droidmind",
-            "command": "uv",
+            "name": "droidctl",
+            "command": "node",
             "args": [
-                "run",
-                "--python",
-                "3.13",
-                "--directory",
-                str(PATHS.repo_root / "droidmind"),
-                "droidmind",
-                "--transport",
-                "stdio",
+                str(PATHS.repo_root / "droidctl" / "scripts" / "start.mjs"),
             ],
         },
         {
@@ -82,7 +75,7 @@ def verify_local_tool_paths() -> None:
     required_paths = (
         PATHS.repo_root / "c64scope" / "dist" / "index.js",
         PATHS.repo_root / "c64bridge" / "dist" / "mcp-server.js",
-        PATHS.repo_root / "droidmind",
+        PATHS.repo_root / "droidctl" / "scripts" / "start.mjs",
     )
     missing = [str(path) for path in required_paths if not Path(path).exists()]
     if missing:
@@ -93,7 +86,7 @@ def tool_shell_hints() -> list[str]:
     return [
         "adb",
         "./android/gradlew",
-        f"uv run --python 3.13 --directory {PATHS.repo_root / 'droidmind'} droidmind --transport stdio",
+        f"node {PATHS.repo_root / 'droidctl' / 'scripts' / 'start.mjs'}",
         f"node {PATHS.repo_root / 'c64scope' / 'dist' / 'autonomousValidation.js'}",
         f"node {(PATHS.repo_root / 'c64bridge' / 'dist' / 'mcp-server.js').resolve()}",
     ]

@@ -24,16 +24,17 @@ export interface CapabilityCheckResult {
   missing: CapabilityRequirement[];
 }
 
-export const requiredDroidmindCapabilities: readonly CapabilityRequirement[] = [
-  { id: "device-list", toolName: "android-device", action: "list_devices" },
-  { id: "app-start", toolName: "android-app", action: "start_app" },
-  { id: "app-stop", toolName: "android-app", action: "stop_app" },
-  { id: "ui-tap", toolName: "android-ui", action: "tap" },
-  { id: "ui-swipe", toolName: "android-ui", action: "swipe" },
-  { id: "ui-key", toolName: "android-ui", action: "press_key" },
-  { id: "ui-text", toolName: "android-ui", action: "input_text" },
-  { id: "shell-read", toolName: "android-shell" },
-  { id: "screenshot", toolName: "android-screenshot" },
+export const requiredDroidctlCapabilities: readonly CapabilityRequirement[] = [
+  { id: "device-list", toolName: "droid_target.list_targets" },
+  { id: "app-start", toolName: "droid_app.start_app" },
+  { id: "app-stop", toolName: "droid_app.stop_app" },
+  { id: "ui-tap", toolName: "droid_input.tap" },
+  { id: "ui-swipe", toolName: "droid_input.swipe" },
+  { id: "ui-key", toolName: "droid_input.press_key" },
+  { id: "ui-text", toolName: "droid_input.input_text" },
+  { id: "shell-read", toolName: "droid_device.run_shell" },
+  { id: "ui-hierarchy", toolName: "droid_capture.ui_hierarchy" },
+  { id: "screenshot", toolName: "droid_capture.screenshot" },
 ];
 
 function toolActions(tool: McpToolCapability): Set<string> | null {
@@ -50,7 +51,7 @@ function toolActions(tool: McpToolCapability): Set<string> | null {
 
 export function checkCapabilities(
   tools: readonly McpToolCapability[],
-  requirements: readonly CapabilityRequirement[] = requiredDroidmindCapabilities,
+  requirements: readonly CapabilityRequirement[] = requiredDroidctlCapabilities,
 ): CapabilityCheckResult {
   const toolByName = new Map(tools.map((tool) => [tool.name, tool]));
   const missing = requirements.filter((requirement) => {

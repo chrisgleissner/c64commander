@@ -1,5 +1,5 @@
 ---
-description: Run autonomous real-hardware Android tests for C64 Commander using droidmind, c64bridge, and c64scope with evidence-backed outcomes.
+description: Run autonomous real-hardware Android tests for C64 Commander using droidctl, c64bridge, and c64scope with evidence-backed outcomes.
 ---
 
 ROLE
@@ -14,7 +14,7 @@ CONTEXT
 
 The agentic testing system uses:
 
-- a mobile controller (`droidmind`)
+- a mobile controller (`droidctl`)
 - a bridge for device interaction (`c64bridge`)
 - a hardware observability system (`c64scope`)
 
@@ -37,7 +37,7 @@ TOOLS
 
 Allowed tools:
 
-- `droidmind`
+- `droidctl`
 - `c64bridge`
 - `c64scope`
 

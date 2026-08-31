@@ -9,6 +9,7 @@
 import { KEYCODES, KEYCODE_NAMES_BY_NUMBER } from "./keycodes.js";
 import { AdbTransport } from "./transport/adb.js";
 import { SshTransport, SSH_TRANSPORT_PROBES } from "./transport/ssh.js";
+import type { TransportCapabilities } from "./transport/types.js";
 
 export interface ResourceDefinition {
   uri: string;
@@ -18,9 +19,10 @@ export interface ResourceDefinition {
   readText: () => string;
 }
 
-function transportMatrix(): Record<string, Record<string, string>> {
-  const adb = new AdbTransport().capabilities();
-  const ssh = new SshTransport().capabilities();
+export function buildTransportMatrix(
+  adb: TransportCapabilities,
+  ssh: TransportCapabilities,
+): Record<string, Record<string, string>> {
   const names = new Set([...Object.keys(adb.tools), ...Object.keys(ssh.tools)]);
   const matrix: Record<string, Record<string, string>> = {};
   for (const name of [...names].sort()) {
@@ -31,6 +33,10 @@ function transportMatrix(): Record<string, Record<string, string>> {
     };
   }
   return matrix;
+}
+
+function transportMatrix(): Record<string, Record<string, string>> {
+  return buildTransportMatrix(new AdbTransport().capabilities(), new SshTransport().capabilities());
 }
 
 export const resources: ResourceDefinition[] = [

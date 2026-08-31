@@ -73,7 +73,7 @@ Three peer MCP servers are orchestrated by a single LLM:
 
 | Peer                                                      | Role                                                      |
 | --------------------------------------------------------- | --------------------------------------------------------- |
-| [Droidmind](https://github.com/hyperb1iss/droidmind)      | App lifecycle, UI interaction, screenshots, logcat        |
+| [droidctl](../droidctl/README.md)                         | App lifecycle, UI interaction, screenshots, logcat        |
 | [C64 Bridge](https://github.com/chrisgleissner/c64bridge) | Stream start/stop, RAM reads, emergency recovery          |
 | C64 Scope (this server)                                   | Evidence capture, session timeline, assertions, artifacts |
 
@@ -87,5 +87,5 @@ Three peer MCP servers are orchestrated by a single LLM:
 ## Implementation rules
 
 - Keep `c64scope` self-contained in this folder.
-- Do not extend `c64bridge` or `droidmind`.
+- Do not extend `c64bridge` or `droidctl`.
 - Keep tool ownership strictly separated.

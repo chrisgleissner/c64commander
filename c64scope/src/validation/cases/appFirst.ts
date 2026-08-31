@@ -9,7 +9,7 @@
 import path from "node:path";
 import { dumpUiHierarchy, ts } from "../helpers.js";
 import { parseUiNodes } from "../appFirstUi.js";
-import { DroidmindClient } from "../droidmindClient.js";
+import { DroidctlClient } from "../droidctlClient.js";
 import { ensureDeviceUnlocked, launchAppForeground, navigateToRoute, restartApp } from "../appFirstPrimitives.js";
 import {
   appFirstHvscColdWorkflow,
@@ -36,13 +36,13 @@ async function runSurfaceMarkerCase(
     action: string;
   },
 ): Promise<{ passed: boolean; missingMarkers: string[]; screenshotPath: string }> {
-  const droidmind = new DroidmindClient();
+  const droidctl = new DroidctlClient();
   const screenshotPath = path.join(ctx.artifactDir, options.screenshotName);
 
   try {
-    await droidmind.connect();
-    await launchAppForeground(droidmind, ctx.serial);
-    await navigateToRoute(droidmind, ctx.serial, options.route);
+    await droidctl.connect();
+    await launchAppForeground(droidctl, ctx.serial);
+    await navigateToRoute(droidctl, ctx.serial, options.route);
 
     const xml = await dumpUiHierarchy(ctx.serial);
     const nodes = parseUiNodes(xml);
@@ -62,7 +62,7 @@ async function runSurfaceMarkerCase(
         : `Missing markers: ${missingMarkers.join(", ")}`,
     });
 
-    await droidmind.screenshotToFile(ctx.serial, screenshotPath);
+    await droidctl.screenshotToFile(ctx.serial, screenshotPath);
     await ctx.store.attachEvidence({
       runId: ctx.runId,
       evidenceId: `ev-${options.stepId}`,
@@ -78,7 +78,7 @@ async function runSurfaceMarkerCase(
 
     return { passed, missingMarkers, screenshotPath };
   } finally {
-    await droidmind.close();
+    await droidctl.close();
   }
 }
 
@@ -97,25 +97,25 @@ export const appFirstLaunchShell: ValidationCase = {
     const trace = {
       routeDiscovery: ["/"],
       decisionLog: [
-        `${ts()} Decision: connect droidmind MCP client`,
+        `${ts()} Decision: connect droidctl MCP client`,
         `${ts()} Decision: launch app and verify home route markers`,
         `${ts()} Decision: capture app screenshot as UI evidence`,
       ],
       safetyBudget: "read-only",
-      oracleSelection: ["UI: route markers + screenshot", "Diagnostics and logs: droidmind command traces"],
+      oracleSelection: ["UI: route markers + screenshot", "Diagnostics and logs: droidctl command traces"],
       recoveryActions: [] as string[],
     };
 
-    const droidmind = new DroidmindClient();
+    const droidctl = new DroidctlClient();
     const screenshotPath = path.join(ctx.artifactDir, "af-home-shell.png");
 
     try {
-      await droidmind.connect();
-      const devices = await droidmind.listDevices();
-      trace.decisionLog.push(`${ts()} Observed: droidmind device list output length=${devices.length}`);
+      await droidctl.connect();
+      const devices = await droidctl.listDevices();
+      trace.decisionLog.push(`${ts()} Observed: droidctl device list output length=${devices.length}`);
 
-      await launchAppForeground(droidmind, ctx.serial);
-      await navigateToRoute(droidmind, ctx.serial, "/");
+      await launchAppForeground(droidctl, ctx.serial);
+      await navigateToRoute(droidctl, ctx.serial, "/");
 
       await ctx.store.recordStep({
         runId: ctx.runId,
@@ -125,10 +125,10 @@ export const appFirstLaunchShell: ValidationCase = {
         action: "launch_and_verify_home_route",
         peerServer: "mobile_controller",
         primaryOracle: "UI",
-        notes: "App launched through droidmind and home markers verified.",
+        notes: "App launched through droidctl and home markers verified.",
       });
 
-      await droidmind.screenshotToFile(ctx.serial, screenshotPath);
+      await droidctl.screenshotToFile(ctx.serial, screenshotPath);
       await ctx.store.attachEvidence({
         runId: ctx.runId,
         evidenceId: "ev-af-home-shell",
@@ -152,7 +152,7 @@ export const appFirstLaunchShell: ValidationCase = {
         explorationTrace: trace,
       };
     } finally {
-      await droidmind.close();
+      await droidctl.close();
     }
   },
 };
@@ -173,7 +173,7 @@ export const appFirstTabNavigation: ValidationCase = {
     const trace = {
       routeDiscovery: [...routes],
       decisionLog: [
-        `${ts()} Decision: launch app via droidmind`,
+        `${ts()} Decision: launch app via droidctl`,
         `${ts()} Decision: traverse all tab routes and verify route markers`,
         `${ts()} Decision: capture screenshot evidence per route`,
       ],
@@ -182,12 +182,12 @@ export const appFirstTabNavigation: ValidationCase = {
       recoveryActions: [] as string[],
     };
 
-    const droidmind = new DroidmindClient();
+    const droidctl = new DroidctlClient();
     let allRoutesVisited = true;
 
     try {
-      await droidmind.connect();
-      await launchAppForeground(droidmind, ctx.serial);
+      await droidctl.connect();
+      await launchAppForeground(droidctl, ctx.serial);
 
       let stepNumber = 1;
       for (const route of routes) {
@@ -197,7 +197,7 @@ export const appFirstTabNavigation: ValidationCase = {
         stepNumber += 1;
 
         try {
-          await navigateToRoute(droidmind, ctx.serial, route);
+          await navigateToRoute(droidctl, ctx.serial, route);
           trace.decisionLog.push(`${ts()} Observed: route '${route}' marker check passed`);
 
           await ctx.store.recordStep({
@@ -211,7 +211,7 @@ export const appFirstTabNavigation: ValidationCase = {
             notes: `Route markers verified for ${route}.`,
           });
 
-          await droidmind.screenshotToFile(ctx.serial, screenshotPath);
+          await droidctl.screenshotToFile(ctx.serial, screenshotPath);
           await ctx.store.attachEvidence({
             runId: ctx.runId,
             evidenceId: `ev-route-${stepNumber - 1}`,
@@ -251,7 +251,7 @@ export const appFirstTabNavigation: ValidationCase = {
         explorationTrace: trace,
       };
     } finally {
-      await droidmind.close();
+      await droidctl.close();
     }
   },
 };
@@ -280,24 +280,24 @@ export const appFirstRuntimeRecovery: ValidationCase = {
       recoveryActions: [] as string[],
     };
 
-    const droidmind = new DroidmindClient();
+    const droidctl = new DroidctlClient();
     let recoverySucceeded = false;
     const screenshotPath = path.join(ctx.artifactDir, "af-runtime-recovery.png");
 
     try {
-      await droidmind.connect();
-      await launchAppForeground(droidmind, ctx.serial);
-      await navigateToRoute(droidmind, ctx.serial, "/play");
+      await droidctl.connect();
+      await launchAppForeground(droidctl, ctx.serial);
+      await navigateToRoute(droidctl, ctx.serial, "/play");
 
       // KEYCODE_POWER toggles screen state; then unlock routine restores app control.
-      await droidmind.pressKey(ctx.serial, 26);
+      await droidctl.pressKey(ctx.serial, 26);
       await new Promise((resolve) => setTimeout(resolve, 1200));
-      await droidmind.pressKey(ctx.serial, 26);
-      await ensureDeviceUnlocked(droidmind, ctx.serial);
+      await droidctl.pressKey(ctx.serial, 26);
+      await ensureDeviceUnlocked(droidctl, ctx.serial);
 
-      await restartApp(droidmind, ctx.serial);
-      await navigateToRoute(droidmind, ctx.serial, "/");
-      await droidmind.screenshotToFile(ctx.serial, screenshotPath);
+      await restartApp(droidctl, ctx.serial);
+      await navigateToRoute(droidctl, ctx.serial, "/");
+      await droidctl.screenshotToFile(ctx.serial, screenshotPath);
 
       await ctx.store.recordStep({
         runId: ctx.runId,
@@ -337,7 +337,7 @@ export const appFirstRuntimeRecovery: ValidationCase = {
       if (!recoverySucceeded) {
         trace.recoveryActions.push(`${ts()} Recovery: runtime recovery case did not complete successfully.`);
       }
-      await droidmind.close();
+      await droidctl.close();
     }
   },
 };
