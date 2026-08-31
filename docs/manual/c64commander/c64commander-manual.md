@@ -75,6 +75,14 @@ Enter a hostname such as `c64u`, `u64`, or `u2`, or an IP address such as `192.1
 
 Now watch the top right of the screen. A green badge there means the active device is answering, and you are ready to go on. You can scan again later from **Settings → Connection → Discover devices**.
 
+### Starting With No Network
+
+Start C64 Commander on a phone or tablet that has no network connection at all — airplane mode, or Wi-Fi and mobile data both off — and none of the above happens. There is nothing to scan for, so the app does not scan, does not ask you anything, and opens straight onto a built-in simulation of a Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, or Ultimate-II. The badge reads **Demo mode**, so you always know which one you are looking at.
+
+Everything the simulator answers for is yours to try: Home, the configuration, disks and drives, the playlist, and Remote Input. It answers the same network services a real machine does, but it runs no 6502 and sends no picture or sound, so programs and tunes do not play on it and Live View has nothing to show.
+
+When you do have hardware, connect to it from **Settings → Connection**. Once the app has reached a real device, it stays with it for the rest of the session.
+
 ## Your First Tour
 
 Start here if the app is new to you. This chapter goes through the app a page at a time and says what each page is for, beginning with two things you can reach from anywhere: the health badge in the corner, and search.
@@ -1115,7 +1123,7 @@ Preferred locations are marked first.
 | HVSC preparation | **Play → Add items**, card at the foot of Play | On by default. Turn it off under **HVSC downloads** in Settings → Stable Features. Settings → HVSC holds the mirror and the update check. |
 | SID Radio | **Play → SID Radio** | Endless stations of similar tunes. Settings → SID Radio tunes it. |
 | CommoServe | **Play → Add items**, Disks → Add disks, Settings → Online Archive | On by default. Turn it off under **CommoServe** in Settings → Stable Features. |
-| Demo Mode | **Settings → Connection** | Off to begin with. Turn it on under **Demo Mode** in Settings → Stable Features. |
+| Demo Mode | **Settings → Connection** | Off to begin with. Turn it on under **Demo Mode** in Settings → Stable Features. Separately from that setting, a launch with no network at all opens on the simulated device on its own. |
 | Background playback scheduling | **Play**, Android app permissions | Always on in this edition. |
 | Display profile, theme, style, text size, card descriptions, orientation | **Settings → Appearance** | Screenshots in this manual use the medium profile. |
 | Settings transfer (export and import) | **Settings → Diagnostics** | App settings, feature switches and safety tuning. Saved devices and passwords stay behind. |

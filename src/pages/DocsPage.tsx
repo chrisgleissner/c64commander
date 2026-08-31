@@ -48,9 +48,13 @@ const buildDocSections = (flags: FeatureFlags): DocSection[] => {
           <p className="text-muted-foreground">
             The header badge shows connection health — tap it for Diagnostics, long-press to switch devices.
           </p>
+          <p className="text-muted-foreground">
+            With no network at all, the app opens on a built-in simulated device so you can try everything without
+            hardware. Connect to your own machine at any time from Settings.
+          </p>
           {flags.demo_mode_enabled ? (
             <p className="text-muted-foreground">
-              Automatic Demo Mode can offer a simulated device when discovery does not find real hardware.
+              Demo Mode can also offer that simulated device when discovery does not find real hardware on a network.
             </p>
           ) : null}
         </div>

@@ -277,5 +277,4 @@ describe("manual generator", () => {
     expect(c64uRemote).not.toContain("Ultimate 64");
     expect(c64uRemote).not.toContain("3.15");
   });
-
 });

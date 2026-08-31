@@ -73,6 +73,14 @@ Enter a hostname such as `c64u` or an IP address such as `192.168.1.64`, then ch
 
 Now watch the top right of the screen. A green badge there means the active device is answering, and you are ready to go on. You can scan again later from **Settings → Connection → Discover devices**.
 
+### Starting With No Network
+
+Start C64U Remote on a phone that has no network connection at all — airplane mode, or Wi-Fi and mobile data both off — and none of the above happens. There is nothing to scan for, so the app does not scan, does not ask you anything, and opens straight onto a built-in simulation of a Commodore 64 Ultimate. The badge reads **Demo mode**, so you always know which one you are looking at.
+
+Everything the simulator answers for is yours to try: Home, the configuration, disks and drives, the playlist, and Remote Input. It answers the same network services a real machine does, but it runs no 6502 and sends no picture or sound, so programs and tunes do not play on it and Live View has nothing to show.
+
+When you do have hardware, connect to it from **Settings → Connection**. Once the app has reached a real device, it stays with it for the rest of the session.
+
 ## Your First Tour
 
 Start here if the app is new to you. This chapter goes through the app a page at a time and says what each page is for, beginning with two things you can reach from anywhere: the health badge in the corner, and search.

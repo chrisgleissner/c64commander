@@ -584,7 +584,11 @@ const featureRows = ({ features, variant }) => {
     ]);
   }
   if (includeFeature(features, "demo_mode_enabled")) {
-    rows.push(["Demo Mode", "**Settings → Connection**", featureAvailability(features.demo_mode_enabled)]);
+    rows.push([
+      "Demo Mode",
+      "**Settings → Connection**",
+      `${featureAvailability(features.demo_mode_enabled)} Separately from that setting, a launch with no network at all opens on the simulated device on its own.`,
+    ]);
   }
   if (includeFeature(features, "background_execution_enabled")) {
     rows.push([
@@ -859,6 +863,14 @@ export const renderManualMarkdown = ({ variant, features }) => {
       : "Enter a hostname such as `c64u`, `u64`, or `u2`, or an IP address such as `192.168.1.64`, then choose **Connect**. If the device answers but requires a password, the same dialog asks for it before saving and connecting.",
     "",
     "Now watch the top right of the screen. A green badge there means the active device is answering, and you are ready to go on. You can scan again later from **Settings → Connection → Discover devices**.",
+    "",
+    "### Starting With No Network",
+    "",
+    `Start ${appName} on a ${appDeviceName(variant)} that has no network connection at all — airplane mode, or Wi-Fi and mobile data both off — and none of the above happens. There is nothing to scan for, so the app does not scan, does not ask you anything, and opens straight onto a built-in simulation of ${targetDeviceDescription(variant)}. The badge reads **Demo mode**, so you always know which one you are looking at.`,
+    "",
+    `Everything the simulator answers for is yours to try: Home, the configuration, disks and drives, the playlist, and Remote Input. It answers the same network services a real machine does, but it runs no 6502 and sends no picture or sound, so programs and tunes do not play on it and Live View has nothing to show.`,
+    "",
+    "When you do have hardware, connect to it from **Settings → Connection**. Once the app has reached a real device, it stays with it for the rest of the session.",
     "",
     "## Your First Tour",
     "",
