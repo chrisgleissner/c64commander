@@ -218,11 +218,13 @@ describe("startup with no network on the device", () => {
     await discoverConnection("startup");
     expect(getC64APIConfigSnapshot().baseUrl).toBe(MOCK_BASE_URL);
 
-    noteReachable(MOCK_BASE_URL, "rest");
+    noteReachable(MOCK_BASE_URL, "rest", { product: "C64 Ultimate", errors: [] } as never);
 
     const snapshot = getConnectionSnapshot();
     expect(snapshot.lastProbeSucceededAtMs).toBeNull();
     expect(snapshot.lastProbeError).toBe(NO_NETWORK_PROBE_ERROR);
+    // The identity on show is the simulated device's, so it is still recorded.
+    expect(snapshot.deviceInfo).toMatchObject({ product: "C64 Ultimate" });
   });
 
   it("connects to the real device once the network comes back", async () => {
@@ -302,6 +304,22 @@ describe("startup with a network on the device", () => {
     startDeviceDiscovery.mockClear();
     isNativePlatform.mockReturnValue(true);
     setNetwork(true);
+  });
+
+  it("claims the discovering state before its first await, so a second trigger cannot strand it", async () => {
+    localStorage.setItem("c64u_device_host", "192.168.1.64");
+
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    const started = discoverConnection("startup");
+
+    expect(getConnectionSnapshot().state).toBe("DISCOVERING");
+
+    await vi.advanceTimersByTimeAsync(800);
+    await started;
+    expect(getConnectionSnapshot().state).not.toBe("DISCOVERING");
   });
 
   it("connects to a reachable real device instead of the simulated one", async () => {

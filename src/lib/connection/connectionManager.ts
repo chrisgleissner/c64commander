@@ -597,9 +597,6 @@ const getActiveReachabilityHosts = () => {
   return new Set(hosts);
 };
 
-// The simulated device is reachable by construction, so its traffic is no evidence
-// about a real one — recording it made Settings and diagnostics report a real device
-// found, on a phone with no network at all.
 const isActiveMockHost = (normalizedHost: string) => {
   const mockBaseUrl = getActiveMockBaseUrl();
   return Boolean(mockBaseUrl) && normalizeReachabilityHost(mockBaseUrl) === normalizedHost;
@@ -609,8 +606,12 @@ export const noteReachable = (host: string, source: ReachabilitySource, deviceIn
   const normalizedHost = normalizeReachabilityHost(host);
   if (!normalizedHost) return;
 
+  // The simulated device is reachable by construction, so its answers are no evidence
+  // about a real one: counting them made Settings report a real device found on a
+  // phone with no network at all. Its identity is still the identity on show, so that
+  // is the one thing kept.
   if (isActiveMockHost(normalizedHost)) {
-    addLog("debug", "Ignoring reachable event from the simulated device", { host: normalizedHost, source });
+    if (deviceInfo) setSnapshot({ deviceInfo });
     return;
   }
 
@@ -1179,20 +1180,25 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
     return;
   }
 
-  // With no network there is nothing to discover, so every foreground trigger
-  // reaches the simulated device directly: no LAN scan, no saved-host probe, and
-  // no prompt to answer. A session that has already reached real hardware is
-  // excluded, so its device becoming unreachable is still reported as a failure.
-  if (trigger !== "background" && (await shouldAutoStartOfflineDemoMode())) {
+  // DISCOVERING is claimed synchronously, next to the run token above: an await
+  // between the two lets a second trigger start its own run and strand this one.
+  if (trigger !== "background") {
+    transitionTo("DISCOVERING", trigger);
+    // With no network there is nothing to discover, so every foreground trigger
+    // reaches the simulated device directly: no LAN scan, no saved-host probe, and
+    // no prompt to answer. A session that has already reached real hardware is
+    // excluded, so its device becoming unreachable is still reported as a failure.
+    if (await shouldAutoStartOfflineDemoMode()) {
+      if (!discoveryRun.isCurrent()) return;
+      addLog("info", "No network on this device; using the simulated device without discovery", { trigger });
+      setSnapshot({ lastProbeError: NO_NETWORK_PROBE_ERROR });
+      await transitionToDemoActive(trigger, { showInterstitial: false });
+      return;
+    }
     if (!discoveryRun.isCurrent()) return;
-    addLog("info", "No network on this device; using the simulated device without discovery", { trigger });
-    setSnapshot({ lastProbeError: NO_NETWORK_PROBE_ERROR });
-    await transitionToDemoActive(trigger, { showInterstitial: false });
-    return;
   }
 
   if (trigger === "manual") {
-    transitionTo("DISCOVERING", trigger);
     const manualProbeTimeoutMs = Math.max(1000, loadDiscoveryProbeTimeoutMs()) + 1000;
     setSnapshot({ lastProbeAtMs: Date.now() });
     const ok = await Promise.race<boolean>([
@@ -1268,8 +1274,6 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
     }
     return;
   }
-
-  transitionTo("DISCOVERING", trigger);
 
   if (trigger === "startup" && !hasPersistedDeviceHostConfig()) {
     const discovered = await tryAutomaticDeviceDiscoveryFallback(trigger, discoveryRun.isCurrent);
