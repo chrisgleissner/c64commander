@@ -14,7 +14,7 @@ App shell launch + foreground stability
 
 ## MCP Server Roles
 
-- `droidmind` (primary): launch app, navigate UI, perform all user-facing actions.
+- `droidctl` (primary): launch app, navigate UI, perform all user-facing actions.
 - `c64scope` (evidence authority): session lifecycle, screenshots, media capture, assertions, artifact summary.
 - `c64bridge` (fallback only): read-only corroboration or hard prerequisite reset/diagnostic when app path cannot do it.
 
@@ -30,7 +30,7 @@ App shell launch + foreground stability
 ## Execution Steps (Deterministic)
 
 1. Start a `c64scope` session with caseId `F001` and artifact root under `/home/chris/dev/c64/c64commander/docs/testing/agentic-tests/full-app-coverage/runs/`.
-2. Use `droidmind` to bring app to `/`.
+2. Use `droidctl` to bring app to `/`.
 3. Perform feature actions through app UI only.
 4. After each meaningful action, record intermediate assertion and capture app screenshot.
 5. Capture corroborating state (logs/config/rest/media) only after app action is completed.
