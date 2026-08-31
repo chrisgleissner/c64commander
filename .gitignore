@@ -139,6 +139,12 @@ c64scope/**/dist/
 c64scope/**/logs/
 c64scope/**/node_modules/
 
+# droidctl generated files
+droidctl/**/artifacts/
+droidctl/**/dist/
+droidctl/**/logs/
+droidctl/**/node_modules/
+
 # Generated project files
 src/version.ts
 

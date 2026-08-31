@@ -13,3 +13,7 @@ args = ["-y", "c64bridge@latest"]
 [mcp_servers.c64scope]
 command = "node"
 args = ["c64scope/scripts/start.mjs"]
+
+[mcp_servers.droidctl]
+command = "node"
+args = ["droidctl/scripts/start.mjs"]

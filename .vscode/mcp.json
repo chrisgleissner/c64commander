@@ -7,6 +7,7 @@
       "args": ["--from", "git+https://github.com/hyperb1iss/droidmind", "droidmind", "--transport", "stdio"]
     },
     "c64bridge": { "type": "stdio", "command": "npx", "args": ["-y", "c64bridge@latest"] },
-    "c64scope": { "type": "stdio", "command": "node", "args": ["c64scope/scripts/start.mjs"] }
+    "c64scope": { "type": "stdio", "command": "node", "args": ["c64scope/scripts/start.mjs"] },
+    "droidctl": { "type": "stdio", "command": "node", "args": ["droidctl/scripts/start.mjs"] }
   }
 }
