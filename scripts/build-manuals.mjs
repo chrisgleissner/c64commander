@@ -2415,7 +2415,18 @@ export const INDEX_TERMS = [
  * Falls back to the package version where no tag is reachable — a shallow CI
  * clone, or a source archive with no git history.
  */
-const resolveEdition = () => {
+export const resolveEdition = () => {
+  // The tag being built wins over `git describe`, which cannot tell which of
+  // several tags on one commit started this build. 1.0.0 was cut at the commit
+  // 0.11.0-rc3 already tagged, and the 1.0.0 manual went out stamped
+  // 0.11.0-rc3. APP_VERSION covers a caller that resolves the version itself.
+  const ref = (process.env.GITHUB_REF ?? "").trim();
+  if (ref.startsWith("refs/tags/")) {
+    const tagged = ref.slice("refs/tags/".length).trim();
+    if (tagged) return tagged;
+  }
+  const provided = (process.env.APP_VERSION ?? process.env.VERSION_NAME ?? "").trim();
+  if (provided) return provided;
   try {
     const tag = execFileSync("git", ["describe", "--tags", "--abbrev=0"], {
       cwd: rootDir,
