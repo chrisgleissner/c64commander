@@ -1,0 +1,35 @@
+{
+  "name": "droidctl",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "MCP server that deploys and drives the Android application under test over an explicit target",
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=10"
+  },
+  "bin": {
+    "droidctl": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "npm run build && npm run test",
+    "mcp": "node dist/index.js",
+    "smoke-device": "node scripts/smoke-device.mjs",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@vitest/coverage-v8": "^4.1.11",
+    "ajv": "^8.17.1",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9"
+  }
+}

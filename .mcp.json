@@ -21,6 +21,7 @@
       "args": ["-y", "c64bridge@latest"],
       "env": { "VICE_ARGS": "-minimized" }
     },
-    "c64scope": { "type": "stdio", "command": "node", "args": ["c64scope/scripts/start.mjs"], "env": {} }
+    "c64scope": { "type": "stdio", "command": "node", "args": ["c64scope/scripts/start.mjs"], "env": {} },
+    "droidctl": { "type": "stdio", "command": "node", "args": ["droidctl/scripts/start.mjs"], "env": {} }
   }
 }
