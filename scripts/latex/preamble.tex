@@ -127,26 +127,42 @@
 \newcommand{\thumbcolour}[1]{%
   \ifcase#1\relax
     chapA\or chapA\or chapB\or chapC\or chapD\or chapE\or chapF\or chapG\or chapH\or chapI\else chapA\fi}
+% Every tab is flush with the outer edge, on both sides of the spread, so the
+% band for the chapter you are in is visible on the closed book. A tab that is
+% not the current chapter is shorter, and gives up its width on the inner side;
+% insetting it from the edge instead left it floating clear of the paper edge
+% and invisible once the book was shut.
+\newlength{\ghosttabwidth}\setlength{\ghosttabwidth}{\dimexpr\tabwidth-2.6mm\relax}
 \newcommand{\drawthumbtabs}{%
   \ifnum\value{chapter}>0\relax
   \setcounter{tabloop}{0}%
   \loop\ifnum\value{tabloop}<9\relax
     \stepcounter{tabloop}%
     \edef\tabhue{\thumbcolour{\value{tabloop}}}%
+    \ifnum\value{tabloop}=\value{chapter}\relax
+      \edef\thistabwidth{\the\tabwidth}%
+    \else
+      \edef\thistabwidth{\the\ghosttabwidth}%
+    \fi
+    % The outer edge is the right on a recto and the left on a verso, so the
+    % origin moves but the tab always ends at the paper edge. Both branches go
+    % through LenToUnit: a bare dimension here shifted the verso tabs off the
+    % edge by about a millimetre, which is what made the two sides look uneven.
     \ifodd\value{page}%
-      \put(\LenToUnit{\dimexpr\paperwidth-\tabwidth\relax},%
+      \put(\LenToUnit{\dimexpr\paperwidth-\thistabwidth\relax},%
            \LenToUnit{\dimexpr-\tabtop-\value{tabloop}\tabheight\relax}){%
-        \ifnum\value{tabloop}=\value{chapter}
-          \textcolor{\tabhue}{\rule{\tabwidth}{\tabheight}}%
+        \ifnum\value{tabloop}=\value{chapter}\relax
+          \textcolor{\tabhue}{\rule{\thistabwidth}{\tabheight}}%
         \else
-          \textcolor{\tabhue!16!c64paper}{\rule{\dimexpr\tabwidth-2.6mm\relax}{\tabheight}}%
+          \textcolor{\tabhue!16!c64paper}{\rule{\thistabwidth}{\tabheight}}%
         \fi}%
     \else
-      \put(0pt,\LenToUnit{\dimexpr-\tabtop-\value{tabloop}\tabheight\relax}){%
-        \ifnum\value{tabloop}=\value{chapter}
-          \textcolor{\tabhue}{\rule{\tabwidth}{\tabheight}}%
+      \put(\LenToUnit{0pt},%
+           \LenToUnit{\dimexpr-\tabtop-\value{tabloop}\tabheight\relax}){%
+        \ifnum\value{tabloop}=\value{chapter}\relax
+          \textcolor{\tabhue}{\rule{\thistabwidth}{\tabheight}}%
         \else
-          \hspace*{2.6mm}\textcolor{\tabhue!16!c64paper}{\rule{\dimexpr\tabwidth-2.6mm\relax}{\tabheight}}%
+          \textcolor{\tabhue!16!c64paper}{\rule{\thistabwidth}{\tabheight}}%
         \fi}%
     \fi
   \repeat\fi}
