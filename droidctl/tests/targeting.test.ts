@@ -51,8 +51,11 @@ describe("targeting: 1. adbArgs always carries an explicit serial", () => {
 
 describe("targeting: 2. every tool but list_targets requires a target", () => {
   it("declares targetId in required, derived from the registry", () => {
-    const offenders = listToolDescriptors()
-      .filter((descriptor) => requiresTarget(descriptor.name))
+    // The count assertion first: without it, a requiresTarget that returned
+    // false for everything would leave nothing to check and the test would pass.
+    const targeted = listToolDescriptors().filter((descriptor) => requiresTarget(descriptor.name));
+    expect(targeted.length).toBeGreaterThanOrEqual(20);
+    const offenders = targeted
       .filter((descriptor) => !(descriptor.inputSchema.required ?? []).includes("targetId"))
       .map((descriptor) => descriptor.name);
     expect(offenders).toEqual([]);
@@ -93,6 +96,7 @@ describe("targeting: 4. list_targets offers no default", () => {
       }
     };
     walk(result.data);
+    expect(keys).toContain("targetId");
     expect(keys.filter((key) => /default|preferred|current/i.test(key))).toEqual([]);
   });
 });

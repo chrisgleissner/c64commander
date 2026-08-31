@@ -140,6 +140,7 @@ describe("tool module dispatch", () => {
   });
 
   it("registers six modules whose domains match their tool prefixes", () => {
+    expect(modules.flatMap((module) => module.describeTools())).toHaveLength(25);
     for (const module of modules) {
       for (const descriptor of module.describeTools()) {
         expect(descriptor.name.startsWith(`${module.domain}.`)).toBe(true);

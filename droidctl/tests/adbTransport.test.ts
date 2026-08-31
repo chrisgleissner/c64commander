@@ -92,6 +92,7 @@ describe("every targeted invocation carries -s", () => {
     await recorder.transport.forwardPort(TARGET, 9222, "localabstract:webview_devtools_remote_1");
     await recorder.transport.removeForward(TARGET, 9222);
 
+    expect(recorder.requests).toHaveLength(6);
     for (const request of recorder.requests) {
       expect(request.args.slice(0, 2)).toEqual(["-s", "9B0EXAMPLE"]);
     }

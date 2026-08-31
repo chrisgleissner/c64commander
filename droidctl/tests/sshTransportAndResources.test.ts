@@ -90,6 +90,7 @@ describe("resources", () => {
 
   it("serves a support matrix covering every registered tool on both transports", () => {
     const matrix = JSON.parse(readResource("droidctl://reference/transport-support")!.readText());
+    expect(listToolDescriptors().length).toBe(25);
     for (const descriptor of listToolDescriptors()) {
       expect(matrix[descriptor.name]).toBeDefined();
       expect(matrix[descriptor.name].adb).toBe("supported");
