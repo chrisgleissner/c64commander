@@ -203,7 +203,7 @@ const featureAvailability = (feature) => {
   if (feature.enabled && feature.isUserToggleable) {
     return `On by default. Turn it off under **${feature.title}** in Settings → ${featureSettingGroup(feature)}.`;
   }
-  if (feature.enabled) return "Always on in this edition.";
+  if (feature.enabled) return "Always on.";
   return `Off to begin with. Turn it on under **${feature.title}** in Settings → ${featureSettingGroup(feature)}.`;
 };
 
@@ -264,7 +264,7 @@ const supportedMachinesSection = ({ appName, variant }) =>
     : [
         "### Supported Machines",
         "",
-        `${appName} is the broad edition. It works with the Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, and Ultimate-II.`,
+        `${appName} works with the Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, and Ultimate-II.`,
         "",
         "The app may call the device-file source **C64U** in lists and pickers. In that place, read it as storage on the connected Ultimate-family device, reached through FTP.",
       ];
@@ -295,9 +295,9 @@ const deviceSafetyGuidance = (variant) =>
     : "Leave it on Auto. It reads the model and the firmware, then chooses the profile that suits them. See Device Safety Modes.";
 
 const safeDeviceUseIntro = ({ appName, variant }) =>
-  `${appName} uses normal REST, FTP, and Telnet requests, but ${targetDeviceShortName(
+  `${appName} uses normal REST, FTP, and Telnet requests, but the firmware on ${targetDeviceShortName(
     variant,
-  )} firmware can still become unresponsive under some network conditions. The app reduces risk by pacing traffic and surfacing errors.`;
+  )} can still become unresponsive under some network conditions. The app reduces risk by pacing traffic and surfacing errors.`;
 
 const safeDeviceUseHabits = (variant) =>
   isC64uRemoteVariant(variant)
@@ -814,8 +814,6 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `${appName} puts your C64 on the screen in your hand: its music, its games, its disks and its settings, over your own network and nobody else’s.`,
     "",
-    "It does three things.",
-    "",
     "- **It plays.** SID music, games, demos and disk images, from your own files, from the machine itself, or from the great free archives.",
     "- **It controls.** Reset, reboot, the menu, the drives, the printer, the SID mixer, memory and every setting the machine has.",
     "- **It explains.** When something will not answer, health checks, logs and traces say what happened and where.",
@@ -866,7 +864,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "### Starting With No Network",
     "",
-    `Start ${appName} on a ${appDeviceName(variant)} that has no network connection at all — airplane mode, or Wi-Fi and mobile data both off — and none of the above happens. There is nothing to scan for, so the app does not scan, does not ask you anything, and opens straight onto a built-in simulation of ${targetDeviceDescription(variant)}. The badge reads **Demo mode**, so you always know which one you are looking at.`,
+    `Start ${appName} on a ${appDeviceName(variant)} that has no network connection at all (airplane mode, or Wi-Fi and mobile data both off) and none of the above happens. There is nothing to scan for, so the app does not scan, does not ask you anything, and opens straight onto a built-in simulation of ${targetDeviceDescription(variant)}. The badge reads **Demo mode**, so you always know which one you are looking at.`,
     "",
     `Everything the simulator answers for is yours to try: Home, the configuration, disks and drives, the playlist, and Remote Input. It answers the same network services a real machine does, but it runs no 6502 and sends no picture or sound, so programs and tunes do not play on it and Live View has nothing to show.`,
     "",
@@ -1099,7 +1097,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "**Notifications** decides whether you see every message or only errors, and how long each one stays on screen. **About** shows the version and links to the open source licenses.",
     "",
-    "Feature switches appear only where a feature is safe for anyone to change. A feature this edition does not support is absent from Settings and from this manual.",
+    "Feature switches appear only where a feature is safe for anyone to change.",
     "",
     "#### Making settings stick",
     "",
@@ -1151,7 +1149,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "Open it from the badge long-press, `#`, or Quick menu. Expand a row for more detail.",
     "",
-    "See [Switching Between Devices](#switching-between-devices) in the In Depth chapter for the full story.",
+    "See [Switching Between Devices](#switching-between-devices) in the In Depth chapter for the detail.",
     "",
     image("Device switcher expanded", profile, "diagnostics/switch-device/profiles/{profile}/02-picker-expanded.png"),
     "",
@@ -1320,7 +1318,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "## In Depth",
     "",
-    "The tour showed you where everything lives, and the flows above are quick recipes. A few features reward a closer look. This chapter takes its time with them.",
+    "A few parts of the app have more to them than a recipe can carry. This chapter covers those in full.",
     "",
     "### SID Music",
     "",
@@ -1600,11 +1598,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
                 "",
                 "The ladder grades what comes back and shows you five numbers: how many notes were **in tune**, how far off the **pitch** was, whether notes ran **long or short**, whether the two deliberate **silent gaps** really were silent, and how far apart the **sound and picture** were.",
                 "",
-                "Wrong pitches, notes running long, or a gap that is not silent all point the same way: the sound is being corrupted on the way to you rather than merely delayed. The commonest cause is a second machine on your network streaming into the same place, and this check makes that plain in one run.",
+                "Wrong pitches, notes running long, or a gap that is not silent all point the same way: the sound is being damaged on its way to you, which a delay alone would not do. The commonest cause is a second machine on your network streaming into the same place, and this check makes that plain in one run.",
                 "",
               ]
             : []),
-          "Live View is ready as it stands. The picture and the sound stay off until you press **Watch** or **Listen**, so nothing crosses the network until you ask for it.",
+          "Live View needs no setting up. The picture and the sound stay off until you press **Watch** or **Listen**, so nothing crosses the network until you ask for it.",
           "",
           "The device sends to two network ports, 11000 for the picture and 11001 for the sound, and **Settings → Play and Disk** changes them if those numbers are already spoken for. Live View borrows the same feeds as **Streams** below, and while it plays it takes charge of them.",
           "",
@@ -1776,7 +1774,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "You will rarely set any of this by hand. Starting a disk from Play switches the drive on if it is off, and changes its type if the current one cannot read the disk, telling you so as it goes.",
     "",
-    "Mounting is the heart of the page. Choose a disk from your collection, choose the drive, and mount it; **Eject** empties the drive again.",
+    "Choose a disk from your collection, choose the drive, and mount it; **Eject** empties the drive again.",
     "",
     `A disk that already lives on ${targetDeviceShortName(
       variant,
@@ -1935,7 +1933,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "The switcher checks each saved device for you, and looks again every ten seconds while it is open. Each row carries the name, a status pill reading **Selected**, **Verifying**, **Offline** or **Mismatch**, a health badge, and a short line such as how many checks passed or when the device was last seen. The device you are on is highlighted.",
     "",
-    "Tap the chevron to open a row and read the checks one by one, which tells a sleeping device from one that is truly unreachable. These rows stay light on the machines they glance at: they check the web and FTP services and read a setting without writing one. For the full round, Telnet included, use **Run health check** in Diagnostics.",
+    "Tap the chevron to open a row and read the checks one by one, which tells a sleeping device from one that cannot be reached at all. These rows stay light on the machines they glance at: they check the web and FTP services and read a setting without writing one. For the full round, Telnet included, use **Run health check** in Diagnostics.",
     "",
     "Tap a device to switch to it. Before anything else the app safely lets go of any input you were holding on the old device, stops tracking its playback and pause state, retargets to the new device's address and ports, and then checks that the new device answers. While that happens the target shows a **Verifying** pill; once it responds, it becomes the active device.",
     "",
@@ -1945,7 +1943,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "### Reading Diagnostics",
     "",
-    "Diagnostics is your window into the health of the connection and everything the app has recently done. It slides up from the bottom of the screen. Reach it by tapping the header badge, pressing `*`, choosing **Diagnostics** in Settings, or tapping any error notification.",
+    "Diagnostics shows the health of the connection and everything the app has recently done. It slides up from the bottom of the screen. Reach it by tapping the header badge, pressing `*`, choosing **Diagnostics** in Settings, or tapping any error notification.",
     "",
     "The panel has three parts, from top to bottom:",
     "",
@@ -1953,7 +1951,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "- The **Filters** bar says how much of the activity you are looking at and opens the filter editor. Filter by device, by kind of activity (Problems, Actions, Logs, Traces), by what raised it (App, REST, FTP, Telnet), or by severity (Errors, Warnings, Info). The editor also holds five one-tap shortcuts: **Errors only**, **Problems only**, **REST**, **FTP**, and **Reset**.",
     "- The **Activity** list gathers problems, actions, logs, and traces together. Tap any row to expand it for the full details.",
     "",
-    "The CONFIG probe is worth watching for. It does more than read: it nudges a live setting by a hair, reads it back to confirm the device applied the change, then puts the original value back.",
+    "The CONFIG probe writes as well as reads. It nudges a live setting by a hair, reads it back to confirm the device applied the change, then puts the original value back.",
     "",
     "On a machine with lights, the case light or the keyboard, you will see them **pulse once** as the check runs, a visible heartbeat that says the connection is alive. On a machine without lights it nudges a mixer volume instead, for about a twelfth of a second.",
     "",
@@ -2043,7 +2041,7 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "## Appendices",
     "",
-    "The rest of this guide is reference material, for the moments when you want the exact answer rather than the explanation behind it. The chapters above tell the story; these tables give the numbers, the defaults, and the exact place to look.",
+    "The rest of this guide is reference material: the numbers, the defaults, and the exact place to look, for when you want the answer without the explanation behind it.",
     "",
     "### Feature Reference",
     "",
@@ -2259,7 +2257,7 @@ export const INDEX_TERMS = [
   { term: "disk groups", match: ["**group**"] },
   { term: "disk images", match: ["disk images"] },
   { term: "disk, blank", match: ["**New disk**"] },
-  { term: "disk, mounting", match: ["Mounting is the heart of the page", "Mount a Disk"] },
+  { term: "disk, mounting", match: ["Mounting is what the page is for", "Choose a disk from your collection"] },
   { term: "disk, renaming", match: ["**Rename disk**"] },
   { term: "disk, rotating", match: ["rotate", "Rotate Disks"] },
   { term: "Disks page", match: ["Disks is where the drives"] },

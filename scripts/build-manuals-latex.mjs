@@ -234,8 +234,8 @@ const dressLatex = (tex, manualDir) => {
   // skimming.
   // Only the availability lines that ask something of the reader become callouts.
   //
-  // "On by default" and "Always on in this edition" tell someone that the thing
-  // they just read about already works. Set as a boxed callout beside every
+  // "On by default" and "Always on" tell someone that the thing they just read
+  // about already works. Set as a boxed callout beside every
   // feature, that is a page of furniture saying nothing, and it devalues the
   // boxes that do carry an instruction. Those lines stay as ordinary prose.
   //

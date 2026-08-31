@@ -29,8 +29,6 @@ Play SID music, run games and demos, mount disks, and control a Commodore 64 Ult
 
 C64 Commander puts your C64 on the screen in your hand: its music, its games, its disks and its settings, over your own network and nobody else’s.
 
-It does three things.
-
 - **It plays.** SID music, games, demos and disk images, from your own files, from the machine itself, or from the great free archives.
 - **It controls.** Reset, reboot, the menu, the drives, the printer, the SID mixer, memory and every setting the machine has.
 - **It explains.** When something will not answer, health checks, logs and traces say what happened and where.
@@ -41,7 +39,7 @@ Read the tour if the app is new to you: it is short, and it goes page by page. C
 
 ### Supported Machines
 
-C64 Commander is the broad edition. It works with the Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, and Ultimate-II.
+C64 Commander works with the Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, and Ultimate-II.
 
 The app may call the device-file source **C64U** in lists and pickers. In that place, read it as storage on the connected Ultimate-family device, reached through FTP.
 
@@ -77,7 +75,7 @@ Now watch the top right of the screen. A green badge there means the active devi
 
 ### Starting With No Network
 
-Start C64 Commander on a phone or tablet that has no network connection at all — airplane mode, or Wi-Fi and mobile data both off — and none of the above happens. There is nothing to scan for, so the app does not scan, does not ask you anything, and opens straight onto a built-in simulation of a Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, or Ultimate-II. The badge reads **Demo mode**, so you always know which one you are looking at.
+Start C64 Commander on a phone or tablet that has no network connection at all (airplane mode, or Wi-Fi and mobile data both off) and none of the above happens. There is nothing to scan for, so the app does not scan, does not ask you anything, and opens straight onto a built-in simulation of a Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, or Ultimate-II. The badge reads **Demo mode**, so you always know which one you are looking at.
 
 Everything the simulator answers for is yours to try: Home, the configuration, disks and drives, the playlist, and Remote Input. It answers the same network services a real machine does, but it runs no 6502 and sends no picture or sound, so programs and tunes do not play on it and Live View has nothing to show.
 
@@ -287,7 +285,7 @@ Settings transfer exports your app settings, feature switches and device-safety 
 
 **Notifications** decides whether you see every message or only errors, and how long each one stays on screen. **About** shows the version and links to the open source licenses.
 
-Feature switches appear only where a feature is safe for anyone to change. A feature this edition does not support is absent from Settings and from this manual.
+Feature switches appear only where a feature is safe for anyone to change.
 
 #### Making settings stick
 
@@ -331,7 +329,7 @@ For a closer look, see [Reading Diagnostics](#reading-diagnostics) and [Sharing 
 
 Open it from the badge long-press, `#`, or Quick menu. Expand a row for more detail.
 
-See [Switching Between Devices](#switching-between-devices) in the In Depth chapter for the full story.
+See [Switching Between Devices](#switching-between-devices) in the In Depth chapter for the detail.
 
 ![Device switcher expanded](../../img/app/diagnostics/switch-device/profiles/medium/02-picker-expanded.png)
 
@@ -490,7 +488,7 @@ Preferred path: Share before restart when you are trying to preserve evidence.
 
 ## In Depth
 
-The tour showed you where everything lives, and the flows above are quick recipes. A few features reward a closer look. This chapter takes its time with them.
+A few parts of the app have more to them than a recipe can carry. This chapter covers those in full.
 
 ### SID Music
 
@@ -725,9 +723,9 @@ Under Live View are three checks you can run whenever something seems off. They 
 
 The ladder grades what comes back and shows you five numbers: how many notes were **in tune**, how far off the **pitch** was, whether notes ran **long or short**, whether the two deliberate **silent gaps** really were silent, and how far apart the **sound and picture** were.
 
-Wrong pitches, notes running long, or a gap that is not silent all point the same way: the sound is being corrupted on the way to you rather than merely delayed. The commonest cause is a second machine on your network streaming into the same place, and this check makes that plain in one run.
+Wrong pitches, notes running long, or a gap that is not silent all point the same way: the sound is being damaged on its way to you, which a delay alone would not do. The commonest cause is a second machine on your network streaming into the same place, and this check makes that plain in one run.
 
-Live View is ready as it stands. The picture and the sound stay off until you press **Watch** or **Listen**, so nothing crosses the network until you ask for it.
+Live View needs no setting up. The picture and the sound stay off until you press **Watch** or **Listen**, so nothing crosses the network until you ask for it.
 
 The device sends to two network ports, 11000 for the picture and 11001 for the sound, and **Settings → Play and Disk** changes them if those numbers are already spoken for. Live View borrows the same feeds as **Streams** below, and while it plays it takes charge of them.
 
@@ -844,7 +842,7 @@ Set its **type** to match the disk: a 1541 for D64 and G64, a 1571 for D71 (whic
 
 You will rarely set any of this by hand. Starting a disk from Play switches the drive on if it is off, and changes its type if the current one cannot read the disk, telling you so as it goes.
 
-Mounting is the heart of the page. Choose a disk from your collection, choose the drive, and mount it; **Eject** empties the drive again.
+Choose a disk from your collection, choose the drive, and mount it; **Eject** empties the drive again.
 
 A disk that already lives on the connected Ultimate-family device mounts in place. A **Local** disk is copied across first, and whatever a program writes to it returns to your own file when you eject, so your high scores and saved games survive.
 
@@ -966,7 +964,7 @@ Open it in any of three ways, whenever more than one device is saved:
 
 The switcher checks each saved device for you, and looks again every ten seconds while it is open. Each row carries the name, a status pill reading **Selected**, **Verifying**, **Offline** or **Mismatch**, a health badge, and a short line such as how many checks passed or when the device was last seen. The device you are on is highlighted.
 
-Tap the chevron to open a row and read the checks one by one, which tells a sleeping device from one that is truly unreachable. These rows stay light on the machines they glance at: they check the web and FTP services and read a setting without writing one. For the full round, Telnet included, use **Run health check** in Diagnostics.
+Tap the chevron to open a row and read the checks one by one, which tells a sleeping device from one that cannot be reached at all. These rows stay light on the machines they glance at: they check the web and FTP services and read a setting without writing one. For the full round, Telnet included, use **Run health check** in Diagnostics.
 
 Tap a device to switch to it. Before anything else the app safely lets go of any input you were holding on the old device, stops tracking its playback and pause state, retargets to the new device's address and ports, and then checks that the new device answers. While that happens the target shows a **Verifying** pill; once it responds, it becomes the active device.
 
@@ -976,7 +974,7 @@ Saved devices are created and edited in **Settings → Connection**, under **Sav
 
 ### Reading Diagnostics
 
-Diagnostics is your window into the health of the connection and everything the app has recently done. It slides up from the bottom of the screen. Reach it by tapping the header badge, pressing `*`, choosing **Diagnostics** in Settings, or tapping any error notification.
+Diagnostics shows the health of the connection and everything the app has recently done. It slides up from the bottom of the screen. Reach it by tapping the header badge, pressing `*`, choosing **Diagnostics** in Settings, or tapping any error notification.
 
 The panel has three parts, from top to bottom:
 
@@ -984,7 +982,7 @@ The panel has three parts, from top to bottom:
 - The **Filters** bar says how much of the activity you are looking at and opens the filter editor. Filter by device, by kind of activity (Problems, Actions, Logs, Traces), by what raised it (App, REST, FTP, Telnet), or by severity (Errors, Warnings, Info). The editor also holds five one-tap shortcuts: **Errors only**, **Problems only**, **REST**, **FTP**, and **Reset**.
 - The **Activity** list gathers problems, actions, logs, and traces together. Tap any row to expand it for the full details.
 
-The CONFIG probe is worth watching for. It does more than read: it nudges a live setting by a hair, reads it back to confirm the device applied the change, then puts the original value back.
+The CONFIG probe writes as well as reads. It nudges a live setting by a hair, reads it back to confirm the device applied the change, then puts the original value back.
 
 On a machine with lights, the case light or the keyboard, you will see them **pulse once** as the check runs, a visible heartbeat that says the connection is alive. On a machine without lights it nudges a mixer volume instead, for about a twelfth of a second.
 
@@ -1008,7 +1006,7 @@ Use **Clear all** afterwards for a clean slate. It asks you to confirm, then sho
 
 ## Safe Device Use
 
-C64 Commander uses normal REST, FTP, and Telnet requests, but the connected Ultimate-family device firmware can still become unresponsive under some network conditions. The app reduces risk by pacing traffic and surfacing errors.
+C64 Commander uses normal REST, FTP, and Telnet requests, but the firmware on the connected Ultimate-family device can still become unresponsive under some network conditions. The app reduces risk by pacing traffic and surfacing errors.
 
 Good habits:
 
@@ -1071,7 +1069,7 @@ Open Diagnostics if possible and check recent REST/FTP/Telnet activity. If HTTP,
 
 ## Appendices
 
-The rest of this guide is reference material, for the moments when you want the exact answer rather than the explanation behind it. The chapters above tell the story; these tables give the numbers, the defaults, and the exact place to look.
+The rest of this guide is reference material: the numbers, the defaults, and the exact place to look, for when you want the answer without the explanation behind it.
 
 ### Feature Reference
 
@@ -1124,7 +1122,7 @@ Preferred locations are marked first.
 | SID Radio | **Play → SID Radio** | Endless stations of similar tunes. Settings → SID Radio tunes it. |
 | CommoServe | **Play → Add items**, Disks → Add disks, Settings → Online Archive | On by default. Turn it off under **CommoServe** in Settings → Stable Features. |
 | Demo Mode | **Settings → Connection** | Off to begin with. Turn it on under **Demo Mode** in Settings → Stable Features. Separately from that setting, a launch with no network at all opens on the simulated device on its own. |
-| Background playback scheduling | **Play**, Android app permissions | Always on in this edition. |
+| Background playback scheduling | **Play**, Android app permissions | Always on. |
 | Display profile, theme, style, text size, card descriptions, orientation | **Settings → Appearance** | Screenshots in this manual use the medium profile. |
 | Settings transfer (export and import) | **Settings → Diagnostics** | App settings, feature switches and safety tuning. Saved devices and passwords stay behind. |
 | Notification style and duration | **Settings → Notifications** | Show everything, or errors alone. |

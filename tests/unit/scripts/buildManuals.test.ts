@@ -123,6 +123,30 @@ describe("manual generator", () => {
     });
   });
 
+  // Each manual is published as the manual for its own product. A reader must not be
+  // able to tell that a second one is rendered from the same source, so nothing may
+  // name an edition, or explain a feature as missing rather than simply omitting it.
+  it("never lets on that a second edition exists", async () => {
+    const contexts = await contextByVariant();
+    const tells = [
+      /\bedition\b/i,
+      /\bvariant\b/i,
+      /this version of the app/i,
+      /depending on your/i,
+      /if your build/i,
+      /available on some devices/i,
+      /does not support/i,
+      /\bhas been removed\b/i,
+    ];
+
+    for (const variantId of ["c64u-remote", "c64commander"]) {
+      const manual = renderManualMarkdown(contexts[variantId]);
+      for (const tell of tells) {
+        expect(manual.match(tell)?.[0] ?? null, `${variantId} manual matches ${tell}`).toBeNull();
+      }
+    }
+  });
+
   it("names no device model in either manual", async () => {
     const contexts = await contextByVariant();
     const modelShape = /\b[A-Z][A-Za-z]+[ -]?[0-9]{4}\b/;
@@ -164,7 +188,7 @@ describe("manual generator", () => {
     expect(c64uRemote).toContain("the same setting appears in Config as **User interface → Auto save config**.");
 
     expect(c64Commander).toContain(
-      "It works with the Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, and Ultimate-II.",
+      "C64 Commander works with the Commodore 64 Ultimate, Ultimate 64, Ultimate 64 Elite, Ultimate 64 Elite II, and Ultimate-II.",
     );
     expect(c64Commander).toContain("Enter a hostname such as `c64u`, `u64`, or `u2`");
     expect(c64Commander).toContain(
