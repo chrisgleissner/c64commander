@@ -48,11 +48,6 @@ vi.mock("../../../src/lib/smoke/smokeMode", () => ({
   recordSmokeStatus: vi.fn(async () => undefined),
 }));
 
-vi.mock("../../../src/lib/c64api", async () => {
-  const actual = await vi.importActual<typeof import("../../../src/lib/c64api")>("../../../src/lib/c64api");
-  return { ...actual, applyC64APIRuntimeConfig: vi.fn() };
-});
-
 vi.mock("../../../src/lib/secureStorage", () => ({
   getPassword: vi.fn(async () => null),
   getPasswordForDevice: vi.fn(async () => null),
@@ -207,6 +202,27 @@ describe("startup with no network on the device", () => {
     expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
     expect(startDeviceDiscovery).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not record the simulated device answering as a real device found", async () => {
+    const {
+      NO_NETWORK_PROBE_ERROR,
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+      noteReachable,
+    } = await import("../../../src/lib/connection/connectionManager");
+    const { getC64APIConfigSnapshot } = await import("../../../src/lib/c64api");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+    expect(getC64APIConfigSnapshot().baseUrl).toBe(MOCK_BASE_URL);
+
+    noteReachable(MOCK_BASE_URL, "rest");
+
+    const snapshot = getConnectionSnapshot();
+    expect(snapshot.lastProbeSucceededAtMs).toBeNull();
+    expect(snapshot.lastProbeError).toBe(NO_NETWORK_PROBE_ERROR);
   });
 
   it("connects to the real device once the network comes back", async () => {

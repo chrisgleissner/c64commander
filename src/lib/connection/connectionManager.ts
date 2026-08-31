@@ -597,9 +597,22 @@ const getActiveReachabilityHosts = () => {
   return new Set(hosts);
 };
 
+// The simulated device is reachable by construction, so its traffic is no evidence
+// about a real one — recording it made Settings and diagnostics report a real device
+// found, on a phone with no network at all.
+const isActiveMockHost = (normalizedHost: string) => {
+  const mockBaseUrl = getActiveMockBaseUrl();
+  return Boolean(mockBaseUrl) && normalizeReachabilityHost(mockBaseUrl) === normalizedHost;
+};
+
 export const noteReachable = (host: string, source: ReachabilitySource, deviceInfo: DeviceInfo | null = null): void => {
   const normalizedHost = normalizeReachabilityHost(host);
   if (!normalizedHost) return;
+
+  if (isActiveMockHost(normalizedHost)) {
+    addLog("debug", "Ignoring reachable event from the simulated device", { host: normalizedHost, source });
+    return;
+  }
 
   const activeHosts = getActiveReachabilityHosts();
   if (!activeHosts.has(normalizedHost)) {
