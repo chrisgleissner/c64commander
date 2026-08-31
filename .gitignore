@@ -210,7 +210,6 @@ org/
 android-mcp-server/
 c64bridge/
 c64stream/
-droidmind/
 mobile-mcp/
 test-data/
 vivipi/
@@ -224,7 +223,6 @@ vivipi/
 android-mcp-server
 c64bridge
 c64stream
-droidmind
 vivipi
 
 # Other local artifacts
