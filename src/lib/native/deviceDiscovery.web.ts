@@ -18,6 +18,13 @@ export class DeviceDiscoveryWeb implements DeviceDiscoveryPlugin {
   // "an interface exists", not "a LAN is reachable" — too weak to route a user
   // into the simulated device on.
   async getNetworkStatus(): Promise<NativeNetworkStatus> {
+    // Test seam (E2E specs only), matching `discover` below: an injected answer lets a browser
+    // drive the no-network path, which otherwise only a real handset with its radios off can
+    // reach. Production web builds never set this global, so the real facade stays `unsupported`.
+    const injected = (globalThis as { __c64uMockNetworkStatus?: Partial<NativeNetworkStatus> }).__c64uMockNetworkStatus;
+    if (injected) {
+      return { online: injected.online !== false, supported: injected.supported === true };
+    }
     return { online: true, supported: false };
   }
 

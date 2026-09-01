@@ -3246,6 +3246,9 @@ export function updateC64APIConfig(
         password: password || "",
         deviceHost: resolvedDeviceHost,
         reason: options?.reason,
+        // A persisted change is the user's: they typed a hostname or a password. Listeners that
+        // re-run discovery act on these and ignore the runtime ones below.
+        mode: "persisted",
       },
     }),
   );
@@ -3314,6 +3317,10 @@ export function applyC64APIRuntimeConfig(
         password: password || "",
         deviceHost: resolvedDeviceHost,
         reason: options?.reason,
+        // The app re-routed itself — entering Demo Mode, switching saved device, smoke mode. It is
+        // not a settings edit, and treating it as one made Demo Mode re-run discovery against the
+        // still-stored real host and connect straight back to it.
+        mode: "runtime",
       },
     }),
   );

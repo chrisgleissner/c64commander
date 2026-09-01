@@ -303,6 +303,33 @@ describe("ConnectionController", () => {
     expect(discoverConnectionMock).toHaveBeenCalledWith("settings");
   });
 
+  it("ignores a runtime re-route, which is the app moving its own target rather than a settings edit", async () => {
+    const queryClient = new QueryClient();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ConnectionController />
+      </QueryClientProvider>,
+    );
+
+    discoverConnectionMock.mockClear();
+
+    // Entering Demo Mode re-routes the API to the loopback mock. Treating that as a settings edit
+    // rediscovered against the still-stored real host, cleared the user's Demo Mode pin and
+    // connected straight back to the device they had just chosen to step away from.
+    window.dispatchEvent(
+      new CustomEvent("c64u-connection-change", {
+        detail: {
+          baseUrl: "http://127.0.0.1:41234",
+          password: "",
+          deviceHost: "127.0.0.1:41234",
+          mode: "runtime",
+        },
+      }),
+    );
+
+    expect(discoverConnectionMock).not.toHaveBeenCalledWith("settings");
+  });
+
   it("reschedules background probes when app setting update event is emitted", async () => {
     vi.useFakeTimers();
     try {
