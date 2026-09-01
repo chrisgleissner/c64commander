@@ -40,6 +40,20 @@ installed at once and both open a WebView DevTools socket.
 
 `droidctl://reference/targeting-rules` serves the full rule list as an MCP resource.
 
+Resolution is deliberately not cached. Every tool call lists the devices again, which is the server's
+only check that the target is still attached: a device that disconnected or became ambiguous since the
+previous call is refused rather than acted on. Measured against the Pixel 4 on USB, that listing costs
+3.6 ms median, against a 14.9 ms floor for any single `adb shell` round trip the tool must then make —
+18.5% of the cheapest possible call (`run_shell ["true"]`, 19.2 ms) and 5.5% of a tap-shaped one
+(64.2 ms). `tests/targeting.test.ts` fails if a resolution cache is introduced.
+
+`apiLevel` is populated by reading `ro.build.version.sdk`. That read is cached per connection rather
+than per listing: the cache is keyed on the serial plus adb's transport id, which changes whenever a
+device reattaches, and entries for devices absent from a listing are dropped. So a device is read once
+when it attaches and never again, which keeps the per-call listing at 3.6 ms; the first listing after a
+device attaches costs 23.5 ms. A target not in state `device` is never queried and reports a null
+`apiLevel`.
+
 ## Tool surface
 
 | Domain          | Tools                                                                                                         |
@@ -50,6 +64,13 @@ installed at once and both open a WebView DevTools socket.
 | `droid_capture` | `screenshot`, `ui_hierarchy`, `start_recording`, `stop_recording`, `logcat`                                   |
 | `droid_assert`  | `assert_visible`, `assert_not_visible`                                                                        |
 | `droid_device`  | `prepare_device`, `run_shell`, `forward_webview`, `push_file`, `pull_file`                                    |
+
+The JSON Schema advertised over `tools/list` is derived from each tool's zod schema by
+`src/tools/jsonSchema.ts`, so there is no second declaration to drift: a constraint enforced at execute
+time is advertised, and a construct the derivation cannot express fails at import instead of quietly
+understating the validator. The one thing it cannot carry is a zod `.refine()`, which is a runtime-only
+predicate; `tests/contract.test.ts` lists each of those explicitly and asserts the disagreement is real.
+`tests/fixtures/advertisedSurface.json` locks the surface callers see, so a change to it is deliberate.
 
 ## Transports
 

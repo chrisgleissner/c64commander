@@ -37,11 +37,15 @@ describe("Android background execution contracts", () => {
     expect(backgroundServiceSource).not.toContain("handler.postDelayed(nextRunnable, remaining)");
   });
 
-  it("guards background auto-skip receiver registration so load is idempotent", () => {
-    expect(backgroundPluginSource).toContain("private var isAutoSkipReceiverRegistered = false");
-    expect(backgroundPluginSource).toContain("if (isAutoSkipReceiverRegistered) return");
-    expect(backgroundPluginSource).toContain("isAutoSkipReceiverRegistered = true");
-    expect(backgroundPluginSource).toContain("isAutoSkipReceiverRegistered = false");
+  it("guards background receiver registration so load is idempotent", () => {
+    expect(backgroundPluginSource).toContain("private var areServiceReceiversRegistered = false");
+    expect(backgroundPluginSource).toContain("if (areServiceReceiversRegistered) return");
+    expect(backgroundPluginSource).toContain("areServiceReceiversRegistered = true");
+    expect(backgroundPluginSource).toContain("areServiceReceiversRegistered = false");
+  });
+
+  it("relays a media button press to the web layer, retained until Play remounts a listener", () => {
+    expect(backgroundPluginSource).toContain('notifyListeners("backgroundTransportCommand", payload, true)');
   });
 
   it("HARD20-010: retains an auto-skip event until Play remounts a listener", () => {

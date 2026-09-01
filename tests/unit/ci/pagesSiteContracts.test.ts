@@ -141,13 +141,16 @@ describe("the privacy policy", () => {
     const html = policy().toLowerCase();
 
     // A permission added to the manifest fails here until the policy explains
-    // it, which is the only way the two stay in step.
+    // it, which is the only way the two stay in step. A permission the user is
+    // prompted for also has to say so, since the policy used to promise there
+    // were none.
     const described: Record<string, string> = {
       INTERNET: "internet",
       CHANGE_WIFI_MULTICAST_STATE: "multicast",
       FOREGROUND_SERVICE: "foreground service",
       FOREGROUND_SERVICE_MEDIA_PLAYBACK: "media playback",
       WAKE_LOCK: "wake lock",
+      POST_NOTIFICATIONS: "notifications",
     };
     for (const permission of declared) {
       const phrase = described[permission];
@@ -160,6 +163,13 @@ describe("the privacy policy", () => {
     expect(policy(), `the policy counts the permissions wrong; there are ${declared.length}`).toContain(
       `declares ${counted} Android permissions`,
     );
+
+    // POST_NOTIFICATIONS is prompted for, so the old blanket promise that none
+    // of the permissions is one Android asks about must not come back.
+    if (declared.includes("POST_NOTIFICATIONS")) {
+      expect(policy()).not.toMatch(/none of them is one Android asks you to approve/i);
+      expect(html).toContain("the only one android asks you to approve");
+    }
   });
 
   it("claims no permission the app does not hold", () => {

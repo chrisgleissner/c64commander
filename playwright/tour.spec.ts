@@ -115,10 +115,11 @@ test.describe("first-run tour", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("tour-overlay")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId("tour-caption")).toHaveAttribute("data-placement", "bottom");
-    // Written after start-up, because the native safe-area bridge writes this variable itself on
-    // launch and would overwrite a value set before it.
+    // Set inline on the root, which is where Capacitor's SystemBars plugin writes the real
+    // insets on Android and so beats the env() fallback declared on :root. The app no longer
+    // keeps a second copy of these under its own name for the layout to compose with.
     await page.evaluate((value: number) => {
-      document.documentElement.style.setProperty("--native-safe-area-inset-bottom", `${value}px`);
+      document.documentElement.style.setProperty("--safe-area-inset-bottom", `${value}px`);
     }, inset);
     await page.waitForTimeout(200);
 

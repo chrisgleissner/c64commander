@@ -45,9 +45,16 @@ class BackgroundExecutionService : Service() {
 
         const val ACTION_UPDATE_DUE_AT = "uk.gleissner.c64commander.action.UPDATE_DUE_AT"
         const val ACTION_AUTO_SKIP_DUE = "uk.gleissner.c64commander.action.AUTO_SKIP_DUE"
+        const val ACTION_TRANSPORT_COMMAND = "uk.gleissner.c64commander.action.TRANSPORT_COMMAND"
         const val EXTRA_DUE_AT_MS = "dueAtMs"
         const val EXTRA_FIRED_AT_MS = "firedAtMs"
         const val EXTRA_COMMAND_GENERATION = "commandGeneration"
+        const val EXTRA_TRANSPORT_COMMAND = "transportCommand"
+
+        /** The three transport commands the session's PlaybackState already advertises. */
+        const val TRANSPORT_COMMAND_PLAY = "play"
+        const val TRANSPORT_COMMAND_PLAY_PAUSE = "playPause"
+        const val TRANSPORT_COMMAND_STOP = "stop"
 
         @Volatile
         var isRunning = false
@@ -145,6 +152,20 @@ class BackgroundExecutionService : Service() {
                         "Audio focus changed ($focusChange)",
                         "BackgroundExecutionService"
                 )
+            }
+
+    /**
+     * A MediaSession with no callback is never made the platform's media-button session, so a
+     * headset, lock-screen or Bluetooth transport press reaches nothing at all. This service knows
+     * nothing about playback, so each press is forwarded to the web layer, which owns the transport.
+     */
+    internal val mediaSessionCallback =
+            object : MediaSession.Callback() {
+                override fun onPlay() = broadcastTransportCommand(TRANSPORT_COMMAND_PLAY)
+
+                override fun onPause() = broadcastTransportCommand(TRANSPORT_COMMAND_PLAY_PAUSE)
+
+                override fun onStop() = broadcastTransportCommand(TRANSPORT_COMMAND_STOP)
             }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -317,6 +338,7 @@ class BackgroundExecutionService : Service() {
         if (mediaSession != null) return
         try {
             val session = MediaSession(this, "C64CommanderBackgroundExecution")
+            session.setCallback(mediaSessionCallback)
             val playbackState =
                     PlaybackState.Builder()
                             .setState(
@@ -344,6 +366,19 @@ class BackgroundExecutionService : Service() {
                     e
             )
         }
+    }
+
+    private fun broadcastTransportCommand(command: String) {
+        val broadcast = Intent(ACTION_TRANSPORT_COMMAND)
+        broadcast.setPackage(packageName)
+        broadcast.putExtra(EXTRA_TRANSPORT_COMMAND, command)
+        sendBroadcast(broadcast)
+        AppLogger.info(
+                this,
+                TAG,
+                "Media button transport command ($command)",
+                "BackgroundExecutionService"
+        )
     }
 
     private fun releaseMediaSession() {
@@ -493,7 +528,11 @@ class BackgroundExecutionService : Service() {
             }
 
             val now = System.currentTimeMillis()
+            // Implicit (no package) this never reaches the plugin's runtime receiver:
+            // the record is enqueued and then dropped without a dispatch. AppLogger's
+            // DIAGNOSTICS_LOG broadcast already sets the package for the same reason.
             val broadcast = Intent(ACTION_AUTO_SKIP_DUE)
+            broadcast.setPackage(packageName)
             broadcast.putExtra(EXTRA_DUE_AT_MS, currentDue)
             broadcast.putExtra(EXTRA_FIRED_AT_MS, now)
             sendBroadcast(broadcast)

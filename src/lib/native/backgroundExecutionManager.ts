@@ -8,6 +8,7 @@
 
 import { addLog } from "@/lib/logging";
 import { BackgroundExecution } from "@/lib/native/backgroundExecution";
+import { ensureNotificationPermission } from "@/lib/native/notificationPermission";
 import { getLifecycleState } from "@/lib/appLifecycle";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 
@@ -41,6 +42,9 @@ const buildOperationError = (operation: "start" | "stop", error: unknown) => {
 export const startBackgroundExecution = async (logContext: BackgroundExecutionLogContext) => {
   activeCount += 1;
   if (activeCount > 1) return;
+  // Ask before the service starts: startForeground() posts the notification once, and a grant that
+  // arrives afterwards does not bring back a notification the system has already dropped.
+  await ensureNotificationPermission();
   try {
     await BackgroundExecution.start();
   } catch (error) {

@@ -159,3 +159,45 @@ describe("targeting: 6. a stale target id touches no device", () => {
     expect(transport.calls.filter((call) => call.kind !== "listTargets")).toEqual([]);
   });
 });
+
+/*
+ * Resolution is not cached. Measured on the Pixel 4 the listing costs 3.6 ms, or
+ * 5.5% of a tap-shaped tool call, and it is the server's only check that the
+ * device is still attached. These pin that: caching the listing would break them.
+ */
+describe("targeting: 7. every call resolves against the live device list", () => {
+  it("lists the devices again on the next call rather than reusing the last answer", async () => {
+    const transport = new FakeTransport([defaultTarget({ targetId: "adb:LIVE", serial: "LIVE" })]);
+    const registry = new TransportRegistry([transport]);
+
+    await registry.resolve("adb:LIVE");
+    await registry.resolve("adb:LIVE");
+
+    expect(transport.calls.filter((call) => call.kind === "listTargets").length).toBe(2);
+  });
+
+  it("refuses a target that disconnected since the last call instead of acting on it", async () => {
+    const transport = new FakeTransport([defaultTarget({ targetId: "adb:LIVE", serial: "LIVE" })]);
+    const registry = new TransportRegistry([transport]);
+    await registry.resolve("adb:LIVE");
+
+    transport.targets = [];
+    const error = await rejection(registry.resolve("adb:LIVE"));
+
+    expect(error.code).toBe("target_not_found");
+  });
+
+  it("refuses a target that became ambiguous since the last call", async () => {
+    const transport = new FakeTransport([defaultTarget({ targetId: "adb:LIVE", serial: "LIVE" })]);
+    const registry = new TransportRegistry([transport]);
+    await registry.resolve("adb:LIVE");
+
+    transport.targets = [
+      defaultTarget({ targetId: "adb:LIVE", serial: "LIVE" }),
+      defaultTarget({ targetId: "adb:LIVE", serial: "LIVE", isEmulator: true }),
+    ];
+    const error = await rejection(registry.resolve("adb:LIVE"));
+
+    expect(error.code).toBe("ambiguous_target");
+  });
+});

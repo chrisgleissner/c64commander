@@ -58,13 +58,14 @@ describe("page-shell bounded viewport contract", () => {
     expect(swipeNavSource).toContain('height: "calc(100dvh - var(--app-tab-bar-reserved-height))"');
   });
 
-  it("derives shared top and bottom safe-area variables from both CSS env values and native insets", () => {
-    expect(css).toMatch(
-      /--safe-area-inset-top:\s*max\(env\(safe-area-inset-top,\s*0px\),\s*var\(--native-safe-area-inset-top\)\)/,
-    );
-    expect(css).toMatch(
-      /--safe-area-inset-bottom:\s*max\(env\(safe-area-inset-bottom,\s*0px\),\s*var\(--native-safe-area-inset-bottom\)\)/,
-    );
+  // Capacitor's SystemBars plugin overwrites these four inline on <html> from the Android window
+  // insets listener, and an inline declaration beats this :root rule. Anything composed here from
+  // a property the app maintains itself is therefore discarded on Android; see
+  // tests/unit/lib/native/safeAreaOwnership.test.ts.
+  it("declares the shared safe-area variables as plain env() fallbacks the native writer overrides", () => {
+    expect(css).toMatch(/--safe-area-inset-top:\s*env\(safe-area-inset-top,\s*0px\)\s*;/);
+    expect(css).toMatch(/--safe-area-inset-bottom:\s*env\(safe-area-inset-bottom,\s*0px\)\s*;/);
+    expect(css).not.toContain("--native-safe-area-inset-");
   });
 
   it("keeps the hardware-key selected-control ring visible over component focus utilities", () => {

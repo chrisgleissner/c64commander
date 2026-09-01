@@ -34,6 +34,7 @@ import { FocusNavigationProvider, type KeypadShortcutHandlers } from "@/hooks/us
 import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
 import { createTransportShortcut } from "@/lib/input/transportShortcuts";
+import { installNativeMediaButtons } from "@/lib/input/nativeMediaButtons";
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
 import { SearchKeyListener } from "@/components/search/SearchKeyListener";
 import { SearchOverlayHost } from "@/components/search/SearchOverlayHost";
@@ -262,6 +263,8 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
     () => ({ navigate: (path: string) => navigate(path), currentPath: () => window.location.pathname }),
     [navigate],
   );
+  // Headset / lock screen / Bluetooth, through the same factory F1 and F3 use.
+  useEffect(() => installNativeMediaButtons(transportShortcutOptions), [transportShortcutOptions]);
   const shortcuts = useMemo<KeypadShortcutHandlers>(
     () => ({
       jumpToTab: (index) => {

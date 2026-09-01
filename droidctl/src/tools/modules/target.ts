@@ -9,12 +9,15 @@
 import { z } from "zod";
 import { describeTarget } from "../../deviceInfo.js";
 import type { TransportKind } from "../../transport/types.js";
-import { defineExecute, resolveTarget, targetIdField, targetIdSchema } from "../common.js";
+import { defineExecute, resolveTarget, targetIdSchema } from "../common.js";
 import { defineToolModule } from "../types.js";
 
 const listTargetsSchema = z
   .object({
-    transports: z.array(z.enum(["adb", "ssh"])).optional(),
+    transports: z
+      .array(z.enum(["adb", "ssh"]))
+      .describe("Restrict enumeration to these transports. Omit to enumerate all registered transports.")
+      .optional(),
   })
   .strict();
 
@@ -29,19 +32,8 @@ export const targetModule = defineToolModule({
       description:
         "List every addressable target with its transport, serial, model, API level, state and whether it is an emulator. " +
         "Returns no default, preferred or current target: pick one and pass its targetId. Offline and unauthorized " +
-        "targets are listed rather than hidden, so a caller can see why its target vanished.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          transports: {
-            type: "array",
-            description: "Restrict enumeration to these transports. Omit to enumerate all registered transports.",
-            items: { type: "string", enum: ["adb", "ssh"] },
-          },
-        },
-        required: [],
-        additionalProperties: false,
-      },
+        "targets are listed rather than hidden, so a caller can see why its target vanished. apiLevel is read once per " +
+        "connection and is null only for a target that cannot be queried, which is every target not in state device.",
       argsSchema: listTargetsSchema,
       execute: defineExecute(listTargetsSchema, async (args, ctx) => {
         const listing = await ctx.transports.list(args.transports as TransportKind[] | undefined);
@@ -53,12 +45,6 @@ export const targetModule = defineToolModule({
       description:
         "Describe one target: build properties, screen geometry, and any wm size or wm density override. A leftover " +
         "override from a small-screen audit fails input and clarity checks with no code fault, so it is reported here.",
-      inputSchema: {
-        type: "object",
-        properties: { targetId: targetIdField },
-        required: ["targetId"],
-        additionalProperties: false,
-      },
       argsSchema: describeTargetSchema,
       execute: defineExecute(describeTargetSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);

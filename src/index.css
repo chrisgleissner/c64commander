@@ -29,14 +29,13 @@
   --display-profile-action-grid-min: 9.5rem;
   --display-profile-modal-max-width: 48rem;
   --display-profile-modal-inset: 1rem;
-  --native-safe-area-inset-top: 0px;
-  --native-safe-area-inset-right: 0px;
-  --native-safe-area-inset-bottom: 0px;
-  --native-safe-area-inset-left: 0px;
-  --safe-area-inset-top: max(env(safe-area-inset-top, 0px), var(--native-safe-area-inset-top));
-  --safe-area-inset-right: max(env(safe-area-inset-right, 0px), var(--native-safe-area-inset-right));
-  --safe-area-inset-bottom: max(env(safe-area-inset-bottom, 0px), var(--native-safe-area-inset-bottom));
-  --safe-area-inset-left: max(env(safe-area-inset-left, 0px), var(--native-safe-area-inset-left));
+  /* Capacitor's SystemBars plugin overwrites these four inline on <html> from the Android
+     window insets listener, and inline beats :root, so nothing composed here survives there.
+     They are the fallback for iOS, the web, and the first paint before that listener runs. */
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
   --app-tab-bar-safe-area-bottom: var(--safe-area-inset-bottom);
   --app-tab-bar-visual-height: 3.5rem;
   --app-tab-bar-nav-padding-y: calc(0.5rem + 0.125rem);

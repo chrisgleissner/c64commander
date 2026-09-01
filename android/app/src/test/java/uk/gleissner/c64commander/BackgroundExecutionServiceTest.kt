@@ -9,6 +9,7 @@
 package uk.gleissner.c64commander
 
 import android.content.Intent
+import android.media.session.MediaSession
 import android.os.Build
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
@@ -532,5 +533,70 @@ class BackgroundExecutionServiceTest {
         assertNotNull("Expected auto-skip broadcast for past due value", autoSkip)
         assertTrue((autoSkip?.getLongExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, -1L) ?: -1L) > 0L)
         assertTrue((autoSkip?.getLongExtra(BackgroundExecutionService.EXTRA_FIRED_AT_MS, -1L) ?: -1L) > 0L)
+    }
+
+    @Test
+    fun autoSkipBroadcastIsAddressedToThisPackage() {
+        controller.create()
+        startService()
+
+        val update = Intent(BackgroundExecutionService.ACTION_UPDATE_DUE_AT)
+        update.putExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, System.currentTimeMillis() - 10L)
+        service.onStartCommand(update, 0, 1)
+
+        ShadowLooper.shadowMainLooper().idleFor(50, TimeUnit.MILLISECONDS)
+
+        val broadcasts = Shadows.shadowOf(service.application as android.app.Application).broadcastIntents
+        val autoSkip = broadcasts.lastOrNull { it.action == BackgroundExecutionService.ACTION_AUTO_SKIP_DUE }
+        assertNotNull("Expected auto-skip broadcast for past due value", autoSkip)
+        // An implicit broadcast is enqueued and then dropped without ever being
+        // dispatched to the plugin's runtime receiver, so the auto-skip is lost.
+        assertEquals(
+                "Auto-skip broadcast must name this package so it is not implicit",
+                service.packageName,
+                autoSkip?.getPackage()
+        )
+    }
+
+    @Test
+    fun mediaSessionIsGivenACallback() {
+        controller.create()
+        startService()
+
+        val session = getPrivateField("mediaSession") as MediaSession?
+        assertNotNull("Expected a MediaSession once the service is running", session)
+        // Without a callback the platform never makes this the media-button session, so a headset
+        // or lock-screen press reaches nothing. MediaSession keeps the callback in mCallback;
+        // a null one means setCallback() was never called.
+        val callbackField = MediaSession::class.java.getDeclaredField("mCallback")
+        callbackField.isAccessible = true
+        assertNotNull("MediaSession must have a callback to receive media buttons", callbackField.get(session))
+    }
+
+    @Test
+    fun mediaSessionCallbackBroadcastsEachTransportCommand() {
+        controller.create()
+        startService()
+        val shadowApp = Shadows.shadowOf(service.application as android.app.Application)
+
+        service.mediaSessionCallback.onPlay()
+        service.mediaSessionCallback.onPause()
+        service.mediaSessionCallback.onStop()
+
+        val commands =
+                shadowApp.broadcastIntents
+                        .filter { it.action == BackgroundExecutionService.ACTION_TRANSPORT_COMMAND }
+        assertEquals(
+                listOf(
+                        BackgroundExecutionService.TRANSPORT_COMMAND_PLAY,
+                        BackgroundExecutionService.TRANSPORT_COMMAND_PLAY_PAUSE,
+                        BackgroundExecutionService.TRANSPORT_COMMAND_STOP,
+                ),
+                commands.map { it.getStringExtra(BackgroundExecutionService.EXTRA_TRANSPORT_COMMAND) },
+        )
+        assertTrue(
+                "Transport broadcasts must name this package so they are not implicit",
+                commands.all { it.getPackage() == service.packageName },
+        )
     }
 }

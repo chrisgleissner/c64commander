@@ -178,6 +178,50 @@ class BackgroundExecutionPluginTest {
     }
 
     @Test
+    fun transportCommandReceiverForwardsTheCommand() {
+        plugin.load()
+        val receiverField =
+                BackgroundExecutionPlugin::class.java.getDeclaredField("transportCommandReceiver")
+        receiverField.isAccessible = true
+        val receiver = receiverField.get(plugin) as BroadcastReceiver
+
+        plugin.notifyListenersCalls.clear()
+        receiver.onReceive(
+                context,
+                Intent(BackgroundExecutionService.ACTION_TRANSPORT_COMMAND).apply {
+                    putExtra(
+                            BackgroundExecutionService.EXTRA_TRANSPORT_COMMAND,
+                            BackgroundExecutionService.TRANSPORT_COMMAND_PLAY_PAUSE,
+                    )
+                },
+        )
+
+        val calls = plugin.notifyListenersCalls.filter { it.first == "backgroundTransportCommand" }
+        assertEquals("notifyListeners should be called once", 1, calls.size)
+        assertEquals(
+                BackgroundExecutionService.TRANSPORT_COMMAND_PLAY_PAUSE,
+                calls[0].second!!.getString("command"),
+        )
+    }
+
+    @Test
+    fun transportCommandReceiverIgnoresAnEmptyCommand() {
+        plugin.load()
+        val receiverField =
+                BackgroundExecutionPlugin::class.java.getDeclaredField("transportCommandReceiver")
+        receiverField.isAccessible = true
+        val receiver = receiverField.get(plugin) as BroadcastReceiver
+
+        plugin.notifyListenersCalls.clear()
+        receiver.onReceive(context, Intent(BackgroundExecutionService.ACTION_TRANSPORT_COMMAND))
+
+        assertTrue(
+                "notifyListeners should not be called without a command",
+                plugin.notifyListenersCalls.none { it.first == "backgroundTransportCommand" },
+        )
+    }
+
+    @Test
     fun autoSkipReceiverIgnoresWrongAction() {
         plugin.load()
         val receiverField =

@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => ({
   markStartupBootstrapComplete: vi.fn(),
   initializeRuntimeMotionMode: vi.fn(),
   registerServiceWorker: vi.fn(),
-  installNativeSafeAreaSync: vi.fn(),
   applyFullScreenFromSettings: vi.fn(),
   applyScreenOrientationFromSettings: vi.fn(),
   loadRemoteFonts: vi.fn(),
@@ -51,7 +50,6 @@ vi.mock("@/lib/startup/serviceWorkerRegistration", () => ({
   registerServiceWorker: mocks.registerServiceWorker,
 }));
 vi.mock("@/lib/logging", () => ({ addErrorLog: mocks.addErrorLog }));
-vi.mock("@/lib/native/safeArea", () => ({ installNativeSafeAreaSync: mocks.installNativeSafeAreaSync }));
 vi.mock("@/lib/native/fullScreen", () => ({ applyFullScreenFromSettings: mocks.applyFullScreenFromSettings }));
 vi.mock("@/lib/native/screenOrientation", () => ({
   applyScreenOrientationFromSettings: mocks.applyScreenOrientationFromSettings,

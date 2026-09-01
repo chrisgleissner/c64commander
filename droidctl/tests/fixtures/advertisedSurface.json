@@ -1,0 +1,812 @@
+[
+  {
+    "name": "droid_app.clear_app_data",
+    "description": "Clear the application's data with pm clear. Requires confirm: true, because it is the only tool here that destroys state on a device somebody else may be using.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "package": {
+          "type": "string",
+          "description": "Android application id. Required: two application ids can be installed at once and both open a WebView DevTools socket."
+        },
+        "confirm": {
+          "type": "boolean",
+          "enum": [true],
+          "description": "Must be true. Second explicit act before data loss."
+        }
+      },
+      "required": ["targetId", "package", "confirm"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_app.install_app",
+    "description": "Install an APK and verify with pm list packages that the named package is present afterwards. A signature mismatch (INSTALL_FAILED_UPDATE_INCOMPATIBLE) is reported with the uninstall-first remedy.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "package": {
+          "type": "string",
+          "description": "Android application id. Required: two application ids can be installed at once and both open a WebView DevTools socket."
+        },
+        "apkPath": {
+          "type": "string",
+          "description": "Path to the APK on this machine."
+        },
+        "reinstall": {
+          "type": "boolean",
+          "description": "Pass -r. Default true."
+        },
+        "allowDowngrade": {
+          "type": "boolean",
+          "description": "Pass -d."
+        },
+        "grantPermissions": {
+          "type": "boolean",
+          "description": "Pass -g."
+        },
+        "allowTestPackages": {
+          "type": "boolean",
+          "description": "Pass -t."
+        }
+      },
+      "required": ["targetId", "package", "apkPath"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_app.read_app_file",
+    "description": "Read a file back out of the application's private files/ directory through run-as.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "package": {
+          "type": "string",
+          "description": "Android application id. Required: two application ids can be installed at once and both open a WebView DevTools socket."
+        },
+        "relativePath": {
+          "type": "string",
+          "description": "Path under the app's files/ directory. May not escape it."
+        },
+        "maxBytes": {
+          "type": "number",
+          "description": "Truncate the returned content to this many bytes."
+        }
+      },
+      "required": ["targetId", "package", "relativePath"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_app.start_app",
+    "description": "Launch the application, by explicit activity with am start -W, or through the launcher intent. Returns the resumed activity and, when am start reported it, the measured total start time.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "package": {
+          "type": "string",
+          "description": "Android application id. Required: two application ids can be installed at once and both open a WebView DevTools socket."
+        },
+        "activity": {
+          "type": "string",
+          "description": "Activity name, e.g. .MainActivity. Default .MainActivity."
+        },
+        "waitForResume": {
+          "type": "boolean",
+          "description": "Poll dumpsys until the package is the resumed activity."
+        },
+        "resumeTimeoutMs": {
+          "type": "number",
+          "description": "Deadline for that poll in milliseconds. Default 15000."
+        },
+        "viaLauncherIntent": {
+          "type": "boolean",
+          "description": "Use monkey with the LAUNCHER category instead of am start."
+        }
+      },
+      "required": ["targetId", "package"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_app.stop_app",
+    "description": "Force-stop the application.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "package": {
+          "type": "string",
+          "description": "Android application id. Required: two application ids can be installed at once and both open a WebView DevTools socket."
+        }
+      },
+      "required": ["targetId", "package"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_app.uninstall_app",
+    "description": "Uninstall a package. With tolerateMissing, a package that was not installed is not an error.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "package": {
+          "type": "string",
+          "description": "Android application id. Required: two application ids can be installed at once and both open a WebView DevTools socket."
+        },
+        "tolerateMissing": {
+          "type": "boolean",
+          "description": "Treat an absent package as success."
+        }
+      },
+      "required": ["targetId", "package"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_app.write_app_file",
+    "description": "Write a file into the application's private files/ directory through run-as. This is how the app is configured before launch. A run-as refusal on a non-debuggable build is reported rather than read as success.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "package": {
+          "type": "string",
+          "description": "Android application id. Required: two application ids can be installed at once and both open a WebView DevTools socket."
+        },
+        "relativePath": {
+          "type": "string",
+          "description": "Path under the app's files/ directory. May not escape it."
+        },
+        "content": {
+          "type": "string",
+          "description": "File content, sent on stdin."
+        }
+      },
+      "required": ["targetId", "package", "relativePath", "content"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_assert.assert_not_visible",
+    "description": "Assert no node matching the predicates is visible. The check that catches a whole-app crash is a negative assertion on the error-boundary title, which both the application shell and the page boundary render.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "name": {
+          "type": "string",
+          "description": "Artifact base name for the evidence pair."
+        },
+        "match": {
+          "type": "object",
+          "description": "Predicates the node must satisfy. At least one is required.",
+          "properties": {
+            "resourceId": {
+              "type": "string",
+              "description": "Exact resource-id. In a WebView this is the element's HTML id attribute, NOT its data-testid: an element that sets only a testid cannot be addressed this way."
+            },
+            "text": {
+              "type": "string",
+              "description": "Exact match on the node's whole text. Inline spans merge into the row."
+            },
+            "textPattern": {
+              "type": "string",
+              "description": "Regular expression against text; the way to match part of a row."
+            },
+            "contentDesc": {
+              "type": "string",
+              "description": "Exact content-desc."
+            },
+            "className": {
+              "type": "string",
+              "description": "Exact class name."
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "requireEnabled": {
+          "type": "boolean",
+          "description": "Require enabled=\"true\". Default true."
+        },
+        "requireOnScreen": {
+          "type": "boolean",
+          "description": "Require the node's bounds to intersect the screen. Default true."
+        },
+        "timeoutMs": {
+          "type": "number",
+          "description": "Re-capture until the predicate holds. Default: one capture."
+        },
+        "pollIntervalMs": {
+          "type": "number",
+          "description": "Interval between re-captures. Default 500."
+        },
+        "runRoot": {
+          "type": "string",
+          "description": "Directory to write artifacts into instead of this run's default directory."
+        }
+      },
+      "required": ["targetId", "name", "match"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_assert.assert_visible",
+    "description": "Assert a node matching the predicates is present, enabled and on screen. Decided from the accessibility hierarchy, never from image comparison. A false assertion returns passed: false with evidence, not an error.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "name": {
+          "type": "string",
+          "description": "Artifact base name for the evidence pair."
+        },
+        "match": {
+          "type": "object",
+          "description": "Predicates the node must satisfy. At least one is required.",
+          "properties": {
+            "resourceId": {
+              "type": "string",
+              "description": "Exact resource-id. In a WebView this is the element's HTML id attribute, NOT its data-testid: an element that sets only a testid cannot be addressed this way."
+            },
+            "text": {
+              "type": "string",
+              "description": "Exact match on the node's whole text. Inline spans merge into the row."
+            },
+            "textPattern": {
+              "type": "string",
+              "description": "Regular expression against text; the way to match part of a row."
+            },
+            "contentDesc": {
+              "type": "string",
+              "description": "Exact content-desc."
+            },
+            "className": {
+              "type": "string",
+              "description": "Exact class name."
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "requireEnabled": {
+          "type": "boolean",
+          "description": "Require enabled=\"true\". Default true."
+        },
+        "requireOnScreen": {
+          "type": "boolean",
+          "description": "Require the node's bounds to intersect the screen. Default true."
+        },
+        "timeoutMs": {
+          "type": "number",
+          "description": "Re-capture until the predicate holds. Default: one capture."
+        },
+        "pollIntervalMs": {
+          "type": "number",
+          "description": "Interval between re-captures. Default 500."
+        },
+        "runRoot": {
+          "type": "string",
+          "description": "Directory to write artifacts into instead of this run's default directory."
+        }
+      },
+      "required": ["targetId", "name", "match"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_capture.logcat",
+    "description": "Clear the log buffer, or dump it with optional line, format, package and tag filters. Regular expressions in filters are applied here and reported as matchedCount plus the matching lines; the full log is still written.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["dump", "clear"],
+          "description": "clear runs logcat -c; dump runs logcat -d."
+        },
+        "name": {
+          "type": "string",
+          "description": "Artifact base name for the log. Default logcat."
+        },
+        "lines": {
+          "type": "number",
+          "description": "logcat -t."
+        },
+        "format": {
+          "type": "string",
+          "enum": ["raw", "brief", "time", "threadtime", "long"],
+          "description": "logcat -v."
+        },
+        "package": {
+          "type": "string",
+          "description": "Resolve this package's pid and pass --pid."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Each becomes -s TAG:I."
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Server-side regular expressions."
+        },
+        "requireRuntimeContent": {
+          "type": "boolean",
+          "description": "Fail when the capture contains no runtime content at all. Default false."
+        },
+        "maxBytes": {
+          "type": "number",
+          "description": "Cap on the captured buffer. Default 32 MiB."
+        },
+        "runRoot": {
+          "type": "string",
+          "description": "Directory to write artifacts into instead of this run's default directory."
+        }
+      },
+      "required": ["targetId", "mode"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_capture.screenshot",
+    "description": "Capture a PNG screenshot and write both a raw copy and a 480 px review copy. The PNG signature is checked at capture time, so a zero-byte capture fails here rather than at evidence validation later.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "name": {
+          "type": "string",
+          "description": "Artifact base name."
+        },
+        "reviewWidth": {
+          "type": "number",
+          "description": "Review width in pixels. Default 480."
+        },
+        "maxDimension": {
+          "type": "number",
+          "description": "Hard cap on either review dimension. Default 1999."
+        },
+        "runRoot": {
+          "type": "string",
+          "description": "Directory to write artifacts into instead of this run's default directory."
+        }
+      },
+      "required": ["targetId", "name"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_capture.start_recording",
+    "description": "Start screenrecord detached and return a handle. The time limit is returned so a caller can tell a recording that outlived its limit from one that stopped early.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "name": {
+          "type": "string",
+          "description": "Artifact base name for the MP4."
+        },
+        "timeLimitSec": {
+          "type": "number",
+          "description": "screenrecord --time-limit. Default 180."
+        },
+        "bitRate": {
+          "type": "number",
+          "description": "screenrecord --bit-rate. Default 6000000."
+        },
+        "size": {
+          "type": "string",
+          "description": "screenrecord --size, as WIDTHxHEIGHT."
+        },
+        "runRoot": {
+          "type": "string",
+          "description": "Directory to write artifacts into instead of this run's default directory."
+        }
+      },
+      "required": ["targetId", "name"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_capture.stop_recording",
+    "description": "Stop a recording, pull the MP4 and delete it from the device. The ftyp box is checked on pull. A recording whose file is missing at stop time is reported as a failed result with the paths, not as an exception.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "recordingId": {
+          "type": "string",
+          "description": "Handle returned by droid_capture.start_recording."
+        }
+      },
+      "required": ["targetId", "recordingId"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_capture.ui_hierarchy",
+    "description": "Capture the uiautomator hierarchy, with the settle poll, retry budget and per-call deadline that a wedged dump requires. Falls back to dumping to /dev/tty when the device has no writable /sdcard.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "name": {
+          "type": "string",
+          "description": "Artifact base name. Default ui-hierarchy."
+        },
+        "settleTimeoutMs": {
+          "type": "number",
+          "description": "How long to wait for the dump file to stop growing."
+        },
+        "attempts": {
+          "type": "number",
+          "description": "Whole-capture attempts before falling back. Default 3."
+        },
+        "runRoot": {
+          "type": "string",
+          "description": "Directory to write artifacts into instead of this run's default directory."
+        }
+      },
+      "required": ["targetId"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_device.forward_webview",
+    "description": "Forward a local TCP port to the named application's WebView DevTools socket. The package is required because two application ids can be installed at once and both open a socket. Every rebuild invalidates the forward.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "package": {
+          "type": "string",
+          "description": "Android application id. Required: two application ids can be installed at once and both open a WebView DevTools socket."
+        },
+        "localPort": {
+          "type": "number",
+          "description": "Local TCP port to bind."
+        },
+        "replaceExisting": {
+          "type": "boolean",
+          "description": "Remove an existing forward on that port first. Default true."
+        }
+      },
+      "required": ["targetId", "package", "localPort"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_device.prepare_device",
+    "description": "Bring a device to a state a test can run against: booted, unlocked, awake, optionally with animations off, and report the resumed activity, focused window and any wm size or wm density override.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "waitForBoot": {
+          "type": "boolean",
+          "description": "Poll sys.boot_completed. Default true."
+        },
+        "dismissKeyguard": {
+          "type": "boolean",
+          "description": "Run wm dismiss-keyguard. Default true."
+        },
+        "stayOn": {
+          "type": "string",
+          "enum": ["usb", "false"],
+          "description": "svc power stayon setting."
+        },
+        "disableAnimations": {
+          "type": "boolean",
+          "description": "Set the three global animation scales to 0."
+        },
+        "requireNativeGeometry": {
+          "type": "boolean",
+          "description": "Fail when wm size or wm density reports an override. A leftover small-screen override fails input and clarity checks with no code fault at all."
+        },
+        "timeoutMs": {
+          "type": "number",
+          "description": "Deadline for the boot wait. Default 120000."
+        }
+      },
+      "required": ["targetId"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_device.pull_file",
+    "description": "Copy a file off the device to a local path.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "remotePath": {
+          "type": "string"
+        },
+        "localPath": {
+          "type": "string"
+        }
+      },
+      "required": ["targetId", "remotePath", "localPath"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_device.push_file",
+    "description": "Copy a local file onto the device.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "localPath": {
+          "type": "string"
+        },
+        "remotePath": {
+          "type": "string"
+        }
+      },
+      "required": ["targetId", "localPath", "remotePath"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_device.run_shell",
+    "description": "Run an arbitrary command on the device. command is an argument array, so no shell line is built by concatenation. The escape hatch for operations that have no typed tool, not a substitute for the typed ones.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "command": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Argument vector, not a shell string."
+        },
+        "timeoutMs": {
+          "type": "number",
+          "description": "Per-call deadline. Default 30000."
+        },
+        "maxBytes": {
+          "type": "number",
+          "description": "Cap on captured stdout."
+        },
+        "stdin": {
+          "type": "string",
+          "description": "Sent to the command's standard input."
+        }
+      },
+      "required": ["targetId", "command"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_input.input_text",
+    "description": "Type text through adb input text. The keypad target has no IME, so prefer press_key there.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": ["targetId", "text"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_input.press_key",
+    "description": "Send a key event. keycode accepts an Android name such as KEYCODE_DPAD_DOWN or a number; the table is served as the droidctl://reference/keycodes resource. This is the primary input tool on a keypad-only target.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "keycode": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "Android keycode number or KEYCODE_ name."
+        },
+        "longPress": {
+          "type": "boolean",
+          "description": "Send with --longpress."
+        },
+        "repeat": {
+          "type": "number",
+          "description": "Send the key this many times. Default 1."
+        }
+      },
+      "required": ["targetId", "keycode"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_input.swipe",
+    "description": "Swipe between two points over a duration.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "x1": {
+          "type": "number"
+        },
+        "y1": {
+          "type": "number"
+        },
+        "x2": {
+          "type": "number"
+        },
+        "y2": {
+          "type": "number"
+        },
+        "durationMs": {
+          "type": "number",
+          "description": "Swipe duration in milliseconds. Default 250."
+        },
+        "units": {
+          "type": "string",
+          "enum": ["physical", "css"],
+          "description": "Coordinate space. adb input speaks physical pixels while the DOM speaks CSS pixels; with css the server multiplies by dpr once, instead of each caller doing it."
+        },
+        "dpr": {
+          "type": "number",
+          "description": "Device pixel ratio. Required when units is css."
+        }
+      },
+      "required": ["targetId", "x1", "y1", "x2", "y2"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_input.tap",
+    "description": "Tap at a point, or press and hold when hold is given. A hold uses motionevent DOWN/UP with an explicit release rather than input tap, because the application treats a tap and a hold as different gestures.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "units": {
+          "type": "string",
+          "enum": ["physical", "css"],
+          "description": "Coordinate space. adb input speaks physical pixels while the DOM speaks CSS pixels; with css the server multiplies by dpr once, instead of each caller doing it."
+        },
+        "dpr": {
+          "type": "number",
+          "description": "Device pixel ratio. Required when units is css."
+        },
+        "hold": {
+          "type": "number",
+          "description": "Hold duration in milliseconds. Omit for a plain tap."
+        }
+      },
+      "required": ["targetId", "x", "y"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_target.describe_target",
+    "description": "Describe one target: build properties, screen geometry, and any wm size or wm density override. A leftover override from a small-screen audit fails input and clarity checks with no code fault, so it is reported here.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
+        }
+      },
+      "required": ["targetId"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "droid_target.list_targets",
+    "description": "List every addressable target with its transport, serial, model, API level, state and whether it is an emulator. Returns no default, preferred or current target: pick one and pass its targetId. Offline and unauthorized targets are listed rather than hidden, so a caller can see why its target vanished. apiLevel is read once per connection and is null only for a target that cannot be queried, which is every target not in state device.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "transports": {
+          "type": "array",
+          "description": "Restrict enumeration to these transports. Omit to enumerate all registered transports.",
+          "items": {
+            "type": "string",
+            "enum": ["adb", "ssh"]
+          }
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  }
+]

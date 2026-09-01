@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { DEFAULT_C64U_HOST } from "./deviceHosts.js";
 import { execFile } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
@@ -172,7 +173,7 @@ export async function runPreflight(options: PreflightOptions = {}): Promise<Pref
   } else {
     checks.push(await checkAdbAvailable());
     checks.push(await checkDeviceConnected(options.deviceSerial));
-    checks.push(await checkC64uReachable(options.c64uHost ?? "192.168.1.13"));
+    checks.push(await checkC64uReachable(options.c64uHost ?? DEFAULT_C64U_HOST));
     checks.push(await checkAppInstalled(options.deviceSerial, options.appPackage));
   }
 

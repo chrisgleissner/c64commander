@@ -11,15 +11,7 @@ import { z } from "zod";
 import { describeTarget } from "../../deviceInfo.js";
 import type { ResolvedTargetHandle } from "../../transport/registry.js";
 import { ToolExecutionError } from "../errors.js";
-import {
-  defineExecute,
-  delay,
-  packageField,
-  packageSchema,
-  resolveTarget,
-  targetIdField,
-  targetIdSchema,
-} from "../common.js";
+import { defineExecute, delay, packageSchema, resolveTarget, targetIdSchema } from "../common.js";
 import { defineToolModule } from "../types.js";
 
 const ANIMATION_SCALES = ["window_animation_scale", "transition_animation_scale", "animator_duration_scale"] as const;
@@ -27,22 +19,28 @@ const ANIMATION_SCALES = ["window_animation_scale", "transition_animation_scale"
 const prepareSchema = z
   .object({
     targetId: targetIdSchema,
-    waitForBoot: z.boolean().optional(),
-    dismissKeyguard: z.boolean().optional(),
-    stayOn: z.enum(["usb", "false"]).optional(),
-    disableAnimations: z.boolean().optional(),
-    requireNativeGeometry: z.boolean().optional(),
-    timeoutMs: z.number().int().positive().optional(),
+    waitForBoot: z.boolean().describe("Poll sys.boot_completed. Default true.").optional(),
+    dismissKeyguard: z.boolean().describe("Run wm dismiss-keyguard. Default true.").optional(),
+    stayOn: z.enum(["usb", "false"]).describe("svc power stayon setting.").optional(),
+    disableAnimations: z.boolean().describe("Set the three global animation scales to 0.").optional(),
+    requireNativeGeometry: z
+      .boolean()
+      .describe(
+        "Fail when wm size or wm density reports an override. A leftover small-screen override fails input and " +
+          "clarity checks with no code fault at all.",
+      )
+      .optional(),
+    timeoutMs: z.number().int().positive().describe("Deadline for the boot wait. Default 120000.").optional(),
   })
   .strict();
 
 const runShellSchema = z
   .object({
     targetId: targetIdSchema,
-    command: z.array(z.string()).min(1),
-    timeoutMs: z.number().int().positive().optional(),
-    maxBytes: z.number().int().positive().optional(),
-    stdin: z.string().optional(),
+    command: z.array(z.string()).min(1).describe("Argument vector, not a shell string."),
+    timeoutMs: z.number().int().positive().describe("Per-call deadline. Default 30000.").optional(),
+    maxBytes: z.number().int().positive().describe("Cap on captured stdout.").optional(),
+    stdin: z.string().describe("Sent to the command's standard input.").optional(),
   })
   .strict();
 
@@ -50,8 +48,8 @@ const forwardSchema = z
   .object({
     targetId: targetIdSchema,
     package: packageSchema,
-    localPort: z.number().int().min(1).max(65535),
-    replaceExisting: z.boolean().optional(),
+    localPort: z.number().int().min(1).max(65535).describe("Local TCP port to bind."),
+    replaceExisting: z.boolean().describe("Remove an existing forward on that port first. Default true.").optional(),
   })
   .strict();
 
@@ -115,25 +113,6 @@ export const deviceModule = defineToolModule({
       description:
         "Bring a device to a state a test can run against: booted, unlocked, awake, optionally with animations off, " +
         "and report the resumed activity, focused window and any wm size or wm density override.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          waitForBoot: { type: "boolean", description: "Poll sys.boot_completed. Default true." },
-          dismissKeyguard: { type: "boolean", description: "Run wm dismiss-keyguard. Default true." },
-          stayOn: { type: "string", enum: ["usb", "false"], description: "svc power stayon setting." },
-          disableAnimations: { type: "boolean", description: "Set the three global animation scales to 0." },
-          requireNativeGeometry: {
-            type: "boolean",
-            description:
-              "Fail when wm size or wm density reports an override. A leftover small-screen override fails input and " +
-              "clarity checks with no code fault at all.",
-          },
-          timeoutMs: { type: "number", description: "Deadline for the boot wait. Default 120000." },
-        },
-        required: ["targetId"],
-        additionalProperties: false,
-      },
       argsSchema: prepareSchema,
       execute: defineExecute(prepareSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -217,18 +196,6 @@ export const deviceModule = defineToolModule({
       description:
         "Run an arbitrary command on the device. command is an argument array, so no shell line is built by " +
         "concatenation. The escape hatch for operations that have no typed tool, not a substitute for the typed ones.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          command: { type: "array", items: { type: "string" }, description: "Argument vector, not a shell string." },
-          timeoutMs: { type: "number", description: "Per-call deadline. Default 30000." },
-          maxBytes: { type: "number", description: "Cap on captured stdout." },
-          stdin: { type: "string", description: "Sent to the command's standard input." },
-        },
-        required: ["targetId", "command"],
-        additionalProperties: false,
-      },
       argsSchema: runShellSchema,
       execute: defineExecute(runShellSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -250,20 +217,6 @@ export const deviceModule = defineToolModule({
       description:
         "Forward a local TCP port to the named application's WebView DevTools socket. The package is required because " +
         "two application ids can be installed at once and both open a socket. Every rebuild invalidates the forward.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          package: packageField,
-          localPort: { type: "number", description: "Local TCP port to bind." },
-          replaceExisting: {
-            type: "boolean",
-            description: "Remove an existing forward on that port first. Default true.",
-          },
-        },
-        required: ["targetId", "package", "localPort"],
-        additionalProperties: false,
-      },
       argsSchema: forwardSchema,
       execute: defineExecute(forwardSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -279,16 +232,6 @@ export const deviceModule = defineToolModule({
     {
       name: "droid_device.push_file",
       description: "Copy a local file onto the device.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          localPath: { type: "string" },
-          remotePath: { type: "string" },
-        },
-        required: ["targetId", "localPath", "remotePath"],
-        additionalProperties: false,
-      },
       argsSchema: pushSchema,
       execute: defineExecute(pushSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -306,16 +249,6 @@ export const deviceModule = defineToolModule({
     {
       name: "droid_device.pull_file",
       description: "Copy a file off the device to a local path.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          remotePath: { type: "string" },
-          localPath: { type: "string" },
-        },
-        required: ["targetId", "remotePath", "localPath"],
-        additionalProperties: false,
-      },
       argsSchema: pullSchema,
       execute: defineExecute(pullSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);

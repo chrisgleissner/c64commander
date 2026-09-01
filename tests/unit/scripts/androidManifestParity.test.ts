@@ -18,6 +18,8 @@ const serviceNames = (xml: string): string[] =>
 // elements/permissions the reduced manifest is allowed to omit, then compare.
 const REMOVED_LINE_MARKERS = [
   "android.permission.FOREGROUND_SERVICE",
+  // The notification the reduced manifest has no foreground service to post.
+  "android.permission.POST_NOTIFICATIONS",
   "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
   "android.permission.WAKE_LOCK",
   ".BackgroundExecutionService",
@@ -42,6 +44,7 @@ describe("AndroidManifest parity (full vs no-background)", () => {
       "android.permission.FOREGROUND_SERVICE",
       "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
       "android.permission.INTERNET",
+      "android.permission.POST_NOTIFICATIONS",
       "android.permission.WAKE_LOCK",
     ]);
     expect(serviceNames(full)).toContain(".BackgroundExecutionService");

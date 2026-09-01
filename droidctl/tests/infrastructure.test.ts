@@ -10,6 +10,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { createLogger } from "../src/logger.js";
 import { parseGetpropDump, parseWmDensity, parseWmSize } from "../src/deviceInfo.js";
 import { ToolExecutionError, ToolValidationError, toolErrorResult, unknownErrorResult } from "../src/tools/errors.js";
@@ -126,8 +127,7 @@ describe("tool module dispatch", () => {
         {
           name: "probe.echo",
           description: "d",
-          inputSchema: { type: "object", properties: {}, required: [], additionalProperties: false },
-          argsSchema: { parse: (value: unknown) => value } as never,
+          argsSchema: z.object({}).strict(),
           async execute(_args, ctx) {
             seen = ctx.toolName;
             return jsonResult({ ok: true });

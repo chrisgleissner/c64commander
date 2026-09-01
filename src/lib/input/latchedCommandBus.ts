@@ -57,11 +57,11 @@ export const createLatchedCommandBus = <T>(eventName: string, ttlMs: number): La
 /** How long an unclaimed command waits for its consumer to mount (spec.md section 9.5). */
 export const LATCHED_COMMAND_TTL_MS = 5_000;
 
-export type TransportCommand = "playPause" | "next" | "play";
+export type TransportCommand = "playPause" | "next" | "play" | "stop";
 
 /**
- * F1 and F3. Consumed in place when Play is mounted; otherwise the app navigates to Play and the
- * latch delivers on arrival.
+ * F1 and F3, and the Android media buttons. Consumed in place when Play is mounted; otherwise the
+ * app navigates to Play and the latch delivers on arrival.
  */
 export const transportCommandBus = createLatchedCommandBus<TransportCommand>(
   "c64u-transport-command",

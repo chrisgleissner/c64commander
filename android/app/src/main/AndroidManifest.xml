@@ -52,4 +52,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- From API 33 the foreground-service notification is dropped without this. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

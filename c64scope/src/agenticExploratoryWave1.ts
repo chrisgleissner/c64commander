@@ -9,7 +9,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "./deviceRegistry.js";
+import { resolveAdbSerial, resolveConfiguredDeviceSerial } from "./deviceRegistry.js";
 import { runPreflight } from "./preflight.js";
 import { discoverMirroredCorpora } from "./testDataDiscovery.js";
 import { runCase } from "./validation/runner.js";
@@ -34,7 +34,7 @@ function isDirectExecution(metaUrl: string): boolean {
 
 export async function main(): Promise<void> {
   const serialInput = process.env["ANDROID_SERIAL"];
-  const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolvePreferredPhysicalTestDeviceSerial();
+  const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolveConfiguredDeviceSerial();
   const c64uHost = process.env["C64U_HOST"] ?? "c64u";
   const repeatRaw = process.env["REPEAT"] ?? "3";
   const repeatCount = Number.parseInt(repeatRaw, 10);

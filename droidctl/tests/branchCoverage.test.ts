@@ -81,7 +81,6 @@ describe("tool registry indexing", () => {
           {
             name,
             description: "d",
-            inputSchema: { type: "object", properties: {}, required: [], additionalProperties: false },
             argsSchema: z.object({}).strict(),
             execute: async () => ({ content: [{ type: "text" as const, text: "{}" }] }),
           },

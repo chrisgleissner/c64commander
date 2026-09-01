@@ -12,6 +12,7 @@ import type { DroidctlLogger } from "../logger.js";
 import type { RecordingStore } from "../recordings.js";
 import type { TransportRegistry } from "../transport/registry.js";
 import { ToolValidationError } from "./errors.js";
+import { toJsonSchema } from "./jsonSchema.js";
 
 export type JsonSchema = {
   readonly type?: string | readonly string[];
@@ -24,6 +25,13 @@ export type JsonSchema = {
   readonly additionalProperties?: boolean | JsonSchema;
   readonly minimum?: number;
   readonly maximum?: number;
+  readonly exclusiveMinimum?: number;
+  readonly exclusiveMaximum?: number;
+  readonly minLength?: number;
+  readonly maxLength?: number;
+  readonly pattern?: string;
+  readonly minItems?: number;
+  readonly maxItems?: number;
   readonly default?: unknown;
 };
 
@@ -54,8 +62,7 @@ export interface ToolRunResult {
 export interface ToolDefinition {
   readonly name: string;
   readonly description: string;
-  readonly inputSchema: JsonSchema;
-  /** The runtime validator for the same input. The contract test keeps the pair honest. */
+  /** The one source of truth for the input. The advertised JSON Schema is derived from it. */
   readonly argsSchema: ZodTypeAny;
   readonly execute: (args: unknown, ctx: ToolExecutionContext) => Promise<ToolRunResult>;
 }
@@ -86,21 +93,24 @@ export interface ToolModule {
 
 export function defineToolModule(config: ToolModuleConfig): ToolModule {
   const toolMap = new Map(config.tools.map((tool) => [tool.name, tool]));
+  // Derived once, at import: a schema this cannot express fails the process start
+  // rather than advertising a surface that quietly disagrees with the validator.
+  const descriptors: readonly ToolDescriptor[] = config.tools.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    inputSchema: toJsonSchema(tool.argsSchema),
+    argsSchema: tool.argsSchema,
+    metadata: {
+      domain: config.domain,
+      summary: config.summary,
+    },
+  }));
 
   return {
     domain: config.domain,
     summary: config.summary,
     describeTools() {
-      return config.tools.map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        inputSchema: tool.inputSchema,
-        argsSchema: tool.argsSchema,
-        metadata: {
-          domain: config.domain,
-          summary: config.summary,
-        },
-      }));
+      return descriptors;
     },
     async invoke(name, args, ctx) {
       const tool = toolMap.get(name);

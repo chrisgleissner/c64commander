@@ -8,6 +8,7 @@
 
 package uk.gleissner.c64commander
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -18,15 +19,28 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import com.getcapacitor.annotation.Permission
+
+/** Alias the web layer names when it checks or requests the notification permission. */
+internal const val NOTIFICATIONS_PERMISSION_ALIAS = "notifications"
 
 /**
- * Capacitor plugin that exposes start/stop lifecycle control for the [BackgroundExecutionService].
- * Both methods are idempotent.
+ * Start/stop lifecycle control for the [BackgroundExecutionService]; both methods are idempotent.
+ * The permission alias gives the web layer [Plugin]'s checkPermissions/requestPermissions for
+ * POST_NOTIFICATIONS, which the service's notification needs from API 33.
  */
-@CapacitorPlugin(name = "BackgroundExecution")
+@CapacitorPlugin(
+        name = "BackgroundExecution",
+        permissions =
+                [
+                        Permission(
+                                alias = NOTIFICATIONS_PERMISSION_ALIAS,
+                                strings = [Manifest.permission.POST_NOTIFICATIONS],
+                        )],
+)
 open class BackgroundExecutionPlugin : Plugin() {
     private val logTag = "BackgroundExecutionPlugin"
-    private var isAutoSkipReceiverRegistered = false
+    private var areServiceReceiversRegistered = false
 
     private val autoSkipReceiver =
             object : BroadcastReceiver() {
@@ -45,20 +59,41 @@ open class BackgroundExecutionPlugin : Plugin() {
                 }
             }
 
+    private val transportCommandReceiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent?.action != BackgroundExecutionService.ACTION_TRANSPORT_COMMAND) return
+                    val command =
+                            intent.getStringExtra(
+                                    BackgroundExecutionService.EXTRA_TRANSPORT_COMMAND
+                            )
+                    if (command.isNullOrEmpty()) return
+                    val payload = JSObject()
+                    payload.put("command", command)
+                    // Retained like the auto-skip event: a media button pressed while Play is
+                    // unmounted on tab navigation must not be lost.
+                    notifyListeners("backgroundTransportCommand", payload, true)
+                }
+            }
+
     override fun load() {
         super.load()
-        if (isAutoSkipReceiverRegistered) return
+        if (areServiceReceiversRegistered) return
         try {
             registerPluginReceiver(
                     autoSkipReceiver,
                     IntentFilter(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE),
             )
-            isAutoSkipReceiverRegistered = true
+            registerPluginReceiver(
+                    transportCommandReceiver,
+                    IntentFilter(BackgroundExecutionService.ACTION_TRANSPORT_COMMAND),
+            )
+            areServiceReceiversRegistered = true
         } catch (e: Exception) {
             AppLogger.error(
                     context,
                     logTag,
-                    "Failed to register auto-skip receiver",
+                    "Failed to register background execution receivers",
                     "BackgroundExecutionPlugin",
                     e
             )
@@ -69,24 +104,29 @@ open class BackgroundExecutionPlugin : Plugin() {
         BroadcastReceiverCompat.registerNotExported(context, receiver, filter)
     }
 
-    override fun handleOnDestroy() {
-        if (!isAutoSkipReceiverRegistered) {
-            super.handleOnDestroy()
-            return
-        }
+    private fun unregisterQuietly(receiver: BroadcastReceiver) {
         try {
-            context.unregisterReceiver(autoSkipReceiver)
+            context.unregisterReceiver(receiver)
         } catch (e: Exception) {
             AppLogger.warn(
                     context,
                     logTag,
-                    "Failed to unregister auto-skip receiver",
+                    "Failed to unregister background execution receiver",
                     "BackgroundExecutionPlugin",
                     e
             )
-        } finally {
-            isAutoSkipReceiverRegistered = false
         }
+    }
+
+    override fun handleOnDestroy() {
+        if (!areServiceReceiversRegistered) {
+            super.handleOnDestroy()
+            return
+        }
+        // Separately, so a failure on the first does not leak the second.
+        unregisterQuietly(autoSkipReceiver)
+        unregisterQuietly(transportCommandReceiver)
+        areServiceReceiversRegistered = false
         super.handleOnDestroy()
     }
 

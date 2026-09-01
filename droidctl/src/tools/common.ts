@@ -11,28 +11,26 @@ import type { ResolvedTargetHandle } from "../transport/registry.js";
 import { errorResult, okResult } from "../types.js";
 import { ToolError, ToolExecutionError, UnsupportedOnTransportError } from "./errors.js";
 import { jsonResult } from "./responses.js";
-import type { JsonSchema, ToolExecutionContext, ToolRunResult } from "./types.js";
+import type { ToolExecutionContext, ToolRunResult } from "./types.js";
 import { parseZodArgs } from "./types.js";
 
-export const targetIdField: JsonSchema = {
-  type: "string",
-  description: "Target id from droid_target.list_targets. There is no default target and no single-device fallback.",
-};
+export const targetIdSchema = z
+  .string()
+  .min(1)
+  .describe("Target id from droid_target.list_targets. There is no default target and no single-device fallback.");
 
-export const packageField: JsonSchema = {
-  type: "string",
-  description:
+export const packageSchema = z
+  .string()
+  .min(1)
+  .describe(
     "Android application id. Required: two application ids can be installed at once and both open a WebView DevTools socket.",
-};
+  );
 
-export const runRootField: JsonSchema = {
-  type: "string",
-  description: "Directory to write artifacts into instead of this run's default directory.",
-};
-
-export const targetIdSchema = z.string().min(1);
-export const packageSchema = z.string().min(1);
-export const runRootSchema = z.string().min(1).optional();
+export const runRootSchema = z
+  .string()
+  .min(1)
+  .describe("Directory to write artifacts into instead of this run's default directory.")
+  .optional();
 
 export function ok(ctx: ToolExecutionContext, data: Record<string, unknown>): ToolRunResult {
   return jsonResult(okResult(ctx.artifacts.runId, data));

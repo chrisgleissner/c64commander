@@ -11,25 +11,27 @@ import { describeTarget } from "../../deviceInfo.js";
 import { resolveKeycode } from "../../keycodes.js";
 import type { ResolvedTargetHandle } from "../../transport/registry.js";
 import { ToolExecutionError, ToolValidationError } from "../errors.js";
-import { defineExecute, expectSuccess, resolveTarget, targetIdField, targetIdSchema } from "../common.js";
+import { defineExecute, expectSuccess, resolveTarget, targetIdSchema } from "../common.js";
 import { defineToolModule } from "../types.js";
 
-const unitsField = {
-  type: "string",
-  enum: ["physical", "css"],
-  description:
+const unitsSchema = z
+  .enum(["physical", "css"])
+  .describe(
     "Coordinate space. adb input speaks physical pixels while the DOM speaks CSS pixels; with css the server " +
-    "multiplies by dpr once, instead of each caller doing it.",
-} as const;
+      "multiplies by dpr once, instead of each caller doing it.",
+  )
+  .optional();
+
+const dprSchema = z.number().positive().describe("Device pixel ratio. Required when units is css.").optional();
 
 const tapSchema = z
   .object({
     targetId: targetIdSchema,
     x: z.number(),
     y: z.number(),
-    units: z.enum(["physical", "css"]).optional(),
-    dpr: z.number().positive().optional(),
-    hold: z.number().int().positive().optional(),
+    units: unitsSchema,
+    dpr: dprSchema,
+    hold: z.number().int().positive().describe("Hold duration in milliseconds. Omit for a plain tap.").optional(),
   })
   .strict();
 
@@ -40,9 +42,9 @@ const swipeSchema = z
     y1: z.number(),
     x2: z.number(),
     y2: z.number(),
-    durationMs: z.number().int().positive().optional(),
-    units: z.enum(["physical", "css"]).optional(),
-    dpr: z.number().positive().optional(),
+    durationMs: z.number().int().positive().describe("Swipe duration in milliseconds. Default 250.").optional(),
+    units: unitsSchema,
+    dpr: dprSchema,
   })
   .strict();
 
@@ -51,9 +53,11 @@ const inputTextSchema = z.object({ targetId: targetIdSchema, text: z.string().mi
 const pressKeySchema = z
   .object({
     targetId: targetIdSchema,
-    keycode: z.union([z.number().int().nonnegative(), z.string().min(1)]),
-    longPress: z.boolean().optional(),
-    repeat: z.number().int().positive().optional(),
+    keycode: z
+      .union([z.number().int().nonnegative(), z.string().min(1)])
+      .describe("Android keycode number or KEYCODE_ name."),
+    longPress: z.boolean().describe("Send with --longpress.").optional(),
+    repeat: z.number().int().positive().describe("Send the key this many times. Default 1.").optional(),
   })
   .strict();
 
@@ -111,19 +115,6 @@ export const inputModule = defineToolModule({
       description:
         "Tap at a point, or press and hold when hold is given. A hold uses motionevent DOWN/UP with an explicit " +
         "release rather than input tap, because the application treats a tap and a hold as different gestures.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          x: { type: "number" },
-          y: { type: "number" },
-          units: unitsField,
-          dpr: { type: "number", description: "Device pixel ratio. Required when units is css." },
-          hold: { type: "number", description: "Hold duration in milliseconds. Omit for a plain tap." },
-        },
-        required: ["targetId", "x", "y"],
-        additionalProperties: false,
-      },
       argsSchema: tapSchema,
       execute: defineExecute(tapSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -149,21 +140,6 @@ export const inputModule = defineToolModule({
     {
       name: "droid_input.swipe",
       description: "Swipe between two points over a duration.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          x1: { type: "number" },
-          y1: { type: "number" },
-          x2: { type: "number" },
-          y2: { type: "number" },
-          durationMs: { type: "number", description: "Swipe duration in milliseconds. Default 250." },
-          units: unitsField,
-          dpr: { type: "number", description: "Device pixel ratio. Required when units is css." },
-        },
-        required: ["targetId", "x1", "y1", "x2", "y2"],
-        additionalProperties: false,
-      },
       argsSchema: swipeSchema,
       execute: defineExecute(swipeSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -197,12 +173,6 @@ export const inputModule = defineToolModule({
     {
       name: "droid_input.input_text",
       description: "Type text through adb input text. The keypad target has no IME, so prefer press_key there.",
-      inputSchema: {
-        type: "object",
-        properties: { targetId: targetIdField, text: { type: "string" } },
-        required: ["targetId", "text"],
-        additionalProperties: false,
-      },
       argsSchema: inputTextSchema,
       execute: defineExecute(inputTextSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -216,20 +186,6 @@ export const inputModule = defineToolModule({
       description:
         "Send a key event. keycode accepts an Android name such as KEYCODE_DPAD_DOWN or a number; the table is served " +
         "as the droidctl://reference/keycodes resource. This is the primary input tool on a keypad-only target.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          keycode: {
-            anyOf: [{ type: "number" }, { type: "string" }],
-            description: "Android keycode number or KEYCODE_ name.",
-          },
-          longPress: { type: "boolean", description: "Send with --longpress." },
-          repeat: { type: "number", description: "Send the key this many times. Default 1." },
-        },
-        required: ["targetId", "keycode"],
-        additionalProperties: false,
-      },
       argsSchema: pressKeySchema,
       execute: defineExecute(pressKeySchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);

@@ -57,7 +57,7 @@ narrow scope but must not violate `REVIEW.md` or `AGENTS.md`.
 - **UI pages**: `src/pages/` · **Navigation**: `src/components/TabBar.tsx`
 - **Core API client**: `src/lib/c64api.ts` · **Hooks**: `src/hooks/`
 - **Song sources**: `src/lib/sources/` · **HVSC module**: `src/lib/hvsc/`,
-  `android/app/src/main/java/com/c64/commander/hvsc/`
+  `android/app/src/main/java/uk/gleissner/c64commander/hvsc/`
 - **SID player utilities**: `src/lib/sid/` · **Native bridges**: `src/lib/native/`
 
 ## Architecture boundaries
@@ -68,7 +68,7 @@ narrow scope but must not violate `REVIEW.md` or `AGENTS.md`.
 - **Song sources**: `src/lib/sources/` (local FS + HVSC)
 - **HVSC ingestion**: `src/lib/hvsc/` (service/types/native bridge)
 - **Native bridges**: `src/lib/native/`, `src/lib/hvsc/native/`
-- **Android HVSC engine**: `android/app/src/main/java/com/c64/commander/hvsc/`
+- **Android HVSC engine**: `android/app/src/main/java/uk/gleissner/c64commander/hvsc/`
 - **SID playback utilities**: `src/lib/sid/`
 
 ## Build and test (essentials)
@@ -82,7 +82,7 @@ npm run test    # Vitest unit
 npm run build
 ```
 
-Other suites: `npm run test:coverage` (≥91% branch), `npm run test:e2e` (Playwright +
+Other suites: `npm run coverage:gate` (≥91% line and branch, the gate CI enforces on the merged report; `npm run test:coverage` measures but enforces nothing), `npm run test:e2e` (Playwright +
 golden traces), `cd android && ./gradlew test` (Android JVM), `npm run test:agents`
 (pytest, ≥90% branch). Android local: `npm run cap:build` then `./build --install-apk`
 (set `JAVA_HOME`). Formatting is enforced by Prettier/ESLint — do not hand-format.

@@ -6,11 +6,12 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { DEFAULT_C64U_HOST } from "./deviceHosts.js";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
-import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "./deviceRegistry.js";
+import { resolveAdbSerial, resolveConfiguredDeviceSerial } from "./deviceRegistry.js";
 import { runPreflight } from "./preflight.js";
 import { ALL_CASES } from "./validation/cases/index.js";
 import { runCase } from "./validation/runner.js";
@@ -118,8 +119,8 @@ export async function main(): Promise<void> {
   const artifactRoot = path.join(workspaceRoot, "c64scope", "artifacts");
 
   const serialInput = process.env["ANDROID_SERIAL"];
-  const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolvePreferredPhysicalTestDeviceSerial();
-  const c64uHost = process.env["C64U_HOST"] ?? "192.168.1.13";
+  const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolveConfiguredDeviceSerial();
+  const c64uHost = process.env["C64U_HOST"] ?? DEFAULT_C64U_HOST;
 
   const preflight = await runPreflight({ deviceSerial: serial, c64uHost });
   if (!preflight.ready) {

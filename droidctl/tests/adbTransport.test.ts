@@ -19,6 +19,7 @@ import {
   type RawExecOutcome,
   type RawExecRequest,
   type RawSpawnHandle,
+  parseAdbDeviceLines,
   parseAdbDevices,
 } from "../src/transport/adb.js";
 import type { CommandRecord, ResolvedTarget } from "../src/transport/types.js";
@@ -76,6 +77,84 @@ describe("adb devices parsing", () => {
   it("maps bootloader and unrecognised states", () => {
     const targets = parseAdbDevices("abc bootloader\ndef somethingnew\n* daemon starting *\n");
     expect(targets.map((target) => target.state)).toEqual(["booting", "unknown"]);
+  });
+
+  it("keeps the transport id, which changes when a device reattaches", () => {
+    const lines = parseAdbDeviceLines("a device transport_id:7\nb device product:x\n");
+    expect(lines.map((line) => line.transportId)).toEqual(["7", null]);
+  });
+});
+
+describe("list_targets api level", () => {
+  const listing = (transportId: string, extra = ""): string =>
+    `List of devices attached\n9B0EXAMPLE device model:Pixel_4 transport_id:${transportId}\n${extra}`;
+
+  function apiLevelRecorder(sdk: (request: RawExecRequest) => RawExecOutcome) {
+    let devices = listing("1");
+    const recorder = recordingTransport((request) => (request.args.includes("devices") ? ok(devices) : sdk(request)));
+    return {
+      ...recorder,
+      setDevices: (value: string) => {
+        devices = value;
+      },
+      getpropCalls: () => recorder.requests.filter((request) => request.args.includes("ro.build.version.sdk")).length,
+    };
+  }
+
+  it("populates apiLevel from one getprop per connection, not per listing", async () => {
+    const recorder = apiLevelRecorder(() => ok("36\n"));
+
+    const first = await recorder.transport.listTargets();
+    const second = await recorder.transport.listTargets();
+
+    expect(first.map((target) => target.apiLevel)).toEqual([36]);
+    expect(second.map((target) => target.apiLevel)).toEqual([36]);
+    expect(recorder.getpropCalls()).toBe(1);
+  });
+
+  it("reads the property again when the device reattaches under a new transport id", async () => {
+    const recorder = apiLevelRecorder(() => ok("36\n"));
+
+    await recorder.transport.listTargets();
+    recorder.setDevices(listing("2"));
+    await recorder.transport.listTargets();
+
+    expect(recorder.getpropCalls()).toBe(2);
+  });
+
+  it("drops the cached property while the device is gone, so a returning device is read again", async () => {
+    const recorder = apiLevelRecorder(() => ok("36\n"));
+
+    await recorder.transport.listTargets();
+    recorder.setDevices("List of devices attached\n");
+    await recorder.transport.listTargets();
+    recorder.setDevices(listing("1"));
+    await recorder.transport.listTargets();
+
+    expect(recorder.getpropCalls()).toBe(2);
+  });
+
+  it("does not query a target that cannot answer, and still lists it", async () => {
+    const recorder = apiLevelRecorder(() => ok("36\n"));
+    recorder.setDevices("List of devices attached\nemulator-5554 offline\n127.0.0.1:5555 unauthorized\n");
+
+    const targets = await recorder.transport.listTargets();
+
+    expect(targets.map((target) => [target.state, target.apiLevel])).toEqual([
+      ["offline", null],
+      ["unauthorized", null],
+    ]);
+    expect(recorder.getpropCalls()).toBe(0);
+  });
+
+  it("leaves apiLevel null rather than failing the listing when the property cannot be read", async () => {
+    const unreadable = apiLevelRecorder(() => ok("\n"));
+    expect((await unreadable.transport.listTargets()).map((target) => target.apiLevel)).toEqual([null]);
+
+    const failing = apiLevelRecorder(() => {
+      throw new Error("device offline");
+    });
+    expect((await failing.transport.listTargets()).map((target) => target.apiLevel)).toEqual([null]);
   });
 });
 
