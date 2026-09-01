@@ -772,7 +772,15 @@ class MockC64UServerTest {
   @Test
   fun streamsStartActuallyDispatchesToTheStreamServerNotJustAcksTheRequest() {
     val state = MockC64UState.fromPayload(JSONObject())
-    val server = MockC64UServer(state, MockTimingProfile.defaultProfile(), null, MockStreamServer())
+    val assetDir = java.io.File("src/main/assets/demo-stream")
+    val streamServer = MockStreamServer {
+      DemoStreamContent.from(
+              java.io.File(assetDir, "testcard.vic4").readBytes(),
+              java.io.File(assetDir, "testcard-surround.mask").readBytes(),
+              java.io.File(assetDir, "tone-ladder.json").readText(),
+      )
+    }
+    val server = MockC64UServer(state, MockTimingProfile.defaultProfile(), null, streamServer)
     server.start()
     waitForServer(server)
 

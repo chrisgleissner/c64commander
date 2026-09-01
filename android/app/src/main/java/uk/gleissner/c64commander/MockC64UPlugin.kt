@@ -20,7 +20,7 @@ import org.json.JSONObject
 class MockC64UPlugin : Plugin() {
   private var server: MockC64UServer? = null
   private var ftpServer: MockFtpServer? = null
-  private val streamServer = MockStreamServer()
+  private val streamServer = MockStreamServer { loadDemoStreamContent() }
   // Per-boot random token shared by both loopback servers; regenerated on each
   // fresh start and returned to the WebView so it (the only intended client) can
   // authenticate. Held so the already-running branch returns the same token.
@@ -149,6 +149,18 @@ class MockC64UPlugin : Plugin() {
         }
       }
     }
+  }
+
+  /**
+   * The Demo Mode stream's pre-built loop, from the assets `scripts/build-demo-stream-assets.ts`
+   * generates. Called on the first `streams:start`, not at plugin construction, so a Demo Mode
+   * session that never opens Live View never pays for it.
+   */
+  private fun loadDemoStreamContent(): DemoStreamContent {
+    val testcard = context.assets.open("demo-stream/testcard.vic4").use { it.readBytes() }
+    val mask = context.assets.open("demo-stream/testcard-surround.mask").use { it.readBytes() }
+    val ladder = context.assets.open("demo-stream/tone-ladder.json").bufferedReader().use { it.readText() }
+    return DemoStreamContent.from(testcard, mask, ladder)
   }
 
   private fun loadTimingProfile(): MockTimingProfile {
