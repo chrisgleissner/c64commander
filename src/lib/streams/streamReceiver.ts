@@ -106,9 +106,20 @@ export interface StreamReceiverOptions {
    * depending on the other machine being stopped. Omitted accepts any sender.
    */
   expectedSource?: string | null;
+  /**
+   * Demo Mode: receive from the mock stream server on loopback instead of joining the real
+   * multicast group. Joining a multicast group needs a live network interface ({@link
+   * MULTICAST_GROUP} would otherwise fail `StreamUdp.bind` outright with Wi-Fi off / airplane
+   * mode), but 127.0.0.1 is always reachable regardless of network state — which is also what
+   * keeps the synthetic stream off the shared LAN entirely. See {@link MockStreamServer}.
+   */
+  demoLoopback?: boolean;
   /** Injectable WebSocket constructor for tests. */
   socketFactory?: (url: string) => WebSocketLike;
 }
+
+/** Loopback host Demo Mode's mock stream server sends to and {@link demoLoopback} receives on. */
+export const DEMO_LOOPBACK_HOST = "127.0.0.1";
 
 export interface WebSocketLike {
   binaryType: string;
@@ -222,11 +233,15 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
   constructor(options: StreamReceiverOptions) {
     this.name = options.name;
     const port = options.port ?? defaultPortFor(options.name);
-    const group = MULTICAST_GROUP[options.name];
+    // Demo Mode's mock stream server sends to loopback and never joins a multicast group (see
+    // demoLoopback's doc comment) — binding a plain unicast socket needs no network interface.
+    const group = options.demoLoopback ? undefined : MULTICAST_GROUP[options.name];
     // Native frame assembly is a video-only fast path; audio stays per-packet (~250/s is cheap).
     this.assemble = options.name === "video" && (options.nativeVideoAssembly ?? true);
-    // Destination is the multicast group (known up front); the device streams there.
-    this.destination = options.destination ?? multicastDestination(options.name, port);
+    // Destination is the multicast group, or loopback in Demo Mode (known up front either way).
+    this.destination =
+      options.destination ??
+      (options.demoLoopback ? `${DEMO_LOOPBACK_HOST}:${port}` : multicastDestination(options.name, port));
     // Always listen for per-packet datagrams (audio, and the video fallback when assembly is off).
     this.listeners.push(
       StreamUdp.addListener("datagram", (event) => {

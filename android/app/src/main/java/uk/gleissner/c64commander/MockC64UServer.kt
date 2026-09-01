@@ -57,6 +57,11 @@ class MockC64UServer(
         // zero user-visible change (HARD10-005). Null/empty = unauthenticated
         // (legacy behaviour, used by tests that don't exercise auth).
         private val authToken: String? = null,
+        // Drives the synthetic Live View feed. Null in tests that only exercise REST (the
+        // default keeps every existing MockC64UServer construction site and test unchanged);
+        // MockC64UPlugin supplies a real one so `streams:start` actually produces packets
+        // instead of just acknowledging the request (see MockStreamServer's doc comment).
+        private val streamServer: MockStreamServer? = null,
 ) {
   constructor(state: MockC64UState) : this(state, MockTimingProfile.defaultProfile())
 
@@ -109,6 +114,7 @@ class MockC64UServer(
 
   fun stop() {
     running = false
+    streamServer?.stopAll()
     serverSocket?.close()
     sockets.forEach { socket ->
       try {
@@ -592,8 +598,12 @@ class MockC64UServer(
 
     val streamMatch = Regex("^/v1/streams/([^/]+):(start|stop)$").find(path)
     if (streamMatch != null && request.method == "PUT") {
-      if (streamMatch.groupValues[2] == "start" && !request.queryParams.containsKey("ip")) {
-        return errorResponse(400, "Missing ip")
+      val streamName = streamMatch.groupValues[1]
+      if (streamMatch.groupValues[2] == "start") {
+        val ip = request.queryParams["ip"] ?: return errorResponse(400, "Missing ip")
+        streamServer?.start(streamName, ip)
+      } else {
+        streamServer?.stop(streamName)
       }
       return okResponse()
     }

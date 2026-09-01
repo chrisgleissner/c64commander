@@ -150,4 +150,32 @@ describe("NativeUdpStreamReceiver (native platform)", () => {
     expect(receiver.destination).toBe("239.0.1.65:11001"); // still known (multicast)
     receiver.close();
   });
+
+  /*
+   * Demo Mode: joining the real multicast group needs a live network interface, so with
+   * Wi-Fi off / airplane mode StreamUdp.bind used to reject outright and Live View's mock
+   * stream could never start ("Could not tell the device to start streaming video."). The
+   * mock stream server sends to loopback, so the receiver must bind a plain unicast socket
+   * (no multicast group) on 127.0.0.1 instead — which needs no interface at all.
+   */
+  it("demoLoopback binds a plain unicast socket on 127.0.0.1 instead of joining the multicast group", async () => {
+    const receiver = createStreamReceiver({ name: "video", port: 11000, demoLoopback: true });
+    expect(receiver.destination).toBe("127.0.0.1:11000");
+    await receiver.ready?.();
+    expect(streamUdp.bind).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "video", port: 11000, group: undefined }),
+    );
+    receiver.close();
+  });
+
+  it("demoLoopback does not override an explicit destination", async () => {
+    const receiver = createStreamReceiver({
+      name: "audio",
+      port: 11001,
+      demoLoopback: true,
+      destination: "127.0.0.1:9999",
+    });
+    expect(receiver.destination).toBe("127.0.0.1:9999");
+    receiver.close();
+  });
 });

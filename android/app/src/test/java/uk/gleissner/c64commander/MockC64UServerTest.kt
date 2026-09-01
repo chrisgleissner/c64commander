@@ -8,6 +8,8 @@
 
 package uk.gleissner.c64commander
 
+import java.net.DatagramPacket
+import java.net.DatagramSocket
 import java.net.HttpURLConnection
 import java.net.Socket
 import java.net.URL
@@ -763,6 +765,54 @@ class MockC64UServerTest {
     options.requestMethod = "OPTIONS"
     assertEquals(204, options.responseCode)
     options.disconnect()
+
+    server.stop()
+  }
+
+  @Test
+  fun streamsStartActuallyDispatchesToTheStreamServerNotJustAcksTheRequest() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state, MockTimingProfile.defaultProfile(), null, MockStreamServer())
+    server.start()
+    waitForServer(server)
+
+    DatagramSocket(0).use { receiver ->
+      receiver.soTimeout = 2000
+      val port = receiver.localPort
+
+      val startConnection =
+              URL("${server.baseUrl}/v1/streams/video:start?ip=127.0.0.1:$port").openConnection() as
+                      HttpURLConnection
+      startConnection.requestMethod = "PUT"
+      assertEquals(200, startConnection.responseCode)
+      startConnection.disconnect()
+
+      // Before the fix this endpoint only returned 200 and never sent a single packet, so Live
+      // View in Demo Mode showed "connected" and then nothing. Receiving a real packet here is
+      // what proves streams:start actually started the synthetic generator.
+      val buffer = ByteArray(2048)
+      receiver.receive(DatagramPacket(buffer, buffer.size))
+
+      val stopConnection = URL("${server.baseUrl}/v1/streams/video:stop").openConnection() as HttpURLConnection
+      stopConnection.requestMethod = "PUT"
+      assertEquals(200, stopConnection.responseCode)
+      stopConnection.disconnect()
+    }
+
+    server.stop()
+  }
+
+  @Test
+  fun streamsStartWithoutIpIsRejected() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val connection = URL("${server.baseUrl}/v1/streams/video:start").openConnection() as HttpURLConnection
+    connection.requestMethod = "PUT"
+    assertEquals(400, connection.responseCode)
+    connection.disconnect()
 
     server.stop()
   }
