@@ -91,9 +91,7 @@ describe("list_targets api level", () => {
 
   function apiLevelRecorder(sdk: (request: RawExecRequest) => RawExecOutcome) {
     let devices = listing("1");
-    const recorder = recordingTransport((request) =>
-      request.args.includes("devices") ? ok(devices) : sdk(request),
-    );
+    const recorder = recordingTransport((request) => (request.args.includes("devices") ? ok(devices) : sdk(request)));
     return {
       ...recorder,
       setDevices: (value: string) => {

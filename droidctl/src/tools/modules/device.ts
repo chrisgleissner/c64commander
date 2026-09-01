@@ -49,10 +49,7 @@ const forwardSchema = z
     targetId: targetIdSchema,
     package: packageSchema,
     localPort: z.number().int().min(1).max(65535).describe("Local TCP port to bind."),
-    replaceExisting: z
-      .boolean()
-      .describe("Remove an existing forward on that port first. Default true.")
-      .optional(),
+    replaceExisting: z.boolean().describe("Remove an existing forward on that port first. Default true.").optional(),
   })
   .strict();
 
@@ -63,7 +60,6 @@ const pushSchema = z
 const pullSchema = z
   .object({ targetId: targetIdSchema, remotePath: z.string().min(1), localPath: z.string().min(1) })
   .strict();
-
 
 export function parseWebviewSockets(procNetUnix: string, pids: readonly string[]): string[] {
   const sockets = new Set<string>();

@@ -168,10 +168,7 @@ const matchSchema = z
           "that sets only a testid cannot be addressed this way.",
       )
       .optional(),
-    text: z
-      .string()
-      .describe("Exact match on the node's whole text. Inline spans merge into the row.")
-      .optional(),
+    text: z.string().describe("Exact match on the node's whole text. Inline spans merge into the row.").optional(),
     textPattern: z
       .string()
       .min(1)

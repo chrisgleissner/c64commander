@@ -15,17 +15,11 @@
         },
         "confirm": {
           "type": "boolean",
-          "enum": [
-            true
-          ],
+          "enum": [true],
           "description": "Must be true. Second explicit act before data loss."
         }
       },
-      "required": [
-        "targetId",
-        "package",
-        "confirm"
-      ],
+      "required": ["targetId", "package", "confirm"],
       "additionalProperties": false
     }
   },
@@ -64,11 +58,7 @@
           "description": "Pass -t."
         }
       },
-      "required": [
-        "targetId",
-        "package",
-        "apkPath"
-      ],
+      "required": ["targetId", "package", "apkPath"],
       "additionalProperties": false
     }
   },
@@ -95,11 +85,7 @@
           "description": "Truncate the returned content to this many bytes."
         }
       },
-      "required": [
-        "targetId",
-        "package",
-        "relativePath"
-      ],
+      "required": ["targetId", "package", "relativePath"],
       "additionalProperties": false
     }
   },
@@ -134,10 +120,7 @@
           "description": "Use monkey with the LAUNCHER category instead of am start."
         }
       },
-      "required": [
-        "targetId",
-        "package"
-      ],
+      "required": ["targetId", "package"],
       "additionalProperties": false
     }
   },
@@ -156,10 +139,7 @@
           "description": "Android application id. Required: two application ids can be installed at once and both open a WebView DevTools socket."
         }
       },
-      "required": [
-        "targetId",
-        "package"
-      ],
+      "required": ["targetId", "package"],
       "additionalProperties": false
     }
   },
@@ -182,10 +162,7 @@
           "description": "Treat an absent package as success."
         }
       },
-      "required": [
-        "targetId",
-        "package"
-      ],
+      "required": ["targetId", "package"],
       "additionalProperties": false
     }
   },
@@ -212,12 +189,7 @@
           "description": "File content, sent on stdin."
         }
       },
-      "required": [
-        "targetId",
-        "package",
-        "relativePath",
-        "content"
-      ],
+      "required": ["targetId", "package", "relativePath", "content"],
       "additionalProperties": false
     }
   },
@@ -284,11 +256,7 @@
           "description": "Directory to write artifacts into instead of this run's default directory."
         }
       },
-      "required": [
-        "targetId",
-        "name",
-        "match"
-      ],
+      "required": ["targetId", "name", "match"],
       "additionalProperties": false
     }
   },
@@ -355,11 +323,7 @@
           "description": "Directory to write artifacts into instead of this run's default directory."
         }
       },
-      "required": [
-        "targetId",
-        "name",
-        "match"
-      ],
+      "required": ["targetId", "name", "match"],
       "additionalProperties": false
     }
   },
@@ -375,10 +339,7 @@
         },
         "mode": {
           "type": "string",
-          "enum": [
-            "dump",
-            "clear"
-          ],
+          "enum": ["dump", "clear"],
           "description": "clear runs logcat -c; dump runs logcat -d."
         },
         "name": {
@@ -391,13 +352,7 @@
         },
         "format": {
           "type": "string",
-          "enum": [
-            "raw",
-            "brief",
-            "time",
-            "threadtime",
-            "long"
-          ],
+          "enum": ["raw", "brief", "time", "threadtime", "long"],
           "description": "logcat -v."
         },
         "package": {
@@ -431,10 +386,7 @@
           "description": "Directory to write artifacts into instead of this run's default directory."
         }
       },
-      "required": [
-        "targetId",
-        "mode"
-      ],
+      "required": ["targetId", "mode"],
       "additionalProperties": false
     }
   },
@@ -465,10 +417,7 @@
           "description": "Directory to write artifacts into instead of this run's default directory."
         }
       },
-      "required": [
-        "targetId",
-        "name"
-      ],
+      "required": ["targetId", "name"],
       "additionalProperties": false
     }
   },
@@ -503,10 +452,7 @@
           "description": "Directory to write artifacts into instead of this run's default directory."
         }
       },
-      "required": [
-        "targetId",
-        "name"
-      ],
+      "required": ["targetId", "name"],
       "additionalProperties": false
     }
   },
@@ -525,10 +471,7 @@
           "description": "Handle returned by droid_capture.start_recording."
         }
       },
-      "required": [
-        "targetId",
-        "recordingId"
-      ],
+      "required": ["targetId", "recordingId"],
       "additionalProperties": false
     }
   },
@@ -559,9 +502,7 @@
           "description": "Directory to write artifacts into instead of this run's default directory."
         }
       },
-      "required": [
-        "targetId"
-      ],
+      "required": ["targetId"],
       "additionalProperties": false
     }
   },
@@ -588,11 +529,7 @@
           "description": "Remove an existing forward on that port first. Default true."
         }
       },
-      "required": [
-        "targetId",
-        "package",
-        "localPort"
-      ],
+      "required": ["targetId", "package", "localPort"],
       "additionalProperties": false
     }
   },
@@ -616,10 +553,7 @@
         },
         "stayOn": {
           "type": "string",
-          "enum": [
-            "usb",
-            "false"
-          ],
+          "enum": ["usb", "false"],
           "description": "svc power stayon setting."
         },
         "disableAnimations": {
@@ -635,9 +569,7 @@
           "description": "Deadline for the boot wait. Default 120000."
         }
       },
-      "required": [
-        "targetId"
-      ],
+      "required": ["targetId"],
       "additionalProperties": false
     }
   },
@@ -658,11 +590,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "targetId",
-        "remotePath",
-        "localPath"
-      ],
+      "required": ["targetId", "remotePath", "localPath"],
       "additionalProperties": false
     }
   },
@@ -683,11 +611,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "targetId",
-        "localPath",
-        "remotePath"
-      ],
+      "required": ["targetId", "localPath", "remotePath"],
       "additionalProperties": false
     }
   },
@@ -721,10 +645,7 @@
           "description": "Sent to the command's standard input."
         }
       },
-      "required": [
-        "targetId",
-        "command"
-      ],
+      "required": ["targetId", "command"],
       "additionalProperties": false
     }
   },
@@ -742,10 +663,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "targetId",
-        "text"
-      ],
+      "required": ["targetId", "text"],
       "additionalProperties": false
     }
   },
@@ -779,10 +697,7 @@
           "description": "Send the key this many times. Default 1."
         }
       },
-      "required": [
-        "targetId",
-        "keycode"
-      ],
+      "required": ["targetId", "keycode"],
       "additionalProperties": false
     }
   },
@@ -814,10 +729,7 @@
         },
         "units": {
           "type": "string",
-          "enum": [
-            "physical",
-            "css"
-          ],
+          "enum": ["physical", "css"],
           "description": "Coordinate space. adb input speaks physical pixels while the DOM speaks CSS pixels; with css the server multiplies by dpr once, instead of each caller doing it."
         },
         "dpr": {
@@ -825,13 +737,7 @@
           "description": "Device pixel ratio. Required when units is css."
         }
       },
-      "required": [
-        "targetId",
-        "x1",
-        "y1",
-        "x2",
-        "y2"
-      ],
+      "required": ["targetId", "x1", "y1", "x2", "y2"],
       "additionalProperties": false
     }
   },
@@ -853,10 +759,7 @@
         },
         "units": {
           "type": "string",
-          "enum": [
-            "physical",
-            "css"
-          ],
+          "enum": ["physical", "css"],
           "description": "Coordinate space. adb input speaks physical pixels while the DOM speaks CSS pixels; with css the server multiplies by dpr once, instead of each caller doing it."
         },
         "dpr": {
@@ -868,11 +771,7 @@
           "description": "Hold duration in milliseconds. Omit for a plain tap."
         }
       },
-      "required": [
-        "targetId",
-        "x",
-        "y"
-      ],
+      "required": ["targetId", "x", "y"],
       "additionalProperties": false
     }
   },
@@ -887,9 +786,7 @@
           "description": "Target id from droid_target.list_targets. There is no default target and no single-device fallback."
         }
       },
-      "required": [
-        "targetId"
-      ],
+      "required": ["targetId"],
       "additionalProperties": false
     }
   },
@@ -904,10 +801,7 @@
           "description": "Restrict enumeration to these transports. Omit to enumerate all registered transports.",
           "items": {
             "type": "string",
-            "enum": [
-              "adb",
-              "ssh"
-            ]
+            "enum": ["adb", "ssh"]
           }
         }
       },

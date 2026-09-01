@@ -55,10 +55,7 @@ const startAppSchema = z
       .positive()
       .describe("Deadline for that poll in milliseconds. Default 15000.")
       .optional(),
-    viaLauncherIntent: z
-      .boolean()
-      .describe("Use monkey with the LAUNCHER category instead of am start.")
-      .optional(),
+    viaLauncherIntent: z.boolean().describe("Use monkey with the LAUNCHER category instead of am start.").optional(),
   })
   .strict();
 

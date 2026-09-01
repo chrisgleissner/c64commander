@@ -31,12 +31,7 @@ const screenshotSchema = z
     targetId: targetIdSchema,
     name: z.string().min(1).describe("Artifact base name."),
     reviewWidth: z.number().int().positive().describe("Review width in pixels. Default 480.").optional(),
-    maxDimension: z
-      .number()
-      .int()
-      .positive()
-      .describe("Hard cap on either review dimension. Default 1999.")
-      .optional(),
+    maxDimension: z.number().int().positive().describe("Hard cap on either review dimension. Default 1999.").optional(),
     runRoot: runRootSchema,
   })
   .strict();
