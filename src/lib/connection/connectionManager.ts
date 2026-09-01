@@ -83,6 +83,13 @@ export type ProbeInfoResult = {
   authRequired?: boolean;
 };
 
+/**
+ * Why the Demo Mode interstitial is up. `discovery-failed` means a device was looked for and not
+ * found, so the dialog offers a different hostname and a retry. `no-network` means the platform
+ * reports no network at all, where both of those are pointless — the copy says so instead.
+ */
+export type DemoInterstitialReason = "discovery-failed" | "no-network";
+
 export type ConnectionSnapshot = Readonly<{
   state: ConnectionState;
   lastDiscoveryTrigger: DiscoveryTrigger | null;
@@ -93,6 +100,7 @@ export type ConnectionSnapshot = Readonly<{
   lastProbeError: string | null;
   deviceInfo: DeviceInfo | null;
   demoInterstitialVisible: boolean;
+  demoInterstitialReason: DemoInterstitialReason | null;
 }>;
 
 const STARTUP_PROBE_INTERVAL_MS = 700;
@@ -145,9 +153,10 @@ type DemoFallbackReason = "setting" | "no-network";
 
 /**
  * No network leaves nothing but the simulated device to fall back to, so a failed probe
- * stays in Demo Mode rather than an empty offline app. With a network only the Demo Mode
- * setting produces one, so an unreachable device still reads as a failure. "no-network"
- * outranks "setting" because the interstitial it suppresses asks which host to try.
+ * offers Demo Mode rather than an empty offline app. With a network only the Demo Mode
+ * setting produces an offer, so an unreachable device still reads as a failure.
+ * "no-network" outranks "setting" because the two ask the user a different question: one
+ * offers a different hostname to try, the other cannot.
  */
 const resolveDemoFallbackReason = async (): Promise<DemoFallbackReason | null> => {
   if (isSmokeModeEnabled()) return null;
@@ -160,7 +169,9 @@ const applyDemoFallback = async (trigger: DiscoveryTrigger, reason: DemoFallback
     await transitionToOfflineNoDemo(trigger);
     return;
   }
-  await transitionToDemoActive(trigger, { showInterstitial: reason === "setting" });
+  await transitionToDemoActive(trigger, {
+    interstitialReason: reason === "no-network" ? "no-network" : "discovery-failed",
+  });
 };
 
 const shouldAutoStartOfflineDemoMode = async () =>
@@ -469,6 +480,7 @@ let snapshot: ConnectionSnapshot = {
   lastProbeError: null,
   deviceInfo: null,
   demoInterstitialVisible: false,
+  demoInterstitialReason: null,
 };
 
 const listeners = new Set<() => void>();
@@ -689,7 +701,7 @@ export function dismissDemoInterstitial() {
       });
     }
   }
-  setSnapshot({ demoInterstitialVisible: false });
+  setSnapshot({ demoInterstitialVisible: false, demoInterstitialReason: null });
 }
 
 const persistDemoModePinnedState = (pinned: boolean) => {
@@ -990,7 +1002,11 @@ const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
 
 const transitionToDemoActive = async (
   trigger: DiscoveryTrigger,
-  options: { showInterstitial?: boolean; bypassStickyRealDeviceLock?: boolean } = {},
+  options: {
+    showInterstitial?: boolean;
+    interstitialReason?: DemoInterstitialReason;
+    bypassStickyRealDeviceLock?: boolean;
+  } = {},
 ) => {
   if (stickyRealDeviceLock && !options.bypassStickyRealDeviceLock) {
     addLog("warn", "Sticky real-device lock active; skipping demo mode transition", { trigger });
@@ -1007,7 +1023,10 @@ const transitionToDemoActive = async (
   if (shouldShowInterstitial) {
     demoInterstitialShownThisSession = true;
     sessionStorage.setItem(DEMO_INTERSTITIAL_SESSION_KEY, "1");
-    setSnapshot({ demoInterstitialVisible: true });
+    setSnapshot({
+      demoInterstitialVisible: true,
+      demoInterstitialReason: options.interstitialReason ?? "discovery-failed",
+    });
   }
 
   // Configure the API base URL BEFORE transitioning state so that queries
@@ -1099,6 +1118,7 @@ const transitionToSmokeMockConnected = async (trigger: DiscoveryTrigger) => {
     lastProbeFailedAtMs: null,
     lastProbeError: null,
     demoInterstitialVisible: false,
+    demoInterstitialReason: null,
   });
   transitionTo("REAL_CONNECTED", trigger);
   logDiscoveryDecision("REAL_CONNECTED", trigger, { mode: "mock", baseUrl });
@@ -1196,15 +1216,17 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
   // between the two lets a second trigger start its own run and strand this one.
   if (trigger !== "background") {
     transitionTo("DISCOVERING", trigger);
-    // With no network there is nothing to discover, so every foreground trigger
-    // reaches the simulated device directly: no LAN scan, no saved-host probe, and
-    // no prompt to answer. A session that has already reached real hardware is
+    // With no network there is nothing to discover, so every foreground trigger goes
+    // straight to the simulated device: no LAN scan and no saved-host probe. The offer
+    // is still put to the user — the same interstitial as a failed discovery, worded for
+    // having no network — so the app never silently substitutes a simulated device for
+    // the one the user configured. A session that has already reached real hardware is
     // excluded, so its device becoming unreachable is still reported as a failure.
     if (await shouldAutoStartOfflineDemoMode()) {
       if (!discoveryRun.isCurrent()) return;
-      addLog("info", "No network on this device; using the simulated device without discovery", { trigger });
+      addLog("info", "No network on this device; offering the simulated device without discovery", { trigger });
       setSnapshot({ lastProbeError: NO_NETWORK_PROBE_ERROR });
-      await transitionToDemoActive(trigger, { showInterstitial: false });
+      await transitionToDemoActive(trigger, { interstitialReason: "no-network" });
       return;
     }
     if (!discoveryRun.isCurrent()) return;

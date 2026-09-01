@@ -10,6 +10,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
 let demoInterstitialVisible = true;
+let demoInterstitialReason: "discovery-failed" | "no-network" | null = "discovery-failed";
 
 const dismissDemoInterstitial = vi.fn();
 const pinDemoModeByUserChoice = vi.fn();
@@ -24,7 +25,7 @@ const getC64APIConfigSnapshot = vi.fn(() => ({
 }));
 
 vi.mock("@/hooks/useConnectionState", () => ({
-  useConnectionState: () => ({ demoInterstitialVisible }),
+  useConnectionState: () => ({ demoInterstitialVisible, demoInterstitialReason }),
 }));
 
 vi.mock("@/lib/connection/connectionManager", () => ({
@@ -50,6 +51,7 @@ import { DemoModeInterstitial } from "@/components/DemoModeInterstitial";
 describe("DemoModeInterstitial", () => {
   beforeEach(() => {
     demoInterstitialVisible = true;
+    demoInterstitialReason = "discovery-failed";
     resolveDeviceHostFromStorage.mockReturnValue("mydevice.local");
     getC64APIConfigSnapshot.mockReturnValue({
       baseUrl: "http://mydevice.local",
@@ -106,6 +108,43 @@ describe("DemoModeInterstitial", () => {
     expect(dismissDemoInterstitial).not.toHaveBeenCalled();
     expect(discoverConnection).not.toHaveBeenCalled();
     expect(updateC64APIConfig).not.toHaveBeenCalled();
+  });
+
+  it("with no network, explains the network is missing instead of naming a host", () => {
+    demoInterstitialReason = "no-network";
+    render(<DemoModeInterstitial />);
+
+    expect(screen.getByTestId("demo-interstitial-description")).toHaveTextContent(/no network connection/i);
+    expect(screen.queryByTestId("demo-interstitial-hostname")).toBeNull();
+  });
+
+  it("with no network, drops the hostname field and Save & retry", () => {
+    demoInterstitialReason = "no-network";
+    render(<DemoModeInterstitial />);
+
+    // Editing a hostname or re-saving it cannot make a device reachable while the platform
+    // reports no network at all, so neither control is offered.
+    expect(screen.queryByTestId("demo-interstitial-host-input")).toBeNull();
+    expect(screen.queryByTestId("demo-interstitial-save-retry")).toBeNull();
+  });
+
+  it("with no network, Continue in Demo Mode still confirms entry", () => {
+    demoInterstitialReason = "no-network";
+    render(<DemoModeInterstitial />);
+
+    fireEvent.click(screen.getByTestId("demo-interstitial-continue"));
+
+    expect(pinDemoModeByUserChoice).toHaveBeenCalledTimes(1);
+  });
+
+  it("with no network, Try again re-runs discovery", () => {
+    demoInterstitialReason = "no-network";
+    render(<DemoModeInterstitial />);
+
+    fireEvent.click(screen.getByTestId("demo-interstitial-retry"));
+
+    expect(dismissDemoInterstitial).toHaveBeenCalledTimes(1);
+    expect(discoverConnection).toHaveBeenCalledWith("manual");
   });
 
   it("renders nothing when interstitial is not visible", () => {

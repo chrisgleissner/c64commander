@@ -138,7 +138,7 @@ describe("startup with no network on the device", () => {
     setNetwork(false);
   });
 
-  it("starts the simulated device on a fresh offline launch without scanning, probing, or prompting", async () => {
+  it("starts the simulated device on a fresh offline launch without scanning or probing", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
 
@@ -146,10 +146,63 @@ describe("startup with no network on the device", () => {
     await discoverConnection("startup");
 
     expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
-    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
     expect(startMockServer).toHaveBeenCalledTimes(1);
     expect(startDeviceDiscovery).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("asks the user before the simulated device stands in for the configured one", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+
+    // The offline launch used to switch silently. Silently substituting a simulated device for
+    // the hardware the user configured is indistinguishable, from the user's side, from the app
+    // deciding their C64U is fine when it is simply unreachable.
+    const snapshot = getConnectionSnapshot();
+    expect(snapshot.demoInterstitialVisible).toBe(true);
+    expect(snapshot.demoInterstitialReason).toBe("no-network");
+  });
+
+  it("does not ask a second time in the same session", async () => {
+    const { discoverConnection, dismissDemoInterstitial, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+    dismissDemoInterstitial();
+    await discoverConnection("settings");
+
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+  });
+
+  it("never asks on a background trigger", async () => {
+    const { discoverConnection, dismissDemoInterstitial, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+    dismissDemoInterstitial();
+    await discoverConnection("background");
+
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+  });
+
+  it("keeps the user in Demo Mode when they confirm from the offline prompt", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, pinDemoModeByUserChoice } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+    await pinDemoModeByUserChoice();
+
+    const snapshot = getConnectionSnapshot();
+    expect(snapshot.state).toBe("DEMO_ACTIVE");
+    expect(snapshot.demoInterstitialVisible).toBe(false);
+    expect(snapshot.demoInterstitialReason).toBeNull();
   });
 
   it("records the reason as a missing network rather than a failed probe", async () => {
