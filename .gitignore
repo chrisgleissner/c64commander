@@ -138,6 +138,9 @@ c64scope/**/artifacts/
 c64scope/**/dist/
 c64scope/**/logs/
 c64scope/**/node_modules/
+# Without the trailing slash too: a symlink named node_modules is not a
+# directory, so the rules above do not match it and one was committed once.
+node_modules
 
 # droidctl generated files
 droidctl/**/artifacts/
