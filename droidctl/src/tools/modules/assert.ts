@@ -9,15 +9,7 @@
 import { z } from "zod";
 import { sanitizeArtifactName } from "../../artifacts.js";
 import type { ResolvedTargetHandle } from "../../transport/registry.js";
-import {
-  defineExecute,
-  delay,
-  resolveTarget,
-  runRootField,
-  runRootSchema,
-  targetIdField,
-  targetIdSchema,
-} from "../common.js";
+import { defineExecute, delay, resolveTarget, runRootSchema, targetIdSchema } from "../common.js";
 import { describeTarget } from "../../deviceInfo.js";
 import { ToolExecutionError } from "../errors.js";
 import { captureUiHierarchy, screenFromHierarchy, writeScreenshot } from "./capture.js";
@@ -168,65 +160,50 @@ export function evaluateMatches(
 
 const matchSchema = z
   .object({
-    resourceId: z.string().min(1).optional(),
-    text: z.string().optional(),
-    textPattern: z.string().min(1).optional(),
-    contentDesc: z.string().optional(),
-    className: z.string().min(1).optional(),
+    resourceId: z
+      .string()
+      .min(1)
+      .describe(
+        "Exact resource-id. In a WebView this is the element's HTML id attribute, NOT its data-testid: an element " +
+          "that sets only a testid cannot be addressed this way.",
+      )
+      .optional(),
+    text: z
+      .string()
+      .describe("Exact match on the node's whole text. Inline spans merge into the row.")
+      .optional(),
+    textPattern: z
+      .string()
+      .min(1)
+      .describe("Regular expression against text; the way to match part of a row.")
+      .optional(),
+    contentDesc: z.string().describe("Exact content-desc.").optional(),
+    className: z.string().min(1).describe("Exact class name.").optional(),
   })
   .strict()
-  .refine((value) => Object.keys(value).length > 0, { message: "match must name at least one predicate" });
+  .refine((value) => Object.keys(value).length > 0, { message: "match must name at least one predicate" })
+  .describe("Predicates the node must satisfy. At least one is required.");
 
 const assertSchema = z
   .object({
     targetId: targetIdSchema,
-    name: z.string().min(1),
+    name: z.string().min(1).describe("Artifact base name for the evidence pair."),
     match: matchSchema,
-    requireEnabled: z.boolean().optional(),
-    requireOnScreen: z.boolean().optional(),
-    timeoutMs: z.number().int().positive().optional(),
-    pollIntervalMs: z.number().int().positive().optional(),
+    requireEnabled: z.boolean().describe('Require enabled="true". Default true.').optional(),
+    requireOnScreen: z
+      .boolean()
+      .describe("Require the node's bounds to intersect the screen. Default true.")
+      .optional(),
+    timeoutMs: z
+      .number()
+      .int()
+      .positive()
+      .describe("Re-capture until the predicate holds. Default: one capture.")
+      .optional(),
+    pollIntervalMs: z.number().int().positive().describe("Interval between re-captures. Default 500.").optional(),
     runRoot: runRootSchema,
   })
   .strict();
-
-const matchProperties = {
-  type: "object",
-  description: "Predicates the node must satisfy. At least one is required.",
-  properties: {
-    resourceId: {
-      type: "string",
-      description:
-        "Exact resource-id. In a WebView this is the element's HTML id attribute, NOT its data-testid: an element " +
-        "that sets only a testid cannot be addressed this way.",
-    },
-    text: { type: "string", description: "Exact match on the node's whole text. Inline spans merge into the row." },
-    textPattern: { type: "string", description: "Regular expression against text; the way to match part of a row." },
-    contentDesc: { type: "string", description: "Exact content-desc." },
-    className: { type: "string", description: "Exact class name." },
-  },
-  required: [],
-  additionalProperties: false,
-} as const;
-
-const assertInputSchema = {
-  type: "object",
-  properties: {
-    targetId: targetIdField,
-    name: { type: "string", description: "Artifact base name for the evidence pair." },
-    match: matchProperties,
-    requireEnabled: { type: "boolean", description: 'Require enabled="true". Default true.' },
-    requireOnScreen: {
-      type: "boolean",
-      description: "Require the node's bounds to intersect the screen. Default true.",
-    },
-    timeoutMs: { type: "number", description: "Re-capture until the predicate holds. Default: one capture." },
-    pollIntervalMs: { type: "number", description: "Interval between re-captures. Default 500." },
-    runRoot: runRootField,
-  },
-  required: ["targetId", "name", "match"],
-  additionalProperties: false,
-} as const;
 
 async function runAssertion(
   args: z.infer<typeof assertSchema>,
@@ -318,7 +295,6 @@ export const assertModule = defineToolModule({
       description:
         "Assert a node matching the predicates is present, enabled and on screen. Decided from the accessibility " +
         "hierarchy, never from image comparison. A false assertion returns passed: false with evidence, not an error.",
-      inputSchema: assertInputSchema,
       argsSchema: assertSchema,
       execute: defineExecute(assertSchema, (args, ctx) => runAssertion(args, ctx, "droid_assert.assert_visible", true)),
     },
@@ -327,7 +303,6 @@ export const assertModule = defineToolModule({
       description:
         "Assert no node matching the predicates is visible. The check that catches a whole-app crash is a negative " +
         "assertion on the error-boundary title, which both the application shell and the page boundary render.",
-      inputSchema: assertInputSchema,
       argsSchema: assertSchema,
       execute: defineExecute(assertSchema, (args, ctx) =>
         runAssertion(args, ctx, "droid_assert.assert_not_visible", false),

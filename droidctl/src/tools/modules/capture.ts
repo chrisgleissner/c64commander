@@ -13,15 +13,7 @@ import { describeTarget } from "../../deviceInfo.js";
 import { createReviewPng } from "../../png.js";
 import type { ResolvedTargetHandle } from "../../transport/registry.js";
 import { ToolExecutionError } from "../errors.js";
-import {
-  defineExecute,
-  delay,
-  resolveTarget,
-  runRootField,
-  runRootSchema,
-  targetIdField,
-  targetIdSchema,
-} from "../common.js";
+import { defineExecute, delay, resolveTarget, runRootSchema, targetIdSchema } from "../common.js";
 import { defineToolModule, type ToolExecutionContext } from "../types.js";
 
 export const UI_DUMP_DEVICE_PATH = "/sdcard/Download/droidctl-ui.xml";
@@ -37,9 +29,14 @@ export const LOGCAT_MAX_BYTES = 32 * 1024 * 1024;
 const screenshotSchema = z
   .object({
     targetId: targetIdSchema,
-    name: z.string().min(1),
-    reviewWidth: z.number().int().positive().optional(),
-    maxDimension: z.number().int().positive().optional(),
+    name: z.string().min(1).describe("Artifact base name."),
+    reviewWidth: z.number().int().positive().describe("Review width in pixels. Default 480.").optional(),
+    maxDimension: z
+      .number()
+      .int()
+      .positive()
+      .describe("Hard cap on either review dimension. Default 1999.")
+      .optional(),
     runRoot: runRootSchema,
   })
   .strict();
@@ -47,9 +44,14 @@ const screenshotSchema = z
 const uiHierarchySchema = z
   .object({
     targetId: targetIdSchema,
-    name: z.string().min(1).optional(),
-    settleTimeoutMs: z.number().int().positive().optional(),
-    attempts: z.number().int().positive().optional(),
+    name: z.string().min(1).describe("Artifact base name. Default ui-hierarchy.").optional(),
+    settleTimeoutMs: z
+      .number()
+      .int()
+      .positive()
+      .describe("How long to wait for the dump file to stop growing.")
+      .optional(),
+    attempts: z.number().int().positive().describe("Whole-capture attempts before falling back. Default 3.").optional(),
     runRoot: runRootSchema,
   })
   .strict();
@@ -57,31 +59,40 @@ const uiHierarchySchema = z
 const startRecordingSchema = z
   .object({
     targetId: targetIdSchema,
-    name: z.string().min(1),
-    timeLimitSec: z.number().int().positive().optional(),
-    bitRate: z.number().int().positive().optional(),
+    name: z.string().min(1).describe("Artifact base name for the MP4."),
+    timeLimitSec: z.number().int().positive().describe("screenrecord --time-limit. Default 180.").optional(),
+    bitRate: z.number().int().positive().describe("screenrecord --bit-rate. Default 6000000.").optional(),
     size: z
       .string()
       .regex(/^\d+x\d+$/)
+      .describe("screenrecord --size, as WIDTHxHEIGHT.")
       .optional(),
     runRoot: runRootSchema,
   })
   .strict();
 
-const stopRecordingSchema = z.object({ targetId: targetIdSchema, recordingId: z.string().min(1) }).strict();
+const stopRecordingSchema = z
+  .object({
+    targetId: targetIdSchema,
+    recordingId: z.string().min(1).describe("Handle returned by droid_capture.start_recording."),
+  })
+  .strict();
 
 const logcatSchema = z
   .object({
     targetId: targetIdSchema,
-    mode: z.enum(["dump", "clear"]),
-    name: z.string().min(1).optional(),
-    lines: z.number().int().positive().optional(),
-    format: z.enum(["raw", "brief", "time", "threadtime", "long"]).optional(),
-    package: z.string().min(1).optional(),
-    tags: z.array(z.string().min(1)).optional(),
-    filters: z.array(z.string().min(1)).optional(),
-    requireRuntimeContent: z.boolean().optional(),
-    maxBytes: z.number().int().positive().optional(),
+    mode: z.enum(["dump", "clear"]).describe("clear runs logcat -c; dump runs logcat -d."),
+    name: z.string().min(1).describe("Artifact base name for the log. Default logcat.").optional(),
+    lines: z.number().int().positive().describe("logcat -t.").optional(),
+    format: z.enum(["raw", "brief", "time", "threadtime", "long"]).describe("logcat -v.").optional(),
+    package: z.string().min(1).describe("Resolve this package's pid and pass --pid.").optional(),
+    tags: z.array(z.string().min(1)).describe("Each becomes -s TAG:I.").optional(),
+    filters: z.array(z.string().min(1)).describe("Server-side regular expressions.").optional(),
+    requireRuntimeContent: z
+      .boolean()
+      .describe("Fail when the capture contains no runtime content at all. Default false.")
+      .optional(),
+    maxBytes: z.number().int().positive().describe("Cap on the captured buffer. Default 32 MiB.").optional(),
     runRoot: runRootSchema,
   })
   .strict();
@@ -260,18 +271,6 @@ export const captureModule = defineToolModule({
       description:
         "Capture a PNG screenshot and write both a raw copy and a 480 px review copy. The PNG signature is checked at " +
         "capture time, so a zero-byte capture fails here rather than at evidence validation later.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          name: { type: "string", description: "Artifact base name." },
-          reviewWidth: { type: "number", description: "Review width in pixels. Default 480." },
-          maxDimension: { type: "number", description: "Hard cap on either review dimension. Default 1999." },
-          runRoot: runRootField,
-        },
-        required: ["targetId", "name"],
-        additionalProperties: false,
-      },
       argsSchema: screenshotSchema,
       execute: defineExecute(screenshotSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -287,18 +286,6 @@ export const captureModule = defineToolModule({
       description:
         "Capture the uiautomator hierarchy, with the settle poll, retry budget and per-call deadline that a wedged " +
         "dump requires. Falls back to dumping to /dev/tty when the device has no writable /sdcard.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          name: { type: "string", description: "Artifact base name. Default ui-hierarchy." },
-          settleTimeoutMs: { type: "number", description: "How long to wait for the dump file to stop growing." },
-          attempts: { type: "number", description: "Whole-capture attempts before falling back. Default 3." },
-          runRoot: runRootField,
-        },
-        required: ["targetId"],
-        additionalProperties: false,
-      },
       argsSchema: uiHierarchySchema,
       execute: defineExecute(uiHierarchySchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -328,19 +315,6 @@ export const captureModule = defineToolModule({
       description:
         "Start screenrecord detached and return a handle. The time limit is returned so a caller can tell a recording " +
         "that outlived its limit from one that stopped early.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          name: { type: "string", description: "Artifact base name for the MP4." },
-          timeLimitSec: { type: "number", description: "screenrecord --time-limit. Default 180." },
-          bitRate: { type: "number", description: "screenrecord --bit-rate. Default 6000000." },
-          size: { type: "string", description: "screenrecord --size, as WIDTHxHEIGHT." },
-          runRoot: runRootField,
-        },
-        required: ["targetId", "name"],
-        additionalProperties: false,
-      },
       argsSchema: startRecordingSchema,
       execute: defineExecute(startRecordingSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -378,15 +352,6 @@ export const captureModule = defineToolModule({
       description:
         "Stop a recording, pull the MP4 and delete it from the device. The ftyp box is checked on pull. A recording " +
         "whose file is missing at stop time is reported as a failed result with the paths, not as an exception.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          recordingId: { type: "string", description: "Handle returned by droid_capture.start_recording." },
-        },
-        required: ["targetId", "recordingId"],
-        additionalProperties: false,
-      },
       argsSchema: stopRecordingSchema,
       execute: defineExecute(stopRecordingSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -461,27 +426,6 @@ export const captureModule = defineToolModule({
       description:
         "Clear the log buffer, or dump it with optional line, format, package and tag filters. Regular expressions in " +
         "filters are applied here and reported as matchedCount plus the matching lines; the full log is still written.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          mode: { type: "string", enum: ["dump", "clear"], description: "clear runs logcat -c; dump runs logcat -d." },
-          name: { type: "string", description: "Artifact base name for the log. Default logcat." },
-          lines: { type: "number", description: "logcat -t." },
-          format: { type: "string", enum: ["raw", "brief", "time", "threadtime", "long"], description: "logcat -v." },
-          package: { type: "string", description: "Resolve this package's pid and pass --pid." },
-          tags: { type: "array", items: { type: "string" }, description: "Each becomes -s TAG:I." },
-          filters: { type: "array", items: { type: "string" }, description: "Server-side regular expressions." },
-          requireRuntimeContent: {
-            type: "boolean",
-            description: "Fail when the capture contains no runtime content at all. Default false.",
-          },
-          maxBytes: { type: "number", description: "Cap on the captured buffer. Default 32 MiB." },
-          runRoot: runRootField,
-        },
-        required: ["targetId", "mode"],
-        additionalProperties: false,
-      },
       argsSchema: logcatSchema,
       execute: defineExecute(logcatSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);

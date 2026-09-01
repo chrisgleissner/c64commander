@@ -6,10 +6,12 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Spec §11.3: the JSON Schema advertised over tools/list and the zod schema that
- * validates at execute time drift. This walks the registry so a tool added later
- * is covered the day it is added.
+ * validates at execute time drift. The advertised schema is derived from the zod
+ * schema now, so this pins what derivation must preserve: the surface a caller
+ * sees, and agreement between both validators on every constraint.
  */
 
+import { readFileSync } from "node:fs";
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import { ToolValidationError } from "../src/tools/errors.js";
@@ -112,7 +114,73 @@ function objectSchemas(schema: JsonSchema, path: string): { path: string; schema
   return found;
 }
 
+/*
+ * Values chosen to trip one constraint class each: minLength, pattern and enum
+ * ("" and "x"), integer (1.5), exclusiveMinimum/minimum/maximum (0, -1, 65536),
+ * minItems ([]), item type (["x"]) and the type itself (true, {}, null).
+ */
+const MUTATIONS: readonly unknown[] = ["", "x", 0, -1, 1.5, 65536, true, [], ["x"], {}, null];
+
+/**
+ * A zod refinement is a runtime-only predicate that no JSON Schema can carry, so
+ * these two are expected to disagree. Listed here rather than skipped silently,
+ * and asserted below so the list cannot rot.
+ */
+const RUNTIME_ONLY_CONSTRAINTS: readonly { tool: string; property: string; value: unknown }[] = [
+  { tool: "droid_assert.assert_visible", property: "match", value: {} },
+  { tool: "droid_assert.assert_not_visible", property: "match", value: {} },
+];
+
+/** Constraint keys derivation adds; stripped to compare against the advertised surface. */
+const CONSTRAINT_KEYS = new Set([
+  "minLength",
+  "maxLength",
+  "pattern",
+  "minimum",
+  "maximum",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "minItems",
+  "maxItems",
+]);
+
+function withoutConstraints(schema: JsonSchema): unknown {
+  const projected: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (CONSTRAINT_KEYS.has(key)) {
+      continue;
+    }
+    if (key === "type") {
+      projected[key] = value === "integer" ? "number" : value;
+    } else if (key === "properties") {
+      projected[key] = Object.fromEntries(
+        Object.entries(value as Record<string, JsonSchema>).map(([name, child]) => [name, withoutConstraints(child)]),
+      );
+    } else if (key === "items") {
+      projected[key] = withoutConstraints(value as JsonSchema);
+    } else if (key === "anyOf") {
+      projected[key] = (value as JsonSchema[]).map(withoutConstraints);
+    } else {
+      projected[key] = value;
+    }
+  }
+  return projected;
+}
+
+function zodAccepts(schema: unknown, payload: unknown): boolean {
+  try {
+    parseZodArgs(schema as { parse: (args: unknown) => unknown }, payload);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const descriptors = listToolDescriptors();
+
+const advertisedSurface = JSON.parse(
+  readFileSync(new URL("./fixtures/advertisedSurface.json", import.meta.url), "utf8"),
+) as { name: string; description: string; inputSchema: JsonSchema }[];
 
 describe("tool contract", () => {
   it("registers exactly the 25 tools of the specified surface, each name unique", () => {
@@ -147,6 +215,40 @@ describe("tool contract", () => {
         "droid_target.list_targets",
       ].sort(),
     );
+  });
+
+  it("still advertises the surface callers were given, once derived constraints are set aside", () => {
+    const derived = descriptors
+      .map((descriptor) => ({
+        name: descriptor.name,
+        description: descriptor.description,
+        inputSchema: withoutConstraints(descriptor.inputSchema),
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+    expect(derived).toEqual(
+      advertisedSurface
+        .map((tool) => ({ ...tool, inputSchema: withoutConstraints(tool.inputSchema) }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    );
+  });
+
+  it("keeps the runtime-only constraints listed, so the exception cannot rot", () => {
+    for (const { tool, property, value } of RUNTIME_ONLY_CONSTRAINTS) {
+      const descriptor = descriptors.find((candidate) => candidate.name === tool);
+      expect(descriptor, tool).toBeDefined();
+      const payload = generate(descriptor!.argsSchema, tool) as Record<string, unknown>;
+      const mutated = { ...payload, [property]: value };
+      expect({ tool, property, ajv: ajv.compile(descriptor!.inputSchema as object)(mutated) }).toEqual({
+        tool,
+        property,
+        ajv: true,
+      });
+      expect({ tool, property, zod: zodAccepts(descriptor!.argsSchema, mutated) }).toEqual({
+        tool,
+        property,
+        zod: false,
+      });
+    }
   });
 
   for (const descriptor of descriptors) {
@@ -184,6 +286,29 @@ describe("tool contract", () => {
         );
         const validate = ajv.compile(descriptor.inputSchema as object);
         expect(validate({ ...payload, unexpectedKey: 1 })).toBe(false);
+      });
+
+      it("agrees with the zod schema on every constraint, not only on which keys exist", () => {
+        const validate = ajv.compile(descriptor.inputSchema as object);
+        const payload = generate(descriptor.argsSchema, descriptor.name) as Record<string, unknown>;
+        const exempt = new Set(
+          RUNTIME_ONLY_CONSTRAINTS.filter((entry) => entry.tool === descriptor.name).map((entry) => entry.property),
+        );
+        const disagreements: string[] = [];
+        for (const key of Object.keys(descriptor.inputSchema.properties ?? {})) {
+          if (exempt.has(key)) {
+            continue;
+          }
+          for (const value of MUTATIONS) {
+            const mutated = { ...payload, [key]: value };
+            const byAjv = validate(mutated);
+            const byZod = zodAccepts(descriptor.argsSchema, mutated);
+            if (byAjv !== byZod) {
+              disagreements.push(`${key}=${JSON.stringify(value)}: JSON Schema ${byAjv}, zod ${byZod}`);
+            }
+          }
+        }
+        expect(disagreements).toEqual([]);
       });
 
       it("rejects a payload missing a required key", () => {

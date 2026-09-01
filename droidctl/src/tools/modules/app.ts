@@ -14,11 +14,9 @@ import {
   defineExecute,
   delay,
   expectSuccess,
-  packageField,
   packageSchema,
   resolveTarget,
   shellQuote,
-  targetIdField,
   targetIdSchema,
 } from "../common.js";
 import { defineToolModule } from "../types.js";
@@ -27,39 +25,57 @@ const installSchema = z
   .object({
     targetId: targetIdSchema,
     package: packageSchema,
-    apkPath: z.string().min(1),
-    reinstall: z.boolean().optional(),
-    allowDowngrade: z.boolean().optional(),
-    grantPermissions: z.boolean().optional(),
-    allowTestPackages: z.boolean().optional(),
+    apkPath: z.string().min(1).describe("Path to the APK on this machine."),
+    reinstall: z.boolean().describe("Pass -r. Default true.").optional(),
+    allowDowngrade: z.boolean().describe("Pass -d.").optional(),
+    grantPermissions: z.boolean().describe("Pass -g.").optional(),
+    allowTestPackages: z.boolean().describe("Pass -t.").optional(),
   })
   .strict();
 
 const packageOnlySchema = z.object({ targetId: targetIdSchema, package: packageSchema }).strict();
 
 const uninstallSchema = z
-  .object({ targetId: targetIdSchema, package: packageSchema, tolerateMissing: z.boolean().optional() })
+  .object({
+    targetId: targetIdSchema,
+    package: packageSchema,
+    tolerateMissing: z.boolean().describe("Treat an absent package as success.").optional(),
+  })
   .strict();
 
 const startAppSchema = z
   .object({
     targetId: targetIdSchema,
     package: packageSchema,
-    activity: z.string().min(1).optional(),
-    waitForResume: z.boolean().optional(),
-    resumeTimeoutMs: z.number().int().positive().optional(),
-    viaLauncherIntent: z.boolean().optional(),
+    activity: z.string().min(1).describe("Activity name, e.g. .MainActivity. Default .MainActivity.").optional(),
+    waitForResume: z.boolean().describe("Poll dumpsys until the package is the resumed activity.").optional(),
+    resumeTimeoutMs: z
+      .number()
+      .int()
+      .positive()
+      .describe("Deadline for that poll in milliseconds. Default 15000.")
+      .optional(),
+    viaLauncherIntent: z
+      .boolean()
+      .describe("Use monkey with the LAUNCHER category instead of am start.")
+      .optional(),
   })
   .strict();
 
-const clearSchema = z.object({ targetId: targetIdSchema, package: packageSchema, confirm: z.literal(true) }).strict();
+const clearSchema = z
+  .object({
+    targetId: targetIdSchema,
+    package: packageSchema,
+    confirm: z.literal(true).describe("Must be true. Second explicit act before data loss."),
+  })
+  .strict();
 
 const writeFileSchema = z
   .object({
     targetId: targetIdSchema,
     package: packageSchema,
-    relativePath: z.string().min(1),
-    content: z.string(),
+    relativePath: z.string().min(1).describe("Path under the app's files/ directory. May not escape it."),
+    content: z.string().describe("File content, sent on stdin."),
   })
   .strict();
 
@@ -67,8 +83,8 @@ const readFileSchema = z
   .object({
     targetId: targetIdSchema,
     package: packageSchema,
-    relativePath: z.string().min(1),
-    maxBytes: z.number().int().positive().optional(),
+    relativePath: z.string().min(1).describe("Path under the app's files/ directory. May not escape it."),
+    maxBytes: z.number().int().positive().describe("Truncate the returned content to this many bytes.").optional(),
   })
   .strict();
 
@@ -117,20 +133,6 @@ export const appModule = defineToolModule({
       description:
         "Install an APK and verify with pm list packages that the named package is present afterwards. A signature " +
         "mismatch (INSTALL_FAILED_UPDATE_INCOMPATIBLE) is reported with the uninstall-first remedy.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          package: packageField,
-          apkPath: { type: "string", description: "Path to the APK on this machine." },
-          reinstall: { type: "boolean", description: "Pass -r. Default true." },
-          allowDowngrade: { type: "boolean", description: "Pass -d." },
-          grantPermissions: { type: "boolean", description: "Pass -g." },
-          allowTestPackages: { type: "boolean", description: "Pass -t." },
-        },
-        required: ["targetId", "package", "apkPath"],
-        additionalProperties: false,
-      },
       argsSchema: installSchema,
       execute: defineExecute(installSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -183,16 +185,6 @@ export const appModule = defineToolModule({
     {
       name: "droid_app.uninstall_app",
       description: "Uninstall a package. With tolerateMissing, a package that was not installed is not an error.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          package: packageField,
-          tolerateMissing: { type: "boolean", description: "Treat an absent package as success." },
-        },
-        required: ["targetId", "package"],
-        additionalProperties: false,
-      },
       argsSchema: uninstallSchema,
       execute: defineExecute(uninstallSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -214,22 +206,6 @@ export const appModule = defineToolModule({
       description:
         "Launch the application, by explicit activity with am start -W, or through the launcher intent. Returns the " +
         "resumed activity and, when am start reported it, the measured total start time.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          package: packageField,
-          activity: { type: "string", description: "Activity name, e.g. .MainActivity. Default .MainActivity." },
-          waitForResume: { type: "boolean", description: "Poll dumpsys until the package is the resumed activity." },
-          resumeTimeoutMs: { type: "number", description: "Deadline for that poll in milliseconds. Default 15000." },
-          viaLauncherIntent: {
-            type: "boolean",
-            description: "Use monkey with the LAUNCHER category instead of am start.",
-          },
-        },
-        required: ["targetId", "package"],
-        additionalProperties: false,
-      },
       argsSchema: startAppSchema,
       execute: defineExecute(startAppSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -296,12 +272,6 @@ export const appModule = defineToolModule({
     {
       name: "droid_app.stop_app",
       description: "Force-stop the application.",
-      inputSchema: {
-        type: "object",
-        properties: { targetId: targetIdField, package: packageField },
-        required: ["targetId", "package"],
-        additionalProperties: false,
-      },
       argsSchema: packageOnlySchema,
       execute: defineExecute(packageOnlySchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -315,20 +285,6 @@ export const appModule = defineToolModule({
       description:
         "Clear the application's data with pm clear. Requires confirm: true, because it is the only tool here that " +
         "destroys state on a device somebody else may be using.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          package: packageField,
-          confirm: {
-            type: "boolean",
-            enum: [true],
-            description: "Must be true. Second explicit act before data loss.",
-          },
-        },
-        required: ["targetId", "package", "confirm"],
-        additionalProperties: false,
-      },
       argsSchema: clearSchema,
       execute: defineExecute(clearSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -354,17 +310,6 @@ export const appModule = defineToolModule({
       description:
         "Write a file into the application's private files/ directory through run-as. This is how the app is " +
         "configured before launch. A run-as refusal on a non-debuggable build is reported rather than read as success.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          package: packageField,
-          relativePath: { type: "string", description: "Path under the app's files/ directory. May not escape it." },
-          content: { type: "string", description: "File content, sent on stdin." },
-        },
-        required: ["targetId", "package", "relativePath", "content"],
-        additionalProperties: false,
-      },
       argsSchema: writeFileSchema,
       execute: defineExecute(writeFileSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
@@ -390,17 +335,6 @@ export const appModule = defineToolModule({
     {
       name: "droid_app.read_app_file",
       description: "Read a file back out of the application's private files/ directory through run-as.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          targetId: targetIdField,
-          package: packageField,
-          relativePath: { type: "string", description: "Path under the app's files/ directory. May not escape it." },
-          maxBytes: { type: "number", description: "Truncate the returned content to this many bytes." },
-        },
-        required: ["targetId", "package", "relativePath"],
-        additionalProperties: false,
-      },
       argsSchema: readFileSchema,
       execute: defineExecute(readFileSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);

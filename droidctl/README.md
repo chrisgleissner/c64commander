@@ -51,6 +51,13 @@ installed at once and both open a WebView DevTools socket.
 | `droid_assert`  | `assert_visible`, `assert_not_visible`                                                                        |
 | `droid_device`  | `prepare_device`, `run_shell`, `forward_webview`, `push_file`, `pull_file`                                    |
 
+The JSON Schema advertised over `tools/list` is derived from each tool's zod schema by
+`src/tools/jsonSchema.ts`, so there is no second declaration to drift: a constraint enforced at execute
+time is advertised, and a construct the derivation cannot express fails at import instead of quietly
+understating the validator. The one thing it cannot carry is a zod `.refine()`, which is a runtime-only
+predicate; `tests/contract.test.ts` lists each of those explicitly and asserts the disagreement is real.
+`tests/fixtures/advertisedSurface.json` locks the surface callers see, so a change to it is deliberate.
+
 ## Transports
 
 One interface, two backends, so a caller does not branch on which is in use.
