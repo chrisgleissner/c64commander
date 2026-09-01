@@ -17,9 +17,10 @@
  * - Finalizes the session and verifies artifact output
  *
  * Usage:
- *   ANDROID_SERIAL=<device serial or 3-char prefix> C64U_HOST=192.168.1.13 node dist/hardwareValidation.js
+ *   ANDROID_SERIAL=<device serial or 3-char prefix> C64U_HOST=c64u node dist/hardwareValidation.js
  */
 
+import { DEFAULT_C64U_HOST } from "./deviceHosts.js";
 import { execFile } from "node:child_process";
 import { readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -396,7 +397,7 @@ async function runCase(
 export async function main(): Promise<void> {
   const serialInput = process.env["ANDROID_SERIAL"];
   const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolvePreferredPhysicalTestDeviceSerial();
-  const c64uHost = process.env["C64U_HOST"] ?? "192.168.1.13";
+  const c64uHost = process.env["C64U_HOST"] ?? DEFAULT_C64U_HOST;
 
   // Preflight
   console.log("=== Preflight ===");

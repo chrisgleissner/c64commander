@@ -38,6 +38,7 @@ stages that were therefore not run. Do not describe the work as verified.
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `preflight`  | Phone attached, Ultimate answering, WebView reachable over CDP, speaker unmuted and at or below the volume ceiling                             | There is no rig in CI, and every later stage misreads a bad rig as a defect                                |
 | `input`      | A held direction keeps moving the C64, and the key-to-direction mapping survives rotation                                                      | The assertion is made at the CIA, at the far end of a network relay                                        |
+| `search-latency` | App-wide search on the handset: p95 keystroke-to-result under 100 ms over 120 samples                                                         | A wall-clock budget inside Vitest flakes on a shared runner, and the work gate beside it proves the algorithm, not what this handset does with it |
 | `wire`       | What the Ultimate **sends**, measured on the host's own link: sequence loss and inter-arrival jitter                                           | Rules the network in or out before anything is blamed on the app — the most common wrong turn in this area |
 | `av-clarity` | The tone ladder as it leaves the phone's speaker, graded per note for length, pitch, dropouts and correct progression                          | Needs a microphone in a room and a real speaker                                                            |
 | `av-latency` | How long a sound takes to get from the Ultimate's wire to the air in front of the phone                                                        | Needs the multicast and the microphone captured against one clock                                          |
@@ -172,7 +173,8 @@ the point of running them together.
 
 Measured on this rig (Pixel 4 on Wi-Fi, C64 Ultimate fw 1.2.0, host on Ethernet), 2026-08-04.
 
-A full run on the shipped build, with the gate setting Listen and Watch itself:
+A full run on the shipped build, with the gate setting Listen and Watch itself. The
+`search-latency` stage was added on 2026-08-29 and so has no row here:
 
 | Stage        | Result                                                                           |
 | ------------ | -------------------------------------------------------------------------------- |

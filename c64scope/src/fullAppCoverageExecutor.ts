@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { DEFAULT_C64U_HOST } from "./deviceHosts.js";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -119,7 +120,7 @@ export async function main(): Promise<void> {
 
   const serialInput = process.env["ANDROID_SERIAL"];
   const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolvePreferredPhysicalTestDeviceSerial();
-  const c64uHost = process.env["C64U_HOST"] ?? "192.168.1.13";
+  const c64uHost = process.env["C64U_HOST"] ?? DEFAULT_C64U_HOST;
 
   const preflight = await runPreflight({ deviceSerial: serial, c64uHost });
   if (!preflight.ready) {
