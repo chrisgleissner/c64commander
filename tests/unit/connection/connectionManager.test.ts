@@ -555,6 +555,42 @@ describe("connectionManager", () => {
     expect(isRealDeviceStickyLockEnabled()).toBe(true);
   });
 
+  it("pinDemoModeByUserChoice bypasses the sticky real-device lock (explicit Preview Demo Mode)", async () => {
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+      isRealDeviceStickyLockEnabled,
+      pinDemoModeByUserChoice,
+    } = await import("../../../src/lib/connection/connectionManager");
+
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(isRealDeviceStickyLockEnabled()).toBe(true);
+
+    // Unlike an automatic fallback (which must stay locked out — see the sibling test above),
+    // an explicit "Preview Demo Mode" choice is a deliberate opt-in and must always work, even
+    // with a real device connected. Without the fix this fell through to OFFLINE_NO_DEMO instead.
+    await pinDemoModeByUserChoice();
+
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+    expect(isRealDeviceStickyLockEnabled()).toBe(false);
+  });
+
   it("rejects probe payload without product identity", async () => {
     const { probeOnce } = await import("../../../src/lib/connection/connectionManager");
     localStorage.removeItem("c64u_has_password");

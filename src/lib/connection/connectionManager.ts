@@ -713,11 +713,19 @@ const clearPinnedDemoMode = () => {
   persistDemoModePinnedState(false);
 };
 
+/**
+ * Explicit, user-initiated entry into Demo Mode — reachable from the discovery-failure
+ * interstitial and from a direct "Preview Demo Mode" action in Settings. Unlike the automatic
+ * fallback, this bypasses the sticky real-device lock: that lock exists to stop a transient
+ * probe blip from yanking a user away from hardware they are actively using, but a deliberate
+ * choice to preview Demo Mode is not a blip, and a device that is merely reachable must not be
+ * able to trap the user out of Demo Mode.
+ */
 export async function pinDemoModeByUserChoice() {
   demoModePinnedByUser = true;
   persistDemoModePinnedState(true);
   dismissDemoInterstitial();
-  await transitionToDemoActive("manual");
+  await transitionToDemoActive("manual", { bypassStickyRealDeviceLock: true });
 }
 
 const cancelActiveDiscovery = () => {
@@ -980,12 +988,16 @@ const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
 const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
   trigger !== "background" && !demoInterstitialShownThisSession;
 
-const transitionToDemoActive = async (trigger: DiscoveryTrigger, options: { showInterstitial?: boolean } = {}) => {
-  if (stickyRealDeviceLock) {
+const transitionToDemoActive = async (
+  trigger: DiscoveryTrigger,
+  options: { showInterstitial?: boolean; bypassStickyRealDeviceLock?: boolean } = {},
+) => {
+  if (stickyRealDeviceLock && !options.bypassStickyRealDeviceLock) {
     addLog("warn", "Sticky real-device lock active; skipping demo mode transition", { trigger });
     await transitionToOfflineNoDemo(trigger);
     return;
   }
+  if (options.bypassStickyRealDeviceLock) stickyRealDeviceLock = false;
   cancelActiveDiscovery();
   resetInteractionState("transition-demo-active");
 
