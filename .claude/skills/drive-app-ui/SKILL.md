@@ -10,7 +10,14 @@ description: >-
 
 # Drive the app on the device
 
-Two mechanisms, used for different things.
+Two mechanisms, used for different things. Load the `droidctl` skill first — it's the
+interface for the plain tap/screenshot/shell primitives these build on or substitute for.
+
+`taptid.sh` (a local, git-ignored helper under `docs/agentic/`, predating `droidctl`) adds a
+hit-test-before-tap step that matters for this app's overlays, but shells out to raw `adb`
+internally rather than `droid_input.tap` — a known gap in that local script, not a reason to
+write new raw-adb code elsewhere. For a plain tap with no overlay risk (already `--check`ed,
+or a fixed-position control), use `droid_input.tap` directly instead.
 
 ## Tapping — `taptid.sh`
 
@@ -22,8 +29,9 @@ cd docs/agentic/hil-rc4
 ```
 
 It scrolls the element into the interactive band with a real swipe and **hit-tests with
-`elementFromPoint` before tapping**, so an open sheet can never silently swallow the tap.
-Raw `adb shell input tap` lands on whatever overlay happens to be there.
+`elementFromPoint` before tapping**, so an open sheet can never silently swallow the tap. A
+plain tap — whether `droid_input.tap` or raw `adb shell input tap` — lands on whatever
+overlay happens to be there, hit-test or not.
 
 **When a visible, enabled button "does nothing", hit-test it before blaming the handler.**
 A fixed toast viewport once sat over the Play transport and ate every tap; two "the button
@@ -94,9 +102,9 @@ a testid:
   .map(e=>e.getAttribute("data-testid")))]; return JSON.stringify(ids.filter(t=>/radio|station/i.test(t)));})()'
 ```
 
-A screenshot (`adb exec-out screencap -p > out.png`) is worth reading when the DOM is
-confusing, but confirm state from the DOM — the screenshot cannot tell you whether a control
-is disabled, pressed, or covered.
+A screenshot (`droid_capture.screenshot`) is worth reading when the DOM is confusing, but
+confirm state from the DOM — the screenshot cannot tell you whether a control is disabled,
+pressed, or covered.
 
 ## Verifying an action landed
 

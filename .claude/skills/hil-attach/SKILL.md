@@ -11,17 +11,20 @@ description: >-
 
 # Attach to the app on the Pixel
 
+Load the `droidctl` skill first if you have not — it is the interface for everything here
+that isn't CDP itself.
+
 Everything on-device is read through the WebView's CDP socket. The forward is fragile in
 one specific way: **it survives nothing**. Re-attach after every install, every force-stop
 and every crash.
 
 ## Attach
 
-```bash
-PID=$(adb shell 'cat /proc/net/unix | grep -o "webview_devtools_remote_[0-9]*"' | sort -u | head -1)
-adb forward --remove-all 2>/dev/null
-adb forward tcp:9333 localabstract:$PID
-```
+Use `droid_device.forward_webview` (`targetId`, `package`, `localPort: 9333`) — it resolves
+the WebView DevTools PID itself and disambiguates between the two installed editions by
+`package`, which a manual `adb forward` cannot do (see droidctl skill, "Common mistakes").
+`replaceExisting` defaults true, so it does not need a separate `adb forward --remove-all`
+first.
 
 Then verify — never assume:
 
@@ -39,8 +42,10 @@ git-ignored), run `node scripts/bughunt-cdp.mjs eval '<expr>'` from the repo roo
 cat /etc/hosts | grep -E "c64u|u64"        # IPs are DHCP-volatile; a stale one looks like a dropout
 curl -s -o /dev/null -w "%{http_code} %{time_total}s\n" --max-time 5 \
      -H "X-Password: pwd" http://<c64u>/v1/version
-adb devices -l
 ```
+
+Then `droid_target.list_targets` to confirm the phone is actually attached and in state
+`device` (not `unauthorized`/offline).
 
 A c64u answering the host in ~15 ms while the app's badge says unhealthy is the app's
 main thread starving, not the device. Check from the host before believing the badge.
@@ -48,29 +53,32 @@ main thread starving, not the device. Check from the host before believing the b
 ## Four ways this goes wrong
 
 **Two editions are installed.** `uk.gleissner.c64commander` and `uk.gleissner.c64uremote`
-both exist and both open a devtools socket. `head -1` may pick the wrong one, and worse,
-the other edition may still be holding an AudioTrack and streaming — which corrupts any
-audio measurement. Force-stop the one you are not using:
+both exist and both open a devtools socket — `droid_device.forward_webview`'s `package`
+disambiguates which one you forward to, but the OTHER edition may still be holding an
+AudioTrack and streaming in the background, which corrupts any audio measurement. Check
+what's alive and stop the one you are not using:
 
-```bash
-adb shell ps -A -o PID,NAME | grep c64          # see which are alive
-adb shell am force-stop uk.gleissner.c64uremote
+```
+droid_device.run_shell(command: ["sh", "-c", "ps -A -o PID,NAME | grep c64"])
+droid_app.stop_app(package: "uk.gleissner.c64uremote")
 ```
 
 **The app is backgrounded.** CDP evals time out (`fatal: timeout Runtime.evaluate`) and
-the audio path may be throttled. Check and foreground it:
+the audio path may be throttled, with no crash or ANR logged to explain it. Check and
+foreground it:
 
-```bash
-adb shell dumpsys activity activities | grep -m1 topResumedActivity
-adb shell monkey -p uk.gleissner.c64commander -c android.intent.category.LAUNCHER 1
+```
+droid_device.run_shell(command: ["sh", "-c", "dumpsys activity activities | grep -m1 topResumedActivity"])
+droid_app.start_app(package: "uk.gleissner.c64commander")
 ```
 
 **A build just landed.** `./build --skip-tests --install-apk` replaces the process. Sleep
 6–8 s after it finishes, then re-attach. An eval against the old forward either fails or
 reads nothing useful.
 
-**`adb devices` is empty but `lsusb` shows the phone.** It has dropped into MIDI USB mode.
-Only a physical replug fixes it — ask the user rather than burning time diagnosing.
+**`droid_target.list_targets` shows the phone offline but `lsusb` (host-level, not a
+droidctl concern) shows it physically present.** It has dropped into MIDI USB mode. Only a
+physical replug fixes it — ask the user rather than burning time diagnosing.
 
 ## Reading state
 
