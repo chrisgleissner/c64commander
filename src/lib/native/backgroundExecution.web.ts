@@ -6,7 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { BackgroundExecutionPlugin } from "./backgroundExecution";
+import type {
+  BackgroundExecutionEvents,
+  BackgroundExecutionPermissions,
+  BackgroundExecutionPlugin,
+} from "./backgroundExecution";
 import { addLog } from "@/lib/logging";
 
 /**
@@ -67,6 +71,15 @@ export class BackgroundExecutionWeb implements BackgroundExecutionPlugin {
     }
   }
 
+  /** The browser has no foreground-service notification, so there is nothing to ask for. */
+  async checkPermissions(): Promise<BackgroundExecutionPermissions> {
+    return { notifications: "granted" };
+  }
+
+  async requestPermissions(): Promise<BackgroundExecutionPermissions> {
+    return { notifications: "granted" };
+  }
+
   async setDueAtMs(options: { dueAtMs: number | null }): Promise<void> {
     if (this.dueTimer !== null) {
       window.clearTimeout(this.dueTimer);
@@ -97,20 +110,23 @@ export class BackgroundExecutionWeb implements BackgroundExecutionPlugin {
     }, delayMs);
   }
 
-  async addListener(
-    eventName: "backgroundAutoSkipDue",
-    listenerFunc: (event: { dueAtMs: number; firedAtMs: number }) => void,
+  async addListener<E extends keyof BackgroundExecutionEvents>(
+    eventName: E,
+    listenerFunc: (event: BackgroundExecutionEvents[E]) => void,
   ): Promise<{ remove: () => Promise<void> }> {
+    // The browser has no media buttons and no foreground service, so only the due timer fires here.
     if (eventName !== "backgroundAutoSkipDue") {
       addLog("warn", "Unsupported web background execution listener event", {
         source: "background-execution-web",
         eventName,
       });
+      return { remove: async () => undefined };
     }
-    this.listeners.add(listenerFunc);
+    const listener = listenerFunc as (event: { dueAtMs: number; firedAtMs: number }) => void;
+    this.listeners.add(listener);
     return {
       remove: async () => {
-        this.listeners.delete(listenerFunc);
+        this.listeners.delete(listener);
       },
     };
   }

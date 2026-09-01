@@ -83,6 +83,7 @@ import {
   stopBackgroundExecution,
 } from "@/lib/native/backgroundExecutionManager";
 import { BackgroundExecution, onBackgroundAutoSkipDue } from "@/lib/native/backgroundExecution";
+import { runTransportCommand } from "@/pages/playFiles/transportCommands";
 
 import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
@@ -633,12 +634,17 @@ export default function PlayFilesPage() {
   // F1 and F3 from anywhere, delivered through the latch (spec.md 9.5). Held until the stored
   // playlist has been restored: usePlaybackPersistence reads it in an effect declared below this
   // one, so a command drained on mount ran against an empty playlist and did nothing.
-  useTransportCommands((command) => {
-    if (command === "next") void handleNext();
-    else if (command === "play") {
-      if (!isPlaying) void handlePlay();
-    } else void handlePauseResume();
-  }, playlist.length > 0);
+  useTransportCommands(
+    (command) =>
+      runTransportCommand(command, {
+        isPlaying,
+        play: () => void handlePlay(),
+        pauseResume: () => void handlePauseResume(),
+        next: () => void handleNext(),
+        stop: () => void handleStop(),
+      }),
+    playlist.length > 0,
+  );
   const sleepTimer = useSleepTimer({
     onExpire: () => {
       void handleStop();

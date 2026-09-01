@@ -9,19 +9,39 @@
 import { registerPlugin } from "@capacitor/core";
 import { getActiveAction } from "@/lib/tracing/actionTrace";
 import { resolveNativeTraceContext, type NativeTraceContext } from "@/lib/native/nativeTraceContext";
+import type { TransportCommand } from "@/lib/input/latchedCommandBus";
 
 export type BackgroundAutoSkipDueEvent = {
   dueAtMs: number;
   firedAtMs: number;
 };
 
+/** A media button press (headset, lock screen, Bluetooth) relayed by the foreground service. */
+export type BackgroundTransportCommandEvent = {
+  command: TransportCommand;
+};
+
+/** Alias declared by BackgroundExecutionPlugin for android.permission.POST_NOTIFICATIONS. */
+export const NOTIFICATIONS_PERMISSION_ALIAS = "notifications";
+
+export type PermissionState = "granted" | "denied" | "prompt" | "prompt-with-rationale";
+
+export type BackgroundExecutionPermissions = { notifications: PermissionState };
+
+export type BackgroundExecutionEvents = {
+  backgroundAutoSkipDue: BackgroundAutoSkipDueEvent;
+  backgroundTransportCommand: BackgroundTransportCommandEvent;
+};
+
 export type BackgroundExecutionPlugin = {
   start: (options?: { traceContext?: NativeTraceContext }) => Promise<void>;
   stop: (options?: { traceContext?: NativeTraceContext }) => Promise<void>;
   setDueAtMs: (options: { dueAtMs: number | null; traceContext?: NativeTraceContext }) => Promise<void>;
-  addListener: (
-    eventName: "backgroundAutoSkipDue",
-    listenerFunc: (event: BackgroundAutoSkipDueEvent) => void,
+  checkPermissions: () => Promise<BackgroundExecutionPermissions>;
+  requestPermissions: (options: { permissions: string[] }) => Promise<BackgroundExecutionPermissions>;
+  addListener: <E extends keyof BackgroundExecutionEvents>(
+    eventName: E,
+    listenerFunc: (event: BackgroundExecutionEvents[E]) => void,
   ) => Promise<{ remove: () => Promise<void> }>;
 };
 
@@ -45,9 +65,15 @@ export const BackgroundExecution: BackgroundExecutionPlugin = {
       ...options,
       traceContext: resolveNativeTraceContext(getActiveAction()),
     }),
+  checkPermissions: () => plugin.checkPermissions(),
+  requestPermissions: (options) => plugin.requestPermissions(options),
   addListener: (eventName, listenerFunc) => plugin.addListener(eventName, listenerFunc),
 };
 
 export const onBackgroundAutoSkipDue = async (listener: (event: BackgroundAutoSkipDueEvent) => void) => {
   return await BackgroundExecution.addListener("backgroundAutoSkipDue", listener);
+};
+
+export const onBackgroundTransportCommand = async (listener: (command: TransportCommand) => void) => {
+  return await BackgroundExecution.addListener("backgroundTransportCommand", (event) => listener(event.command));
 };
