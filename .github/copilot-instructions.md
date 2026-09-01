@@ -41,6 +41,10 @@ narrow scope but must not violate `REVIEW.md` or `AGENTS.md`.
    ones.
 7. **Don't revert unrelated worktree changes** — assume a concurrent agent owns them
    unless the task says otherwise.
+8. **All Android device automation goes through the `droidctl` MCP server, never raw
+   `adb`.** Load the `droidctl` skill before any Pixel 4 task — install/uninstall, taps,
+   shell, screenshots, logcat all have a droidctl tool; see AGENTS.md "Device automation
+   goes through droidctl, never raw adb".
 
 ## Quick discovery
 
@@ -54,6 +58,7 @@ narrow scope but must not violate `REVIEW.md` or `AGENTS.md`.
 - **UX guidance**: `docs/ux-guidelines.md`
 - **CTA / keypad inventory**: `docs/cta-inventory.md`
 - **Maestro guidance**: `docs/testing/maestro.md`
+- **Android device automation**: the `droidctl` skill — never raw `adb`
 - **UI pages**: `src/pages/` · **Navigation**: `src/components/TabBar.tsx`
 - **Core API client**: `src/lib/c64api.ts` · **Hooks**: `src/hooks/`
 - **Song sources**: `src/lib/sources/` · **HVSC module**: `src/lib/hvsc/`,
@@ -76,7 +81,7 @@ narrow scope but must not violate `REVIEW.md` or `AGENTS.md`.
 Use the smallest honest subset for your change; see AGENTS.md for the full matrix.
 
 ```bash
-npm install
+npm ci          # NOT `npm install` — that prunes @emnapi and rewrites the lockfile (AGENTS.md)
 npm run lint    # format:check:ts + eslint + variant/feature-flag/bundle checks
 npm run test    # Vitest unit
 npm run build

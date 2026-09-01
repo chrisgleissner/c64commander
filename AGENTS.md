@@ -223,7 +223,12 @@ Before declaring any task complete, deploy the most recent built APK from
 - Prefer the adb-attached Pixel 4 with serial prefix `9B0` when it is present.
 - Attempt installation of the newest APK first.
 - If installation fails because an earlier installed copy blocks the update, uninstall the
-  existing `uk.gleissner.c64commander` package from that Pixel 4 and retry.
+  existing `uk.gleissner.c64commander` package from that Pixel 4 and retry. **Do this through
+  droidctl** (`droid_app.install_app`, `droid_app.uninstall_app`) — see
+  [Device automation goes through droidctl](#device-automation-goes-through-droidctl-never-raw-adb).
+  `install_app`'s `allowDowngrade` will not, by itself, get past `INSTALL_FAILED_VERSION_DOWNGRADE`
+  on a retail/`user`-build phone (only a `userdebug` device honors that flag from either client);
+  `uninstall_app` then `install_app` is the correct sequence there, same as any other device.
 - Launch the newly deployed build and validate the user-visible behavior there for the
   touched feature area before closing the task.
 - Record the deployment and on-device validation result in the completion summary. Do not
@@ -354,6 +359,29 @@ For these loops:
   are complete or explicitly blocked.
 
 ## Hardware in the loop
+
+### Device automation goes through droidctl, never raw adb
+
+**For all Android device work, `droidctl` is the interface. Not raw `adb`, not a hand-rolled
+wrapper script.** This is what PR #400 ("Migrate every caller to droidctl and retire the
+third-party device server") established, and it is easy to violate by accident: several
+existing docs and skills still describe raw `adb` invocations because they predate `droidctl`,
+and `droidctl`'s own tool surface covers more than it looks like at a glance
+(`droid_app.install_app` / `uninstall_app` with `allowDowngrade` / `tolerateMissing`, not just
+launch/stop).
+
+Load the `droidctl` skill before any Android device task — it is the single canonical reference
+and states the policy in one place instead of scattering it. If a task genuinely needs a raw
+`adb` call because `droidctl` has no equivalent (rare — `droid_device.run_shell` is itself a
+`droidctl` call and covers most gaps), say so explicitly and name what's missing; do not
+silently drop to `Bash` + `adb` because it is the reflex. `docs/agentic/hil-rc4/taptid.sh` and
+similar locally-generated, git-ignored helper scripts predate `droidctl` and still shell out to
+raw `adb` internally — that is a known gap in local scratch tooling, not sanctioned guidance to
+follow elsewhere.
+
+One thing `droidctl` cannot do: evaluate JavaScript inside the app's WebView over CDP (use `node
+scripts/bughunt-cdp.mjs eval`, per the `hil-attach` skill) — this is the one place raw tooling
+outside `droidctl` is expected, not a loophole.
 
 ### The hardware that exists — and the keypad handset, which does not
 

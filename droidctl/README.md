@@ -59,7 +59,7 @@ device attaches costs 23.5 ms. A target not in state `device` is never queried a
 | Domain          | Tools                                                                                                         |
 | --------------- | ------------------------------------------------------------------------------------------------------------- |
 | `droid_target`  | `list_targets`, `describe_target`                                                                             |
-| `droid_app`     | `install_app`, `uninstall_app`, `launch_app`, `stop_app`, `clear_app_data`, `write_app_file`, `read_app_file` |
+| `droid_app`     | `install_app`, `uninstall_app`, `start_app`, `stop_app`, `clear_app_data`, `write_app_file`, `read_app_file` |
 | `droid_input`   | `tap`, `swipe`, `type_text`, `press_key`                                                                      |
 | `droid_capture` | `screenshot`, `ui_hierarchy`, `start_recording`, `stop_recording`, `logcat`                                   |
 | `droid_assert`  | `assert_visible`, `assert_not_visible`                                                                        |
