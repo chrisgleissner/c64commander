@@ -10,7 +10,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { defaultPhysicalTestDevice } from "../src/deviceRegistry.js";
+
 import { LabStateStore } from "../src/labState.js";
 import { createLogger } from "../src/logger.js";
 import { ScopeSessionStore } from "../src/sessionStore.js";
@@ -37,7 +37,7 @@ describe("tool modules", () => {
       await toolRegistry.invoke("scope_lab.report_peer_health", {
         peer: "mobile_controller",
         level: "healthy",
-        detail: `Device ${defaultPhysicalTestDevice.serialOrPrefix}... online`,
+        detail: "Device 9B0... online",
       });
       await toolRegistry.invoke("scope_lab.report_peer_health", {
         peer: "c64bridge",

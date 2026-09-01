@@ -12,14 +12,14 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const resolveAdbSerialMock = vi.fn();
-const resolvePreferredPhysicalTestDeviceSerialMock = vi.fn();
+const resolveConfiguredDeviceSerialMock = vi.fn();
 const runPreflightMock = vi.fn();
 const discoverMirroredCorporaMock = vi.fn();
 const runCaseMock = vi.fn();
 
 vi.mock("../src/deviceRegistry.js", () => ({
   resolveAdbSerial: resolveAdbSerialMock,
-  resolvePreferredPhysicalTestDeviceSerial: resolvePreferredPhysicalTestDeviceSerialMock,
+  resolveConfiguredDeviceSerial: resolveConfiguredDeviceSerialMock,
 }));
 
 vi.mock("../src/preflight.js", () => ({
@@ -54,7 +54,7 @@ describe("agentic exploratory wave 1", () => {
     vi.resetModules();
     vi.restoreAllMocks();
     resolveAdbSerialMock.mockReset();
-    resolvePreferredPhysicalTestDeviceSerialMock.mockReset();
+    resolveConfiguredDeviceSerialMock.mockReset();
     runPreflightMock.mockReset();
     discoverMirroredCorporaMock.mockReset();
     runCaseMock.mockReset();
@@ -100,7 +100,7 @@ describe("agentic exploratory wave 1", () => {
       },
     };
 
-    resolvePreferredPhysicalTestDeviceSerialMock.mockResolvedValue("serial-wave1");
+    resolveConfiguredDeviceSerialMock.mockResolvedValue("serial-wave1");
     runPreflightMock.mockResolvedValue({
       ready: true,
       checks: [{ name: "adb", status: "pass", detail: "ok" }],
@@ -143,7 +143,7 @@ describe("agentic exploratory wave 1", () => {
 
     try {
       await main();
-      expect(resolvePreferredPhysicalTestDeviceSerialMock).toHaveBeenCalledTimes(1);
+      expect(resolveConfiguredDeviceSerialMock).toHaveBeenCalledTimes(1);
       expect(runPreflightMock).toHaveBeenCalledWith({ deviceSerial: "serial-wave1", c64uHost: "c64u" });
       expect(discoverMirroredCorporaMock).toHaveBeenCalledWith(tempRoot, "c64u");
       expect(runCaseMock).toHaveBeenCalledTimes(4);
@@ -195,7 +195,7 @@ describe("agentic exploratory wave 1", () => {
 
     await expect(main()).rejects.toThrow(/Wave 1 preflight failed: adb: missing; c64u: slow/);
     expect(resolveAdbSerialMock).toHaveBeenCalledWith("serial-explicit");
-    expect(resolvePreferredPhysicalTestDeviceSerialMock).not.toHaveBeenCalled();
+    expect(resolveConfiguredDeviceSerialMock).not.toHaveBeenCalled();
     expect(discoverMirroredCorporaMock).not.toHaveBeenCalled();
     expect(runCaseMock).not.toHaveBeenCalled();
   });
@@ -203,7 +203,7 @@ describe("agentic exploratory wave 1", () => {
   it("includes resolved hvsc details and default repeat handling when overrides are absent", async () => {
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "c64scope-wave1-hvsc-"));
     await mkdir(tempRoot, { recursive: true });
-    resolvePreferredPhysicalTestDeviceSerialMock.mockResolvedValue("serial-default");
+    resolveConfiguredDeviceSerialMock.mockResolvedValue("serial-default");
     runPreflightMock.mockResolvedValue({
       ready: true,
       checks: [{ name: "adb", status: "pass", detail: "ok" }],
@@ -281,7 +281,7 @@ describe("agentic exploratory wave 1", () => {
 
   it("rejects invalid repeat overrides before running preflight", async () => {
     process.env["REPEAT"] = "not-a-number";
-    resolvePreferredPhysicalTestDeviceSerialMock.mockResolvedValue("serial-invalid-repeat");
+    resolveConfiguredDeviceSerialMock.mockResolvedValue("serial-invalid-repeat");
 
     const { main } = await import("../src/agenticExploratoryWave1.js");
 

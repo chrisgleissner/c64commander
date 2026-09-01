@@ -12,7 +12,7 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const resolveAdbSerialMock = vi.fn();
-const resolvePreferredPhysicalTestDeviceSerialMock = vi.fn();
+const resolveConfiguredDeviceSerialMock = vi.fn();
 const runPreflightMock = vi.fn();
 const generateReportMock = vi.fn();
 const collectHardwareInfoMock = vi.fn();
@@ -20,7 +20,7 @@ const runCaseMock = vi.fn();
 
 vi.mock("../src/deviceRegistry.js", () => ({
   resolveAdbSerial: resolveAdbSerialMock,
-  resolvePreferredPhysicalTestDeviceSerial: resolvePreferredPhysicalTestDeviceSerialMock,
+  resolveConfiguredDeviceSerial: resolveConfiguredDeviceSerialMock,
 }));
 
 vi.mock("../src/preflight.js", () => ({
@@ -70,7 +70,7 @@ describe("autonomous validation", () => {
     vi.resetModules();
     vi.restoreAllMocks();
     resolveAdbSerialMock.mockReset();
-    resolvePreferredPhysicalTestDeviceSerialMock.mockReset();
+    resolveConfiguredDeviceSerialMock.mockReset();
     runPreflightMock.mockReset();
     generateReportMock.mockReset();
     collectHardwareInfoMock.mockReset();
@@ -90,7 +90,7 @@ describe("autonomous validation", () => {
   });
 
   it("stops early when preflight is not ready", async () => {
-    resolvePreferredPhysicalTestDeviceSerialMock.mockResolvedValue("serial-1");
+    resolveConfiguredDeviceSerialMock.mockResolvedValue("serial-1");
     runPreflightMock.mockResolvedValue({
       ready: false,
       checks: [{ name: "adb", status: "fail", detail: "missing" }],
@@ -170,7 +170,7 @@ describe("autonomous validation", () => {
     const tempRoot = await mkdtemp(path.join(os.tmpdir(), "c64scope-auto-incomplete-"));
     process.chdir(tempRoot);
 
-    resolvePreferredPhysicalTestDeviceSerialMock.mockResolvedValue("serial-3");
+    resolveConfiguredDeviceSerialMock.mockResolvedValue("serial-3");
     runPreflightMock.mockResolvedValue({
       ready: true,
       checks: [{ name: "adb", status: "pass", detail: "ok" }],

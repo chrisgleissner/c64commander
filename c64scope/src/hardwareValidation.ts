@@ -27,7 +27,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "./deviceRegistry.js";
+import { resolveAdbSerial, resolveConfiguredDeviceSerial } from "./deviceRegistry.js";
 import { classifyRun, type AssertionRecord } from "./oraclePolicy.js";
 import { runPreflight } from "./preflight.js";
 import { ScopeSessionStore } from "./sessionStore.js";
@@ -396,7 +396,7 @@ async function runCase(
 
 export async function main(): Promise<void> {
   const serialInput = process.env["ANDROID_SERIAL"];
-  const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolvePreferredPhysicalTestDeviceSerial();
+  const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolveConfiguredDeviceSerial();
   const c64uHost = process.env["C64U_HOST"] ?? DEFAULT_C64U_HOST;
 
   // Preflight

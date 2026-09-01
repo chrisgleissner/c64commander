@@ -12,13 +12,13 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const resolveAdbSerialMock = vi.fn();
-const resolvePreferredPhysicalTestDeviceSerialMock = vi.fn();
+const resolveConfiguredDeviceSerialMock = vi.fn();
 const runPreflightMock = vi.fn();
 const runCaseMock = vi.fn();
 
 vi.mock("../src/deviceRegistry.js", () => ({
   resolveAdbSerial: resolveAdbSerialMock,
-  resolvePreferredPhysicalTestDeviceSerial: resolvePreferredPhysicalTestDeviceSerialMock,
+  resolveConfiguredDeviceSerial: resolveConfiguredDeviceSerialMock,
 }));
 
 vi.mock("../src/preflight.js", () => ({
@@ -95,7 +95,7 @@ describe("full app coverage executor", () => {
     await writeFile(path.join(docsRoot, "prompt-2.md"), "# prompt 2", "utf-8");
     process.chdir(tempRoot);
 
-    resolvePreferredPhysicalTestDeviceSerialMock.mockResolvedValue("serial-1");
+    resolveConfiguredDeviceSerialMock.mockResolvedValue("serial-1");
     runPreflightMock.mockResolvedValue({
       ready: true,
       checks: [{ name: "adb", status: "pass", detail: "ok" }],
@@ -136,7 +136,7 @@ describe("full app coverage executor", () => {
     await writeFile(path.join(docsRoot, "prompt-1.md"), "# prompt 1", "utf-8");
     process.chdir(tempRoot);
 
-    resolvePreferredPhysicalTestDeviceSerialMock.mockResolvedValue("serial-1");
+    resolveConfiguredDeviceSerialMock.mockResolvedValue("serial-1");
     runPreflightMock.mockResolvedValue({
       ready: true,
       checks: [{ name: "adb", status: "pass", detail: "ok" }],

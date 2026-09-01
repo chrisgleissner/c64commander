@@ -30,7 +30,7 @@ import { DEFAULT_C64U_HOST } from "./deviceHosts.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "./deviceRegistry.js";
+import { resolveAdbSerial, resolveConfiguredDeviceSerial } from "./deviceRegistry.js";
 import { runPreflight } from "./preflight.js";
 import { ALL_CASES } from "./validation/cases/index.js";
 import { generateReport } from "./validation/report.js";
@@ -53,7 +53,7 @@ export function parseTrackMode(input: string | undefined): ValidationTrackMode {
 
 export async function main(): Promise<void> {
   const serialInput = process.env["ANDROID_SERIAL"];
-  const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolvePreferredPhysicalTestDeviceSerial();
+  const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolveConfiguredDeviceSerial();
   const c64uHost = process.env["C64U_HOST"] ?? DEFAULT_C64U_HOST;
   const repeatCount = parseInt(process.env["REPEAT"] ?? "1", 10);
   const trackMode = parseTrackMode(process.env["VALIDATION_TRACK"]);

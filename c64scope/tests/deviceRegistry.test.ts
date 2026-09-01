@@ -8,11 +8,7 @@
 
 import { execFile } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  physicalTestDevices,
-  resolveAdbSerial,
-  resolvePreferredPhysicalTestDeviceSerial,
-} from "../src/deviceRegistry.js";
+import { resolveAdbSerial, resolveConfiguredDeviceSerial } from "../src/deviceRegistry.js";
 
 vi.mock("node:child_process", () => ({
   execFile: vi.fn(),
@@ -27,183 +23,70 @@ function mockAdbDevicesOutput(output: string): void {
   );
 }
 
-describe("deviceRegistry", () => {
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
+const TWO_DEVICES = [
+  "List of devices attached",
+  "9B081FFAZ001WX         device usb:5-2 product:flame model:Pixel_4",
+  "R5CT123456X            device usb:5-3 product:x1s model:SM_G781B",
+  "",
+].join("\n");
 
-  const restoreRegistry = (snapshot: Array<{ id: string; name: string; serialOrPrefix: string }>) => {
-    snapshot.forEach((device, index) => {
-      (physicalTestDevices as unknown as Array<{ id: string; name: string; serialOrPrefix: string }>)[index] = device;
-    });
-  };
+afterEach(() => {
+  vi.resetAllMocks();
+});
 
-  const withMutatedRegistry = async (
-    mutate: (devices: Array<{ id: string; name: string; serialOrPrefix: string }>) => void,
-    run: () => Promise<void>,
-  ) => {
-    const mutableDevices = physicalTestDevices as unknown as Array<{
-      id: string;
-      name: string;
-      serialOrPrefix: string;
-    }>;
-    const snapshot = mutableDevices.map((device) => ({ ...device }));
-    mutate(mutableDevices);
-
-    try {
-      await run();
-    } finally {
-      restoreRegistry(snapshot);
-    }
-  };
-
-  it("passes through full serials without adb lookup", async () => {
-    await expect(resolveAdbSerial("R5C12345678")).resolves.toBe("R5C12345678");
+describe("resolveAdbSerial", () => {
+  it("returns a full serial without consulting adb", async () => {
+    await expect(resolveAdbSerial("9B081FFAZ001WX")).resolves.toBe("9B081FFAZ001WX");
     expect(vi.mocked(execFile)).not.toHaveBeenCalled();
   });
 
-  it("resolves a unique serial from a 3-char prefix", async () => {
+  it("expands a prefix that matches exactly one connected device", async () => {
+    mockAdbDevicesOutput(TWO_DEVICES);
+    await expect(resolveAdbSerial("9B0")).resolves.toBe("9B081FFAZ001WX");
+  });
+
+  it("refuses a prefix that matches nothing, and names what is connected", async () => {
+    mockAdbDevicesOutput(TWO_DEVICES);
+    await expect(resolveAdbSerial("ZZZ")).rejects.toThrow(/9B081FFAZ001WX/);
+  });
+
+  it("refuses a prefix that matches more than one device rather than picking", async () => {
     mockAdbDevicesOutput(
-      [
-        "List of devices attached",
-        "R5C12345678\tdevice product:x model:Galaxy device:y transport_id:1",
-        "emulator-5554\tdevice product:sdk model:Android device:emu transport_id:2",
-      ].join("\n"),
+      ["List of devices attached", "9B0AAAAAAAAAAA         device", "9B0BBBBBBBBBBB         device", ""].join("\n"),
     );
+    await expect(resolveAdbSerial("9B0")).rejects.toThrow(/Multiple/);
+  });
+});
 
-    await expect(resolveAdbSerial("R5C")).resolves.toBe("R5C12345678");
+/**
+ * This used to walk a hardcoded priority list of two Samsungs. Neither is on this
+ * bench, and the Pixel that is was not in the list, so it resolved nothing while
+ * looking deliberate.
+ */
+describe("resolveConfiguredDeviceSerial", () => {
+  it("uses the serial named in ANDROID_SERIAL", async () => {
+    mockAdbDevicesOutput(TWO_DEVICES);
+    await expect(resolveConfiguredDeviceSerial({ ANDROID_SERIAL: "9B081FFAZ001WX" })).resolves.toBe("9B081FFAZ001WX");
   });
 
-  it("fails when no connected serial matches the prefix", async () => {
-    mockAdbDevicesOutput(
-      ["List of devices attached", "emulator-5554\tdevice product:sdk model:Android device:emu transport_id:2"].join(
-        "\n",
-      ),
-    );
-
-    await expect(resolveAdbSerial("R5C")).rejects.toThrow('No connected Android device matched prefix "R5C"');
+  it("accepts a prefix there, and still refuses an ambiguous one", async () => {
+    mockAdbDevicesOutput(TWO_DEVICES);
+    await expect(resolveConfiguredDeviceSerial({ ANDROID_SERIAL: "9B0" })).resolves.toBe("9B081FFAZ001WX");
   });
 
-  it("fails when multiple connected serials match the prefix", async () => {
-    mockAdbDevicesOutput(
-      [
-        "List of devices attached",
-        "R5C12345678\tdevice product:x model:Galaxy device:y transport_id:1",
-        "R5CABCDEFGH\tdevice product:x model:Galaxy device:y transport_id:3",
-      ].join("\n"),
-    );
-
-    await expect(resolveAdbSerial("R5C")).rejects.toThrow(
-      'Multiple connected Android devices matched prefix "R5C": R5C12345678, R5CABCDEFGH',
-    );
+  it("refuses to choose when no device is named, and lists what is connected", async () => {
+    mockAdbDevicesOutput(TWO_DEVICES);
+    await expect(resolveConfiguredDeviceSerial({})).rejects.toThrow(/No Android device was named/);
+    await expect(resolveConfiguredDeviceSerial({})).rejects.toThrow(/9B081FFAZ001WX/);
   });
 
-  it("ignores non-device adb rows when resolving prefixes", async () => {
-    mockAdbDevicesOutput(
-      [
-        "List of devices attached",
-        "R5CUNAUTHORIZED\tunauthorized usb:1-1 transport_id:4",
-        "R5COFFLINE\toffline transport_id:5",
-        "R5C12345678\tdevice product:x model:Galaxy device:y transport_id:1",
-      ].join("\n"),
-    );
-
-    await expect(resolveAdbSerial("R5C")).resolves.toBe("R5C12345678");
+  it("treats a blank ANDROID_SERIAL as naming nothing", async () => {
+    mockAdbDevicesOutput(TWO_DEVICES);
+    await expect(resolveConfiguredDeviceSerial({ ANDROID_SERIAL: "   " })).rejects.toThrow(/No Android device/);
   });
 
-  it("defines note 3 as primary and s21 fe as fallback", () => {
-    expect(physicalTestDevices[0]).toMatchObject({
-      id: "samsung-galaxy-note-3",
-      serialOrPrefix: "211",
-    });
-    expect(physicalTestDevices[1]).toMatchObject({
-      id: "samsung-galaxy-s21-fe",
-      serialOrPrefix: "R5C",
-    });
-  });
-
-  it("resolves primary device when available", async () => {
-    mockAdbDevicesOutput(
-      [
-        "List of devices attached",
-        "211\tdevice product:hlte model:SM_N9005 device:hlte transport_id:1",
-        "R5C\tdevice product:r9qxeea model:SM_G990B device:r9q transport_id:2",
-      ].join("\n"),
-    );
-
-    await expect(resolvePreferredPhysicalTestDeviceSerial()).resolves.toBe("211");
-  });
-
-  it("prefers an exact configured serial before evaluating fallback prefixes", async () => {
-    await withMutatedRegistry(
-      (devices) => {
-        devices[0] = {
-          ...devices[0],
-          serialOrPrefix: "R5C12345678",
-        };
-      },
-      async () => {
-        mockAdbDevicesOutput(
-          [
-            "List of devices attached",
-            "R5C12345678\tdevice product:r9qxeea model:SM_G990B device:r9q transport_id:1",
-            "211\tdevice product:hlte model:SM_N9005 device:hlte transport_id:2",
-          ].join("\n"),
-        );
-
-        await expect(resolvePreferredPhysicalTestDeviceSerial()).resolves.toBe("R5C12345678");
-      },
-    );
-  });
-
-  it("falls back to s21 fe when primary is unavailable", async () => {
-    mockAdbDevicesOutput(
-      ["List of devices attached", "R5C\tdevice product:r9qxeea model:SM_G990B device:r9q transport_id:2"].join("\n"),
-    );
-
-    await expect(resolvePreferredPhysicalTestDeviceSerial()).resolves.toBe("R5C");
-  });
-
-  it("skips unmatched exact serial selectors and continues to later fallback prefixes", async () => {
-    await withMutatedRegistry(
-      (devices) => {
-        devices[0] = {
-          ...devices[0],
-          serialOrPrefix: "R5C12345678",
-        };
-      },
-      async () => {
-        mockAdbDevicesOutput(
-          [
-            "List of devices attached",
-            "R5CABCDEFGH\tdevice product:r9qxeea model:SM_G990B device:r9q transport_id:2",
-          ].join("\n"),
-        );
-
-        await expect(resolvePreferredPhysicalTestDeviceSerial()).resolves.toBe("R5CABCDEFGH");
-      },
-    );
-  });
-
-  it("fails when multiple fallback devices match a configured prefix", async () => {
-    mockAdbDevicesOutput(
-      [
-        "List of devices attached",
-        "R5C12345678\tdevice product:x model:Galaxy device:y transport_id:1",
-        "R5CABCDEFGH\tdevice product:x model:Galaxy device:y transport_id:2",
-      ].join("\n"),
-    );
-
-    await expect(resolvePreferredPhysicalTestDeviceSerial()).rejects.toThrow(
-      /Multiple connected Android devices matched fallback prefix "R5C"/,
-    );
-  });
-
-  it("fails when no configured physical test device is connected", async () => {
-    mockAdbDevicesOutput(["List of devices attached", "emulator-5554\tdevice product:sdk model:Android"].join("\n"));
-
-    await expect(resolvePreferredPhysicalTestDeviceSerial()).rejects.toThrow(
-      /No configured physical test device is connected/,
-    );
+  it("never picks a device just because it is the only one connected", async () => {
+    mockAdbDevicesOutput(["List of devices attached", "9B081FFAZ001WX         device", ""].join("\n"));
+    await expect(resolveConfiguredDeviceSerial({})).rejects.toThrow(/No Android device was named/);
   });
 });

@@ -9,7 +9,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { resolvePreferredPhysicalTestDeviceSerial } from "../deviceRegistry.js";
+import { resolveConfiguredDeviceSerial } from "../deviceRegistry.js";
 import { runCtaCensus } from "./ctaCensus.js";
 import { DroidctlClient } from "../validation/droidctlClient.js";
 import { resolveWorkspaceRoot, timestampId } from "../fullAppCoverageExecutor.js";
@@ -59,7 +59,7 @@ export function parseDiscoverArgs(args: readonly string[]): DiscoverArgs {
 
 export async function main(): Promise<void> {
   const options = parseDiscoverArgs(process.argv.slice(2));
-  const serial = options.serial ?? (await resolvePreferredPhysicalTestDeviceSerial());
+  const serial = options.serial ?? (await resolveConfiguredDeviceSerial());
   const runId = `cta-discover-${timestampId()}`;
   const artifactRoot = path.join(resolveWorkspaceRoot(), "c64scope", "artifacts", "cta-discover", runId);
   const client = new DroidctlClient();

@@ -9,31 +9,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-export interface PhysicalTestDevice {
-  id: string;
-  name: string;
-  serialOrPrefix: string;
-}
-
-export const physicalTestDevices = [
-  {
-    id: "samsung-galaxy-note-3",
-    name: "Samsung Galaxy Note 3",
-    serialOrPrefix: "211",
-  },
-  {
-    id: "samsung-galaxy-s21-fe",
-    name: "Samsung Galaxy S21 FE",
-    serialOrPrefix: "R5C",
-  },
-] as const satisfies readonly PhysicalTestDevice[];
-
-export const defaultPhysicalTestDevice = physicalTestDevices[0];
 const execFileAsync = promisify(execFile);
-
-if (!defaultPhysicalTestDevice) {
-  throw new Error("Device registry is empty; at least one physical test device is required.");
-}
 
 function parseConnectedDeviceSerials(adbOutput: string): string[] {
   return adbOutput
@@ -71,35 +47,21 @@ export async function resolveAdbSerial(serialOrPrefix: string): Promise<string> 
 }
 
 /**
- * Resolve the preferred physical test device from the connected ADB device list.
- * Uses registry order as priority and falls back to later devices when earlier ones are unavailable.
+ * The device under test is named, never guessed at. This walked a hardcoded priority
+ * list of two Samsungs, neither of which is on this bench, so it resolved nothing
+ * while looking deliberate. ANDROID_SERIAL is adb's own variable, so setting it once
+ * points every runner here and adb itself at the same device.
  */
-export async function resolvePreferredPhysicalTestDeviceSerial(): Promise<string> {
-  const { stdout } = await execFileAsync("adb", ["devices", "-l"]);
-  const connectedSerials = parseConnectedDeviceSerials(stdout);
-
-  for (const device of physicalTestDevices) {
-    const selector = device.serialOrPrefix;
-    if (selector.length > 3) {
-      if (connectedSerials.includes(selector)) {
-        return selector;
-      }
-      continue;
-    }
-
-    const candidates = connectedSerials.filter((serial) => serial.startsWith(selector));
-    if (candidates.length === 1) {
-      return candidates[0]!;
-    }
-    if (candidates.length > 1) {
-      throw new Error(
-        `Multiple connected Android devices matched fallback prefix "${selector}" (${device.name}): ${candidates.join(", ")}`,
-      );
-    }
+export async function resolveConfiguredDeviceSerial(env: NodeJS.ProcessEnv = process.env): Promise<string> {
+  const configured = (env["ANDROID_SERIAL"] ?? "").trim();
+  if (configured) {
+    return resolveAdbSerial(configured);
   }
 
-  const configured = physicalTestDevices.map((d) => `${d.name} [${d.serialOrPrefix}]`).join("; ");
+  const { stdout } = await execFileAsync("adb", ["devices", "-l"]);
+  const connectedSerials = parseConnectedDeviceSerials(stdout);
   throw new Error(
-    `No configured physical test device is connected. Configured: ${configured}. Connected: ${connectedSerials.join(", ") || "(none)"}`,
+    "No Android device was named. Set ANDROID_SERIAL, or pass the serial explicitly. " +
+      `Connected: ${connectedSerials.join(", ") || "(none)"}`,
   );
 }

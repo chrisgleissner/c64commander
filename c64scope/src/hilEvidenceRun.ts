@@ -11,7 +11,7 @@ import { access, cp, mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "./deviceRegistry.js";
+import { resolveAdbSerial, resolveConfiguredDeviceSerial } from "./deviceRegistry.js";
 import { runPreflight } from "./preflight.js";
 import { ScopeSessionStore } from "./sessionStore.js";
 import { adb, isAppInForeground, launchApp, takeScreenshot } from "./validation/helpers.js";
@@ -315,7 +315,7 @@ export async function readDirOrWarn(directoryPath: string): Promise<string[]> {
 export async function main(): Promise<void> {
   const args = parseHilEvidenceArgs(process.argv.slice(2));
   const serialInput = process.env["ANDROID_SERIAL"];
-  const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolvePreferredPhysicalTestDeviceSerial();
+  const serial = serialInput ? await resolveAdbSerial(serialInput) : await resolveConfiguredDeviceSerial();
   const c64uHost = process.env["C64U_HOST"] ?? "c64u";
   const workspaceRoot = resolveWorkspaceRoot();
   const artifactsRoot = resolveHilArtifactsRoot(workspaceRoot, args);

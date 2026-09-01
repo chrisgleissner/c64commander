@@ -17,7 +17,7 @@ import { buildReplaySpec, recordedAction, replayCommand, type RecordedAction } f
 import { pruneSuccessfulRuns } from "./retention.js";
 import { createBaselineState, type StateLedger } from "./stateLedger.js";
 import { CtaStateGraph, stateKey, type CtaStateNode } from "./stateGraph.js";
-import { resolveAdbSerial, resolvePreferredPhysicalTestDeviceSerial } from "../deviceRegistry.js";
+import { resolveAdbSerial, resolveConfiguredDeviceSerial } from "../deviceRegistry.js";
 import { resolveWorkspaceRoot, timestampId } from "../fullAppCoverageExecutor.js";
 import { DroidctlClient } from "../validation/droidctlClient.js";
 import { APP_PACKAGE, gitSha, readFlagValue } from "./runnerCommon.js";
@@ -142,7 +142,7 @@ export function coverageFromFingerprints(
 export async function main(): Promise<void> {
   const args = parseCtaRunnerArgs(process.argv.slice(2));
   const workspaceRoot = resolveWorkspaceRoot();
-  const serial = args.device ? await resolveAdbSerial(args.device) : await resolvePreferredPhysicalTestDeviceSerial();
+  const serial = args.device ? await resolveAdbSerial(args.device) : await resolveConfiguredDeviceSerial();
   const sha = await gitSha(workspaceRoot);
   const runId = `cta-${timestampId()}-pixel4-${args.target}-${sha}`;
   const artifactDir = args.artifactDir ?? path.join(workspaceRoot, "c64scope", "artifacts", runId);
