@@ -49,7 +49,36 @@ const withTimeout = async (
   }
 };
 
+/**
+ * Test seam (E2E and hardware-in-the-loop only), the native counterpart of the one in
+ * `deviceDiscovery.web.ts`.
+ *
+ * "A network is up but no C64U answers on it" cannot be staged on the bench handset without
+ * putting probe traffic on the Wi-Fi the real devices are on. With the radios off and this
+ * override in place, the app takes the whole network-enabled route — saved-host probe, discovery
+ * window, LAN-scan fallback, then the Demo Mode offer — while the phone physically cannot reach
+ * anything but its own loopback.
+ *
+ * Gated on the same explicit probe opt-in as every other seam; a release build never sets it.
+ */
+const readInjectedNetworkStatus = (): NativeNetworkStatus | null => {
+  if (typeof window === "undefined") return null;
+  const win = window as Window & {
+    __c64uTestProbeEnabled?: boolean;
+    __c64uMockNetworkStatus?: Partial<NativeNetworkStatus>;
+  };
+  if (win.__c64uTestProbeEnabled !== true) return null;
+  const injected = win.__c64uMockNetworkStatus;
+  if (!injected) return null;
+  return { online: injected.online !== false, supported: injected.supported === true };
+};
+
 export const readNativeNetworkStatus = async (): Promise<NativeNetworkStatus> => {
+  const injected = readInjectedNetworkStatus();
+  if (injected) {
+    addLog("info", "Native network status overridden by a test probe", injected);
+    return injected;
+  }
   if (!isNativePlatform()) return UNKNOWN_NETWORK_STATUS;
   try {
     const status = await withTimeout(DeviceDiscovery.getNetworkStatus(), NETWORK_STATUS_TIMEOUT_MS);

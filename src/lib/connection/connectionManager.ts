@@ -793,15 +793,28 @@ const logDiscoveryDecision = (
 
 let identityHealInFlight = false;
 
-// A promotion driven by passive traffic (noteReachable) or a cancelled startup
-// probe can reach REAL_CONNECTED with no device identity; without identity the
-// health gate reports Degraded indefinitely, so fetch it once after connect.
-const ensureDeviceIdentityAfterConnect = async () => {
+/**
+ * Fetch the connected device's identity once, if the transition that connected did not carry one.
+ *
+ * REAL_CONNECTED: a promotion driven by passive traffic (`noteReachable`) or by a cancelled
+ * startup probe arrives with no identity, and without one the health gate reports Degraded
+ * indefinitely.
+ *
+ * DEMO_ACTIVE: the simulated device answers `/v1/info` like a real one, but nothing was asking.
+ * With no identity, `deriveDeviceCapabilities` had only the Data Streams config read to go on, so
+ * Live View — the one feature Demo Mode exists to show — was missing from Home until that read
+ * happened to land, and stayed missing if it did not.
+ */
+const ensureDeviceIdentityAfterConnect = async (options: { useRuntimeTarget?: boolean } = {}) => {
   if (identityHealInFlight || snapshot.deviceInfo) return;
+  const connectedStates: ConnectionState[] = ["REAL_CONNECTED", "DEMO_ACTIVE"];
   identityHealInFlight = true;
   try {
-    const result = await probeInfoOnce();
-    if (result.ok && snapshot.state === "REAL_CONNECTED" && !snapshot.deviceInfo) {
+    // `probeInfoOnce` rebuilds its client from the PERSISTED host, which is the real device even
+    // while Demo Mode is routed at the loopback mock — and the mock needs its per-boot token. So
+    // the Demo Mode read goes through the live, already-routed and already-authenticated client.
+    const result = options.useRuntimeTarget ? await readIdentityFromRuntimeTarget() : await probeInfoOnce();
+    if (result.ok && connectedStates.includes(snapshot.state) && !snapshot.deviceInfo) {
       setSnapshot({ deviceInfo: result.deviceInfo });
     } else if (!result.ok) {
       addLog("debug", "Post-connect identity probe failed", { error: result.error });
@@ -811,10 +824,32 @@ const ensureDeviceIdentityAfterConnect = async () => {
   }
 };
 
+const readIdentityFromRuntimeTarget = async (): Promise<ProbeInfoResult> => {
+  try {
+    const response = await getC64API().getInfo({
+      timeoutMs: loadDiscoveryProbeTimeoutMs(),
+      __c64uIntent: "system",
+      __c64uAllowDuringDiscovery: true,
+      __c64uBypassCache: true,
+    });
+    const healthy = isProbePayloadHealthy(response);
+    return {
+      ok: healthy,
+      deviceInfo: response,
+      error: healthy ? null : "Probe payload missing required identity",
+    };
+  } catch (error) {
+    return { ok: false, deviceInfo: null, error: (error as Error | undefined)?.message ?? "Identity read failed" };
+  }
+};
+
 const transitionToRealConnected = async (
   trigger: DiscoveryTrigger,
   runtimeConfig?: { baseUrl: string; deviceHost: string; password?: string },
 ) => {
+  // Leaving Demo Mode must not carry the simulated device's identity onto real hardware; the
+  // identity is re-read below from whatever answers now.
+  const leavingDemoMode = snapshot.state === "DEMO_ACTIVE";
   clearPinnedDemoMode();
   cancelActiveDiscovery();
   dismissDemoInterstitial();
@@ -844,6 +879,7 @@ const transitionToRealConnected = async (
     stickyRealDeviceLock = true;
   }
   addLog("info", "Connection switched to real device", { trigger });
+  if (leavingDemoMode) setSnapshot({ deviceInfo: null });
   if (!snapshot.deviceInfo) {
     void ensureDeviceIdentityAfterConnect();
   }
@@ -1097,9 +1133,20 @@ const transitionToDemoActive = async (
   }
 
   // Transition state AFTER the URL is configured so that React queries
-  // triggered by the DEMO_ACTIVE re-render hit the correct endpoint.
+  // triggered by the DEMO_ACTIVE re-render hit the correct endpoint. The previous device's
+  // identity is dropped in the same step: keeping it would let the simulated device advertise
+  // the capabilities of hardware that is no longer being talked to.
+  setSnapshot({ deviceInfo: null });
   transitionTo("DEMO_ACTIVE", trigger);
   logDiscoveryDecision("DEMO_ACTIVE", trigger, { mode: "demo" });
+  // The simulated device has an identity of its own; read it, so capability-gated features are
+  // offered in Demo Mode exactly as they are against real hardware. Only when the mock server is
+  // what the API is actually pointed at: without one there is nothing simulated to ask, and the
+  // request would go to the stored real host — which is the one thing the no-network path must
+  // never do.
+  if (activeMockUrl) {
+    void ensureDeviceIdentityAfterConnect({ useRuntimeTarget: true });
+  }
 };
 
 const transitionToSmokeMockConnected = async (trigger: DiscoveryTrigger) => {

@@ -110,3 +110,49 @@ describe("readNativeNetworkStatus", () => {
     );
   });
 });
+
+describe("the native network-status test seam", () => {
+  type SeamWindow = Window & {
+    __c64uTestProbeEnabled?: boolean;
+    __c64uMockNetworkStatus?: { online?: boolean; supported?: boolean };
+  };
+
+  const seamWindow = () => globalThis.window as SeamWindow;
+
+  beforeEach(() => {
+    getNetworkStatus.mockReset();
+  });
+
+  afterEach(() => {
+    delete seamWindow().__c64uTestProbeEnabled;
+    delete seamWindow().__c64uMockNetworkStatus;
+  });
+
+  it("is ignored unless the probe opt-in is set, so a stray global cannot change a shipped build", async () => {
+    seamWindow().__c64uMockNetworkStatus = { online: false, supported: true };
+    getNetworkStatus.mockResolvedValue({ online: true, supported: true });
+
+    await expect(readNativeNetworkStatus()).resolves.toEqual({ online: true, supported: true });
+    expect(getNetworkStatus).toHaveBeenCalled();
+  });
+
+  it("answers from the injected value and never asks the platform", async () => {
+    seamWindow().__c64uTestProbeEnabled = true;
+    seamWindow().__c64uMockNetworkStatus = { online: true, supported: true };
+    getNetworkStatus.mockResolvedValue({ online: false, supported: true });
+
+    // "A network is up but no C64U answers" cannot be staged on the bench handset without putting
+    // probe traffic on the Wi-Fi the real devices are on. This is what lets a hardware run take
+    // the network-enabled route with the radios off.
+    await expect(readNativeNetworkStatus()).resolves.toEqual({ online: true, supported: true });
+    expect(getNetworkStatus).not.toHaveBeenCalled();
+    await expect(isDeviceConfirmedOffline()).resolves.toBe(false);
+  });
+
+  it("can also assert no network, which is the offline auto-offer case", async () => {
+    seamWindow().__c64uTestProbeEnabled = true;
+    seamWindow().__c64uMockNetworkStatus = { online: false, supported: true };
+
+    await expect(isDeviceConfirmedOffline()).resolves.toBe(true);
+  });
+});
