@@ -31,6 +31,7 @@ import type {
 export const DEFAULT_EXEC_TIMEOUT_MS = 30_000;
 export const DEFAULT_MAX_BYTES = 32 * 1024 * 1024;
 export const DETACHED_STOP_TIMEOUT_MS = 15_000;
+export const API_LEVEL_TIMEOUT_MS = 10_000;
 export const MAXBUFFER_HEADROOM = 4 * 1024 * 1024;
 
 /**
@@ -181,8 +182,18 @@ const ADB_TOOL_SUPPORT: Readonly<Record<string, CapabilitySupport>> = Object.fro
   ALL_TOOL_NAMES.map((name) => [name, "supported" as CapabilitySupport]),
 );
 
-export function parseAdbDevices(stdout: string): TargetInfo[] {
-  const targets: TargetInfo[] = [];
+export interface AdbDeviceLine {
+  readonly target: TargetInfo;
+  /**
+   * adb issues a fresh transport id whenever a device attaches, so it changes
+   * across a reboot or a reconnect while the serial does not. That makes it the
+   * generation token the build-property cache is keyed on.
+   */
+  readonly transportId: string | null;
+}
+
+export function parseAdbDeviceLines(stdout: string): AdbDeviceLine[] {
+  const targets: AdbDeviceLine[] = [];
   for (const line of stdout.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (trimmed.length === 0 || /^List of devices/i.test(trimmed) || /^\*/.test(trimmed)) {
@@ -200,16 +211,23 @@ export function parseAdbDevices(stdout: string): TargetInfo[] {
       }
     }
     targets.push({
-      targetId: `adb:${serial}`,
-      transport: "adb",
-      serial,
-      model: properties.get("model") ?? null,
-      apiLevel: null,
-      state: normalizeState(rawState),
-      isEmulator: /^emulator-/.test(serial),
+      target: {
+        targetId: `adb:${serial}`,
+        transport: "adb",
+        serial,
+        model: properties.get("model") ?? null,
+        apiLevel: null,
+        state: normalizeState(rawState),
+        isEmulator: /^emulator-/.test(serial),
+      },
+      transportId: properties.get("transport_id") ?? null,
     });
   }
   return targets;
+}
+
+export function parseAdbDevices(stdout: string): TargetInfo[] {
+  return parseAdbDeviceLines(stdout).map((entry) => entry.target);
 }
 
 function normalizeState(raw: string): TargetState {
@@ -236,6 +254,7 @@ export class AdbTransport implements Transport {
   private readonly spawnRunner: RawSpawnRunner;
   private readonly onCommand?: CommandSink;
   private readonly defaultTimeoutMs: number;
+  private apiLevels = new Map<string, number>();
 
   constructor(options: AdbTransportOptions = {}) {
     this.adbPath = options.adbPath ?? "adb";
@@ -256,7 +275,45 @@ export class AdbTransport implements Transport {
         details: { exitCode: outcome.exitCode, stderr: outcome.stderr },
       });
     }
-    return parseAdbDevices(outcome.stdout.toString("utf8"));
+    const entries = parseAdbDeviceLines(outcome.stdout.toString("utf8"));
+    const fresh = new Map<string, number>();
+    const targets = await Promise.all(entries.map((entry) => this.withApiLevel(entry, fresh)));
+    // Rebuilt from what this listing saw, so a device that has gone takes its
+    // entry with it and is probed again if it comes back.
+    this.apiLevels = fresh;
+    return targets;
+  }
+
+  private async withApiLevel(entry: AdbDeviceLine, fresh: Map<string, number>): Promise<TargetInfo> {
+    if (entry.target.state !== "device") {
+      return entry.target;
+    }
+    const key = `${entry.target.serial}\u0000${entry.transportId ?? ""}`;
+    const apiLevel = this.apiLevels.get(key) ?? (await this.readApiLevel(entry.target));
+    if (apiLevel === null) {
+      return entry.target;
+    }
+    fresh.set(key, apiLevel);
+    return { ...entry.target, apiLevel };
+  }
+
+  /**
+   * A build property cannot change without the device reattaching, so this costs
+   * one getprop per connection rather than one per listing. A device that will
+   * not answer is listed with a null apiLevel rather than dropped or failed.
+   */
+  private async readApiLevel(target: TargetInfo): Promise<number | null> {
+    try {
+      const result = await this.exec(
+        { targetId: target.targetId, transport: "adb", serial: target.serial },
+        ["getprop", "ro.build.version.sdk"],
+        { timeoutMs: API_LEVEL_TIMEOUT_MS },
+      );
+      const parsed = Number.parseInt(result.stdout.trim(), 10);
+      return Number.isInteger(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
   }
 
   async exec(target: ResolvedTarget, argv: readonly string[], opts: ExecOptions = {}): Promise<ExecResult> {

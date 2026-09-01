@@ -40,6 +40,13 @@ installed at once and both open a WebView DevTools socket.
 
 `droidctl://reference/targeting-rules` serves the full rule list as an MCP resource.
 
+`apiLevel` is populated by reading `ro.build.version.sdk`. That read is cached per connection rather
+than per listing: the cache is keyed on the serial plus adb's transport id, which changes whenever a
+device reattaches, and entries for devices absent from a listing are dropped. So a device is read once
+when it attaches and never again, which keeps the per-call listing at 3.6 ms; the first listing after a
+device attaches costs 23.5 ms. A target not in state `device` is never queried and reports a null
+`apiLevel`.
+
 ## Tool surface
 
 | Domain          | Tools                                                                                                         |

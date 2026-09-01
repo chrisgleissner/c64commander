@@ -32,7 +32,8 @@ export const targetModule = defineToolModule({
       description:
         "List every addressable target with its transport, serial, model, API level, state and whether it is an emulator. " +
         "Returns no default, preferred or current target: pick one and pass its targetId. Offline and unauthorized " +
-        "targets are listed rather than hidden, so a caller can see why its target vanished.",
+        "targets are listed rather than hidden, so a caller can see why its target vanished. apiLevel is read once per " +
+        "connection and is null only for a target that cannot be queried, which is every target not in state device.",
       argsSchema: listTargetsSchema,
       execute: defineExecute(listTargetsSchema, async (args, ctx) => {
         const listing = await ctx.transports.list(args.transports as TransportKind[] | undefined);
