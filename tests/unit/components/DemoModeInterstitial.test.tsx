@@ -68,6 +68,7 @@ describe("DemoModeInterstitial", () => {
   it("shows the attempted hostname in the description", () => {
     render(<DemoModeInterstitial />);
     expect(screen.getByTestId("demo-interstitial-hostname")).toHaveTextContent("mydevice.local");
+    expect(screen.getByTestId("demo-interstitial-message")).toHaveTextContent("mydevice.local");
   });
 
   it("pre-fills the hostname input with the stored device host", () => {
@@ -114,6 +115,9 @@ describe("DemoModeInterstitial", () => {
     demoInterstitialReason = "no-network";
     render(<DemoModeInterstitial />);
 
+    // The description element is sr-only in this app, so the words the user actually sees are the
+    // ones that matter: a confirmation dialog whose visible body is empty asks nothing.
+    expect(screen.getByTestId("demo-interstitial-message")).toHaveTextContent(/no network connection/i);
     expect(screen.getByTestId("demo-interstitial-description")).toHaveTextContent(/no network connection/i);
     expect(screen.queryByTestId("demo-interstitial-hostname")).toBeNull();
   });

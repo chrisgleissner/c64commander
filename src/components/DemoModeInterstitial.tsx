@@ -46,6 +46,9 @@ export function DemoModeInterstitial() {
   // hostname field and the retry button: offering either would invite the user to answer a
   // question that cannot change the outcome until they turn a network back on.
   const noNetwork = demoInterstitialReason === "no-network";
+  const message = noNetwork
+    ? "This device has no network connection, so no C64U can be reached. You can continue in Demo Mode using the built-in simulated device, or connect to a network and try again."
+    : `No C64U was found at ${attemptedHost}. You can continue in Demo Mode using the built-in simulated device, or retry connecting to real hardware.`;
 
   const handleSaveAndRetry = () => {
     try {
@@ -69,22 +72,23 @@ export function DemoModeInterstitial() {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Demo Mode</DialogTitle>
-          <DialogDescription data-testid="demo-interstitial-description">
-            {noNetwork ? (
-              <>
-                This device has no network connection, so no C64U can be reached. You can continue in Demo Mode using
-                the built-in simulated device, or connect to a network and try again.
-              </>
-            ) : (
-              <>
-                No C64U was found at <strong data-testid="demo-interstitial-hostname">{attemptedHost}</strong>. You can
-                continue in Demo Mode using the built-in simulated device, or retry connecting to real hardware.
-              </>
-            )}
-          </DialogDescription>
+          {/* `DialogDescription` is sr-only in this app (see components/ui/dialog.tsx), so it
+              carries the accessible description while the same words are shown below. A dialog
+              that asks the user to choose has to state the choice on screen. */}
+          <DialogDescription data-testid="demo-interstitial-description">{message}</DialogDescription>
         </DialogHeader>
+        <p className="px-4 pt-1 text-sm text-muted-foreground sm:px-6" data-testid="demo-interstitial-message">
+          {noNetwork ? (
+            message
+          ) : (
+            <>
+              No C64U was found at <strong data-testid="demo-interstitial-hostname">{attemptedHost}</strong>. You can
+              continue in Demo Mode using the built-in simulated device, or retry connecting to real hardware.
+            </>
+          )}
+        </p>
         {noNetwork ? null : (
-          <div className="space-y-2 py-2">
+          <div className="space-y-2 px-4 py-2 sm:px-6">
             <Label htmlFor="demo-device-host">C64U hostname / IP</Label>
             <Input
               id="demo-device-host"
