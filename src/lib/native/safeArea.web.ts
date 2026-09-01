@@ -6,18 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { SafeAreaInsets } from "./safeArea";
-
 export class SafeAreaWeb {
-  async getInsets(): Promise<SafeAreaInsets> {
-    return {
-      top: 0,
-      right: 0,
-      bottom: 0,
-      left: 0,
-    };
-  }
-
   async setSystemBarsVisibility(): Promise<void> {
     // The browser owns its own chrome; there are no app-controlled system bars.
   }

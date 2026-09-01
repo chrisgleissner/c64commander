@@ -20,7 +20,6 @@ import { applyStoredTextScale } from "./lib/uiPreferences";
 import { registerServiceWorker } from "./lib/startup/serviceWorkerRegistration";
 import { silenceLeftoverNativeAudio } from "./lib/streams/silenceLeftoverNativeAudio";
 import { addErrorLog } from "./lib/logging";
-import { installNativeSafeAreaSync } from "./lib/native/safeArea";
 import { applyFullScreenFromSettings } from "./lib/native/fullScreen";
 import { applyScreenOrientationFromSettings } from "./lib/native/screenOrientation";
 import { loadRemoteFonts } from "./lib/startup/fontLoading";
@@ -103,7 +102,6 @@ applyStoredTextScale();
 // and the next local tune then starts underneath it.
 void silenceLeftoverNativeAudio();
 registerServiceWorker();
-installNativeSafeAreaSync();
 applyFullScreenFromSettings();
 applyScreenOrientationFromSettings();
 createRoot(document.getElementById("root")!).render(<App />);
