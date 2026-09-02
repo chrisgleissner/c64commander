@@ -50,7 +50,7 @@ import { addLog } from "@/lib/logging";
 import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeStatus } from "@/lib/smoke/smokeMode";
 import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { getHealthCheckStateSnapshot, setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
-import { prepareForDeviceRetarget } from "@/lib/connection/deviceRetarget";
+import { prepareForDeviceRetarget, restartAvMirrorAfterDeviceRetarget } from "@/lib/connection/deviceRetarget";
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
 import { isAuthRequiredError, normalizeTransportError } from "@/lib/c64api/transportErrors";
 import { notifyAuthRequired } from "@/lib/auth/authChallenge";
@@ -943,8 +943,9 @@ const tryReachableSavedDeviceFallback = async (
   // stop, device-scoped query invalidation) BEFORE re-selecting — while the
   // runtime API still targets the old device, so the remote-input release lands
   // on the right host. Without this, device A's paused state, stale health
-  // verdict, and armed auto-skip watchdog leaked onto device B.
-  await prepareForDeviceRetarget(selectedId, reachable.device.id);
+  // verdict, and armed auto-skip watchdog leaked onto device B. HARD27-010 added
+  // the playback stop and the A/V mirror stop to that shared sequence.
+  const mirrorState = await prepareForDeviceRetarget(selectedId, reachable.device.id);
   // HARD16-001: select and apply the reachable device's identity/ports BEFORE
   // verifying, mirroring executeSavedDeviceSwitch. verifyCurrentConnectionTarget
   // stamps whatever device is currently selected, so verifying while the
@@ -968,6 +969,8 @@ const tryReachableSavedDeviceFallback = async (
   }
   if (verification.ok && verification.deviceInfo) {
     completeSavedDeviceVerification(reachable.device.id, verification.deviceInfo);
+    // HARD27-010: follow Live View to the device that just verified, as the canonical switch does.
+    restartAvMirrorAfterDeviceRetarget(mirrorState, reachable.device.id);
     return true;
   }
   return false;

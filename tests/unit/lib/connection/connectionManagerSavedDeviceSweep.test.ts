@@ -24,7 +24,8 @@ const startDeviceDiscoveryMock = vi.fn();
 const hasPersistedDeviceHostConfigMock = vi.fn();
 const setStoredFtpPortMock = vi.fn();
 const setStoredTelnetPortMock = vi.fn();
-const prepareForDeviceRetargetMock = vi.fn(async () => {});
+const prepareForDeviceRetargetMock = vi.fn(async () => ({ videoWasLive: false, audioWasLive: false }));
+const restartAvMirrorAfterDeviceRetargetMock = vi.fn();
 
 vi.mock("@/lib/c64api", () => ({
   C64API: class {
@@ -136,6 +137,7 @@ vi.mock("@/lib/deviceDiscovery/discoveryManager", () => ({
 
 vi.mock("@/lib/connection/deviceRetarget", () => ({
   prepareForDeviceRetarget: (...args: unknown[]) => prepareForDeviceRetargetMock(...args),
+  restartAvMirrorAfterDeviceRetarget: (...args: unknown[]) => restartAvMirrorAfterDeviceRetargetMock(...args),
 }));
 
 vi.mock("@/lib/logging", () => ({
@@ -252,6 +254,49 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     const retargetOrder = prepareForDeviceRetargetMock.mock.invocationCallOrder[0];
     const selectOrder = selectSavedDeviceMock.mock.invocationCallOrder[0];
     expect(retargetOrder).toBeLessThan(selectOrder);
+  });
+
+  // HARD27-010: before this, the fallback never stopped or restarted the mirror, so Live View
+  // stayed bound to the old device's expected source. It showed "The video stream stopped
+  // arriving." — or, if the old device came back, kept rendering its picture while the app
+  // reported the new one.
+  it("follows a live A/V mirror to the new device once verification succeeds", async () => {
+    prepareForDeviceRetargetMock.mockResolvedValueOnce({ videoWasLive: true, audioWasLive: true });
+    getInfoMock.mockResolvedValueOnce(HEALTHY).mockResolvedValueOnce(HEALTHY);
+    getSavedDevicesSnapshotMock.mockReturnValue(
+      snapshotWith([
+        { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
+        { id: "other", host: "192.168.1.60", httpPort: 80, hasPassword: false },
+      ]),
+    );
+
+    await discoverConnection("startup");
+    await flushAsync();
+
+    expect(restartAvMirrorAfterDeviceRetargetMock).toHaveBeenCalledWith(
+      { videoWasLive: true, audioWasLive: true },
+      "other",
+    );
+    // The restart must follow the identity stamp, so it binds to the device that just verified.
+    expect(completeSavedDeviceVerificationMock.mock.invocationCallOrder[0]).toBeLessThan(
+      restartAvMirrorAfterDeviceRetargetMock.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("leaves the mirror off rather than restarting it on a device that failed verification", async () => {
+    prepareForDeviceRetargetMock.mockResolvedValueOnce({ videoWasLive: true, audioWasLive: false });
+    getInfoMock.mockResolvedValueOnce(HEALTHY).mockResolvedValueOnce(UNHEALTHY);
+    getSavedDevicesSnapshotMock.mockReturnValue(
+      snapshotWith([
+        { id: "selected", host: "u64", httpPort: 80, hasPassword: false },
+        { id: "flaky", host: "192.168.1.80", httpPort: 80, hasPassword: false },
+      ]),
+    );
+
+    await discoverConnection("startup");
+    await flushAsync();
+
+    expect(restartAvMirrorAfterDeviceRetargetMock).not.toHaveBeenCalled();
   });
 
   it("reads the saved password and tolerates a secure-storage failure during the sweep (lines 688-696)", async () => {
