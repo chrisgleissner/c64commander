@@ -17,7 +17,7 @@
  * Home "check" preview and the Remote Input preview) render the one stream.
  */
 
-import { C64API, getC64API } from "@/lib/c64api";
+import { getC64API } from "@/lib/c64api";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { addLog } from "@/lib/logging";
 import { Capacitor } from "@capacitor/core";
@@ -39,6 +39,7 @@ import {
 import { getDeveloperModeEnabled } from "@/lib/config/developerModeStore";
 import { resolveVideoStartAction, shouldReturnAudioToWifi, shouldUseWifiForAudio } from "./audioRoute";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
+import { stopStreamAtForeignHost } from "./foreignSenderStop";
 import { NativeAudioSink } from "./audioNativeSink";
 import { AudioMirrorController, type AudioMirrorSignals, type AudioMirrorState } from "./audioMirrorController";
 import { VideoMirrorController, type VideoMirrorState } from "./videoMirrorController";
@@ -51,7 +52,13 @@ import type { VideoStandard } from "./vicDecode";
 import type { AudioMirrorPlayer } from "./audioPlayer";
 
 export interface AvMirrorSnapshot {
-  audio: { state: AudioMirrorState; droppedPackets: number; error: string | null };
+  audio: {
+    state: AudioMirrorState;
+    droppedPackets: number;
+    error: string | null;
+    /** A second Ultimate is streaming into our group and would not stop when asked. */
+    foreignSenderNotice: string | null;
+  };
   video: {
     state: VideoMirrorState;
     fps: number;
@@ -107,7 +114,7 @@ export interface AvStatsSnapshot {
 export type AvStatsListener = (snapshot: AvStatsSnapshot) => void;
 
 const INITIAL: AvMirrorSnapshot = {
-  audio: { state: "off", droppedPackets: 0, error: null },
+  audio: { state: "off", droppedPackets: 0, error: null, foreignSenderNotice: null },
   video: { state: "off", fps: 0, droppedPackets: 0, framesLost: 0, standard: "PAL", error: null },
 };
 
@@ -243,7 +250,15 @@ export class AvMirrorSession {
     this.audio = new AudioMirrorController({
       startStream: (_name, destination, options) => startStream("audio", destination, options),
       stopStream: () => stopStream("audio"),
-      onChange: (s) => this.update({ audio: { state: s.state, droppedPackets: s.droppedPackets, error: s.error } }),
+      onChange: (s) =>
+        this.update({
+          audio: {
+            state: s.state,
+            droppedPackets: s.droppedPackets,
+            error: s.error,
+            foreignSenderNotice: s.foreignSenderNotice,
+          },
+        }),
       createReceiver:
         deps.createAudioReceiver ??
         ((opts) =>
@@ -265,7 +280,7 @@ export class AvMirrorSession {
       // multicast and every Ultimate defaults to the same ones, so a machine left streaming by an
       // earlier session sends straight into ours.
       expectedSenderHost: () => getC64API().getDeviceHost(),
-      stopStreamAt: (host, name) => new C64API(undefined, undefined, host).stopStream(name),
+      stopStreamAt: (host, name) => stopStreamAtForeignHost(host, name),
     });
 
     this.video = new VideoMirrorController({

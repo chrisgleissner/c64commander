@@ -476,3 +476,60 @@ describe("streamReceiver", () => {
     expect(receiver).toBeInstanceOf(UnsupportedStreamReceiver);
   });
 });
+
+/**
+ * HARD27-019. The eviction is best-effort, and when it fails the mirror keeps working — the native
+ * filter drops the foreign packets — so the only symptom left is rough audio the user cannot explain.
+ * The card has to name the machine that would not stop.
+ */
+describe("AudioMirrorController foreign-sender notice", () => {
+  const sinkWithSenders = (senders: string[]) =>
+    ({
+      open: vi.fn(async () => true),
+      getStats: vi.fn(() => ({ bufferedMs: 30, underruns: 0, concealedMs: 0, arrival: undefined })),
+      close: vi.fn(async () => {}),
+      get bufferCapacityMs() {
+        return 40;
+      },
+      get senders() {
+        return senders;
+      },
+    }) as unknown as NativeAudioSink;
+
+  const startWithForeignSender = async (stopStreamAt: (host: string, name: "audio" | "video") => Promise<unknown>) => {
+    const receiver = new FakeReceiver();
+    const controller = new AudioMirrorController({
+      createReceiver: () => receiver,
+      createNativeSink: () => sinkWithSenders(["10.0.0.7", "192.168.1.15"]),
+      startStream: vi.fn(async () => ({ errors: [] })),
+      stopStream: vi.fn(async () => ({ errors: [] })),
+      expectedSenderHost: () => "10.0.0.7",
+      stopStreamAt,
+      onChange: vi.fn(),
+    });
+    await controller.start();
+    receiver.emitState("open");
+    controller.getSignals();
+    // The eviction is fire-and-forget from getSignals; let its promise chain settle.
+    await Promise.resolve();
+    await Promise.resolve();
+    return controller;
+  };
+
+  it("names the machine that refused the stop, without touching the error field", async () => {
+    const controller = await startWithForeignSender(async () => {
+      throw new Error("Forbidden");
+    });
+
+    expect(controller.getSnapshot().foreignSenderNotice).toBe(
+      "Another Ultimate at 192.168.1.15 is also streaming into this group; stop it on that machine.",
+    );
+    expect(controller.getSnapshot().error).toBeNull();
+    expect(controller.getSnapshot().state).toBe("live");
+  });
+
+  it("stays silent when the uninvited machine obeys", async () => {
+    const controller = await startWithForeignSender(async () => ({ errors: [] }));
+    expect(controller.getSnapshot().foreignSenderNotice).toBeNull();
+  });
+});

@@ -51,16 +51,22 @@ export const foreignSenders = (senders: readonly string[], expectedHost: string 
   return senders.map(hostOnly).filter((ip) => ip.length > 0 && ip !== expected);
 };
 
+/** What one eviction pass achieved: the machines that obeyed, and the ones still streaming. */
+export interface ForeignSenderOutcome {
+  readonly stopped: string[];
+  readonly failed: string[];
+}
+
 /**
  * Ask every uninvited sender to stop, and report what was found.
  *
- * Best-effort by design: a machine that cannot be reached is logged and skipped, because the point
- * is to rescue the stream we are listening to, not to guarantee anything about a device the user may
- * not even own.
+ * Best-effort by design: a machine that cannot be reached, or that refuses the request, is logged
+ * and reported in `failed` rather than retried, because the point is to rescue the stream we are
+ * listening to, not to guarantee anything about a device the user may not even own.
  */
-export const stopForeignSenders = async (deps: ForeignSenderDeps): Promise<string[]> => {
+export const stopForeignSenders = async (deps: ForeignSenderDeps): Promise<ForeignSenderOutcome> => {
   const foreign = foreignSenders(deps.senders, deps.expectedHost);
-  if (foreign.length === 0) return [];
+  if (foreign.length === 0) return { stopped: [], failed: [] };
 
   addLog("warn", "Live View: another machine is streaming into our audio group; asking it to stop", {
     service: "streams",
@@ -72,11 +78,13 @@ export const stopForeignSenders = async (deps: ForeignSenderDeps): Promise<strin
   });
 
   const stopped: string[] = [];
+  const failed: string[] = [];
   for (const host of foreign) {
     try {
       await deps.stopStreamAt(host, "audio");
       stopped.push(host);
     } catch (error) {
+      failed.push(host);
       addLog("warn", "Live View: could not stop the uninvited sender", {
         service: "streams",
         host,
@@ -84,5 +92,19 @@ export const stopForeignSenders = async (deps: ForeignSenderDeps): Promise<strin
       });
     }
   }
-  return stopped;
+  return { stopped, failed };
+};
+
+/**
+ * A sentence naming the machines still streaming after the eviction, for the Live View card.
+ *
+ * The user is the only one who can act: the app has already asked and been refused or ignored, and
+ * that other machine may not even be theirs to control from here.
+ */
+export const describeUnstoppedForeignSenders = (failed: readonly string[]): string | null => {
+  if (failed.length === 0) return null;
+  const list = failed.join(", ");
+  return failed.length === 1
+    ? `Another Ultimate at ${list} is also streaming into this group; stop it on that machine.`
+    : `Other Ultimates at ${list} are also streaming into this group; stop them on those machines.`;
 };

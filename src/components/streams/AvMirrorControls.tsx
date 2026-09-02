@@ -119,6 +119,11 @@ export function AvMirrorControls({
           {error}
         </span>
       )}
+      {audio.foreignSenderNotice && (
+        <span role="status" className="text-xs text-muted-foreground" data-testid="av-mirror-foreign-sender-notice">
+          {audio.foreignSenderNotice}
+        </span>
+      )}
     </div>
   );
 }

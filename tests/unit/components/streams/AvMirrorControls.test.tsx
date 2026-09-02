@@ -17,7 +17,7 @@ const mirror = vi.hoisted(() => ({
   state: {
     audioLive: false,
     videoLive: false,
-    audio: { state: "off", error: null as string | null },
+    audio: { state: "off", error: null as string | null, foreignSenderNotice: null as string | null },
     video: { state: "off", error: null as string | null },
   },
 }));
@@ -40,9 +40,26 @@ describe("AvMirrorControls", () => {
     mirror.state = {
       audioLive: false,
       videoLive: false,
-      audio: { state: "off", error: null },
+      audio: { state: "off", error: null, foreignSenderNotice: null },
       video: { state: "off", error: null },
     };
+  });
+
+  // HARD27-019: the second Ultimate that would not stop is reported here rather than through the
+  // app-wide password dialog, which would name a machine the user never selected.
+  it("names an uninvited second Ultimate as a status hint, not as an error", () => {
+    mirror.state.audioLive = true;
+    mirror.state.audio = {
+      state: "live",
+      error: null,
+      foreignSenderNotice:
+        "Another Ultimate at 192.168.1.15 is also streaming into this group; stop it on that machine.",
+    };
+    render(<AvMirrorControls />);
+    const notice = screen.getByTestId("av-mirror-foreign-sender-notice");
+    expect(notice).toHaveTextContent("192.168.1.15");
+    expect(notice).toHaveAttribute("role", "status");
+    expect(screen.queryByTestId("av-mirror-error")).toBeNull();
   });
 
   it("shows idle Listen/Watch labels and toggles on click", () => {
@@ -61,7 +78,7 @@ describe("AvMirrorControls", () => {
 
   it("reflects live and connecting states", () => {
     mirror.state.audioLive = true;
-    mirror.state.audio = { state: "live", error: null };
+    mirror.state.audio = { state: "live", error: null, foreignSenderNotice: null };
     mirror.state.video = { state: "connecting", error: null };
     render(<AvMirrorControls />);
     expect(screen.getByTestId("av-audio-toggle")).toHaveTextContent("Listening");
@@ -80,7 +97,7 @@ describe("AvMirrorControls", () => {
   });
 
   it("surfaces a stream error", () => {
-    mirror.state.audio = { state: "error", error: "Lost the audio stream connection." };
+    mirror.state.audio = { state: "error", foreignSenderNotice: null, error: "Lost the audio stream connection." };
     render(<AvMirrorControls />);
     const alert = screen.getByTestId("av-mirror-error");
     expect(alert).toHaveTextContent("Lost the audio stream connection.");

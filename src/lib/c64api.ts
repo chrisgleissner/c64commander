@@ -2669,12 +2669,17 @@ export class C64API {
     return response;
   }
 
-  async stopStream(stream: string): Promise<{ errors: string[] }> {
+  /**
+   * `options.suppressAuthChallenge` keeps a 401/403 from opening the app-wide password dialog.
+   * Set by the foreign-sender eviction, which addresses a machine the user did not select.
+   */
+  async stopStream(stream: string, options: { suppressAuthChallenge?: boolean } = {}): Promise<{ errors: string[] }> {
     const response = await this.request<{ errors: string[] }>(`/v1/streams/${encodeURIComponent(stream)}:stop`, {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
       __c64uSkipSuccessBodyInspection: true,
       __c64uInspectSkippedSuccessBody: true,
+      __c64uSuppressAuthChallenge: options.suppressAuthChallenge,
     });
     this.assertActionAccepted(response, `stream ${stream} stop`);
     return response;

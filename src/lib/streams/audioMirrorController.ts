@@ -15,7 +15,7 @@
  */
 
 import { addLog } from "@/lib/logging";
-import { foreignSenders, stopForeignSenders } from "./foreignSenderGuard";
+import { describeUnstoppedForeignSenders, foreignSenders, stopForeignSenders } from "./foreignSenderGuard";
 import { AUDIO_SAMPLE_RATE, AudioBatcher, bytesToInt16LE, parseAudioPacket } from "./audioStream";
 import { loadStreamNetworkBufferMs } from "@/lib/config/appSettings";
 import { AudioPlaybackBuffer } from "./audioPlaybackBuffer";
@@ -36,6 +36,11 @@ export interface AudioMirrorSnapshot {
   error: string | null;
   /** The route the current stream actually uses (Wi‑Fi only when requested + available). */
   route: "wifi" | "ethernet";
+  /**
+   * A second Ultimate is streaming into our group and would not stop when asked. Non-fatal — the
+   * native filter keeps the picture right — so it is a hint beside the controls, not an error.
+   */
+  foreignSenderNotice: string | null;
 }
 
 /** Live audio-pipeline signals for the governor + telemetry (read on the low-rate tick). */
@@ -112,6 +117,7 @@ export class AudioMirrorController {
     chunks: 0,
     error: null,
     route: "ethernet",
+    foreignSenderNotice: null,
   };
 
   constructor(private readonly deps: AudioMirrorDeps) {}
@@ -159,7 +165,7 @@ export class AudioMirrorController {
     this.snapshot = { ...this.snapshot, ...patch };
     // Throttle the React broadcast like the video path: the chunk/dropped snapshot changes ~31/s but
     // state/error transitions must not be delayed. getSnapshot() stays current for the session tick.
-    const important = patch.state !== undefined || patch.error !== undefined;
+    const important = patch.state !== undefined || patch.error !== undefined || patch.foreignSenderNotice !== undefined;
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
     if (important || now - this.lastEmitMs >= AUDIO_SNAPSHOT_EMIT_INTERVAL_MS) {
       this.lastEmitMs = now;
@@ -182,7 +188,14 @@ export class AudioMirrorController {
     this.batcher.reset();
     this.nativeLostPackets = 0;
     this.nativeLastSeq = null;
-    this.update({ state: "connecting", error: null, droppedPackets: 0, chunks: 0, route: "ethernet" });
+    this.update({
+      state: "connecting",
+      error: null,
+      droppedPackets: 0,
+      chunks: 0,
+      route: "ethernet",
+      foreignSenderNotice: null,
+    });
 
     // Prefer the native low-latency sink when offered: the plugin's receive thread feeds the
     // AudioTrack directly, so JS drives NO playback (no bridge traffic, no jitter buffer). Fall back
@@ -314,11 +327,12 @@ export class AudioMirrorController {
     );
     if (pending.length === 0) return;
     pending.forEach((host) => this.foreignHandled.add(host));
-    await stopForeignSenders({
+    const { failed } = await stopForeignSenders({
       senders: pending,
       expectedHost: null, // already filtered
       stopStreamAt: (host, name) => this.deps.stopStreamAt?.(host, name) ?? Promise.resolve(),
     });
+    if (failed.length > 0) this.update({ foreignSenderNotice: describeUnstoppedForeignSenders(failed) });
   }
 
   /**
