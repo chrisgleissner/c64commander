@@ -10,6 +10,7 @@ import type { TransportCommand } from "@/lib/input/latchedCommandBus";
 
 export interface TransportCommandHandlers {
   isPlaying: boolean;
+  isPaused: boolean;
   play: () => void;
   pauseResume: () => void;
   next: () => void;
@@ -24,6 +25,9 @@ export const runTransportCommand = (command: TransportCommand, handlers: Transpo
   if (command === "next") handlers.next();
   else if (command === "stop") handlers.stop();
   else if (command === "play") {
-    if (!handlers.isPlaying) handlers.play();
+    // HARD27-007: a paused session still has isPlaying true, so the old "start only when nothing is
+    // playing" rule made a headset or lock-screen Play a no-op exactly when the user meant resume.
+    if (handlers.isPaused) handlers.pauseResume();
+    else if (!handlers.isPlaying) handlers.play();
   } else handlers.pauseResume();
 };

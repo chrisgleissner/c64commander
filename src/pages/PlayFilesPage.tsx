@@ -638,6 +638,7 @@ export default function PlayFilesPage() {
     (command) =>
       runTransportCommand(command, {
         isPlaying,
+        isPaused,
         play: () => void handlePlay(),
         pauseResume: () => void handlePauseResume(),
         next: () => void handleNext(),
