@@ -72,7 +72,8 @@ At the start of every invocation:
 4. If the branch exists but is not attached, attach it to that worktree path without resetting or recreating it.
 5. If the target path is non-empty, the branch is attached elsewhere, or ownership is ambiguous, do not delete, reset, move, or overwrite anything. Record the exact conflict and stop.
 6. Record the source `main` commit in the progress ledger. Do not update, check out, or modify the primary checkout merely to refresh `main`.
-7. After bootstrap, run all repository reads, edits, tests, builds, commits, and state updates from the dedicated worktree. Never edit the primary checkout.
+7. A fresh worktree has no `node_modules`. Install with `npm ci`, never `npm install` - a local `npm install` prunes packages the lockfile needs and rewrites `package-lock.json`, which turns roughly ten CI jobs red. The `c64scope` and `droidctl` MCP servers start from this worktree via `.mcp.json` and need their own runtime dependencies present.
+8. After bootstrap, run all repository reads, edits, tests, builds, commits, and state updates from the dedicated worktree. Never edit the primary checkout.
 
 Never use `git reset --hard`, `git clean`, destructive checkout commands, history rewriting, or forced pushes. Preserve unrelated and user-authored changes.
 
