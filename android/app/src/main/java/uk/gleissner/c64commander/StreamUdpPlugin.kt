@@ -963,14 +963,9 @@ class StreamUdpPlugin : Plugin() {
   }
 
   /**
-   * Drop the Wi-Fi locks while the app is in the background.
-   *
-   * The JavaScript policy stops both streams when the app is hidden, but Android may freeze the
-   * WebView before that stop reaches the device — and then the locks stay held for as long as the
-   * app is away. `WIFI_MODE_FULL_LOW_LATENCY` is a real battery cost and the platform only honours
-   * it in the foreground anyway, so nothing is lost by releasing here.
-   *
-   * Public rather than protected so the lock behaviour can be driven directly from a unit test.
+   * Android can freeze the WebView before the JS "stop the streams" reaches the device, and the two
+   * Wi-Fi locks would then stay held for the whole time the app is away. Public so a test can drive
+   * it.
    */
   public override fun handleOnPause() {
     super.handleOnPause()
@@ -978,11 +973,9 @@ class StreamUdpPlugin : Plugin() {
   }
 
   /**
-   * Take the locks back when a stream is still bound.
-   *
-   * Mandatory, not an optimisation: a `MulticastLock` released under a live socket makes the Wi-Fi
-   * driver filter multicast again, so without this the user returns to a receive loop that is bound,
-   * running and permanently starved — a silent, black stream with no error anywhere.
+   * Required, not an optimisation: a `MulticastLock` released under a live socket makes the driver
+   * filter multicast again, so without this the user returns to a bound, running, permanently
+   * starved receive loop that reports no error at all.
    */
   public override fun handleOnResume() {
     super.handleOnResume()
