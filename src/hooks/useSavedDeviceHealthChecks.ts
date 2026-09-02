@@ -116,6 +116,17 @@ const getBackgroundHealthCadenceMs = (mode: "healthy" | "recovery") => {
 const isDocumentHidden = () =>
   typeof document !== "undefined" && (document.visibilityState === "hidden" || document.hidden);
 
+/**
+ * Demo Mode is a simulated device, and these probes go to the SAVED ones.
+ *
+ * Left running, they filled the Diagnostics list with failures against hardware the user had
+ * deliberately stepped away from — so the one screen that reports how things are going reported a
+ * problem with every device, in a mode whose whole point is that everything works. On a live
+ * network they also put traffic on real hardware that nothing in Demo Mode has any business
+ * touching.
+ */
+const shouldPauseForSimulatedDevice = () => getConnectionSnapshot().state === "DEMO_ACTIVE";
+
 const getBackgroundTrafficEvidence = () => {
   const connection = getConnectionSnapshot();
   const deviceState = getDeviceStateSnapshot();
@@ -301,6 +312,9 @@ export function useSavedDeviceHealthChecks(
       if (shouldPauseForForegroundSwitch()) {
         return;
       }
+      if (shouldPauseForSimulatedDevice()) {
+        return;
+      }
       if (shouldPauseForDiagnosticsSuppression()) {
         return;
       }
@@ -443,6 +457,9 @@ export function useSavedDeviceHealthChecks(
         return getBackgroundHealthCadenceMs("healthy");
       }
       if (shouldPauseForForegroundSwitch()) {
+        return getBackgroundHealthCadenceMs("healthy");
+      }
+      if (shouldPauseForSimulatedDevice()) {
         return getBackgroundHealthCadenceMs("healthy");
       }
       if (shouldPauseForDiagnosticsSuppression()) {

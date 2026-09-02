@@ -39,6 +39,9 @@ import {
 import { DismissableLayer } from "@radix-ui/react-dismissable-layer";
 
 import { Button } from "@/components/ui/button";
+import { useConnectionState } from "@/hooks/useConnectionState";
+import { pinDemoModeByUserChoice } from "@/lib/connection/connectionManager";
+import { featureFlagManager } from "@/lib/config/featureFlags";
 import { SavedDeviceEditorFields } from "@/components/devices/SavedDeviceEditorFields";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
@@ -1363,6 +1366,13 @@ export function DiagnosticsDialog({
       : (healthState.connectedDeviceLabel ?? "C64U"),
     selectedProductCode,
   );
+  // Offered only where it is the answer: the app is not talking to a device, and Demo Mode is
+  // available. In Demo Mode already, or connected to real hardware, it would be noise.
+  const connectionState = useConnectionState();
+  const showSimulatedDeviceOffer =
+    (connectionState.state === "OFFLINE_NO_DEMO" || connectionState.state === "UNKNOWN") &&
+    featureFlagManager.getSnapshot().flags.demo_mode_enabled;
+
   const activeFilterLabels = useMemo(() => {
     const labels: string[] = [];
     if (severity !== "All") labels.push(severity);
@@ -1797,6 +1807,21 @@ export function DiagnosticsDialog({
                   >
                     {healthCheckRunning ? "Restart health check" : "Run health check"}
                   </Button>
+                  {/* The connection indicator is where a user goes when they notice nothing is
+                      connected, so it is where the way into Demo Mode belongs. Until now the only
+                      one was to know Demo Mode exists and to go looking for it in Settings. */}
+                  {showSimulatedDeviceOffer ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-1 h-7 text-xs"
+                      onClick={() => void pinDemoModeByUserChoice()}
+                      data-testid="use-simulated-device-action"
+                    >
+                      Use the simulated device
+                    </Button>
+                  ) : null}
                 </div>
                 {lastHealthCheckResult || liveHealthCheckProbes !== null || healthCheckRunning ? (
                   <Button

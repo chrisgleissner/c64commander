@@ -1,0 +1,114 @@
+{
+  "generatedBy": "scripts/build-demo-stream-assets.ts",
+  "slotSeconds": 0.4987576731949722,
+  "slots": [
+    {
+      "index": 0,
+      "name": "silence",
+      "hz": 0,
+      "colour": null
+    },
+    {
+      "index": 1,
+      "name": "C3",
+      "hz": 130.8127826502993,
+      "colour": 0
+    },
+    {
+      "index": 2,
+      "name": "D3",
+      "hz": 146.8323839587038,
+      "colour": 1
+    },
+    {
+      "index": 3,
+      "name": "E3",
+      "hz": 164.81377845643496,
+      "colour": 2
+    },
+    {
+      "index": 4,
+      "name": "F3",
+      "hz": 174.61411571650194,
+      "colour": 3
+    },
+    {
+      "index": 5,
+      "name": "G3",
+      "hz": 195.99771799087463,
+      "colour": 4
+    },
+    {
+      "index": 6,
+      "name": "A3",
+      "hz": 220,
+      "colour": 5
+    },
+    {
+      "index": 7,
+      "name": "B3",
+      "hz": 246.94165062806206,
+      "colour": 6
+    },
+    {
+      "index": 8,
+      "name": "C4",
+      "hz": 261.6255653005986,
+      "colour": 7
+    },
+    {
+      "index": 9,
+      "name": "silence",
+      "hz": 0,
+      "colour": null
+    },
+    {
+      "index": 10,
+      "name": "C4",
+      "hz": 261.6255653005986,
+      "colour": 8
+    },
+    {
+      "index": 11,
+      "name": "B3",
+      "hz": 246.94165062806206,
+      "colour": 9
+    },
+    {
+      "index": 12,
+      "name": "A3",
+      "hz": 220,
+      "colour": 10
+    },
+    {
+      "index": 13,
+      "name": "G3",
+      "hz": 195.99771799087463,
+      "colour": 11
+    },
+    {
+      "index": 14,
+      "name": "F3",
+      "hz": 174.61411571650194,
+      "colour": 12
+    },
+    {
+      "index": 15,
+      "name": "E3",
+      "hz": 164.81377845643496,
+      "colour": 13
+    },
+    {
+      "index": 16,
+      "name": "D3",
+      "hz": 146.8323839587038,
+      "colour": 14
+    },
+    {
+      "index": 17,
+      "name": "C3",
+      "hz": 130.8127826502993,
+      "colour": 15
+    }
+  ]
+}

@@ -90,7 +90,7 @@ export const FEATURE_FLAG_DEFINITIONS: readonly FeatureFlagDefinition[] = [
   },
   {
     id: "demo_mode_enabled",
-    enabled: false,
+    enabled: true,
     visible_to_user: true,
     developer_only: false,
     group: "stable",

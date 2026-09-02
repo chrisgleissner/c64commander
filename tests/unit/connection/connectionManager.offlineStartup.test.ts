@@ -91,6 +91,19 @@ const setNetwork = (online: boolean, supported = true) => {
   getNetworkStatus.mockResolvedValue({ online, supported });
 };
 
+/**
+ * Requests that left the device, as opposed to requests to the in-app simulated device.
+ *
+ * The simulated device is an HTTP server inside the app on loopback; talking to it is not network
+ * traffic and is not what these tests forbid. What they forbid is a probe of the configured real
+ * host while the platform says there is no network.
+ */
+const offDeviceRequests = () =>
+  vi
+    .mocked(fetch)
+    .mock.calls.map(([input]) => String(typeof input === "string" ? input : ((input as Request).url ?? input)))
+    .filter((url) => !url.startsWith(MOCK_BASE_URL));
+
 const respondWithDevice = () =>
   new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
     status: 200,
@@ -138,7 +151,7 @@ describe("startup with no network on the device", () => {
     setNetwork(false);
   });
 
-  it("starts the simulated device on a fresh offline launch without scanning, probing, or prompting", async () => {
+  it("starts the simulated device on a fresh offline launch without scanning or probing", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");
 
@@ -146,10 +159,88 @@ describe("startup with no network on the device", () => {
     await discoverConnection("startup");
 
     expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
-    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
     expect(startMockServer).toHaveBeenCalledTimes(1);
     expect(startDeviceDiscovery).not.toHaveBeenCalled();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(offDeviceRequests()).toEqual([]);
+  });
+
+  it("asks the user before the simulated device stands in for the configured one", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+
+    // The offline launch used to switch silently. Silently substituting a simulated device for
+    // the hardware the user configured is indistinguishable, from the user's side, from the app
+    // deciding their C64U is fine when it is simply unreachable.
+    const snapshot = getConnectionSnapshot();
+    expect(snapshot.demoInterstitialVisible).toBe(true);
+    expect(snapshot.demoInterstitialReason).toBe("no-network");
+  });
+
+  it("does not ask a second time in the same session", async () => {
+    const { discoverConnection, dismissDemoInterstitial, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+    dismissDemoInterstitial();
+    await discoverConnection("settings");
+
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+  });
+
+  it("never asks on a background trigger", async () => {
+    const { discoverConnection, dismissDemoInterstitial, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+    dismissDemoInterstitial();
+    await discoverConnection("background");
+
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+  });
+
+  it("keeps the user in Demo Mode when they confirm from the offline prompt", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, pinDemoModeByUserChoice } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+    await pinDemoModeByUserChoice();
+
+    const snapshot = getConnectionSnapshot();
+    expect(snapshot.state).toBe("DEMO_ACTIVE");
+    expect(snapshot.demoInterstitialVisible).toBe(false);
+    expect(snapshot.demoInterstitialReason).toBeNull();
+  });
+
+  it("reads the simulated device's identity, so capability-gated features are offered in Demo Mode", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const url = String(typeof input === "string" ? input : ((input as Request).url ?? input));
+      if (!url.startsWith(MOCK_BASE_URL)) throw new TypeError("Failed to fetch");
+      return new Response(
+        JSON.stringify({ product: "C64 Ultimate", core_version: "V1.48", hostname: "demo", errors: [] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+    await vi.waitFor(() => expect(getConnectionSnapshot().deviceInfo).not.toBeNull());
+
+    // Without an identity, `deriveDeviceCapabilities` has only a config read to go on, and Live
+    // View — the feature Demo Mode exists to show — was absent from Home until that read landed.
+    const snapshot = getConnectionSnapshot();
+    expect(snapshot.state).toBe("DEMO_ACTIVE");
+    expect(snapshot.deviceInfo?.core_version).toBe("V1.48");
+    expect(offDeviceRequests()).toEqual([]);
   });
 
   it("records the reason as a missing network rather than a failed probe", async () => {
@@ -188,7 +279,7 @@ describe("startup with no network on the device", () => {
     await discoverConnection("startup");
     await discoverConnection("background");
 
-    expect(fetch).not.toHaveBeenCalled();
+    expect(offDeviceRequests()).toEqual([]);
   });
 
   it("does not scan when entering Demo Mode re-routes the API and re-triggers discovery", async () => {
@@ -201,7 +292,7 @@ describe("startup with no network on the device", () => {
 
     expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
     expect(startDeviceDiscovery).not.toHaveBeenCalled();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(offDeviceRequests()).toEqual([]);
   });
 
   it("does not record the simulated device answering as a real device found", async () => {

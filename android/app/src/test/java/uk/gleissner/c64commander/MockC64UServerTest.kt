@@ -8,6 +8,8 @@
 
 package uk.gleissner.c64commander
 
+import java.net.DatagramPacket
+import java.net.DatagramSocket
 import java.net.HttpURLConnection
 import java.net.Socket
 import java.net.URL
@@ -763,6 +765,159 @@ class MockC64UServerTest {
     options.requestMethod = "OPTIONS"
     assertEquals(204, options.responseCode)
     options.disconnect()
+
+    server.stop()
+  }
+
+  @Test
+  fun streamsStartActuallyDispatchesToTheStreamServerNotJustAcksTheRequest() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val assetDir = java.io.File("src/main/assets/demo-stream")
+    val streamServer = MockStreamServer {
+      DemoStreamContent.from(
+              java.io.File(assetDir, "font8x8.bin").readBytes(),
+              java.io.File(assetDir, "tone-ladder.json").readText(),
+      )
+    }
+    val server = MockC64UServer(state, MockTimingProfile.defaultProfile(), null, streamServer)
+    server.start()
+    waitForServer(server)
+
+    DatagramSocket(0).use { receiver ->
+      receiver.soTimeout = 2000
+      val port = receiver.localPort
+
+      val startConnection =
+              URL("${server.baseUrl}/v1/streams/video:start?ip=127.0.0.1:$port").openConnection() as
+                      HttpURLConnection
+      startConnection.requestMethod = "PUT"
+      assertEquals(200, startConnection.responseCode)
+      startConnection.disconnect()
+
+      // Before the fix this endpoint only returned 200 and never sent a single packet, so Live
+      // View in Demo Mode showed "connected" and then nothing. Receiving a real packet here is
+      // what proves streams:start actually started the synthetic generator.
+      val buffer = ByteArray(2048)
+      receiver.receive(DatagramPacket(buffer, buffer.size))
+
+      val stopConnection = URL("${server.baseUrl}/v1/streams/video:stop").openConnection() as HttpURLConnection
+      stopConnection.requestMethod = "PUT"
+      assertEquals(200, stopConnection.responseCode)
+      stopConnection.disconnect()
+    }
+
+    server.stop()
+  }
+
+  @Test
+  fun everyRunnerPutsItsOwnScreenOnTheSimulatedMachine() {
+    // Answering 200 and changing nothing is what made every launch look like it had failed: the app
+    // reported success and Live View carried on showing whatever it showed before.
+    val state = MockC64UState.fromPayload(JSONObject())
+    val assetDir = java.io.File("src/main/assets/demo-stream")
+    val streamServer = MockStreamServer {
+      DemoStreamContent.from(
+              java.io.File(assetDir, "font8x8.bin").readBytes(),
+              java.io.File(assetDir, "tone-ladder.json").readText(),
+      )
+    }
+    val server = MockC64UServer(state, MockTimingProfile.defaultProfile(), null, streamServer)
+    server.start()
+    waitForServer(server)
+
+    fun put(path: String) {
+      val connection = URL("${server.baseUrl}$path").openConnection() as HttpURLConnection
+      connection.requestMethod = "PUT"
+      assertEquals(200, connection.responseCode)
+      connection.disconnect()
+    }
+
+    put("/v1/runners:run_prg?file=/Usb0/Programs/Hello.prg")
+    assertEquals(MachineScreen.Running("HELLO", "PRG"), streamServer.currentScreen())
+
+    put("/v1/runners:run_crt?file=/Usb0/Carts/Action.crt")
+    assertEquals(MachineScreen.Running("ACTION", "CRT"), streamServer.currentScreen())
+
+    put("/v1/runners:load_prg?file=/Usb0/Programs/Hello.prg")
+    assertEquals(MachineScreen.Loading("HELLO", "USB0"), streamServer.currentScreen())
+
+    put("/v1/runners:sidplay?file=/Usb0/Music/Commander%20March.sid")
+    val playing = streamServer.currentScreen()
+    assertTrue("expected a Playing screen, got $playing", playing is MachineScreen.Playing)
+
+    put("/v1/machine:reset")
+    assertEquals(MachineScreen.Ready, streamServer.currentScreen())
+
+    put("/v1/machine:pause")
+    assertEquals(MachineScreen.Paused, streamServer.currentScreen())
+
+    put("/v1/machine:resume")
+    assertEquals(MachineScreen.Ready, streamServer.currentScreen())
+
+    put("/v1/machine:poweroff")
+    assertEquals(MachineScreen.Off, streamServer.currentScreen())
+
+    server.stop()
+  }
+
+  @Test
+  fun writingSystemModeSwitchesTheStreamBetweenPalAndNtsc() {
+    // Setting the machine to NTSC on real hardware changes what comes down the wire, so it has to
+    // here too — otherwise the app's NTSC path can never be exercised without a second device.
+    val payload = JSONObject()
+    payload.put(
+            "categories",
+            JSONObject().put(
+                    "U64 Specific Settings",
+                    JSONObject().put(
+                            "System Mode",
+                            JSONObject()
+                                    .put("value", "PAL")
+                                    .put("options", JSONArray(listOf("PAL", "NTSC", "PAL-60", "NTSC-50"))),
+                    ),
+            ),
+    )
+    val state = MockC64UState.fromPayload(payload)
+    val assetDir = java.io.File("src/main/assets/demo-stream")
+    val streamServer = MockStreamServer {
+      DemoStreamContent.from(
+              java.io.File(assetDir, "font8x8.bin").readBytes(),
+              java.io.File(assetDir, "tone-ladder.json").readText(),
+      )
+    }
+    val server = MockC64UServer(state, MockTimingProfile.defaultProfile(), null, streamServer)
+    server.start()
+    waitForServer(server)
+
+    fun put(path: String) {
+      val connection = URL("${server.baseUrl}$path").openConnection() as HttpURLConnection
+      connection.requestMethod = "PUT"
+      assertEquals(200, connection.responseCode)
+      connection.disconnect()
+    }
+
+    assertEquals("a PAL machine must stream PAL from the start", VideoStandard.PAL, streamServer.currentStandard())
+
+    put("/v1/configs/U64%20Specific%20Settings/System%20Mode?value=NTSC")
+    assertEquals(VideoStandard.NTSC, streamServer.currentStandard())
+
+    put("/v1/configs/U64%20Specific%20Settings/System%20Mode?value=PAL-60")
+    assertEquals("PAL-60 is a PAL line count at 60 Hz, not NTSC", VideoStandard.PAL, streamServer.currentStandard())
+
+    server.stop()
+  }
+
+  @Test
+  fun streamsStartWithoutIpIsRejected() {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val connection = URL("${server.baseUrl}/v1/streams/video:start").openConnection() as HttpURLConnection
+    connection.requestMethod = "PUT"
+    assertEquals(400, connection.responseCode)
+    connection.disconnect()
 
     server.stop()
   }

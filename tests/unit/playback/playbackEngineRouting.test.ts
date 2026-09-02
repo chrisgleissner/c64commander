@@ -25,6 +25,32 @@ describe("playbackEngineRouting", () => {
       }
     });
 
+    it("plays a SID here when the device answering is the simulation, whatever the engine setting says", () => {
+      // The simulated device has no SID chip, so a tune sent to it is a success toast and silence.
+      expect(preRouteEngine({ category: "sid", engine: "c64", localSupported: true, simulatedDevice: true })).toEqual({
+        route: "local",
+        notice: "simulated-device-local-sid",
+      });
+    });
+
+    it("leaves everything the local engine cannot play on the simulated device", () => {
+      // Only SID can play on-device, and the simulated device does show a screen for a program or a
+      // cartridge — so those still go to it rather than failing here.
+      for (const category of ["mod", "prg", "crt", "disk"] as const) {
+        expect(preRouteEngine({ category, engine: "c64", localSupported: true, simulatedDevice: true })).toEqual({
+          route: "c64",
+          notice: null,
+        });
+      }
+    });
+
+    it("does not claim the local engine on the simulated device when the platform cannot run it", () => {
+      expect(preRouteEngine({ category: "sid", engine: "c64", localSupported: false, simulatedDevice: true })).toEqual({
+        route: "c64",
+        notice: null,
+      });
+    });
+
     it("plays a supported SID on the local engine", () => {
       expect(preRouteEngine({ category: "sid", engine: "local", localSupported: true })).toEqual({
         route: "local",

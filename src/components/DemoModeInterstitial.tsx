@@ -27,8 +27,23 @@ import {
 import { resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { saveConfiguredHostAndRetry } from "@/lib/connection/hostEdit";
 
+/**
+ * The dialog's words, in one place.
+ *
+ * `DialogDescription` is sr-only in this app (see components/ui/dialog.tsx), so the same sentences
+ * are rendered twice — once as the accessible description, once as visible body copy that bolds
+ * the hostname. Splitting at the hostname is what lets both come from these constants instead of
+ * being written out twice and drifting apart.
+ */
+const NOT_FOUND_PREFIX = "No C64U was found at";
+const NOT_FOUND_SUFFIX =
+  ". You can continue in Demo Mode using the built-in simulated device, or retry connecting to real hardware.";
+const NO_NETWORK_MESSAGE =
+  "This device has no network connection, so no C64U can be reached. You can continue in Demo Mode using the " +
+  "built-in simulated device, or connect to a network and try again.";
+
 export function DemoModeInterstitial() {
-  const { demoInterstitialVisible } = useConnectionState();
+  const { demoInterstitialVisible, demoInterstitialReason } = useConnectionState();
   const [deviceHostInput, setDeviceHostInput] = useState("");
   const [hostError, setHostError] = useState<string | null>(null);
 
@@ -42,6 +57,11 @@ export function DemoModeInterstitial() {
   if (!demoInterstitialVisible) return null;
 
   const attemptedHost = resolveDeviceHostFromStorage();
+  // With no network there is no host to reach and no scan to repeat, so the dialog drops the
+  // hostname field and Save & retry: offering either would invite the user to answer a question
+  // that cannot change the outcome until they turn a network back on.
+  const noNetwork = demoInterstitialReason === "no-network";
+  const message = noNetwork ? NO_NETWORK_MESSAGE : `${NOT_FOUND_PREFIX} ${attemptedHost}${NOT_FOUND_SUFFIX}`;
 
   const handleSaveAndRetry = () => {
     try {
@@ -65,29 +85,38 @@ export function DemoModeInterstitial() {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Demo Mode</DialogTitle>
-          <DialogDescription>
-            No C64U was found at <strong data-testid="demo-interstitial-hostname">{attemptedHost}</strong>. You can
-            continue in Demo Mode using the built-in simulated device, or retry connecting to real hardware.
-          </DialogDescription>
+          <DialogDescription data-testid="demo-interstitial-description">{message}</DialogDescription>
         </DialogHeader>
-        <div className="space-y-2 py-2">
-          <Label htmlFor="demo-device-host">C64U hostname / IP</Label>
-          <Input
-            id="demo-device-host"
-            data-testid="demo-interstitial-host-input"
-            value={deviceHostInput}
-            onChange={(e) => {
-              setDeviceHostInput(e.target.value);
-              setHostError(null);
-            }}
-            placeholder={attemptedHost}
-          />
-          {hostError ? (
-            <p className="text-xs text-destructive" data-testid="demo-interstitial-host-error">
-              {hostError}
-            </p>
-          ) : null}
-        </div>
+        <p className="px-4 pt-1 text-sm text-muted-foreground sm:px-6" data-testid="demo-interstitial-message">
+          {noNetwork ? (
+            message
+          ) : (
+            <>
+              {NOT_FOUND_PREFIX} <strong data-testid="demo-interstitial-hostname">{attemptedHost}</strong>
+              {NOT_FOUND_SUFFIX}
+            </>
+          )}
+        </p>
+        {noNetwork ? null : (
+          <div className="space-y-2 px-4 py-2 sm:px-6">
+            <Label htmlFor="demo-device-host">C64U hostname / IP</Label>
+            <Input
+              id="demo-device-host"
+              data-testid="demo-interstitial-host-input"
+              value={deviceHostInput}
+              onChange={(e) => {
+                setDeviceHostInput(e.target.value);
+                setHostError(null);
+              }}
+              placeholder={attemptedHost}
+            />
+            {hostError ? (
+              <p className="text-xs text-destructive" data-testid="demo-interstitial-host-error">
+                {hostError}
+              </p>
+            ) : null}
+          </div>
+        )}
         <DialogFooter>
           <div className="flex flex-col gap-2 w-full sm:flex-row sm:justify-end">
             <Button
@@ -98,11 +127,13 @@ export function DemoModeInterstitial() {
                 void discoverConnection("manual");
               }}
             >
-              Retry connection
+              {noNetwork ? "Try again" : "Retry connection"}
             </Button>
-            <Button variant="secondary" data-testid="demo-interstitial-save-retry" onClick={handleSaveAndRetry}>
-              Save & retry
-            </Button>
+            {noNetwork ? null : (
+              <Button variant="secondary" data-testid="demo-interstitial-save-retry" onClick={handleSaveAndRetry}>
+                Save & retry
+              </Button>
+            )}
             <Button
               variant="default"
               data-testid="demo-interstitial-continue"

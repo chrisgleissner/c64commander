@@ -326,6 +326,37 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(2);
   });
 
+  it("probes nothing while Demo Mode is active", async () => {
+    // These probes go to the SAVED devices. Left running in Demo Mode they filled Diagnostics with
+    // failures against hardware the user had deliberately stepped away from, and on a live network
+    // they put traffic on real devices that nothing in Demo Mode has any business touching.
+    mockGetConnectionSnapshot.mockReturnValue({
+      state: "DEMO_ACTIVE",
+      lastDiscoveryTrigger: null,
+      lastTransitionAtMs: 0,
+      lastProbeAtMs: null,
+      lastProbeSucceededAtMs: null,
+      lastProbeFailedAtMs: null,
+      lastProbeError: null,
+      deviceInfo: null,
+      demoInterstitialVisible: false,
+    });
+
+    const savedDevices = buildSavedDevices();
+    renderBackgroundHook(savedDevices);
+    await flushAsyncWork();
+
+    expect(mockRunConnectivityProbeForTarget).not.toHaveBeenCalled();
+    expect(mockRunHealthCheckForTarget).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(120_000);
+    });
+    await flushAsyncWork();
+
+    expect(mockRunConnectivityProbeForTarget).not.toHaveBeenCalled();
+  });
+
   it("surfaces circuit-open state without issuing a background probe", async () => {
     mockGetDeviceStateSnapshot.mockReturnValue({
       state: "ERROR",

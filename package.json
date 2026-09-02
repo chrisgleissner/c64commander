@@ -44,7 +44,7 @@
     "build:web-server": "tsc -p web/server/tsconfig.json",
     "build:web-platform": "npm run build && npm run build:web-server",
     "build:dev": "node scripts/run-vite.mjs build --mode development",
-    "lint": "npm run format:check:ts && eslint . && npm run typecheck && npm run lint:display-profiles && npm run lint:font-size-floors && npm run lint:bundle-budgets && npm run lint:stale-names && npm run variant:check && npm run feature-flags:check && npm run menu-mapping:check && npm run palettes:check && npm run styles:check && npm run search:check",
+    "lint": "npm run format:check:ts && eslint . && npm run typecheck && npm run lint:display-profiles && npm run lint:font-size-floors && npm run lint:bundle-budgets && npm run lint:stale-names && npm run variant:check && npm run feature-flags:check && npm run menu-mapping:check && npm run palettes:check && npm run styles:check && npm run search:check && npm run demo-stream:check && npm run demo-device:check",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "lint:stale-names": "node scripts/check-stale-variant-names.mjs",
     "lint:display-profiles": "node scripts/check-display-profile-breakpoints.mjs",
@@ -149,7 +149,11 @@
     "wasm:sync": "node scripts/sync-libsidplayfp-wasm.mjs",
     "native:prune-assets": "node scripts/prune-native-assets.mjs",
     "lint:font-size-floors": "node scripts/check-font-size-floors.mjs",
-    "screenshots:prune-drift": "node scripts/revert-visually-identical-pngs.mjs"
+    "screenshots:prune-drift": "node scripts/revert-visually-identical-pngs.mjs",
+    "demo-stream:build": "npx vite-node --script scripts/build-demo-stream-assets.ts",
+    "demo-stream:check": "npx vite-node --script scripts/build-demo-stream-assets.ts --check",
+    "demo-device:build": "node scripts/build-demo-device-content.mjs",
+    "demo-device:check": "node scripts/build-demo-device-content.mjs --check"
   },
   "dependencies": {
     "7z-wasm": "^1.2.0",

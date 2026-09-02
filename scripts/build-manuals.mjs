@@ -587,7 +587,7 @@ const featureRows = ({ features, variant }) => {
     rows.push([
       "Demo Mode",
       "**Settings → Connection**",
-      `${featureAvailability(features.demo_mode_enabled)} Separately from that setting, a launch with no network at all opens on the simulated device on its own.`,
+      `${featureAvailability(features.demo_mode_enabled)} When no C64 Ultimate can be reached — because none answers, or because the phone has no network — the app offers the simulated device and waits for you to accept. **Preview Demo Mode**, in the same section, switches to it at any time, including while a real C64 Ultimate is connected, and **Use the simulated device** appears on the connection card behind the connectivity badge whenever the app is offline. The simulated device holds its own music, programs, cartridges and disks, and Live View shows its screen: the BASIC prompt, a load in progress, or the program you started. It cannot run a real C64 program, and says so on that screen; a tune plays on your phone's own SID engine instead.`,
     ]);
   }
   if (includeFeature(features, "background_execution_enabled")) {

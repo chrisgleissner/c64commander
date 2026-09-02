@@ -16,6 +16,11 @@ Known so far:
 - The compact-profile density work on `ux/compact-density` (separate branch) will change spacing on
   most compact screenshots when it lands.
 - The follow-focus feature on `feat/follow-focus` (separate branch) adds Live View UI.
+- Demo Mode is on by default from `demo-mode-offline-and-av-stream`, so **Settings → Devices** now
+  shows a checked **Automatic Demo Mode** and a **Preview Demo Mode** button, and everything below
+  them in that group has moved down. Nothing under `docs/img/app/settings/` has been recaptured for
+  it. A whole-corpus run on that branch was checked and discarded: all 252 files it rewrote differed
+  only by antialiasing or by where the page happened to be scrolled, which is the trap below.
 
 ## How — and the trap
 

@@ -79,7 +79,7 @@ export const variantConfig = {
       },
       demo_mode_enabled: {
         developer_only: false,
-        enabled: false,
+        enabled: true,
         visible_to_user: true,
       },
       disk_explorer_enabled: {

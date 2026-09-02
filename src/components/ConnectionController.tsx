@@ -252,8 +252,13 @@ export function ConnectionController() {
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail as
-        { baseUrl?: string; password?: string; deviceHost?: string } | undefined;
+        { baseUrl?: string; password?: string; deviceHost?: string; mode?: string } | undefined;
       if (!detail) return;
+      // Only a persisted change is a settings edit. A runtime re-route is the app moving its own
+      // API target — entering Demo Mode does exactly that — and rediscovering on it probed the
+      // still-stored real host, cleared the user's Demo Mode pin and connected straight back to
+      // the device they had just chosen to step away from.
+      if (detail.mode === "runtime") return;
       const next = {
         baseUrl: typeof detail.baseUrl === "string" ? detail.baseUrl : "",
         password: typeof detail.password === "string" ? detail.password : "",

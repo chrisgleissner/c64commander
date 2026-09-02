@@ -16,6 +16,8 @@ physical rig), while the host-deterministic budget checks run in CI.
   enter the app the way a handset's keypad enters it.
 - **`hvsc_search_soak.mjs`** — "Find a tune" latency over many consecutive queries. See **HVSC
   search** below.
+- **`demo_mode_hil.ts`** — Demo Mode end to end with no Ultimate involved at all. See **Demo Mode**
+  below.
 
 ## THE trap: a hidden WebView
 
@@ -116,14 +118,14 @@ instead — a rule that means nothing until something checks it against the mach
 sprites move over a dotted backdrop; sprite 0 is "the player", and the programme it runs is the
 list of things that break object trackers, one every three seconds:
 
-| Phase | 150 frames each | What it is for |
-| --- | --- | --- |
-| 1 IDLE | drifts one pixel a frame, steady colour | lock on here |
-| 2 WALK | two pixels a frame, vertical wander | ordinary play |
-| 3 FLASH | colour changes every four frames, then keeps a new one | damage, then a power-up |
-| 4 FAST | eight pixels a frame, off one side and back on the other | screen wrap |
-| 5 CROSS | the player and sprite 1 — same shape, same colour — pass through each other | identity swap |
-| 6 HIDE | the player is switched off for 40 frames while it keeps moving | occlusion |
+| Phase   | 150 frames each                                                             | What it is for          |
+| ------- | --------------------------------------------------------------------------- | ----------------------- |
+| 1 IDLE  | drifts one pixel a frame, steady colour                                     | lock on here            |
+| 2 WALK  | two pixels a frame, vertical wander                                         | ordinary play           |
+| 3 FLASH | colour changes every four frames, then keeps a new one                      | damage, then a power-up |
+| 4 FAST  | eight pixels a frame, off one side and back on the other                    | screen wrap             |
+| 5 CROSS | the player and sprite 1 — same shape, same colour — pass through each other | identity swap           |
+| 6 HIDE  | the player is switched off for 40 frames while it keeps moving              | occlusion               |
 
 Sprite 1 is a deliberate look-alike: the player's own shape in the player's own colour. **If the
 view comes out of phase 5 following sprite 1, that is the defect the phase exists to find.**
@@ -398,3 +400,54 @@ Two practical notes the app depends on:
 - **Don't hammer the device while streaming.** Heavy concurrent REST (e.g. bulk `readmem` polling)
   degrades the video stream (observed ~47 → ~23 fps) and drops the 1-frame flashes. Read state
   sparingly during a soak.
+
+## Demo Mode
+
+```bash
+npx vite-node --script tools/hil/demo_mode_hil.ts -- --serial <adb serial> \
+  --json artifacts/demo-mode-hil/summary.json
+npx vite-node --script tools/hil/demo_mode_hil.ts -- --serial <adb serial> --only av-stream
+```
+
+**The phone must be in flight mode with no routable interface, and the run refuses to start
+otherwise.** That is not only what the first stage is about — it is what makes the whole run safe.
+With no radio there is no path to a c64u, u64 or u2, so no stage can put a packet near one however
+the app behaves. The "a network is up but nothing answers on it" stage injects the network status
+rather than turning a radio on, for the same reason.
+
+Eleven stages:
+
+| Stage               | What it establishes                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `offline-offer`     | A fresh launch with no network offers Demo Mode, with the explanation visible on screen and no hostname field; confirming reaches `DEMO_ACTIVE`. Records how long after the launch intent the offer appears.                                                                                                                                                                                                 |
+| `unreachable-offer` | With a network reported up and nothing answering, the app probes, fails, and offers Demo Mode naming the host it tried.                                                                                                                                                                                                                                                                                      |
+| `av-stream`         | Live View in Demo Mode: assembled frame rate, audio packets per second and loss, the sender being loopback only, all sixteen tone-ladder colours walked off the decoded canvas, and every note's pitch graded from PCM captured on the phone.                                                                                                                                                                |
+| `library`           | The simulated device's own music, programs, cartridges and disks are listed by the app's own Add-items flow.                                                                                                                                                                                                                                                                                                 |
+| `music`             | A tune from the simulated device reaches the speaker — frames written to the mixer, counted from the kernel — and the device's screen names it. **Audible**, about fifteen seconds.                                                                                                                                                                                                                          |
+| `prg-stream`        | Starting a program changes what Live View shows. Keeps a decoded frame and a five-second screen recording.                                                                                                                                                                                                                                                                                                   |
+| `crt-stream`        | The same for a cartridge.                                                                                                                                                                                                                                                                                                                                                                                    |
+| `disks`             | A disk from the simulated device end to end: a three-image folder added through the app's own picker, `Disk 1.d64` mounted on Drive A, the Disk Explorer reading its directory off the image, and a program run from it changing what Live View shows.                                                                                                                                                       |
+| `ntsc-stream`       | The other raster standard end to end: `System Mode` is switched to NTSC on the Config page, and the stream becomes 240-line frames the receiver assembles at 60 fps with nothing lost. Asserts the assembled rate and the painted rate separately, because on a debug build it is the PAINTING that occasionally sheds a frame, not the machine or the receiver. Switched back to PAL before the stage ends. |
+| `performance`       | While video and audio both run: frame rate held over a twelve-second window, video and audio loss measured as a delta over ten seconds, processor use, and how long each tab takes to answer a press — measured again with the stream stopped, so what is asserted is the stream's contribution.                                                                                                             |
+| `cta-census`        | Every main route renders in Demo Mode with no error boundary, with enabled controls, and with every control reachable by a tap once scrolled into view.                                                                                                                                                                                                                                                      |
+
+The `av-stream` stage relaunches into a stock session first. `__c64uTestProbeEnabled`, which the
+`unreachable-offer` stage needs in order to inject a network status, also tells the app not to start
+its own mock server — a session carrying it enters Demo Mode routed at the stored real host and
+streams nothing. The process restart is what clears it.
+
+Audio discipline: the stage steps the music stream down to 6 of 25 before it plays anything, and the
+ladder is a C-major octave at -14.7 dBFS. Total audible time is about 25 seconds.
+
+Artefacts land in `artifacts/demo-mode-hil/`: the JSON named by `--json` with every measurement, the
+frames decoded off the Live View canvas (`live-view-frame.png`, `prg-running.png`, `crt-running.png`,
+`music-now-playing.png`, `ntsc-frame.png`), the `*-running.mp4` and `ntsc-stream.mp4` screen
+recordings, and `mirror.wav` as captured by the audio pipeline.
+
+Reference numbers from this rig (Pixel 4, debug build): offer on screen 2.4 s after the launch
+intent; 50-51 fps PAL, and NTSC assembled at 60.0-60.2 fps with 633-674 frames painted in the
+measurement window, each with 0 lost frames; 250 audio
+packets a second with 0 lost and 0 underruns; 48,288 frames a second reaching the speaker while a
+tune plays; 13.4% of the device's processors; every tab answering a press in 34-254 ms except Home,
+which takes about 410 ms while streaming against 30 ms with the mirror stopped, because returning to
+it re-mounts the Live View card.

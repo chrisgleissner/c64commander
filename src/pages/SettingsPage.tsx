@@ -203,7 +203,7 @@ import { getStoredFtpPort, setStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { FolderPicker, type SafPersistedUri } from "@/lib/native/folderPicker";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
-import { discoverConnection, getConnectionSnapshot } from "@/lib/connection/connectionManager";
+import { discoverConnection, getConnectionSnapshot, pinDemoModeByUserChoice } from "@/lib/connection/connectionManager";
 import { evaluateNewDeviceReachability } from "@/lib/connection/addDeviceReachability";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
@@ -369,6 +369,7 @@ export default function SettingsPage() {
   const [discoverySwitchBusyId, setDiscoverySwitchBusyId] = useState<string | null>(null);
   const [discoveryPasswordInput, setDiscoveryPasswordInput] = useState("");
   const [discoveryPasswordError, setDiscoveryPasswordError] = useState<string | null>(null);
+  const [demoPreviewBusy, setDemoPreviewBusy] = useState(false);
   const runtimeDeviceHost = stripPortFromDeviceHost(deviceHost);
   const runtimeHttpPort = getDeviceHostHttpPort(deviceHost, runtimeBaseUrl);
   const isDemoActive = status.state === "DEMO_ACTIVE";
@@ -1765,6 +1766,27 @@ export default function SettingsPage() {
                       }}
                     />
                   </div>
+                  {!isDemoActive ? (
+                    <div className="space-y-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={demoPreviewBusy}
+                        data-testid="settings-preview-demo-mode"
+                        onClick={() => {
+                          setDemoPreviewBusy(true);
+                          void pinDemoModeByUserChoice().finally(() => setDemoPreviewBusy(false));
+                        }}
+                      >
+                        {demoPreviewBusy ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
+                        Preview Demo Mode
+                      </Button>
+                      <HelperText>
+                        Switch to the built-in simulated device now, even while a real C64U is connected.
+                      </HelperText>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 

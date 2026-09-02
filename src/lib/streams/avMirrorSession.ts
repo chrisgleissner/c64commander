@@ -18,6 +18,7 @@
  */
 
 import { C64API, getC64API } from "@/lib/c64api";
+import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { addLog } from "@/lib/logging";
 import { Capacitor } from "@capacitor/core";
 
@@ -250,6 +251,7 @@ export class AvMirrorSession {
             ...opts,
             port: loadStreamAudioPort(),
             expectedSource: getC64API().getDeviceHost(),
+            demoLoopback: getConnectionSnapshot().state === "DEMO_ACTIVE",
           })),
       createPlayer: deps.createPlayer,
       // Native low-latency audio when the setting is on AND we're on a device with the plugin;
@@ -290,6 +292,7 @@ export class AvMirrorSession {
             // Accept video only from the selected machine. Every Ultimate defaults to the same
             // multicast group, so a second one streaming into it is assembled into our frames.
             expectedSource: getC64API().getDeviceHost(),
+            demoLoopback: getConnectionSnapshot().state === "DEMO_ACTIVE",
           })),
       renderFrame: (frame, height, arrivalMs) => this.emitFrame(frame, height, arrivalMs),
       // Start at the governor's effective divisor (from the saved frame-rate mode); the tick keeps it live.
