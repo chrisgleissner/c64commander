@@ -608,17 +608,22 @@ config Save/Load/Manage, RAM snapshot manager, song selector, drive-status
 details, item/disk pickers, Diagnostics dialog, Open source licenses page.
 
 **Demo Mode dialog** (`demo-interstitial-*`, a modal decision interstitial shown at
-most once per session when a probe fails **while the device has a network** and the
-`demo_mode_enabled` flag plus the Demo Mode setting are both on): attempted hostname
-— text — `demo-interstitial-hostname` — display only ; C64U hostname / IP — text input
-— `demo-interstitial-host-input` — R✅ I✅ ; host error — text —
-`demo-interstitial-host-error` — display only `[only after a rejected hostname]` ;
-Retry connection — button — `demo-interstitial-retry` — R✅ I✅ ; Save & retry — button
-— `demo-interstitial-save-retry` — R✅ I✅ ; Continue in Demo Mode — button —
-`demo-interstitial-continue` — R✅ I✅. It is **not** shown when the simulated device
-starts by itself because the platform reports no network at all: there is no host to
-offer and no decision to take, so that path enters Demo Mode directly and the route to
-real hardware stays in **Settings → Device → Connection**.
+most once per session, on both automatic routes into Demo Mode — a failed probe, and a
+platform that reports no network at all — while the `demo_mode_enabled` flag and the
+Demo Mode setting are both on): explanation — text — `demo-interstitial-message` —
+display only ; attempted hostname — text — `demo-interstitial-hostname` — display only
+`[not shown with no network]` ; C64U hostname / IP — text input —
+`demo-interstitial-host-input` — R✅ I✅ `[not shown with no network]` ; host error —
+text — `demo-interstitial-host-error` — display only `[only after a rejected hostname]`
+; Retry connection / Try again — button — `demo-interstitial-retry` — R✅ I✅ (the label
+reads "Try again" with no network) ; Save & retry — button —
+`demo-interstitial-save-retry` — R✅ I✅ `[not shown with no network]` ; Continue in Demo
+Mode — button — `demo-interstitial-continue` — R✅ I✅.
+
+With no network the dialog drops the hostname field, its error line and Save & retry:
+neither editing a hostname nor re-saving one can make a device reachable until a network
+comes back, so the only decisions left are to continue or to try again. The route to
+real hardware also stays in **Settings → Device → Connection**.
 
 **Automatic device discovery dialog** (`startup-discovered-device-*`, shown after
 startup/resume discovery completes while no configured device is reachable):
