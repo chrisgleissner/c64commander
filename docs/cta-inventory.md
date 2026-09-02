@@ -607,6 +607,13 @@ closes). Examples: machine-action confirmations (Reset/Reboot/Power Off),
 config Save/Load/Manage, RAM snapshot manager, song selector, drive-status
 details, item/disk pickers, Diagnostics dialog, Open source licenses page.
 
+**Diagnostics dialog — connection card** (opened from the connectivity badge on any page):
+Run health check — button — `run-health-check` — R✅ I✅ ; Use the simulated device — button —
+`use-simulated-device-action` — R✅ I✅ `[visible only while the app reports itself offline or has
+not connected yet, and the demo_mode_enabled flag is on]`. It is the way into Demo Mode for a user
+who dismissed the offer or turned Automatic Demo Mode off; the other two are that offer's
+**Continue in Demo Mode** and **Preview Demo Mode** in Settings → Devices.
+
 **Demo Mode dialog** (`demo-interstitial-*`, a modal decision interstitial shown at
 most once per session, on both automatic routes into Demo Mode — a failed probe, and a
 platform that reports no network at all — while the `demo_mode_enabled` flag and the

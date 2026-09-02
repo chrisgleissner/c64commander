@@ -106,6 +106,66 @@ class MockStreamServerTest {
   }
 
   @Test
+  fun theStreamGoesSilentWhileThePhoneIsPlayingTheTune() {
+    // The tune's sound comes from the phone's own SID engine, so a stream carrying its own music on
+    // top would be two pieces of music at once. The loop keeps running — the sequence numbers stay
+    // continuous and the receiver sees no gap — but the samples are zero.
+    val server = server()
+    DatagramSocket(0).use { receiver ->
+      receiver.soTimeout = 4000
+      try {
+        server.show(MachineScreen.Playing("COMMANDER MARCH", "Usb0"), audible = false)
+        server.start("audio", "127.0.0.1:${receiver.localPort}")
+
+        val sequences = mutableListOf<Int>()
+        repeat(10) {
+          val buffer = ByteArray(2048)
+          val packet = DatagramPacket(buffer, buffer.size)
+          receiver.receive(packet)
+          val payload = buffer.copyOfRange(packet.offset, packet.offset + packet.length)
+          sequences += DemoStreamContent.readU16LE(payload, 0)
+          for (index in DemoStreamContent.AUDIO_SEQ_BYTES until payload.size) {
+            assertEquals("sample byte $index must be silence", 0, payload[index].toInt())
+          }
+        }
+        for (index in 1 until sequences.size) {
+          assertEquals("the sequence must stay continuous through the silence", (sequences[0] + index) and 0xffff, sequences[index])
+        }
+      } finally {
+        server.stopAll()
+      }
+    }
+  }
+
+  @Test
+  fun theStreamPlaysItsOwnTuneWhenNothingElseIs() {
+    val server = server()
+    DatagramSocket(0).use { receiver ->
+      receiver.soTimeout = 4000
+      try {
+        server.show(MachineScreen.Ready)
+        server.start("audio", "127.0.0.1:${receiver.localPort}")
+        var loudest = 0
+        // The ladder opens with a half-second silence, which is 125 packets at ~4 ms each, so a
+        // short capture would grade the silence and call the stream dead.
+        repeat(400) {
+          val buffer = ByteArray(2048)
+          val packet = DatagramPacket(buffer, buffer.size)
+          receiver.receive(packet)
+          val payload = buffer.copyOfRange(packet.offset, packet.offset + packet.length)
+          for (offset in DemoStreamContent.AUDIO_SEQ_BYTES until payload.size step 4) {
+            val sample = DemoStreamContent.readU16LE(payload, offset).toShort().toInt()
+            loudest = maxOf(loudest, kotlin.math.abs(sample))
+          }
+        }
+        assertTrue("the idle stream must carry the ladder, not silence: peak was $loudest", loudest > 1000)
+      } finally {
+        server.stopAll()
+      }
+    }
+  }
+
+  @Test
   fun contentIsBuiltOnceAndReusedForEveryPacket() {
     // The whole point of pre-building is that the send loop does no work per packet. If the loop
     // ever went back to the provider, this device would be rendering nine seconds of audio and 18
