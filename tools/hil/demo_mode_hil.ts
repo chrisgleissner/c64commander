@@ -156,13 +156,26 @@ const enterStockDemoMode = async () => {
   }
   const state = await connectionState();
   expect(state === "DEMO_ACTIVE", `expected DEMO_ACTIVE, got ${state}`);
-  // Prove the simulated device is what the app is talking to: with no network, a session routed
-  // at the stored real host would report Demo Mode and then fail every read.
-  const identity = await js(`(() => {
-    const badge = document.querySelector('[data-panel-position="1"] [data-testid=unified-health-badge]');
-    return { state: badge ? badge.getAttribute("data-connection-state") : null };
+
+  // DEMO_ACTIVE alone does not say what the app is talking to: a session that could not start the
+  // simulated device reports Demo Mode and stays routed at the stored real host. Settings prints
+  // the runtime target, so read it — it has to be the loopback mock.
+  const target = await js(`(async () => {
+    history.pushState({}, "", "/settings");
+    dispatchEvent(new PopStateEvent("popstate"));
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const line = Array.from(document.querySelectorAll("*"))
+      .map((node) => node.textContent || "")
+      .find((text) => text.startsWith("Currently using:"));
+    history.pushState({}, "", "/");
+    dispatchEvent(new PopStateEvent("popstate"));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    return line || "";
   })()`);
-  expect(identity.state === "DEMO_ACTIVE", "the session did not settle in Demo Mode");
+  expect(
+    /Currently using:\s*127\.0\.0\.1/.test(target) && target.includes("(Demo mock)"),
+    `the app is not routed at the simulated device: ${JSON.stringify(target.slice(0, 120))}`,
+  );
 };
 
 // ── stage plumbing ───────────────────────────────────────────────────────────────────────────
