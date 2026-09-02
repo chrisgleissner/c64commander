@@ -221,6 +221,13 @@ export interface StreamUdpPlugin {
    * a control that still reads "Watching").
    */
   readStreamDiagnostics(options: { name: string }): Promise<StreamUdpStreamDiagnostics>;
+  /**
+   * Ask for audio focus again for a sink that is already open.
+   *
+   * `openAudioTrack` takes focus, but a pause leaves the track open, so a resume has no open call to
+   * ride on. Without this, a tune resumed after another app interrupted it played with no focus.
+   */
+  requestAudioFocus(): Promise<{ granted: boolean }>;
   /** Stop + release the native audio sink. Safe to call when none is open. */
   closeAudioTrack(options?: Record<string, never>): Promise<void>;
   /**

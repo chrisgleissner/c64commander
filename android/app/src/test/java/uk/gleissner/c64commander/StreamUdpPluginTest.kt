@@ -485,6 +485,34 @@ class StreamUdpPluginTest {
     plugin.closeAudioTrack(resolvingCall {}.first)
   }
 
+  @Test
+  fun aResumeAfterAPermanentLossTakesAudioFocusBackForTheStillOpenTrack() {
+    // HARD27-006, second cause. A pause does not close the sink, so the resume has no
+    // openAudioTrack to take focus on. The plugin also kept audioFocusHeld true after the system
+    // had taken focus away, which made any later request a no-op: the tune played on with no focus
+    // and no callback for the next interruption.
+    val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    val shadow = shadowOf(audio)
+    plugin.openAudioTrack(resolvingCall { `when`(it.getInt("sampleRate")).thenReturn(47983) }.first)
+    val listener = shadow.lastAudioFocusRequest.listener
+    listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS)
+
+    // Whether the plugin really asked the system again is only visible in what the system answers,
+    // so the next answer is made a refusal: a plugin that skipped the request would report the
+    // focus it wrongly believed it still had.
+    shadow.setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_FAILED)
+    val (refused, readRefused) = resolvingCall {}
+    plugin.requestAudioFocus(refused)
+    assertEquals(false, readRefused()?.getBool("granted"))
+
+    shadow.setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+    val (granted, readGranted) = resolvingCall {}
+    plugin.requestAudioFocus(granted)
+    assertEquals(true, readGranted()?.getBool("granted"))
+
+    plugin.closeAudioTrack(resolvingCall {}.first)
+  }
+
   private fun resolvingCall(configure: (PluginCall) -> Unit): Pair<PluginCall, () -> JSObject?> {
     val call = mock(PluginCall::class.java)
     configure(call)

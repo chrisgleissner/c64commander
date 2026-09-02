@@ -25,6 +25,7 @@ import {
 import { accurateEngineViable, recordRenderMeasurement, renderRatio, startupBufferSeconds } from "./renderThroughput";
 import { addLog, addErrorLog } from "@/lib/logging";
 import { claimPhoneAudio, phoneAudioOwner, releasePhoneAudio } from "@/lib/audio/phoneAudioOwnership";
+import { reacquirePlaybackAudioFocus } from "@/lib/audio/audioFocusPolicy";
 import { clearLocalAudioHealth, reportLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
 import { notifyPlaybackActivityChanged } from "./playbackActivitySignal";
 import type { PendingSeekState } from "./pendingSeekStatus";
@@ -1996,6 +1997,9 @@ export class LocalSidEngine {
   /** Resume after {@link pause}. */
   async resume(): Promise<void> {
     this.paused = false;
+    // The sink stayed open across the pause, so nothing else asks for audio focus on the way back
+    // in. Whatever interrupted this tune holds it until this call (HARD27-006).
+    void reacquirePlaybackAudioFocus();
     // The buffer drained while the clock was suspended; give the pipeline the same grace a fresh
     // start gets rather than judging it on how long the pause lasted.
     this.lastAudioAtMs = Date.now();

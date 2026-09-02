@@ -61,6 +61,26 @@ export const handleAudioFocusChange = (change: StreamUdpAudioFocusChange): void 
 };
 
 /**
+ * Take audio focus back for a source that is resuming into an already-open sink.
+ *
+ * The native sink asks for focus when it opens, and a pause does not close it, so a resume would
+ * otherwise play with focus the system had already given to the app that interrupted it — no loss
+ * callback, and the two-sounds failure on the next interruption. Idempotent: the plugin returns
+ * early when it still holds focus.
+ */
+export const reacquirePlaybackAudioFocus = async (): Promise<void> => {
+  if (!isNativePlatform() || getPlatform() !== "android") return;
+  try {
+    await StreamUdp.requestAudioFocus();
+  } catch (error: unknown) {
+    addLog("warn", "Could not take audio focus back for the resuming source", {
+      service: "audio",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
+/**
  * Subscribe to the native sink's focus events. Returns a cleanup; a no-op off native Android, where
  * no such sink exists.
  */

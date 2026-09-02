@@ -202,7 +202,14 @@ class StreamUdpPlugin : Plugin() {
   private val audioFocusListener =
     AudioManager.OnAudioFocusChangeListener { focusChange ->
       when (focusChange) {
-        AudioManager.AUDIOFOCUS_LOSS -> emitAudioFocusChange(FOCUS_LOSS)
+        AudioManager.AUDIOFOCUS_LOSS -> {
+          // The system has taken focus away, so the request this plugin is holding is spent. Not
+          // recording that made requestPlaybackAudioFocus a no-op for the rest of the track's life
+          // (it returns early while audioFocusHeld is true), so a tune resumed after an interruption
+          // played with no focus at all and got no callback for the next one.
+          audioFocusHeld = false
+          emitAudioFocusChange(FOCUS_LOSS)
+        }
         AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> emitAudioFocusChange(FOCUS_LOSS_TRANSIENT)
         AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
           // Android 8+ ducks an app that has not opted out, and then does not call this at all; on
@@ -638,6 +645,21 @@ class StreamUdpPlugin : Plugin() {
       audioPipeline?.setGain(gain)
     }
     call.resolve(JSObject())
+  }
+
+  /**
+   * Ask for audio focus again for a sink that is already open.
+   *
+   * Focus is normally taken in `openAudioTrack`, but a pause does not close the track: an
+   * interruption suspends the JS side and leaves the native pipeline in place. The resume therefore
+   * has no `openAudioTrack` to ride on, and this is the call that gives it one.
+   */
+  @PluginMethod
+  fun requestAudioFocus(call: PluginCall) {
+    requestPlaybackAudioFocus()
+    val result = JSObject()
+    result.put("granted", audioFocusHeld)
+    call.resolve(result)
   }
 
   @PluginMethod
