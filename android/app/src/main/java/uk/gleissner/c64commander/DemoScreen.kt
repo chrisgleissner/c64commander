@@ -53,6 +53,26 @@ sealed interface MachineScreen {
  * because the tone ladder steps it once per note and re-rendering the text 18 times to change one
  * colour would be most of a megabyte of pixel work for nothing.
  */
+/** The two raster standards a C64 runs at, which decide the frame height and the frame rate. */
+enum class VideoStandard(val height: Int, val framesPerSlot: Int) {
+  /** 272 lines at ~50 Hz, and the 25 frames a tone-ladder slot lasts. */
+  PAL(272, 25),
+
+  /** 240 lines at ~60 Hz. A slot is the same half-second, so it spans more frames. */
+  NTSC(240, 30);
+
+  companion object {
+    /**
+     * The standard a `System Mode` config value names.
+     *
+     * The firmware's list includes PAL-60 and NTSC-50, which are the other machine's line count at
+     * this one's refresh; what the stream carries is the LINE COUNT, so those follow their prefix.
+     */
+    fun fromSystemMode(value: String?): VideoStandard =
+            if (value?.trim()?.uppercase()?.startsWith("NTSC") == true) NTSC else PAL
+  }
+}
+
 class DemoScreen(private val font: ByteArray) {
   init {
     require(font.size == GLYPH_COUNT * GLYPH_BYTES) {
@@ -61,25 +81,29 @@ class DemoScreen(private val font: ByteArray) {
   }
 
   /** One frame: the text drawn on `background` in `foreground`, everything outside it `border`. */
-  fun render(screen: MachineScreen, border: Int): ByteArray {
+  fun render(screen: MachineScreen, border: Int, standard: VideoStandard = VideoStandard.PAL): ByteArray {
+    val height = standard.height
+    val top = textTop(height)
     val palette = paletteFor(screen)
-    val frame = ByteArray(WIDTH * HEIGHT) { palette.background.toByte() }
-    fillBorder(frame, border)
+    val frame = ByteArray(WIDTH * height) { palette.background.toByte() }
+    fillBorder(frame, border, height, top)
     val lines = linesFor(screen)
     for ((row, line) in lines.withIndex()) {
       if (row >= ROWS) break
-      drawLine(frame, line, row, palette.foreground)
+      drawLine(frame, line, row, palette.foreground, top)
     }
     return pack(frame)
   }
 
   /** Replace only the border of an already-packed frame, which is all a ladder step changes. */
-  fun retint(packed: ByteArray, border: Int): ByteArray {
+  fun retint(packed: ByteArray, border: Int, standard: VideoStandard = VideoStandard.PAL): ByteArray {
+    val height = standard.height
+    val top = textTop(height)
     val out = packed.copyOf()
     val nibble = border and 0x0f
-    for (y in 0 until HEIGHT) {
+    for (y in 0 until height) {
       for (x in 0 until WIDTH) {
-        if (x >= TEXT_LEFT && x < TEXT_LEFT + COLUMNS * 8 && y >= TEXT_TOP && y < TEXT_TOP + ROWS * 8) continue
+        if (x >= TEXT_LEFT && x < TEXT_LEFT + COLUMNS * 8 && y >= top && y < top + ROWS * 8) continue
         val pixel = y * WIDTH + x
         val index = pixel ushr 1
         val current = out[index].toInt() and 0xff
@@ -102,16 +126,16 @@ class DemoScreen(private val font: ByteArray) {
             else -> Palette(BLUE, LIGHT_BLUE)
           }
 
-  private fun fillBorder(frame: ByteArray, border: Int) {
-    for (y in 0 until HEIGHT) {
+  private fun fillBorder(frame: ByteArray, border: Int, height: Int, top: Int) {
+    for (y in 0 until height) {
       for (x in 0 until WIDTH) {
-        val inText = x >= TEXT_LEFT && x < TEXT_LEFT + COLUMNS * 8 && y >= TEXT_TOP && y < TEXT_TOP + ROWS * 8
+        val inText = x >= TEXT_LEFT && x < TEXT_LEFT + COLUMNS * 8 && y >= top && y < top + ROWS * 8
         if (!inText) frame[y * WIDTH + x] = border.toByte()
       }
     }
   }
 
-  private fun drawLine(frame: ByteArray, line: String, row: Int, colour: Int) {
+  private fun drawLine(frame: ByteArray, line: String, row: Int, colour: Int, top: Int) {
     for (column in 0 until minOf(line.length, COLUMNS)) {
       val code = line[column].code
       val index = if (code < FIRST_CODE || code >= FIRST_CODE + GLYPH_COUNT) 0 else code - FIRST_CODE
@@ -119,14 +143,14 @@ class DemoScreen(private val font: ByteArray) {
         val bits = font[index * GLYPH_BYTES + y].toInt() and 0xff
         for (x in 0 until 8) {
           if (bits and (0x80 ushr x) == 0) continue
-          frame[(TEXT_TOP + row * 8 + y) * WIDTH + TEXT_LEFT + column * 8 + x] = colour.toByte()
+          frame[(top + row * 8 + y) * WIDTH + TEXT_LEFT + column * 8 + x] = colour.toByte()
         }
       }
     }
   }
 
   private fun pack(indices: ByteArray): ByteArray {
-    val packed = ByteArray(WIDTH * HEIGHT / 2)
+    val packed = ByteArray(indices.size / 2)
     for (i in packed.indices) {
       val low = indices[i * 2].toInt() and 0x0f
       val high = indices[i * 2 + 1].toInt() and 0x0f
@@ -142,6 +166,9 @@ class DemoScreen(private val font: ByteArray) {
     const val ROWS = 25
     const val TEXT_LEFT = (WIDTH - COLUMNS * 8) / 2
     const val TEXT_TOP = (HEIGHT - ROWS * 8) / 2
+
+    /** The text screen sits in the middle of whatever raster the machine is running. */
+    fun textTop(height: Int) = (height - ROWS * 8) / 2
 
     const val FIRST_CODE = 32
     const val GLYPH_COUNT = 96

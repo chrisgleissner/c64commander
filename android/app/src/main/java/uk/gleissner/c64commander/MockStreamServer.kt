@@ -55,6 +55,30 @@ class MockStreamServer(private val contentProvider: () -> DemoStreamContent) {
   private val showing = AtomicReference<Showing?>(null)
 
   /**
+   * The raster standard the simulated machine is set to, from its `System Mode` config item.
+   *
+   * PAL sends 272-line frames at ~50 Hz and NTSC 240-line frames at ~60 Hz, which is what the app
+   * reads the standard back from — [StreamUdpPlugin] and `vicDecode.ts` both decide it from the
+   * height of the frames arriving, not from anything the device says about itself.
+   */
+  private val standard = AtomicReference(VideoStandard.PAL)
+
+  /**
+   * Switch the simulated machine between PAL and NTSC.
+   *
+   * Re-renders the current screen at the new geometry straight away, so a config write shows up in
+   * Live View without the stream having to be stopped and started.
+   */
+  fun setStandard(next: VideoStandard) {
+    if (standard.getAndSet(next) == next) return
+    val current = showing.get() ?: return
+    showing.set(current.copy(loop = content().videoLoopFor(current.screen, next)))
+  }
+
+  /** The standard the stream is currently sending, for tests and diagnostics. */
+  fun currentStandard(): VideoStandard = standard.get()
+
+  /**
    * Put a screen on the simulated machine.
    *
    * Called from the REST handler when the app starts a program, plays a tune, resets or pauses, so
@@ -67,7 +91,7 @@ class MockStreamServer(private val contentProvider: () -> DemoStreamContent) {
    */
   fun show(screen: MachineScreen, audible: Boolean = true) {
     val content = content()
-    showing.set(Showing(screen, content.videoLoopFor(screen), audible))
+    showing.set(Showing(screen, content.videoLoopFor(screen, standard.get()), audible))
   }
 
   /** The screen currently being streamed, for tests and diagnostics. */
@@ -87,9 +111,8 @@ class MockStreamServer(private val contentProvider: () -> DemoStreamContent) {
   /** The screen to stream when nothing has asked for another one: a C64 sitting at its prompt. */
   private fun currentShowing(): Showing =
           showing.get()
-                  ?: Showing(MachineScreen.Ready, content().videoLoopFor(MachineScreen.Ready), true).also {
-                    showing.compareAndSet(null, it)
-                  }
+                  ?: Showing(MachineScreen.Ready, content().videoLoopFor(MachineScreen.Ready, standard.get()), true)
+                          .also { showing.compareAndSet(null, it) }
 
   /** Start the named synthetic stream. `ip` is the receiver's `host:port` (only the port is used). */
   fun start(streamName: String, ip: String) {
@@ -153,25 +176,26 @@ class MockStreamServer(private val contentProvider: () -> DemoStreamContent) {
    */
   private fun runVideoLoop(port: Int) {
     try {
-      val content = content()
+      content() // build before the first send, so no frame pays for it
       DatagramSocket().use { socket ->
         val dest = InetAddress.getByName(LOOPBACK)
         var frameNum = 0
         var seq = 0
         var nextTickNanos = System.nanoTime()
         while (videoRunning.get() && !Thread.currentThread().isInterrupted) {
-          val slotPackets =
-                  currentShowing().loop.slotPackets[
-                          (frameNum / DemoStreamContent.FRAMES_PER_SLOT) % content.slots.size]
-          for (packet in slotPackets) {
+          // Read once per frame: a standard change swaps the whole loop, and taking the packets and
+          // the cadence from the same value keeps a switch on a frame boundary rather than inside
+          // one, so the receiver never has to assemble a frame that is half of each geometry.
+          val loop = currentShowing().loop
+          for (packet in loop.slotPackets[(frameNum / loop.framesPerSlot) % loop.slotPackets.size]) {
             if (!videoRunning.get()) return
             DemoStreamContent.writeU16LE(packet, 0, seq)
             DemoStreamContent.writeU16LE(packet, 2, frameNum and 0xffff)
             socket.send(DatagramPacket(packet, packet.size, dest, port))
             seq = (seq + 1) and 0xffff
           }
-          frameNum = (frameNum + 1) % content.loopFrames
-          nextTickNanos += content.videoFrameIntervalNanos
+          frameNum = (frameNum + 1) % loop.loopFrames
+          nextTickNanos += loop.frameIntervalNanos
           sleepUntil(nextTickNanos)
         }
       }

@@ -861,6 +861,53 @@ class MockC64UServerTest {
   }
 
   @Test
+  fun writingSystemModeSwitchesTheStreamBetweenPalAndNtsc() {
+    // Setting the machine to NTSC on real hardware changes what comes down the wire, so it has to
+    // here too — otherwise the app's NTSC path can never be exercised without a second device.
+    val payload = JSONObject()
+    payload.put(
+            "categories",
+            JSONObject().put(
+                    "U64 Specific Settings",
+                    JSONObject().put(
+                            "System Mode",
+                            JSONObject()
+                                    .put("value", "PAL")
+                                    .put("options", JSONArray(listOf("PAL", "NTSC", "PAL-60", "NTSC-50"))),
+                    ),
+            ),
+    )
+    val state = MockC64UState.fromPayload(payload)
+    val assetDir = java.io.File("src/main/assets/demo-stream")
+    val streamServer = MockStreamServer {
+      DemoStreamContent.from(
+              java.io.File(assetDir, "font8x8.bin").readBytes(),
+              java.io.File(assetDir, "tone-ladder.json").readText(),
+      )
+    }
+    val server = MockC64UServer(state, MockTimingProfile.defaultProfile(), null, streamServer)
+    server.start()
+    waitForServer(server)
+
+    fun put(path: String) {
+      val connection = URL("${server.baseUrl}$path").openConnection() as HttpURLConnection
+      connection.requestMethod = "PUT"
+      assertEquals(200, connection.responseCode)
+      connection.disconnect()
+    }
+
+    assertEquals("a PAL machine must stream PAL from the start", VideoStandard.PAL, streamServer.currentStandard())
+
+    put("/v1/configs/U64%20Specific%20Settings/System%20Mode?value=NTSC")
+    assertEquals(VideoStandard.NTSC, streamServer.currentStandard())
+
+    put("/v1/configs/U64%20Specific%20Settings/System%20Mode?value=PAL-60")
+    assertEquals("PAL-60 is a PAL line count at 60 Hz, not NTSC", VideoStandard.PAL, streamServer.currentStandard())
+
+    server.stop()
+  }
+
+  @Test
   fun streamsStartWithoutIpIsRejected() {
     val state = MockC64UState.fromPayload(JSONObject())
     val server = MockC64UServer(state)

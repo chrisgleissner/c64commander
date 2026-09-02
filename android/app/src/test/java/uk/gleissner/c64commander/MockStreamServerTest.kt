@@ -166,6 +166,77 @@ class MockStreamServerTest {
   }
 
   @Test
+  fun switchingTheMachineToNtscChangesTheFramesOnTheWire() {
+    // A real Ultimate set to NTSC sends 240-line frames at ~60 Hz, and both the app's decoder and
+    // its native receiver read the standard back from nothing but the frame height. Measured off
+    // the socket rather than off the loop object, because the send loop reads the cadence and the
+    // packets separately and a switch that changed only one of them would still pass a unit check.
+    val server = server()
+    DatagramSocket(0).use { receiver ->
+      receiver.receiveBufferSize = 1 shl 20
+      receiver.soTimeout = 4000
+      try {
+        server.setStandard(VideoStandard.NTSC)
+        server.show(MachineScreen.Ready)
+        server.start("video", "127.0.0.1:${receiver.localPort}")
+
+        val boundaries = mutableListOf<Long>()
+        var packetsSinceBoundary = 0
+        val perFrame = mutableListOf<Int>()
+        while (boundaries.size < 7) {
+          val buffer = ByteArray(2048)
+          val packet = DatagramPacket(buffer, buffer.size)
+          receiver.receive(packet)
+          val payload = buffer.copyOfRange(packet.offset, packet.offset + packet.length)
+          packetsSinceBoundary += 1
+          if (DemoStreamContent.readU16LE(payload, 4) and DemoStreamContent.VIC_LAST_LINE_FLAG != 0) {
+            if (boundaries.isNotEmpty()) perFrame += packetsSinceBoundary
+            boundaries += System.nanoTime()
+            packetsSinceBoundary = 0
+          }
+        }
+
+        for (count in perFrame) assertEquals("an NTSC frame is 60 packets", 60, count)
+        val fps = (boundaries.size - 1) * 1e9 / (boundaries.last() - boundaries.first())
+        assertTrue("NTSC must arrive near 60 fps, measured $fps", fps > 57.0 && fps < 63.0)
+      } finally {
+        server.stopAll()
+      }
+    }
+  }
+
+  @Test
+  fun theDefaultStandardIsPalAndItsFramesAreSixtyEightPackets() {
+    val server = server()
+    assertEquals(VideoStandard.PAL, server.currentStandard())
+    DatagramSocket(0).use { receiver ->
+      receiver.receiveBufferSize = 1 shl 20
+      receiver.soTimeout = 4000
+      try {
+        server.start("video", "127.0.0.1:${receiver.localPort}")
+        var seen = 0
+        var packetsSinceBoundary = 0
+        val perFrame = mutableListOf<Int>()
+        while (seen < 4) {
+          val buffer = ByteArray(2048)
+          val packet = DatagramPacket(buffer, buffer.size)
+          receiver.receive(packet)
+          val payload = buffer.copyOfRange(packet.offset, packet.offset + packet.length)
+          packetsSinceBoundary += 1
+          if (DemoStreamContent.readU16LE(payload, 4) and DemoStreamContent.VIC_LAST_LINE_FLAG != 0) {
+            if (seen > 0) perFrame += packetsSinceBoundary
+            seen += 1
+            packetsSinceBoundary = 0
+          }
+        }
+        for (count in perFrame) assertEquals("a PAL frame is 68 packets", 68, count)
+      } finally {
+        server.stopAll()
+      }
+    }
+  }
+
+  @Test
   fun contentIsBuiltOnceAndReusedForEveryPacket() {
     // The whole point of pre-building is that the send loop does no work per packet. If the loop
     // ever went back to the provider, this device would be rendering nine seconds of audio and 18

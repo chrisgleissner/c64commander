@@ -415,7 +415,7 @@ With no radio there is no path to a c64u, u64 or u2, so no stage can put a packe
 the app behaves. The "a network is up but nothing answers on it" stage injects the network status
 rather than turning a radio on, for the same reason.
 
-Four stages:
+Ten stages:
 
 | Stage               | What it establishes                                                                                                                                                                                                                                                                              |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -426,6 +426,7 @@ Four stages:
 | `music`             | A tune from the simulated device reaches the speaker — frames written to the mixer, counted from the kernel — and the device's screen names it. **Audible**, about fifteen seconds.                                                                                                              |
 | `prg-stream`        | Starting a program changes what Live View shows. Keeps a decoded frame and a five-second screen recording.                                                                                                                                                                                       |
 | `crt-stream`        | The same for a cartridge.                                                                                                                                                                                                                                                                        |
+| `ntsc-stream`       | The other raster standard end to end: `System Mode` is switched to NTSC on the Config page, and the stream becomes 240-line frames at 60 fps with nothing lost, dropped or decimated. Switched back to PAL before the stage ends. Keeps a decoded frame and a five-second recording.             |
 | `performance`       | While video and audio both run: frame rate held over a twelve-second window, video and audio loss measured as a delta over ten seconds, processor use, and how long each tab takes to answer a press — measured again with the stream stopped, so what is asserted is the stream's contribution. |
 | `cta-census`        | Every main route renders in Demo Mode with no error boundary, with enabled controls, and with every control reachable by a tap once scrolled into view.                                                                                                                                          |
 
@@ -439,11 +440,12 @@ ladder is a C-major octave at -14.7 dBFS. Total audible time is about 25 seconds
 
 Artefacts land in `artifacts/demo-mode-hil/`: the JSON named by `--json` with every measurement, the
 frames decoded off the Live View canvas (`live-view-frame.png`, `prg-running.png`, `crt-running.png`,
-`music-now-playing.png`), the `*-running.mp4` screen recordings, and `mirror.wav` as captured by the
-audio pipeline.
+`music-now-playing.png`, `ntsc-frame.png`), the `*-running.mp4` and `ntsc-stream.mp4` screen
+recordings, and `mirror.wav` as captured by the audio pipeline.
 
 Reference numbers from this rig (Pixel 4, debug build): offer on screen 2.4 s after the launch
-intent; 50-51 fps with 0 lost frames, 0 dropped packets and 0 decimated over ten seconds; 250 audio
+intent; 50-51 fps PAL and 59-61 fps NTSC, each with 0 lost frames, 0 dropped packets and 0 decimated
+over ten seconds; 250 audio
 packets a second with 0 lost and 0 underruns; 48,288 frames a second reaching the speaker while a
 tune plays; 13.4% of the device's processors; every tab answering a press in 34-254 ms except Home,
 which takes about 410 ms while streaming against 30 ms with the mirror stopped, because returning to

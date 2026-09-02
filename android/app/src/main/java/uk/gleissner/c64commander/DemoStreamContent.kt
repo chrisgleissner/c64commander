@@ -48,18 +48,37 @@ private constructor(
         val audioPackets: List<ByteArray>,
         private val screenRenderer: DemoScreen,
 ) {
-  /** One screen's eighteen slot frames, each already split into wire packets. */
-  class VideoLoop(val slotPackets: List<List<ByteArray>>)
+  /**
+   * One screen's eighteen slot frames, each already split into wire packets.
+   *
+   * The cadence travels with the frames rather than with the content, because it is the standard —
+   * not the screen — that decides both: a PAL loop is 18 slots of 25 frames, an NTSC loop 18 slots
+   * of 30, and both last exactly [loopNanos], so the send loop can switch standard between frames
+   * without the sound and the picture coming apart.
+   */
+  class VideoLoop(
+          val slotPackets: List<List<ByteArray>>,
+          val standard: VideoStandard,
+          val framesPerSlot: Int,
+          val frameIntervalNanos: Long,
+  ) {
+    val loopFrames: Int = slotPackets.size * framesPerSlot
+  }
 
   /**
-   * Build the frames for a screen.
+   * Build the frames for a screen at the machine's current raster standard.
    *
    * Called on a machine state change, not per frame: the text is drawn once and re-tinted per slot,
    * so a change costs one screen render plus eighteen border passes rather than eighteen renders.
    */
-  fun videoLoopFor(screen: MachineScreen): VideoLoop {
-    val base = screenRenderer.render(screen, slots[0].colour)
-    return VideoLoop(slots.map { slot -> packetizeFrame(screenRenderer.retint(base, slot.colour)) })
+  fun videoLoopFor(screen: MachineScreen, standard: VideoStandard = VideoStandard.PAL): VideoLoop {
+    val base = screenRenderer.render(screen, slots[0].colour, standard)
+    return VideoLoop(
+            slotPackets = slots.map { slot -> packetizeFrame(screenRenderer.retint(base, slot.colour, standard), standard) },
+            standard = standard,
+            framesPerSlot = standard.framesPerSlot,
+            frameIntervalNanos = loopNanos / (slots.size * standard.framesPerSlot),
+    )
   }
   /** One ladder slot: the note to sound (0 Hz for a silence) and the colour the surround holds. */
   data class Slot(val index: Int, val name: String, val hz: Double, val colour: Int)
@@ -85,6 +104,9 @@ private constructor(
     const val VIC_BITS_PER_PIXEL = 4
     const val VIC_LAST_LINE_FLAG = 0x8000
     const val VIC_PACKETS_PER_FRAME = VIC_PAL_HEIGHT / VIC_LINES_PER_PACKET // 68
+
+    /** 68 packets for a 272-line PAL frame, 60 for a 240-line NTSC one. */
+    fun packetsPerFrame(standard: VideoStandard) = standard.height / VIC_LINES_PER_PACKET
 
     // Audio wire format. Must match StreamUdpPlugin's AUDIO_SEQ_BYTES / AUDIO_BYTES_PER_FRAME and
     // DEFAULT_AUDIO_SAMPLE_RATE.
@@ -153,8 +175,9 @@ private constructor(
      * number is left at zero — [MockStreamServer] patches it per send, which is what lets the same
      * arrays be reused for the whole run.
      */
-    internal fun packetizeFrame(frame: ByteArray): List<ByteArray> =
-            (0 until VIC_PACKETS_PER_FRAME).map { group ->
+    internal fun packetizeFrame(frame: ByteArray, standard: VideoStandard = VideoStandard.PAL): List<ByteArray> {
+      val packetsPerFrame = packetsPerFrame(standard)
+      return (0 until packetsPerFrame).map { group ->
               val line = group * VIC_LINES_PER_PACKET
               val packet = ByteArray(VIC_HEADER_BYTES + VIC_LINES_PER_PACKET * VIC_BYTES_PER_LINE)
               writeU16LE(packet, 0, 0) // seq, patched per send
@@ -162,7 +185,7 @@ private constructor(
               writeU16LE(
                       packet,
                       4,
-                      (line and 0x7fff) or (if (group == VIC_PACKETS_PER_FRAME - 1) VIC_LAST_LINE_FLAG else 0),
+                      (line and 0x7fff) or (if (group == packetsPerFrame - 1) VIC_LAST_LINE_FLAG else 0),
               )
               writeU16LE(packet, 6, VIC_FRAME_WIDTH)
               packet[8] = VIC_LINES_PER_PACKET.toByte()
@@ -177,6 +200,7 @@ private constructor(
               )
               packet
             }
+    }
 
     /**
      * How many audio packets one loop is.

@@ -249,6 +249,64 @@ class DemoStreamContentTest {
   }
 
   @Test
+  fun anNtscLoopIsShorterFramesAtSixtyHertzOverTheSameNineSeconds() {
+    // Both standards must cover the same 18 half-second ladder slots in the same total time, since
+    // the audio loop is shared: NTSC just divides that time into more, shorter frames of 240 lines.
+    val content = content()
+    val pal = content.videoLoopFor(MachineScreen.Ready, VideoStandard.PAL)
+    val ntsc = content.videoLoopFor(MachineScreen.Ready, VideoStandard.NTSC)
+
+    assertEquals(68, pal.slotPackets[0].size)
+    assertEquals(60, ntsc.slotPackets[0].size)
+    assertEquals(450, pal.loopFrames)
+    assertEquals(540, ntsc.loopFrames)
+
+    assertEquals("PAL refresh", DemoStreamContent.PAL_REFRESH_HZ, 1e9 / pal.frameIntervalNanos, 0.05)
+    assertEquals("NTSC refresh", 60.1, 1e9 / ntsc.frameIntervalNanos, 0.3)
+
+    val toleranceNanos = 1_000L
+    for (loop in listOf(pal, ntsc)) {
+      val loopNanos = loop.frameIntervalNanos * loop.loopFrames
+      assertTrue(
+              "${loop.standard} loop $loopNanos ns against ${content.loopNanos} ns",
+              abs(loopNanos - content.loopNanos) <= toleranceNanos,
+      )
+    }
+  }
+
+  @Test
+  fun anNtscFrameCarriesTwoHundredAndFortyLinesAndFlagsItsLast() {
+    // The app decides the standard from the frame height alone, so a 240-line frame that still
+    // flagged its last line at 268 would be reported as PAL however the machine was configured.
+    val loop = content().videoLoopFor(MachineScreen.Ready, VideoStandard.NTSC)
+    val packets = loop.slotPackets[1]
+    val lines = packets.map { DemoStreamContent.readU16LE(it, 4) and 0x7fff }
+    assertEquals((0 until 240 step DemoStreamContent.VIC_LINES_PER_PACKET).toList(), lines)
+
+    val flagged = packets.indices.filter { DemoStreamContent.readU16LE(packets[it], 4) and DemoStreamContent.VIC_LAST_LINE_FLAG != 0 }
+    assertEquals(listOf(packets.size - 1), flagged)
+    assertEquals(236, DemoStreamContent.readU16LE(packets.last(), 4) and 0x7fff)
+
+    assertEquals(
+            DemoScreen.WIDTH * VideoStandard.NTSC.height / 2,
+            packets.sumOf { it.size - DemoStreamContent.VIC_HEADER_BYTES },
+    )
+  }
+
+  @Test
+  fun theSystemModeSettingNamesTheStandard() {
+    // The firmware's list is PAL, NTSC, PAL-60, NTSC-50 and the /L variants. What travels on the
+    // wire is the LINE COUNT, which is what the prefix names, so the refresh suffix does not move
+    // a mode to the other standard.
+    assertEquals(VideoStandard.PAL, VideoStandard.fromSystemMode("PAL"))
+    assertEquals(VideoStandard.PAL, VideoStandard.fromSystemMode("PAL-60"))
+    assertEquals(VideoStandard.NTSC, VideoStandard.fromSystemMode("NTSC"))
+    assertEquals(VideoStandard.NTSC, VideoStandard.fromSystemMode("NTSC-50"))
+    assertEquals(VideoStandard.NTSC, VideoStandard.fromSystemMode("ntsc-50/l"))
+    assertEquals("an unreadable value must not silently change the machine", VideoStandard.PAL, VideoStandard.fromSystemMode(null))
+  }
+
+  @Test
   fun theVideoFrameRateIsPalRefresh() {
     val content = content()
     val fps = 1e9 / content.videoFrameIntervalNanos

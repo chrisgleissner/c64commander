@@ -88,6 +88,10 @@ class MockC64UServer(
   internal var socketReadTimeoutMs: Int = 15_000
 
   private companion object {
+    /** Where the firmware keeps PAL/NTSC, as captured in `docs/c64/c64u-config.yaml`. */
+    const val VIDEO_STANDARD_CATEGORY = "U64 Specific Settings"
+    const val VIDEO_STANDARD_ITEM = "System Mode"
+
     const val MAX_CONNECTION_THREADS = 32
     // 1 MB: far above any legitimate mock request. The largest real body is the
     // full 64 KB RAM image POSTed to /v1/machine:writemem; config batches are tiny.
@@ -109,7 +113,22 @@ class MockC64UServer(
     port = serverSocket?.localPort ?: 0
     running = true
     acceptExecutor.execute { acceptLoop() }
+    applyVideoStandard() // a machine already set to NTSC must stream NTSC from its first frame
     return port
+  }
+
+  /**
+   * Follow the machine's `System Mode` setting into the stream's raster geometry.
+   *
+   * A real Ultimate switched to NTSC sends 240-line frames at ~60 Hz instead of PAL's 272 at ~50,
+   * and both the app's decoder and its native receiver read the standard back from the frame height
+   * alone. Re-reading the item after every config write rather than matching on the path means a
+   * batch write reaches the stream on the same terms as a single one.
+   */
+  private fun applyVideoStandard() {
+    val server = streamServer ?: return
+    val value = state.getCategory(VIDEO_STANDARD_CATEGORY)?.get(VIDEO_STANDARD_ITEM)?.value?.toString()
+    server.setStandard(VideoStandard.fromSystemMode(value))
   }
 
   /** The file's own name, as a C64 would show it: no path, no extension, upper case. */
@@ -360,6 +379,7 @@ class MockC64UServer(
         try {
           val payload = JSONObject(body)
           state.updateConfigBatch(payload)
+          applyVideoStandard()
         } catch (error: Exception) {
           return errorResponse(400, error.message ?: "Invalid JSON payload")
         }
@@ -393,6 +413,7 @@ class MockC64UServer(
           return errorResponse(400, "Missing value")
         }
         state.updateConfigValue(category, item, value)
+        applyVideoStandard()
         return okResponse()
       }
       if (request.method == "GET") {

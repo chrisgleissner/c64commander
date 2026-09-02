@@ -413,6 +413,106 @@ const readFps = async () => {
   return { fps: Number(/(\d+)\s*fps/.exec(text ?? "")?.[1] ?? NaN), text };
 };
 
+/** The Live View badge, which reads `PAL 50 fps` or `NTSC 60 fps` off the decoded frames. */
+const waitForStandardBadge = async (expected: "PAL" | "NTSC", timeoutMs = 40000) => {
+  const deadline = Date.now() + timeoutMs;
+  let text: string | null = null;
+  while (Date.now() < deadline) {
+    text = await js(`(() => {
+      const el = document.querySelector('[data-testid="av-mirror-fps"]');
+      return el ? el.innerText : null;
+    })()`);
+    if ((text ?? "").includes(expected)) return { standard: expected, text };
+    await sleep(1000);
+  }
+  return { standard: null, text };
+};
+
+/**
+ * Eight one-second samples of the frame-rate badge, taken inside a single page evaluation.
+ *
+ * Both parts matter. A badge read straight after a route change measures the re-render rather than
+ * the stream — the first sample after switching standard came back 20 per cent low every time. And
+ * sampling with one CDP round trip per read costs enough on this handset to depress the number
+ * being read: eight separate evaluations reported a median of 49 fps while the stream was in fact
+ * presenting 59.6 frames a second, measured from the panel's own cumulative counter.
+ */
+const medianBadgeFps = async () => {
+  const samples: number[] = await js(`(async () => {
+    // Let the route settle first. The badge counts frames presented in the trailing second, so a
+    // sample taken while the card is still mounting counts the frames it missed while mounting.
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    const out = [];
+    for (let index = 0; index < 8; index += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const el = document.querySelector('[data-testid="av-mirror-fps"]');
+      const value = Number(/(\\d+)\\s*fps/.exec(el ? el.innerText : "")?.[1] ?? NaN);
+      if (Number.isFinite(value)) out.push(value);
+    }
+    return out;
+  })()`);
+  const sorted = [...samples].sort((left, right) => left - right);
+  return { fps: sorted[Math.floor(sorted.length / 2)] ?? NaN, samples };
+};
+
+/**
+ * Switch the simulated machine between PAL and NTSC the way a user does: the Config page.
+ *
+ * Driving the dropdown rather than writing the config item over HTTP is deliberate. It proves the
+ * whole write path works in Demo Mode — the page renders the item, the app sends the PUT, and the
+ * simulated device acts on it — which is the same claim being made about every other feature here.
+ *
+ * The item is not on the Config landing page: that page lists menu sections, and `System Mode` is
+ * inside `Video setup`, which has to be opened first.
+ */
+const SYSTEM_MODE_SELECT = "config-select-trigger:U64 Specific Settings:System Mode";
+
+const setSystemMode = async (value: "PAL" | "NTSC") => {
+  await goTo("/config", 4000);
+  const opened = await js(`(async () => {
+    const section = document.querySelector('[data-testid="config-menu-page-video-setup"]');
+    if (!section) return { section: false };
+    if (section.getAttribute("aria-expanded") !== "true") section.click();
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    const trigger = document.querySelector('[data-testid="${SYSTEM_MODE_SELECT}"]');
+    if (!trigger) return { section: true, trigger: false };
+    trigger.scrollIntoView({ block: "center" });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    const before = (trigger.innerText || "").trim();
+    trigger.click();
+    await new Promise((resolve) => setTimeout(resolve, 1400));
+    return {
+      section: true,
+      trigger: true,
+      before,
+      options: Array.from(document.querySelectorAll('[role="option"]')).map((el) => (el.textContent || "").trim()),
+    };
+  })()`);
+  expect(opened.section, "the Config page has no Video setup section in Demo Mode");
+  expect(opened.trigger, "Video setup does not render a System Mode dropdown in Demo Mode");
+  expect(
+    Array.isArray(opened.options) && opened.options.includes(value),
+    `the System Mode dropdown does not offer ${value}: ${JSON.stringify(opened.options)}`,
+  );
+
+  // Radix closes its listbox on pointerup, not click, so a bare `.click()` leaves it open with
+  // nothing chosen. The full pointer sequence is what a finger produces and what it listens for.
+  const chosen = await js(`(async () => {
+    const option = Array.from(document.querySelectorAll('[role="option"]'))
+      .find((el) => (el.textContent || "").trim() === ${JSON.stringify(value)});
+    if (!option) return { clicked: false };
+    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+      option.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerType: "touch" }));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const trigger = document.querySelector('[data-testid="${SYSTEM_MODE_SELECT}"]');
+    return { clicked: true, now: trigger ? (trigger.innerText || "").trim() : null, stillOpen: document.querySelectorAll('[role="option"]').length };
+  })()`);
+  expect(chosen.clicked, `the System Mode dropdown had no ${value} option to choose`);
+  expect((chosen.now ?? "") === value, `the Config page reads ${JSON.stringify(chosen.now)} after choosing ${value}`);
+  return { before: opened.before, now: chosen.now };
+};
+
 /** Processor time this application has used, in seconds, from the kernel's own counters. */
 const processCpuSeconds = async () => {
   const pid = await waitForApp();
@@ -868,6 +968,113 @@ const launchStage = async (kind: "prg" | "crt") => {
  * actually sends; and responsiveness is judged by what the stream COSTS, because switching route
  * takes this handset 230-370 ms with nothing streaming at all.
  */
+/**
+ * The other raster standard, end to end.
+ *
+ * A C64 set to NTSC sends 240-line frames at ~60 Hz instead of PAL's 272 at ~50, and the app works
+ * out which it is receiving from the frame height alone. Until the simulated device could do both,
+ * the app's NTSC path could not be exercised without a second piece of hardware set to NTSC.
+ *
+ * The switch is made on the Config page, so this also stands as the check that a config write
+ * reaches the simulated device and takes effect there.
+ */
+const ntscStream = async () => {
+  await enterStockDemoMode();
+  await startMirror({ audio: false });
+
+  const palBadge = await waitForStandardBadge("PAL");
+  expect(
+    palBadge.standard === "PAL",
+    `expected a PAL stream before switching, badge read ${JSON.stringify(palBadge.text)}`,
+  );
+  const pal = await medianBadgeFps();
+  expect(pal.fps >= 48, `PAL held ${pal.fps} fps before the switch (samples ${JSON.stringify(pal.samples)})`);
+
+  const write = await setSystemMode("NTSC");
+  await goTo("/", 3000);
+  const ntscBadge = await waitForStandardBadge("NTSC");
+  expectWith(
+    ntscBadge.standard === "NTSC",
+    `the stream never became NTSC: badge read ${JSON.stringify(ntscBadge.text)}`,
+    { palSamples: pal.samples, ntscBadge: ntscBadge.text, configWrite: write },
+  );
+  const ntsc = await medianBadgeFps();
+  expectWith(ntsc.fps >= 57, `NTSC held ${ntsc.fps} fps, not the 60 the device sends`, {
+    palSamples: pal.samples,
+    ntscSamples: ntsc.samples,
+  });
+
+  const frame = await captureFrame("ntsc-frame");
+  const clip = await captureVideo("ntsc-stream", 5);
+
+  // Ten seconds of NTSC on its own counters. Read as a delta for the same reason the PAL window is:
+  // the totals carry the PAL frames from before the switch.
+  const readVideoStats = () =>
+    js(`(async () => {
+      const open = document.querySelector('[data-testid="stream-stats-toggle"]');
+      if (open && open.getAttribute("aria-expanded") !== "true") open.click();
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      const read = (id) => {
+        const el = document.querySelector('[data-testid="stream-stats-' + id + '"]');
+        if (!el) return null;
+        const digits = el.innerText.replace(/[^0-9]/g, "");
+        return digits === "" ? null : Number(digits);
+      };
+      return {
+        presented: read("presented"),
+        lost: read("frames-lost"),
+        droppedPackets: read("video-dropped-packets"),
+        decimated: read("decimated"),
+      };
+    })()`);
+  const before = await readVideoStats();
+  await sleep(10000);
+  const after = await readVideoStats();
+  const delta = (key: string) => Number(after[key] ?? 0) - Number(before[key] ?? 0);
+  const stats = {
+    presented: delta("presented"),
+    lost: delta("lost"),
+    droppedPackets: delta("droppedPackets"),
+    decimated: delta("decimated"),
+  };
+  expectWith(stats.lost === 0, `${stats.lost} NTSC frames were lost in ten seconds`, { stats });
+  expectWith(stats.droppedPackets === 0, `${stats.droppedPackets} NTSC packets were dropped in ten seconds`, { stats });
+  expectWith(stats.decimated === 0, `${stats.decimated} NTSC frames were decimated in ten seconds`, { stats });
+  // The window is the ten-second sleep plus the two panel reads either side of it, so the count is
+  // a floor rather than an exact rate: 580 is 58 fps over the shortest the window can be.
+  expectWith(
+    stats.presented >= 580,
+    `only ${stats.presented} frames were painted in ten seconds; NTSC sends about 600`,
+    { stats },
+  );
+
+  // Put the machine back, so a later stage measuring PAL is measuring PAL because the machine is
+  // PAL and not because it happened to be left that way.
+  await setSystemMode("PAL");
+  await goTo("/", 3000);
+  const restored = await waitForStandardBadge("PAL");
+  expect(restored.standard === "PAL", `the machine did not return to PAL: badge read ${JSON.stringify(restored.text)}`);
+
+  await js(`(() => {
+    const videoToggle = document.querySelector('[data-testid="av-video-toggle"]');
+    if (videoToggle && videoToggle.getAttribute("aria-pressed") === "true") videoToggle.click();
+    return true;
+  })()`);
+
+  return {
+    palFps: pal.fps,
+    palSamples: pal.samples,
+    ntscFps: ntsc.fps,
+    ntscSamples: ntsc.samples,
+    ntscBadge: ntscBadge.text,
+    restoredBadge: restored.text,
+    ntscInTenSeconds: stats,
+    configWrite: write,
+    frame,
+    clip,
+  };
+};
+
 const performance_ = async () => {
   await enterStockDemoMode();
   await quietenSpeaker();
@@ -1228,6 +1435,7 @@ const main = async () => {
   await stage("music", music);
   await stage("prg-stream", () => launchStage("prg"));
   await stage("crt-stream", () => launchStage("crt"));
+  await stage("ntsc-stream", ntscStream);
   await stage("performance", performance_);
   await stage("cta-census", ctaCensus);
 
