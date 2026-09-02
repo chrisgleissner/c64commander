@@ -9,6 +9,7 @@
 package uk.gleissner.c64commander
 
 import android.content.Context
+import android.net.wifi.WifiManager
 import android.util.Base64
 import androidx.test.core.app.ApplicationProvider
 import com.getcapacitor.Bridge
@@ -381,6 +382,58 @@ class StreamUdpPluginTest {
     plugin.close(closeCall)
     verify(closeCall).resolve(any())
   }
+
+  /**
+   * HARD27-021. The JavaScript policy stops both streams when the app is hidden, but Android can
+   * freeze the WebView before that stop reaches the device. The plugin must then drop the Wi-Fi
+   * locks itself, and take them back on return: a MulticastLock released under a bound socket makes
+   * the driver filter multicast again, so the stream would come back silent and black.
+   */
+  @Test
+  fun pauseReleasesTheWifiLocksAndResumeReacquiresThemWhileASocketIsStillBound() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("name")).thenReturn("video")
+    `when`(call.getInt("port")).thenReturn(0)
+    `when`(call.getString("group")).thenReturn("239.0.1.64")
+    doAnswer { null }.`when`(call).resolve(any())
+    plugin.bind(call)
+    assertTrue("bind should hold the multicast lock", multicastLockHeld())
+
+    plugin.handleOnPause()
+    assertFalse("a backgrounded app must not hold the multicast lock", multicastLockHeld())
+    assertFalse("a backgrounded app must not hold the low-latency Wi-Fi lock", wifiLockHeld())
+
+    plugin.handleOnResume()
+    assertTrue("returning with a bound socket must re-join multicast", multicastLockHeld())
+
+    val closeCall = mock(PluginCall::class.java)
+    `when`(closeCall.getString("name")).thenReturn("video")
+    plugin.close(closeCall)
+  }
+
+  /** With no stream bound there is nothing to receive, so returning must not take a lock back. */
+  @Test
+  fun resumeDoesNotAcquireLocksWhenNoStreamIsBound() {
+    plugin.handleOnPause()
+    plugin.handleOnResume()
+
+    assertFalse("no bound socket means no multicast lock", multicastLockHeld())
+    assertFalse("no bound socket means no Wi-Fi lock", wifiLockHeld())
+  }
+
+  private fun lockHeld(fieldName: String): Boolean {
+    val field = StreamUdpPlugin::class.java.getDeclaredField(fieldName)
+    field.isAccessible = true
+    return when (val lock = field.get(plugin)) {
+      is WifiManager.MulticastLock -> lock.isHeld
+      is WifiManager.WifiLock -> lock.isHeld
+      else -> false
+    }
+  }
+
+  private fun multicastLockHeld(): Boolean = lockHeld("multicastLock")
+
+  private fun wifiLockHeld(): Boolean = lockHeld("wifiLock")
 
   @Test
   fun closeRejectsMissingName() {

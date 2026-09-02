@@ -19,6 +19,7 @@ import { initializeRuntimeMotionMode } from "./lib/startup/runtimeMotionBudget";
 import { applyStoredTextScale } from "./lib/uiPreferences";
 import { registerServiceWorker } from "./lib/startup/serviceWorkerRegistration";
 import { silenceLeftoverNativeAudio } from "./lib/streams/silenceLeftoverNativeAudio";
+import { stopLeftoverDeviceStreams } from "./lib/streams/leftoverDeviceStreams";
 import { addErrorLog } from "./lib/logging";
 import { applyFullScreenFromSettings } from "./lib/native/fullScreen";
 import { applyScreenOrientationFromSettings } from "./lib/native/screenOrientation";
@@ -81,6 +82,10 @@ const startDeferredStartupBootstrap = () => {
   markStartupBootstrapComplete();
   void import("./lib/startup/secureStorageBootstrap")
     .then(({ primeSecureStorageAfterStartup }) => primeSecureStorageAfterStartup())
+    // Only the app's own sockets have been closed so far. If the process died with Live View on,
+    // the Ultimate was never told to stop and is still multicasting. Sequenced after the secure
+    // storage prime because the stop has to be authenticated on a password-protected device.
+    .then(() => stopLeftoverDeviceStreams())
     .catch((error) => {
       const err = error as Error;
       addErrorLog("Deferred secure storage bootstrap failed", {

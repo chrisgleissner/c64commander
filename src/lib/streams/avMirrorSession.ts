@@ -40,6 +40,7 @@ import { getDeveloperModeEnabled } from "@/lib/config/developerModeStore";
 import { resolveVideoStartAction, shouldReturnAudioToWifi, shouldUseWifiForAudio } from "./audioRoute";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 import { stopStreamAtForeignHost } from "./foreignSenderStop";
+import { recordDeviceStreamStarted, recordDeviceStreamStopped } from "./leftoverDeviceStreams";
 import { NativeAudioSink } from "./audioNativeSink";
 import { AudioMirrorController, type AudioMirrorSignals, type AudioMirrorState } from "./audioMirrorController";
 import { VideoMirrorController, type VideoMirrorState } from "./videoMirrorController";
@@ -238,9 +239,24 @@ export class AvMirrorSession {
   private opChain: Promise<unknown> = Promise.resolve();
 
   constructor(deps: AvMirrorSessionDeps = {}) {
+    // Record which machine is streaming to this phone across the two default transports, so a
+    // process death with Live View on can be cleaned up at the next launch — see
+    // [stopLeftoverDeviceStreams]. Injected transports (tests, the web bridge) keep their own
+    // behaviour and record nothing.
     const startStream =
-      deps.startStream ?? ((name, destination, options) => getC64API().startStream(name, destination, options));
-    const stopStream = deps.stopStream ?? ((name) => getC64API().stopStream(name));
+      deps.startStream ??
+      (async (name, destination, options) => {
+        const result = await getC64API().startStream(name, destination, options);
+        recordDeviceStreamStarted(name, getC64API().getDeviceHost());
+        return result;
+      });
+    const stopStream =
+      deps.stopStream ??
+      (async (name) => {
+        const result = await getC64API().stopStream(name);
+        recordDeviceStreamStopped(name);
+        return result;
+      });
     this.now = deps.now ?? (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
     // The stored frame-rate mode is applied when a session starts (see beginSessionIfIdle), NOT at
     // construction — the app-wide singleton is built at import time, before localStorage-backed

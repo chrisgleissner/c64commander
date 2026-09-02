@@ -47,13 +47,24 @@ export const resolveForeignSenderPassword = async (host: string): Promise<string
 };
 
 /**
- * Stop `name` at one uninvited machine, authenticated where possible and never raising a popup.
+ * Stop `name` at `host` over a one-off connection, authenticated where possible and never raising a
+ * password dialog.
+ *
+ * Addressing the host directly rather than going through the app-wide C64API matters to both
+ * callers: the uninvited sender is by definition not the selected device, and the leftover-stream
+ * sweep runs at launch, before a connection to the selected device has been established.
+ */
+export const stopStreamAtHost = async (host: string, name: "audio" | "video"): Promise<unknown> => {
+  const password = await resolveForeignSenderPassword(host);
+  return new C64API(undefined, password ?? undefined, host).stopStream(name, { suppressAuthChallenge: true });
+};
+
+/**
+ * Stop `name` at one uninvited machine.
  *
  * A password-protected Ultimate answers an unauthenticated stop with 403, so the eviction achieves
  * nothing; and the dialog that 403 normally raises would name a machine the user never selected and,
  * if answered, re-verify the selected device's connection for an unrelated request.
  */
-export const stopStreamAtForeignHost = async (host: string, name: "audio" | "video"): Promise<unknown> => {
-  const password = await resolveForeignSenderPassword(host);
-  return new C64API(undefined, password ?? undefined, host).stopStream(name, { suppressAuthChallenge: true });
-};
+export const stopStreamAtForeignHost = (host: string, name: "audio" | "video"): Promise<unknown> =>
+  stopStreamAtHost(host, name);
