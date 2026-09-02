@@ -153,6 +153,7 @@ const relaunchFresh = async () => {
   // swallowed with no error: the activity manager logs the kill and never starts anything. Give it
   // a moment, then start, and start again if nothing came up.
   await sleep(2000);
+  const startedAt = Date.now();
   await shell(`am start -n ${PACKAGE}/.MainActivity`);
   try {
     await waitForApp(12000);
@@ -160,10 +161,20 @@ const relaunchFresh = async () => {
     await shell(`am start -n ${PACKAGE}/.MainActivity`);
     await waitForApp(20000);
   }
-  // The process exists well before the WebView has a page to attach to, and before discovery has
-  // decided anything; this is the shortest wait that reliably lands after both.
-  await sleep(12000);
-  await attach();
+  // The process exists before the WebView has a page to attach to, so attach on a retry rather than
+  // on a fixed wait: the app reaches its first screen in about two seconds, and a blanket sleep made
+  // every stage that relaunches several times slower than the thing it was measuring.
+  for (let attempt = 0; attempt < 14; attempt += 1) {
+    await sleep(attempt === 0 ? 800 : 1000);
+    try {
+      await attach();
+      const ready = await js(`(() => Boolean(document.querySelector("[data-testid]")))()`).catch(() => false);
+      if (ready) return startedAt;
+    } catch {
+      // The DevTools socket is not up yet; try again.
+    }
+  }
+  throw new Error("the app did not present a screen after a relaunch");
 };
 
 /**
@@ -417,8 +428,16 @@ const cpuCores = async () => Number((await shell("nproc")).trim()) || 8;
 // ── stages ───────────────────────────────────────────────────────────────────────────────────
 
 const offlineOffer = async () => {
-  await relaunchFresh();
-  const offer = await readOffer();
+  // Timed from the launch intent, not from the start of the stage: `pm clear` and this harness's
+  // own attach retries are not the app starting, and folding them in would report a number no user
+  // ever waits.
+  const launchedAt = (await relaunchFresh()) ?? Date.now();
+  let offer = await readOffer();
+  for (let attempt = 0; attempt < 40 && !offer.dialogOpen; attempt += 1) {
+    await sleep(250);
+    offer = await readOffer();
+  }
+  const offerAfterMs = Date.now() - launchedAt;
   expect(offer.dialogOpen, "no dialog appeared on a fresh offline launch");
   expect(offer.messageVisible, "the dialog's explanation was not visible on screen");
   expect(/no network connection/i.test(offer.messageText ?? ""), `unexpected copy: ${offer.messageText}`);
@@ -428,7 +447,10 @@ const offlineOffer = async () => {
   await sleep(4000);
   const state = await connectionState();
   expect(state === "DEMO_ACTIVE", `expected DEMO_ACTIVE after confirming, got ${state}`);
-  return { message: offer.messageText };
+  // A start that takes long enough to look broken is its own defect, so the wait is measured rather
+  // than assumed. The bound is generous; what it catches is a regression into seconds.
+  expect(offerAfterMs < 8000, `the offer took ${offerAfterMs} ms to appear after launch`);
+  return { message: offer.messageText, offerAfterMs };
 };
 
 const unreachableOffer = async () => {
@@ -766,17 +788,19 @@ const music = async () => {
   const screen = await captureFrame("music-now-playing");
   const text = await js(`(() => {
     const el = document.querySelector('[data-testid="playback-current-track"]');
-    return el ? el.innerText : "";
+    if (!el) return "";
+    return el.innerText
+      .split(String.fromCharCode(10))
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join(" | ");
   })()`);
 
   await js(`(() => { document.querySelector('[data-testid="playlist-pause"]')?.click(); return true; })()`);
   await sleep(1500);
 
   return {
-    track: String(text)
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)[0],
+    track: String(text),
     speakerFramesPerSecond: Math.round(framesPerSecond),
     screen,
   };

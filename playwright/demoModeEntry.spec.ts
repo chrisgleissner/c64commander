@@ -402,6 +402,66 @@ test.describe("Entering Demo Mode", () => {
   });
 });
 
+test.describe("Reaching Demo Mode after declining the offer", () => {
+  let device: MockServer;
+  let demo: MockServer;
+
+  test.beforeEach(async () => {
+    device = await createMockC64Server({});
+    demo = await createMockC64Server({});
+  });
+
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    try {
+      await saveCoverageFromPage(page, testInfo.title);
+      await assertNoUiIssues(page, testInfo);
+    } finally {
+      if (!page.isClosed()) await finalizeEvidence(page, testInfo);
+      await demo?.close?.().catch(() => undefined);
+      await device?.close?.().catch(() => undefined);
+    }
+  });
+
+  test("the connection indicator offers the simulated device once discovery has failed", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    allowWarnings(
+      testInfo,
+      "The configured device is deliberately unreachable, and reads in flight when Demo Mode re-routes the API are aborted by design.",
+    );
+
+    device.setReachable(false);
+    await seedHandset(page, {
+      deviceHost: new URL(device.baseUrl).host,
+      deviceBaseUrl: device.baseUrl,
+      demoBaseUrl: demo.baseUrl,
+      networkStatus: { online: true, supported: true },
+    });
+    // Automatic Demo Mode turned off, which is the case this control exists for: the app reports
+    // itself offline, no dialog is coming, and until now the only way in was to know Demo Mode
+    // exists and to go looking for it in Settings.
+    await page.addInitScript(() => localStorage.setItem("c64u_demo_mode_enabled", "0"));
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(demoDialog(page)).toHaveCount(0);
+    await expectConnectionState(page, "OFFLINE_NO_DEMO", 25000);
+
+    // Where a user actually goes when they notice nothing is connected: the connection indicator,
+    // and then the connection actions inside the Diagnostics dialog it opens.
+    await clickCta(page, "unified-health-badge");
+    await expect(page.getByRole("dialog", { name: "Diagnostics" })).toBeVisible({ timeout: 10000 });
+    const offer = page.getByTestId("use-simulated-device-action");
+    await expect(offer).toBeVisible({ timeout: 10000 });
+    await snap(page, testInfo, "connection-actions-offer");
+
+    await clickCta(page, "use-simulated-device-action");
+    await expectConnectionState(page, "DEMO_ACTIVE");
+
+    await snap(page, testInfo, "connection-actions-demo-active");
+  });
+});
+
 test.describe("The Demo Mode offer on a small screen", () => {
   let device: MockServer;
   let demo: MockServer;
