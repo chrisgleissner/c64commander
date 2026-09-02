@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useAvMirror } from "@/hooks/useAvMirror";
 import type { AvMirrorSession } from "@/lib/streams/avMirrorSession";
 import { saveMirrorC64Audio, saveMirrorC64Video } from "@/lib/config/appSettings";
+import { describeSenderAdoption } from "@/lib/streams/senderMismatch";
 
 /** A subtle pulsing "live" dot, so an active-but-invisible stream isn't ambiguous. */
 export const LiveDot = ({ className }: { className?: string }) => (
@@ -42,7 +43,7 @@ export function AvMirrorControls({
   session,
   className,
 }: AvMirrorControlsProps) {
-  const { audioLive, videoLive, audio, video, toggleAudio, toggleVideo } = useAvMirror(session);
+  const { audioLive, videoLive, audio, video, toggleAudio, toggleVideo, session: mirror } = useAvMirror(session);
 
   // The session reports the failures it knows how to describe (a blocked route, a refused
   // start) through its own snapshot, but a toggle can still reject — a socket that will not
@@ -64,6 +65,10 @@ export function AvMirrorControls({
   }, []);
 
   const error = audio.error ?? video.error ?? toggleError;
+  // The stream IS arriving, from an address the native filter refuses (a dual-homed Ultimate, or a
+  // saved host that is the machine's other interface). The plugin knows the address, so the user is
+  // offered it rather than sent to check the C64 and the cable.
+  const mismatch = video.senderMismatch ?? audio.senderMismatch;
 
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)} data-testid="av-mirror-controls">
@@ -118,6 +123,16 @@ export function AvMirrorControls({
         <span role="alert" className="text-xs text-destructive" data-testid="av-mirror-error">
           {error}
         </span>
+      )}
+      {mismatch && (
+        <Button
+          size={size}
+          variant="outline"
+          onClick={() => runToggle(() => mirror.adoptSender(mismatch.source))}
+          data-testid="av-mirror-adopt-sender"
+        >
+          {describeSenderAdoption(mismatch)}
+        </Button>
       )}
       {audio.foreignSenderNotice && (
         <span role="status" className="text-xs text-muted-foreground" data-testid="av-mirror-foreign-sender-notice">

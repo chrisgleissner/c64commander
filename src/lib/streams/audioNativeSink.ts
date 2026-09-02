@@ -64,6 +64,8 @@ export interface NativeAudioStats {
    * into it uninvited (see `foreignSenderGuard`).
    */
   senders?: string[];
+  /** Packets the native sender filter refused because they came from another address. */
+  rejectedPackets?: number;
 }
 
 /** Minimal plugin surface the sink needs — injectable so the sink is unit-testable without Capacitor. */

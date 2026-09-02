@@ -101,6 +101,16 @@ class StreamUdpPlugin : Plugin() {
 
   /** Packets dropped because they came from a machine other than [expectedSource], per stream. */
   private val rejectedPackets = ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
+
+  /**
+   * The machine whose packets were dropped most recently, per stream.
+   *
+   * Without it a filter mismatch is indistinguishable from a dead stream: the socket receives at
+   * full rate, every packet is dropped, and eight seconds later the card says the stream stopped
+   * arriving. Naming the address the packets DID come from is what turns that into a diagnosis the
+   * user can act on, so it is reported to JS rather than only logged.
+   */
+  private val lastRejectedSource = ConcurrentHashMap<String, InetAddress>()
   private val logTag = "StreamUdpPlugin"
   private var multicastLock: WifiManager.MulticastLock? = null
 
@@ -211,7 +221,36 @@ class StreamUdpPlugin : Plugin() {
     call.resolve(JSObject())
   }
 
+  /**
+   * What the sender filter has done to a stream: how much it dropped, and whose packets those were.
+   *
+   * Read when a live stream goes silent. A filter keyed to the wrong address of a dual-homed
+   * Ultimate receives at full rate and drops everything, which looks exactly like a stream that
+   * stopped: same silent socket, same watchdog, same message. These two numbers are the only
+   * evidence that separates the two, so they have to leave the plugin.
+   */
+  @PluginMethod
+  fun readStreamDiagnostics(call: PluginCall) {
+    val name = call.getString("name")
+    if (name == null) {
+      call.reject("name is required")
+      return
+    }
+    val result = JSObject()
+    result.put("rejectedPackets", rejectedPackets[name]?.get() ?: 0L)
+    result.put("lastRejectedSource", lastRejectedSource[name]?.hostAddress)
+    result.put("expectedSource", expectedSource[name]?.hostAddress)
+    val senders = JSArray()
+    streamSenders[name]?.forEach { senders.put(it) }
+    result.put("senders", senders)
+    call.resolve(result)
+  }
+
   private fun applyExpectedSource(name: String, host: String?) {
+    // A new filter identity makes the old rejection count a statement about a question nobody is
+    // asking any more, so adopting a sender (or rebinding) starts the diagnosis from zero.
+    rejectedPackets.remove(name)
+    lastRejectedSource.remove(name)
     val trimmed = host?.trim()?.substringBefore(':')?.takeIf { it.isNotEmpty() }
     if (trimmed == null) {
       expectedSource.remove(name)
@@ -239,6 +278,9 @@ class StreamUdpPlugin : Plugin() {
   private fun isForeign(name: String, source: InetAddress?): Boolean {
     val expected = expectedSource[name] ?: return false
     if (source === expected || source == expected) return false
+    // Reference compare first: the socket reuses one address object per peer, so the common case of
+    // a steady foreign stream costs no map write on a path that runs ~3400 times a second.
+    if (source != null && lastRejectedSource[name] !== source) lastRejectedSource[name] = source
     val counter = rejectedPackets.getOrPut(name) { java.util.concurrent.atomic.AtomicLong() }
     val n = counter.incrementAndGet()
     if (n == 1L || n % FOREIGN_LOG_EVERY == 0L) {
@@ -263,7 +305,6 @@ class StreamUdpPlugin : Plugin() {
     val assemble = call.getBoolean("assemble", false) == true
     try {
       closeSocket(name)
-      rejectedPackets.remove(name)
       applyExpectedSource(name, call.getString("source"))
       val socket: DatagramSocket =
         if (group != null) {
@@ -316,6 +357,8 @@ class StreamUdpPlugin : Plugin() {
     }
     closeSocket(name)
     streamSenders.remove(name)
+    rejectedPackets.remove(name)
+    lastRejectedSource.remove(name)
     call.resolve(JSObject())
   }
 
@@ -442,6 +485,10 @@ class StreamUdpPlugin : Plugin() {
     val senders = JSArray()
     streamSenders["audio"]?.forEach { senders.put(it) }
     result.put("senders", senders)
+    // What the sender filter refused, beside what it let through. A stream can look perfectly dead
+    // here while the socket is busy; these two say which of the two it is.
+    result.put("rejectedPackets", rejectedPackets["audio"]?.get() ?: 0L)
+    result.put("lastRejectedSource", lastRejectedSource["audio"]?.hostAddress)
     return result
   }
 

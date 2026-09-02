@@ -113,8 +113,16 @@ describe("AvMirrorSession", () => {
     const unsubscribe = session.subscribe((snap) => seen.push(snap));
     expect(seen).toHaveLength(1);
     expect(session.getSnapshot()).toEqual({
-      audio: { state: "off", droppedPackets: 0, error: null, foreignSenderNotice: null },
-      video: { state: "off", fps: 0, droppedPackets: 0, framesLost: 0, standard: "PAL", error: null },
+      audio: { state: "off", droppedPackets: 0, error: null, foreignSenderNotice: null, senderMismatch: null },
+      video: {
+        state: "off",
+        fps: 0,
+        droppedPackets: 0,
+        framesLost: 0,
+        standard: "PAL",
+        error: null,
+        senderMismatch: null,
+      },
     });
     expect(session.audioLive).toBe(false);
     expect(session.videoLive).toBe(false);

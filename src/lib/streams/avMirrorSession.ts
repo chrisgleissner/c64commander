@@ -42,6 +42,7 @@ import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions }
 import { stopStreamAtForeignHost } from "./foreignSenderStop";
 import { recordDeviceStreamStarted, recordDeviceStreamStopped } from "./leftoverDeviceStreams";
 import { NativeAudioSink } from "./audioNativeSink";
+import type { SenderMismatch } from "./senderMismatch";
 import { AudioMirrorController, type AudioMirrorSignals, type AudioMirrorState } from "./audioMirrorController";
 import { VideoMirrorController, type VideoMirrorState } from "./videoMirrorController";
 import { readLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
@@ -59,6 +60,8 @@ export interface AvMirrorSnapshot {
     error: string | null;
     /** A second Ultimate is streaming into our group and would not stop when asked. */
     foreignSenderNotice: string | null;
+    /** The stream is arriving from an address the native sender filter refuses. */
+    senderMismatch: SenderMismatch | null;
   };
   video: {
     state: VideoMirrorState;
@@ -67,6 +70,8 @@ export interface AvMirrorSnapshot {
     framesLost: number;
     standard: VideoStandard;
     error: string | null;
+    /** The stream is arriving from an address the native sender filter refuses. */
+    senderMismatch: SenderMismatch | null;
   };
 }
 
@@ -108,6 +113,13 @@ export interface AvStatsSnapshot {
      * stream its packets, so the numbers move in opposite directions.
      */
     audioLostPackets: number;
+    /**
+     * Audio packets the native sender filter refused because they came from another address.
+     *
+     * Reported beside the loss counters because it is the number that separates a stream that is
+     * not arriving from one that is arriving and being thrown away.
+     */
+    audioRejectedPackets: number;
     standard: VideoStandard;
   };
 }
@@ -115,8 +127,16 @@ export interface AvStatsSnapshot {
 export type AvStatsListener = (snapshot: AvStatsSnapshot) => void;
 
 const INITIAL: AvMirrorSnapshot = {
-  audio: { state: "off", droppedPackets: 0, error: null, foreignSenderNotice: null },
-  video: { state: "off", fps: 0, droppedPackets: 0, framesLost: 0, standard: "PAL", error: null },
+  audio: { state: "off", droppedPackets: 0, error: null, foreignSenderNotice: null, senderMismatch: null },
+  video: {
+    state: "off",
+    fps: 0,
+    droppedPackets: 0,
+    framesLost: 0,
+    standard: "PAL",
+    error: null,
+    senderMismatch: null,
+  },
 };
 
 const isLiveState = (state: AudioMirrorState | VideoMirrorState) => state === "connecting" || state === "live";
@@ -273,6 +293,7 @@ export class AvMirrorSession {
             droppedPackets: s.droppedPackets,
             error: s.error,
             foreignSenderNotice: s.foreignSenderNotice,
+            senderMismatch: s.senderMismatch,
           },
         }),
       createReceiver:
@@ -311,8 +332,10 @@ export class AvMirrorSession {
             framesLost: s.framesLost,
             standard: s.standard,
             error: s.error,
+            senderMismatch: s.senderMismatch,
           },
         }),
+      expectedSenderHost: () => getC64API().getDeviceHost(),
       createReceiver:
         deps.createVideoReceiver ??
         ((opts) =>
@@ -425,7 +448,7 @@ export class AvMirrorSession {
     const signals: AudioMirrorSignals =
       typeof this.audio.getSignals === "function"
         ? this.audio.getSignals()
-        : { audioBufferMs: 0, audioUnderruns: 0, audioConcealed: 0, audioLostPackets: 0 };
+        : { audioBufferMs: 0, audioUnderruns: 0, audioConcealed: 0, audioLostPackets: 0, audioRejectedPackets: 0 };
     const video = this.video.getSnapshot();
 
     // On-device playback competes for the same main thread the video path paints on, and the governor
@@ -552,7 +575,7 @@ export class AvMirrorSession {
     const signals: AudioMirrorSignals =
       typeof this.audio.getSignals === "function"
         ? this.audio.getSignals()
-        : { audioBufferMs: 0, audioUnderruns: 0, audioConcealed: 0, audioLostPackets: 0 };
+        : { audioBufferMs: 0, audioUnderruns: 0, audioConcealed: 0, audioLostPackets: 0, audioRejectedPackets: 0 };
     return {
       governor: this.governor.state,
       transitions: this.governor.getTransitions(),
@@ -573,6 +596,7 @@ export class AvMirrorSession {
         framesLost: video.framesLost,
         droppedPackets: video.droppedPackets,
         audioLostPackets: signals.audioLostPackets,
+        audioRejectedPackets: signals.audioRejectedPackets,
         standard: video.standard,
       },
     };
@@ -721,6 +745,23 @@ export class AvMirrorSession {
 
   toggleVideo(): Promise<void> {
     return this.videoLive ? this.stopVideo() : this.startVideo();
+  }
+
+  /**
+   * Accept the machine that is actually streaming, after a sender-filter mismatch was diagnosed.
+   *
+   * Applied to both streams, not only the one that reported it: the two mirrors are separate
+   * multicast groups from the same machine, so an address that is wrong for one is wrong for the
+   * other, and a user who has been told which address to use should not have to be told twice.
+   */
+  adoptSender(source: string): Promise<void> {
+    return this.serialize(async () => {
+      addLog("info", "Live View: accepting the stream from the address it is actually arriving from", {
+        service: "streams",
+        source,
+      });
+      await Promise.allSettled([this.audio.adoptSender(source), this.video.adoptSender(source)]);
+    });
   }
 
   async stopAll(): Promise<void> {

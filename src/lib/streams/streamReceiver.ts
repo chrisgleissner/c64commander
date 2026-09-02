@@ -9,6 +9,7 @@
 import { addLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
 import { StreamUdp } from "@/lib/native/streamUdp";
+import type { SenderFilterDiagnostics } from "./senderMismatch";
 import type { PluginListenerHandle } from "@capacitor/core";
 
 /**
@@ -64,6 +65,21 @@ export interface StreamReceiver {
   /** Returns true iff the NATIVE side will decimate (assembly on); false → keep JS decimation. */
   setNativeCadence?(fraction: number): boolean;
   onStateChange(handler: (state: StreamConnectionState) => void): void;
+  /**
+   * Optional: what the transport's sender filter has dropped, and whose packets those were.
+   *
+   * Present only where a filter exists (the native plugin). The mirror controllers read it when a
+   * live stream goes silent, because a filter aimed at the wrong address of a dual-homed Ultimate
+   * is silent in exactly the same way as a stream that stopped — see `streams/senderMismatch`.
+   */
+  readDiagnostics?(): Promise<SenderFilterDiagnostics | null>;
+  /**
+   * Optional: point the sender filter at a different machine on the already-bound socket.
+   *
+   * Used by the one-tap recovery from a filter mismatch, and cheaper than a restart: the socket
+   * stays in the multicast group, so the next packet from the adopted sender is accepted.
+   */
+  setExpectedSource?(host: string | null): Promise<void>;
   /** The host:port the device should stream to (the receiver's own address). */
   readonly destination: string;
   /**
@@ -331,6 +347,27 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
   onStateChange(handler: (state: StreamConnectionState) => void): void {
     this.stateHandler = handler;
     handler("connecting");
+  }
+
+  /**
+   * Read the plugin's sender-filter counters. Null when the plugin cannot answer — a diagnosis that
+   * cannot be made must not replace the plain "stopped arriving" message with an error of its own.
+   */
+  async readDiagnostics(): Promise<SenderFilterDiagnostics | null> {
+    try {
+      return await StreamUdp.readStreamDiagnostics({ name: this.name });
+    } catch (error) {
+      addLog("debug", "Native stream diagnostics read failed", {
+        name: this.name,
+        error: (error as Error)?.message ?? String(error),
+      });
+      return null;
+    }
+  }
+
+  /** Retarget the sender filter on the bound socket (the mismatch recovery). */
+  async setExpectedSource(host: string | null): Promise<void> {
+    await StreamUdp.setExpectedSource({ name: this.name, host });
   }
 
   close(): void {

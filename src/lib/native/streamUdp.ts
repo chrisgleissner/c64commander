@@ -105,6 +105,28 @@ export interface StreamUdpAudioStats {
    * into it uninvited — see `streams/foreignSenderGuard`.
    */
   senders?: string[];
+  /** Packets the sender filter dropped because they came from another address — see {@link StreamUdpStreamDiagnostics}. */
+  rejectedPackets?: number;
+  /** The address those dropped packets came from, most recently. */
+  lastRejectedSource?: string;
+}
+
+/**
+ * What the native sender filter has done to one stream.
+ *
+ * Read when a mirror that believed it was live goes silent, because a filter pointed at the wrong
+ * address of a dual-homed Ultimate produces exactly the same symptoms as a stream that stopped: the
+ * socket receives at full rate and every packet is dropped before it is counted as an arrival.
+ */
+export interface StreamUdpStreamDiagnostics {
+  /** Packets dropped because they came from a machine other than {@link expectedSource}. */
+  rejectedPackets: number;
+  /** The address the dropped packets came from, most recently. Absent when nothing was dropped. */
+  lastRejectedSource?: string;
+  /** The resolved address the filter is accepting. Absent means the filter is open. */
+  expectedSource?: string;
+  /** Distinct source IPs seen on this stream's group. */
+  senders?: string[];
 }
 
 /**
@@ -178,6 +200,14 @@ export interface StreamUdpPlugin {
    * or it would keep clearing the maxima a diagnostic run is collecting.
    */
   readAudioStats(options?: { reset?: boolean }): Promise<StreamUdpAudioStats>;
+  /**
+   * Read what the sender filter dropped on one stream, and whose packets those were.
+   *
+   * Separate from {@link readAudioStats} because video has no audio pipeline to hang stats off, and
+   * the video mirror is the surface where a filter mismatch is most visible (a frozen picture under
+   * a control that still reads "Watching").
+   */
+  readStreamDiagnostics(options: { name: string }): Promise<StreamUdpStreamDiagnostics>;
   /** Stop + release the native audio sink. Safe to call when none is open. */
   closeAudioTrack(options?: Record<string, never>): Promise<void>;
   /**

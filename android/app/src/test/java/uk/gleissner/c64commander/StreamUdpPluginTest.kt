@@ -572,6 +572,84 @@ class StreamUdpPluginTest {
     plugin.closeAudioTrack(resolvingCall {}.first)
   }
 
+  /**
+   * HARD27-005: a filter aimed at the wrong address receives at full rate and drops everything.
+   *
+   * That is silent in exactly the same way as a stream that stopped, so the only thing that can tell
+   * the two apart is the plugin reporting what it refused and whose packets those were. Before this,
+   * `rejectedPackets` was counted and written to logcat, and nothing reached JS at all.
+   */
+  @Test
+  fun readStreamDiagnosticsNamesTheAddressWhosePacketsTheFilterRefused() {
+    val (bindCall, bindResolved) =
+        resolvingCall {
+          `when`(it.getString("name")).thenReturn("video")
+          `when`(it.getInt("port")).thenReturn(0)
+          // 127.0.0.2 is a loopback address that resolves without DNS and is NOT the address the
+          // test's sender socket will use, so every packet below is foreign.
+          `when`(it.getString("source")).thenReturn("127.0.0.2")
+        }
+    plugin.bind(bindCall)
+    val port = bindResolved()!!.getInteger("port")!!
+
+    // The filter resolves off the caller's thread, so wait for it to be armed before sending.
+    val armed = waitFor { diagnostics("video").getString("expectedSource") != null }
+    assertTrue("the sender filter was never armed", armed)
+
+    val payload = byteArrayOf(0x01, 0x02, 0x03, 0x04)
+    DatagramSocket().use { sender ->
+      repeat(3) { sender.send(DatagramPacket(payload, payload.size, InetAddress.getByName("127.0.0.1"), port)) }
+    }
+
+    val counted = waitFor { diagnostics("video").getInteger("rejectedPackets")!! >= 3 }
+    val stats = diagnostics("video")
+    assertTrue("expected the refused packets to be counted, got $stats", counted)
+    assertEquals("127.0.0.1", stats.getString("lastRejectedSource"))
+    assertEquals("127.0.0.2", stats.getString("expectedSource"))
+    // Nothing was forwarded: the packets were dropped before any accounting, which is why the app
+    // sees silence.
+    assertEquals(0, received.size)
+
+    // Adopting the sender that is actually streaming clears the diagnosis and reopens the filter.
+    val adoptCall = mock(PluginCall::class.java)
+    `when`(adoptCall.getString("name")).thenReturn("video")
+    `when`(adoptCall.getString("host")).thenReturn("127.0.0.1")
+    plugin.setExpectedSource(adoptCall)
+    assertTrue(
+        "adopting the sender must reset the rejection count",
+        waitFor { diagnostics("video").getInteger("rejectedPackets") == 0 },
+    )
+
+    val closeCall = mock(PluginCall::class.java)
+    `when`(closeCall.getString("name")).thenReturn("video")
+    plugin.close(closeCall)
+  }
+
+  @Test
+  fun readStreamDiagnosticsRejectsMissingName() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("name")).thenReturn(null)
+    plugin.readStreamDiagnostics(call)
+    verify(call).reject("name is required")
+  }
+
+  /** Read the plugin's sender-filter counters for one stream. */
+  private fun diagnostics(name: String): JSObject {
+    val (call, resolved) = resolvingCall { `when`(it.getString("name")).thenReturn(name) }
+    plugin.readStreamDiagnostics(call)
+    return resolved()!!
+  }
+
+  /** Poll a condition the plugin's own executor threads satisfy asynchronously. */
+  private fun waitFor(timeoutMs: Long = 3000, condition: () -> Boolean): Boolean {
+    val deadline = System.currentTimeMillis() + timeoutMs
+    while (System.currentTimeMillis() < deadline) {
+      if (condition()) return true
+      Thread.sleep(10)
+    }
+    return false
+  }
+
   private fun bindAudio(): Int {
     val (bindCall, bindResolved) =
         resolvingCall {
