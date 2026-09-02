@@ -73,6 +73,7 @@ import { buildRenderedTuneKey } from "@/lib/playback/renderedTuneCache";
 import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
+import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import {
   ENGINE_FALLBACK_MESSAGES,
   preRouteEngine,
@@ -1023,11 +1024,16 @@ export function usePlaybackController({
         // `c64u_local_engine_enabled` — off by default, so the whole block is a
         // no-op and playback is byte-for-byte the C64 path.
         let routeToLocal = false;
-        if (loadLocalEngineEnabled()) {
+        // Against the simulated device the on-device engine is not an optional extra: it is the
+        // only thing that can make a sound, so this block runs whether or not the local-engine flag
+        // is on. The flag still governs the choice against real hardware.
+        const simulatedDevice = getConnectionSnapshot().state === "DEMO_ACTIVE";
+        if (loadLocalEngineEnabled() || simulatedDevice) {
           const selection = preRouteEngine({
             category: item.category,
             engine: loadPlaybackEngine(),
             localSupported: LocalSidPlaybackController.isSupported(),
+            simulatedDevice,
           });
           // A tune that lives on the Ultimate has no local blob — `file` is resolved for the
           // commoserve, HVSC and local sources and for no other. The on-device engine needs the
@@ -1238,6 +1244,18 @@ export function usePlaybackController({
           rebootBeforePlay: Boolean(executionOptions?.rebootBeforeMount),
         });
         if (routeToLocal) {
+          // Tell the simulated device what is playing, so its Live View screen names the tune the
+          // way a real machine's screen would. Fire and forget: the sound is already coming from
+          // this phone, and a failed REST call must not delay or fail the first note.
+          if (simulatedDevice && effectivePath) {
+            void getC64API()
+              .playSid(effectivePath, effectiveRequest.songNr)
+              .catch((error: unknown) =>
+                addLog("debug", "Simulated device did not accept the now-playing screen", {
+                  error: error instanceof Error ? error.message : String(error),
+                }),
+              );
+          }
           // On-device engine: render the SID here, no C64 (spec §12). The
           // songlength clock + auto-advance below run identically to the C64
           // path, so playlist/SID-Radio behaviour is engine-agnostic.

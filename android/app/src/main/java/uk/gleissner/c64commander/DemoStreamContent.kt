@@ -27,14 +27,16 @@ import kotlin.math.sin
  *
  * The loop is the tone and colour ladder (`src/lib/streams/toneLadder.ts`) the app already uses to
  * grade a real device's stream: eighteen half-second slots — a silence, a C-major octave up, a
- * silence, the octave back down — with the picture's surround stepping through all sixteen VIC
- * colours, one per note. Reusing it means the synthetic stream is gradable by the same instruments
- * as a real one (pitch per note, note length, silence floor, and the audio-to-video offset, since
- * tone and colour change together), and it sounds like a scale rather than a test tone.
+ * silence, the octave back down — with the screen BORDER stepping through all sixteen VIC colours,
+ * one per note, exactly as the ladder's own SID does on real hardware. Reusing it means the
+ * synthetic stream is gradable by the same instruments as a real one (pitch per note, note length,
+ * silence floor, and the audio-to-video offset, since tone and colour change together), and it
+ * sounds like a scale rather than a test tone.
  *
- * Video is one distinct frame per slot, sent [FRAMES_PER_SLOT] times: the card is static and only
- * its surround changes, so eighteen pre-packetised frames cover the whole loop in under a megabyte.
- * Audio is the whole loop, pre-rendered.
+ * Video is one distinct frame per slot, sent [FRAMES_PER_SLOT] times. The text on the screen does
+ * not change within a loop; only the border does. So a screen is drawn once and the eighteen slot
+ * frames are that drawing with the border re-tinted, which is what keeps a screen change cheap
+ * enough to do while the stream is running. Audio is the whole loop, pre-rendered.
  *
  * Both loops last exactly [loopNanos], derived from the audio sample count, so the picture cannot
  * drift against the sound however long the stream runs.
@@ -42,11 +44,23 @@ import kotlin.math.sin
 class DemoStreamContent
 private constructor(
         val slots: List<Slot>,
-        /** `videoSlotPackets[slot]` is that slot's frame, already split into wire packets. */
-        val videoSlotPackets: List<List<ByteArray>>,
         /** The whole audio loop, already split into wire packets. */
         val audioPackets: List<ByteArray>,
+        private val screenRenderer: DemoScreen,
 ) {
+  /** One screen's eighteen slot frames, each already split into wire packets. */
+  class VideoLoop(val slotPackets: List<List<ByteArray>>)
+
+  /**
+   * Build the frames for a screen.
+   *
+   * Called on a machine state change, not per frame: the text is drawn once and re-tinted per slot,
+   * so a change costs one screen render plus eighteen border passes rather than eighteen renders.
+   */
+  fun videoLoopFor(screen: MachineScreen): VideoLoop {
+    val base = screenRenderer.render(screen, slots[0].colour)
+    return VideoLoop(slots.map { slot -> packetizeFrame(screenRenderer.retint(base, slot.colour)) })
+  }
   /** One ladder slot: the note to sound (0 Hz for a silence) and the colour the surround holds. */
   data class Slot(val index: Int, val name: String, val hz: Double, val colour: Int)
 
@@ -94,22 +108,14 @@ private constructor(
     /**
      * Build the loop from the committed assets.
      *
-     * @param testcard 4bpp PAL frame, [VIC_BYTES_PER_FRAME] bytes.
-     * @param surroundMask one bit per pixel, LSB first, set where the pixel is surround.
+     * @param font `font8x8.bin`, 96 glyphs of 8 rows.
      * @param ladderJson `tone-ladder.json`, generated from `toneLadder.ts`.
      */
-    fun from(testcard: ByteArray, surroundMask: ByteArray, ladderJson: String): DemoStreamContent {
-      require(testcard.size == VIC_BYTES_PER_FRAME) {
-        "test card must be $VIC_BYTES_PER_FRAME bytes, was ${testcard.size}"
-      }
-      require(surroundMask.size == VIC_FRAME_WIDTH * VIC_PAL_HEIGHT / 8) {
-        "surround mask must be ${VIC_FRAME_WIDTH * VIC_PAL_HEIGHT / 8} bytes, was ${surroundMask.size}"
-      }
+    fun from(font: ByteArray, ladderJson: String): DemoStreamContent {
 
       val slots = parseSlots(ladderJson)
-      val videoSlotPackets = slots.map { slot -> packetizeFrame(tintSurround(testcard, surroundMask, slot.colour)) }
       val audioPackets = renderAudioLoop(slots)
-      return DemoStreamContent(slots, videoSlotPackets, audioPackets)
+      return DemoStreamContent(slots, audioPackets, DemoScreen(font))
     }
 
     /**
@@ -139,21 +145,6 @@ private constructor(
         carried = slot.colour ?: carried
         Slot(index = slot.index, name = slot.name, hz = slot.hz, colour = carried)
       }
-    }
-
-    /** The card with every surround pixel replaced by `colour`; the panel is left alone. */
-    internal fun tintSurround(testcard: ByteArray, surroundMask: ByteArray, colour: Int): ByteArray {
-      val tinted = testcard.copyOf()
-      val nibble = colour and 0x0f
-      for (pixel in 0 until VIC_FRAME_WIDTH * VIC_PAL_HEIGHT) {
-        if ((surroundMask[pixel ushr 3].toInt() ushr (pixel and 7)) and 1 == 0) continue
-        val byteIndex = pixel ushr 1
-        val current = tinted[byteIndex].toInt() and 0xff
-        tinted[byteIndex] =
-                if (pixel and 1 == 0) ((current and 0xf0) or nibble).toByte()
-                else ((current and 0x0f) or (nibble shl 4)).toByte()
-      }
-      return tinted
     }
 
     /**

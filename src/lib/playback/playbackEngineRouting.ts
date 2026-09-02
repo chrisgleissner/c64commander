@@ -13,7 +13,10 @@
  * module holds the *decision* — kept pure so the route + the one-time notices
  * are unit-tested without the controller. The rules:
  *
- * - Engine `c64` → always the Ultimate (`executePlayPlan`), the app's identity.
+ * - Engine `c64` → the Ultimate (`executePlayPlan`), the app's identity — except against the
+ *   SIMULATED device, which has no SID chip. There a tune routed to "the C64" is played by this
+ *   phone's own engine instead, so Demo Mode makes a sound rather than acknowledging a play command
+ *   and staying silent. The device is still told, so its screen shows what is playing.
  * - Engine `local`:
  *   - only **SID** can play on-device (libsidplayfp is SID-only) → non-SID
  *     (prg/crt/disk/mod) falls back to the C64 with a one-time notice.
@@ -33,13 +36,16 @@ import type { PlaybackEngine } from "@/lib/config/appSettings";
 export type PlaybackRoute = "c64" | "local";
 
 /** The distinct one-time notices shown when a Local selection falls back to the C64. */
-export type EngineFallbackNotice = "non-sid-on-c64" | "rom-on-c64" | "local-unavailable" | "rom-lite-engine";
+export type EngineFallbackNotice =
+  "non-sid-on-c64" | "rom-on-c64" | "local-unavailable" | "rom-lite-engine" | "simulated-device-local-sid";
 
 export interface EngineRouteInput {
   category: PlayFileCategory;
   engine: PlaybackEngine;
   /** Web Worker + Web Audio present (LocalSidEngine.isSupported()). */
   localSupported: boolean;
+  /** Demo Mode: the device answering is the built-in simulation, which has no SID chip. */
+  simulatedDevice?: boolean;
 }
 
 export interface PreRouteDecision {
@@ -53,8 +59,20 @@ export interface PreRouteDecision {
  * ROM-dependence is only known once the worker opens the SID, so a `local`
  * route here may still fall back later — see {@link romFallbackDecision}.
  */
-export function preRouteEngine({ category, engine, localSupported }: EngineRouteInput): PreRouteDecision {
-  if (engine !== "local") return { route: "c64", notice: null };
+export function preRouteEngine({
+  category,
+  engine,
+  localSupported,
+  simulatedDevice = false,
+}: EngineRouteInput): PreRouteDecision {
+  if (engine !== "local") {
+    // The simulated device answers a play command and cannot make a sound, so a SID sent to it
+    // would be silence with a success toast. Play it here instead and say so once.
+    if (simulatedDevice && category === "sid" && localSupported) {
+      return { route: "local", notice: "simulated-device-local-sid" };
+    }
+    return { route: "c64", notice: null };
+  }
   if (category !== "sid") return { route: "c64", notice: "non-sid-on-c64" };
   if (!localSupported) return { route: "c64", notice: "local-unavailable" };
   return { route: "local", notice: null };
@@ -113,4 +131,7 @@ export const ENGINE_FALLBACK_MESSAGES: Record<EngineFallbackNotice, string> = {
     "Playing without the C64\u2019s ROMs \u2014 they\u2019re being read from the machine you\u2019re " +
     "connected to. Ordinary tunes sound the same either way; only the few that use the C64\u2019s own " +
     "routines need them.",
+  "simulated-device-local-sid":
+    "The simulated device has no SID chip, so this tune is playing on your phone. Everything else " +
+    "behaves as it does against a real C64 Ultimate.",
 };

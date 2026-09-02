@@ -112,6 +112,18 @@ class MockC64UServer(
     return port
   }
 
+  /** The file's own name, as a C64 would show it: no path, no extension, upper case. */
+  private fun fileLabel(file: String?): String {
+    val name = file?.substringAfterLast('/')?.substringBeforeLast('.')?.trim().orEmpty()
+    return if (name.isEmpty()) "PROGRAM" else name.uppercase()
+  }
+
+  /** The mount point the file came from, which is what a KERNAL load message names. */
+  private fun deviceLabel(file: String?): String {
+    val first = file?.trim('/')?.substringBefore('/').orEmpty()
+    return if (first.isEmpty()) "USB0" else first.uppercase()
+  }
+
   fun stop() {
     running = false
     streamServer?.stopAll()
@@ -315,37 +327,22 @@ class MockC64UServer(
       return jsonResponse(200, payload)
     }
 
-    if (path == "/v1/runners:sidplay" && (request.method == "PUT" || request.method == "POST")) {
-      if (request.method == "PUT" && !request.queryParams.containsKey("file")) {
-        return errorResponse(400, "Missing file")
-      }
-      return okResponse()
-    }
-
-    if (path == "/v1/runners:modplay" && (request.method == "PUT" || request.method == "POST")) {
-      if (request.method == "PUT" && !request.queryParams.containsKey("file")) {
-        return errorResponse(400, "Missing file")
-      }
-      return okResponse()
-    }
-
-    if (path == "/v1/runners:load_prg" && (request.method == "PUT" || request.method == "POST")) {
-      if (request.method == "PUT" && !request.queryParams.containsKey("file")) {
-        return errorResponse(400, "Missing file")
-      }
-      return okResponse()
-    }
-
-    if (path == "/v1/runners:run_prg" && (request.method == "PUT" || request.method == "POST")) {
-      if (request.method == "PUT" && !request.queryParams.containsKey("file")) {
-        return errorResponse(400, "Missing file")
-      }
-      return okResponse()
-    }
-
-    if (path == "/v1/runners:run_crt" && (request.method == "PUT" || request.method == "POST")) {
-      if (request.method == "PUT" && !request.queryParams.containsKey("file")) {
-        return errorResponse(400, "Missing file")
+    // The runner endpoints put the machine into a state, and Live View shows it. Answering 200 and
+    // changing nothing is what made every launch look like it had failed: the app reported success
+    // and the picture carried on showing whatever it showed before.
+    val runnerMatch = Regex("^/v1/runners:(sidplay|modplay|load_prg|run_prg|run_crt)$").find(path)
+    if (runnerMatch != null && (request.method == "PUT" || request.method == "POST")) {
+      val runner = runnerMatch.groupValues[1]
+      val file = request.queryParams["file"]
+      if (request.method == "PUT" && file == null) return errorResponse(400, "Missing file")
+      val name = fileLabel(file)
+      when (runner) {
+        // The tune's sound comes from the phone's own SID engine, so the stream goes quiet and the
+        // screen says where the music is coming from rather than pretending the SID chip is here.
+        "sidplay", "modplay" -> streamServer?.show(MachineScreen.Playing(name, deviceLabel(file)), audible = false)
+        "load_prg" -> streamServer?.show(MachineScreen.Loading(name, deviceLabel(file)))
+        "run_prg" -> streamServer?.show(MachineScreen.Running(name, "PRG"))
+        "run_crt" -> streamServer?.show(MachineScreen.Running(name, "CRT"))
       }
       return okResponse()
     }
@@ -434,6 +431,14 @@ class MockC64UServer(
                             )
                             .contains(path)
     ) {
+      when (path) {
+        // A reset or a reboot puts a real machine back at its prompt, and a power-off blanks it.
+        // Live View has to show that, or the buttons look inert.
+        "/v1/machine:reset", "/v1/machine:reboot" -> streamServer?.show(MachineScreen.Ready)
+        "/v1/machine:poweroff" -> streamServer?.show(MachineScreen.Off, audible = false)
+        "/v1/machine:pause" -> streamServer?.show(MachineScreen.Paused, audible = false)
+        "/v1/machine:resume" -> streamServer?.show(MachineScreen.Ready)
+      }
       if (path == "/v1/machine:reset" ||
                       path == "/v1/machine:reboot" ||
                       path == "/v1/machine:poweroff"

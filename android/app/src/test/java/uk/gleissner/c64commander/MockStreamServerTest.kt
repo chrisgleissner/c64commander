@@ -21,8 +21,7 @@ class MockStreamServerTest {
 
   private fun content() =
           DemoStreamContent.from(
-                  File(assetDir, "testcard.vic4").readBytes(),
-                  File(assetDir, "testcard-surround.mask").readBytes(),
+                  File(assetDir, "font8x8.bin").readBytes(),
                   File(assetDir, "tone-ladder.json").readText(),
           )
 

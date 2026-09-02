@@ -13,6 +13,7 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Synthetic Live View source for Demo Mode.
@@ -44,13 +45,51 @@ class MockStreamServer(private val contentProvider: () -> DemoStreamContent) {
   private val audioRunning = AtomicBoolean(false)
 
   /**
+   * What the simulated machine has on screen, and whether it is making a sound.
+   *
+   * Held as one immutable value swapped atomically: the video thread reads it once per frame, and a
+   * half-applied change would put one screen's border on another screen's text.
+   */
+  private data class Showing(val screen: MachineScreen, val loop: DemoStreamContent.VideoLoop, val audible: Boolean)
+
+  private val showing = AtomicReference<Showing?>(null)
+
+  /**
+   * Put a screen on the simulated machine.
+   *
+   * Called from the REST handler when the app starts a program, plays a tune, resets or pauses, so
+   * Live View shows the effect of the command the way it would against real hardware. Rendering
+   * happens here, on the caller's thread, and the send loop only ever swaps a reference.
+   *
+   * `audible` is false while the phone's own SID engine is playing the tune: the sound is already
+   * coming out of the speaker, and the stream carrying its own tune on top would be two pieces of
+   * music at once.
+   */
+  fun show(screen: MachineScreen, audible: Boolean = true) {
+    val content = content()
+    showing.set(Showing(screen, content.videoLoopFor(screen), audible))
+  }
+
+  /** The screen currently being streamed, for tests and diagnostics. */
+  fun currentScreen(): MachineScreen? = showing.get()?.screen
+
+  /**
    * Built on first use, not at construction: reading three assets and rendering nine seconds of
    * audio takes long enough that doing it when the mock REST server starts would show up as
    * startup latency for every Demo Mode session, including the ones that never open Live View.
    */
   @Volatile private var content: DemoStreamContent? = null
 
-  private fun content(): DemoStreamContent = content ?: contentProvider().also { content = it }
+  private fun content(): DemoStreamContent =
+          content
+                  ?: synchronized(this) { content ?: contentProvider().also { content = it } }
+
+  /** The screen to stream when nothing has asked for another one: a C64 sitting at its prompt. */
+  private fun currentShowing(): Showing =
+          showing.get()
+                  ?: Showing(MachineScreen.Ready, content().videoLoopFor(MachineScreen.Ready), true).also {
+                    showing.compareAndSet(null, it)
+                  }
 
   /** Start the named synthetic stream. `ip` is the receiver's `host:port` (only the port is used). */
   fun start(streamName: String, ip: String) {
@@ -121,7 +160,9 @@ class MockStreamServer(private val contentProvider: () -> DemoStreamContent) {
         var seq = 0
         var nextTickNanos = System.nanoTime()
         while (videoRunning.get() && !Thread.currentThread().isInterrupted) {
-          val slotPackets = content.videoSlotPackets[(frameNum / DemoStreamContent.FRAMES_PER_SLOT) % content.slots.size]
+          val slotPackets =
+                  currentShowing().loop.slotPackets[
+                          (frameNum / DemoStreamContent.FRAMES_PER_SLOT) % content.slots.size]
           for (packet in slotPackets) {
             if (!videoRunning.get()) return
             DemoStreamContent.writeU16LE(packet, 0, seq)
@@ -153,9 +194,12 @@ class MockStreamServer(private val contentProvider: () -> DemoStreamContent) {
         val dest = InetAddress.getByName(LOOPBACK)
         var seq = 0
         var packetIndex = 0
+        val silence = ByteArray(content.audioPackets[0].size)
         var nextTickNanos = System.nanoTime()
         while (audioRunning.get() && !Thread.currentThread().isInterrupted) {
-          val packet = content.audioPackets[packetIndex]
+          // Silence while the phone's own engine is playing: the loop keeps running so the stream
+          // never stalls and the sequence numbers stay continuous, but the samples are zero.
+          val packet = if (currentShowing().audible) content.audioPackets[packetIndex] else silence
           DemoStreamContent.writeU16LE(packet, 0, seq)
           socket.send(DatagramPacket(packet, packet.size, dest, port))
           seq = (seq + 1) and 0xffff

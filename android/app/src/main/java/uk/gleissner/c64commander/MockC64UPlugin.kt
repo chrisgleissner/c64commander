@@ -157,10 +157,9 @@ class MockC64UPlugin : Plugin() {
    * session that never opens Live View never pays for it.
    */
   private fun loadDemoStreamContent(): DemoStreamContent {
-    val testcard = context.assets.open("demo-stream/testcard.vic4").use { it.readBytes() }
-    val mask = context.assets.open("demo-stream/testcard-surround.mask").use { it.readBytes() }
+    val font = context.assets.open("demo-stream/font8x8.bin").use { it.readBytes() }
     val ladder = context.assets.open("demo-stream/tone-ladder.json").bufferedReader().use { it.readText() }
-    return DemoStreamContent.from(testcard, mask, ladder)
+    return DemoStreamContent.from(font, ladder)
   }
 
   private fun loadTimingProfile(): MockTimingProfile {

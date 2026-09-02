@@ -24,13 +24,29 @@ import org.junit.Test
 class DemoStreamContentTest {
   private val assetDir = File("src/main/assets/demo-stream")
 
-  private fun testcard() = File(assetDir, "testcard.vic4").readBytes()
-
-  private fun mask() = File(assetDir, "testcard-surround.mask").readBytes()
+  private fun font() = File(assetDir, "font8x8.bin").readBytes()
 
   private fun ladderJson() = File(assetDir, "tone-ladder.json").readText()
 
-  private fun content() = DemoStreamContent.from(testcard(), mask(), ladderJson())
+  private fun content() = DemoStreamContent.from(font(), ladderJson())
+
+  private fun readyLoop() = content().videoLoopFor(MachineScreen.Ready)
+
+  /** The frame a receiver would rebuild from one slot's packets. */
+  private fun reassemble(packets: List<ByteArray>): ByteArray {
+    val frame = ByteArray(DemoStreamContent.VIC_BYTES_PER_FRAME)
+    for (packet in packets) {
+      val line = DemoStreamContent.readU16LE(packet, 4) and 0x7fff
+      System.arraycopy(
+              packet,
+              DemoStreamContent.VIC_HEADER_BYTES,
+              frame,
+              line * DemoStreamContent.VIC_BYTES_PER_LINE,
+              DemoStreamContent.VIC_LINES_PER_PACKET * DemoStreamContent.VIC_BYTES_PER_LINE,
+      )
+    }
+    return frame
+  }
 
   private fun nibbleAt(frame: ByteArray, pixel: Int): Int {
     val byte = frame[pixel ushr 1].toInt() and 0xff
@@ -38,20 +54,8 @@ class DemoStreamContentTest {
   }
 
   @Test
-  fun assetsAreTheSizesTheWireFormatRequires() {
-    assertEquals(DemoStreamContent.VIC_BYTES_PER_FRAME, testcard().size)
-    assertEquals(DemoStreamContent.VIC_FRAME_WIDTH * DemoStreamContent.VIC_PAL_HEIGHT / 8, mask().size)
-  }
-
-  @Test
-  fun everyNibbleOfTheTestCardIsAValidPaletteIndex() {
-    // 4bpp gives no room for an invalid index, so this can only fail if the asset is the wrong
-    // size or the wrong format entirely — which is exactly what it is here to catch.
-    val frame = testcard()
-    assertEquals(DemoStreamContent.VIC_BYTES_PER_FRAME, frame.size)
-    for (pixel in 0 until DemoStreamContent.VIC_FRAME_WIDTH * DemoStreamContent.VIC_PAL_HEIGHT) {
-      assertTrue(nibbleAt(frame, pixel) in 0..15)
-    }
+  fun theFontIsTheSizeTheScreenRendererRequires() {
+    assertEquals(DemoScreen.GLYPH_COUNT * DemoScreen.GLYPH_BYTES, font().size)
   }
 
   @Test
@@ -59,7 +63,7 @@ class DemoStreamContentTest {
     val slots = content().slots
     assertEquals(18, slots.size)
     assertEquals(
-            "every VIC colour must appear, so the picture identifies the note",
+            "every VIC colour must appear, so the border identifies the note",
             (0..15).toSet(),
             slots.map { it.colour }.toSet(),
     )
@@ -83,47 +87,101 @@ class DemoStreamContentTest {
   }
 
   @Test
-  fun tintingReplacesOnlyTheSurround() {
-    val frame = testcard()
-    val surround = mask()
-    val tinted = DemoStreamContent.tintSurround(frame, surround, colour = 2)
-
-    var tintedPixels = 0
-    for (pixel in 0 until DemoStreamContent.VIC_FRAME_WIDTH * DemoStreamContent.VIC_PAL_HEIGHT) {
-      val inSurround = (surround[pixel ushr 3].toInt() ushr (pixel and 7)) and 1 == 1
-      if (inSurround) {
-        assertEquals("surround pixel $pixel must take the slot colour", 2, nibbleAt(tinted, pixel))
-        tintedPixels += 1
-      } else {
-        assertEquals("panel pixel $pixel must be left alone", nibbleAt(frame, pixel), nibbleAt(tinted, pixel))
-      }
+  fun everyNibbleOfARenderedScreenIsAValidPaletteIndex() {
+    // 4bpp leaves no room for an invalid index, so this can only fail if the renderer writes
+    // outside the frame or the font is the wrong size — which is exactly what it is here to catch.
+    val frame = reassemble(readyLoop().slotPackets[0])
+    assertEquals(DemoStreamContent.VIC_BYTES_PER_FRAME, frame.size)
+    for (pixel in 0 until DemoScreen.WIDTH * DemoScreen.HEIGHT) {
+      assertTrue(nibbleAt(frame, pixel) in 0..15)
     }
-    assertTrue("the mask must actually cover something", tintedPixels > 1000)
   }
 
   @Test
-  fun tintingKeepsTheSixteenColourBarStripIntact() {
-    // The strip shows all sixteen indices including light blue, the colour the card draws its
-    // surround in. Tinting by colour value rather than by mask would recolour that one bar and
-    // quietly turn the palette check into a fifteen-colour check.
-    val content = content()
-    val distinctPerSlot = content.videoSlotPackets.indices.map { slot ->
-      val frame = DemoStreamContent.tintSurround(testcard(), mask(), content.slots[slot].colour)
-      (0 until DemoStreamContent.VIC_FRAME_WIDTH * DemoStreamContent.VIC_PAL_HEIGHT)
-              .map { nibbleAt(frame, it) }
-              .toSet()
+  fun theIdleScreenIsACommodoreBootScreen() {
+    // The picture is the machine's screen, not a test card: a Live View that showed the same thing
+    // whatever the machine was doing would make every action the app offers look inert.
+    val text = DemoScreen.linesFor(MachineScreen.Ready).joinToString(" ")
+    assertTrue(text, text.contains("COMMODORE 64 BASIC V2"))
+    assertTrue(text, text.contains("READY."))
+  }
+
+  @Test
+  fun aRunningProgramIsNamedOnScreenAndSaysWhatItStandsIn() {
+    val text = DemoScreen.linesFor(MachineScreen.Running("SAMPLE QUEST", "PRG")).joinToString(" ")
+    assertTrue(text, text.contains("NOW RUNNING"))
+    assertTrue(text, text.contains("SAMPLE QUEST"))
+    assertTrue(text, text.contains("PRG"))
+    // The one hard wall is stated on the screen rather than left for the user to discover.
+    assertTrue(text, text.contains("CANNOT EXECUTE"))
+  }
+
+  @Test
+  fun aPlayingTuneSaysWhereTheSoundIsComingFrom() {
+    val text = DemoScreen.linesFor(MachineScreen.Playing("COMMANDER MARCH", "Usb0")).joinToString(" ")
+    assertTrue(text, text.contains("NOW PLAYING"))
+    assertTrue(text, text.contains("COMMANDER MARCH"))
+    assertTrue(text, text.contains("USB0"))
+    // The one hard wall is named on the screen rather than left for the listener to wonder about.
+    assertTrue(text, text.contains("NO SID"))
+  }
+
+  @Test
+  fun aLoadNamesTheFileAndTheDeviceTheWayTheKernalDoes() {
+    val text = DemoScreen.linesFor(MachineScreen.Loading("HELLO", "Usb0")).joinToString(" ")
+    assertTrue(text, text.contains("LOAD\"HELLO\",8,1"))
+    assertTrue(text, text.contains("SEARCHING FOR HELLO"))
+    assertTrue(text, text.contains("USB0"))
+  }
+
+  @Test
+  fun onlyTheBorderChangesBetweenSlotsOfOneScreen() {
+    // The text is drawn once and re-tinted per slot. If a slot re-rendered the text instead, a
+    // screen change would cost eighteen full renders while the stream is running.
+    val loop = readyLoop()
+    val first = reassemble(loop.slotPackets[0])
+    val second = reassemble(loop.slotPackets[5])
+    var differing = 0
+    for (pixel in 0 until DemoScreen.WIDTH * DemoScreen.HEIGHT) {
+      if (nibbleAt(first, pixel) == nibbleAt(second, pixel)) continue
+      differing += 1
+      val x = pixel % DemoScreen.WIDTH
+      val y = pixel / DemoScreen.WIDTH
+      val inText =
+              x >= DemoScreen.TEXT_LEFT &&
+                      x < DemoScreen.TEXT_LEFT + DemoScreen.COLUMNS * 8 &&
+                      y >= DemoScreen.TEXT_TOP &&
+                      y < DemoScreen.TEXT_TOP + DemoScreen.ROWS * 8
+      assertTrue("pixel $x,$y is inside the text area and must not change with the border", !inText)
     }
-    for (colours in distinctPerSlot) {
-      assertEquals("all sixteen palette indices must survive every tint", 16, colours.size)
+    assertTrue("the border must actually change colour between slots", differing > 1000)
+  }
+
+  @Test
+  fun twoScreensDifferInsideTheTextArea() {
+    val ready = reassemble(readyLoop().slotPackets[0])
+    val running = reassemble(content().videoLoopFor(MachineScreen.Running("HELLO", "PRG")).slotPackets[0])
+    var differingInText = 0
+    for (pixel in 0 until DemoScreen.WIDTH * DemoScreen.HEIGHT) {
+      val x = pixel % DemoScreen.WIDTH
+      val y = pixel / DemoScreen.WIDTH
+      val inText =
+              x >= DemoScreen.TEXT_LEFT &&
+                      x < DemoScreen.TEXT_LEFT + DemoScreen.COLUMNS * 8 &&
+                      y >= DemoScreen.TEXT_TOP &&
+                      y < DemoScreen.TEXT_TOP + DemoScreen.ROWS * 8
+      if (inText && nibbleAt(ready, pixel) != nibbleAt(running, pixel)) differingInText += 1
     }
+    assertTrue("a program screen must not look like the BASIC prompt", differingInText > 500)
   }
 
   @Test
   fun everySlotProducesAWholeFrameOfWireFormatPackets() {
     val content = content()
-    assertEquals(content.slots.size, content.videoSlotPackets.size)
+    val loop = content.videoLoopFor(MachineScreen.Ready)
+    assertEquals(content.slots.size, loop.slotPackets.size)
 
-    for ((slotIndex, packets) in content.videoSlotPackets.withIndex()) {
+    for ((slotIndex, packets) in loop.slotPackets.withIndex()) {
       assertEquals(DemoStreamContent.VIC_PACKETS_PER_FRAME, packets.size)
       packets.forEachIndexed { packetIndex, packet ->
         assertEquals(
@@ -134,7 +192,11 @@ class DemoStreamContentTest {
         val line = packetIndex * DemoStreamContent.VIC_LINES_PER_PACKET
         val isLast = packetIndex == packets.size - 1
         val expectedLineField = line or (if (isLast) DemoStreamContent.VIC_LAST_LINE_FLAG else 0)
-        assertEquals("slot $slotIndex packet $packetIndex line field", expectedLineField, DemoStreamContent.readU16LE(packet, 4))
+        assertEquals(
+                "slot $slotIndex packet $packetIndex line field",
+                expectedLineField,
+                DemoStreamContent.readU16LE(packet, 4),
+        )
         assertEquals(DemoStreamContent.VIC_FRAME_WIDTH, DemoStreamContent.readU16LE(packet, 6))
         assertEquals(DemoStreamContent.VIC_LINES_PER_PACKET, packet[8].toInt())
         assertEquals(DemoStreamContent.VIC_BITS_PER_PIXEL, packet[9].toInt())
@@ -144,36 +206,13 @@ class DemoStreamContentTest {
 
   @Test
   fun thePacketsOfOneFrameCoverEveryLineExactlyOnce() {
-    val content = content()
-    val reassembled = ByteArray(DemoStreamContent.VIC_BYTES_PER_FRAME)
-    for (packet in content.videoSlotPackets[1]) {
-      val line = DemoStreamContent.readU16LE(packet, 4) and 0x7fff
-      System.arraycopy(
-              packet,
-              DemoStreamContent.VIC_HEADER_BYTES,
-              reassembled,
-              line * DemoStreamContent.VIC_BYTES_PER_LINE,
-              DemoStreamContent.VIC_LINES_PER_PACKET * DemoStreamContent.VIC_BYTES_PER_LINE,
-      )
-    }
-    val expected = DemoStreamContent.tintSurround(testcard(), mask(), content.slots[1].colour)
-    assertTrue("a receiver reassembling the packets must get the tinted card back", expected.contentEquals(reassembled))
-  }
-
-  @Test
-  fun successiveSlotsSendDifferentPictures() {
-    // A frozen picture is the failure this stream exists to make visible, so consecutive slots
-    // must differ. They differ only in the surround, which is the point: the picture identifies
-    // the note being played.
-    val content = content()
-    for (index in content.slots.indices) {
-      val next = (index + 1) % content.slots.size
-      if (content.slots[index].colour == content.slots[next].colour) continue
-      assertNotEquals(
-              content.videoSlotPackets[index].map { it.toList() },
-              content.videoSlotPackets[next].map { it.toList() },
-      )
-    }
+    val loop = readyLoop()
+    val reassembled = reassemble(loop.slotPackets[1])
+    // Every byte must have been written by exactly one packet: a gap would leave zeros, which is a
+    // valid palette index and so would not be caught by a range check.
+    assertEquals(DemoStreamContent.VIC_BYTES_PER_FRAME, reassembled.size)
+    val lines = loop.slotPackets[1].map { DemoStreamContent.readU16LE(it, 4) and 0x7fff }.toSet()
+    assertEquals(DemoStreamContent.VIC_PACKETS_PER_FRAME, lines.size)
   }
 
   @Test

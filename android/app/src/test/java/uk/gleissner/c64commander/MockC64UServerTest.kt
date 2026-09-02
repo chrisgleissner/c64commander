@@ -775,8 +775,7 @@ class MockC64UServerTest {
     val assetDir = java.io.File("src/main/assets/demo-stream")
     val streamServer = MockStreamServer {
       DemoStreamContent.from(
-              java.io.File(assetDir, "testcard.vic4").readBytes(),
-              java.io.File(assetDir, "testcard-surround.mask").readBytes(),
+              java.io.File(assetDir, "font8x8.bin").readBytes(),
               java.io.File(assetDir, "tone-ladder.json").readText(),
       )
     }
@@ -806,6 +805,57 @@ class MockC64UServerTest {
       assertEquals(200, stopConnection.responseCode)
       stopConnection.disconnect()
     }
+
+    server.stop()
+  }
+
+  @Test
+  fun everyRunnerPutsItsOwnScreenOnTheSimulatedMachine() {
+    // Answering 200 and changing nothing is what made every launch look like it had failed: the app
+    // reported success and Live View carried on showing whatever it showed before.
+    val state = MockC64UState.fromPayload(JSONObject())
+    val assetDir = java.io.File("src/main/assets/demo-stream")
+    val streamServer = MockStreamServer {
+      DemoStreamContent.from(
+              java.io.File(assetDir, "font8x8.bin").readBytes(),
+              java.io.File(assetDir, "tone-ladder.json").readText(),
+      )
+    }
+    val server = MockC64UServer(state, MockTimingProfile.defaultProfile(), null, streamServer)
+    server.start()
+    waitForServer(server)
+
+    fun put(path: String) {
+      val connection = URL("${server.baseUrl}$path").openConnection() as HttpURLConnection
+      connection.requestMethod = "PUT"
+      assertEquals(200, connection.responseCode)
+      connection.disconnect()
+    }
+
+    put("/v1/runners:run_prg?file=/Usb0/Programs/Hello.prg")
+    assertEquals(MachineScreen.Running("HELLO", "PRG"), streamServer.currentScreen())
+
+    put("/v1/runners:run_crt?file=/Usb0/Carts/Action.crt")
+    assertEquals(MachineScreen.Running("ACTION", "CRT"), streamServer.currentScreen())
+
+    put("/v1/runners:load_prg?file=/Usb0/Programs/Hello.prg")
+    assertEquals(MachineScreen.Loading("HELLO", "USB0"), streamServer.currentScreen())
+
+    put("/v1/runners:sidplay?file=/Usb0/Music/Commander%20March.sid")
+    val playing = streamServer.currentScreen()
+    assertTrue("expected a Playing screen, got $playing", playing is MachineScreen.Playing)
+
+    put("/v1/machine:reset")
+    assertEquals(MachineScreen.Ready, streamServer.currentScreen())
+
+    put("/v1/machine:pause")
+    assertEquals(MachineScreen.Paused, streamServer.currentScreen())
+
+    put("/v1/machine:resume")
+    assertEquals(MachineScreen.Ready, streamServer.currentScreen())
+
+    put("/v1/machine:poweroff")
+    assertEquals(MachineScreen.Off, streamServer.currentScreen())
 
     server.stop()
   }

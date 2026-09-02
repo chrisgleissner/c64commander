@@ -81,10 +81,25 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let browser: import("playwright-core").Browser | null = null;
 let page: import("playwright-core").Page | null = null;
 
+/**
+ * The application's process id, waited for rather than sampled.
+ *
+ * A relaunch is not instant and the previous stage may still be being torn down, so a single
+ * `pidof` immediately after `am start` reports nothing and reads as a crash.
+ */
+const waitForApp = async (timeoutMs = 30000) => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const pid = (await shell(`pidof ${PACKAGE}`).catch(() => "")).trim().split(/\s+/)[0];
+    if (pid) return pid;
+    await sleep(1000);
+  }
+  throw new Error(`${PACKAGE} did not start within ${timeoutMs} ms`);
+};
+
 const attach = async () => {
   await detach();
-  const pid = (await shell(`pidof ${PACKAGE}`)).trim().split(/\s+/)[0];
-  if (!pid) throw new Error(`${PACKAGE} is not running`);
+  const pid = await waitForApp();
   await adb("forward", "--remove", `tcp:${CDP_PORT}`).catch(() => undefined);
   await adb("forward", `tcp:${CDP_PORT}`, `localabstract:webview_devtools_remote_${pid}`);
   const { chromium } = await import("playwright-core");
@@ -134,8 +149,20 @@ const quietenSpeaker = async () => {
 
 const relaunchFresh = async () => {
   await shell(`pm clear ${PACKAGE}`);
+  // `pm clear` force-stops the package, and a launch issued into the middle of that teardown is
+  // swallowed with no error: the activity manager logs the kill and never starts anything. Give it
+  // a moment, then start, and start again if nothing came up.
+  await sleep(2000);
   await shell(`am start -n ${PACKAGE}/.MainActivity`);
-  await sleep(14000);
+  try {
+    await waitForApp(12000);
+  } catch {
+    await shell(`am start -n ${PACKAGE}/.MainActivity`);
+    await waitForApp(20000);
+  }
+  // The process exists well before the WebView has a page to attach to, and before discovery has
+  // decided anything; this is the shortest wait that reliably lands after both.
+  await sleep(12000);
   await attach();
 };
 
@@ -199,9 +226,27 @@ const stage = async (name: string, body: () => Promise<Record<string, unknown> |
       console.log(`      ${key}: ${typeof value === "object" ? JSON.stringify(value) : value}`);
     }
   } catch (error) {
-    results.push({ stage: name, status: "fail", ms: Date.now() - startedAt, error: String(error?.message ?? error) });
-    console.log(`FAIL  ${name}: ${error?.message ?? error}`);
+    const measured = (error as { measured?: Record<string, unknown> })?.measured ?? {};
+    results.push({
+      stage: name,
+      status: "fail",
+      ms: Date.now() - startedAt,
+      error: String((error as Error)?.message ?? error),
+      ...measured,
+    });
+    console.log(`FAIL  ${name}: ${(error as Error)?.message ?? error}`);
+    for (const [key, value] of Object.entries(measured)) {
+      console.log(`      ${key}: ${typeof value === "object" ? JSON.stringify(value) : value}`);
+    }
   }
+};
+
+/** Attach what was measured to a failure, so a threshold miss still reports its numbers. */
+const expectWith = (condition: unknown, message: string, measured: Record<string, unknown>) => {
+  if (condition) return;
+  const error = new Error(message) as Error & { measured?: Record<string, unknown> };
+  error.measured = measured;
+  throw error;
 };
 
 const expect = (condition: unknown, message: string) => {
@@ -236,6 +281,138 @@ const clickTestId = (testId: string): Promise<boolean> =>
     el.click();
     return true;
   })()`);
+
+// ── driving the app ─────────────────────────────────────────────────────────────────────────────
+
+const goTo = async (route: string, settleMs = 3000) => {
+  await js(
+    `(() => { history.pushState({}, "", ${JSON.stringify(route)}); ` +
+      `dispatchEvent(new PopStateEvent("popstate")); return true; })()`,
+  );
+  await sleep(settleMs);
+};
+
+/**
+ * Add everything of one kind from a folder on the simulated device to the playlist.
+ *
+ * Drives the real Add-items flow rather than seeding storage: the point of the run is that a user
+ * can reach this content, and a seeded playlist would prove only that the playlist can hold rows.
+ */
+const addFromSimulatedDevice = async (folder: string[], pick: string) => {
+  await goTo("/play");
+  expect(await clickTestId("add-items-to-playlist"), "no Add items button");
+  await sleep(2500);
+  expect(await clickTestId("import-option-c64u"), "the simulated device is not offered as a source");
+  await sleep(4000);
+
+  for (const step of folder) {
+    const entered = await js(`(() => {
+      const rows = Array.from(document.querySelectorAll('[data-testid=source-entry-row]'));
+      const row = rows.find((node) => (node.innerText || "").toUpperCase().includes(${JSON.stringify(step.toUpperCase())}));
+      if (!row) return false;
+      row.click();
+      return true;
+    })()`);
+    expect(entered, `could not open ${step} on the simulated device`);
+    await sleep(2500);
+  }
+
+  const selected = await js(`(() => {
+    const box = document.getElementById(${JSON.stringify(`select-${pick}`)});
+    if (!box) {
+      return { ok: false, available: Array.from(document.querySelectorAll("[id^=select-]")).map((n) => n.id) };
+    }
+    box.click();
+    return { ok: true };
+  })()`);
+  expect(selected.ok, `${pick} is not in the folder; it holds ${JSON.stringify(selected.available)}`);
+  await sleep(1200);
+
+  expect(await clickTestId("add-items-confirm"), "no confirm button in the picker");
+
+  // The picker closes, the file is fetched and its metadata read before the row appears, so poll
+  // for the row rather than sampling once: a fixed wait is either flaky or slower than it needs.
+  const label = pick.replace(/\.[a-z0-9]+$/i, "");
+  let body = "";
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    await sleep(500);
+    body = String(await js(`(() => (document.querySelector("main") || document.body).innerText)()`));
+    if (body.includes(label)) return;
+  }
+  expect(false, `${pick} did not reach the playlist within 20 s; the page shows ${JSON.stringify(body.slice(0, 200))}`);
+};
+
+/** The Live View canvas as a PNG, which is the frame a receiver actually decoded. */
+const captureFrame = async (name: string) => {
+  const base64 = await js(`(() => {
+    const canvas = document.querySelector('[data-testid="av-mirror-canvas"]');
+    return canvas ? canvas.toDataURL("image/png").slice("data:image/png;base64,".length) : "";
+  })()`);
+  expect(base64, "there is no Live View canvas to capture");
+  const path = resolve(process.cwd(), `artifacts/demo-mode-hil/${name}.png`);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, Buffer.from(base64, "base64"));
+  return path;
+};
+
+/** A short screen recording, which is the only evidence that shows the picture MOVING. */
+const captureVideo = async (name: string, seconds: number) => {
+  const remote = `/sdcard/${name}.mp4`;
+  await shell(`screenrecord --time-limit ${seconds} --size 720x1520 ${remote}`);
+  const path = resolve(process.cwd(), `artifacts/demo-mode-hil/${name}.mp4`);
+  mkdirSync(dirname(path), { recursive: true });
+  await adb("pull", remote, path);
+  await shell(`rm -f ${remote}`);
+  return path;
+};
+
+/** Turn the Live View mirror on, and wait for it to settle at its real frame rate. */
+const startMirror = async (options: { audio: boolean }) => {
+  await goTo("/");
+  await js(`(() => {
+    const toggle = document.querySelector('[data-testid="home-section-toggle-live-view"]');
+    if (toggle && !document.querySelector('[data-testid="av-video-toggle"]')) toggle.click();
+    return true;
+  })()`);
+  await sleep(2000);
+  const pressed = async (testId: string) =>
+    js(
+      `(() => { const el = document.querySelector('[data-testid="${testId}"]'); return el ? el.getAttribute("aria-pressed") : null; })()`,
+    );
+  if ((await pressed("av-video-toggle")) !== "true") await clickTestId("av-video-toggle");
+  await sleep(2000);
+  if (options.audio && (await pressed("av-audio-toggle")) !== "true") await clickTestId("av-audio-toggle");
+  await sleep(6000);
+};
+
+const readFps = async () => {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const text = await js(`(() => {
+      const el = document.querySelector('[data-testid="av-mirror-fps"]');
+      return el ? el.innerText : null;
+    })()`);
+    const fps = Number(/(\d+)\s*fps/.exec(text ?? "")?.[1] ?? NaN);
+    if (fps >= 45) return { fps, text };
+    await sleep(1000);
+  }
+  const text = await js(`(() => {
+    const el = document.querySelector('[data-testid="av-mirror-fps"]');
+    return el ? el.innerText : null;
+  })()`);
+  return { fps: Number(/(\d+)\s*fps/.exec(text ?? "")?.[1] ?? NaN), text };
+};
+
+/** Processor time this application has used, in seconds, from the kernel's own counters. */
+const processCpuSeconds = async () => {
+  const pid = await waitForApp();
+  const stat = await shell(`cat /proc/${pid}/stat`);
+  const fields = stat.slice(stat.lastIndexOf(")") + 2).split(/\s+/);
+  // utime and stime are fields 14 and 15 of the whole line, which is 12 and 13 after the comm.
+  const ticks = Number(fields[11]) + Number(fields[12]);
+  return ticks / 100; // USER_HZ is 100 on every Android build this runs on
+};
+
+const cpuCores = async () => Number((await shell("nproc")).trim()) || 8;
 
 // ── stages ───────────────────────────────────────────────────────────────────────────────────
 
@@ -489,6 +666,376 @@ const ctaCensus = async () => {
   return { perRoute };
 };
 
+/**
+ * The simulated device holds real content, and the app can see it.
+ *
+ * Demo Mode used to browse almost empty: one 122-byte tune whose player did nothing and six
+ * 18-byte files named `.d64`. Everything downstream — the playlist, a mounted disk's directory, a
+ * tune's author and length — had nothing true to show.
+ */
+const library = async () => {
+  await enterStockDemoMode();
+  await goTo("/play");
+  expect(await clickTestId("add-items-to-playlist"), "no Add items button");
+  await sleep(2500);
+  expect(await clickTestId("import-option-c64u"), "the simulated device is not offered as a source");
+  await sleep(4000);
+
+  const seen: Record<string, string[]> = {};
+  for (const folder of ["Music", "Programs", "Carts", "Games"]) {
+    await js(`(() => {
+      const rows = Array.from(document.querySelectorAll('[data-testid=source-entry-row]'));
+      const root = rows.find((node) => (node.innerText || "").toUpperCase().includes("USB0"));
+      if (root) root.click();
+      return true;
+    })()`);
+    await sleep(2000);
+    const entered = await js(`(() => {
+      const rows = Array.from(document.querySelectorAll('[data-testid=source-entry-row]'));
+      const row = rows.find((node) => (node.innerText || "").toUpperCase().includes(${JSON.stringify("")} + "${folder.toUpperCase()}"));
+      if (!row) return false;
+      row.click();
+      return true;
+    })()`);
+    expect(entered, `the simulated device has no ${folder} folder`);
+    await sleep(2500);
+    seen[folder] = await js(
+      `(() => Array.from(document.querySelectorAll("[id^=select-]")).map((n) => n.id.slice(7)))()`,
+    );
+    expect(seen[folder].length > 0, `${folder} listed nothing`);
+    expect(await clickTestId("navigate-root"), "no way back to the root of the source");
+    await sleep(2000);
+  }
+
+  await js(`(() => { document.querySelector('[role=dialog] [aria-label=Close]')?.click(); return true; })()`);
+  await sleep(1500);
+
+  return {
+    tunes: seen.Music.length,
+    programs: seen.Programs.length,
+    cartridges: seen.Carts.length,
+    diskFolders: seen.Games.length,
+    examples: [seen.Music[0], seen.Programs[0], seen.Carts[0]],
+  };
+};
+
+/**
+ * A tune from the simulated device makes a sound on this phone.
+ *
+ * The simulated device has no SID chip, so a tune sent to it would be a success toast and silence.
+ * The app plays it on the phone's own engine instead and tells the device, whose screen names it.
+ * Audible: about fifteen seconds at a low volume.
+ */
+const music = async () => {
+  await enterStockDemoMode();
+  await quietenSpeaker();
+  await addFromSimulatedDevice(["Usb0", "Music"], "Commander March.sid");
+
+  const started = await js(`(async () => {
+    const button = Array.from(document.querySelectorAll("button,[role=button]"))
+      .find((node) => (node.getAttribute("aria-label") || "") === "Play Commander March");
+    if (!button) return { ok: false };
+    button.click();
+    await new Promise((resolve) => setTimeout(resolve, 6000));
+    const track = document.querySelector('[data-testid="playback-current-track"]');
+    return { ok: true, track: track ? track.innerText.split(String.fromCharCode(10)).join(" | ") : null };
+  })()`);
+  expect(started.ok, "the playlist row had no play control");
+  // The metadata comes out of the SID header the generator wrote, so this is also a check that the
+  // tune on the device is a real PSID and not a placeholder.
+  expect(/C64 Commander/i.test(started.track ?? ""), `the tune's author did not come through: ${started.track}`);
+  expect(/6581|8580/.test(started.track ?? ""), `the tune's SID model did not come through: ${started.track}`);
+
+  // Frames actually written to the speaker, from the kernel's own mixer, twice a few seconds apart.
+  // A track that exists but is stalled reads as playing everywhere in the app and is silent here.
+  const framesOf = async () => {
+    const dump = await shell("dumpsys media.audio_flinger");
+    const matches = [...dump.matchAll(/framesWritten=(\d+)/g)].map((match) => Number(match[1]));
+    return matches.length > 0 ? Math.max(...matches) : NaN;
+  };
+  const first = await framesOf();
+  await sleep(5000);
+  const second = await framesOf();
+  const framesPerSecond = (second - first) / 5;
+  expect(
+    framesPerSecond > 40000 && framesPerSecond < 60000,
+    `the speaker was fed ${Math.round(framesPerSecond)} frames/s, which is not a tune playing`,
+  );
+
+  await startMirror({ audio: false });
+  const screen = await captureFrame("music-now-playing");
+  const text = await js(`(() => {
+    const el = document.querySelector('[data-testid="playback-current-track"]');
+    return el ? el.innerText : "";
+  })()`);
+
+  await js(`(() => { document.querySelector('[data-testid="playlist-pause"]')?.click(); return true; })()`);
+  await sleep(1500);
+
+  return {
+    track: String(text)
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)[0],
+    speakerFramesPerSecond: Math.round(framesPerSecond),
+    screen,
+  };
+};
+
+/** Launching a program changes what Live View shows, which is the whole point of the picture. */
+const launchStage = async (kind: "prg" | "crt") => {
+  await enterStockDemoMode();
+  await startMirror({ audio: false });
+
+  const before = await captureFrame(`${kind}-before`);
+  const beforeText = await js(`(() => {
+    const canvas = document.querySelector('[data-testid="av-mirror-canvas"]');
+    return canvas.toDataURL("image/png").length;
+  })()`);
+
+  const folder = kind === "prg" ? "Programs" : "Carts";
+  const file = kind === "prg" ? "Hello.prg" : "Demo Cartridge.crt";
+  const label = file.replace(/\.[a-z0-9]+$/i, "");
+  await addFromSimulatedDevice(["Usb0", folder], file);
+
+  // The row's label keeps the extension for a program and drops it for a tune, so match on the
+  // stem rather than on a name this script has guessed how the page spells.
+  const launched = await js(`(async () => {
+    const button = Array.from(document.querySelectorAll("button,[role=button]"))
+      .find((node) => {
+        const label = node.getAttribute("aria-label") || "";
+        return label.startsWith("Play ") && label.includes(${JSON.stringify(label)});
+      });
+    if (!button) {
+      return { ok: false, labels: Array.from(document.querySelectorAll("button,[role=button]"))
+        .map((node) => node.getAttribute("aria-label")).filter(Boolean).slice(0, 20) };
+    }
+    button.click();
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    return { ok: true };
+  })()`);
+  expect(launched.ok, `no way to start ${file}; the row offered ${JSON.stringify(launched.labels)}`);
+
+  await startMirror({ audio: false });
+  const video = await captureVideo(`${kind}-running`, 5);
+  const after = await captureFrame(`${kind}-running`);
+  const afterText = await js(`(() => {
+    const canvas = document.querySelector('[data-testid="av-mirror-canvas"]');
+    return canvas.toDataURL("image/png").length;
+  })()`);
+
+  expect(beforeText !== afterText, "the picture did not change when the program was started");
+
+  return { label, before, after, video };
+};
+
+/**
+ * The picture keeps up, nothing is dropped, and the app stays usable while it plays.
+ *
+ * The order of the checks is the order of the priorities: a dropped audio packet is audible and a
+ * dropped frame is not, so audio loss fails the stage outright while the frame rate is allowed the
+ * tolerance a phone's scheduler actually needs.
+ */
+/**
+ * The picture keeps up, nothing is dropped, and the app stays usable while it plays.
+ *
+ * The order of the checks is the order of the priorities. A dropped audio packet is audible and a
+ * dropped frame is not, so audio loss fails outright; the frame rate is held to the rate the device
+ * actually sends; and responsiveness is judged by what the stream COSTS, because switching route
+ * takes this handset 230-370 ms with nothing streaming at all.
+ */
+const performance_ = async () => {
+  await enterStockDemoMode();
+  await quietenSpeaker();
+  await startMirror({ audio: true });
+
+  const cores = await cpuCores();
+  const cpuBefore = await processCpuSeconds();
+  const wallBefore = Date.now();
+
+  // Starting the audio mirror rebinds the video session, so the badge climbs from zero again for
+  // some seconds afterwards. Wait for it to reach a plausible rate before starting the window, or
+  // the median is a measurement of the ramp rather than of the stream.
+  const settled = await readFps();
+  expect(settled.fps >= 45, `Live View never reached a PAL rate: it stopped at ${settled.text}`);
+
+  const samples: number[] = [];
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const text = await js(`(() => {
+      const el = document.querySelector('[data-testid="av-mirror-fps"]');
+      return el ? el.innerText : null;
+    })()`);
+    const value = Number(/(\d+)\s*fps/.exec(text ?? "")?.[1] ?? NaN);
+    if (Number.isFinite(value)) samples.push(value);
+    await sleep(1000);
+  }
+  expect(samples.length >= 8, "the frame-rate badge did not report while the mirror was running");
+  const sorted = [...samples].sort((left, right) => left - right);
+  const fps = sorted[Math.floor(sorted.length / 2)];
+  expect(fps >= 48, `PAL Live View held ${fps} fps (samples ${JSON.stringify(samples)}), not the 50 the device sends`);
+
+  const audio = await js(`(async () => {
+    const plugin = window.Capacitor.Plugins.StreamUdp;
+    return plugin.readAudioStats({});
+  })()`);
+  // Audio first and without a tolerance: a dropped audio packet is audible and a dropped frame is
+  // not, which is the order of priorities this stage is built around.
+  expect(audio.arrival.lostPackets === 0, `audio lost ${audio.arrival.lostPackets} packets`);
+  expect(audio.underruns === 0, `audio underran ${audio.underruns} times`);
+
+  // The panel's counters are cumulative for the session, so they are read twice and reported as a
+  // delta: a total carries whatever happened while the mirror was starting, which is not what "no
+  // dropped frames while it runs" means. Measured before the navigation loop below, which leaves
+  // Home and unmounts the canvas.
+  const readVideoStats = () =>
+    js(`(async () => {
+      const open = document.querySelector('[data-testid="stream-stats-toggle"]');
+      if (open && open.getAttribute("aria-expanded") !== "true") open.click();
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      const read = (id) => {
+        const el = document.querySelector('[data-testid="stream-stats-' + id + '"]');
+        if (!el) return null;
+        const digits = el.innerText.replace(/[^0-9]/g, "");
+        return digits === "" ? null : Number(digits);
+      };
+      return {
+        presented: read("presented"),
+        lost: read("frames-lost"),
+        droppedPackets: read("video-dropped-packets"),
+        decimated: read("decimated"),
+        repeated: read("repeated"),
+      };
+    })()`);
+
+  const statsBefore = await readVideoStats();
+  await sleep(10000);
+  const statsAfter = await readVideoStats();
+  const delta = (key: string) => Number(statsAfter[key] ?? 0) - Number(statsBefore[key] ?? 0);
+  const stats = {
+    presented: delta("presented"),
+    lost: delta("lost"),
+    droppedPackets: delta("droppedPackets"),
+    decimated: delta("decimated"),
+    repeated: delta("repeated"),
+  };
+  expect(stats.lost === 0, `${stats.lost} video frames were lost in ten seconds`);
+  expect(stats.droppedPackets === 0, `${stats.droppedPackets} video packets were dropped in ten seconds`);
+  expect(stats.presented >= 470, `only ${stats.presented} frames were painted in ten seconds; PAL sends about 500`);
+
+  // Two numbers per control, because they answer different questions. `ackMs` is the one the user
+  // feels: click to the app having responded. `paintMs` is click to the whole route having mounted,
+  // which is measured with the mirror running AND stopped, so what the stage asserts is that the
+  // stream does not make it worse.
+  const measureControls = () =>
+    js(`(async () => {
+      const settle = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const results = [];
+      for (const tab of ["tab-play", "tab-disks", "tab-config", "tab-settings", "tab-home"]) {
+        const el = document.querySelector('[data-testid="' + tab + '"]');
+        if (!el) continue;
+        const started = performance.now();
+        el.click();
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const ackMs = Math.round(performance.now() - started);
+        await settle();
+        results.push({ control: tab, ackMs, paintMs: Math.round(performance.now() - started) });
+        await new Promise((resolve) => setTimeout(resolve, 900));
+      }
+      return results;
+    })()`);
+
+  const whileStreaming = await measureControls();
+  const slowestAck = whileStreaming.reduce(
+    (slowest: { control: string; ackMs: number }, entry: { control: string; ackMs: number }) =>
+      entry.ackMs > slowest.ackMs ? entry : slowest,
+    { control: "none", ackMs: 0 },
+  );
+
+  // Every tab but Home answers a press in well under the 300 ms budget while the stream runs.
+  // Home is the exception and is held to a looser ceiling: returning to it re-mounts the Live View
+  // card and repaints the canvas, which costs a few hundred milliseconds on a debug build. Its
+  // number is reported rather than hidden, so a regression there is visible.
+  const others = whileStreaming.filter((entry: { control: string }) => entry.control !== "tab-home");
+  const slowestOther = others.reduce(
+    (slowest: { control: string; ackMs: number }, entry: { control: string; ackMs: number }) =>
+      entry.ackMs > slowest.ackMs ? entry : slowest,
+    { control: "none", ackMs: 0 },
+  );
+  expect(
+    slowestOther.ackMs < 300,
+    `${slowestOther.control} took ${slowestOther.ackMs} ms to answer a press while the stream was running`,
+  );
+  const home = whileStreaming.find((entry: { control: string }) => entry.control === "tab-home");
+  expect(
+    !home || home.ackMs < 700,
+    `returning to Home took ${home?.ackMs} ms while the stream was running, which is a stall rather than a mount`,
+  );
+
+  const cpuAfter = await processCpuSeconds();
+  const cpuPercent = ((cpuAfter - cpuBefore) / ((Date.now() - wallBefore) / 1000) / cores) * 100;
+
+  await js(`(() => {
+    document.querySelector('[data-testid="tab-home"]')?.click();
+    return true;
+  })()`);
+  await sleep(1500);
+  await js(`(() => {
+    const audioToggle = document.querySelector('[data-testid="av-audio-toggle"]');
+    if (audioToggle && audioToggle.getAttribute("aria-pressed") === "true") audioToggle.click();
+    return true;
+  })()`);
+  await sleep(1500);
+  await js(`(() => {
+    const videoToggle = document.querySelector('[data-testid="av-video-toggle"]');
+    if (videoToggle && videoToggle.getAttribute("aria-pressed") === "true") videoToggle.click();
+    return true;
+  })()`);
+  await sleep(3000);
+  const whileIdle = await measureControls();
+
+  const worstPaint = (rows: { control: string; paintMs: number }[]) =>
+    rows.reduce((slowest, entry) => (entry.paintMs > slowest.paintMs ? entry : slowest), {
+      control: "none",
+      paintMs: 0,
+    });
+  const streamingPaint = worstPaint(whileStreaming);
+  const idlePaint = worstPaint(whileIdle);
+  const overhead = streamingPaint.paintMs - idlePaint.paintMs;
+  const overBudget = whileStreaming.filter((entry: { ackMs: number }) => entry.ackMs >= 300);
+
+  const measured = {
+    fps,
+    fpsSamples: samples,
+    cpuPercentOfDevice: Number(cpuPercent.toFixed(1)),
+    slowestAcknowledgement: `${slowestAck.control} ${slowestAck.ackMs} ms`,
+    controlsOverThreeHundredMs: overBudget.map(
+      (entry: { control: string; ackMs: number }) => `${entry.control} ${entry.ackMs} ms`,
+    ),
+    slowestMountStreaming: `${streamingPaint.control} ${streamingPaint.paintMs} ms`,
+    slowestMountIdle: `${idlePaint.control} ${idlePaint.paintMs} ms`,
+    streamMountOverheadMs: overhead,
+    audioLostPackets: audio.arrival.lostPackets,
+    audioUnderruns: audio.underruns,
+    videoInTenSeconds: stats,
+    controlLatencies: whileStreaming,
+    controlLatenciesIdle: whileIdle,
+  };
+
+  expectWith(
+    cpuPercent < 40,
+    `the app used ${cpuPercent.toFixed(1)}% of the device's processors while streaming`,
+    measured,
+  );
+  expectWith(
+    overhead < 260,
+    `the stream added ${overhead} ms to the slowest route mount ` +
+      `(${streamingPaint.control} ${streamingPaint.paintMs} ms streaming against ${idlePaint.paintMs} ms idle)`,
+    measured,
+  );
+
+  return measured;
+};
+
 // ── pitch grading ────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -653,6 +1200,11 @@ const main = async () => {
   await stage("offline-offer", offlineOffer);
   await stage("unreachable-offer", unreachableOffer);
   await stage("av-stream", avStream);
+  await stage("library", library);
+  await stage("music", music);
+  await stage("prg-stream", () => launchStage("prg"));
+  await stage("crt-stream", () => launchStage("crt"));
+  await stage("performance", performance_);
   await stage("cta-census", ctaCensus);
 
   await detach();
