@@ -573,23 +573,76 @@ const pumpNativeDeviceRequestQueue = () => {
     next.resolve();
   }
 };
+// HARD27-014: a handler registers the native call it started, so the lane can stay
+// held until the socket is actually gone rather than until the JavaScript promise
+// settles. `CapacitorHttp.request` takes no abort signal and cannot be cancelled, so
+// an aborted request rejects its promise while the native call keeps the connection
+// open for up to its own timeout.
+// Grace on top of the native connect/read timeout before the lane stops waiting for a
+// native call. OkHttp applies its read timeout per read, so a slow-but-alive response can
+// legitimately outlive `requestTimeoutMs`; the grace keeps that case from being logged and
+// released as a wedge.
+const NATIVE_CALL_HOLD_GRACE_MS = 2000;
+
+export type HoldNativeDeviceCall = (nativeCall: Promise<unknown>, holdTimeoutMs: number) => void;
+
+const noopHoldNativeDeviceCall: HoldNativeDeviceCall = () => {};
+
+// Resolve when the native call settles, or when `holdTimeoutMs` passes — whichever
+// comes first. The deadline is what stops a wedged native bridge from holding the
+// lane forever; without it a single call that never settles would stall every later
+// device request for the lifetime of the process.
+const awaitNativeCallWithinHoldDeadline = (nativeCall: Promise<unknown>, holdTimeoutMs: number): Promise<void> => {
+  const deadlineMs = Number.isFinite(holdTimeoutMs) ? Math.max(0, holdTimeoutMs) : 0;
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      addLog("warn", "Native device call outlived its connection-lane hold deadline", { deadlineMs });
+      resolve();
+    }, deadlineMs);
+    const settle = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    void nativeCall.then(settle, settle);
+  });
+};
+
 // Run `run` once a device connection slot is free, allowing at most
 // `maxConcurrent` native device requests in flight at a time (1 = fully
 // serialized — one connection). The limit comes from the resolved device-safety
 // profile (restMaxConcurrency): CONSERVATIVE = 1 for the unfixed-firmware c64u,
-// higher for firmware that shipped the Ultimate network-stack fixes. Exported for
-// unit testing. See docs/c64/c64u-firmware-tcp-wedge-report.md.
-export const serializeNativeDeviceRequest = async <T>(run: () => Promise<T>, maxConcurrent = 1): Promise<T> => {
+// higher for firmware that shipped the Ultimate network-stack fixes.
+//
+// The slot is freed once `run` has settled AND every native call it registered with
+// `hold` has settled (or hit its hold deadline). Freeing it on the JavaScript promise
+// alone let an abort — React Query cancellation, a saved-device switch, a discovery
+// restart — start the next request while the aborted request's socket was still open,
+// which is exactly the overlapping-connection pattern that can wedge the unfixed
+// firmware. Exported for unit testing. See docs/c64/c64u-firmware-tcp-wedge-report.md.
+export const serializeNativeDeviceRequest = async <T>(
+  run: (hold: HoldNativeDeviceCall) => Promise<T>,
+  maxConcurrent = 1,
+): Promise<T> => {
   const limit = Number.isFinite(maxConcurrent) ? Math.max(1, Math.floor(maxConcurrent)) : 1;
   await new Promise<void>((resolve) => {
     nativeDeviceRequestQueue.push({ limit, resolve });
     pumpNativeDeviceRequestQueue();
   });
-  try {
-    return await run();
-  } finally {
+  const heldNativeCalls: Array<Promise<void>> = [];
+  const hold: HoldNativeDeviceCall = (nativeCall, holdTimeoutMs) => {
+    heldNativeCalls.push(awaitNativeCallWithinHoldDeadline(nativeCall, holdTimeoutMs));
+  };
+  const releaseLane = () => {
     activeNativeDeviceRequests = Math.max(0, activeNativeDeviceRequests - 1);
     pumpNativeDeviceRequestQueue();
+  };
+  try {
+    return await run(hold);
+  } finally {
+    // Detach the caller's promise from the lane: an abort must reject immediately,
+    // and only the slot waits for the native call.
+    if (heldNativeCalls.length === 0) releaseLane();
+    else void Promise.all(heldNativeCalls).then(releaseLane);
   }
 };
 
@@ -1607,12 +1660,15 @@ export class C64API {
     }
 
     const serializeOnDevice = isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
-    const runNativeSerialized = <R>(handler: () => Promise<R>) =>
+    // Only the shared bulk-REST lane holds its slot for the native call (HARD27-014).
+    // The machine-input lane keeps the previous release-on-settle behaviour so its
+    // 10/sec floor is not put at risk; see DECISIONS.md.
+    const runNativeSerialized = <R>(handler: (hold: HoldNativeDeviceCall) => Promise<R>) =>
       serializeOnDevice
         ? useInputLane
-          ? serializeMachineInputRequest(handler)
+          ? serializeMachineInputRequest(() => handler(noopHoldNativeDeviceCall))
           : serializeNativeDeviceRequest(handler, loadDeviceSafetyConfig().restMaxConcurrency)
-        : handler();
+        : handler(noopHoldNativeDeviceCall);
     const runRequest = () =>
       runWithImplicitAction(`rest.${method.toLowerCase()} ${path}`, async (action) =>
         withRestInteraction(
@@ -1634,7 +1690,7 @@ export class C64API {
             useInputLane,
           },
           () =>
-            runNativeSerialized(async () => {
+            runNativeSerialized(async (holdNativeCall) => {
               const requestId = buildRequestId();
               const idleContext = getIdleContext();
               const scheduledRequest = intent === "background";
@@ -1711,18 +1767,25 @@ export class C64API {
                   // capacitorHttpDeviceFetch). Web/proxy transports keep the standard fetch path.
                   const useNativeDeviceTransport =
                     isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
+                  const nativeCall = useNativeDeviceTransport
+                    ? capacitorHttpDeviceFetch(url, { method, headers, body: requestOptions.body }, requestTimeoutMs)
+                    : null;
+                  if (nativeCall) {
+                    // Keep the connection lane held until this uncancellable native call is
+                    // done, even if the abort below rejects our promise first (HARD27-014).
+                    holdNativeCall(nativeCall, requestTimeoutMs + NATIVE_CALL_HOLD_GRACE_MS);
+                  }
                   const response = await awaitPromiseWithAbortSignal(
-                    useNativeDeviceTransport
-                      ? capacitorHttpDeviceFetch(url, { method, headers, body: requestOptions.body }, requestTimeoutMs)
-                      : fetchWithSignalCompatibility(
-                          url,
-                          {
-                            ...requestOptions,
-                            headers,
-                            credentials: requestOptions.credentials ?? "omit",
-                          },
-                          timedSignal.signal,
-                        ),
+                    nativeCall ??
+                      fetchWithSignalCompatibility(
+                        url,
+                        {
+                          ...requestOptions,
+                          headers,
+                          credentials: requestOptions.credentials ?? "omit",
+                        },
+                        timedSignal.signal,
+                      ),
                     timedSignal.signal,
                   );
                   throwIfSuperseded();

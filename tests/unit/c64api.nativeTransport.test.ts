@@ -95,6 +95,50 @@ describe("C64API native device transport (BUG-066: reboot stale-connection recov
     expect(CapacitorHttp.request).toHaveBeenCalledTimes(2);
   });
 
+  it("holds the single-connection lane while an aborted request's native call is still open", async () => {
+    // HARD27-014: aborting a request rejects its JavaScript promise, but CapacitorHttp.request
+    // has no cancellation, so the native call it started stays open. If the lane is released at
+    // that moment, the next request opens a second connection to a device whose CONSERVATIVE
+    // profile allows exactly one. Assert the second native call does not begin until the first
+    // native call settles.
+    const nativeCallUrls: string[] = [];
+    let settleFirstNativeCall!: () => void;
+    const firstNativeCall = new Promise<void>((resolve) => (settleFirstNativeCall = resolve));
+
+    vi.mocked(CapacitorHttp.request).mockImplementation((async (options: { url: string }) => {
+      nativeCallUrls.push(String(options.url));
+      if (nativeCallUrls.length === 1) await firstNativeCall;
+      return {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        data: infoPayload,
+        url: options.url,
+      };
+    }) as never);
+
+    const api = new C64API(DEVICE_BASE, undefined, "192.168.1.50");
+    const controller = new AbortController();
+    const aborted = api.getInfo({
+      timeoutMs: 5000,
+      __c64uIntent: "system",
+      __c64uBypassCache: true,
+      signal: controller.signal,
+    } as never);
+
+    await vi.waitFor(() => expect(nativeCallUrls).toHaveLength(1));
+    controller.abort();
+    await expect(aborted).rejects.toThrow();
+
+    const next = api.getInfo({ timeoutMs: 5000, __c64uIntent: "system", __c64uBypassCache: true } as never);
+    // Give the released-lane path every chance to start a second connection.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(nativeCallUrls).toHaveLength(1);
+
+    settleFirstNativeCall();
+    await expect(next).resolves.toMatchObject({ firmware_version: "1.1.0" });
+    expect(nativeCallUrls).toHaveLength(2);
+  });
+
   const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 
   it("reads memory over the native arraybuffer transport with byte fidelity and a native timeout", async () => {
