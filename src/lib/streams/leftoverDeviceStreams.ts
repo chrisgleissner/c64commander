@@ -43,7 +43,13 @@ const readRecord = (): LeftoverRecord => {
       if (typeof host === "string" && host.trim()) record[name] = host.trim();
     }
     return record;
-  } catch {
+  } catch (error) {
+    // An unreadable record means the sweep cannot run this launch, which is the difference between
+    // a leftover stream being stopped and the Ultimate multicasting until someone notices.
+    addLog("debug", "Live View: could not read the record of device streams left running", {
+      service: "streams",
+      error: error instanceof Error ? error.message : String(error),
+    });
     return {};
   }
 };
@@ -53,8 +59,13 @@ const writeRecord = (record: LeftoverRecord): void => {
   try {
     if (Object.keys(record).length === 0) localStorage.removeItem(LEFTOVER_STREAMS_KEY);
     else localStorage.setItem(LEFTOVER_STREAMS_KEY, JSON.stringify(record));
-  } catch {
-    // A full or unavailable localStorage must never break starting or stopping a stream.
+  } catch (error) {
+    // A full or unavailable localStorage must never break starting or stopping a stream, but a
+    // record that was not written is a sweep that will not happen.
+    addLog("debug", "Live View: could not record which device streams are running", {
+      service: "streams",
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 };
 
