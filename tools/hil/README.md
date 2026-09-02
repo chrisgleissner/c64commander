@@ -415,7 +415,7 @@ With no radio there is no path to a c64u, u64 or u2, so no stage can put a packe
 the app behaves. The "a network is up but nothing answers on it" stage injects the network status
 rather than turning a radio on, for the same reason.
 
-Ten stages:
+Eleven stages:
 
 | Stage               | What it establishes                                                                                                                                                                                                                                                                              |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -426,6 +426,7 @@ Ten stages:
 | `music`             | A tune from the simulated device reaches the speaker — frames written to the mixer, counted from the kernel — and the device's screen names it. **Audible**, about fifteen seconds.                                                                                                              |
 | `prg-stream`        | Starting a program changes what Live View shows. Keeps a decoded frame and a five-second screen recording.                                                                                                                                                                                       |
 | `crt-stream`        | The same for a cartridge.                                                                                                                                                                                                                                                                        |
+| `disks`             | A disk from the simulated device end to end: a three-image folder added through the app's own picker, `Disk 1.d64` mounted on Drive A, the Disk Explorer reading its directory off the image, and a program run from it changing what Live View shows.                                           |
 | `ntsc-stream`       | The other raster standard end to end: `System Mode` is switched to NTSC on the Config page, and the stream becomes 240-line frames at 60 fps with nothing lost, dropped or decimated. Switched back to PAL before the stage ends. Keeps a decoded frame and a five-second recording.             |
 | `performance`       | While video and audio both run: frame rate held over a twelve-second window, video and audio loss measured as a delta over ten seconds, processor use, and how long each tab takes to answer a press — measured again with the stream stopped, so what is asserted is the stream's contribution. |
 | `cta-census`        | Every main route renders in Demo Mode with no error boundary, with enabled controls, and with every control reachable by a tap once scrolled into view.                                                                                                                                          |

@@ -947,20 +947,151 @@ const launchStage = async (kind: "prg" | "crt") => {
 };
 
 /**
- * The picture keeps up, nothing is dropped, and the app stays usable while it plays.
+ * A disk from the simulated device, all the way to running a program off it.
  *
- * The order of the checks is the order of the priorities: a dropped audio packet is audible and a
- * dropped frame is not, so audio loss fails the stage outright while the frame rate is allowed the
- * tolerance a phone's scheduler actually needs.
+ * Mounting, the drive card and the Disk Explorer are the features the simulated device's five
+ * 174848-byte images exist for, and none of them is reachable from the Play page the other stages
+ * use. The images carry a real BAM and a real directory chain, so what the Explorer lists here is
+ * read off the disk rather than reported by the mock.
  */
-/**
- * The picture keeps up, nothing is dropped, and the app stays usable while it plays.
- *
- * The order of the checks is the order of the priorities. A dropped audio packet is audible and a
- * dropped frame is not, so audio loss fails outright; the frame rate is held to the rate the device
- * actually sends; and responsiveness is judged by what the stream COSTS, because switching route
- * takes this handset 230-370 ms with nothing streaming at all.
- */
+const disks = async () => {
+  await enterStockDemoMode();
+  await goTo("/disks", 4000);
+
+  // The picker's rows are folders here: `Sample Arcade` holds three images, and choosing the folder
+  // adds all three, which is also how a user would add a multi-disk game.
+  const added = await js(`(async () => {
+    const add = Array.from(document.querySelectorAll("button")).find((node) => (node.innerText || "").trim() === "Add disks");
+    if (!add) return { ok: false, why: "no Add disks button" };
+    add.click();
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const source = document.querySelector('[data-testid="import-option-c64u"]');
+    if (!source) return { ok: false, why: "the simulated device is not offered as a disk source" };
+    source.click();
+    await new Promise((resolve) => setTimeout(resolve, 4500));
+    for (const step of ["USB0", "GAMES"]) {
+      const row = Array.from(document.querySelectorAll('[data-testid=source-entry-row]'))
+        .find((node) => (node.innerText || "").toUpperCase().includes(step));
+      if (!row) return { ok: false, why: "could not open " + step };
+      row.click();
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+    // Select the FOLDER, not one image inside it: that is how a user adds a multi-disk game, and
+    // it is the case where the app has to expand a directory into its three images.
+    const folder = document.getElementById("select-Sample Arcade");
+    if (!folder) {
+      return { ok: false, why: "Games holds no Sample Arcade folder, only " + JSON.stringify(Array.from(document.querySelectorAll("[id^=select-]")).map((node) => node.id)) };
+    }
+    folder.click();
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    const confirm = document.querySelector('[data-testid="add-items-confirm"]');
+    if (!confirm) return { ok: false, why: "no confirm button in the picker" };
+    confirm.click();
+    // The picker closes, then each image is fetched and its size read before its row appears, so
+    // poll for the rows rather than sampling once after a fixed wait.
+    const mountLabels = () =>
+      Array.from(document.querySelectorAll('[data-testid="disk-list"] button'))
+        .map((node) => node.getAttribute("aria-label") || "")
+        .filter((label) => label.startsWith("Mount "));
+    let images = [];
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      images = mountLabels();
+      if (images.length >= 3) break;
+    }
+    const list = document.querySelector('[data-testid="disk-list"]');
+    return { ok: true, images, listText: (list ? list.innerText : "").split(String.fromCharCode(10)).join(" | ").slice(0, 400) };
+  })()`);
+  expect(added.ok, `the disks could not be added: ${added.why}`);
+  expect(
+    Array.isArray(added.images) && added.images.length >= 3,
+    `the folder should have added three images, the list offers ${JSON.stringify(added.images)} and reads ${JSON.stringify(added.listText)}`,
+  );
+
+  // Mount is two steps: the row asks which drive, because a disk can go in either.
+  const mounted = await js(`(async () => {
+    const button = Array.from(document.querySelectorAll("button"))
+      .find((node) => (node.getAttribute("aria-label") || "") === "Mount Disk 1.d64");
+    if (!button) return { ok: false, why: "the row has no Mount control" };
+    button.scrollIntoView({ block: "center" });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    button.click();
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    const drive = Array.from(document.querySelectorAll('[role="dialog"] button'))
+      .find((node) => (node.innerText || "").includes("Drive A"));
+    if (!drive) return { ok: false, why: "the drive picker did not open" };
+    drive.click();
+    await new Promise((resolve) => setTimeout(resolve, 9000));
+    const label = document.querySelector('[data-testid="drive-mounted-label-a"]');
+    return { ok: true, label: label ? (label.innerText || "").trim() : null };
+  })()`);
+  expect(mounted.ok, `Disk 1.d64 could not be mounted: ${mounted.why}`);
+  expect(mounted.label === "Disk 1.d64", `Drive A reads ${JSON.stringify(mounted.label)} after mounting Disk 1.d64`);
+
+  // The row menu is a Radix dropdown, which opens on pointerup rather than on a bare click.
+  const explored = await js(`(async () => {
+    const trigger = document.querySelector('[data-testid="disk-row-actions-Disk_1_d64"]');
+    if (!trigger) return { ok: false, why: "the row has no actions menu" };
+    trigger.scrollIntoView({ block: "center" });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    const press = (node) => {
+      for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+        node.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerType: "touch", button: 0 }));
+      }
+    };
+    press(trigger);
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const open = Array.from(document.querySelectorAll('[role="menuitem"]'))
+      .find((node) => (node.innerText || "").includes("Disk Explorer"));
+    if (!open) {
+      return { ok: false, why: "no Disk Explorer entry", items: Array.from(document.querySelectorAll('[role="menuitem"]')).map((node) => (node.innerText || "").trim()) };
+    }
+    press(open);
+    await new Promise((resolve) => setTimeout(resolve, 8000));
+    const error = document.querySelector('[data-testid="disk-contents-error"]');
+    const list = document.querySelector('[data-testid="disk-contents-list"]');
+    return {
+      ok: true,
+      error: error ? (error.innerText || "").trim() : null,
+      entries: Array.from(list ? list.querySelectorAll("li") : []).map((node) => (node.innerText || "").split(String.fromCharCode(10)).join(" ").trim()),
+    };
+  })()`);
+  expect(explored.ok, `the Disk Explorer did not open: ${explored.why} ${JSON.stringify(explored.items ?? [])}`);
+  expect(!explored.error, `the Disk Explorer reported ${JSON.stringify(explored.error)}`);
+  expect(
+    Array.isArray(explored.entries) && explored.entries.length === 2,
+    `the disk should hold two programs, the Explorer lists ${JSON.stringify(explored.entries)}`,
+  );
+  // Read off the directory chain the image generator wrote, not reported by the mock: a BASIC
+  // program loads at $0801, so an Explorer reading the disk correctly says so for both entries.
+  expect(
+    explored.entries.every((entry: string) => entry.includes("$0801")),
+    `the entries should load at $0801: ${JSON.stringify(explored.entries)}`,
+  );
+
+  await js(`(() => {
+    const run = document.querySelector('[data-testid="disk-entry-run-0"]');
+    if (run) run.click();
+    return true;
+  })()`);
+  await sleep(6000);
+
+  await startMirror({ audio: false });
+  const screen = await captureFrame("disk-program-running");
+  const text = await js(`(() => {
+    const canvas = document.querySelector('[data-testid="av-mirror-canvas"]');
+    return canvas ? canvas.toDataURL("image/png").length : 0;
+  })()`);
+
+  return {
+    images: added.images,
+    mountedOnDriveA: mounted.label,
+    directory: explored.entries,
+    frameBytes: text,
+    screen,
+  };
+};
+
 /**
  * The other raster standard, end to end.
  *
@@ -1068,6 +1199,14 @@ const ntscStream = async () => {
   };
 };
 
+/**
+ * The picture keeps up, nothing is dropped, and the app stays usable while it plays.
+ *
+ * The order of the checks is the order of the priorities. A dropped audio packet is audible and a
+ * dropped frame is not, so audio loss fails outright; the frame rate is held to the rate the device
+ * actually sends; and responsiveness is judged by what the stream COSTS, because switching route
+ * takes this handset 230-370 ms with nothing streaming at all.
+ */
 const performance_ = async () => {
   await enterStockDemoMode();
   await quietenSpeaker();
@@ -1448,6 +1587,7 @@ const main = async () => {
   await stage("music", music);
   await stage("prg-stream", () => launchStage("prg"));
   await stage("crt-stream", () => launchStage("crt"));
+  await stage("disks", disks);
   await stage("ntsc-stream", ntscStream);
   await stage("performance", performance_);
   await stage("cta-census", ctaCensus);
