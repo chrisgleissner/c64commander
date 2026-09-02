@@ -13,6 +13,13 @@ vi.mock("@/lib/native/platform", async (importOriginal) => ({
   isNativePlatform: () => true,
 }));
 
+// The receiver factory selects on plugin availability, not on "native" (HARD27-002) — these cases
+// are the Android path, where StreamUdp is registered.
+vi.mock("@capacitor/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@capacitor/core")>();
+  return { ...actual, Capacitor: { ...actual.Capacitor, isPluginAvailable: () => true } };
+});
+
 const streamUdp = vi.hoisted(() => {
   const listeners: Record<string, ((event: Record<string, unknown>) => void) | null> = {
     datagram: null,

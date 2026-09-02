@@ -12,6 +12,9 @@
 | DiagnosticsBridgePlugin   | BroadcastReceiver → JS                               | NotificationCenter → JS + debug HTTP server                                                                                                                                                                             | **Parity**            |
 | MockC64UPlugin            | Mock HTTP + FTP servers                              | NWListener + Darwin sockets                                                                                                                                                                                             | **Parity**            |
 | AppLogger                 | Broadcast-based structured logger                    | IOSDiagnostics with os_log + NotificationCenter                                                                                                                                                                         | **Functional parity** |
+| StreamUdpPlugin           | UDP multicast socket + native VIC frame assembly + native AudioTrack sink | Not registered (`AppDelegate.swift`) — `Capacitor.isPluginAvailable("StreamUdp")` is false, so Live View and Game Mode streams degrade to the unsupported receiver | **Android only** |
+| DeviceRotationPlugin      | Locks/unlocks the activity orientation                                    | Not registered — orientation stays under iOS control                                                                                                            | **Android only** |
+| SafeAreaPlugin            | Reports display cutout and system bar insets                              | Not registered — the web `env(safe-area-inset-*)` values are used instead                                                                                       | **Android only** |
 
 ## Infrastructure Parity
 
