@@ -11,7 +11,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Controllable stand-in for the app-wide singleton the driver ticks.
 const { fakeSession } = vi.hoisted(() => ({
-  fakeSession: { audioLive: false, videoLive: false, tick: vi.fn(), getStatsSnapshot: vi.fn(() => ({})) },
+  fakeSession: {
+    audioLive: false,
+    videoLive: false,
+    tick: vi.fn(),
+    getStatsSnapshot: vi.fn(() => ({})),
+    stopAll: vi.fn(async () => {}),
+    startAudio: vi.fn(async () => {}),
+    startVideo: vi.fn(async () => {}),
+  },
 }));
 vi.mock("@/lib/streams/avMirrorSession", () => ({ avMirrorSession: fakeSession }));
 
@@ -54,5 +62,27 @@ describe("AvMirrorGovernorDriver", () => {
   it("renders nothing", () => {
     const { container } = render(<AvMirrorGovernorDriver />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  // HARD27-021: before this driver owned the backgrounding policy, hiding the app left the native
+  // receiver running and the Ultimate multicasting. Nothing in the app listened for the event.
+  it("stops a live mirror when the app is hidden, and stops listening on unmount", () => {
+    const setHidden = (hidden: boolean) =>
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+    fakeSession.videoLive = true;
+    fakeSession.stopAll.mockClear();
+    const { unmount } = render(<AvMirrorGovernorDriver />);
+
+    setHidden(true);
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(fakeSession.stopAll).toHaveBeenCalledTimes(1);
+
+    unmount();
+    setHidden(false);
+    document.dispatchEvent(new Event("visibilitychange"));
+    setHidden(true);
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(fakeSession.stopAll).toHaveBeenCalledTimes(1);
+    setHidden(false);
   });
 });
