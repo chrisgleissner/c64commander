@@ -27,6 +27,21 @@ import {
 import { resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { saveConfiguredHostAndRetry } from "@/lib/connection/hostEdit";
 
+/**
+ * The dialog's words, in one place.
+ *
+ * `DialogDescription` is sr-only in this app (see components/ui/dialog.tsx), so the same sentences
+ * are rendered twice — once as the accessible description, once as visible body copy that bolds
+ * the hostname. Splitting at the hostname is what lets both come from these constants instead of
+ * being written out twice and drifting apart.
+ */
+const NOT_FOUND_PREFIX = "No C64U was found at";
+const NOT_FOUND_SUFFIX =
+  ". You can continue in Demo Mode using the built-in simulated device, or retry connecting to real hardware.";
+const NO_NETWORK_MESSAGE =
+  "This device has no network connection, so no C64U can be reached. You can continue in Demo Mode using the " +
+  "built-in simulated device, or connect to a network and try again.";
+
 export function DemoModeInterstitial() {
   const { demoInterstitialVisible, demoInterstitialReason } = useConnectionState();
   const [deviceHostInput, setDeviceHostInput] = useState("");
@@ -43,12 +58,10 @@ export function DemoModeInterstitial() {
 
   const attemptedHost = resolveDeviceHostFromStorage();
   // With no network there is no host to reach and no scan to repeat, so the dialog drops the
-  // hostname field and the retry button: offering either would invite the user to answer a
-  // question that cannot change the outcome until they turn a network back on.
+  // hostname field and Save & retry: offering either would invite the user to answer a question
+  // that cannot change the outcome until they turn a network back on.
   const noNetwork = demoInterstitialReason === "no-network";
-  const message = noNetwork
-    ? "This device has no network connection, so no C64U can be reached. You can continue in Demo Mode using the built-in simulated device, or connect to a network and try again."
-    : `No C64U was found at ${attemptedHost}. You can continue in Demo Mode using the built-in simulated device, or retry connecting to real hardware.`;
+  const message = noNetwork ? NO_NETWORK_MESSAGE : `${NOT_FOUND_PREFIX} ${attemptedHost}${NOT_FOUND_SUFFIX}`;
 
   const handleSaveAndRetry = () => {
     try {
@@ -72,9 +85,6 @@ export function DemoModeInterstitial() {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Demo Mode</DialogTitle>
-          {/* `DialogDescription` is sr-only in this app (see components/ui/dialog.tsx), so it
-              carries the accessible description while the same words are shown below. A dialog
-              that asks the user to choose has to state the choice on screen. */}
           <DialogDescription data-testid="demo-interstitial-description">{message}</DialogDescription>
         </DialogHeader>
         <p className="px-4 pt-1 text-sm text-muted-foreground sm:px-6" data-testid="demo-interstitial-message">
@@ -82,8 +92,8 @@ export function DemoModeInterstitial() {
             message
           ) : (
             <>
-              No C64U was found at <strong data-testid="demo-interstitial-hostname">{attemptedHost}</strong>. You can
-              continue in Demo Mode using the built-in simulated device, or retry connecting to real hardware.
+              {NOT_FOUND_PREFIX} <strong data-testid="demo-interstitial-hostname">{attemptedHost}</strong>
+              {NOT_FOUND_SUFFIX}
             </>
           )}
         </p>

@@ -1039,7 +1039,6 @@ const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
 const transitionToDemoActive = async (
   trigger: DiscoveryTrigger,
   options: {
-    showInterstitial?: boolean;
     interstitialReason?: DemoInterstitialReason;
     bypassStickyRealDeviceLock?: boolean;
   } = {},
@@ -1055,8 +1054,7 @@ const transitionToDemoActive = async (
 
   // Show the interstitial early so the UI responds immediately while the mock
   // server is still starting up.
-  const shouldShowInterstitial = options.showInterstitial !== false && shouldShowDemoInterstitial(trigger);
-  if (shouldShowInterstitial) {
+  if (shouldShowDemoInterstitial(trigger)) {
     demoInterstitialShownThisSession = true;
     sessionStorage.setItem(DEMO_INTERSTITIAL_SESSION_KEY, "1");
     setSnapshot({
