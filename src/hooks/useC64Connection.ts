@@ -573,13 +573,26 @@ export function useC64UpdateConfigBatch() {
       category,
       updates,
       skipInvalidation,
+      transient,
+      transientRestore,
     }: {
       category: string;
       updates: Record<string, string | number>;
       skipInvalidation?: boolean;
+      // HARD27-011: a playback-time mixer write is not a setting the user chose, so it must not be
+      // written to the device's flash by the "Keep device settings after a restart" policy.
+      transient?: boolean;
+      transientRestore?: boolean;
     }) => {
       const api = getC64API();
-      return api.updateConfigBatch({ [category]: updates });
+      return api.updateConfigBatch(
+        { [category]: updates },
+        transientRestore
+          ? { __c64uTransientConfigWrite: true, __c64uTransientConfigRestore: true }
+          : transient
+            ? { __c64uTransientConfigWrite: true }
+            : {},
+      );
     },
     onSuccess: (_, variables) => {
       if (variables.skipInvalidation) {

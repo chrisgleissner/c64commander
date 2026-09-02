@@ -40,7 +40,10 @@ export type MachineExecutionSnapshot = Readonly<{
 }>;
 
 type ResumeUnmuteApi = {
-  updateConfigBatch: (payload: Record<string, Record<string, string | number>>) => Promise<{ errors?: string[] }>;
+  updateConfigBatch: (
+    payload: Record<string, Record<string, string | number>>,
+    options?: { __c64uTransientConfigWrite?: boolean; __c64uTransientConfigRestore?: boolean },
+  ) => Promise<{ errors?: string[] }>;
 };
 
 const initialState: MachineExecutionState = "running";
@@ -130,7 +133,12 @@ export const restorePauseMuteFromPersistedSnapshot = async (
     return false;
   }
   try {
-    const result = await api.updateConfigBatch({ "Audio Mixer": updates });
+    // HARD27-011: this undoes the pause mute, so it releases the flash save the
+    // mute was holding rather than persisting the mute itself.
+    const result = await api.updateConfigBatch(
+      { "Audio Mixer": updates },
+      { __c64uTransientConfigWrite: true, __c64uTransientConfigRestore: true },
+    );
     const firmwareErrors = Array.isArray(result?.errors)
       ? result.errors.filter((entry) => entry.trim().length > 0)
       : [];

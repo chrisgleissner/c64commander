@@ -115,11 +115,16 @@ describe("machineExecutionStore", () => {
       ),
     ).resolves.toBe(true);
 
-    expect(updateConfigBatch).toHaveBeenCalledWith({
-      "Audio Mixer": {
-        "Vol Socket 1": "-6 dB",
+    // HARD27-011: the unmute undoes the pause mute, so it is marked as the
+    // restore of a transient write and must not be persisted to flash on its own.
+    expect(updateConfigBatch).toHaveBeenCalledWith(
+      {
+        "Audio Mixer": {
+          "Vol Socket 1": "-6 dB",
+        },
       },
-    });
+      { __c64uTransientConfigWrite: true, __c64uTransientConfigRestore: true },
+    );
     expect(hydratePlaybackSnapshot("device-1")?.pauseMuteSnapshot).toBeNull();
     expect(hydratePlaybackSnapshot("device-1")?.pauseMuteEnablement).toBeNull();
   });
@@ -186,11 +191,14 @@ describe("machineExecutionStore", () => {
       ),
     ).resolves.toBe(true);
 
-    expect(updateConfigBatch).toHaveBeenCalledWith({
-      "Audio Mixer": {
-        "Vol Master": "0 dB",
+    expect(updateConfigBatch).toHaveBeenCalledWith(
+      {
+        "Audio Mixer": {
+          "Vol Master": "0 dB",
+        },
       },
-    });
+      { __c64uTransientConfigWrite: true, __c64uTransientConfigRestore: true },
+    );
     expect(hydratePlaybackSnapshot("device-1")?.pauseMuteSnapshot).toBeNull();
   });
 });

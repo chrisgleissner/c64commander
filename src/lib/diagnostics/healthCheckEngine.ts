@@ -844,6 +844,7 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
                 __c64uForceProbe: runtime.forceProbe,
                 __c64uSuppressCircuitContribution: true,
                 __c64uTransientConfigWrite: true,
+                __c64uTransientConfigRestore: true,
               });
             } catch (error) {
               revertErrorMessage = error instanceof Error ? error.message : String(error ?? "Unknown revert failure");

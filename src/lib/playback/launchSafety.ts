@@ -126,7 +126,10 @@ export const withCartridgeParked = async <T>(api: C64API, run: () => Promise<T>)
   } finally {
     try {
       await withTimeout(
-        api.setConfigValue(CART_CATEGORY, CART_ITEM, current, { __c64uTransientConfigWrite: true }),
+        api.setConfigValue(CART_CATEGORY, CART_ITEM, current, {
+          __c64uTransientConfigWrite: true,
+          __c64uTransientConfigRestore: true,
+        }),
         CART_WRITE_TIMEOUT_MS,
       );
       addLog("info", "Launch Safety: restored cartridge value", { restored: current });

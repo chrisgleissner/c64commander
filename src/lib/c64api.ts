@@ -30,7 +30,12 @@ import {
   validateConfigBatchWrite,
   validateConfigWrite,
 } from "@/lib/config/validateConfigWrite";
-import { noteConfigWritten, notePersistedToFlash } from "@/lib/config/configFlashPersistence";
+import {
+  noteConfigWritten,
+  noteTransientConfigWritten,
+  noteTransientConfigWriteSettled,
+  notePersistedToFlash,
+} from "@/lib/config/configFlashPersistence";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
@@ -915,6 +920,13 @@ type C64ReadRequestOptions = RequestInit & {
    * make a transient workaround permanent.
    */
   __c64uTransientConfigWrite?: boolean;
+  /**
+   * A transient config write that RESTORES the user's own value.
+   *
+   * Implies `__c64uTransientConfigWrite`. The device is back to what the user chose, so a flash save
+   * that was armed before the transient write and held by it may now go out. See HARD27-011.
+   */
+  __c64uTransientConfigRestore?: boolean;
   /**
    * An explicit, user-forced probe (the Diagnostics "Run health check" button).
    * Implies every bypass flag AND overrides the device-state gate, so it always
@@ -2367,8 +2379,27 @@ export class C64API {
     // The device has now EFFECTUATED this value but has not written it to flash — that needs a
     // separate `save_to_flash`, which is what this arms. Only after the write was accepted: a
     // rejected write left nothing to persist.
-    if (!options.__c64uTransientConfigWrite) noteConfigWritten(() => this.saveConfig({ __c64uIntent: "user" }));
+    this.noteConfigWriteForFlash(options);
     return response;
+  }
+
+  /**
+   * Tells the flash-persist policy what kind of write just landed.
+   *
+   * HARD27-011: this is the one place that decides it, so every config write funnel classifies
+   * alike. A restore releases a save the transient write was holding; a transient write holds it;
+   * anything else is a user setting and arms the save.
+   */
+  private noteConfigWriteForFlash(options: C64ReadRequestOptions): void {
+    if (options.__c64uTransientConfigRestore) {
+      noteTransientConfigWriteSettled();
+      return;
+    }
+    if (options.__c64uTransientConfigWrite) {
+      noteTransientConfigWritten();
+      return;
+    }
+    noteConfigWritten(() => this.saveConfig({ __c64uIntent: "user" }));
   }
 
   // HARD19-025: the firmware reports flash-save/load and reset-to-default failures
@@ -2402,7 +2433,10 @@ export class C64API {
     return response;
   }
 
-  async updateConfigBatch(payload: Record<string, Record<string, string | number>>): Promise<{ errors: string[] }> {
+  async updateConfigBatch(
+    payload: Record<string, Record<string, string | number>>,
+    options: C64ReadRequestOptions = {},
+  ): Promise<{ errors: string[] }> {
     const categories = Object.entries(payload);
     const resolvedEntriesByCategory: Record<string, Array<[string, string | number]>> = {};
     await Promise.all(
@@ -2458,11 +2492,13 @@ export class C64API {
               {
                 method: "PUT",
                 ...CONFIG_WRITE_REQUEST_OPTIONS,
+                ...options,
               },
             )
           : this.request("/v1/configs", {
               method: "POST",
               ...CONFIG_WRITE_REQUEST_OPTIONS,
+              ...options,
               body: JSON.stringify(requestPayload),
             });
       const response = await scheduleConfigWrite(run);
@@ -2473,7 +2509,7 @@ export class C64API {
         });
       });
       errors.push(...(response.errors ?? []));
-      noteConfigWritten(() => this.saveConfig({ __c64uIntent: "user" }));
+      this.noteConfigWriteForFlash(options);
     }
     return { errors };
   }

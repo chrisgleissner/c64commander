@@ -65,8 +65,11 @@ describe("capturePauseMuteToPersistedSnapshot (HARD19-010)", () => {
     expect(result).toBe(true);
     // Single Audio Mixer batch write (never decomposed).
     expect(api.updateConfigBatch).toHaveBeenCalledTimes(1);
-    const [payload] = api.updateConfigBatch.mock.calls[0];
+    const [payload, options] = api.updateConfigBatch.mock.calls[0];
     expect(Object.keys(payload)).toEqual(["Audio Mixer"]);
+    // HARD27-011: the mute is undone on resume, so it must not be written to the device's flash by
+    // the "Keep device settings after a restart" policy.
+    expect(options).toEqual({ __c64uTransientConfigWrite: true });
     // The pre-mute snapshot is persisted device-scoped for resume to restore.
     expect(persistPauseMuteSnapshotMock).toHaveBeenCalledTimes(1);
     const [deviceId, snapshot] = persistPauseMuteSnapshotMock.mock.calls[0];

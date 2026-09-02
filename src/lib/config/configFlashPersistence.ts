@@ -124,6 +124,41 @@ export const noteConfigWritten = (save: ConfigFlashSaver): void => {
 };
 
 /**
+ * Records a write the app intends to undo, so an armed save waits for the undo.
+ *
+ * HARD27-011: playback-time mixer writes — the volume override, the pause mute — are transient by
+ * design, but they reach the device through the same funnels as a Config-page edit. Skipping
+ * `noteConfigWritten` for them is not enough on its own: a user edit moments earlier may already
+ * have armed a save, and that save would then write the transient value to flash. Holding the timer
+ * keeps `pendingSave` set, so the user's own edit is still persisted — by
+ * `noteTransientConfigWriteSettled` when the undo lands, or by their next ordinary config write if
+ * the undo never happens.
+ */
+export const noteTransientConfigWritten = (): void => {
+  if (!pendingSave) return;
+  clearQuietTimer();
+};
+
+/**
+ * Records that the undo of a transient write has landed, and re-arms a held save.
+ *
+ * The device is back to the values the user chose, so a save armed before the transient write may
+ * now go out. No-op when nothing was pending.
+ */
+export const noteTransientConfigWriteSettled = (): void => {
+  if (!pendingSave) return;
+  if (!loadPersistConfigToFlash()) {
+    pendingSave = false;
+    clearQuietTimer();
+    return;
+  }
+  clearQuietTimer();
+  quietTimer = setTimeout(() => {
+    void onQuiet();
+  }, CONFIG_FLASH_SAVE_QUIET_MS);
+};
+
+/**
  * Records that flash now holds everything, however it got there.
  *
  * Home's "To Flash" button goes straight to the API rather than through `saveConfigToFlashNow`.
