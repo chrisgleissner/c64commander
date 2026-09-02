@@ -36,6 +36,12 @@ export type BackgroundExecutionEvents = {
 export type BackgroundExecutionPlugin = {
   start: (options?: { traceContext?: NativeTraceContext }) => Promise<void>;
   stop: (options?: { traceContext?: NativeTraceContext }) => Promise<void>;
+  /**
+   * Tells the foreground service whether the session is playing or paused. A paused session keeps
+   * its notification and MediaSession for a bounded grace period so a headset or lock-screen Play
+   * still reaches the web layer (HARD27-007).
+   */
+  setPlaybackState: (options: { paused: boolean; traceContext?: NativeTraceContext }) => Promise<void>;
   setDueAtMs: (options: { dueAtMs: number | null; traceContext?: NativeTraceContext }) => Promise<void>;
   checkPermissions: () => Promise<BackgroundExecutionPermissions>;
   requestPermissions: (options: { permissions: string[] }) => Promise<BackgroundExecutionPermissions>;
@@ -57,6 +63,11 @@ export const BackgroundExecution: BackgroundExecutionPlugin = {
     }),
   stop: (options) =>
     plugin.stop({
+      ...options,
+      traceContext: resolveNativeTraceContext(getActiveAction()),
+    }),
+  setPlaybackState: (options) =>
+    plugin.setPlaybackState({
       ...options,
       traceContext: resolveNativeTraceContext(getActiveAction()),
     }),

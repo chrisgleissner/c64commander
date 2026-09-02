@@ -46,10 +46,20 @@ class BackgroundExecutionService : Service() {
         const val ACTION_UPDATE_DUE_AT = "uk.gleissner.c64commander.action.UPDATE_DUE_AT"
         const val ACTION_AUTO_SKIP_DUE = "uk.gleissner.c64commander.action.AUTO_SKIP_DUE"
         const val ACTION_TRANSPORT_COMMAND = "uk.gleissner.c64commander.action.TRANSPORT_COMMAND"
+        const val ACTION_SET_PLAYBACK_STATE = "uk.gleissner.c64commander.action.SET_PLAYBACK_STATE"
         const val EXTRA_DUE_AT_MS = "dueAtMs"
         const val EXTRA_FIRED_AT_MS = "firedAtMs"
         const val EXTRA_COMMAND_GENERATION = "commandGeneration"
         const val EXTRA_TRANSPORT_COMMAND = "transportCommand"
+        const val EXTRA_PAUSED = "paused"
+
+        /**
+         * HARD27-007: how long a paused session keeps its notification and MediaSession alive so a
+         * headset or lock-screen Play still reaches the web layer. The wake lock is released as
+         * soon as playback pauses, so the only cost over this window is a notification and the
+         * process's foreground priority.
+         */
+        const val PAUSED_GRACE_PERIOD_MS = 10L * 60L * 1000L
 
         /** The three transport commands the session's PlaybackState already advertises. */
         const val TRANSPORT_COMMAND_PLAY = "play"
@@ -99,6 +109,42 @@ class BackgroundExecutionService : Service() {
                 return
             }
             context.stopService(Intent(context, BackgroundExecutionService::class.java))
+        }
+
+        /**
+         * HARD27-007: pausing must not release the MediaSession, or the headset Play that follows
+         * reaches nothing. Resuming after the grace period has already stopped the service starts a
+         * fresh one, because the web layer still owns the session.
+         */
+        fun setPlaybackState(context: Context, paused: Boolean) {
+            val activeService = runningInstance
+            if (isRunning && activeService != null) {
+                activeService.applyPlaybackStateUpdate(paused)
+                return
+            }
+            val pendingGeneration = startPendingGeneration
+            if (pendingGeneration == null) {
+                if (paused) {
+                    AppLogger.debug(
+                            context,
+                            TAG,
+                            "Not running — ignoring pause request",
+                            "BackgroundExecutionService"
+                    )
+                    return
+                }
+                start(context)
+                return
+            }
+            val intent = Intent(context, BackgroundExecutionService::class.java)
+            intent.action = ACTION_SET_PLAYBACK_STATE
+            intent.putExtra(EXTRA_PAUSED, paused)
+            intent.putExtra(EXTRA_COMMAND_GENERATION, pendingGeneration)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
         }
 
         fun updateDueAt(context: Context, dueAtMs: Long?) {
@@ -169,6 +215,8 @@ class BackgroundExecutionService : Service() {
             }
 
     private val handler = Handler(Looper.getMainLooper())
+    private var isPausedState = false
+    private var pausedExpiryRunnable: Runnable? = null
     private var dueAtMs: Long? = null
     private var dueAtElapsedMs: Long? = null
     private var dueRunnable: Runnable? = null
@@ -215,6 +263,11 @@ class BackgroundExecutionService : Service() {
             isRunning = true
         }
 
+        if (action == ACTION_SET_PLAYBACK_STATE) {
+            updatePlaybackStateInternal(intent.getBooleanExtra(EXTRA_PAUSED, false))
+            return START_STICKY
+        }
+
         if (action == ACTION_UPDATE_DUE_AT) {
             val nextDue = intent.getLongExtra(EXTRA_DUE_AT_MS, -1L)
             if (nextDue <= 0L) {
@@ -231,6 +284,7 @@ class BackgroundExecutionService : Service() {
     override fun onDestroy() {
         AppLogger.info(this, TAG, "Service stopping", "BackgroundExecutionService")
         updateDueAtInternal(null)
+        cancelPausedExpiry()
         abandonAudioFocusIfNeeded()
         releaseMediaSession()
         releaseWakeLock()
@@ -258,6 +312,87 @@ class BackgroundExecutionService : Service() {
             manager.createNotificationChannel(channel)
         }
     }
+
+    private fun applyPlaybackStateUpdate(paused: Boolean) {
+        handler.post { updatePlaybackStateInternal(paused) }
+    }
+
+    /**
+     * Pausing releases the wake lock, because nothing has to run, but keeps the notification and
+     * the MediaSession so the platform still routes media buttons here (HARD27-007).
+     */
+    private fun updatePlaybackStateInternal(paused: Boolean) {
+        if (paused == isPausedState) return
+        isPausedState = paused
+        if (paused) {
+            releaseWakeLock()
+            publishPlaybackState(PlaybackState.STATE_PAUSED)
+            schedulePausedExpiry()
+        } else {
+            cancelPausedExpiry()
+            acquireWakeLock()
+            publishPlaybackState(PlaybackState.STATE_PLAYING)
+        }
+        refreshNotification()
+        AppLogger.info(
+                this,
+                TAG,
+                "Playback state ${if (paused) "paused" else "playing"}",
+                "BackgroundExecutionService"
+        )
+    }
+
+    private fun schedulePausedExpiry() {
+        cancelPausedExpiry()
+        val runnable = Runnable {
+            pausedExpiryRunnable = null
+            AppLogger.info(
+                    this,
+                    TAG,
+                    "Paused grace period elapsed; stopping service",
+                    "BackgroundExecutionService"
+            )
+            stopSelf()
+        }
+        pausedExpiryRunnable = runnable
+        handler.postDelayed(runnable, PAUSED_GRACE_PERIOD_MS)
+    }
+
+    private fun cancelPausedExpiry() {
+        pausedExpiryRunnable?.let { handler.removeCallbacks(it) }
+        pausedExpiryRunnable = null
+    }
+
+    private fun refreshNotification() {
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        manager.notify(NOTIFICATION_ID, buildNotification())
+    }
+
+    private fun publishPlaybackState(state: Int) {
+        val session = mediaSession ?: return
+        try {
+            session.setPlaybackState(buildPlaybackState(state))
+        } catch (e: Exception) {
+            AppLogger.warn(
+                    this,
+                    TAG,
+                    "Failed to publish playback state",
+                    "BackgroundExecutionService",
+                    e
+            )
+        }
+    }
+
+    private fun buildPlaybackState(state: Int): PlaybackState =
+            PlaybackState.Builder()
+                    .setState(state, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f)
+                    .setActions(
+                            PlaybackState.ACTION_PLAY or
+                                    PlaybackState.ACTION_PAUSE or
+                                    PlaybackState.ACTION_PLAY_PAUSE or
+                                    PlaybackState.ACTION_STOP,
+                    )
+                    .build()
 
     private fun applyDueAtUpdate(nextDueAtMs: Long?) {
         handler.post { updateDueAtInternal(nextDueAtMs) }
@@ -301,7 +436,7 @@ class BackgroundExecutionService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle(getString(R.string.app_name))
-                .setContentText("Playback active")
+                .setContentText(if (isPausedState) "Playback paused" else "Playback active")
                 .setSmallIcon(android.R.drawable.ic_media_play)
                 .setOngoing(true)
                 .setContentIntent(pendingIntent)
@@ -339,21 +474,12 @@ class BackgroundExecutionService : Service() {
         try {
             val session = MediaSession(this, "C64CommanderBackgroundExecution")
             session.setCallback(mediaSessionCallback)
-            val playbackState =
-                    PlaybackState.Builder()
-                            .setState(
-                                    PlaybackState.STATE_PLAYING,
-                                    PlaybackState.PLAYBACK_POSITION_UNKNOWN,
-                                    1.0f
-                            )
-                            .setActions(
-                                    PlaybackState.ACTION_PLAY or
-                                            PlaybackState.ACTION_PAUSE or
-                                            PlaybackState.ACTION_PLAY_PAUSE or
-                                            PlaybackState.ACTION_STOP,
-                            )
-                            .build()
-            session.setPlaybackState(playbackState)
+            session.setPlaybackState(
+                    buildPlaybackState(
+                            if (isPausedState) PlaybackState.STATE_PAUSED
+                            else PlaybackState.STATE_PLAYING
+                    )
+            )
             session.isActive = true
             mediaSession = session
             AppLogger.debug(this, TAG, "MediaSession initialized", "BackgroundExecutionService")

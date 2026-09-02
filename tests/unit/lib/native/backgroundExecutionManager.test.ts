@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   start: vi.fn(async () => undefined),
   stop: vi.fn(async () => undefined),
+  setPlaybackState: vi.fn(async () => undefined),
   addLog: vi.fn(),
   getLifecycleState: vi.fn(() => "active"),
   classifyError: vi.fn(() => ({
@@ -15,6 +16,7 @@ vi.mock("@/lib/native/backgroundExecution", () => ({
   BackgroundExecution: {
     start: mocks.start,
     stop: mocks.stop,
+    setPlaybackState: mocks.setPlaybackState,
   },
 }));
 
@@ -33,6 +35,7 @@ vi.mock("@/lib/tracing/failureTaxonomy", () => ({
 import {
   isBackgroundExecutionActive,
   resetBackgroundExecutionState,
+  setBackgroundExecutionPaused,
   startBackgroundExecution,
   stopBackgroundExecution,
 } from "@/lib/native/backgroundExecutionManager";
@@ -42,6 +45,7 @@ describe("backgroundExecutionManager", () => {
     resetBackgroundExecutionState();
     mocks.start.mockReset();
     mocks.stop.mockReset();
+    mocks.setPlaybackState.mockReset();
     mocks.addLog.mockReset();
     mocks.getLifecycleState.mockReturnValue("active");
     mocks.classifyError.mockReturnValue({
@@ -52,6 +56,38 @@ describe("backgroundExecutionManager", () => {
 
   afterEach(() => {
     resetBackgroundExecutionState();
+  });
+
+  it("HARD27-007: publishes the paused state of a live session and stays silent without one", async () => {
+    await setBackgroundExecutionPaused(true, { source: "test" });
+    expect(mocks.setPlaybackState).not.toHaveBeenCalled();
+
+    await startBackgroundExecution({ source: "test" });
+    await setBackgroundExecutionPaused(true, { source: "test" });
+    expect(mocks.setPlaybackState).toHaveBeenCalledWith({ paused: true });
+
+    await setBackgroundExecutionPaused(false, { source: "test" });
+    expect(mocks.setPlaybackState).toHaveBeenLastCalledWith({ paused: false });
+    // A pause must never unbalance the reference count; only stop() does.
+    expect(isBackgroundExecutionActive()).toBe(true);
+  });
+
+  it("HARD27-007: logs and throws when the paused-state update fails", async () => {
+    await startBackgroundExecution({ source: "test" });
+    mocks.setPlaybackState.mockRejectedValueOnce(new Error("plugin-failed"));
+
+    await expect(setBackgroundExecutionPaused(true, { source: "test" })).rejects.toThrow(
+      "Background execution playback-state failed: plugin-failed",
+    );
+    expect(mocks.addLog).toHaveBeenCalledWith(
+      "error",
+      "Background execution playback state update failed",
+      expect.objectContaining({ source: "test" }),
+    );
+
+    // A failed publish must stay retryable rather than being swallowed as already-published.
+    await setBackgroundExecutionPaused(true, { source: "test" });
+    expect(mocks.setPlaybackState).toHaveBeenLastCalledWith({ paused: true });
   });
 
   it("logs error and throws when background start fails", async () => {

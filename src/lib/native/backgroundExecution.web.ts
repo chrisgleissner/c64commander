@@ -71,6 +71,14 @@ export class BackgroundExecutionWeb implements BackgroundExecutionPlugin {
     }
   }
 
+  /**
+   * The browser has no foreground service and no media session, so a paused session has nothing to
+   * keep alive; the screen wake lock stays as `start`/`stop` left it.
+   */
+  async setPlaybackState(): Promise<void> {
+    return undefined;
+  }
+
   /** The browser has no foreground-service notification, so there is nothing to ask for. */
   async checkPermissions(): Promise<BackgroundExecutionPermissions> {
     return { notifications: "granted" };

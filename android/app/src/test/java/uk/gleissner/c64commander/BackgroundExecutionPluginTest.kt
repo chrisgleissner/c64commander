@@ -111,6 +111,31 @@ class BackgroundExecutionPluginTest {
     }
 
     @Test
+    fun setPlaybackStatePausedResolvesAndDoesNotStartAStoppedService() {
+        val call = mock(PluginCall::class.java)
+        `when`(call.getBoolean("paused")).thenReturn(true)
+
+        plugin.setPlaybackState(call)
+
+        verify(call).resolve()
+        assertFalse("A pause with no session must not start one", BackgroundExecutionService.isRunning)
+        val shadowApp = Shadows.shadowOf(context as android.app.Application)
+        assertNull("A pause with no session must not start a foreground service", shadowApp.nextStartedService)
+    }
+
+    @Test
+    fun setPlaybackStateResumeBringsTheServiceBackAfterThePausedGracePeriod() {
+        val call = mock(PluginCall::class.java)
+        `when`(call.getBoolean("paused")).thenReturn(false)
+
+        plugin.setPlaybackState(call)
+
+        verify(call).resolve()
+        val shadowApp = Shadows.shadowOf(context as android.app.Application)
+        assertNotNull("Resuming a session the service no longer backs must start one", shadowApp.nextStartedService)
+    }
+
+    @Test
     fun setDueAtMsResolvesWithZeroValue() {
         val call = mock(PluginCall::class.java)
         `when`(call.getLong("dueAtMs")).thenReturn(0L)

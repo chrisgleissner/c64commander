@@ -193,6 +193,25 @@ open class BackgroundExecutionPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun setPlaybackState(call: PluginCall) {
+        val paused = call.getBoolean("paused") ?: false
+        try {
+            BackgroundExecutionService.setPlaybackState(context, paused)
+            call.resolve()
+        } catch (e: Exception) {
+            AppLogger.error(
+                    pluginContextOrNull(),
+                    logTag,
+                    "Failed to update background playback state",
+                    "BackgroundExecutionPlugin",
+                    e,
+                    traceFields(call)
+            )
+            call.reject("Failed to update background playback state", e)
+        }
+    }
+
+    @PluginMethod
     fun stop(call: PluginCall) {
         try {
             BackgroundExecutionService.updateDueAt(context, null)

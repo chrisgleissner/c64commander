@@ -79,6 +79,7 @@ import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import {
   isBackgroundExecutionActive,
+  setBackgroundExecutionPaused,
   startBackgroundExecution,
   stopBackgroundExecution,
 } from "@/lib/native/backgroundExecutionManager";
@@ -148,8 +149,7 @@ import { useDebouncedValue } from "@/pages/playFiles/hooks/useDebouncedValue";
 import { useQueryFilteredPlaylist } from "@/pages/playFiles/hooks/useQueryFilteredPlaylist";
 import {
   isBackgroundExecutionEnabled,
-  shouldStartBackgroundExecution,
-  shouldStopBackgroundExecution,
+  resolveBackgroundExecutionAction,
   shouldSyncBackgroundExecutionDueAt,
 } from "@/pages/playFiles/backgroundExecutionPolicy";
 import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
@@ -738,15 +738,14 @@ export default function PlayFilesPage() {
   }, [isPaused, isPlaying]);
 
   useEffect(() => {
-    if (
-      shouldStartBackgroundExecution({
-        backgroundExecutionEnabled,
-        backgroundExecutionActive: backgroundExecutionActiveRef.current,
-        isPlaying,
-        isPaused,
-        playlistEnded,
-      })
-    ) {
+    const backgroundExecutionAction = resolveBackgroundExecutionAction({
+      backgroundExecutionEnabled,
+      backgroundExecutionActive: backgroundExecutionActiveRef.current,
+      isPlaying,
+      isPaused,
+      playlistEnded,
+    });
+    if (backgroundExecutionAction === "start") {
       backgroundExecutionActiveRef.current = true;
       void startBackgroundExecution({
         source: "playback-controller",
@@ -767,15 +766,29 @@ export default function PlayFilesPage() {
       void queueBackgroundDueAtUpdate(autoAdvanceDueAtMs);
       return;
     }
-    if (
-      !shouldStopBackgroundExecution({
-        backgroundExecutionEnabled,
-        backgroundExecutionActive: backgroundExecutionActiveRef.current,
-        isPlaying,
-        isPaused,
-        playlistEnded,
-      })
-    ) {
+    if (backgroundExecutionAction === "publish-paused" || backgroundExecutionAction === "publish-playing") {
+      // HARD27-007: a pause or resume of a live session updates the service in place. Stopping it
+      // on pause released the MediaSession, so the headset Play that followed reached nothing.
+      const paused = backgroundExecutionAction === "publish-paused";
+      void setBackgroundExecutionPaused(paused, {
+        source: "playback-controller",
+        reason: paused ? "pause" : "resume",
+        context: { trackInstanceId },
+      }).catch((error) => {
+        reportUserError({
+          operation: "setBackgroundExecutionPaused",
+          title: "Background playback state update failed",
+          description: "Lock-screen and headset controls may not match the current playback state.",
+          error,
+          context: { trackInstanceId, paused },
+          // System bookkeeping around a transport action the user already saw
+          // succeed; diagnostics material, never a toast (ERROR_POLICY §3).
+          background: true,
+        });
+      });
+      return;
+    }
+    if (backgroundExecutionAction !== "stop") {
       return;
     }
     // Never let an instance that only adopted the running session (and has not
@@ -787,7 +800,7 @@ export default function PlayFilesPage() {
     backgroundExecutionActiveRef.current = false;
     void stopBackgroundExecution({
       source: "playback-controller",
-      reason: isPaused ? "pause" : "stop",
+      reason: "stop",
       context: { trackInstanceId },
     }).catch((error) => {
       reportUserError({
@@ -795,7 +808,7 @@ export default function PlayFilesPage() {
         title: "Background playback cleanup failed",
         description: "Background playback guard could not be fully stopped.",
         error,
-        context: { trackInstanceId, reason: isPaused ? "pause" : "stop" },
+        context: { trackInstanceId, reason: "stop" },
         // Background guard cleanup is system work; failures are diagnostics
         // material, never a toast (ERROR_POLICY §3).
         background: true,
@@ -817,8 +830,11 @@ export default function PlayFilesPage() {
       const latestPlaybackState = playbackStateRef.current;
       // Keep the wake lock when this instance is still playing OR when it never
       // observed playback (a transient instance that only adopted the running
-      // session must not release the live session's lock — BUG-040).
-      if ((latestPlaybackState.isPlaying && !latestPlaybackState.isPaused) || !hasObservedActivePlaybackRef.current) {
+      // session must not release the live session's lock — BUG-040). A paused
+      // session is kept too (HARD27-007): the service has already dropped its
+      // wake lock and its own grace period bounds how long it survives, so
+      // tabbing away from Play must not be what kills the headset controls.
+      if (latestPlaybackState.isPlaying || !hasObservedActivePlaybackRef.current) {
         addLog("debug", "Leaving background playback guard active across Play page unmount", {
           trackInstanceId: backgroundCleanupTrackInstanceIdRef.current,
           dueAtMs: autoAdvanceGuardRef.current?.dueAtMs ?? null,

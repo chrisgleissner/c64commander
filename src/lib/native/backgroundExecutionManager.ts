@@ -19,6 +19,7 @@ type BackgroundExecutionLogContext = {
 };
 
 let activeCount = 0;
+let publishedPaused = false;
 
 const toError = (value: unknown) => (value instanceof Error ? value : new Error(String(value)));
 
@@ -34,7 +35,7 @@ const buildFailureDetails = (error: unknown, logContext: BackgroundExecutionLogC
   };
 };
 
-const buildOperationError = (operation: "start" | "stop", error: unknown) => {
+const buildOperationError = (operation: "start" | "stop" | "playback-state", error: unknown) => {
   const normalizedError = toError(error);
   return new Error(`Background execution ${operation} failed: ${normalizedError.message}`);
 };
@@ -42,6 +43,7 @@ const buildOperationError = (operation: "start" | "stop", error: unknown) => {
 export const startBackgroundExecution = async (logContext: BackgroundExecutionLogContext) => {
   activeCount += 1;
   if (activeCount > 1) return;
+  publishedPaused = false;
   // Ask before the service starts: startForeground() posts the notification once, and a grant that
   // arrives afterwards does not bring back a notification the system has already dropped.
   await ensureNotificationPermission();
@@ -58,6 +60,7 @@ export const stopBackgroundExecution = async (logContext: BackgroundExecutionLog
   if (activeCount <= 0) return;
   activeCount = Math.max(0, activeCount - 1);
   if (activeCount > 0) return;
+  publishedPaused = false;
   try {
     await BackgroundExecution.stop();
   } catch (error) {
@@ -66,8 +69,31 @@ export const stopBackgroundExecution = async (logContext: BackgroundExecutionLog
   }
 };
 
+/**
+ * Publishes whether the live session is playing or paused. A paused session keeps its foreground
+ * notification and MediaSession for a bounded grace period, so a headset or lock-screen Play still
+ * reaches the web layer (HARD27-007). No session, nothing to publish.
+ */
+export const setBackgroundExecutionPaused = async (paused: boolean, logContext: BackgroundExecutionLogContext) => {
+  if (activeCount <= 0) return;
+  // The page recomputes this on every playback-state change, most of which do not move the
+  // playing/paused boundary. Only a real transition is worth a bridge call.
+  if (paused === publishedPaused) return;
+  const previouslyPublished = publishedPaused;
+  publishedPaused = paused;
+  try {
+    await BackgroundExecution.setPlaybackState({ paused });
+  } catch (error) {
+    // A failed publish must stay retryable, or the dedupe above would swallow the next attempt.
+    publishedPaused = previouslyPublished;
+    addLog("error", "Background execution playback state update failed", buildFailureDetails(error, logContext));
+    throw buildOperationError("playback-state", error);
+  }
+};
+
 export const resetBackgroundExecutionState = () => {
   activeCount = 0;
+  publishedPaused = false;
 };
 
 // True while this JS manager believes background execution is active. The Play
