@@ -412,30 +412,63 @@ const avStream = async () => {
 };
 
 const ctaCensus = async () => {
-  const perRoute: Record<string, { visible: number; disabled: string[]; boundary: boolean }> = {};
+  // Self-contained, so `--only cta-census` measures the same thing a full run does: a stock Demo
+  // Mode session, not whatever the previous stage left behind.
+  if ((await connectionState().catch(() => null)) !== "DEMO_ACTIVE") await enterStockDemoMode();
+  const perRoute: Record<string, { visible: number; disabled: string[]; covered: string[]; boundary: boolean }> = {};
   for (const route of MAIN_ROUTES) {
     await js(
       `(() => { window.history.pushState({}, "", ${JSON.stringify(route)}); window.dispatchEvent(new PopStateEvent("popstate")); return true; })()`,
     );
     await sleep(3500);
-    perRoute[route] = await js(`(() => {
+    perRoute[route] = await js(`(async () => {
       const selector = ["button", "a[href]", "input", "select", "textarea", '[role="button"]',
         '[role="checkbox"]', '[role="switch"]', '[role="tab"]', '[role="slider"]'].join(",");
       const visible = [];
       const disabled = [];
+      const covered = [];
+      const settle = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
       for (const node of Array.from(document.querySelectorAll(selector))) {
         const testId = node.dataset.testid;
         if (!testId) continue;
-        const rect = node.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) continue;
+        if (node.getBoundingClientRect().width === 0 || node.getBoundingClientRect().height === 0) continue;
         if (getComputedStyle(node).visibility === "hidden") continue;
-        if (node.hasAttribute("disabled") || node.getAttribute("aria-disabled") === "true") disabled.push(testId);
-        else visible.push(testId);
+        if (node.hasAttribute("disabled") || node.getAttribute("aria-disabled") === "true") {
+          disabled.push(testId);
+          continue;
+        }
+        visible.push(testId);
+
+        // Scroll it to the middle first, the way a user reaches a control below the fold, then hit-
+        // test its centre. A control can be visible and enabled and still take no tap because
+        // something transparent is over it — a toast viewport once sat across the Play transport
+        // and ate every tap while every other check passed. Without the scroll this instead
+        // reports every control that happens to sit under the fixed tab bar, which is not a defect.
+        node.scrollIntoView({ block: "center", inline: "center" });
+        await settle();
+        const rect = node.getBoundingClientRect();
+        const midX = rect.left + rect.width / 2;
+        const midY = rect.top + rect.height / 2;
+        if (midX < 0 || midY < 0 || midX > innerWidth || midY > innerHeight) continue;
+        const hit = document.elementFromPoint(midX, midY);
+        if (hit && !node.contains(hit) && !hit.contains(node)) {
+          covered.push(testId + " <- " + (hit.dataset.testid || hit.tagName.toLowerCase()));
+        }
       }
-      return { visible: visible.length, disabled, boundary: !!document.querySelector('[data-testid="error-boundary"]') };
+      return {
+        visible: visible.length,
+        disabled,
+        covered,
+        boundary: !!document.querySelector('[data-testid="error-boundary"]'),
+      };
     })()`);
     expect(!perRoute[route].boundary, `${route} rendered an error boundary in Demo Mode`);
     expect(perRoute[route].visible > 0, `${route} rendered no enabled controls in Demo Mode`);
+    expect(
+      perRoute[route].covered.length === 0,
+      `${route}: controls that cannot be tapped because something is over them: ${JSON.stringify(perRoute[route].covered)}`,
+    );
   }
   return { perRoute };
 };
@@ -598,6 +631,8 @@ const gradeLadder = (wavPath: string) => {
 const main = async () => {
   await requireFlightMode();
   console.log(`Demo Mode HIL on ${serial} — flight mode confirmed, loopback only.\n`);
+  // Attach up front so a single-stage run has a page; every stage that relaunches re-attaches.
+  await attach().catch(() => undefined);
 
   await stage("offline-offer", offlineOffer);
   await stage("unreachable-offer", unreachableOffer);
