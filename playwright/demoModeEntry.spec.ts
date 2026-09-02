@@ -193,20 +193,34 @@ const interactiveTestIds = async (page: Page): Promise<string[]> => {
  * answered (streaming, for instance, is derived from the Data Streams category, not from a
  * literal), and those reads finish well after the page stops changing for a moment.
  */
-const collectCtasPerRoute = async (page: Page, expected?: Record<string, string[]>) => {
+/**
+ * Controls that only render once a config read has answered, so a route is not finished settling
+ * until they are there. Sampling before them makes the comparison report a difference between two
+ * moments rather than between two modes.
+ */
+const ROUTE_LANDMARKS: Record<string, string[]> = {
+  "/": ["home-drive-toggle-a", "home-video-mode"],
+  "/play": ["volume-mute"],
+  "/disks": ["drive-bus-select-a"],
+  "/settings": ["settings-discover-devices"],
+};
+
+const collectCtasPerRoute = async (page: Page, options: { state: string; expected?: Record<string, string[]> }) => {
   const byRoute: Record<string, string[]> = {};
   for (const route of MAIN_ROUTES) {
     await page.goto(route, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => undefined);
+    // Each route is sampled only once the app is in the mode under test on that route. A page that
+    // has navigated but not yet re-rendered against the connection state answers for the previous
+    // mode, and the comparison then reports a difference between two moments, not two modes.
+    await expectConnectionState(page, options.state);
 
+    const wanted = [...(ROUTE_LANDMARKS[route] ?? []), ...(options.expected?.[route] ?? [])];
     let found = await interactiveTestIds(page);
-    const wanted = expected?.[route];
-    if (wanted) {
-      const deadline = Date.now() + 25000;
-      while (Date.now() < deadline && wanted.some((testId) => !found.includes(testId))) {
-        await page.waitForTimeout(500);
-        found = await interactiveTestIds(page);
-      }
+    const deadline = Date.now() + 25000;
+    while (Date.now() < deadline && wanted.some((testId) => !found.includes(testId))) {
+      await page.waitForTimeout(500);
+      found = await interactiveTestIds(page);
     }
     byRoute[route] = found;
   }
@@ -494,7 +508,7 @@ test.describe("Demo Mode CTA parity", () => {
     });
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expectConnectionState(page, "REAL_CONNECTED");
-    const connected = await collectCtasPerRoute(page);
+    const connected = await collectCtasPerRoute(page, { state: "REAL_CONNECTED" });
 
     device.setReachable(false);
     await page.evaluate(() => {
@@ -507,11 +521,23 @@ test.describe("Demo Mode CTA parity", () => {
     await clickCta(page, "demo-interstitial-continue");
     await expect(dialog).toBeHidden({ timeout: 10000 });
     await expectConnectionState(page, "DEMO_ACTIVE");
-    const inDemo = await collectCtasPerRoute(page, connected);
+    const inDemo = await collectCtasPerRoute(page, { state: "DEMO_ACTIVE", expected: connected });
+
+    // The one control that is meant to disappear: it is the way IN to Demo Mode, so it hides once
+    // you are there. Asserted below rather than only excluded, so the exception stays a checked
+    // property instead of a hole in the comparison.
+    expect(connected["/settings"], "the entry point should be offered against a real device").toContain(
+      "settings-preview-demo-mode",
+    );
+    expect(inDemo["/settings"], "the entry point should be gone once Demo Mode is active").not.toContain(
+      "settings-preview-demo-mode",
+    );
 
     const missing: Record<string, string[]> = {};
     for (const route of MAIN_ROUTES) {
-      const absent = connected[route].filter((testId) => !inDemo[route].includes(testId));
+      const absent = connected[route].filter(
+        (testId) => testId !== "settings-preview-demo-mode" && !inDemo[route].includes(testId),
+      );
       if (absent.length > 0) missing[route] = absent;
     }
 
