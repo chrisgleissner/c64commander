@@ -50,6 +50,9 @@ private constructor(
   /** One ladder slot: the note to sound (0 Hz for a silence) and the colour the surround holds. */
   data class Slot(val index: Int, val name: String, val hz: Double, val colour: Int)
 
+  /** A slot as `tone-ladder.json` states it, before a silence inherits the colour before it. */
+  private data class DeclaredSlot(val index: Int, val name: String, val hz: Double, val colour: Int?)
+
   val loopFrames: Int = slots.size * FRAMES_PER_SLOT
   val loopSamples: Int = audioPackets.size * AUDIO_SAMPLES_PER_PACKET
   val loopNanos: Long = loopSamples.toLong() * NANOS_PER_SECOND / AUDIO_SAMPLE_RATE
@@ -123,19 +126,18 @@ private constructor(
       val declared =
               (0 until array.length()).map { index ->
                 val entry = array.getJSONObject(index)
-                Triple(
-                        entry.getInt("index"),
-                        entry.getString("name"),
-                        entry.getDouble("hz") to if (entry.isNull("colour")) null else entry.getInt("colour"),
+                DeclaredSlot(
+                        index = entry.getInt("index"),
+                        name = entry.getString("name"),
+                        hz = entry.getDouble("hz"),
+                        colour = if (entry.isNull("colour")) null else entry.getInt("colour"),
                 )
               }
       var carried =
-              declared.lastOrNull { it.third.second != null }?.third?.second
-                      ?: error("tone ladder has no slot with a colour")
-      return declared.map { (index, name, note) ->
-        val (hz, colour) = note
-        carried = colour ?: carried
-        Slot(index = index, name = name, hz = hz, colour = carried)
+              declared.lastOrNull { it.colour != null }?.colour ?: error("tone ladder has no slot with a colour")
+      return declared.map { slot ->
+        carried = slot.colour ?: carried
+        Slot(index = slot.index, name = slot.name, hz = slot.hz, colour = carried)
       }
     }
 
