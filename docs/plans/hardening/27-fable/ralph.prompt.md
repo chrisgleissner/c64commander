@@ -322,6 +322,8 @@ The bench is shared, but yielding it forever is also a failure. Another agent or
 
 A lock is stale when its pid is gone, its heartbeat is older than 20 minutes, or the file carries no owner information at all. Terminate a foreign process only when you can name it, show it holds the device, and show it has made no progress in that window - and record the exact command. Never pattern-kill by name, never kill an unidentified process tree, and never reboot or power-cycle the C64 to clear a conflict. Release your own lock at finalization, even when the iteration ends badly.
 
+This host suspends between iterations when the provider window is exhausted, and every resume on this machine reinitialises the USB host controllers (`xhci_hcd ... xHC error in resume, USBSTS 0x401, Reinit`). The Pixel 4 is on USB, so it re-enumerates across a sleep. If `adb` reports no device, an offline device, or a dead port forward at the start of an iteration, treat USB re-enumeration as the first hypothesis: re-list devices, restart the adb server if needed, and re-establish any port forward before concluding the phone is unreachable or that a build is broken.
+
 Before every current-build HIL claim:
 
 1. Resolve the current source/app version using the repository's supported identity script.
