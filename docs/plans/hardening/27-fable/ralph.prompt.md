@@ -25,7 +25,7 @@ The desired end state is:
 2. Every reproducible defect has a root-cause fix, not a symptom suppression.
 3. Every practical defect has red-green regression evidence.
 4. Android and shared changes are validated on the Pixel 4 against the real C64 where the flow is safe and physically available.
-5. Web and iOS changes receive platform-appropriate tests and builds. Do not pretend Pixel 4 evidence validates iOS or Docker-only behaviour.
+5. Web and iOS changes receive platform-appropriate tests and builds. Do not pretend Pixel 4 evidence validates iOS or Docker-only behaviour. There is no local macOS host, Xcode toolchain, iOS simulator, or iOS device, so every iOS build and Swift test result comes from a GitHub Actions macOS runner on a pushed commit. See PLATFORM SCHEDULING.
 6. The branch is coherent, reviewable, and passes the repository's final release gates.
 7. No firmware, user data, device configuration, or unrelated user work is damaged.
 
@@ -74,7 +74,9 @@ At the start of every invocation:
 6. Record the source `main` commit in the progress ledger. Do not update, check out, or modify the primary checkout merely to refresh `main`.
 7. After bootstrap, run all repository reads, edits, tests, builds, commits, and state updates from the dedicated worktree. Never edit the primary checkout.
 
-Never use `git reset --hard`, `git clean`, destructive checkout commands, history rewriting, or forced pushes. Preserve unrelated and user-authored changes. Do not push, open a PR, merge, or modify remote state unless the user separately requests it.
+Never use `git reset --hard`, `git clean`, destructive checkout commands, history rewriting, or forced pushes. Preserve unrelated and user-authored changes.
+
+Remote state: you may run `git push origin fix/hardening-27` (plain, non-forced, this branch only) as often as needed, because a GitHub Actions run on a pushed commit is the only way to build or test the iOS platform and the only way to see the full CI matrix. Push at least once per iteration that produced a commit, and immediately after every commit that touches iOS or other CI-only surfaces. Never force-push, never push any other branch, never push to `main`, and do not open, merge, or comment on a pull request unless the user separately requests it.
 
 ## REQUIRED READING AND AUTHORITY
 
@@ -188,6 +190,28 @@ Respect the review's dependency graph. In particular:
 
 Choose the next package by severity, dependency readiness, regression-test leverage, and ability to reach a reviewable commit. Do not select documentation or broad refactoring while a ready P1/P2 correctness package remains, except when a dependency requires it.
 
+## PLATFORM SCHEDULING - iOS IS OFF THE CRITICAL PATH
+
+iOS is not on the critical path for this release, and this machine cannot build or test it. Any change to `ios/**`, a `.swift` file, an iOS-only Capacitor configuration, or an iOS project file can only be compiled and tested by a GitHub Actions macOS runner, on a commit that has been pushed. Such a run takes a long time and its queue time is outside your control. Schedule around that instead of waiting for it.
+
+Deferred iOS track (do these last, in this order):
+
+1. `HARD27-003`, `HARD27-012`, `HARD27-013` - iOS bridge parity, the Swift side.
+2. The iOS half of `HARD27-028` - the free-space check in the Swift HVSC plugin.
+3. `HARD27-018` - staged iOS HVSC ingestion. The most invasive iOS change; keep it last of all.
+
+`HARD27-002` is TypeScript-only stream gating with no Swift edit, so it stays in the normal priority order and is not part of the deferred track. The same applies to the TypeScript degradations and the plugin-contract test in the bridge-parity package: any part of an iOS-related finding that is pure TypeScript, and therefore testable locally, may be implemented in normal order; only the parts that need a Swift compiler are deferred.
+
+Scheduling rules:
+
+1. Never select a deferred-track package while any non-iOS package is dependency-ready and not terminal. Rank iOS work below every other ready package regardless of its severity.
+2. Never block on a runner. When a pushed commit is waiting on CI, immediately continue with local, non-runner work in the same iteration. Idling, polling in a loop, or ending an iteration early to wait for a run is a failure of this prompt.
+3. Push iOS commits the moment they are made, so the runner's wall-clock time overlaps with your local work. Do not accumulate several iOS packages into one end-of-run push, and do not leave iOS work so late that no run can finish before the loop ends.
+4. Read CI results at iteration startup, not by waiting: `gh run list --branch fix/hardening-27 --limit 10` and `gh run view <id>` (add `--log-failed` only once a run has finished). Record the run id, conclusion, and any failing job in `PROGRESS.md` and `WORKLOG.md`.
+5. A red iOS run becomes the next deferred-track package: fix, commit, push, and return to non-runner work. Do not let a red iOS run stop non-iOS progress.
+6. When a finding spans iOS and another platform, implement and land the non-iOS part in normal order and carve the Swift part out as an explicitly named deferred sub-item. The finding reaches a terminal status only when both parts are complete or the iOS part is recorded as `BLOCKED_EXTERNAL` with the exact missing platform access.
+7. Swift changes may only be marked `GREEN_LOCAL` on the strength of a completed green GitHub Actions iOS job, named by run id. Local type checks, contract tests, and reasoning are supporting evidence, not a substitute. Simulator-only or device-only behaviour that no runner exercises stays `BLOCKED_EXTERNAL`.
+
 ## UNIT OF PROGRESS
 
 One Ralph invocation should complete one coherent work package or one independently reviewable slice of an invasive package. Completion normally means:
@@ -289,6 +313,14 @@ Tool roles:
 
 Availability must be determined from actual exposed tools and safe status/list calls. If a required HIL peer is absent, record the exact discovery evidence. Continue code and non-HIL work, but retain `HIL_PENDING` for affected findings.
 
+The bench is shared, but yielding it forever is also a failure. Another agent or human session may be driving the Pixel 4 or the `c64u`. The repository has no lock convention today, so this loop establishes one: `/tmp/c64commander-hil.lock`, a JSON file holding `{ owner, pid, iteration, startedAt, heartbeatAt, activity }`. Before you install an APK, take that lock, or start a long physical flow, look for an owner: that lock file, live processes holding the device (`adb`, `droidctl`, a Gradle install), and recent foreign activity on the device itself. The absence of the lock file is not proof the bench is free - check the processes too. Then apply this ladder, and record which rung you took and the evidence for it:
+
+1. **Live, identified owner** - a lock whose pid is alive and whose heartbeat or device activity is under 20 minutes old. Defer HIL this iteration and do non-HIL work. Count the deferral in `PROGRESS.md`.
+2. **Second consecutive deferral for the same owner** - defer again, but write the conflict and the owner's identity prominently in `CONTINUATION.md` so it is visible.
+3. **Third consecutive deferral, or a lock that is stale, or an owner you cannot identify** - take ownership. Do not stall a fourth time. Record the takeover in `WORKLOG.md` first: timestamp, lock contents, the pid checks you ran, device activity you observed, and why you concluded the bench was free or abandoned. Then reclaim the lock, write your own with your pid, iteration number, and a heartbeat you refresh, and proceed with HIL.
+
+A lock is stale when its pid is gone, its heartbeat is older than 20 minutes, or the file carries no owner information at all. Terminate a foreign process only when you can name it, show it holds the device, and show it has made no progress in that window - and record the exact command. Never pattern-kill by name, never kill an unidentified process tree, and never reboot or power-cycle the C64 to clear a conflict. Release your own lock at finalization, even when the iteration ends badly.
+
 Before every current-build HIL claim:
 
 1. Resolve the current source/app version using the repository's supported identity script.
@@ -363,6 +395,15 @@ Apply these in addition to each finding's acceptance criteria:
 9. Do not run broad suites repeatedly without relevant changes. Run narrow tests during development, package/phase gates at convergence points, and the repository's full required release gates once all packages are integrated.
 10. Before final completion, inspect the entire branch diff from the recorded base, run the current repository-mandated lint/type/unit/integration/build gates, assemble the Android release-representative artifact, and validate its identity on the Pixel 4.
 
+## REPOSITORY GATE COMMANDS AND TWO KNOWN TRAPS
+
+Follow `AGENTS.md` for the authoritative command list. These four points have each turned an otherwise green branch red on this repository, so treat them as rules:
+
+1. Typecheck with `npm run typecheck` (which runs `tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit`). Bare `npx tsc --noEmit` uses the root config, accepts code the app project rejects, and is not the check CI runs.
+2. Lint and format with `npx eslint .` and `npx prettier --check "src/**/*.{ts,tsx}" "tests/**/*.{ts,tsx}"`. Do not pass `.py` or `.sh` paths to prettier.
+3. Tests: `npx vitest run` (slow, hundreds of files) and `cd android && ./gradlew :app:testDebugUnitTest`. Prefer the narrow file or directory during development; run the broad suites at package and phase boundaries.
+4. A local build rewrites `THIRD_PARTY_NOTICES.md`, `package-lock.json`, and `c64scope/package-lock.json`. Never commit those as build churn: run `git checkout -- THIRD_PARTY_NOTICES.md package-lock.json c64scope/package-lock.json` before staging, stage explicit paths, and never `git add -A`. Commit a lockfile only when the change is a deliberate dependency edit.
+
 ## ITERATION STARTUP
 
 Every invocation follows this order:
@@ -373,9 +414,10 @@ Every invocation follows this order:
 4. Read current repository instructions if this is the first iteration or they changed.
 5. Inspect `git status`, branch, HEAD, recent commits, and diff. Preserve all existing work.
 6. Confirm that no previous iteration left an incomplete test, build, HIL session, temporary credential, or unsafe device state.
-7. Select the highest-priority dependency-ready non-terminal package.
-8. Append one compact iteration-start entry to `WORKLOG.md`: iteration number, time, provider/runtime summary, capacity, branch/HEAD/status, selected package, exact intended terminal condition, and known blockers.
-9. Execute the package protocol. Do not spend a HIL-capable iteration only grooming state files.
+7. Read the state of the GitHub Actions runs for pushed commits on this branch (`gh run list --branch fix/hardening-27 --limit 10`). Record finished runs against their findings. Never wait for a run in progress.
+8. Select the highest-priority dependency-ready non-terminal package, ranking the deferred iOS track below everything else per PLATFORM SCHEDULING.
+9. Append one compact iteration-start entry to `WORKLOG.md`: iteration number, time, provider/runtime summary, capacity, branch/HEAD/status, selected package, exact intended terminal condition, and known blockers.
+10. Execute the package protocol. Do not spend a HIL-capable iteration only grooming state files.
 
 If the continuation is stale, current Git and test evidence win. Correct the state rather than restarting the project.
 
@@ -386,7 +428,7 @@ Before a successful Ralph return:
 1. Stop new investigation early enough to finish tests, review the diff, restore physical state, and preserve evidence.
 2. Close or classify active c64scope sessions and copy artifacts into the iteration directory.
 3. Inspect Git status and ensure no accidental secrets, generated junk, debug hooks, or unrelated changes remain.
-4. Commit coherent code/test/documentation work when it is green. If blocked before a safe commit, preserve the minimal work without destructive cleanup and describe it exactly.
+4. Commit coherent code/test/documentation work when it is green. If blocked before a safe commit, preserve the minimal work without destructive cleanup and describe it exactly. Push the branch after committing, and record the pushed SHA and the id of any GitHub Actions run it started.
 5. Update every affected `PROGRESS.md` row, including test commands, HIL result, commit SHA, blocker, and next action.
 6. Append a concise `WORKLOG.md` result with:
    - package and finding IDs;
@@ -417,7 +459,7 @@ The Hardening 27 task is complete only when all of the following are true:
 7. Final Android/shared smoke and targeted regression flows pass against `c64u`, with `u64` used where a second device or isolation is required.
 8. Final diagnostics, package-filtered logcat, request traces, and c64scope evidence contain no unexplained release-relevant error, warning, request anomaly, resource leak, latency violation, or C64 degradation.
 9. Web fixes pass the available server/Docker/Playwright gates.
-10. iOS fixes pass all available contract/native/build gates, with any genuinely external simulator/device gap explicitly listed rather than concealed.
+10. iOS fixes have a completed, green GitHub Actions iOS build/test run on a pushed commit of this branch, named by run id in `PROGRESS.md`, plus their TypeScript contract tests. A run that is still queued or in progress at the end of the loop is recorded as pending with its id, not as a pass. Simulator-only or device-only behaviour that no runner exercises is listed explicitly as an external gap rather than concealed.
 11. No prohibited physical action was taken and all changed runtime state was restored or explicitly recorded.
 12. The final branch diff is scoped, reviewable, free of secrets/debugging residue, and preserves unrelated user work.
 
@@ -439,6 +481,10 @@ If external hardware or platform access prevents a validation step, do not fabri
 - Do not overwrite the review or unrelated work.
 - Do not spend a normal implementation-capable iteration only rewriting Markdown.
 - Do not rerun unchanged broad suites as a substitute for progress.
+- Do not idle, poll, or end an iteration early while waiting for a GitHub Actions run.
+- Do not defer HIL a third consecutive time on a bench conflict you cannot evidence as a live, identified owner. Take ownership instead, with the evidence recorded.
+- Do not select a Swift or iOS package while any non-iOS package is dependency-ready and not terminal.
+- Do not claim a Swift change is validated without a completed green iOS run id.
 - Do not declare global completion while any ledger row lacks a defensible terminal status and evidence.
 
 ## FINAL RESPONSE FORMAT FOR EACH INVOCATION
@@ -473,4 +519,4 @@ If external hardware or platform access prevents a validation step, do not fabri
 
 ## START NOW
 
-Resolve or create the dedicated `fix/hardening-27` worktree from local `main` without modifying the primary checkout. Enter it. Read the repository instructions, the full Hardening 27 review, and any existing state in `docs/plans/hardening/27-fable/`. Initialize the 40-row progress ledger if absent. Revalidate the highest-priority dependency-ready finding against current code, establish red evidence, implement the smallest root-cause fix, run the applicable tests and platform validation, commit the coherent increment, and update the Hardening 27 progress state. Continue through Ralph Robin until the global exit criteria are met.
+Resolve or create the dedicated `fix/hardening-27` worktree from local `main` without modifying the primary checkout. Enter it. Read the repository instructions, the full Hardening 27 review, and any existing state in `docs/plans/hardening/27-fable/`. Initialize the 40-row progress ledger if absent. Read the state of any GitHub Actions run already started on this branch, without waiting for one. Revalidate the highest-priority dependency-ready finding against current code - ranking the deferred iOS track below every other ready package - establish red evidence, implement the smallest root-cause fix, run the applicable tests and platform validation, commit the coherent increment, push the branch, and update the Hardening 27 progress state. Continue through Ralph Robin until the global exit criteria are met.
