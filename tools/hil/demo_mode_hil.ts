@@ -886,21 +886,14 @@ const music = async () => {
 
   await startMirror({ audio: false });
   const screen = await captureFrame("music-now-playing");
-  const text = await js(`(() => {
-    const el = document.querySelector('[data-testid="playback-current-track"]');
-    if (!el) return "";
-    return el.innerText
-      .split(String.fromCharCode(10))
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .join(" | ");
-  })()`);
 
   await js(`(() => { document.querySelector('[data-testid="playlist-pause"]')?.click(); return true; })()`);
   await sleep(1500);
 
   return {
-    track: String(text),
+    // What the Play page showed while the tune was playing. Read before the mirror was started,
+    // because starting it leaves for Home, where this element does not exist.
+    track: String(started.track ?? ""),
     speakerFramesPerSecond: Math.round(framesPerSecond),
     screen,
   };
@@ -1157,22 +1150,42 @@ const performance_ = async () => {
   // feels: click to the app having responded. `paintMs` is click to the whole route having mounted,
   // which is measured with the mirror running AND stopped, so what the stage asserts is that the
   // stream does not make it worse.
+  // Three passes over the tab bar, reported per control as the median of its three presses. A
+  // single press is too noisy on this handset to hold to a 300 ms budget: consecutive runs put
+  // tab-disks at 298 ms and 306 ms with nothing changed between them, which would make the gate
+  // decide on noise rather than on the app.
   const measureControls = () =>
     js(`(async () => {
       const settle = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      const results = [];
-      for (const tab of ["tab-play", "tab-disks", "tab-config", "tab-settings", "tab-home"]) {
-        const el = document.querySelector('[data-testid="' + tab + '"]');
-        if (!el) continue;
-        const started = performance.now();
-        el.click();
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-        const ackMs = Math.round(performance.now() - started);
-        await settle();
-        results.push({ control: tab, ackMs, paintMs: Math.round(performance.now() - started) });
-        await new Promise((resolve) => setTimeout(resolve, 900));
+      const tabs = ["tab-play", "tab-disks", "tab-config", "tab-settings", "tab-home"];
+      const samples = new Map(tabs.map((tab) => [tab, { ack: [], paint: [] }]));
+      for (let round = 0; round < 3; round += 1) {
+        for (const tab of tabs) {
+          const el = document.querySelector('[data-testid="' + tab + '"]');
+          if (!el) continue;
+          const started = performance.now();
+          el.click();
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+          const ackMs = Math.round(performance.now() - started);
+          await settle();
+          const entry = samples.get(tab);
+          entry.ack.push(ackMs);
+          entry.paint.push(Math.round(performance.now() - started));
+          await new Promise((resolve) => setTimeout(resolve, 900));
+        }
       }
-      return results;
+      const median = (values) => {
+        const sorted = [...values].sort((left, right) => left - right);
+        return sorted[Math.floor(sorted.length / 2)];
+      };
+      return tabs
+        .filter((tab) => samples.get(tab).ack.length > 0)
+        .map((tab) => ({
+          control: tab,
+          ackMs: median(samples.get(tab).ack),
+          paintMs: median(samples.get(tab).paint),
+          ackSamples: samples.get(tab).ack,
+        }));
     })()`);
 
   const whileStreaming = await measureControls();
