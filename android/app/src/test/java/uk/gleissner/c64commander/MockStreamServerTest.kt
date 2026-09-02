@@ -14,6 +14,7 @@ import java.net.DatagramSocket
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume
 import org.junit.Test
 
 class MockStreamServerTest {
@@ -298,7 +299,20 @@ class MockStreamServerTest {
   @Test
   fun aMissingPortFallsBackToTheDefaultForTheStream() {
     val server = server()
-    DatagramSocket(MockStreamServer.DEFAULT_VIDEO_PORT).use { receiver ->
+    // The claim under test is about a well-known port, so the receiver has to bind that exact port
+    // and nothing else. On a shared development machine something else can already hold it, which
+    // says nothing about this code — so that case is reported as skipped rather than as a failure.
+    val receiver =
+            try {
+              DatagramSocket(MockStreamServer.DEFAULT_VIDEO_PORT)
+            } catch (error: java.net.BindException) {
+              Assume.assumeNoException(
+                      "UDP ${MockStreamServer.DEFAULT_VIDEO_PORT} is held by another process on this machine",
+                      error,
+              )
+              return
+            }
+    receiver.use { receiver ->
       receiver.soTimeout = 4000
       try {
         server.start("video", "127.0.0.1")
