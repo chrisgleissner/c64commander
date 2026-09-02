@@ -1121,7 +1121,7 @@ Preferred locations are marked first.
 | HVSC preparation | **Play → Add items**, card at the foot of Play | On by default. Turn it off under **HVSC downloads** in Settings → Stable Features. Settings → HVSC holds the mirror and the update check. |
 | SID Radio | **Play → SID Radio** | Endless stations of similar tunes. Settings → SID Radio tunes it. |
 | CommoServe | **Play → Add items**, Disks → Add disks, Settings → Online Archive | On by default. Turn it off under **CommoServe** in Settings → Stable Features. |
-| Demo Mode | **Settings → Connection** | Off to begin with. Turn it on under **Demo Mode** in Settings → Stable Features. Separately from that setting, a launch with no network at all opens on the simulated device on its own. |
+| Demo Mode | **Settings → Connection** | On by default. Turn it off under **Demo Mode** in Settings → Stable Features. When no C64 Ultimate can be reached — because none answers, or because the phone has no network — the app offers the simulated device and waits for you to accept. **Preview Demo Mode**, in the same section, switches to it at any time, including while a real C64 Ultimate is connected. |
 | Background playback scheduling | **Play**, Android app permissions | Always on. |
 | Display profile, theme, style, text size, card descriptions, orientation | **Settings → Appearance** | Screenshots in this manual use the medium profile. |
 | Settings transfer (export and import) | **Settings → Diagnostics** | App settings, feature switches and safety tuning. Saved devices and passwords stay behind. |

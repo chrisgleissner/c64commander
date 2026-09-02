@@ -17,6 +17,11 @@
  * primary tab route — the offline shell is exactly the Callback's manual-IP
  * first-run state, so no mock device is needed.
  *
+ * The offline shell has to be asked for now that Demo Mode is on by default: without
+ * `c64u_demo_mode_enabled: "0"` an unreachable device is answered with the Demo Mode offer and a
+ * rediscovery schedule, which is a different screen and a network that never goes idle. Demo Mode's
+ * own layout at these widths is covered in demoModeEntry.spec.ts.
+ *
  * Runs on the default appearance style only; see appearanceGeometryInvariance.spec.ts, which proves
  * switching style changes zero geometry so this coverage holds for all twelve generated palettes.
  */
@@ -44,9 +49,19 @@ const expectNoHorizontalOverflow = async (page: Page, label: string) => {
   expect(overflow.body, `${label}: body horizontal overflow (vw=${overflow.viewport})`).toBeLessThanOrEqual(1);
 };
 
+const seedOfflineShell = async (page: Page) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("c64u_demo_mode_enabled", "0");
+    localStorage.removeItem("c64u_automatic_demo_mode_enabled");
+    localStorage.setItem("c64u_startup_discovery_window_ms", "1000");
+    localStorage.setItem("c64u_background_rediscovery_interval_ms", "60000");
+  });
+};
+
 for (const vp of VIEWPORTS) {
   test(`no horizontal overflow at ${vp.name} across primary routes`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: vp.width, height: vp.height });
+    await seedOfflineShell(page);
     for (const route of PRIMARY_ROUTES) {
       await page.goto(route);
       await page.waitForLoadState("networkidle");

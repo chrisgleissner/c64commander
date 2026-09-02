@@ -587,7 +587,7 @@ const featureRows = ({ features, variant }) => {
     rows.push([
       "Demo Mode",
       "**Settings → Connection**",
-      `${featureAvailability(features.demo_mode_enabled)} Separately from that setting, a launch with no network at all opens on the simulated device on its own.`,
+      `${featureAvailability(features.demo_mode_enabled)} When no C64 Ultimate can be reached — because none answers, or because the phone has no network — the app offers the simulated device and waits for you to accept. **Preview Demo Mode**, in the same section, switches to it at any time, including while a real C64 Ultimate is connected.`,
     ]);
   }
   if (includeFeature(features, "background_execution_enabled")) {
