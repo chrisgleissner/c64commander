@@ -445,8 +445,8 @@ frames decoded off the Live View canvas (`live-view-frame.png`, `prg-running.png
 recordings, and `mirror.wav` as captured by the audio pipeline.
 
 Reference numbers from this rig (Pixel 4, debug build): offer on screen 2.4 s after the launch
-intent; 50-51 fps PAL, and NTSC assembled at 60.0-60.2 fps with 668-674 frames painted in the
-measurement window, each with 0 lost frames and 0 dropped packets; 250 audio
+intent; 50-51 fps PAL, and NTSC assembled at 60.0-60.2 fps with 633-674 frames painted in the
+measurement window, each with 0 lost frames; 250 audio
 packets a second with 0 lost and 0 underruns; 48,288 frames a second reaching the speaker while a
 tune plays; 13.4% of the device's processors; every tab answering a press in 34-254 ms except Home,
 which takes about 410 ms while streaming against 30 ms with the mirror stopped, because returning to

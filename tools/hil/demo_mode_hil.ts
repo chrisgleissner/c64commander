@@ -1188,18 +1188,18 @@ const ntscStream = async () => {
   };
   // What the stage asserts, and what it only reports, follows from what NTSC costs THIS rig. The
   // phone generates 60 frames a second and decodes them at the same time — a real device only ever
-  // sends — and eight runs of this stage put the extra load in two places:
+  // sends — and on a debug build the decode and blit sit close to the governor's per-frame budget
+  // at the NTSC period, so it tips over sometimes and not others.
   //
-  //   - the governor shedding frames to protect the audio: 0 in five runs, 21, 22 and 23 in three,
-  //     and once about a sixth of them, of roughly 665;
-  //   - the receive socket dropping the odd packet: 0 in seven runs, 2 in one, of about 37,000.
+  // Twelve runs while this stage was being built. The assembly rate above was 60 fps with nothing
+  // lost in every run where it was measured. What the app PAINTED varied: nothing shed in six runs,
+  // 18 to 23 frames of about 665 in four, and about a sixth of them once. One run dropped 2 of
+  // about 37,000 packets on the receive socket; the rest dropped none. No run lost a whole frame or
+  // an audio packet.
   //
-  // The assembly rate above was 60 fps with nothing lost in every one of those runs, so what varies
-  // is what the app chooses to PAINT, not what the machine sends or the receiver gets. A debug
-  // build's decode and blit sit close to the governor's per-frame budget at the NTSC period, which
-  // is why it tips over sometimes and not others. So the painted rate is held to a floor that says
-  // "better than PAL" rather than to 60, dropped packets are allowed well under a tenth of a per
-  // cent, and the decimation count is reported rather than gated.
+  // So a lost frame fails outright, the painted rate is held to a floor that says "better than
+  // PAL" rather than to 60, dropped packets are allowed well under a tenth of a per cent, and the
+  // decimation count is reported rather than gated — a real collapse shows up in the painted rate.
   expectWith(stats.lost === 0, `${stats.lost} NTSC frames were lost in ten seconds`, { stats });
   expectWith(
     stats.droppedPackets <= 20,
