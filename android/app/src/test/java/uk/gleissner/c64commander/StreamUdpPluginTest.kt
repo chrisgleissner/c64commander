@@ -9,6 +9,7 @@
 package uk.gleissner.c64commander
 
 import android.content.Context
+import android.media.AudioManager
 import android.net.wifi.WifiManager
 import android.util.Base64
 import androidx.test.core.app.ApplicationProvider
@@ -34,6 +35,7 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 
 @RunWith(RobolectricTestRunner::class)
 class StreamUdpPluginTest {
@@ -444,6 +446,45 @@ class StreamUdpPluginTest {
   }
 
   /** Resolve a PluginCall, capturing the resolved JSObject. */
+  @Test
+  fun openAudioTrackTakesAudioFocusAndClosingGivesItBack() {
+    // HARD27-006: neither audio source asked for focus. The A/V mirror never went near the
+    // background service that did ask, so the C64's audio played on top of whatever the user had
+    // started elsewhere. Focus belongs to the sink because the sink is what actually makes sound.
+    val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    val shadow = shadowOf(audio)
+
+    plugin.openAudioTrack(resolvingCall { `when`(it.getInt("sampleRate")).thenReturn(47983) }.first)
+
+    val request = shadow.lastAudioFocusRequest
+    assertNotNull("opening the sink must request audio focus", request)
+    assertEquals(AudioManager.AUDIOFOCUS_GAIN, request.durationHint)
+
+    plugin.closeAudioTrack(resolvingCall {}.first)
+    assertNotNull("closing the sink must abandon audio focus", shadow.lastAbandonedAudioFocusRequest)
+  }
+
+  @Test
+  fun audioFocusChangesReachTheWebLayer() {
+    // The web layer is where the two sources are told apart, so every change is forwarded there
+    // rather than acted on natively. Ducking is the exception: it is an attenuation of the samples
+    // this pipeline is about to play, and it is applied in the pipeline (see AudioPipelineTest).
+    val changes = ArrayList<String>()
+    plugin.emitAudioFocusChange = { changes.add(it) }
+    val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    val shadow = shadowOf(audio)
+    plugin.openAudioTrack(resolvingCall { `when`(it.getInt("sampleRate")).thenReturn(47983) }.first)
+    val listener = shadow.lastAudioFocusRequest.listener
+
+    listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)
+    listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK)
+    listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_GAIN)
+    listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS)
+
+    assertEquals(listOf("loss-transient", "duck", "gain", "loss"), changes)
+    plugin.closeAudioTrack(resolvingCall {}.first)
+  }
+
   private fun resolvingCall(configure: (PluginCall) -> Unit): Pair<PluginCall, () -> JSObject?> {
     val call = mock(PluginCall::class.java)
     configure(call)

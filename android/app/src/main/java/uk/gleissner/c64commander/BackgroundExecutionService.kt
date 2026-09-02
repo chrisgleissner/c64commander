@@ -15,9 +15,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
-import android.media.AudioFocusRequest
-import android.media.AudioManager
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Build
@@ -186,19 +183,14 @@ class BackgroundExecutionService : Service() {
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
-    private var audioManager: AudioManager? = null
-    private var audioFocusRequest: AudioFocusRequest? = null
     private var mediaSession: MediaSession? = null
 
-    private val audioFocusChangeListener =
-            AudioManager.OnAudioFocusChangeListener { focusChange ->
-                AppLogger.debug(
-                        this,
-                        TAG,
-                        "Audio focus changed ($focusChange)",
-                        "BackgroundExecutionService"
-                )
-            }
+    /*
+     * Audio focus is NOT requested here. This service starts for a tune on the Play page and not for
+     * the A/V mirror, and it ends on its own lifecycle rather than the speaker's, so the focus it
+     * held said nothing about whether the app was making sound. `StreamUdpPlugin` owns focus now:
+     * it opens and closes the only audio sink either source plays through (HARD27-006).
+     */
 
     /**
      * A MediaSession with no callback is never made the platform's media-button session, so a
@@ -259,7 +251,6 @@ class BackgroundExecutionService : Service() {
             startForeground(NOTIFICATION_ID, buildNotification())
             acquireWakeLock()
             initializeMediaSession()
-            requestAudioFocusIfNeeded()
             isRunning = true
         }
 
@@ -285,7 +276,6 @@ class BackgroundExecutionService : Service() {
         AppLogger.info(this, TAG, "Service stopping", "BackgroundExecutionService")
         updateDueAtInternal(null)
         cancelPausedExpiry()
-        abandonAudioFocusIfNeeded()
         releaseMediaSession()
         releaseWakeLock()
         isRunning = false
@@ -524,96 +514,6 @@ class BackgroundExecutionService : Service() {
             }
         }
         mediaSession = null
-    }
-
-    private fun requestAudioFocusIfNeeded() {
-        if (audioManager == null) {
-            audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-        }
-        val manager = audioManager
-        if (manager == null) {
-            AppLogger.warn(
-                    this,
-                    TAG,
-                    "AudioManager unavailable; audio focus not requested",
-                    "BackgroundExecutionService"
-            )
-            return
-        }
-
-        try {
-            val focusResult =
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        val request =
-                                audioFocusRequest
-                                        ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                                                .setAudioAttributes(
-                                                        AudioAttributes.Builder()
-                                                                .setUsage(
-                                                                        AudioAttributes.USAGE_MEDIA
-                                                                )
-                                                                .setContentType(
-                                                                        AudioAttributes
-                                                                                .CONTENT_TYPE_MUSIC
-                                                                )
-                                                                .build(),
-                                                )
-                                                .setOnAudioFocusChangeListener(
-                                                        audioFocusChangeListener
-                                                )
-                                                .build()
-                                                .also { audioFocusRequest = it }
-                        manager.requestAudioFocus(request)
-                    } else {
-                        AppLogger.warn(
-                                this,
-                                TAG,
-                                "Audio focus APIs below Android O are deprecated; skipping explicit request",
-                                "BackgroundExecutionService",
-                        )
-                        AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-                    }
-
-            if (focusResult == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-                AppLogger.debug(this, TAG, "Audio focus granted", "BackgroundExecutionService")
-            } else {
-                AppLogger.warn(
-                        this,
-                        TAG,
-                        "Audio focus request not granted (result=$focusResult)",
-                        "BackgroundExecutionService"
-                )
-            }
-        } catch (e: Exception) {
-            AppLogger.warn(
-                    this,
-                    TAG,
-                    "Failed to request audio focus",
-                    "BackgroundExecutionService",
-                    e
-            )
-        }
-    }
-
-    private fun abandonAudioFocusIfNeeded() {
-        val manager = audioManager ?: return
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                audioFocusRequest?.let { manager.abandonAudioFocusRequest(it) }
-            }
-            AppLogger.debug(this, TAG, "Audio focus abandoned", "BackgroundExecutionService")
-        } catch (e: Exception) {
-            AppLogger.warn(
-                    this,
-                    TAG,
-                    "Failed to abandon audio focus",
-                    "BackgroundExecutionService",
-                    e
-            )
-        } finally {
-            audioFocusRequest = null
-            audioManager = null
-        }
     }
 
     private fun updateDueAtInternal(nextDueAtMs: Long?) {

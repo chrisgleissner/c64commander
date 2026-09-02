@@ -460,6 +460,36 @@ class AudioPipelineTest {
   }
 
   @Test
+  fun duckingAttenuatesTheOutputAndUnduckingRestoresIt() {
+    // HARD27-006: a navigation prompt or any other transient focus holder should hear the tune drop
+    // under it, not stop. Ducking is separate from the volume gain so neither can wipe the other,
+    // which is what this measures: the same tone, at the same requested gain, ducked and not.
+    val outputRate = 48000
+    fun rmsWithDuck(ducked: Boolean): Double {
+      val speaker = FakeSpeaker(outputRate, record = true)
+      val pipeline = AudioPipeline(sampleRate, 120, outputRate, 240, speaker.factory)
+      try {
+        pipeline.setGain(1.0)
+        pipeline.setDucked(ducked)
+        pipeline.start()
+        feedTone(pipeline, 1000.0, seconds = 2)
+        val pcm = synchronized(speaker.played) { speaker.played.toByteArray() }
+        assertTrue("nothing reached the speaker", pcm.size > outputRate)
+        // Skip the first quarter second: the gain ramp is deliberately gradual.
+        val tail = pcm.copyOfRange(outputRate, pcm.size)
+        return rms(channel(tail, 0))
+      } finally {
+        pipeline.close()
+      }
+    }
+
+    val open = rmsWithDuck(false)
+    val ducked = rmsWithDuck(true)
+    assertEquals("un-ducked output changed level", TONE_AMPLITUDE.toDouble() / Math.sqrt(2.0), open, 900.0)
+    assertEquals("ducked output is not attenuated by the duck gain", open * 0.2, ducked, open * 0.05)
+  }
+
+  @Test
   fun aConcealedPacketDoesNotLeaveAClick() {
     assertNoClick(440.0)
   }

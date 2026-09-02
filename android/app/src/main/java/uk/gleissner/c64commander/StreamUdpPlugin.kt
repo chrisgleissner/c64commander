@@ -9,6 +9,8 @@
 package uk.gleissner.c64commander
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.net.wifi.WifiManager
@@ -180,6 +182,41 @@ class StreamUdpPlugin : Plugin() {
     event.put("present", present)
     notifyListeners("videoframe", event)
   }
+
+  /**
+   * Test seam: how an audio-focus change is delivered to JS (default: an `audiofocus` event).
+   *
+   * The sink is the only part of the app that knows sound is actually being produced — the A/V
+   * mirror and the on-device SID engine both play through it — so focus is requested and released
+   * here, and what to do about losing it is decided in JS, where the two sources are told apart.
+   */
+  internal var emitAudioFocusChange: (String) -> Unit = { change ->
+    val event = JSObject()
+    event.put("change", change)
+    notifyListeners("audiofocus", event)
+  }
+
+  private var audioFocusRequest: AudioFocusRequest? = null
+  private var audioFocusHeld = false
+
+  private val audioFocusListener =
+    AudioManager.OnAudioFocusChangeListener { focusChange ->
+      when (focusChange) {
+        AudioManager.AUDIOFOCUS_LOSS -> emitAudioFocusChange(FOCUS_LOSS)
+        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> emitAudioFocusChange(FOCUS_LOSS_TRANSIENT)
+        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+          // Android 8+ ducks an app that has not opted out, and then does not call this at all; on
+          // 24/25 nothing ducks unless we do. Attenuating here covers both without a version check.
+          audioPipeline?.setDucked(true)
+          emitAudioFocusChange(FOCUS_DUCK)
+        }
+        AudioManager.AUDIOFOCUS_GAIN -> {
+          audioPipeline?.setDucked(false)
+          emitAudioFocusChange(FOCUS_GAIN)
+        }
+        else -> Log.d(logTag, "unhandled audio focus change ($focusChange)")
+      }
+    }
 
   /**
    * Per-stream keep-rate in permille (0–1000; default 1000 = present every frame). The governor
@@ -393,6 +430,7 @@ class StreamUdpPlugin : Plugin() {
             )
         pipeline.start()
         audioPipeline = pipeline
+        requestPlaybackAudioFocus()
         nativeAudioOwnsPlayback = true
         audioArrivals.reset()
         val result = JSObject()
@@ -609,8 +647,77 @@ class StreamUdpPlugin : Plugin() {
       audioPipeline?.close()
       audioPipeline = null
     }
+    abandonPlaybackAudioFocus()
     call.resolve(JSObject())
   }
+
+  /**
+   * Take audio focus for as long as this app is producing sound.
+   *
+   * Focus used to be requested by the background-execution service, which starts for a tune on the
+   * Play page and not for the A/V mirror, and abandons on its own lifecycle rather than the
+   * speaker's. Requesting it where the samples are actually played covers both sources, tells
+   * whatever was playing to stop, and gives the app a loss callback it can act on.
+   */
+  private fun requestPlaybackAudioFocus() {
+    if (audioFocusHeld) return
+    val manager = audioManager() ?: return
+    try {
+      val result =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          val request =
+            audioFocusRequest
+              ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                  AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+                )
+                .setOnAudioFocusChangeListener(audioFocusListener)
+                .build()
+                .also { audioFocusRequest = it }
+          manager.requestAudioFocus(request)
+        } else {
+          @Suppress("DEPRECATION")
+          manager.requestAudioFocus(
+            audioFocusListener,
+            AudioManager.STREAM_MUSIC,
+            AudioManager.AUDIOFOCUS_GAIN,
+          )
+        }
+      audioFocusHeld = result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+      if (!audioFocusHeld) Log.w(logTag, "audio focus not granted (result=$result)")
+    } catch (error: Exception) {
+      Log.w(logTag, "audio focus request failed", error)
+    }
+  }
+
+  /** Give focus back when the sink closes, so another app is free to play. */
+  private fun abandonPlaybackAudioFocus() {
+    val manager = audioManager()
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        audioFocusRequest?.let { manager?.abandonAudioFocusRequest(it) }
+      } else {
+        @Suppress("DEPRECATION")
+        manager?.abandonAudioFocus(audioFocusListener)
+      }
+    } catch (error: Exception) {
+      Log.w(logTag, "abandoning audio focus failed", error)
+    } finally {
+      audioFocusRequest = null
+      audioFocusHeld = false
+    }
+  }
+
+  private fun audioManager(): AudioManager? =
+    try {
+      context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    } catch (error: Exception) {
+      Log.w(logTag, "AudioManager unavailable", error)
+      null
+    }
 
   private fun receiveLoop(name: String, socket: DatagramSocket) {
     raiseThreadPriority(name)
@@ -1064,6 +1171,12 @@ class StreamUdpPlugin : Plugin() {
 
     /** Log the first foreign packet, then one line per this many, so a stuck sender cannot spam. */
     private const val FOREIGN_LOG_EVERY = 5000L
+
+    /** Focus-change names as JS sees them (`StreamUdpAudioFocusEvent.change`). */
+    internal const val FOCUS_LOSS = "loss"
+    internal const val FOCUS_LOSS_TRANSIENT = "loss-transient"
+    internal const val FOCUS_DUCK = "duck"
+    internal const val FOCUS_GAIN = "gain"
 
     private const val AUDIO_SEQ_BYTES = 2
     private const val AUDIO_BYTES_PER_FRAME = 4

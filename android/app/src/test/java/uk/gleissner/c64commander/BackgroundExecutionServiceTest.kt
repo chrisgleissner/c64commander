@@ -9,6 +9,7 @@
 package uk.gleissner.c64commander
 
 import android.content.Intent
+import android.media.AudioManager
 import android.media.session.MediaSession
 import android.os.Build
 import android.os.Looper
@@ -314,24 +315,39 @@ class BackgroundExecutionServiceTest {
     }
 
     @Test
-    fun serviceStartInitializesMediaSessionAndAudioFocusState() {
+    fun serviceStartInitializesMediaSession() {
         controller.create()
         startService()
 
         assertNotNull("MediaSession should be initialized when service starts", getPrivateField("mediaSession"))
-        assertNotNull("AudioManager should be initialized when service starts", getPrivateField("audioManager"))
     }
 
     @Test
-    fun serviceDestroyReleasesMediaSessionAndAudioFocusState() {
+    fun serviceDestroyReleasesMediaSession() {
         controller.create()
         startService()
 
         controller.destroy()
 
         assertNull("MediaSession should be released on destroy", getPrivateField("mediaSession"))
-        assertNull("AudioManager reference should clear on destroy", getPrivateField("audioManager"))
-        assertNull("AudioFocusRequest should clear on destroy", getPrivateField("audioFocusRequest"))
+    }
+
+    @Test
+    fun serviceDoesNotOwnAudioFocus() {
+        // HARD27-006: this service asked for audio focus although it starts for a tune on the Play
+        // page and not for the A/V mirror, and abandoned it on its own lifecycle rather than the
+        // speaker's. StreamUdpPlugin holds focus around the sink both sources play through. Two
+        // requests from one app are also not free: the second takes focus off the first, so our own
+        // service would receive the loss meant for another app.
+        val audio =
+                ApplicationProvider.getApplicationContext<android.content.Context>()
+                        .getSystemService(android.content.Context.AUDIO_SERVICE) as AudioManager
+        val shadow = Shadows.shadowOf(audio)
+
+        controller.create()
+        startService()
+
+        assertNull("the background service must not request audio focus", shadow.lastAudioFocusRequest)
     }
 
     @Test

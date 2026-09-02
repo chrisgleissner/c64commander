@@ -42,12 +42,25 @@ import { addLog } from "@/lib/logging";
  */
 export type PhoneAudioSource = "local-sid" | "av-mirror";
 
+/**
+ * How an owner is silenced and restored while another app holds the phone's audio focus.
+ *
+ * Distinct from `stop`: an interruption is expected to end. The local engine suspends its audio
+ * clock and continues from the same place; the mirror stops receiving and starts again, because a
+ * live stream has no position to hold.
+ */
+export interface PhoneAudioInterrupt {
+  readonly pause: () => void;
+  readonly resume: () => void;
+}
+
 interface PhoneAudioOwner {
   readonly source: PhoneAudioSource;
   /** Silence this owner. Must be safe to call when already stopped. */
   readonly stop: () => void;
   /** Identity within a source, so one engine re-claiming is not an eviction. */
   readonly token: object;
+  readonly interrupt?: PhoneAudioInterrupt;
 }
 
 let owner: PhoneAudioOwner | null = null;
@@ -58,7 +71,12 @@ let owner: PhoneAudioOwner | null = null;
  * `token` identifies the individual claimant: the same engine re-opening a sink
  * for its next tune must not evict itself.
  */
-export const claimPhoneAudio = (source: PhoneAudioSource, token: object, stop: () => void): void => {
+export const claimPhoneAudio = (
+  source: PhoneAudioSource,
+  token: object,
+  stop: () => void,
+  interrupt?: PhoneAudioInterrupt,
+): void => {
   const previous = owner;
   if (previous && previous.token !== token) {
     addLog("warn", "Audio: stopping one source so another can play", {
@@ -75,8 +93,25 @@ export const claimPhoneAudio = (source: PhoneAudioSource, token: object, stop: (
     // claim we are about to install.
     previous.stop();
   }
-  owner = { source, token, stop };
+  owner = { source, token, stop, interrupt };
 };
+
+/**
+ * Silence the current owner because something outside the app took the speaker.
+ *
+ * Returns what was silenced, so the caller can decide whether to restore it — a transient loss ends
+ * with a resume, a permanent one does not. Null when nothing was playing or the owner registered no
+ * interrupt handlers.
+ */
+export const interruptPhoneAudio = (): { source: PhoneAudioSource; token: object; resume: () => void } | null => {
+  const current = owner;
+  if (!current?.interrupt) return null;
+  current.interrupt.pause();
+  return { source: current.source, token: current.token, resume: current.interrupt.resume };
+};
+
+/** Which token holds the speaker, or null. Lets a caller check its interruption is still current. */
+export const phoneAudioOwnerToken = (): object | null => owner?.token ?? null;
 
 /** Give up the speaker, if `token` still holds it. */
 export const releasePhoneAudio = (token: object): void => {

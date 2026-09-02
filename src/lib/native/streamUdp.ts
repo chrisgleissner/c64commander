@@ -130,6 +130,19 @@ export interface StreamUdpStreamDiagnostics {
 }
 
 /**
+ * What the platform did to this app's audio focus, as the native sink saw it.
+ *
+ * `duck` is reported for completeness — the pipeline has already attenuated itself by the time the
+ * event arrives, because the samples it applies to are native. The rest are decisions only the web
+ * layer can take, since it is the only side that knows whether a tune or the mirror is playing.
+ */
+export type StreamUdpAudioFocusChange = "loss" | "loss-transient" | "duck" | "gain";
+
+export interface StreamUdpAudioFocusEvent {
+  change: StreamUdpAudioFocusChange;
+}
+
+/**
  * Native UDP receiver bridge (Android `StreamUdpPlugin`). Only used on native platforms —
  * the web/Docker build receives streams through the server's UDP -> WebSocket bridge instead.
  */
@@ -222,6 +235,10 @@ export interface StreamUdpPlugin {
    */
   setAudioAnalysis(options: { enabled: boolean }): Promise<void>;
   addListener(eventName: "datagram", listener: (event: StreamUdpDatagramEvent) => void): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: "audiofocus",
+    listener: (event: StreamUdpAudioFocusEvent) => void,
+  ): Promise<PluginListenerHandle>;
   addListener(
     eventName: "videoframe",
     listener: (event: StreamUdpVideoFrameEvent) => void,

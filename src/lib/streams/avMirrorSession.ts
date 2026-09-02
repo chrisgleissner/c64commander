@@ -664,17 +664,27 @@ export class AvMirrorSession {
       // pieces of music at once with no way for the listener to tell which
       // control stops which. Claiming first means the tune is already silenced
       // by the time the first packet arrives.
-      claimPhoneAudio("av-mirror", this, () => {
-        void this.stopAudio().catch((error) => {
-          // Not cosmetic: if the stop fails, the C64's audio keeps playing and
-          // the local tune starts underneath it — the two-sounds-at-once
-          // failure this registry exists to prevent.
-          addLog("warn", "A/V mirror: stopping audio during eviction failed", {
-            service: "streams",
-            error: error instanceof Error ? error.message : String(error),
+      claimPhoneAudio(
+        "av-mirror",
+        this,
+        () => {
+          void this.stopAudio().catch((error) => {
+            // Not cosmetic: if the stop fails, the C64's audio keeps playing and
+            // the local tune starts underneath it — the two-sounds-at-once
+            // failure this registry exists to prevent.
+            addLog("warn", "A/V mirror: stopping audio during eviction failed", {
+              service: "streams",
+              error: error instanceof Error ? error.message : String(error),
+            });
           });
-        });
-      });
+        },
+        {
+          // A focus loss (HARD27-006): the C64 keeps streaming, so there is no position to hold —
+          // stop receiving and start again if the loss turns out to have been transient.
+          pause: () => void this.stopAudio().catch(() => undefined),
+          resume: () => void this.startAudio().catch(() => undefined),
+        },
+      );
       // Prefer Wi‑Fi for audio-only when the policy allows it (firmware wifi=true);
       // the controller falls back to Ethernet if Wi‑Fi isn't available.
       const wifi = shouldUseWifiForAudio({ policy: this.effectiveAudioRoute(), videoActive: this.videoLive });

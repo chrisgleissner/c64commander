@@ -198,6 +198,8 @@ internal class AudioPipeline(
    * jumps between one frame and the next is audible as a click.
    */
   @Volatile private var targetGain: Double = 1.0
+  /** Ducking attenuation, multiplied with [targetGain]. See [setDucked]. */
+  @Volatile private var duckGain: Double = 1.0
   private var appliedGain: Double = 1.0
   @Volatile private var running = true
   @Volatile private var started = false
@@ -305,6 +307,17 @@ internal class AudioPipeline(
    */
   fun setGain(gain: Double) {
     targetGain = if (gain.isFinite()) gain.coerceIn(0.0, 1.0) else 1.0
+  }
+
+  /**
+   * Attenuate while another app holds transient focus with ducking allowed.
+   *
+   * Kept apart from [setGain] and multiplied with it, so a duck cannot wipe the level the listener
+   * chose and the volume slider cannot cancel a duck. Ramped by the same slew as any other gain
+   * change, so ducking in and out is not a click.
+   */
+  fun setDucked(ducked: Boolean) {
+    duckGain = if (ducked) DUCK_GAIN else 1.0
   }
 
   fun offer(data: ByteArray, offset: Int, length: Int) {
@@ -861,7 +874,7 @@ internal class AudioPipeline(
     // Ramp towards the requested level rather than jumping to it. `GAIN_RAMP_FRAMES` is a whole
     // number of frames at the output rate, so the slew is the same wall-clock duration whatever the
     // device resamples to.
-    val target = targetGain
+    val target = targetGain * duckGain
     if (appliedGain != target) {
       val step = 1.0 / GAIN_RAMP_FRAMES
       appliedGain = if (appliedGain < target) minOf(target, appliedGain + step) else maxOf(target, appliedGain - step)
@@ -949,6 +962,9 @@ internal class AudioPipeline(
      * same whichever path is playing. Long enough that no step is audible as a click, short enough
      * that the control still feels immediate.
      */
+    /** How far output drops while ducking. The usual platform duck is about this deep. */
+    private const val DUCK_GAIN = 0.2
+
     private const val GAIN_RAMP_FRAMES = 960.0
 
     private const val TRACK_BURSTS = 4

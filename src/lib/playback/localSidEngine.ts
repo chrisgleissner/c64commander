@@ -229,8 +229,17 @@ const SEEK_ACK_TIMEOUT_MS = 20_000;
  * play the C64's audio straight over the top of a local tune, because the two
  * subsystems had no common notion of who holds the speaker. Now they do.
  */
-const claimAudioOwnership = (engine: { stopPlayback: () => void }): void => {
-  claimPhoneAudio("local-sid", engine, () => engine.stopPlayback());
+const claimAudioOwnership = (engine: {
+  stopPlayback: () => void;
+  pause: () => Promise<void>;
+  resume: () => Promise<void>;
+}): void => {
+  // The interrupt handlers are what an audio-focus loss uses (HARD27-006): suspending the clock
+  // holds the tune's position, so the listener gets the same tune back rather than a restart.
+  claimPhoneAudio("local-sid", engine, () => engine.stopPlayback(), {
+    pause: () => void engine.pause(),
+    resume: () => void engine.resume(),
+  });
 };
 
 const releaseAudioOwnership = (engine: object): void => {

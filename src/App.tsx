@@ -35,6 +35,7 @@ import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
 import { createTransportShortcut } from "@/lib/input/transportShortcuts";
 import { installNativeMediaButtons } from "@/lib/input/nativeMediaButtons";
+import { installAudioFocusPolicy } from "@/lib/audio/audioFocusPolicy";
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
 import { SearchKeyListener } from "@/components/search/SearchKeyListener";
 import { SearchOverlayHost } from "@/components/search/SearchOverlayHost";
@@ -265,6 +266,9 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
   );
   // Headset / lock screen / Bluetooth, through the same factory F1 and F3 use.
   useEffect(() => installNativeMediaButtons(transportShortcutOptions), [transportShortcutOptions]);
+  // Another app taking the speaker has to reach whichever source is playing, so this is installed
+  // app-wide rather than by the Play page (HARD27-006).
+  useEffect(() => installAudioFocusPolicy(), []);
   const shortcuts = useMemo<KeypadShortcutHandlers>(
     () => ({
       jumpToTab: (index) => {
