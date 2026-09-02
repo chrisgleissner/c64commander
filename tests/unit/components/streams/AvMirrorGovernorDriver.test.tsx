@@ -66,15 +66,20 @@ describe("AvMirrorGovernorDriver", () => {
 
   // HARD27-021: before this driver owned the backgrounding policy, hiding the app left the native
   // receiver running and the Ultimate multicasting. Nothing in the app listened for the event.
-  it("stops a live mirror when the app is hidden, and stops listening on unmount", () => {
+  it("stops a live mirror when the app is hidden, and stops listening on unmount", async () => {
     const setHidden = (hidden: boolean) =>
       Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+    // The policy runs its transitions on a promise chain, so let the microtasks settle.
+    const settle = async () => {
+      for (let i = 0; i < 4; i += 1) await Promise.resolve();
+    };
     fakeSession.videoLive = true;
     fakeSession.stopAll.mockClear();
     const { unmount } = render(<AvMirrorGovernorDriver />);
 
     setHidden(true);
     document.dispatchEvent(new Event("visibilitychange"));
+    await settle();
     expect(fakeSession.stopAll).toHaveBeenCalledTimes(1);
 
     unmount();
@@ -82,6 +87,7 @@ describe("AvMirrorGovernorDriver", () => {
     document.dispatchEvent(new Event("visibilitychange"));
     setHidden(true);
     document.dispatchEvent(new Event("visibilitychange"));
+    await settle();
     expect(fakeSession.stopAll).toHaveBeenCalledTimes(1);
     setHidden(false);
   });

@@ -28,6 +28,7 @@ export interface AvMirrorSuspendedState {
  */
 export class AvMirrorBackgroundPolicy {
   private suspended: AvMirrorSuspendedState | null = null;
+  private chain: Promise<unknown> = Promise.resolve();
 
   constructor(
     private readonly session: Pick<
@@ -41,7 +42,32 @@ export class AvMirrorBackgroundPolicy {
     return this.suspended;
   }
 
-  async handleHidden(): Promise<void> {
+  /**
+   * Run `op` after any transition already in flight. Observed on the Pixel 4: returning to the app
+   * can deliver a second hidden/visible pair while the restore is still running its two starts. Left
+   * unserialised, the hidden arrives between them, records only the half that is live again, stops
+   * both, and the tail of the restore then starts the other half — so the user comes back to audio
+   * with no picture. Serialising means the hidden runs after the restore, sees both streams live and
+   * records both.
+   */
+  private serialize(op: () => Promise<void>): Promise<void> {
+    const run = this.chain.then(op, op);
+    this.chain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  handleHidden(): Promise<void> {
+    return this.serialize(() => this.stopForHidden());
+  }
+
+  handleVisible(): Promise<void> {
+    return this.serialize(() => this.restoreForVisible());
+  }
+
+  private async stopForHidden(): Promise<void> {
     if (this.suspended) return;
     const state: AvMirrorSuspendedState = {
       audioWasLive: this.session.audioLive,
@@ -57,7 +83,7 @@ export class AvMirrorBackgroundPolicy {
     await this.session.stopAll();
   }
 
-  async handleVisible(): Promise<void> {
+  private async restoreForVisible(): Promise<void> {
     const state = this.suspended;
     if (!state) return;
     this.suspended = null;

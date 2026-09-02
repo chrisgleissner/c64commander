@@ -119,6 +119,28 @@ describe("AvMirrorBackgroundPolicy (HARD27-021)", () => {
     expect(session.startVideo).not.toHaveBeenCalled();
   });
 
+  // Found on the Pixel 4: returning to the app delivered a second hidden/visible pair while the
+  // restore was still running its two starts. Unserialised, the trace read
+  // video:start, audio:stop, video:stop, audio:start — the user came back to audio and no picture.
+  it("applies a hidden that arrives mid-restore after the restore, not between its two starts", async () => {
+    const session = createSession({ audioLive: true, videoLive: true });
+    const policy = new AvMirrorBackgroundPolicy(session);
+    // Hidden fires again the moment the restore's first start lands, as it did on the device.
+    session.startVideo.mockImplementationOnce(async () => {
+      session.calls.push("startVideo");
+      session.setLive({ videoLive: true });
+      void policy.handleHidden();
+    });
+
+    await policy.handleHidden();
+    await policy.handleVisible();
+    await policy.handleVisible();
+
+    expect(session.calls).toEqual(["stopAll", "startVideo", "startAudio", "stopAll", "startVideo", "startAudio"]);
+    expect(session.audioLive).toBe(true);
+    expect(session.videoLive).toBe(true);
+  });
+
   it("still clears the held state when a restart fails, so the next hide records afresh", async () => {
     const session = createSession({ audioLive: true, videoLive: false });
     session.startAudio.mockRejectedValueOnce(new Error("streams:start refused"));
