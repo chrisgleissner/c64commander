@@ -55,6 +55,30 @@ export const normalizePassword = (value: unknown): string | null => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
+// HARD27-001: the app stores per-device passwords as a JSON envelope, while
+// this server keeps one plaintext password that it uses as the device
+// X-Password header, the FTP password and the web login password. Storing the
+// envelope breaks all three and locks the user out of the login page, so the
+// envelope is rejected at the boundary rather than accepted and misused.
+export const isPasswordEnvelope = (value: unknown): boolean => {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{")) return false;
+  try {
+    const parsed = JSON.parse(trimmed) as { version?: unknown; passwordsByDeviceId?: unknown } | null;
+    return Boolean(
+      parsed &&
+        typeof parsed === "object" &&
+        parsed.version === 1 &&
+        typeof parsed.passwordsByDeviceId === "object" &&
+        parsed.passwordsByDeviceId !== null,
+    );
+  } catch {
+    // Not JSON: an ordinary password that happens to start with a brace.
+    return false;
+  }
+};
+
 export const sanitizeHost = (value: unknown): string | null => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();

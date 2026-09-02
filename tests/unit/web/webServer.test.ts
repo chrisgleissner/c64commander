@@ -288,6 +288,51 @@ describe("web server platform runtime", () => {
     await server.close();
   });
 
+  // HARD27-001: the app used to send its per-device password envelope here, and
+  // the server stored it as the single network password. That broke the device
+  // X-Password header, FTP and the login page at once, so the envelope is now
+  // rejected at the boundary.
+  it("rejects the app's per-device password envelope with 400", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ok</body></html>", "utf8");
+
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      NODE_ENV: "production",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+    });
+
+    const envelope = JSON.stringify({
+      version: 1,
+      legacyDefaultPassword: null,
+      passwordsByDeviceId: { "device-1": "plain-secret" },
+    });
+    const rejected = await fetch(`${server.baseUrl}/api/secure-storage/password`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: envelope }),
+    });
+    expect(rejected.status).toBe(400);
+    expect(rejected.headers.get("set-cookie")).toBeNull();
+
+    // The rejected write must not have been stored.
+    const status = await fetch(`${server.baseUrl}/auth/status`);
+    expect(await status.json()).toEqual({ requiresLogin: false, authenticated: false });
+
+    // A plaintext password on a brace-prefixed value is still accepted.
+    const accepted = await fetch(`${server.baseUrl}/api/secure-storage/password`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: "{not-json-secret" }),
+    });
+    expect(accepted.status).toBe(200);
+
+    await server.close();
+  });
+
   it("emits secure session cookies only for explicitly secure deployments", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");

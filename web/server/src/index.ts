@@ -6,7 +6,13 @@ import { URL } from "node:url";
 import { PassThrough, Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { Client as FtpClient } from "basic-ftp";
-import { normalizePassword, safeCompare, sanitizeHost, isTrustedInsecureHost } from "./hostValidation.js";
+import {
+  normalizePassword,
+  isPasswordEnvelope,
+  safeCompare,
+  sanitizeHost,
+  isTrustedInsecureHost,
+} from "./hostValidation.js";
 import { applySecurityHeaders, getClientIp } from "./securityHeaders.js";
 import { readBody, readJsonBody, writeJson, writeText } from "./httpIO.js";
 import { createStaticAssetServer } from "./staticAssets.js";
@@ -579,6 +585,12 @@ export const startWebServer = async () => {
         }
         if (method === "PUT") {
           const payload = await readJsonBody<{ value?: string }>(req);
+          if (isPasswordEnvelope(payload.value)) {
+            writeJson(res, 400, {
+              error: "Expected the device password as plain text, not the app's per-device password envelope",
+            });
+            return;
+          }
           const password = normalizePassword(payload.value);
           config = { ...config, networkPassword: password };
           await saveConfig(config);
