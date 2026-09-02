@@ -203,8 +203,17 @@ export interface StreamUdpPlugin {
    * scheduled chunk-by-chunk from the JS thread. No-op (zeroed stats) if no pipeline is open.
    */
   writeAudioTrack(options: { data: string }): Promise<StreamUdpAudioStats>;
-  /** Drop queued-but-unplayed audio, so a pause or seek is immediate despite a deep ring. */
+  /** Drop queued-but-unplayed audio, so a seek is immediate despite a deep ring. */
   flushAudioTrack(options?: Record<string, never>): Promise<void>;
+  /**
+   * Hold the speaker for a listener's pause, keeping the ring and the track's own buffer intact.
+   *
+   * Distinct from {@link flushAudioTrack}, which is for a seek: a seek invalidates the queued audio,
+   * a pause does not, and discarding it on a pause is heard as a jump forward on resume.
+   */
+  pauseAudioTrack(options?: Record<string, never>): Promise<void>;
+  /** Continue a {@link pauseAudioTrack} from the sample it stopped on. */
+  resumeAudioTrack(options?: Record<string, never>): Promise<void>;
   /**
    * Read the pipeline's live depth, underruns and arrival evenness — the governor's audio-headroom
    * signal, polled periodically since native (not JS) drives playback. Zeroed if none is open.

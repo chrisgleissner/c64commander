@@ -23,6 +23,8 @@ interface FakeBackend extends NativeLocalAudioBackend {
   /** The samples of each write, decoded — the volume control's whole job is what is in here. */
   pcm: Int16Array[];
   flushes: number;
+  pauses: number;
+  resumes: number;
   closes: number;
   /** Queue depth the pipeline reports back, in ms. */
   bufferedMs: number;
@@ -44,6 +46,8 @@ const createBackend = (): FakeBackend => {
     writes: [],
     pcm: [],
     flushes: 0,
+    pauses: 0,
+    resumes: 0,
     closes: 0,
     bufferedMs: 0,
     underruns: 0,
@@ -61,6 +65,12 @@ const createBackend = (): FakeBackend => {
     },
     flushAudioTrack: async () => {
       backend.flushes += 1;
+    },
+    pauseAudioTrack: async () => {
+      backend.pauses += 1;
+    },
+    resumeAudioTrack: async () => {
+      backend.resumes += 1;
     },
     readAudioStats: async () => ({ bufferedMs: backend.bufferedMs, underruns: backend.underruns }),
   };
@@ -211,14 +221,15 @@ describe("on-device playback through the native track", () => {
     expect(sink!.sink.currentTime).toBeLessThan(0.5);
   });
 
-  it("flushes on pause, so a deep ring does not keep sounding", async () => {
+  it("holds the pipeline on pause, so a deep ring does not keep sounding", async () => {
     const backend = createBackend();
     const sink = createNativeLocalSidSink(RATE, backend);
     scheduleChunk(sink, 4);
     await settle();
 
     sink!.suspend?.();
-    expect(backend.flushes).toBeGreaterThan(0);
+    await settle();
+    expect(backend.pauses).toBe(1);
   });
 
   it("flushes and closes the track on teardown", async () => {
@@ -385,38 +396,62 @@ describe("on-device playback through the native track", () => {
     expect(backend.pcm[0][0]).toBe(Math.round(0.5 * (INT16_MAX - 1)));
   });
 
-  it("resumes feeding after a pause", async () => {
+  it("resumes feeding after a pause without being handed anything new", async () => {
+    // The engine does not re-feed a resumed tune: its render top-up is gated on what the scheduler
+    // believes is still in flight, and a pause changes nothing about that. So the sink has to
+    // continue from what it already holds, on its own, or playback never restarts.
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend);
+    // A full pipeline, so the pump stops at its high water with slices of its own still queued.
+    backend.bufferedMs = 12_000;
+    scheduleChunk(sink, 20);
+    await settle(200);
+    sink!.suspend?.();
+    const whilePaused = backend.writes.length;
+    // Drained, so the only thing left holding the pump back is the pause.
+    backend.bufferedMs = 0;
+    await settle(200);
+    expect(backend.writes.length).toBe(whilePaused);
+
+    const frozen = sink!.sink.currentTime;
+    sink!.resume?.();
+    await settle(200);
+
+    expect(backend.writes.length).toBeGreaterThan(whilePaused);
+    // The transport clock is derived from this, and a resume that writes nothing froze it for good.
+    expect(sink!.sink.currentTime).toBeGreaterThan(frozen);
+  });
+
+  it("pauses the pipeline rather than flushing it, so a resume is not a jump forward", async () => {
+    // The ring runs twelve seconds deep. Flushing it for a pause discards audio the tune already
+    // rendered, and the write counter then has to be rebased onto what was played — which leaves the
+    // scheduler counting audio the sink no longer holds, and its render gate never reopens.
     const backend = createBackend();
     const sink = createNativeLocalSidSink(RATE, backend);
     scheduleChunk(sink, 4);
     await settle(200);
+
     sink!.suspend?.();
-    const whilePaused = backend.writes.length;
+    await settle();
 
-    sink!.resume?.();
-    scheduleChunk(sink, 4, 4);
-    await settle(200);
-
-    expect(backend.writes.length).toBeGreaterThan(whilePaused);
+    expect(backend.pauses).toBe(1);
+    expect(backend.flushes).toBe(0);
   });
 
-  it("drops the completions owed for audio a pause threw away", async () => {
-    // A pause discards the ring, so those completions describe audio nobody heard. The engine counts
-    // them against what it scheduled to decide the tune is over, so leaving them queued would let
-    // the count run ahead and end the track early after a few pause/resume cycles. Asserted on the
-    // sink's own counters rather than on a callback, because whether one fires depends on how far
-    // the fake pipeline's clock has run.
+  it("keeps the completions owed for audio a pause did not throw away", async () => {
+    // They are what drives the engine to render more. Discarding them on a pause stopped the chain:
+    // no completion, no render, nothing written, and the playhead could not advance again.
     const backend = createBackend();
     const sink = createNativeLocalSidSink(RATE, backend);
-    // Scheduled far enough ahead that its completion is still owed when the pause arrives.
     scheduleChunk(sink, 4, 100);
     await settle(200);
     const debug = (globalThis as Record<string, unknown>).__localSinkDebug as () => Record<string, number>;
-    expect(debug().endings).toBeGreaterThan(0);
+    const owed = debug().endings;
+    expect(owed).toBeGreaterThan(0);
 
     sink!.suspend?.();
 
-    expect(debug().endings).toBe(0);
+    expect(debug().endings).toBe(owed);
   });
 
   it("holds the clock still while paused", async () => {

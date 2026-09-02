@@ -203,6 +203,7 @@ internal class AudioPipeline(
   private var appliedGain: Double = 1.0
   @Volatile private var running = true
   @Volatile private var started = false
+  @Volatile private var paused = false
 
   private var totalFramesWritten: Long = 0
   private var player: Thread? = null
@@ -296,6 +297,34 @@ internal class AudioPipeline(
     synchronized(producerLock) {
       readFrames = writeFrames
       flushSeq += 1
+    }
+  }
+
+  /**
+   * Stop the speaker without discarding anything, which is what a listener's pause has to be.
+   *
+   * [flush] is wrong for a pause: the ring runs seconds deep, so it drops rendered audio, and the
+   * JS sink then rebases onto the played position while its scheduler still counts that audio as in
+   * flight — a gate that never reopens, so the transport clock froze on resume and never moved.
+   */
+  fun pause() {
+    if (paused) return
+    paused = true
+    try {
+      if (started) track.pause()
+    } catch (error: Exception) {
+      Log.w(TAG, "AudioTrack pause failed", error)
+    }
+  }
+
+  /** Continue a [pause] from the sample it stopped on. */
+  fun resume() {
+    if (!paused) return
+    paused = false
+    try {
+      if (started) track.play()
+    } catch (error: Exception) {
+      Log.w(TAG, "AudioTrack resume failed", error)
     }
   }
 
@@ -643,6 +672,12 @@ internal class AudioPipeline(
     srcScratch = ShortArray(((outFrames * nominalRatio() * (1 + MAX_DRIFT) + 2).toInt() + 2) * CHANNELS)
     while (running) {
       try {
+        if (paused) {
+          // Parked, not spinning on the ring: a paused pipeline must not consume what it holds, or
+          // the audio the listener paused on would be gone by the time they came back to it.
+          LockSupport.parkNanos(POLL_NANOS)
+          continue
+        }
         if (!started) {
           // Prime for BOTH buffers, not just the cushion. The first writes fill the speaker track,
           // and every frame of that comes out of the ring — so priming to the cushion target alone

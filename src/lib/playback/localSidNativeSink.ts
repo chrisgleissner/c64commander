@@ -214,8 +214,12 @@ export interface NativeLocalAudioBackend {
   }): Promise<{ sampleRate: number; bufferMs: number }>;
   writeAudioTrack(options: { data: string }): Promise<NativeAudioStats | undefined>;
   closeAudioTrack(options?: Record<string, never>): Promise<void>;
-  /** Drop queued-but-unplayed audio, so a pause or seek is immediate despite the deep ring. */
+  /** Drop queued-but-unplayed audio, so a seek is immediate despite the deep ring. */
   flushAudioTrack?(options?: Record<string, never>): Promise<void>;
+  /** Hold the speaker without discarding anything, for a listener's pause. */
+  pauseAudioTrack?(options?: Record<string, never>): Promise<void>;
+  /** Continue a {@link pauseAudioTrack} from the sample it stopped on. */
+  resumeAudioTrack?(options?: Record<string, never>): Promise<void>;
   /** Master attenuation applied by the pipeline as samples leave its ring (0..1). */
   setAudioTrackGain?(options: { gain: number }): Promise<void>;
   /** Current pipeline state. Plain field reads, so cheap enough to poll while waiting. */
@@ -1058,29 +1062,12 @@ class NativeLocalSidSink implements AudioScheduleSink {
     // Freeze the clock where it stands, so nothing scheduled against it is judged late on resume.
     this.playheadSec = this.currentTime;
     this.suspended = true;
-    // The ring holds a couple of seconds, which would otherwise keep sounding after a pause.
-    this.queue = [];
-    // And the completions owed for it. The audio those entries describe has just been thrown away,
-    // so their `at` times are now in a future the playhead will still reach — each would announce a
-    // chunk that never played. The engine counts those announcements against what it scheduled to
-    // decide the tune is over, so a few pause/resume cycles would let the count run ahead and end
-    // the track early. Discarded, not orphaned: unlike `reopenAfterStall` there is nothing to
-    // rescue, because the scheduler is not being asked to refill from here.
-    this.endings = [];
-    // Rebase the write counter onto what was actually heard, exactly as the other two paths that
-    // discard audio do (`flush` and `reopenAfterStall`). The playhead is derived as
-    // "written minus still queued", so throwing audio away while leaving it counted as written puts
-    // the playhead that far ahead of the sound — and on resume the pump writes the audio that piled
-    // up during the pause on top of an already-overstated base. Measured on a Pixel 4: pausing for
-    // twelve seconds made the transport clock jump forward by about eight the moment it resumed.
-    this.writtenFrames = Math.max(0, Math.round(this.playheadSec * this.sampleRate));
-    this.queuedSec = 0;
-    void this.backend.flushAudioTrack?.().catch((error) => {
-      // A pipeline that has already gone has nothing to flush, so this is not fatal — but it is
-      // still worth a line, because a flush that fails on a live track leaves the paused audio in it.
-      addLog("warn", "Native audio: flush on suspend failed", {
-        error: (error as Error)?.message ?? String(error),
-      });
+    // Nothing is discarded, so the queue, the completions owed for it and the write counter all stay
+    // valid and resume continues from the same sample. The flush is only a fallback for a plugin
+    // without the pause method; it costs the ring's audio, which is heard as a jump forward.
+    const hold = this.backend.pauseAudioTrack ?? this.backend.flushAudioTrack;
+    void hold?.call(this.backend).catch((error) => {
+      addLog("warn", "Native audio: pause failed", { error: (error as Error)?.message ?? String(error) });
     });
   }
 
@@ -1088,6 +1075,12 @@ class NativeLocalSidSink implements AudioScheduleSink {
     if (!this.suspended) return;
     this.playheadAtMs = performance.now();
     this.suspended = false;
+    void this.backend.resumeAudioTrack?.call(this.backend).catch((error) => {
+      addLog("warn", "Native audio: resume failed", { error: (error as Error)?.message ?? String(error) });
+    });
+    // The ticker stops itself while suspended (nothing is outstanding that it can observe), and it is
+    // what restarts the pump when the queue refills, so resuming has to start it again.
+    this.startTicking();
     void this.pump();
   }
 

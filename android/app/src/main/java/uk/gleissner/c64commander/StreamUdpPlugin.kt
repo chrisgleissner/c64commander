@@ -472,6 +472,25 @@ class StreamUdpPlugin : Plugin() {
     call.resolve(audioStatsPayload(pipeline?.stats() ?: AudioPipeline.Stats.ZERO))
   }
 
+  /**
+   * Hold the speaker where it is, keeping every queued sample, for a listener's pause.
+   *
+   * Distinct from [flushAudioTrack], which exists for a seek: a seek invalidates the queued audio,
+   * a pause does not.
+   */
+  @PluginMethod
+  fun pauseAudioTrack(call: PluginCall) {
+    audioPipeline?.pause()
+    call.resolve(JSObject())
+  }
+
+  /** Continue a [pauseAudioTrack] from the sample it stopped on. */
+  @PluginMethod
+  fun resumeAudioTrack(call: PluginCall) {
+    audioPipeline?.resume()
+    call.resolve(JSObject())
+  }
+
   /** Drop queued-but-unplayed audio, so a pause or a seek takes effect at once. */
   @PluginMethod
   fun flushAudioTrack(call: PluginCall) {
