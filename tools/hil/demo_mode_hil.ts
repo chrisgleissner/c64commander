@@ -158,8 +158,10 @@ const enterStockDemoMode = async () => {
   expect(state === "DEMO_ACTIVE", `expected DEMO_ACTIVE, got ${state}`);
 
   // DEMO_ACTIVE alone does not say what the app is talking to: a session that could not start the
-  // simulated device reports Demo Mode and stays routed at the stored real host. Settings prints
-  // the runtime target, so read it — it has to be the loopback mock.
+  // simulated device reports Demo Mode and stays routed at the stored real host, on port 80.
+  // Settings prints the runtime target; the port on it is the discriminator, because the mock
+  // binds an ephemeral one. The hostname is not — it keeps the stored device's name even while
+  // the requests go to loopback.
   const target = await js(`(async () => {
     history.pushState({}, "", "/settings");
     dispatchEvent(new PopStateEvent("popstate"));
@@ -172,9 +174,10 @@ const enterStockDemoMode = async () => {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     return line || "";
   })()`);
+  const httpPort = Number(/HTTP\s+(\d+)/.exec(target)?.[1] ?? NaN);
   expect(
-    /Currently using:\s*127\.0\.0\.1/.test(target) && target.includes("(Demo mock)"),
-    `the app is not routed at the simulated device: ${JSON.stringify(target.slice(0, 120))}`,
+    target.includes("(Demo mock)") && httpPort > 1024,
+    `the app is not routed at the simulated device: ${JSON.stringify(target.slice(0, 140))}`,
   );
 };
 
