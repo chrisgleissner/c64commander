@@ -39,6 +39,38 @@ describe("secureStorage", () => {
     vi.mocked(SecureStorage.clearPassword).mockClear();
   });
 
+  // HARD27-004: the Android plugin used to answer any read exception by wiping
+  // the store and resolving null, so this layer cached "no passwords" and wrote
+  // that empty set back over the user's saved ones. The plugin now rejects; this
+  // guards the TypeScript half of the contract.
+  it("does not persist an empty password set when the secure store fails to read", async () => {
+    localStorage.setItem(HAS_PASSWORD_KEY, "1");
+    vi.mocked(SecureStorage.getPassword).mockRejectedValueOnce(new Error("keystore unavailable"));
+
+    await expect(getPassword()).rejects.toThrow("keystore unavailable");
+
+    expect(getCachedPassword()).toBeNull();
+    expect(vi.mocked(SecureStorage.setPassword)).not.toHaveBeenCalled();
+    expect(localStorage.getItem(HAS_PASSWORD_KEY)).toBe("1");
+  });
+
+  it("re-reads the secure store after a failed read instead of latching an empty set", async () => {
+    localStorage.setItem(HAS_PASSWORD_KEY, "1");
+    vi.mocked(SecureStorage.getPassword)
+      .mockRejectedValueOnce(new Error("keystore unavailable"))
+      .mockResolvedValueOnce({
+        value: JSON.stringify({
+          version: 1,
+          legacyDefaultPassword: "stored-secret",
+          passwordsByDeviceId: {},
+        }),
+      });
+
+    await expect(getPassword()).rejects.toThrow("keystore unavailable");
+
+    expect(await getPassword()).toBe("stored-secret");
+  });
+
   it("never writes password to localStorage when setting", async () => {
     await setPassword("super-secret");
 

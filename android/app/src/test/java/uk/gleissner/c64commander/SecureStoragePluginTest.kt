@@ -184,7 +184,7 @@ class SecureStoragePluginTest {
   }
 
   @Test
-  fun setPasswordRecoversFromCorruptedEncryptedPrefsAndRetriesOnce() {
+  fun setPasswordRetriesOnceWithoutWipingWhenTheFirstAttemptFails() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     setPluginBridge(plugin, context)
     val prefs = memoryPrefs(context, "secure-storage-plugin-recovery-test")
@@ -202,6 +202,7 @@ class SecureStoragePluginTest {
     verify(setCall).resolve()
     verify(setCall, never()).reject(any(), any(Exception::class.java))
     assertEquals(2, factoryCalls)
+    assertEquals(0, plugin.recoveryCount)
 
     val getCall = mock(PluginCall::class.java)
     var resolved: JSObject? = null
@@ -215,11 +216,40 @@ class SecureStoragePluginTest {
     assertEquals(2, factoryCalls)
   }
 
+  // HARD27-004: a read must never destroy the store. A read that keeps failing
+  // rejects, so the TypeScript layer leaves passwordLoaded false and never
+  // persists an empty envelope over the user's saved passwords.
   @Test
-  fun getPasswordReturnsNullAfterEncryptedPrefsRecovery() {
+  fun getPasswordRejectsAndNeverWipesWhenEncryptedPrefsKeepFailing() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     setPluginBridge(plugin, context)
+    plugin.recoveryRetryDelayMs = 0L
     plugin.encryptedPrefsFactory = { throw RuntimeException("corrupt keyset") }
+
+    val getCall = mock(PluginCall::class.java)
+    plugin.getPassword(getCall)
+
+    verify(getCall).reject(any(), any(Exception::class.java))
+    verify(getCall, never()).resolve(org.mockito.Mockito.any())
+    assertEquals(0, plugin.recoveryCount)
+  }
+
+  // HARD27-004: androidx.security.crypto throws transiently when the Keystore
+  // daemon restarts. One such failure must not cost the user every password.
+  // The retry, not the exception class, is what tells the two cases apart.
+  @Test
+  fun getPasswordReturnsTheRealValueAfterOneFailedRead() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+    plugin.recoveryRetryDelayMs = 0L
+    val prefs = memoryPrefs(context, "secure-storage-plugin-transient-read-test")
+    prefs.edit().putString("c64u_password", "stored-secret").commit()
+    var factoryCalls = 0
+    plugin.encryptedPrefsFactory = {
+      factoryCalls += 1
+      if (factoryCalls == 1) throw RuntimeException("keystore daemon restarted")
+      prefs
+    }
 
     val getCall = mock(PluginCall::class.java)
     var resolved: JSObject? = null
@@ -230,15 +260,120 @@ class SecureStoragePluginTest {
 
     plugin.getPassword(getCall)
 
-    verify(getCall).resolve(org.mockito.Mockito.any())
+    assertEquals("stored-secret", resolved?.getString("value"))
     verify(getCall, never()).reject(any(), any(Exception::class.java))
-    assertEquals(null, resolved?.getString("value"))
+    assertEquals(0, plugin.recoveryCount)
+  }
+
+  // HARD27-004: the write path retries before it wipes, so a password the user
+  // just typed survives a single failure instead of costing the whole store.
+  @Test
+  fun setPasswordRetriesAFailedWriteWithoutWiping() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+    plugin.recoveryRetryDelayMs = 0L
+    val prefs = memoryPrefs(context, "secure-storage-plugin-transient-write-test")
+    var factoryCalls = 0
+    plugin.encryptedPrefsFactory = {
+      factoryCalls += 1
+      if (factoryCalls == 1) throw RuntimeException("keystore in use")
+      prefs
+    }
+
+    val setCall = mock(PluginCall::class.java)
+    org.mockito.Mockito.`when`(setCall.getString("value")).thenReturn("secret")
+    plugin.setPassword(setCall)
+
+    verify(setCall).resolve()
+    verify(setCall, never()).reject(any(), any(Exception::class.java))
+    assertEquals(0, plugin.recoveryCount)
+    assertEquals("secret", prefs.getString("c64u_password", null))
+  }
+
+  // HARD27-004: genuine corruption still has a way out. Recovery runs only
+  // after the retry also fails, and then exactly once.
+  @Test
+  fun setPasswordRecoversOnlyAfterTheRetryAlsoFails() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+    plugin.recoveryRetryDelayMs = 0L
+    val prefs = memoryPrefs(context, "secure-storage-plugin-persistent-corruption-test")
+    var factoryCalls = 0
+    plugin.encryptedPrefsFactory = {
+      factoryCalls += 1
+      if (factoryCalls <= 2) throw RuntimeException("corrupt keyset")
+      prefs
+    }
+
+    val setCall = mock(PluginCall::class.java)
+    org.mockito.Mockito.`when`(setCall.getString("value")).thenReturn("secret")
+    plugin.setPassword(setCall)
+
+    verify(setCall).resolve()
+    assertEquals(3, factoryCalls)
+    assertEquals(1, plugin.recoveryCount)
+    assertEquals("secret", prefs.getString("c64u_password", null))
+  }
+
+  // HARD27-004: recovery renames the unreadable file rather than unlinking it,
+  // so a support report can still show what was there.
+  @Test
+  fun recoveryQuarantinesTheCorruptPrefsFileInsteadOfDeletingIt() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+    plugin.recoveryRetryDelayMs = 0L
+    context.getSharedPreferences("c64_secure_storage", Context.MODE_PRIVATE)
+      .edit().putString("opaque", "ciphertext").commit()
+    val prefsDir = java.io.File(context.applicationInfo.dataDir, "shared_prefs")
+    assertTrue(java.io.File(prefsDir, "c64_secure_storage.xml").exists())
+
+    val prefs = memoryPrefs(context, "secure-storage-plugin-quarantine-test")
+    var factoryCalls = 0
+    plugin.encryptedPrefsFactory = {
+      factoryCalls += 1
+      if (factoryCalls <= 2) throw RuntimeException("corrupt keyset")
+      prefs
+    }
+    val setCall = mock(PluginCall::class.java)
+    org.mockito.Mockito.`when`(setCall.getString("value")).thenReturn("secret")
+    plugin.setPassword(setCall)
+
+    verify(setCall).resolve()
+    val quarantined = prefsDir.listFiles { file ->
+      file.name.startsWith("c64_secure_storage.xml.corrupt-")
+    }
+    assertEquals(1, quarantined?.size)
+  }
+
+  // HARD27-004: apply() flushes on a background thread, so a process death in
+  // the flush window loses a password the app already reported as saved.
+  @Test
+  fun setPasswordCommitsSynchronously() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+    val editor = mock(android.content.SharedPreferences.Editor::class.java)
+    org.mockito.Mockito.`when`(editor.putString(org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString()))
+      .thenReturn(editor)
+    org.mockito.Mockito.`when`(editor.remove(org.mockito.Mockito.anyString())).thenReturn(editor)
+    org.mockito.Mockito.`when`(editor.commit()).thenReturn(true)
+    val prefs = mock(android.content.SharedPreferences::class.java)
+    org.mockito.Mockito.`when`(prefs.edit()).thenReturn(editor)
+    plugin.prefsProvider = { prefs }
+
+    val setCall = mock(PluginCall::class.java)
+    org.mockito.Mockito.`when`(setCall.getString("value")).thenReturn("secret")
+    plugin.setPassword(setCall)
+
+    verify(setCall).resolve()
+    verify(editor).commit()
+    verify(editor, never()).apply()
   }
 
   @Test
   fun setPasswordRejectsWhenPrefsProviderFails() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     setPluginBridge(plugin, context)
+    plugin.recoveryRetryDelayMs = 0L
     plugin.prefsProvider = { throw RuntimeException("prefs set failed") }
 
     val call = mock(PluginCall::class.java)
@@ -254,6 +389,7 @@ class SecureStoragePluginTest {
   fun getPasswordRejectsWhenPrefsProviderFails() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     setPluginBridge(plugin, context)
+    plugin.recoveryRetryDelayMs = 0L
     plugin.prefsProvider = { throw RuntimeException("prefs get failed") }
 
     val call = mock(PluginCall::class.java)
@@ -267,6 +403,7 @@ class SecureStoragePluginTest {
   fun clearPasswordRejectsWhenPrefsProviderFails() {
     val context = ApplicationProvider.getApplicationContext<Context>()
     setPluginBridge(plugin, context)
+    plugin.recoveryRetryDelayMs = 0L
     plugin.prefsProvider = { throw RuntimeException("prefs clear failed") }
 
     val call = mock(PluginCall::class.java)
