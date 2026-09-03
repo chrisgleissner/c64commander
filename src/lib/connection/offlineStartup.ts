@@ -9,6 +9,7 @@
 import { addLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
 import { DeviceDiscovery, type NativeNetworkStatus } from "@/lib/native/deviceDiscovery";
+import { isKnownUnavailable, isPluginMethodUnimplemented, recordUnavailable } from "@/lib/native/pluginAvailability";
 
 const UNKNOWN_NETWORK_STATUS: NativeNetworkStatus = { online: true, supported: false };
 
@@ -73,6 +74,8 @@ const readInjectedNetworkStatus = (): NativeNetworkStatus | null => {
   return { online: injected.online !== false, supported: injected.supported === true };
 };
 
+const NETWORK_STATUS_METHOD = "DeviceDiscovery.getNetworkStatus";
+
 export const readNativeNetworkStatus = async (): Promise<NativeNetworkStatus> => {
   const injected = readInjectedNetworkStatus();
   if (injected) {
@@ -80,6 +83,7 @@ export const readNativeNetworkStatus = async (): Promise<NativeNetworkStatus> =>
     return injected;
   }
   if (!isNativePlatform()) return UNKNOWN_NETWORK_STATUS;
+  if (isKnownUnavailable(NETWORK_STATUS_METHOD)) return UNKNOWN_NETWORK_STATUS;
   try {
     const status = await withTimeout(DeviceDiscovery.getNetworkStatus(), NETWORK_STATUS_TIMEOUT_MS);
     if (!status) {
@@ -90,6 +94,21 @@ export const readNativeNetworkStatus = async (): Promise<NativeNetworkStatus> =>
     }
     return { online: status.online !== false, supported: status.supported === true };
   } catch (error) {
+    /*
+     * iOS lists no `getNetworkStatus` in its `pluginMethods`, so this rejected on every
+     * foreground discovery and on every background probe - a 5 s cadence, backing off to 60 s.
+     * That is the pattern AGENTS.md records as having crowded a 500-entry log out. An
+     * unimplemented method stays unimplemented, so it is reported once per process and the
+     * subsequent calls return the same unknown status silently (HARD27-003).
+     */
+    if (isPluginMethodUnimplemented(error)) {
+      if (recordUnavailable(NETWORK_STATUS_METHOD)) {
+        addLog("info", "Native network status is unavailable on this platform; connectivity stays unknown", {
+          method: NETWORK_STATUS_METHOD,
+        });
+      }
+      return UNKNOWN_NETWORK_STATUS;
+    }
     addLog("info", "Native network status unavailable; treating connectivity as unknown", {
       error: error instanceof Error ? error.message : String(error ?? "unknown error"),
     });

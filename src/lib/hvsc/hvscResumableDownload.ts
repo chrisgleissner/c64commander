@@ -8,6 +8,7 @@
 
 import { HvscIngestion, type HvscNativeDownloadResult } from "@/lib/native/hvscIngestion";
 import { addLog } from "@/lib/logging";
+import { isPluginMethodUnimplemented } from "@/lib/native/pluginAvailability";
 
 export type ResumableArchiveDownloadOptions = {
   /** Path under the app data directory, e.g. `hvsc/cache/HVSC_85.zip`. */
@@ -18,21 +19,8 @@ export type ResumableArchiveDownloadOptions = {
   onProgress: (downloadedBytes: number, totalBytes: number | null) => void;
 };
 
-const UNIMPLEMENTED_MESSAGE_PATTERN =
-  /unimplemented|not implemented|no such method|method not found|is not a function/i;
-
-/**
- * Whether a plugin call failed because this platform has no such native method, as opposed to
- * failing on its own terms. Capacitor reports this as an `UNIMPLEMENTED` code on iOS and as a
- * message on the web; a proxy that does not define the method at all raises a `TypeError`. All
- * three mean the same thing here, and all three degrade to the whole-file download.
- */
-export const isPluginMethodUnimplemented = (error: unknown): boolean => {
-  const code = (error as { code?: unknown } | null | undefined)?.code;
-  if (typeof code === "string" && code.toUpperCase() === "UNIMPLEMENTED") return true;
-  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
-  return UNIMPLEMENTED_MESSAGE_PATTERN.test(message);
-};
+/* Re-exported from its shared home so the existing callers and tests keep working. */
+export { isPluginMethodUnimplemented };
 
 // Cached because an unimplemented method stays unimplemented for the life of the process, and
 // every probe otherwise writes another rejection into the log.

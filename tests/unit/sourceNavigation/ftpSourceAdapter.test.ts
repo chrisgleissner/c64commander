@@ -39,11 +39,13 @@ vi.mock("@/lib/secureStorage", () => ({
 import { listFtpDirectory, listFtpDirectoryRecursive } from "@/lib/ftp/ftpClient";
 import { addLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
+import { resetPluginAvailabilityForTests } from "@/lib/native/pluginAvailability";
 import { createUltimateSourceLocation, normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 
 const listFtpDirectoryMock = vi.mocked(listFtpDirectory);
 const listFtpDirectoryRecursiveMock = vi.mocked(listFtpDirectoryRecursive);
 const isNativePlatformMock = vi.mocked(isNativePlatform);
+const addLogMock = vi.mocked(addLog);
 import { CURRENT_DEVICE_HOST_KEY as DEVICE_HOST_KEY } from "@/lib/c64api/hostConfig";
 const HAS_PASSWORD_KEY = "c64u_has_password";
 const FTP_CACHE_KEY = "c64u_ftp_cache:v1";
@@ -52,7 +54,10 @@ describe("ftpSourceAdapter", () => {
   beforeEach(() => {
     listFtpDirectoryMock.mockReset();
     listFtpDirectoryRecursiveMock.mockReset();
+    addLogMock.mockReset();
     isNativePlatformMock.mockReturnValue(false);
+    // The unavailable-method latch is a module singleton shared by every test in this file.
+    resetPluginAvailabilityForTests();
     localStorage.clear();
     localStorage.setItem(DEVICE_HOST_KEY, "c64u");
     localStorage.setItem(HAS_PASSWORD_KEY, "1");
@@ -213,6 +218,63 @@ describe("ftpSourceAdapter", () => {
     expect(results.map((entry) => entry.path).sort()).toEqual(["/music/song.sid", "/root.sid"]);
     expect(results.partialFailures).toEqual([{ path: "/bad", message: "listing failed" }]);
     expect(deltas).toEqual([2]);
+  });
+
+  it("walks in TypeScript when the native recursive listing is not implemented (HARD27-003)", async () => {
+    // iOS lists no listDirectoryRecursive in its pluginMethods, so this rejected and the raw
+    // Capacitor message reached the user as an error toast when they selected a folder.
+    isNativePlatformMock.mockReturnValue(true);
+    listFtpDirectoryRecursiveMock.mockRejectedValue(
+      Object.assign(new Error('"FtpClient.listDirectoryRecursive()" is not implemented on ios'), {
+        code: "UNIMPLEMENTED",
+      }),
+    );
+    listFtpDirectoryMock.mockImplementation(async ({ path }) =>
+      path === "/"
+        ? { entries: [{ type: "file", name: "root.sid", path: "/root.sid", size: 5, modifiedAt: "now" }] }
+        : { entries: [] },
+    );
+
+    const source = createUltimateSourceLocation();
+    const results = await source.listFilesRecursive("/");
+
+    expect(results.map((entry) => entry.path)).toEqual(["/root.sid"]);
+    expect(results.partialFailures ?? []).toEqual([]);
+    expect(listFtpDirectoryMock).toHaveBeenCalled();
+    expect(addLogMock).toHaveBeenCalledWith(
+      "info",
+      "Recursive FTP listing runs in TypeScript on this platform",
+      expect.objectContaining({ method: "FtpClient.listDirectoryRecursive" }),
+    );
+  });
+
+  it("stops calling the missing native method, and logs the degradation once (HARD27-003)", async () => {
+    isNativePlatformMock.mockReturnValue(true);
+    listFtpDirectoryRecursiveMock.mockRejectedValue(
+      Object.assign(new Error("not implemented on ios"), { code: "UNIMPLEMENTED" }),
+    );
+    listFtpDirectoryMock.mockResolvedValue({ entries: [] });
+
+    const source = createUltimateSourceLocation();
+    await source.listFilesRecursive("/");
+    await source.listFilesRecursive("/");
+    await source.listFilesRecursive("/");
+
+    // Latched: one attempt, one log entry, regardless of how many folders are imported.
+    expect(listFtpDirectoryRecursiveMock).toHaveBeenCalledTimes(1);
+    const degradationLogs = addLogMock.mock.calls.filter(
+      (call) => call[1] === "Recursive FTP listing runs in TypeScript on this platform",
+    );
+    expect(degradationLogs).toHaveLength(1);
+  });
+
+  it("still propagates a native recursive listing failure that is not an unimplemented method", async () => {
+    isNativePlatformMock.mockReturnValue(true);
+    listFtpDirectoryRecursiveMock.mockRejectedValue(new Error("530 Login incorrect"));
+
+    const source = createUltimateSourceLocation();
+    await expect(source.listFilesRecursive("/")).rejects.toThrow("530 Login incorrect");
+    expect(listFtpDirectoryMock).not.toHaveBeenCalled();
   });
 
   it("surfaces a native timedOut walk as a partial failure (HARD9-078)", async () => {
