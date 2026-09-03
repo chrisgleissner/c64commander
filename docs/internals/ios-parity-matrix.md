@@ -5,22 +5,31 @@
 | Feature                   | Android                                              | iOS                                                                                                                                                                                                                     | Status                |
 | ------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
 | FolderPickerPlugin        | SAF-based                                            | UIDocumentPicker + security-scoped bookmarks                                                                                                                                                                            | **Parity**            |
-| FtpClientPlugin           | Apache FTPClient                                     | CFStream/socket FTP                                                                                                                                                                                                     | **Parity**            |
+| FtpClientPlugin           | Apache FTPClient                                     | CFStream/socket FTP, without `listDirectoryRecursive` or `cancelRead` — a recursive listing falls back to the TypeScript walker and an aborted read is not cancelled natively (HARD27-003)                                | **Partial**           |
 | SecureStoragePlugin       | EncryptedSharedPreferences                           | Keychain                                                                                                                                                                                                                | **Parity**            |
 | FeatureFlagsPlugin        | SharedPreferences                                    | UserDefaults                                                                                                                                                                                                            | **Parity**            |
 | BackgroundExecutionPlugin | Full foreground service + WakeLock + auto-skip alarm | `AVAudioSession` category set + `beginBackgroundTask` + main-queue due timer (fires `onBackgroundAutoSkipDue` when elapsed) — partial implementation: timer may expire before song end under iOS background-task limits | **Partial**           |
+| DeviceDiscoveryPlugin     | Subnet sweep plus `getNetworkStatus`                 | `discover` only — `getNetworkStatus` is unimplemented, so connectivity reads as unknown on every foreground discovery and background probe (HARD27-003)                                                                  | **Partial**           |
 | DiagnosticsBridgePlugin   | BroadcastReceiver → JS                               | NotificationCenter → JS + debug HTTP server                                                                                                                                                                             | **Parity**            |
 | MockC64UPlugin            | Mock HTTP + FTP servers                              | NWListener + Darwin sockets                                                                                                                                                                                             | **Parity**            |
 | AppLogger                 | Broadcast-based structured logger                    | IOSDiagnostics with os_log + NotificationCenter                                                                                                                                                                         | **Functional parity** |
 | StreamUdpPlugin           | UDP multicast socket + native VIC frame assembly + native AudioTrack sink | Not registered (`AppDelegate.swift`) — `Capacitor.isPluginAvailable("StreamUdp")` is false, so Live View and Game Mode streams degrade to the unsupported receiver | **Android only** |
 | DeviceRotationPlugin      | Locks/unlocks the activity orientation                                    | Not registered — orientation stays under iOS control                                                                                                            | **Android only** |
 | SafeAreaPlugin            | Reports display cutout and system bar insets                              | Not registered — the web `env(safe-area-inset-*)` values are used instead                                                                                       | **Android only** |
+| LibraryInstallPlugin      | Foreground service keeping an HVSC install alive across a leave            | Not registered — the install runs in the foreground only, and is abandoned if iOS suspends the app                                                              | **Android only** |
+
+> **Method-level parity is enforced by a test.** `tests/unit/ci/iosPluginMethodParity.test.ts`
+> reads each Swift plugin's `pluginMethods` array and each TypeScript `registerPlugin` contract in
+> `src/lib/native`, and fails when a declared method has no Swift implementation and no recorded
+> reason. The recorded gaps live in `KNOWN_IOS_METHOD_GAPS` in that file, with one reason each, and
+> the list may only shrink. It is a source comparison, so it runs in the normal unit suite rather
+> than on a macOS runner.
 
 ## Infrastructure Parity
 
 | Area                | Android                             | iOS                              | Status      |
 | ------------------- | ----------------------------------- | -------------------------------- | ----------- |
-| Native unit tests   | 13 JVM test classes (82 tests)      | 0 XCTest classes                 | **Gap**     |
+| Native unit tests   | 13 JVM test classes (82 tests)      | 6 XCTest classes (41 tests)      | **Partial** |
 | CI gating           | Required check (android.yaml)       | Stage A / informative (ios.yaml) | **Gap**     |
 | Signed distribution | Debug APK + conditional release APK | Unsigned AltStore IPA only       | **Gap**     |
 | Maestro E2E flows   | 6 ci-critical flows                 | 6 ci-critical-ios flows          | **Parity**  |
