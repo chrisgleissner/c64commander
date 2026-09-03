@@ -1227,6 +1227,82 @@ describe("SettingsPage", () => {
     expect(savedDevice?.host).toBe("edited-host.local");
   });
 
+  it("HARD27-037 renames a saved device whose reachability probe fails", async () => {
+    mockEvaluateNewDeviceReachability.mockResolvedValue({
+      status: "unreachable",
+      suggestedAddress: null,
+      suggestedHostname: null,
+    });
+    const store = await import("@/lib/savedDevices/store");
+    if (!store.getSavedDeviceById("saved-device-1")) {
+      store.addSavedDevice({
+        id: "saved-device-1",
+        name: "Office U64",
+        host: "c64u",
+        httpPort: 80,
+        ftpPort: 21,
+        telnetPort: 64,
+        lastKnownProduct: "U64",
+        lastKnownHostname: "office-u64",
+        lastKnownUniqueId: "UID-1",
+        hasPassword: false,
+      });
+    }
+
+    renderSettingsPage();
+
+    fireEvent.change(screen.getByLabelText(/device name/i), { target: { value: "Den U64" } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
+    });
+
+    const persisted = JSON.parse(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY) ?? "{}");
+    const savedDevice = (persisted.devices as Array<{ id: string; name: string }>).find(
+      (device) => device.id === "saved-device-1",
+    );
+    expect(savedDevice?.name).toBe("Den U64");
+    // The probe never ran, so the switched-off device is never reported unreachable.
+    expect(mockEvaluateNewDeviceReachability).not.toHaveBeenCalled();
+    expect(screen.queryByText(/couldn.t reach/i)).toBeNull();
+  }, 15000);
+
+  it("HARD27-037 saves a corrected FTP port for an unreachable device without switching to it", async () => {
+    mockEvaluateNewDeviceReachability.mockResolvedValue({
+      status: "unreachable",
+      suggestedAddress: null,
+      suggestedHostname: null,
+    });
+
+    renderSettingsPage();
+
+    fireEvent.change(screen.getByTestId("settings-device-ftp"), { target: { value: "2121" } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Connection settings saved" }));
+    });
+    expect(mockEvaluateNewDeviceReachability).not.toHaveBeenCalled();
+    expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+  }, 15000);
+
+  it("HARD27-037 still re-applies a local-only edit to a live connection", async () => {
+    connectionPayloadRef.current.status.isConnected = true;
+    mockSwitchSavedDevice.mockResolvedValue(undefined);
+
+    renderSettingsPage();
+
+    fireEvent.change(screen.getByTestId("settings-device-ftp"), { target: { value: "2121" } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(mockSwitchSavedDevice).toHaveBeenCalledWith("saved-device-1");
+    });
+    expect(mockEvaluateNewDeviceReachability).not.toHaveBeenCalled();
+    connectionPayloadRef.current.status.isConnected = false;
+  }, 15000);
+
   it("persists the saved-device password flag before switching devices", async () => {
     renderSettingsPage();
 

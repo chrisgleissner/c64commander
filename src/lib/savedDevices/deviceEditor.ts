@@ -107,3 +107,23 @@ export const validateSavedDevicePorts = (draft: SavedDeviceEditorDraft) => {
   if (!isValidPort(draft.telnetPort)) return "Telnet port must be 1 to 65535.";
   return null;
 };
+
+export type SavedDeviceConnectionIdentity = Pick<SavedDevice, "host" | "httpPort">;
+
+// HARD27-037: only the host, the HTTP port and the password decide whether the
+// app can still reach a saved device. A rename or an FTP/Telnet port correction
+// therefore does not need a reachability probe, and must stay editable while the
+// device is switched off. A save that changes nothing still probes, because the
+// user pressed a button labelled "Save & Connect".
+export const isLocalOnlySavedDeviceEdit = (
+  current: SavedDeviceConnectionIdentity,
+  next: { host: string; httpPort: number },
+  isChangingPassword: boolean,
+  hasOtherFieldChanges: boolean,
+): boolean => {
+  if (isChangingPassword) return false;
+
+  if (current.host.trim().toLowerCase() !== next.host.trim().toLowerCase()) return false;
+  if (current.httpPort !== next.httpPort) return false;
+  return hasOtherFieldChanges;
+};

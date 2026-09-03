@@ -218,6 +218,7 @@ import { OnlineArchiveDialog } from "@/components/archive/OnlineArchiveDialog";
 import { getStoredTelnetPort, setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import {
   buildSavedDeviceEditorDraft,
+  isLocalOnlySavedDeviceEdit,
   type SavedDeviceEditorDraft,
   validateSavedDevicePorts,
 } from "@/lib/savedDevices/deviceEditor";
@@ -780,18 +781,37 @@ export default function SettingsPage() {
         ? ((await getPasswordForDevice(selectedSavedDevice.id)) ?? "")
         : "";
     const hasPassword = effectivePassword.length > 0;
+    // HARD27-037: a rename or an FTP/Telnet port correction cannot make the device
+    // unreachable, so it must not be gated on a probe that fails while the machine
+    // is switched off.
+    const savedDraft = buildSavedDeviceEditorDraft(selectedSavedDevice, selectedSavedDevice.host);
+    // `passwordEditing` is true whenever the field is editable, which it is for every
+    // device that has no stored password. Only a password that is actually being set
+    // or cleared needs the device to answer.
+    const isChangingStoredPassword = isChangingPassword && (hasPassword || selectedSavedDevice.hasPassword);
+    const isLocalOnlyEdit = isLocalOnlySavedDeviceEdit(
+      { host: selectedSavedDevice.host, httpPort: selectedSavedDevice.httpPort },
+      { host: nextHost, httpPort: Number(deviceDraft.httpPort) },
+      isChangingStoredPassword,
+      deviceDraft.name !== savedDraft.name ||
+        deviceDraft.type !== savedDraft.type ||
+        deviceDraft.ftpPort !== savedDraft.ftpPort ||
+        deviceDraft.telnetPort !== savedDraft.telnetPort,
+    );
     setPasswordError(null);
     setIsSaving(true);
     try {
       // Pre-commit reachability gate: never persist an unreachable device. When an
       // entered hostname can't be reached but the device is found on the LAN, calmly
       // steer the user to its IP address instead of failing silently.
-      const reachability = await evaluateNewDeviceReachability({
-        host: nextHost,
-        deviceHost: nextDeviceHost,
-        password: hasPassword ? effectivePassword : null,
-      });
-      if (reachability.status === "unreachable") {
+      const reachability = isLocalOnlyEdit
+        ? null
+        : await evaluateNewDeviceReachability({
+            host: nextHost,
+            deviceHost: nextDeviceHost,
+            password: hasPassword ? effectivePassword : null,
+          });
+      if (reachability?.status === "unreachable") {
         if (reachability.suggestedAddress) {
           setReachabilitySuggestion({ address: reachability.suggestedAddress });
           setHostnameError(null);
@@ -803,7 +823,7 @@ export default function SettingsPage() {
         }
         return;
       }
-      if (reachability.status === "needs-password" && isChangingPassword && hasPassword) {
+      if (reachability?.status === "needs-password" && isChangingPassword && hasPassword) {
         // The just-typed password was itself rejected by the device. A wrong password
         // must never be persisted (HARD9-004) — surface it as an auth failure, not a save.
         setPasswordError("Wrong password for this device.");
@@ -829,14 +849,19 @@ export default function SettingsPage() {
         hasPassword,
       });
       updateConfig(nextDeviceHost, hasPassword ? effectivePassword : undefined);
-      const verification = await switchSavedDevice(selectedSavedDevice.id);
-      if (isOfflineSwitchResult(verification)) {
-        throw new Error(
-          describeSwitchFailure(
-            verification,
-            `Unable to reach ${nextHost}. Check the hostname/IP address and confirm the device is powered on.`,
-          ),
-        );
+      // A local-only edit still re-applies to a live connection, but a device that is
+      // not connected is not made to answer: that wait and its failure are exactly what
+      // HARD27-037 removed.
+      if (!isLocalOnlyEdit || status.isConnected) {
+        const verification = await switchSavedDevice(selectedSavedDevice.id);
+        if (isOfflineSwitchResult(verification) && !isLocalOnlyEdit) {
+          throw new Error(
+            describeSwitchFailure(
+              verification,
+              `Unable to reach ${nextHost}. Check the hostname/IP address and confirm the device is powered on.`,
+            ),
+          );
+        }
       }
       setHostnameError(null);
       setPasswordInput("");
