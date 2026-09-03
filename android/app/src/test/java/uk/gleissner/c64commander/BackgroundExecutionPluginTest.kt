@@ -66,6 +66,38 @@ class BackgroundExecutionPluginTest {
     }
 
     @Test
+    fun aDurationThatFitsInAnIntegerStillReachesTheService() {
+        // Capacitor's PluginCall.getLong returns null unless the JSON parser already made the value
+        // a Long, so every tune shorter than about 24 days arrives as an Integer and its length was
+        // silently dropped — the lock screen showed a media control with no duration at all.
+        val shadowApp = Shadows.shadowOf(context as android.app.Application)
+        plugin.start(mock(PluginCall::class.java))
+        shadowApp.nextStartedService
+
+        val data = JSObject().apply {
+            put("title", "Nightshift")
+            put("artist", "Jeroen Tel")
+            put("durationMs", 195_000)
+        }
+        val call = spy(PluginCall(null, "BackgroundExecution", "callback-1", "setNowPlaying", data))
+        doNothing().`when`(call).resolve()
+
+        plugin.setNowPlaying(call)
+
+        assertEquals(195_000L, plugin.readDurationMs(call))
+        val queued = shadowApp.nextStartedService
+        assertNotNull("Expected the now-playing update to be queued behind the pending start", queued)
+        assertEquals(
+                BackgroundExecutionService.ACTION_SET_NOW_PLAYING,
+                queued?.action,
+        )
+        assertEquals(
+                195_000L,
+                queued?.getLongExtra(BackgroundExecutionService.EXTRA_NOW_PLAYING_DURATION_MS, -1L),
+        )
+    }
+
+    @Test
     fun startResolvesOnSuccess() {
         val call = mock(PluginCall::class.java)
         plugin.start(call)

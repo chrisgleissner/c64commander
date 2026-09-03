@@ -211,6 +211,14 @@ open class BackgroundExecutionPlugin : Plugin() {
         }
     }
 
+    /**
+     * `PluginCall.getLong` returns null unless the JSON parser already made the value a Long, and a
+     * tune's length in milliseconds fits in an Integer until it is about 24 days long. Reading the
+     * raw number and widening it here is what keeps the duration from being silently dropped.
+     */
+    internal fun readDurationMs(call: PluginCall): Long? =
+            (call.data.opt("durationMs") as? Number)?.toLong()
+
     @PluginMethod
     fun setNowPlaying(call: PluginCall) {
         try {
@@ -218,7 +226,7 @@ open class BackgroundExecutionPlugin : Plugin() {
                     context,
                     call.getString("title"),
                     call.getString("artist"),
-                    call.getLong("durationMs"),
+                    readDurationMs(call),
             )
             call.resolve()
         } catch (e: Exception) {
