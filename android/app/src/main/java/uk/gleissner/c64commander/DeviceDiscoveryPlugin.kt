@@ -259,6 +259,23 @@ class DeviceDiscoveryPlugin : Plugin() {
     return hosts
   }
 
+  // The pool has to drain every target inside the deadline. A sweep widened by a saved
+  // custom port (HARD27-020) is otherwise silently truncated: measured on a /24 with one
+  // saved device on port 8080, the port-80 pass finished but the 8080 pass reached only
+  // 172 of 254 addresses before the 10s budget ran out. Sizing the pool up puts no extra
+  // load on any single host, since each address is probed the same number of times either
+  // way; the requested concurrency stays the floor, so the common single-port scan is
+  // unchanged.
+  internal fun effectiveConcurrency(targetCount: Int, timeoutMs: Int, connectTimeoutMs: Int, requested: Int): Int {
+    if (targetCount <= 0 || timeoutMs <= 0 || connectTimeoutMs <= 0) return requested
+    val budgetMs = timeoutMs.toLong() * PROBE_BUDGET_PERCENT / 100
+    if (budgetMs <= 0) return requested
+    val work = targetCount.toLong() * connectTimeoutMs
+    val required = (work + budgetMs - 1) / budgetMs
+    val ceiling = MAX_PROBE_CONCURRENCY.coerceAtLeast(requested).toLong()
+    return required.coerceIn(requested.toLong(), ceiling).toInt()
+  }
+
   internal fun runProbes(
     targets: List<DiscoveryTarget>,
     timeoutMs: Int,
@@ -272,7 +289,7 @@ class DeviceDiscoveryPlugin : Plugin() {
     // own connect/read timeout elapses. Daemon threads can't keep the process alive or
     // accumulate as non-daemon stragglers across repeated scans (startup + rediscovery).
     val probePool =
-      Executors.newFixedThreadPool(maxConcurrency) { runnable ->
+      Executors.newFixedThreadPool(effectiveConcurrency(targets.size, timeoutMs, connectTimeoutMs, maxConcurrency)) { runnable ->
         Thread(runnable, "device-discovery-probe").apply { isDaemon = true }
       }
     val completionService = ExecutorCompletionService<ProbeOutcome>(probePool)
@@ -542,5 +559,9 @@ class DeviceDiscoveryPlugin : Plugin() {
 
   internal companion object {
     internal const val DEFAULT_HTTP_PORT = 80
+    internal const val MAX_PROBE_CONCURRENCY = 64
+    // Leave headroom in the deadline for probes that are slower than the connect timeout
+    // and for the completion loop itself.
+    internal const val PROBE_BUDGET_PERCENT = 80
   }
 }
