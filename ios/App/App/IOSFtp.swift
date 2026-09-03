@@ -174,6 +174,12 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
                 )
                 defer { session.disconnect() }
                 /*
+                 * The control channel keeps the clamped `timeout`; the bulk read gets the idle
+                 * timeout, which honours `timeoutMs: 0` as "no idle timeout". The songlengths
+                 * read from the Ultimate sends exactly that (HARD27-012).
+                 */
+                session.transferTimeout = FtpRequestOptions.resolveTransferTimeout(call.getInt("timeoutMs"))
+                /*
                  * The TypeScript client only sends a requestId when the read is cancellable
                  * (it has an abort signal or a progress listener), so an ordinary read
                  * registers nothing.
@@ -330,6 +336,25 @@ private extension FtpRequestOptions {
         self.traceDetails = traceDetails
     }
 
+    /*
+     * The data-transfer timeout, which is not the same thing as `resolveTimeout`.
+     *
+     * `timeoutMs == 0` explicitly means "no idle timeout" - the songlengths read from the
+     * Ultimate sends it, because a truncating timeout can wedge the firmware's FTP data channel.
+     * `resolveTimeout` clamped that to 1 s, so the read returned a truncated buffer and the
+     * songlengths import reported failure. A positive value is an idle timeout bounded the same
+     * way Android bounds it, to 10 minutes rather than the 60 s a whole-transfer deadline needed
+     * (HARD27-012).
+     *
+     * Returns nil for "no idle timeout".
+     */
+    static func resolveTransferTimeout(_ timeoutMs: Int?, defaultMs: Int = 8_000) -> TimeInterval? {
+        guard let timeoutMs else { return TimeInterval(defaultMs) / 1_000 }
+        if timeoutMs == 0 { return nil }
+        let clampedMs = min(max(timeoutMs, 1_000), 600_000)
+        return TimeInterval(clampedMs) / 1_000
+    }
+
     static func resolveTimeout(_ timeoutMs: Int?, defaultMs: Int = 8_000) -> TimeInterval {
         let clampedMs = min(max(timeoutMs ?? defaultMs, 1_000), 60_000)
         return TimeInterval(clampedMs) / 1_000
@@ -393,12 +418,20 @@ final class FtpSession {
     private var outputStream: OutputStream?
     /* Set only for a cancellable read; the data session inherits it in `readFile`. */
     var cancellationToken: FtpReadCancellationToken?
+    /*
+     * The idle timeout for a bulk data transfer, which the control channel's `timeout` is not:
+     * `timeout` bounds one command/response exchange, while this bounds a gap between chunks and
+     * is reset by every chunk that arrives. nil means no idle timeout. The data session inherits
+     * it in `readFile` (HARD27-012).
+     */
+    var transferTimeout: TimeInterval?
 
     init(host: String, port: Int, timeout: TimeInterval = 30, connectTimeout: TimeInterval? = nil) {
         self.host = host
         self.port = port
         self.timeout = timeout
         self.connectTimeout = connectTimeout ?? timeout
+        self.transferTimeout = timeout
     }
 
     func connect() throws {
@@ -471,8 +504,10 @@ final class FtpSession {
     func readFile(path: String) throws -> Data {
         let passiveAddress = try openPassiveDataChannel()
         let dataSession = FtpSession(host: passiveAddress.host, port: passiveAddress.port, timeout: timeout)
-        // The bytes arrive on the data channel, so that is the session the cancel has to reach.
+        // The bytes arrive on the data channel, so that is the session the cancel and the idle
+        // timeout both have to reach.
         dataSession.cancellationToken = cancellationToken
+        dataSession.transferTimeout = transferTimeout
         try dataSession.connectForData()
 
         _ = try sendAndRead("RETR \(path)", expectedPrefix: [125, 150])
@@ -696,7 +731,13 @@ final class FtpSession {
 
         var bytes: [UInt8] = []
         var buffer = [UInt8](repeating: 0, count: 4096)
-        let deadline = Date().addingTimeInterval(timeout)
+        /*
+         * An idle deadline, reset by every chunk, rather than one deadline for the whole
+         * transfer. A whole-transfer deadline capped every read at 60 s of wall time no matter
+         * how well it was progressing, so a large disk image over the c64u's slow FTP failed
+         * where Android succeeded (HARD27-012).
+         */
+        var deadline = FtpSession.idleDeadline(from: Date(), timeout: transferTimeout)
 
         while Date() <= deadline {
             if cancellationToken?.isCancelled == true {
@@ -718,9 +759,31 @@ final class FtpSession {
                 break
             }
             bytes.append(contentsOf: buffer.prefix(readCount))
+            /*
+             * Base64 encoding the buffered file costs another ~1.33x on top of the raw bytes, so
+             * an uncapped read of a large file (a .dnp disk pack, a firmware image) drives the app
+             * into memory pressure. Same 32 MiB cap and same message as Android (HARD9-044).
+             */
+            if bytes.count > FtpSession.maxReadFileBytes {
+                throw NativePluginError.operationFailed(
+                    "File exceeds the maximum readable size (\(FtpSession.maxReadFileBytes / (1024 * 1024))MB)"
+                )
+            }
+            deadline = FtpSession.idleDeadline(from: Date(), timeout: transferTimeout)
         }
 
         return bytes
+    }
+
+    static let maxReadFileBytes = 32 * 1024 * 1024
+
+    /*
+     * `Date.distantFuture` rather than a very large interval: adding one to a Date overflows on
+     * some inputs, and "no idle timeout" is exactly what distantFuture expresses.
+     */
+    static func idleDeadline(from now: Date, timeout: TimeInterval?) -> Date {
+        guard let timeout else { return Date.distantFuture }
+        return now.addingTimeInterval(timeout)
     }
 
     private func readAllLines() throws -> [String] {

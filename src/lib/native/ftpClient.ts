@@ -45,6 +45,21 @@ export type FtpReadOptions = {
   username?: string;
   password?: string;
   path: string;
+  /**
+   * Idle timeout for the data transfer in milliseconds: the longest gap allowed between two
+   * chunks, reset by every chunk that arrives. It is deliberately not a deadline for the whole
+   * transfer, so a slow-but-steady read of a large file completes.
+   *
+   * `0` means no idle timeout at all. Callers use it where a truncating timeout would be worse
+   * than a slow read - the songlengths database on the Ultimate is read that way, because a
+   * truncated read can wedge the firmware's FTP data channel. `cancelRead` is the safety valve
+   * for those, not a short timeout. Absent keeps the platform default (8 s); a positive value is
+   * bounded to [1 s, 10 min].
+   *
+   * Both native plugins are held to this. Android's `resolveTransferTimeoutMs` and iOS's
+   * `FtpRequestOptions.resolveTransferTimeout` implement it, and iOS mirrors it in
+   * `ios/native-tests` where `FtpRequestNormalizationTests` covers the three cases (HARD27-012).
+   */
   timeoutMs?: number;
   connectTimeoutMs?: number;
   traceContext?: NativeTraceContext;

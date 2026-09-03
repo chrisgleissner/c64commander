@@ -1,8 +1,33 @@
 import Foundation
 
 public enum FtpRequestNormalization {
+    /* The control channel: bounds one command/response exchange. Unchanged by HARD27-012. */
     public static func resolveTimeoutMs(_ raw: Int?, defaultMs: Int = 8_000) -> Int {
         min(max(raw ?? defaultMs, 1_000), 60_000)
+    }
+
+    /*
+     * The data transfer: an idle timeout between chunks, not a deadline for the whole transfer.
+     * Mirrors `FtpRequestOptions.resolveTransferTimeout` in `ios/App/App/IOSFtp.swift` and matches
+     * Android's `resolveTransferTimeoutMs`.
+     *
+     * `0` explicitly means "no idle timeout", returned here as nil. The songlengths read from the
+     * Ultimate sends it, because a truncating timeout can wedge the firmware's FTP data channel.
+     * The previous code ran that value through `resolveTimeoutMs`, which turned it into 1 s, so
+     * the read returned a truncated buffer and the songlengths import reported failure
+     * (HARD27-012).
+     */
+    public static func resolveTransferTimeoutMs(_ raw: Int?, defaultMs: Int = 8_000) -> Int? {
+        guard let raw else { return defaultMs }
+        if raw == 0 { return nil }
+        return min(max(raw, 1_000), 600_000)
+    }
+
+    /* Mirrors `FtpSession.maxReadFileBytes` and `FolderPickerPlugin.maxReadFileBytes`. */
+    public static let maxReadFileBytes = 32 * 1024 * 1024
+
+    public static func maximumReadableSizeMessage(maxBytes: Int = maxReadFileBytes) -> String {
+        "File exceeds the maximum readable size (\(maxBytes / (1024 * 1024))MB)"
     }
 
     public static func resolveTraceDetails(_ trace: [String: Any]?) -> [String: Any] {

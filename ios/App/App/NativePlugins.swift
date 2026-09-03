@@ -186,7 +186,7 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
                 let scoped = try self.resolveScopedUrl(from: uri, mustBeDirectory: false)
                 defer { scoped.stopAccessingSecurityScopedResource() }
 
-                let data = try Data(contentsOf: scoped)
+                let data = try self.readBoundedFile(at: scoped)
                 IOSDiagnostics.log(.debug, "File read completed", details: ["origin": "native", "operation": "readFile", "sizeBytes": data.count])
                 call.resolve(["data": data.base64EncodedString()])
             } catch {
@@ -194,6 +194,34 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
                 call.reject(error.localizedDescription)
             }
         }
+    }
+
+    /*
+     * Base64 encoding a fully-buffered file costs another ~1.33x on top of the raw bytes, so
+     * tapping a large file (a .dnp disk pack, a firmware image) through the picker drove the app
+     * into memory pressure. Android caps this at the same 32 MiB with the same message; iOS had
+     * no bound at all (HARD27-012, HARD9-044).
+     *
+     * The size is read from the file's attributes before the bytes are, so an oversized file is
+     * refused without first being loaded.
+     */
+    static let maxReadFileBytes = 32 * 1024 * 1024
+
+    static func maximumReadableSizeMessage(maxBytes: Int = maxReadFileBytes) -> String {
+        "File exceeds the maximum readable size (\(maxBytes / (1024 * 1024))MB)"
+    }
+
+    private func readBoundedFile(at url: URL) throws -> Data {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        if let size = attributes[.size] as? NSNumber, size.intValue > Self.maxReadFileBytes {
+            throw NativePluginError.operationFailed(Self.maximumReadableSizeMessage())
+        }
+        let data = try Data(contentsOf: url)
+        // Checked again: the attribute read and the byte read are not atomic.
+        if data.count > Self.maxReadFileBytes {
+            throw NativePluginError.operationFailed(Self.maximumReadableSizeMessage())
+        }
+        return data
     }
 
     @objc public func readFileFromTree(_ call: CAPPluginCall) {
@@ -213,7 +241,7 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
                 defer { root.stopAccessingSecurityScopedResource() }
 
                 let fileUrl = root.appendingPathComponent(safePath, isDirectory: false)
-                let data = try Data(contentsOf: fileUrl)
+                let data = try self.readBoundedFile(at: fileUrl)
                 IOSDiagnostics.log(.debug, "File read from tree completed", details: ["origin": "native", "operation": "readFileFromTree", "path": path, "sizeBytes": data.count])
                 call.resolve(["data": data.base64EncodedString()])
             } catch {
