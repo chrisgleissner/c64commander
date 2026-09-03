@@ -180,6 +180,10 @@ not-connected / empty / single-device).
   - Live View — button — `home-tile-home.section.live-view` — R✅ I✅ `[disabled: no device, or Live View off]`
 - **Connect a C64** (`home-connect-c64`) — button — `home-connect-c64-setup` — R✅ I✅
   `[visible only in the offline arrangement, in place of Quick Actions]`
+- **Lighting** — the card naming the look currently on the machine (chips `home-lighting-profile-chip`, `home-lighting-automation-chip`, `home-lighting-lock-chip` are display-only). Code-verified, not yet enumerated on hardware.
+  - Why this look? — button — `home-lighting-why` — opens the **Context Lens** sheet
+  - Hold look / Resume auto — button — `home-lighting-lock-toggle` — one button, two labels: it holds the current look against automation, or releases it again
+  - Studio — button — `home-lighting-studio` — opens **Lighting Studio** (§5.1)
 - **Header**
   - Quick menu — button — `app-bar-quick-menu` — R✅ I✅
   - Status badge — button — `unified-health-badge` — R✅ I✅
@@ -273,6 +277,7 @@ not-connected / empty / single-device).
   - (edit mode) endpoint — text — `home-stream-endpoint-*` — R✅ I✅
   - _Live View precedence:_ while Live View is receiving a feed (VIC↔video, Audio↔audio) that row goes **read-only** — edit/start/stop are hidden/disabled, replaced by a `home-stream-liveview-badge-*` chip + `home-stream-liveview-note-*` explanation (display-only); controls return when Live View stops.
 - **Live View** (`live-view-card`) _(Content Explorer A/V Mirror; mounted only when the device advertises streaming and `audio_mirror_enabled` or `video_mirror_enabled` is on)_
+  - Reset — button — `live-view-stop` — R✅ I✅ `[visible only while a feed is live]` — the card header's own action, so it is reachable while the card is collapsed. Labelled "Reset" to match every other card header; the accessible name is "Stop Live View", which is what it does — it stops both feeds, releasing the multicast receiver and the audio track
   - Audio — Listen / Listening toggle — button — `av-audio-toggle` — R✅ I✅ _(flag `audio_mirror_enabled`; controls the shared app-wide session; the live dot is display-only)_
   - Video — Watch / Watching toggle — button — `av-video-toggle` — R✅ I✅ _(flag `video_mirror_enabled`; the check-preview canvas and fps badge are display-only)_
   - Expand / collapse preview — button — `live-view-expand` — R✅ I✅ _(shown only while a video stream is active; toggles the check preview between check and immersive size)_
@@ -304,7 +309,7 @@ not-connected / empty / single-device).
 - Now playing, two lines: author · released — `playback-current-credits`; SID model · clock · tune position · length — `playback-current-facts`
 - Mute — button — `volume-mute` — R✅ I✅ `[disabled]` (icon-only; the accessible name carries the
   state, and on the on-device route it attenuates the samples rather than the device's volume)
-- Volume — slider — R✅ I✅ `[disabled]` — shares one row with Mute and the dB readout (`volume-row`);
+- Volume — slider — `volume-slider` — R✅ I✅ `[disabled]` — shares one row with Mute and the dB readout (`volume-row`);
   the former `volume-caption` label is gone, the readout is fixed-width so the row cannot reflow
 - Shuffle / Repeat — checkbox — `playback-shuffle|playback-repeat` — R✅ I✅ — **not rendered** while
   a SID Radio station drives the queue. A station owns the play order, so these are
@@ -313,7 +318,7 @@ not-connected / empty / single-device).
 - Reshuffle — button — `playlist-reshuffle` — R✅ I✅ `[disabled]` — likewise **not rendered** during
   a station. The row that holds all three is dropped with them, so a station leaves no empty or
   greyed row behind.
-- Duration — slider — R✅ I✅
+- Duration — slider — `duration-slider` — R✅ I✅
 - Duration override — text — `duration-input` (`mm:ss`) — R✅ I✅ ; Change — button — R✅ I✅
 - Add items to playlist — button — `add-items-to-playlist` — R✅ I✅ (opens picker)
 - Include subfolders — checkbox — `playback-recurse` — R✅ I✅ — in the **Add items** sheet
@@ -324,8 +329,11 @@ not-connected / empty / single-device).
 - Type filters: SID / MOD / PRG / CRT / Disk — checkbox — `playlist-type-*` — R✅ I✅
 - Select all — button — `playlist-list-toggle-select-all` — R✅ I✅
 - HVSC: Download / Ingest / Reindex / Reset — button — R✅ I✅ _(flag `hvsc_enabled`)_
+- HVSC: Stop — button — `hvsc-stop` — R✅ I✅ `[visible only while an install, ingest or reindex is running]` — cancels the operation in progress
+- **HVSC preparation sheet** — the progress surface those long operations open. Its footer holds one set of actions per outcome, so at most two are on screen at a time: Browse HVSC (`hvsc-preparation-browse`, on success), Cancel and Retry (`hvsc-preparation-cancel`, `hvsc-preparation-retry`, on failure), and Cancel alone while it is still running. The phase, throughput and error lines (`hvsc-preparation-{phase,throughput,error}`) are display-only
 - Game Mode — button — `play-open-game-mode` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — starts the remembered picture/sound and opens the **Remote Input sheet** in Game Mode (§5). **Leads** Remote Input for a `prg`/`crt`/`disk` item (overwhelmingly likely to be a game) and **follows** it for a `sid`/`mod` item.
 - Remote Input — button — `play-open-controller` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — opens the **Remote Input sheet** (§5). Both controller actions sit in the sheet-actions row **after** SID Radio and Liked Tunes: all of them open a sheet, and the two station actions are about what plays next while these leave the music behind.
+- Tune notes — expand/collapse — `tune-details-toggle` — R✅ I✅ — reveals `tune-details-body`, which carries the STIL entry for the tune. The chevron leads the label and the button is only as wide as its content, so no part of its target sits beneath the favourite action on the line above
 - Progress bar (seek) — button — `playback-progress-seek` — R✅ I✅ — tap or drag to jump within the tune; **also operable without a pointer**: `ArrowLeft`/`ArrowRight` step ±2%. Rendered only for audio this device renders (see _Listen on_ below); on the C64 route the bar is a plain indicator (`playback-progress`) and not focusable, because the machine plays the SID on its own chip and cannot be scrubbed.
 - Previous / Next **held** — scrub — same `playlist-prev|next` buttons — R✅ I✅ — a hold scrubs the current tune instead of changing track (local playback only); a tap still skips.
 
@@ -904,6 +912,76 @@ Per-entry testids `keypad-quick-menu-tab-<label>`, `keypad-quick-menu-game-mode`
 `keypad-quick-menu-diagnostics`, `keypad-quick-menu-switch-device`,
 `keypad-quick-menu-sections-expand`, `keypad-quick-menu-sections-collapse`,
 `keypad-quick-menu-section-descriptions`.
+
+### 5.1 Lighting Studio (`lighting-studio-sheet`)
+
+Opened from the Home lighting card's **Studio** button (`home-lighting-studio`,
+§4.1). Code-verified against source, **not yet enumerated on hardware** — the R/I
+marks are omitted below rather than guessed, the way §3's Content Explorer note
+describes for the flag-gated controls there.
+
+The sheet has a header, a device mockup, three sections and a footer. Listed in
+DOM order, which is the order the focus ring walks.
+
+**Header** (`lighting-header-actions`)
+
+- Why — button — `lighting-open-context-lens` — opens the **Context Lens** sheet
+  (`lighting-context-lens-sheet`), which explains why the current look was chosen
+- Unlock look — button — `lighting-unlock` `[visible only while a manual lock is held]`
+
+**Device mockup** (`lighting-device-mockup`) — the C64 picture that chooses which
+surface is being edited. It is a graphic, so all but one of its `lighting-mockup-*`
+ids mark geometry rather than controls.
+
+- Case / Keys — button — `lighting-select-surface-case`, `lighting-select-surface-keyboard` —
+  Keys is **not rendered** when the connected machine has no keyboard lighting
+  (`lighting-keyboard-unsupported` explains why in its place)
+- Case shell — `lighting-mockup-case-shell` — the case drawing itself carries
+  `role="button"` and the accessible name "Edit case lighting", so tapping the picture
+  selects the case surface too. A second route to `lighting-select-surface-case` rather
+  than a control of its own
+
+**Profiles** (`lighting-profiles-section`)
+
+- Profile name — text — `lighting-profile-save-name`
+- Save — button — `lighting-profile-save` — saves the current draft under that name
+- Selected profile (`lighting-profile-detail-card`), for the profile a chip selects:
+  - Rename field — text — `lighting-profile-rename-input`
+  - Apply — button — `lighting-profile-apply`
+  - Duplicate — button — `lighting-profile-duplicate`
+  - Pin / Unpin — button — `lighting-profile-pin`
+  - Rename — button — `lighting-profile-rename`
+  - Delete — button — `lighting-profile-delete`
+
+**Compose** (`lighting-compose-section`)
+
+- Link mode — select — `lighting-link-mode` — how the two surfaces track each other
+
+**Automation** (`lighting-automation-section`) — four independent rules, each a switch
+with its own controls beneath it, revealed only while that switch is on.
+
+- Connection sentinel — checkbox — `lighting-connection-sentinel-toggle` — maps link
+  state to looks; a per-state profile select sits beneath it for each state
+- Quiet Launch — checkbox — `lighting-quiet-launch-toggle` — a calm look at startup,
+  handed off afterwards; Launch profile — select — `lighting-quiet-launch-profile`
+- Source identity map — checkbox — `lighting-source-identity-toggle` — reflects the
+  active source on Play and Disks; a per-bucket select sits beneath it for each bucket
+- Circadian palette — checkbox — `lighting-circadian-toggle` — offline sun phases. Its
+  location can come from three places and all three are shown at once:
+  - Use device location — checkbox — `lighting-use-device-location` ; Refresh — button —
+    `lighting-request-device-location` (status in `lighting-device-location-status`)
+  - Latitude / Longitude — number — `lighting-manual-latitude`, `lighting-manual-longitude`
+    (errors in `lighting-manual-{latitude,longitude}-error`) ; Use manual coordinates —
+    button — `lighting-apply-manual-coordinates`
+  - City — text — `lighting-city-search` ; results `lighting-city-results` ; Use city —
+    button — `lighting-apply-city`
+
+**Footer**
+
+- Clear preview — button — `lighting-clear-preview` (label shortens to "Clear" on the
+  compact profile)
+- Preview — button — `lighting-preview`
+- Apply — button — `lighting-apply-draft`
 
 ---
 

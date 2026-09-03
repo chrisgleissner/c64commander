@@ -54,7 +54,6 @@ export const readInstalledMajors = (packageJson) => {
   return majors;
 };
 
-/* The line is matched by its label so a reordering or an added entry does not break it. */
 export const findStackLine = (markdown) =>
   markdown.split("\n").find((line) => line.startsWith("- **UI/runtime**:")) ?? null;
 
@@ -69,7 +68,6 @@ export const findStackDrift = (stackLine, majors) => {
       drift.push({ label, reason: `${pkg} is not a dependency, so the line cannot be checked` });
       continue;
     }
-    /* `React` is a prefix of `React Router`, so the label must be followed by its number. */
     const stated = new RegExp(`\\b${label} (\\d+)`).exec(stackLine);
     if (stated === null) {
       drift.push({ label, reason: `the stack line does not state a ${label} version` });
@@ -285,39 +283,6 @@ export const EXCLUSIONS = new Map([
  * Entries are grouped by the surface they belong to, in the order the inventory would.
  */
 export const UNDOCUMENTED_BASELINE = new Set([
-  /* Lighting Studio dialog and its Home entry points (no inventory section yet) */
-  "home-lighting-lock-toggle",
-  "home-lighting-studio",
-  "home-lighting-why",
-  "lighting-apply-city",
-  "lighting-apply-draft",
-  "lighting-apply-manual-coordinates",
-  "lighting-circadian-toggle",
-  "lighting-city-search",
-  "lighting-clear-preview",
-  "lighting-connection-sentinel-toggle",
-  "lighting-link-mode",
-  "lighting-manual-latitude",
-  "lighting-manual-longitude",
-  "lighting-mockup-case-shell",
-  "lighting-open-context-lens",
-  "lighting-preview",
-  "lighting-profile-apply",
-  "lighting-profile-delete",
-  "lighting-profile-duplicate",
-  "lighting-profile-pin",
-  "lighting-profile-rename",
-  "lighting-profile-rename-input",
-  "lighting-profile-save",
-  "lighting-profile-save-name",
-  "lighting-quiet-launch-profile",
-  "lighting-quiet-launch-toggle",
-  "lighting-request-device-location",
-  "lighting-select-surface-case",
-  "lighting-select-surface-keyboard",
-  "lighting-source-identity-toggle",
-  "lighting-unlock",
-  "lighting-use-device-location",
   /* Diagnostics: header, overflow, share, clear-all and the connection actions */
   "connection-actions-toggle",
   "connection-edit-cancel",
@@ -385,20 +350,12 @@ export const UNDOCUMENTED_BASELINE = new Set([
   "archive-search-button",
   "archive-select-all",
   "source-entry-row",
-  /* Play: controls whose inventory entry names no testid, plus the liked-tunes rows */
-  "duration-slider",
+  /* Play: the liked-tunes rows and the recently-played overflow row */
   "liked-tune-play",
   "liked-tune-unlike",
   "recently-played-other-row",
-  "tune-details-toggle",
-  "volume-slider",
-  /* Live View, HVSC preparation and the long-running stop actions */
+  /* Live View: adopting a sender the app is currently filtering out */
   "av-mirror-adopt-sender",
-  "hvsc-preparation-browse",
-  "hvsc-preparation-cancel",
-  "hvsc-preparation-retry",
-  "hvsc-stop",
-  "live-view-stop",
   /* Snapshots and REU restore */
   "restore-reu-load",
   "restore-reu-preload",
