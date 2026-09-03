@@ -40,6 +40,8 @@ import uk.gleissner.c64commander.hvsc.ExtractedSong
 import uk.gleissner.c64commander.hvsc.ExtractionProgress
 import uk.gleissner.c64commander.hvsc.HvscArchiveExtractor
 import uk.gleissner.c64commander.hvsc.HvscArchiveMode
+import uk.gleissner.c64commander.hvsc.HvscDownloadCancelledException
+import uk.gleissner.c64commander.hvsc.HvscResumableDownload
 import uk.gleissner.c64commander.hvsc.InsufficientMemoryException
 import uk.gleissner.c64commander.hvsc.MemoryBudget
 
@@ -50,6 +52,7 @@ open class HvscIngestionPlugin : Plugin() {
   private var activeJob: Job? = null
   private val cancellationRequested = AtomicBoolean(false)
   private val archiveExtractor: HvscArchiveExtractor by lazy { createArchiveExtractor() }
+  private val resumableDownload: HvscResumableDownload by lazy { createResumableDownload() }
   private val trimMemoryCallbacks =
           object : ComponentCallbacks2 {
             override fun onConfigurationChanged(newConfig: android.content.res.Configuration) = Unit
@@ -68,6 +71,7 @@ open class HvscIngestionPlugin : Plugin() {
   private companion object {
     private const val MAX_DELETION_LIST_SIZE_BYTES = 10L * 1024 * 1024
     private const val MAX_ARCHIVE_CHUNK_SIZE_BYTES = 1024 * 1024
+    private const val PART_FILE_SUFFIX = ".part"
     private val UNSUPPORTED_SEVEN_Z_METHOD_PATTERN =
             Pattern.compile("Unsupported compression method \\[(.*?)\\]", Pattern.CASE_INSENSITIVE)
     /**
@@ -110,6 +114,8 @@ open class HvscIngestionPlugin : Plugin() {
 
   /** Overridable so a Robolectric test can supply a known figure; its [StatFs] shadow reports 0. */
   internal open fun readAvailableBytes(dir: File): Long = StatFs(dir.absolutePath).availableBytes
+
+  internal open fun createResumableDownload(): HvscResumableDownload = HvscResumableDownload()
 
   internal open fun createArchiveExtractor(): HvscArchiveExtractor {
     return DefaultHvscArchiveExtractor { resolveBundledSevenZipExecutable() }
@@ -937,6 +943,95 @@ open class HvscIngestionPlugin : Plugin() {
       )
       call.reject(error.message, error)
     }
+  }
+
+  /**
+   * Downloads an HVSC archive into a `.part` sidecar and promotes it by rename, so an interrupted
+   * transfer resumes with a `Range` request instead of restarting. Capacitor's
+   * `Filesystem.downloadFile` truncates its destination, so it cannot serve this. See HARD27-028.
+   */
+  @PluginMethod
+  fun downloadArchive(call: PluginCall) {
+    val relativeArchivePath = call.getString("relativeArchivePath")
+    val url = call.getString("url")
+    val expectedTotalBytes: Long? =
+            if (call.data.has("expectedTotalBytes")) call.data.getLong("expectedTotalBytes")
+            else null
+
+    if (relativeArchivePath.isNullOrBlank()) {
+      call.reject("relativeArchivePath is required")
+      return
+    }
+    if (url.isNullOrBlank()) {
+      call.reject("url is required")
+      return
+    }
+    if (activeJob?.isActive == true) {
+      call.reject("HVSC ingestion already running")
+      return
+    }
+
+    cancellationRequested.set(false)
+    activeJob =
+            scope.launch {
+              val downloadJob = coroutineContext[Job]
+              try {
+                val targetFile = File(context.filesDir, relativeArchivePath)
+                val partFile = File(targetFile.parentFile, "${targetFile.name}$PART_FILE_SUFFIX")
+                val outcome =
+                        resumableDownload.download(
+                                url = url,
+                                partFile = partFile,
+                                targetFile = targetFile,
+                                expectedTotalBytes = expectedTotalBytes?.takeIf { it > 0L },
+                                isCancelled = { cancellationRequested.get() || downloadJob?.isActive == false },
+                                onProgress = { downloadedBytes, totalBytes ->
+                                  emitDownloadProgress(relativeArchivePath, downloadedBytes, totalBytes)
+                                },
+                        )
+                AppLogger.info(
+                        pluginContextOrNull(),
+                        logTag,
+                        "HVSC archive download completed: total=${outcome.totalBytes} resumedFrom=${outcome.resumedFromBytes} transferred=${outcome.transferredBytes}",
+                        "HvscIngestionPlugin",
+                )
+                val payload = JSObject()
+                payload.put("totalBytes", outcome.totalBytes)
+                payload.put("resumedFromBytes", outcome.resumedFromBytes)
+                payload.put("transferredBytes", outcome.transferredBytes)
+                call.resolve(payload)
+              } catch (error: CancellationException) {
+                call.reject("HVSC download cancelled", "CANCELLED")
+                throw error
+              } catch (error: HvscDownloadCancelledException) {
+                call.reject("HVSC download cancelled", "CANCELLED")
+              } catch (error: Exception) {
+                AppLogger.error(
+                        pluginContextOrNull(),
+                        logTag,
+                        "HVSC archive download failed",
+                        "HvscIngestionPlugin",
+                        error,
+                        traceFields(call),
+                )
+                call.reject(error.message ?: "HVSC archive download failed", error)
+              }
+            }
+  }
+
+  private fun emitDownloadProgress(
+          relativeArchivePath: String,
+          downloadedBytes: Long,
+          totalBytes: Long,
+  ) {
+    val payload = JSObject()
+    payload.put("relativeArchivePath", relativeArchivePath)
+    payload.put("downloadedBytes", downloadedBytes)
+    payload.put("totalBytes", totalBytes)
+    if (totalBytes > 0L) {
+      payload.put("percent", ((downloadedBytes.toDouble() / totalBytes.toDouble()) * 100.0).toInt())
+    }
+    notifyListeners("hvscDownloadProgress", payload)
   }
 
   @PluginMethod

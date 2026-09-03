@@ -14,6 +14,7 @@ import {
   getHvscCacheDir,
   writeCachedArchive,
   deleteCachedArchive,
+  deleteCachedArchivePart,
   writeCachedArchiveMarker,
   readCachedArchiveMarker,
   MAX_BRIDGE_READ_BYTES,
@@ -22,6 +23,7 @@ import { HvscIngestion } from "@/lib/native/hvscIngestion";
 import { addLog } from "@/lib/logging";
 import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
 import { createHvscCancellationError } from "./hvscCancellation";
+import { downloadArchiveWithResume } from "./hvscResumableDownload";
 
 const HVSC_NATIVE_ARCHIVE_READ_CHUNK_BYTES = 512 * 1024;
 const nativeArchiveDownloads = new Map<string, Promise<unknown>>();
@@ -577,6 +579,127 @@ export const ensureNotCancelledWith = (
   }
 };
 
+type FilesystemPluginDownloadOptions = {
+  archivePath: string;
+  archiveName: string;
+  downloadUrl: string;
+  cacheDir: string;
+  totalBytesHint: number | null;
+  cancelToken: string;
+  cancelTokens: Map<string, { cancelled: boolean }>;
+  emitProgress: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void;
+  ensureNotCancelled: () => void;
+};
+
+/**
+ * The whole-file download: Capacitor's `Filesystem.downloadFile`, with a `fetch` retry for the
+ * "file exists" rejection. It cannot resume, because the plugin opens its destination with
+ * `FileOutputStream(file, false)`. Used where the resumable native method is unimplemented.
+ */
+const downloadArchiveViaFilesystemPlugin = async (
+  options: FilesystemPluginDownloadOptions,
+): Promise<{ expectedSizeBytes: number | null; buffer: Uint8Array | null }> => {
+  const {
+    archivePath,
+    archiveName,
+    downloadUrl,
+    cacheDir,
+    totalBytesHint,
+    cancelToken,
+    cancelTokens,
+    emitProgress,
+    ensureNotCancelled,
+  } = options;
+  let observedTotalBytes: number | null = totalBytesHint;
+  let downloadedBuffer: Uint8Array | null = null;
+  let lastReported = 0;
+  let pollingTimer: ReturnType<typeof setInterval> | null = null;
+  let progressListener: { remove: () => Promise<void> } | null = null;
+  let totalBytes = totalBytesHint ?? null;
+  let pollErrorLogged = false;
+  const pollSize = async () => {
+    if (cancelTokens.get(cancelToken)?.cancelled) {
+      return;
+    }
+    try {
+      const stat = await Filesystem.stat({
+        directory: Directory.Data,
+        path: `${cacheDir}/${archivePath}`,
+      });
+      const size = stat.size ?? 0;
+      if (size > lastReported) {
+        lastReported = size;
+        emitDownloadProgress(emitProgress, archiveName, size, totalBytes);
+      }
+    } catch (error) {
+      if (!pollErrorLogged) {
+        pollErrorLogged = true;
+        addLog("warn", "HVSC download progress stat failed", {
+          archivePath,
+          error: (error as Error).message,
+        });
+      }
+    }
+  };
+  try {
+    pollingTimer = setInterval(pollSize, 400);
+    if (Filesystem.addListener) {
+      progressListener = await Filesystem.addListener("progress", (status) => {
+        if (status.url && status.url !== downloadUrl) return;
+        const progress = resolveDownloadProgressBytes(status);
+        totalBytes = progress.total ?? totalBytes;
+        observedTotalBytes = progress.total ?? observedTotalBytes;
+        if (progress.loaded >= lastReported) {
+          lastReported = progress.loaded;
+          emitDownloadProgress(emitProgress, archiveName, progress.loaded, totalBytes);
+        }
+      });
+    }
+    const nativeDownload = Filesystem.downloadFile({
+      url: downloadUrl,
+      directory: Directory.Data,
+      path: `${cacheDir}/${archivePath}`,
+      // Without this the plugin dispatches NO progress events at all, so the listener registered
+      // above never fired and the bar sat at zero for the whole download — which, for the full
+      // 81 MiB archive, is most of the wait. The 400 ms stat poll below cannot cover for it
+      // either: the file is not readable at its final path until the transfer completes.
+      progress: true,
+    });
+    nativeArchiveDownloads.set(archivePath, nativeDownload);
+    try {
+      await nativeDownload;
+    } finally {
+      if (nativeArchiveDownloads.get(archivePath) === nativeDownload) {
+        nativeArchiveDownloads.delete(archivePath);
+      }
+    }
+    ensureNotCancelled();
+  } catch (error) {
+    await deleteCachedArchive(archivePath);
+    if (!isExistsError(error)) throw error;
+    ensureNotCancelled();
+    const response = await fetch(downloadUrl, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+    }
+    const buffer = new Uint8Array(await response.arrayBuffer());
+    await writeCachedArchive(archivePath, buffer);
+    emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, buffer.byteLength);
+    downloadedBuffer = buffer;
+  } finally {
+    if (pollingTimer) clearInterval(pollingTimer);
+    if (progressListener) {
+      await progressListener.remove().catch((error) => {
+        addLog("warn", "Failed to remove HVSC native download progress listener", {
+          archiveName,
+          error: (error as Error).message,
+        });
+      });
+    }
+  }
+  return { expectedSizeBytes: observedTotalBytes, buffer: downloadedBuffer };
+};
+
 export const downloadArchive = async (options: DownloadArchiveOptions): Promise<Uint8Array | null> => {
   const { plan, archiveName, archivePath, downloadUrl, cancelToken, cancelTokens, emitProgress } = options;
   const retainInMemoryBuffer = options.retainInMemoryBuffer ?? false;
@@ -609,92 +732,43 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
     expectedSizeBytes = totalBytesHint;
     if (shouldUseNativeDownload()) {
       const cacheDir = getHvscCacheDir();
-      let lastReported = 0;
-      let pollingTimer: ReturnType<typeof setInterval> | null = null;
-      let progressListener: { remove: () => Promise<void> } | null = null;
-      let totalBytes = totalBytesHint ?? null;
-      let pollErrorLogged = false;
-      const pollSize = async () => {
-        if (cancelTokens.get(cancelToken)?.cancelled) {
-          return;
-        }
-        try {
-          const stat = await Filesystem.stat({
-            directory: Directory.Data,
-            path: `${cacheDir}/${archivePath}`,
-          });
-          const size = stat.size ?? 0;
-          if (size > lastReported) {
-            lastReported = size;
-            emitDownloadProgress(emitProgress, archiveName, size, totalBytes);
+      const relativeArchivePath = `${cacheDir}/${archivePath}`;
+      let resumeTotalBytes = totalBytesHint ?? null;
+      const resumed = await downloadArchiveWithResume({
+        relativeArchivePath,
+        archiveName,
+        downloadUrl,
+        expectedTotalBytes: totalBytesHint ?? null,
+        onProgress: (downloadedBytes, totalBytes) => {
+          if (totalBytes) {
+            resumeTotalBytes = totalBytes;
+            expectedSizeBytes = totalBytes;
           }
-        } catch (error) {
-          if (!pollErrorLogged) {
-            pollErrorLogged = true;
-            addLog("warn", "HVSC download progress stat failed", {
-              archivePath,
-              error: (error as Error).message,
-            });
-          }
-        }
-      };
-      try {
-        pollingTimer = setInterval(pollSize, 400);
-        if (Filesystem.addListener) {
-          progressListener = await Filesystem.addListener("progress", (status) => {
-            if (status.url && status.url !== downloadUrl) return;
-            const progress = resolveDownloadProgressBytes(status);
-            totalBytes = progress.total ?? totalBytes;
-            expectedSizeBytes = progress.total ?? expectedSizeBytes;
-            if (progress.loaded >= lastReported) {
-              lastReported = progress.loaded;
-              emitDownloadProgress(emitProgress, archiveName, progress.loaded, totalBytes);
-            }
-          });
-        }
-        const nativeDownload = Filesystem.downloadFile({
-          url: downloadUrl,
-          directory: Directory.Data,
-          path: `${cacheDir}/${archivePath}`,
-          // Without this the plugin dispatches NO progress events at all, so the listener registered
-          // above never fired and the bar sat at zero for the whole download — which, for the full
-          // 81 MiB archive, is most of the wait. The 400 ms stat poll below cannot cover for it
-          // either: the file is not readable at its final path until the transfer completes.
-          progress: true,
+          emitDownloadProgress(emitProgress, archiveName, downloadedBytes, resumeTotalBytes);
+        },
+      });
+      if (resumed) {
+        ensureNotCancelled();
+        if (resumed.totalBytes > 0) expectedSizeBytes = resumed.totalBytes;
+      } else {
+        const fallback = await downloadArchiveViaFilesystemPlugin({
+          archivePath,
+          archiveName,
+          downloadUrl,
+          cacheDir,
+          totalBytesHint,
+          cancelToken,
+          cancelTokens,
+          emitProgress,
+          ensureNotCancelled,
         });
-        nativeArchiveDownloads.set(archivePath, nativeDownload);
-        try {
-          await nativeDownload;
-        } finally {
-          if (nativeArchiveDownloads.get(archivePath) === nativeDownload) {
-            nativeArchiveDownloads.delete(archivePath);
-          }
-        }
-        ensureNotCancelled();
-      } catch (error) {
-        await deleteCachedArchive(archivePath);
-        if (!isExistsError(error)) throw error;
-        ensureNotCancelled();
-        const response = await fetch(downloadUrl, { cache: "no-store" });
-        if (!response.ok) {
-          throw new Error(`Download failed: ${response.status} ${response.statusText}`);
-        }
-        const buffer = new Uint8Array(await response.arrayBuffer());
-        await writeCachedArchive(archivePath, buffer);
-        emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, buffer.byteLength);
-        downloadedBufferForMarker = buffer;
-        inMemoryBuffer = retainInMemoryBuffer ? buffer : null;
-      } finally {
-        if (pollingTimer) clearInterval(pollingTimer);
-        if (progressListener) {
-          await progressListener.remove().catch((error) => {
-            addLog("warn", "Failed to remove HVSC native download progress listener", {
-              archiveName,
-              error: (error as Error).message,
-            });
-          });
-        }
+        expectedSizeBytes = fallback.expectedSizeBytes ?? expectedSizeBytes;
+        downloadedBufferForMarker = fallback.buffer;
+        inMemoryBuffer = retainInMemoryBuffer ? fallback.buffer : null;
       }
+      // The sidecar only outlives a download that was interrupted; a promotion by rename has
+      // already consumed it, and the whole-file path never wrote one.
+      await deleteCachedArchivePart(archivePath);
       let nativeDownloadedSize: number | null = null;
       try {
         const postStat = await Filesystem.stat({

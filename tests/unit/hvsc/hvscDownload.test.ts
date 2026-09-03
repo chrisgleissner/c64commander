@@ -42,6 +42,7 @@ vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
   getHvscCacheDir: vi.fn(() => "hvsc/cache"),
   writeCachedArchive: vi.fn(async () => undefined),
   deleteCachedArchive: vi.fn(async () => undefined),
+  deleteCachedArchivePart: vi.fn(async () => undefined),
   writeCachedArchiveMarker: vi.fn(async () => undefined),
   readCachedArchiveMarker: vi.fn(async () => null),
   createLibraryStagingDir: vi.fn(async () => undefined),

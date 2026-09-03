@@ -63,6 +63,7 @@ vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
   resetSonglengthsCache: (...args: unknown[]) => mocks.resetSonglengthsCache(...args),
   writeCachedArchive: vi.fn(async () => undefined),
   deleteCachedArchive: vi.fn(async () => undefined),
+  deleteCachedArchivePart: vi.fn(async () => undefined),
   writeCachedArchiveMarker: vi.fn(async () => undefined),
   readCachedArchiveMarker: (...args: unknown[]) => mocks.readCachedArchiveMarker(...args),
   createLibraryStagingDir: vi.fn(async () => undefined),
