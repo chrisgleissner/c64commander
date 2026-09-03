@@ -373,7 +373,39 @@ public final class DeviceDiscoveryPlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "DeviceDiscovery"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "discover", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getNetworkStatus", returnType: CAPPluginReturnPromise),
     ]
+
+    /*
+     * One monitor for the life of the process. `getNetworkStatus` is called on every foreground
+     * discovery and on every background probe, whose default cadence is 5 s, so starting and
+     * cancelling an `NWPathMonitor` per call would be the wrong shape - and `currentPath` is not
+     * populated until the monitor has delivered its first update, which is why the first caller
+     * waits for it.
+     */
+    private static let pathMonitorQueue = DispatchQueue(label: "uk.gleissner.c64commander.networkpath")
+    private static let pathMonitor = NWPathMonitor()
+    private static var pathMonitorStarted = false
+    private static let firstPathUpdate = DispatchSemaphore(value: 0)
+    private static let startLock = NSLock()
+
+    private static func startPathMonitorIfNeeded() {
+        startLock.lock()
+        defer { startLock.unlock() }
+        guard !pathMonitorStarted else { return }
+        pathMonitorStarted = true
+        pathMonitor.pathUpdateHandler = { _ in
+            firstPathUpdate.signal()
+        }
+        pathMonitor.start(queue: pathMonitorQueue)
+    }
+
+    /*
+     * Bounded, because a caller that blocks on connectivity is worse than one that answers
+     * "unknown". The TypeScript side already applies its own timeout and treats a miss as
+     * unknown; this only has to avoid reporting "offline" for a path that has not arrived yet.
+     */
+    private static let firstUpdateWaitSeconds = 0.5
 
     @objc public func discover(_ call: CAPPluginCall) {
         IOSDiagnostics.log(.info, "Device discovery is not implemented on iOS", details: ["origin": "native"])
@@ -383,6 +415,28 @@ public final class DeviceDiscoveryPlugin: CAPPlugin, CAPBridgedPlugin {
             "elapsedMs": 0,
             "unsupported": true,
         ])
+    }
+
+    /*
+     * Answers the same contract as Android's `DeviceDiscoveryPlugin.getNetworkStatus`:
+     * `supported` says the platform can tell, `online` says a usable route exists. Android walks
+     * the interface list and rejects loopback and link-local addresses; `NWPath.status` already
+     * makes that distinction, reporting `.satisfied` only for a path that can carry traffic.
+     * Without this the TypeScript caller treated connectivity as unknown on every probe
+     * (HARD27-003).
+     */
+    @objc public func getNetworkStatus(_ call: CAPPluginCall) {
+        Self.startPathMonitorIfNeeded()
+        DispatchQueue.global(qos: .userInitiated).async {
+            if Self.pathMonitor.currentPath.status == .requiresConnection {
+                _ = Self.firstPathUpdate.wait(timeout: .now() + Self.firstUpdateWaitSeconds)
+            }
+            let status = Self.pathMonitor.currentPath.status
+            call.resolve([
+                "supported": true,
+                "online": status == .satisfied,
+            ])
+        }
     }
 }
 

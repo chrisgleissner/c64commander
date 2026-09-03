@@ -81,10 +81,8 @@ export const KNOWN_IOS_METHOD_GAPS = new Map<string, Map<string, string>>([
     "FtpClient",
     new Map([
       ["listDirectoryRecursive", "HARD27-003: folder import rejects on iOS; callers fall back to the JS walker"],
-      ["cancelRead", "HARD27-003: an aborted read logs an error-level rejection on every page leave"],
     ]),
   ],
-  ["DeviceDiscovery", new Map([["getNetworkStatus", "HARD27-003: every 5 s background probe logs one info entry"]])],
   [
     "BackgroundExecution",
     new Map([
@@ -170,12 +168,12 @@ describe("iOS plugin method parity", () => {
     }
   });
 
-  it("reports a newly added TypeScript method as a gap", () => {
-    // The pre-fix state of HARD27-003: FtpClient.cancelRead with nothing recording it.
+  it("reports a TypeScript method that Swift does not implement and nothing records", () => {
+    // The state HARD27-003 found: a declared method with no Swift counterpart and no record.
     const withoutRecord = new Map(KNOWN_IOS_METHOD_GAPS);
-    withoutRecord.set("FtpClient", new Map([["listDirectoryRecursive", "still recorded, so only cancelRead reports"]]));
+    withoutRecord.set("FtpClient", new Map());
     const { unexpected } = findParityGaps(swift, typescript, withoutRecord);
-    expect(unexpected).toContainEqual({ jsName: "FtpClient", method: "cancelRead" });
+    expect(unexpected).toContainEqual({ jsName: "FtpClient", method: "listDirectoryRecursive" });
   });
 
   it("reports a recorded gap that Swift now implements", () => {

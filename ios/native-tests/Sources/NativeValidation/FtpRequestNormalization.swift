@@ -31,6 +31,7 @@ public enum FtpPluginContract {
         "writeFile",
         "makeDirectory",
         "pingFtp",
+        "cancelRead",
     ]
 
     public static func exportedMethodNames(source: String) -> [String] {

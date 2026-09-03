@@ -42,6 +42,63 @@ private struct FtpWriteRequestOptions {
     }
 }
 
+/*
+ * Cancellation for an in-flight `readFile`.
+ *
+ * The plugin runs every FTP call on one serial queue, so a `cancelRead` dispatched onto that queue
+ * would sit behind the very read it is meant to stop. Instead the cancelling call sets a flag from
+ * its own thread and the read loop notices it on its next poll, which is at most 50 ms later. The
+ * alternative - closing the streams from another thread - races `disconnect()`, which nils them
+ * while the read loop is using them.
+ */
+final class FtpReadCancellationToken {
+    private let lock = NSLock()
+    private var cancelled = false
+
+    var isCancelled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancelled
+    }
+
+    func cancel() {
+        lock.lock()
+        defer { lock.unlock() }
+        cancelled = true
+    }
+}
+
+final class FtpReadCancellationRegistry {
+    static let shared = FtpReadCancellationRegistry()
+
+    private let lock = NSLock()
+    private var tokens: [String: FtpReadCancellationToken] = [:]
+
+    func register(requestId: String) -> FtpReadCancellationToken {
+        let token = FtpReadCancellationToken()
+        lock.lock()
+        defer { lock.unlock() }
+        tokens[requestId] = token
+        return token
+    }
+
+    func release(requestId: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        tokens.removeValue(forKey: requestId)
+    }
+
+    /* Returns false when the read already finished, which is not an error for any caller. */
+    @discardableResult
+    func cancel(requestId: String) -> Bool {
+        lock.lock()
+        let token = tokens[requestId]
+        lock.unlock()
+        token?.cancel()
+        return token != nil
+    }
+}
+
 @objc(FtpClientPlugin)
 public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "FtpClientPlugin"
@@ -52,6 +109,7 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "writeFile", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "makeDirectory", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pingFtp", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "cancelRead", returnType: CAPPluginReturnPromise),
     ]
 
     private let queue = DispatchQueue(label: "uk.gleissner.c64commander.ftp")
@@ -115,6 +173,20 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
                     connectTimeout: options.connectTimeout
                 )
                 defer { session.disconnect() }
+                /*
+                 * The TypeScript client only sends a requestId when the read is cancellable
+                 * (it has an abort signal or a progress listener), so an ordinary read
+                 * registers nothing.
+                 */
+                let requestId = call.getString("requestId")
+                if let requestId {
+                    session.cancellationToken = FtpReadCancellationRegistry.shared.register(requestId: requestId)
+                }
+                defer {
+                    if let requestId {
+                        FtpReadCancellationRegistry.shared.release(requestId: requestId)
+                    }
+                }
                 try session.connect()
                 try session.login(username: options.username, password: options.password)
                 let data = try session.readFile(path: options.path)
@@ -128,6 +200,26 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject(error.localizedDescription)
             }
         }
+    }
+
+    /*
+     * Deliberately not dispatched onto `queue`: that queue is serialised behind the read this is
+     * meant to stop, so a cancel posted to it would run only after the read completed. Resolves
+     * either way - cancelling a read that already finished is not an error for any caller
+     * (HARD27-003).
+     */
+    @objc public func cancelRead(_ call: CAPPluginCall) {
+        guard let requestId = call.getString("requestId"), !requestId.isEmpty else {
+            call.reject("requestId is required")
+            return
+        }
+        let cancelled = FtpReadCancellationRegistry.shared.cancel(requestId: requestId)
+        IOSDiagnostics.log(
+            .debug,
+            cancelled ? "FTP read cancelled" : "FTP read already finished when cancelled",
+            details: ["origin": "native", "requestId": requestId]
+        )
+        call.resolve()
     }
 
     @objc public func writeFile(_ call: CAPPluginCall) {
@@ -299,6 +391,8 @@ final class FtpSession {
 
     private var inputStream: InputStream?
     private var outputStream: OutputStream?
+    /* Set only for a cancellable read; the data session inherits it in `readFile`. */
+    var cancellationToken: FtpReadCancellationToken?
 
     init(host: String, port: Int, timeout: TimeInterval = 30, connectTimeout: TimeInterval? = nil) {
         self.host = host
@@ -377,6 +471,8 @@ final class FtpSession {
     func readFile(path: String) throws -> Data {
         let passiveAddress = try openPassiveDataChannel()
         let dataSession = FtpSession(host: passiveAddress.host, port: passiveAddress.port, timeout: timeout)
+        // The bytes arrive on the data channel, so that is the session the cancel has to reach.
+        dataSession.cancellationToken = cancellationToken
         try dataSession.connectForData()
 
         _ = try sendAndRead("RETR \(path)", expectedPrefix: [125, 150])
@@ -603,6 +699,9 @@ final class FtpSession {
         let deadline = Date().addingTimeInterval(timeout)
 
         while Date() <= deadline {
+            if cancellationToken?.isCancelled == true {
+                throw NativePluginError.operationFailed("FTP read cancelled")
+            }
             if !inputStream.hasBytesAvailable {
                 if inputStream.streamStatus == .atEnd {
                     break
