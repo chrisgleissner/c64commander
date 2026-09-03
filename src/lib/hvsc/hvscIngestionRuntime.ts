@@ -40,6 +40,7 @@ import { invalidateHvscHydration } from "./hvscHydrationControl";
 import { getDefaultHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
 import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from "./hvscSongLengthService";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { beginHvscInstallGuard, endHvscInstallGuard } from "@/lib/hvsc/hvscInstallGuard";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { buildSidTrackSubsongs, parseSidHeaderMetadata } from "@/lib/sid/sidUtils";
 import { clearHvscBrowseIndexSnapshot, createHvscBrowseIndexMutable } from "./hvscBrowseIndexStore";
@@ -902,6 +903,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
   await ensureHvscDirs();
   await cleanupStaleStagingDir();
   runtimeState.cancelTokens.set(cancelToken, { cancelled: false });
+  await beginHvscInstallGuard();
 
   let currentArchive: string | null = null;
   let currentArchiveType: "baseline" | "update" | null = null;
@@ -1143,6 +1145,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
     throw error;
   } finally {
     await drainNativeProgressListeners(cancelToken);
+    await endHvscInstallGuard();
     runtimeState.activeIngestionRunning = false;
     runtimeState.cancelTokens.delete(cancelToken);
   }
@@ -1167,6 +1170,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
   await ensureHvscDirs();
   await cleanupStaleStagingDir();
   runtimeState.cancelTokens.set(cancelToken, { cancelled: false });
+  await beginHvscInstallGuard();
 
   let currentArchive: string | null = null;
   let currentArchiveType: "baseline" | "update" | null = null;
@@ -1357,6 +1361,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
     throw error;
   } finally {
     await drainNativeProgressListeners(cancelToken);
+    await endHvscInstallGuard();
     runtimeState.activeIngestionRunning = false;
     runtimeState.cancelTokens.delete(cancelToken);
   }
