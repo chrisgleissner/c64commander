@@ -149,6 +149,7 @@ describe("the privacy policy", () => {
       CHANGE_WIFI_MULTICAST_STATE: "multicast",
       FOREGROUND_SERVICE: "foreground service",
       FOREGROUND_SERVICE_MEDIA_PLAYBACK: "media playback",
+      FOREGROUND_SERVICE_DATA_SYNC: "data sync",
       WAKE_LOCK: "wake lock",
       POST_NOTIFICATIONS: "notifications",
     };
