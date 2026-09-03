@@ -121,6 +121,26 @@ describe("check-reference-docs: deciding what is a control", () => {
     expect(collectInteractiveTestIds(source)).toEqual(new Set(["deep-row"]));
   });
 
+  it("finds the tag when a prop expression contains a generic or a comparison", () => {
+    // `new Set<EvidenceType>(...)` puts a `<` between the tag name and the attribute, so a
+    // backwards search for the nearest `<` lands on the generic and the control is skipped.
+    const generic = [
+      "<Button",
+      '  onClick={() => onTypesChange(new Set<EvidenceType>(["Problems"]))}',
+      '  data-testid="quick-filter-problems"',
+      ">P</Button>",
+    ].join("\n");
+    expect(collectInteractiveTestIds(generic)).toEqual(new Set(["quick-filter-problems"]));
+
+    const comparison = '<Button onClick={() => set(a < b)} data-testid="compare-row">C</Button>';
+    expect(collectInteractiveTestIds(comparison)).toEqual(new Set(["compare-row"]));
+  });
+
+  it("still ignores a testid on a non-interactive tag that follows a generic", () => {
+    const source = '<p title={String(new Set<Kind>())} data-testid="type-summary">n</p>';
+    expect(collectInteractiveTestIds(source)).toEqual(new Set());
+  });
+
   it("collects only the literal ids, leaving templated ones to their documented pattern", () => {
     const source = [
       '<Button data-testid="drive-reset">R</Button>',

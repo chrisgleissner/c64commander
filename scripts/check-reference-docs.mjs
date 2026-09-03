@@ -150,6 +150,28 @@ export const INTERACTIVE_ROLES = new Set([
   "treeitem",
 ]);
 
+/*
+ * Finds the JSX opening tag an attribute at `attributeIndex` belongs to. The nearest earlier
+ * `<` is not always that tag: a prop expression may contain a generic (`new Set<Kind>(...)`)
+ * or a comparison, and such a `<` closes before the attribute. A candidate only qualifies
+ * when the tag it opens still extends past the attribute.
+ */
+export const findOpeningTagFor = (source, attributeIndex) => {
+  let cursor = attributeIndex;
+  while (cursor > 0) {
+    const start = source.lastIndexOf("<", cursor - 1);
+    if (start < 0) return null;
+    const openingTag = readOpeningTag(source, start);
+    /* `a < b` and `a<b` are comparisons; a tag name follows its `<` directly and ends the name
+       on whitespace, `/` or `>`. This also rejects the `<` of a closing tag. */
+    if (/^<[A-Za-z][\w.]*[\s/>]/.test(openingTag) && start + openingTag.length > attributeIndex) {
+      return openingTag;
+    }
+    cursor = start;
+  }
+  return null;
+};
+
 export const isInteractiveTag = (openingTag) => {
   const name = /^<\s*([A-Za-z][\w.]*)/.exec(openingTag)?.[1];
   if (name === undefined) return false;
@@ -172,9 +194,9 @@ export const collectInteractiveTestIds = (source) => {
   while ((match = pattern.exec(source)) !== null) {
     const id = match[2];
     if (id === "") continue;
-    const tagStart = source.lastIndexOf("<", match.index);
-    if (tagStart < 0) continue;
-    if (isInteractiveTag(readOpeningTag(source, tagStart))) ids.add(id);
+    const openingTag = findOpeningTagFor(source, match.index);
+    if (openingTag === null) continue;
+    if (isInteractiveTag(openingTag)) ids.add(id);
   }
   return ids;
 };
@@ -283,62 +305,15 @@ export const EXCLUSIONS = new Map([
  * Entries are grouped by the surface they belong to, in the order the inventory would.
  */
 export const UNDOCUMENTED_BASELINE = new Set([
-  /* Diagnostics: header, overflow, share, clear-all and the connection actions */
-  "connection-actions-toggle",
-  "connection-edit-cancel",
-  "connection-edit-save",
-  "connection-view-edit",
-  "device-detail-back",
-  "diagnostics-clear-all-confirm",
-  "diagnostics-clear-all-trigger",
-  "diagnostics-connection-details-action",
-  "diagnostics-device-line",
-  "diagnostics-header-toggle",
-  "diagnostics-manage-devices-action",
-  "diagnostics-overflow-menu",
-  "diagnostics-share-all",
-  "diagnostics-share-filtered",
-  "retry-connection-action",
-  /* Diagnostics sub-screens and their filters */
-  "config-drift-back",
-  "config-drift-refresh",
-  "decision-state-back",
-  "decision-state-repair",
+  /* Controls reached from Diagnostics that belong to another section of the inventory */
   "device-safety-machine-input-cooldown",
-  "health-history-zoom-out",
-  "load-more-activity",
   "navigate-root",
-  "open-config-drift-screen",
-  "open-config-heatmap-screen",
-  "open-connection-settings",
-  "open-decision-state-screen",
-  "open-filters-editor",
-  "open-ftp-heatmap-screen",
-  "open-latency-filters",
-  "open-latency-screen",
-  "open-rest-heatmap-screen",
-  "open-timeline-screen",
-  "quick-filter-errors",
-  "quick-filter-ftp",
-  "quick-filter-reset",
-  "quick-filter-rest",
   "search-results",
-  "switch-lab-delay-ms",
-  "switch-lab-from-device",
-  "switch-lab-iterations",
-  "switch-lab-launcher",
-  "switch-lab-run-soak",
-  "switch-lab-to-device",
-  /* Device switcher and the device password / auth challenge prompts */
+  /* The device password / auth challenge prompts */
   "device-auth-challenge-cancel",
   "device-auth-challenge-input",
   "device-auth-challenge-submit",
   "startup-manual-device-panel",
-  "switch-device-cancel",
-  "switch-device-connect",
-  "switch-device-host-input",
-  "switch-device-port-input",
-  "switch-device-toggle",
   /* Add items sheet and the archive browser */
   "add-items-confirm",
   "add-items-deep-scan",

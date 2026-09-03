@@ -985,6 +985,116 @@ with its own controls beneath it, revealed only while that switch is on.
 
 ---
 
+### 5.2 Diagnostics (`diagnostics-dialog`)
+
+Opened from Settings → **Diagnostics** (`diagnostics-open-dialog`, §4.5), from the
+Quick Menu (`keypad-quick-menu-diagnostics`, §5.0.2) or with the **✱** key (§1).
+Code-verified against source, **not yet enumerated on hardware** — the R/I marks
+are omitted below rather than guessed, as in §5.1.
+
+The dialog is a sheet: a header with the overflow menu, a health header, a filter
+bar, the activity list, and a set of sub-screens the overflow menu opens. Listed in
+DOM order.
+
+**Sheet header**
+
+- ⋯ — button — `diagnostics-overflow-menu` — toggles the **Views** panel described
+  below. The panel is a dismissable layer, so Back/Escape closes the panel and not
+  the whole dialog
+
+**Views panel** (`diagnostics-overflow-panel`) — three groups, in this order.
+
+- Connection details — button — `diagnostics-connection-details-action` — opens the
+  connection surface (below)
+- Manage devices — button — `diagnostics-manage-devices-action` — closes the dialog
+  and navigates to Settings
+- Screens, each replacing the dialog body:
+  - Config drift — button — `open-config-drift-screen`
+  - Decision state — button — `open-decision-state-screen`
+  - Latency — button — `open-latency-screen`
+  - Key Explorer — button — `open-key-explorer-screen` (the popup itself is §5.0.2)
+  - Health history — button — `open-timeline-screen`
+  - REST heat map — button — `open-rest-heatmap-screen`
+  - FTP heat map — button — `open-ftp-heatmap-screen`
+  - Config heat map — button — `open-config-heatmap-screen`
+- Sticky footer:
+  - Share all — button — `diagnostics-share-all`
+  - Share filtered — button — `diagnostics-share-filtered` — shares only the entries
+    the current filters leave visible
+  - Clear all — button — `diagnostics-clear-all-trigger` — opens a confirmation whose
+    **Clear** is `diagnostics-clear-all-confirm` and whose Cancel is the shared
+    `AlertDialogCancel`
+
+**Health header** (`diagnostics-header`)
+
+- Device line — button — `diagnostics-device-line` — Enter/OK opens the connection
+  surface in view mode; long-press or context-menu opens it in edit mode
+- Run health check — button — `run-health-check`
+- Use simulated device — button — `use-simulated-device-action` `[only while no
+  device is reachable]` — pins Demo Mode
+- Expand/collapse — button — `diagnostics-header-toggle` `[rendered only once a health
+  check has run or is running]` — reveals `diagnostics-header-expanded`
+
+**Filter bar** (`filters-collapsed-bar`)
+
+- Funnel — button — `open-filters-editor` — opens the filter editor sheet
+  (`filters-editor-surface`), whose quick filters each set severity, evidence types,
+  contributor and device filter in one action:
+  - Errors only — button — `quick-filter-errors`
+  - Problems only — button — `quick-filter-problems`
+  - REST — button — `quick-filter-rest`
+  - FTP — button — `quick-filter-ftp`
+  - Reset — button — `quick-filter-reset`
+
+**Activity list** (`evidence-list`) — rows expand in place; the list also pages on
+scroll, so the button is a keypad-reachable equivalent of reaching the end.
+
+- Load more — button — `load-more-activity` `[only while more entries exist]`
+
+**Connection surface** — one dialog with a view mode and an edit mode.
+
+- Edit — button — `connection-view-edit` `[view mode]`
+- Edit fields — `connection-edit-*`, the shared saved-device editor fields
+- Cancel — button — `connection-edit-cancel` `[edit mode]`
+- Save — button — `connection-edit-save` `[edit mode]`
+
+**Connection actions** (`connection-actions-region`) — rendered inside the dialog and
+in the connection summary. In panel mode it is collapsible.
+
+- Connection actions — button — `connection-actions-toggle` `[panel mode only]`
+- Retry connection — button — `retry-connection-action`
+- Switch device — button — `switch-device-toggle` — reveals an inline host/port form:
+  - Host — text — `switch-device-host-input`
+  - Port — number — `switch-device-port-input`
+  - Connect — button — `switch-device-connect` `[disabled while the host is empty]`
+  - Cancel — button — `switch-device-cancel`
+  - Open connection settings — link — `open-connection-settings` — navigates to Settings
+    for the editing the inline form does not offer
+
+**Sub-screens.** Each replaces the dialog body and returns with its own Back control,
+so Back has a target inside the dialog before it reaches the dialog itself.
+
+- Device detail — Back — button — `device-detail-back`
+- Config drift (`config-drift-surface`) — Back — button — `config-drift-back` ;
+  Refresh — button — `config-drift-refresh`
+- Decision state (`decision-state-surface`) — Back — button — `decision-state-back` ;
+  Resync / repair — button — `decision-state-repair`
+- Health history (`health-history-popup`) — Zoom in — button — `health-history-zoom-in` ;
+  Zoom out — button — `health-history-zoom-out` (each disabled at its end of the
+  zoom-window list)
+- Latency — funnel — button — `open-latency-filters` — the same filter editor pattern
+  as the main list
+
+**Test-only surface: Switch Lab.** `DeviceSwitchLabPage` and its launcher are bundled
+only in coverage-probe builds (`shouldBundleCoverageProbeModules`), so no release build
+renders them and they are not part of the keypad surface. The launcher
+`switch-lab-launcher` appears only on `/__device-switch__` or when
+`VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON` is set; the page carries `switch-lab-from-device`,
+`switch-lab-to-device`, `switch-lab-iterations`, `switch-lab-delay-ms` and
+`switch-lab-run-soak`.
+
+---
+
 ## 6. Known findings / limitations (as of last verification)
 
 **Resolved on this branch:**
