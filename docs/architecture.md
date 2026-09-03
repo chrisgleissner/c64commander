@@ -304,9 +304,20 @@ TypeScript remains the business-logic source of truth via repository interfaces;
 | Capability           | Android              | iOS                | Web                   |
 | -------------------- | -------------------- | ------------------ | --------------------- |
 | Native HVSC plugin   | Yes                  | Yes                | No                    |
-| Large-archive ingest | Native (streaming)   | Native (streaming) | Blocked (5 MiB limit) |
+| Large-archive ingest | Native (streaming)   | Native (in memory) | Blocked (5 MiB limit) |
 | HVSC metadata DB     | SQLite               | SQLite             | In-memory             |
-| Baseline recovery    | Staged + atomic swap | Staged (planned)   | N/A (no large ingest) |
+| Baseline recovery    | Staged + atomic swap | Staged + atomic swap | N/A (no large ingest) |
+
+The iOS row for large-archive ingest said "streaming" and described the intended design rather
+than the shipped one. `HvscIngestionPlugin.swift` reads the whole `.7z` with `Data(contentsOf:)`
+and SWCompression's `SevenZipContainer.open` materialises every entry before any file is written,
+so the peak footprint is the archive plus every extracted file plus the LZMA dictionary. On a
+device with a tighter jetsam limit the process can be killed part-way through. Making that
+genuinely streaming is outstanding; the table now says what the code does (HARD27-018).
+
+Baseline recovery is staged on both platforms as of HARD27-018. iOS extracts into
+`hvsc/library-staging` and promotes it by rename after the row-count check, so a kill or a
+cancellation mid-install leaves the previous library in place rather than deleting it first.
 
 ### Web platform limitations
 

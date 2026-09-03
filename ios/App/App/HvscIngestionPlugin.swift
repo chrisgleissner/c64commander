@@ -153,8 +153,26 @@ public final class HvscIngestionPlugin: CAPPlugin, CAPBridgedPlugin {
                 let db = try self.openDatabase()
                 defer { sqlite3_close(db) }
 
+                /*
+                 * A baseline install used to delete the library and its index before extracting
+                 * anything. The extraction is the long, memory-hungry part, so a jetsam kill or a
+                 * cancellation left the user with no HVSC library at all - roughly sixty thousand
+                 * songs and a half-hour install, gone, with nothing to fall back on.
+                 *
+                 * It now extracts into a staging directory and promotes by rename once the new
+                 * library has passed the row-count check, keeping the old one until then. This is
+                 * `promoteBaselineLibrary` on Android, ported (HARD27-018).
+                 */
+                let stagingRoot = try self.resolveStagingRoot()
+                let extractionRoot = resetLibrary ? stagingRoot : libraryRoot
                 if resetLibrary {
-                    try self.clearLibrary(libraryRoot: libraryRoot, db: db)
+                    try self.resetDirectory(stagingRoot)
+                }
+                /* Staging is never left behind, whether this call succeeds, fails or is cancelled. */
+                defer {
+                    if resetLibrary {
+                        try? FileManager.default.removeItem(at: stagingRoot)
+                    }
                 }
 
                 self.emitProgress(stage: "archive_extraction", message: "Loading archive…",
@@ -222,7 +240,7 @@ public final class HvscIngestionPlugin: CAPPlugin, CAPBridgedPlugin {
                         continue
                     }
 
-                    let targetUrl = libraryRoot.appendingPathComponent(normalizedPath)
+                    let targetUrl = extractionRoot.appendingPathComponent(normalizedPath)
                     let parentDir = targetUrl.deletingLastPathComponent()
                     try FileManager.default.createDirectory(at: parentDir,
                         withIntermediateDirectories: true)
@@ -247,7 +265,14 @@ public final class HvscIngestionPlugin: CAPPlugin, CAPBridgedPlugin {
                             ])
                             songsIngested += 1
 
-                            if pendingUpserts.count >= dbBatchSize {
+                            /*
+                             * In reset mode the live index still describes the old library, which
+                             * is still on disk and still the one the user has. Writing the new
+                             * rows into it before the swap would point the index at files that are
+                             * not there yet. They are held and applied in the promotion
+                             * transaction instead, as on Android.
+                             */
+                            if !resetLibrary && pendingUpserts.count >= dbBatchSize {
                                 let upsertCount = try self.flushUpserts(&pendingUpserts, db: db)
                                 metadataUpserts += upsertCount
                             }
@@ -260,18 +285,41 @@ public final class HvscIngestionPlugin: CAPPlugin, CAPBridgedPlugin {
                     }
                 }
 
-                // Flush remaining upserts
-                if !pendingUpserts.isEmpty {
-                    let upsertCount = try self.flushUpserts(&pendingUpserts, db: db)
-                    metadataUpserts += upsertCount
+                let metadataRows: Int
+                if resetLibrary {
+                    /*
+                     * The check runs against what the new library will contain, not the live
+                     * index, which still holds the old rows at this point. Failing here leaves the
+                     * old library promoted and intact - which is the whole reason for staging.
+                     */
+                    if pendingUpserts.count < minExpectedRows {
+                        throw HvscError.operationFailed(
+                            "HVSC metadata row count below threshold: \(pendingUpserts.count) < \(minExpectedRows)"
+                        )
+                    }
+                    self.emitProgress(stage: "archive_extraction", message: "Finishing…",
+                        processedCount: processedEntries, totalCount: entries.count, currentFile: nil,
+                        songsIngested: songsIngested, songsDeleted: songsDeleted)
+                    metadataUpserts += try self.promoteStagedLibrary(
+                        libraryRoot: libraryRoot,
+                        stagingRoot: stagingRoot,
+                        deferredUpserts: &pendingUpserts,
+                        db: db
+                    )
+                } else {
+                    // Flush remaining upserts
+                    if !pendingUpserts.isEmpty {
+                        let upsertCount = try self.flushUpserts(&pendingUpserts, db: db)
+                        metadataUpserts += upsertCount
+                    }
                 }
 
-                // Apply deletions
+                // Apply deletions, always against the promoted library.
                 if !pendingDeletions.isEmpty {
                     songsDeleted = try self.applyDeletions(pendingDeletions, libraryRoot: libraryRoot, db: db)
                 }
 
-                let metadataRows = self.getSongIndexCount(db)
+                metadataRows = self.getSongIndexCount(db)
                 if metadataRows < minExpectedRows {
                     throw HvscError.operationFailed(
                         "HVSC metadata row count below threshold: \(metadataRows) < \(minExpectedRows)"
@@ -362,19 +410,93 @@ public final class HvscIngestionPlugin: CAPPlugin, CAPBridgedPlugin {
         return components.joined(separator: "/")
     }
 
-    private func clearLibrary(libraryRoot: URL, db: OpaquePointer) throws {
-        if FileManager.default.fileExists(atPath: libraryRoot.path) {
-            try FileManager.default.removeItem(at: libraryRoot)
+    /*
+     * A sibling of the library rather than a child, so promoting is a rename within one directory
+     * and never a move across volumes.
+     */
+    private func resolveStagingRoot() throws -> URL {
+        guard let docsDir = FileManager.default.urls(for: .documentDirectory,
+                                                      in: .userDomainMask).first else {
+            throw HvscError.operationFailed("Cannot resolve Documents directory")
         }
-        try FileManager.default.createDirectory(at: libraryRoot, withIntermediateDirectories: true)
-        let sql = "DELETE FROM hvsc_song_index"
-        var stmt: OpaquePointer?
-        defer { sqlite3_finalize(stmt) }
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
-            throw HvscError.operationFailed("Failed to prepare DELETE: \(String(cString: sqlite3_errmsg(db)))")
+        return docsDir.appendingPathComponent("hvsc/library-staging", isDirectory: true)
+    }
+
+    private func resetDirectory(_ url: URL) throws {
+        if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
         }
-        guard sqlite3_step(stmt) == SQLITE_DONE else {
-            throw HvscError.operationFailed("Failed to clear song index: \(String(cString: sqlite3_errmsg(db)))")
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    }
+
+    /*
+     * Swaps the staged library in and replaces the index in one transaction. Ported from Android's
+     * `promoteBaselineLibrary` (HARD27-018).
+     *
+     * The order matters. The two renames happen first, so the files are in place before any row
+     * claims they are; a failure between them puts the old library back. The index is then cleared
+     * and repopulated inside a transaction, so a crash part-way leaves the index describing the
+     * old library rather than half of each - and the old library is only deleted once that
+     * transaction has committed.
+     */
+    private func promoteStagedLibrary(
+        libraryRoot: URL,
+        stagingRoot: URL,
+        deferredUpserts: inout [[String: Any?]],
+        db: OpaquePointer
+    ) throws -> Int {
+        let fileManager = FileManager.default
+        let oldRoot = libraryRoot.deletingLastPathComponent()
+            .appendingPathComponent("library-old", isDirectory: true)
+        if fileManager.fileExists(atPath: oldRoot.path) {
+            try fileManager.removeItem(at: oldRoot)
+        }
+
+        var libraryMoved = false
+        if fileManager.fileExists(atPath: libraryRoot.path) {
+            try fileManager.moveItem(at: libraryRoot, to: oldRoot)
+            libraryMoved = true
+        }
+
+        do {
+            try fileManager.moveItem(at: stagingRoot, to: libraryRoot)
+        } catch {
+            // Put the user's library back before reporting the failure.
+            if libraryMoved {
+                try? fileManager.moveItem(at: oldRoot, to: libraryRoot)
+            }
+            throw HvscError.operationFailed("Failed to promote staged HVSC library: \(error.localizedDescription)")
+        }
+
+        var upsertCount = 0
+        do {
+            try self.execute(sql: "BEGIN IMMEDIATE", db: db)
+            try self.execute(sql: "DELETE FROM hvsc_song_index", db: db)
+            upsertCount = try self.flushUpserts(&deferredUpserts, db: db)
+            try self.execute(sql: "COMMIT", db: db)
+        } catch {
+            try? self.execute(sql: "ROLLBACK", db: db)
+            // The files are already swapped, so put them back too rather than leaving the index
+            // describing a library that is no longer there.
+            try? fileManager.removeItem(at: libraryRoot)
+            if libraryMoved {
+                try? fileManager.moveItem(at: oldRoot, to: libraryRoot)
+            }
+            throw error
+        }
+
+        if fileManager.fileExists(atPath: oldRoot.path) {
+            try? fileManager.removeItem(at: oldRoot)
+        }
+        return upsertCount
+    }
+
+    private func execute(sql: String, db: OpaquePointer) throws {
+        var errorMessage: UnsafeMutablePointer<CChar>?
+        defer { sqlite3_free(errorMessage) }
+        guard sqlite3_exec(db, sql, nil, nil, &errorMessage) == SQLITE_OK else {
+            let detail = errorMessage.map { String(cString: $0) } ?? String(cString: sqlite3_errmsg(db))
+            throw HvscError.operationFailed("HVSC \(sql) failed: \(detail)")
         }
     }
 
