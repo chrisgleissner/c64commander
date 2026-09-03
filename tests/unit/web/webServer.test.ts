@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import http from "node:http";
 import dgram from "node:dgram";
-import { mkdtemp, mkdir, writeFile, rm, chmod } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, chmod, stat } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { createMockFtpServer, type MockFtpServer } from "../../contract/mockFtpServer.js";
@@ -286,6 +286,47 @@ describe("web server platform runtime", () => {
     expect(requiresAuth.status).toBe(401);
 
     await server.close();
+  });
+
+  // HARD27-015: web-config.json holds the network password in plaintext and sits
+  // on a bind-mounted volume, so it must not be readable by other users on the
+  // host. It was written with the default 0644.
+  it("keeps the config file readable only by the server's own user", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ok</body></html>", "utf8");
+    const configFile = path.join(configDir, "web-config.json");
+
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+    });
+
+    // Startup creates the file when it is absent.
+    expect((await stat(configFile)).mode & 0o777).toBe(0o600);
+
+    const setPassword = await fetch(`${server.baseUrl}/api/secure-storage/password`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: "stored-secret" }),
+    });
+    expect(setPassword.status).toBe(200);
+    expect((await stat(configFile)).mode & 0o777).toBe(0o600);
+
+    await server.close();
+
+    // A file left world-readable by an older release is tightened on load.
+    await chmod(configFile, 0o644);
+    const restarted = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+    });
+    expect((await stat(configFile)).mode & 0o777).toBe(0o600);
+    await restarted.close();
   });
 
   // HARD27-001: the app used to send its per-device password envelope here, and

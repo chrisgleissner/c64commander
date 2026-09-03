@@ -196,6 +196,7 @@ const loadConfig = async (): Promise<AppConfig> => {
   }
   try {
     const raw = await fs.readFile(configPath, "utf8");
+    await restrictConfigPermissions();
     const parsed = JSON.parse(raw) as Partial<AppConfig>;
     const networkPassword = normalizePassword(parsed.networkPassword);
     const defaultDeviceHost = sanitizeHost(parsed.defaultDeviceHost) ?? defaultConfig.defaultDeviceHost;
@@ -238,11 +239,30 @@ const loadConfig = async (): Promise<AppConfig> => {
   }
 };
 
+// HARD27-015: the config file holds the network password in plaintext and lands
+// on a bind-mounted volume, so it must not be world-readable. The mode argument
+// only applies when the file is created, so an existing file is chmod-ed too.
+const CONFIG_FILE_MODE = 0o600;
+
+const restrictConfigPermissions = async (): Promise<void> => {
+  try {
+    await fs.chmod(configPath, CONFIG_FILE_MODE);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code;
+    if (code === "ENOENT") return;
+    log("warn", "Could not restrict web config file permissions", {
+      configPath,
+      ...errorDetails(error),
+    });
+  }
+};
+
 const saveConfig = async (config: AppConfig): Promise<void> => {
   try {
     await fs.mkdir(configDir, { recursive: true });
     const payload = JSON.stringify(config, null, 2);
-    await fs.writeFile(configPath, payload, "utf8");
+    await fs.writeFile(configPath, payload, { encoding: "utf8", mode: CONFIG_FILE_MODE });
+    await restrictConfigPermissions();
   } catch (error) {
     throw new Error(`Failed to persist web config at ${configPath}: ${(error as Error)?.message || String(error)}`, {
       cause: error as Error,

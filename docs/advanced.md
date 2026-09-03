@@ -20,6 +20,7 @@ Optional hardening:
 - No network password configured: the UI opens directly.
 - Network password configured in **Settings > Device > Network password**: login is required. The server injects the password into requests proxied to the configured device.
 - The password is persisted in `/config/web-config.json`. Successful login creates an authenticated session cookie (`HttpOnly`, `SameSite=Lax`; add `Secure` only for HTTPS deployments).
+- The password is stored in plaintext, so the server writes `/config/web-config.json` with mode `0600` and tightens an existing file to `0600` on startup. Give the host directory behind the `/config` volume to the user the container runs as, and do not make it group- or world-readable.
 
 ### Security settings
 
