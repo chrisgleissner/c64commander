@@ -11,6 +11,7 @@
 | BackgroundExecutionPlugin | Full foreground service + WakeLock + auto-skip alarm | `AVAudioSession` category set + `beginBackgroundTask` + main-queue due timer (fires `onBackgroundAutoSkipDue` when elapsed) — partial implementation: timer may expire before song end under iOS background-task limits | **Partial**           |
 | DeviceDiscoveryPlugin     | Subnet sweep plus `getNetworkStatus`                 | `getNetworkStatus` answers from a long-lived `NWPathMonitor` (HARD27-003); `discover` still resolves `unsupported`, so the app falls back to its saved host rather than scanning                                          | **Partial**           |
 | DiagnosticsBridgePlugin   | BroadcastReceiver → JS                               | NotificationCenter → JS + debug HTTP server                                                                                                                                                                             | **Parity**            |
+| TelnetSocketPlugin        | Socket + `Connection closed` on EOF (HARD20-006)     | CFStream sockets; EOF now closes the streams and reports `Connection closed`, which the TypeScript client maps to `CONNECTION_CLOSED` so the session reconnects (HARD27-013)                                             | **Parity**            |
 | MockC64UPlugin            | Mock HTTP + FTP servers                              | NWListener + Darwin sockets                                                                                                                                                                                             | **Parity**            |
 | AppLogger                 | Broadcast-based structured logger                    | IOSDiagnostics with os_log + NotificationCenter                                                                                                                                                                         | **Functional parity** |
 | StreamUdpPlugin           | UDP multicast socket + native VIC frame assembly + native AudioTrack sink | Not registered (`AppDelegate.swift`) — `Capacitor.isPluginAvailable("StreamUdp")` is false, so Live View and Game Mode streams degrade to the unsupported receiver | **Android only** |
@@ -29,7 +30,7 @@
 
 | Area                | Android                             | iOS                              | Status      |
 | ------------------- | ----------------------------------- | -------------------------------- | ----------- |
-| Native unit tests   | 13 JVM test classes (82 tests)      | 7 XCTest classes (54 tests)      | **Partial** |
+| Native unit tests   | 13 JVM test classes (82 tests)      | 7 XCTest classes (57 tests)      | **Partial** |
 | CI gating           | Required check (android.yaml)       | Stage A / informative (ios.yaml) | **Gap**     |
 | Signed distribution | Debug APK + conditional release APK | Unsigned AltStore IPA only       | **Gap**     |
 | Maestro E2E flows   | 6 ci-critical flows                 | 6 ci-critical-ios flows          | **Parity**  |

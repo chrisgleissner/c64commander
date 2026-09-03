@@ -221,7 +221,12 @@ public final class TelnetSocketPlugin: CAPPlugin, CAPBridgedPlugin {
                     throw inputStream.streamError ?? NativePluginError.operationFailed("Telnet read failed")
                 }
                 if readCount == 0 {
-                    break
+                    /*
+                     * A stream read of 0 is end of stream, not an empty poll: the peer closed the
+                     * connection. Reported as a closure rather than returned as an empty buffer -
+                     * see `throwConnectionClosed` (HARD27-013).
+                     */
+                    try throwConnectionClosed()
                 }
                 collected.append(buffer, count: readCount)
 
@@ -231,14 +236,45 @@ public final class TelnetSocketPlugin: CAPPlugin, CAPBridgedPlugin {
                 continue
             }
 
-            if !collected.isEmpty || inputStream.streamStatus == .atEnd {
+            if inputStream.streamStatus == .atEnd {
+                try throwConnectionClosed()
+            }
+
+            if !collected.isEmpty {
                 break
             }
 
             RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
         }
 
+        /*
+         * Reaching here means the deadline expired with nothing to read, which is an ordinary
+         * empty poll and stays an empty result. Only EOF is a closure.
+         */
         return collected
+    }
+
+    /*
+     * The Ultimate drops a Telnet session on its own idle reaping, on a reboot, and when another
+     * client takes the last of its four session slots. Android has closed the socket and thrown
+     * "Connection closed" on EOF since HARD20-006; iOS returned an empty buffer instead, so
+     * `readScreen` counted three empty reads and returned an empty screen while the session still
+     * believed it was connected and authenticated. Every later menu action then went into a closed
+     * socket and reported a parse failure rather than reconnecting.
+     *
+     * The message matters: `telnetClient.ts` matches /connection closed/i to raise
+     * `CONNECTION_CLOSED`, which is the code `telnetSession.ts` uses to invalidate authentication
+     * and reconnect. Any other wording degrades to `DISCONNECTED`, which does not (HARD27-013).
+     *
+     * Bytes already collected are discarded, as on Android. A session that has gone away cannot
+     * answer for a partial screen, and presenting one as a complete read is what produced the
+     * parse failures.
+     */
+    static let connectionClosedMessage = "Connection closed"
+
+    private func throwConnectionClosed() throws -> Never {
+        closeStreams()
+        throw NativePluginError.operationFailed(Self.connectionClosedMessage)
     }
 
     private func closeStreams() {
