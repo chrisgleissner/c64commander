@@ -771,4 +771,78 @@ describe("device discovery manager", () => {
     expect(firstSaved).toMatchObject({ host: "192.168.1.20", lastKnownUniqueId: "AAAAAAAA" });
     expect(secondSaved).toMatchObject({ host: "192.168.1.21", lastKnownUniqueId: "BBBBBBBB" });
   });
+  it("sends a saved device's custom HTTP port to the native scan so it can be rediscovered", async () => {
+    const { addSavedDevice } = await import("@/lib/savedDevices/store");
+    // A device behind a port-forward: reachable on 8080, not on 80.
+    addSavedDevice({
+      id: "custom-port-1",
+      name: "Forwarded C64U",
+      host: "192.168.1.50",
+      httpPort: 8080,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "C64U",
+      lastKnownHostname: "c64u-fwd",
+      lastKnownUniqueId: null,
+      hasPassword: false,
+    });
+
+    discover.mockResolvedValueOnce({ candidates: [], scannedHosts: 0, elapsedMs: 1, unsupported: false });
+    const { startDeviceDiscovery } = await import("@/lib/deviceDiscovery/discoveryManager");
+    await startDeviceDiscovery({ trigger: "settings", includeLanScan: true, timeoutMs: 10_000 });
+
+    const knownHosts = discover.mock.calls[0][0].knownHosts as string[];
+    expect(knownHosts).toContain("192.168.1.50:8080");
+    expect(knownHosts).toContain("c64u-fwd:8080");
+    // The stock product hostnames stay on the default port and carry no suffix.
+    expect(knownHosts).toContain("c64u");
+    expect(knownHosts).not.toContain("192.168.1.50");
+  });
+
+  it("leaves a saved device on the default HTTP port as a bare host", async () => {
+    const { addSavedDevice } = await import("@/lib/savedDevices/store");
+    addSavedDevice({
+      id: "default-port-1",
+      name: "Plain C64U",
+      host: "192.168.1.51",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "C64U",
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+      hasPassword: false,
+    });
+
+    discover.mockResolvedValueOnce({ candidates: [], scannedHosts: 0, elapsedMs: 1, unsupported: false });
+    const { startDeviceDiscovery } = await import("@/lib/deviceDiscovery/discoveryManager");
+    await startDeviceDiscovery({ trigger: "settings", includeLanScan: true, timeoutMs: 10_000 });
+
+    const knownHosts = discover.mock.calls[0][0].knownHosts as string[];
+    expect(knownHosts).toContain("192.168.1.51");
+    expect(knownHosts).not.toContain("192.168.1.51:80");
+  });
+
+  it("uses the port embedded in a saved host string when the httpPort field disagrees", async () => {
+    const { addSavedDevice } = await import("@/lib/savedDevices/store");
+    addSavedDevice({
+      id: "embedded-port-1",
+      name: "Embedded C64U",
+      host: "192.168.1.52:9090",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      lastKnownProduct: "C64U",
+      lastKnownHostname: null,
+      lastKnownUniqueId: null,
+      hasPassword: false,
+    });
+
+    discover.mockResolvedValueOnce({ candidates: [], scannedHosts: 0, elapsedMs: 1, unsupported: false });
+    const { startDeviceDiscovery } = await import("@/lib/deviceDiscovery/discoveryManager");
+    await startDeviceDiscovery({ trigger: "settings", includeLanScan: true, timeoutMs: 10_000 });
+
+    const knownHosts = discover.mock.calls[0][0].knownHosts as string[];
+    expect(knownHosts).toContain("192.168.1.52:9090");
+  });
 });

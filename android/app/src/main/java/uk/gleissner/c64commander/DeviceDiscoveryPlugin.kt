@@ -37,9 +37,13 @@ class DeviceDiscoveryPlugin : Plugin() {
   private val logTag = "DeviceDiscoveryPlugin"
   internal var httpConnectionFactory: (URL) -> HttpURLConnection = { url -> url.openConnection() as HttpURLConnection }
 
+  // Test seam: the real enumeration walks the host's own interfaces, so a test cannot
+  // otherwise assert the shape or the order of the LAN sweep.
+  internal var lanHostEnumerator: () -> List<String> = { enumerateLanHosts() }
+
   internal data class DiscoveryTarget(
     val host: String,
-    val port: Int = 80,
+    val port: Int = DEFAULT_HTTP_PORT,
     val source: String,
   )
 
@@ -162,16 +166,53 @@ class DeviceDiscoveryPlugin : Plugin() {
     return hosts
   }
 
+  // A known host may carry the saved device's HTTP port as a "host:port" suffix, written
+  // by buildDeviceHostWithHttpPort on the TypeScript side. Anything that is not an
+  // unambiguous port suffix (an unbracketed IPv6 literal, an out-of-range or non-numeric
+  // suffix) is kept verbatim as the host on the default port. See HARD27-020.
+  internal fun splitHostAndPort(spec: String): Pair<String, Int> {
+    val trimmed = spec.trim()
+    if (trimmed.startsWith("[")) {
+      val closingBracket = trimmed.indexOf(']')
+      if (closingBracket <= 0) return trimmed to DEFAULT_HTTP_PORT
+      val host = trimmed.substring(0, closingBracket + 1)
+      val rest = trimmed.substring(closingBracket + 1)
+      if (!rest.startsWith(":")) return host to DEFAULT_HTTP_PORT
+      return host to (parsePort(rest.substring(1)) ?: DEFAULT_HTTP_PORT)
+    }
+    val separator = trimmed.lastIndexOf(':')
+    // A second colon means an unbracketed IPv6 literal, which carries no port.
+    if (separator <= 0 || trimmed.indexOf(':') != separator) return trimmed to DEFAULT_HTTP_PORT
+    val port = parsePort(trimmed.substring(separator + 1)) ?: return trimmed to DEFAULT_HTTP_PORT
+    return trimmed.substring(0, separator) to port
+  }
+
+  private fun parsePort(value: String): Int? = value.toIntOrNull()?.takeIf { it in 1..65535 }
+
   internal fun buildTargets(knownHosts: List<String>, includeLanScan: Boolean): List<DiscoveryTarget> {
     val targets = linkedMapOf<String, DiscoveryTarget>()
-    knownHosts.forEach { host ->
-      val target = DiscoveryTarget(host = host, source = "hostname")
+    val savedCustomPorts = linkedSetOf<Int>()
+    knownHosts.forEach { spec ->
+      val (host, port) = splitHostAndPort(spec)
+      if (host.isBlank()) return@forEach
+      if (port != DEFAULT_HTTP_PORT) savedCustomPorts.add(port)
+      val target = DiscoveryTarget(host = host, port = port, source = "hostname")
       targets[targetKey(target)] = target
     }
     if (includeLanScan) {
-      enumerateLanHosts().forEach { host ->
+      val lanHosts = lanHostEnumerator()
+      // Port 80 covers every stock device and is submitted first: runProbes drains the
+      // pool in submission order under one deadline, so widening the sweep to a saved
+      // custom port must not push the default sweep past the budget.
+      lanHosts.forEach { host ->
         val target = DiscoveryTarget(host = host, source = "lan-scan")
         targets.putIfAbsent(targetKey(target), target)
+      }
+      savedCustomPorts.forEach { port ->
+        lanHosts.forEach { host ->
+          val target = DiscoveryTarget(host = host, port = port, source = "lan-scan")
+          targets.putIfAbsent(targetKey(target), target)
+        }
       }
     }
     return targets.values.toList()
@@ -497,5 +538,9 @@ class DeviceDiscoveryPlugin : Plugin() {
 
   private fun elapsedMillis(startedAt: Long): Long {
     return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt)
+  }
+
+  internal companion object {
+    internal const val DEFAULT_HTTP_PORT = 80
   }
 }
