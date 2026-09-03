@@ -17,6 +17,12 @@ It complements:
 > same change**. See the rule in `AGENTS.md` ("CTA inventory upkeep"). Counts in
 > §3 are a quick tripwire: if a page's interactive-element count changes and this
 > file did not, the change is incomplete.
+>
+> `npm run lint:reference-docs` checks the mechanical half: every `data-testid` on
+> an interactive element in `src/pages` or `src/components` has to be mentioned
+> here. It reads the abbreviations this document already uses — `a|b|c`, `{a,b}`,
+> `<slot>` and `*` — so an entry may keep naming a family in one token. It cannot
+> judge keypad reachability, which still needs the §7 device pass.
 
 Last verified on real hardware: **Pixel 4 (Android 16)** against a real **c64u**
 (firmware 1.1.0), app `0.8.8-b92e0`, branch `feat/keyboard-input`,

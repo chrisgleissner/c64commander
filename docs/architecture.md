@@ -10,7 +10,7 @@ The core app controls a C64 Ultimate over REST and FTP, keeps app-local state in
 
 ## Runtime and stack summary
 
-- **UI/runtime**: React 18, React Router 6, Vite 5, Capacitor 6
+- **UI/runtime**: React 18, React Router 6, Vite 6, Capacitor 8
 - **State and forms**: TanStack Query, React Hook Form, Zod
 - **UI primitives**: Tailwind CSS, Radix UI, shadcn-style component patterns, Framer Motion
 - **Core domain modules**: `src/lib/c64api.ts`, `src/lib/playback/`, `src/lib/hvsc/`, `src/lib/disks/`, `src/lib/config/`, `src/lib/sourceNavigation/`

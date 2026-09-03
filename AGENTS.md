@@ -563,6 +563,15 @@ in §7 and reconcile any delta. A `UI_CHANGE` or `DOC_PLUS_CODE` task that touch
 controls but leaves this file unchanged is **incomplete**. When in doubt, update
 it — an over-listed control is cheaper than a missing one.
 
+`npm run lint:reference-docs` (part of `npm run lint`) enforces the mechanical half
+of this rule without a device. It scans `src/pages` and `src/components` for a
+`data-testid` on an interactive element and fails when the inventory does not
+mention it. Controls that were already undocumented when the check landed are
+listed in `UNDOCUMENTED_BASELINE` in `scripts/check-reference-docs.mjs`; that list
+may only shrink, so documenting one means deleting its baseline entry in the same
+change. The check cannot judge keypad reachability, so it does not replace the
+on-device pass — it only stops the gap from growing.
+
 ### User-visible text casing
 
 Sentence case for every piece of UI text: dialog and sheet titles, section headings, control
