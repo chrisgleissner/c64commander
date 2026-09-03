@@ -17,6 +17,11 @@
     { "host": "172.32.0.1", "privateLan": false, "loopback": false, "note": "just above RFC 1918 172.16/12" },
     { "host": "2001:db8::1", "privateLan": false, "loopback": false, "note": "public IPv6 documentation range" },
     { "host": "256.0.0.1", "privateLan": false, "loopback": false, "note": "not a valid IPv4 address" },
-    { "host": "example.com", "privateLan": false, "loopback": false, "note": "a name is not an address; each platform resolves or refuses it by its own policy" }
+    {
+      "host": "example.com",
+      "privateLan": false,
+      "loopback": false,
+      "note": "a name is not an address; each platform resolves or refuses it by its own policy"
+    }
   ]
 }
