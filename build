@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$ROOT_DIR/scripts/lib/build-fast-path.sh"
+source "$ROOT_DIR/scripts/lib/device-safety-governor.sh"
 APK_DEFAULT=""
 APK_VARIANT="debug"
 
@@ -1784,6 +1785,18 @@ if [[ "$RUN_BUILD" == "true" && "$RUN_FORMAT" == "true" ]]; then
 fi
 
 if [[ "$RUN_BUILD" == "true" ]]; then
+  # HARD27-036: decided before the probe flag below, so a build that talks to the
+  # real machine keeps the device-safety governor on even with probes enabled.
+  BUILD_RUNS_PLAYWRIGHT=false
+  if [[ "$RUN_TEST" == "true" || "$RUN_TEST_E2E" == "true" || "$RUN_TEST_E2E_CI" == "true" || "$RUN_SCREENSHOTS" == "true" || "$RUN_VIDEO" == "true" || "$RUN_FUZZ" == "true" ]]; then
+    BUILD_RUNS_PLAYWRIGHT=true
+  fi
+  DEVICE_SAFETY_GOVERNOR="$(resolve_device_safety_governor "$C64U_TARGET" "$RUN_APK" "$BUILD_RUNS_PLAYWRIGHT")"
+  if [[ -n "$DEVICE_SAFETY_GOVERNOR" ]]; then
+    export VITE_DEVICE_SAFETY_GOVERNOR="$DEVICE_SAFETY_GOVERNOR"
+    log "Device-safety governor in this build: VITE_DEVICE_SAFETY_GOVERNOR=$DEVICE_SAFETY_GOVERNOR"
+  fi
+
   if [[ "$RUN_TEST_DEVICE_SWITCH_SOAK" == "true" && "$C64U_TARGET" == "real" ]]; then
     export VITE_ENABLE_TEST_PROBES=1
     export VITE_DEBUG_SAVED_DEVICES_JSON="$(build_switch_soak_saved_devices_json "$C64U_HOST" "$SECONDARY_C64U_HOST")"

@@ -127,16 +127,7 @@ type QueueTask<T> = {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const isTestEnv = () => {
-  if (
-    (
-      globalThis as {
-        __c64uForceInteractionScheduling?: boolean;
-      }
-    ).__c64uForceInteractionScheduling === true
-  ) {
-    return false;
-  }
+const isAutomatedEnv = () => {
   if (typeof import.meta !== "undefined") {
     const env = import.meta.env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
     if (env?.VITE_ENABLE_TEST_PROBES === "1") return true;
@@ -152,6 +143,38 @@ const isTestEnv = () => {
   }
   return false;
 };
+
+const readGovernorFlag = (): string | undefined => {
+  if (typeof import.meta !== "undefined") {
+    const env = import.meta.env as { VITE_DEVICE_SAFETY_GOVERNOR?: string } | undefined;
+    if (env?.VITE_DEVICE_SAFETY_GOVERNOR !== undefined) return env.VITE_DEVICE_SAFETY_GOVERNOR;
+  }
+  if (typeof process !== "undefined") return process.env?.VITE_DEVICE_SAFETY_GOVERNOR;
+  return undefined;
+};
+
+const readGovernorOverride = (): boolean | null => {
+  const flag = readGovernorFlag();
+  if (flag === "1") return true;
+  if (flag === "0") return false;
+  if ((globalThis as { __c64uForceInteractionScheduling?: boolean }).__c64uForceInteractionScheduling === true) {
+    return true;
+  }
+  return null;
+};
+
+// HARD27-036: "this build is automated" and "the governor is off" used to be
+// one predicate, so every probe build and Playwright run recorded an ungoverned
+// request pattern. VITE_DEVICE_SAFETY_GOVERNOR ("1" on, "0" off) and the
+// __c64uForceInteractionScheduling seam now decide the governor's state and win
+// over every automated-environment signal.
+export const isDeviceSafetyGovernorEnabled = (): boolean => {
+  const override = readGovernorOverride();
+  if (override !== null) return override;
+  return !isAutomatedEnv();
+};
+
+const isGovernorBypassed = () => !isDeviceSafetyGovernorEnabled();
 
 // PH10: thrown when queued interaction tasks are cancelled by a device-state
 // reset (e.g. saved-device switch). Classified as cancellation, not failure,
@@ -568,7 +591,7 @@ const resolveRestPolicy = (method: string, path: string, baseUrl: string) => {
 };
 
 const shouldBlockForState = (intent: InteractionIntent, allowDuringDiscovery?: boolean, allowDuringError?: boolean) => {
-  if (isTestEnv()) return false;
+  if (isGovernorBypassed()) return false;
   const snapshot = getDeviceStateSnapshot();
   const state = snapshot.state;
   if (state === "UNKNOWN" || state === "DISCOVERING") {
@@ -630,7 +653,7 @@ const invalidateRestReadStateForWrite = (method: string, path: string, baseUrl: 
 };
 
 export const withRestInteraction = async <T>(meta: RestRequestMeta, handler: () => Promise<T>): Promise<T> => {
-  if (isTestEnv()) {
+  if (isGovernorBypassed()) {
     markDeviceRequestStart();
     try {
       const result = await handler();
@@ -945,7 +968,7 @@ const applyTelnetConnectPacing = async (hostScope: string, action: TraceActionCo
 };
 
 export const withFtpInteraction = async <T>(meta: FtpRequestMeta, handler: () => Promise<T>): Promise<T> => {
-  if (isTestEnv()) {
+  if (isGovernorBypassed()) {
     markDeviceRequestStart();
     try {
       const result = await handler();
@@ -1072,7 +1095,7 @@ export const withTelnetInteraction = async <T>(meta: TelnetRequestMeta, handler:
   // discovery-path acquisition composes harmlessly with this one.
   const pollingPause = pollingPauseRegistry.acquirePause();
   try {
-    if (isTestEnv()) {
+    if (isGovernorBypassed()) {
       markDeviceRequestStart();
       try {
         const result = await handler();

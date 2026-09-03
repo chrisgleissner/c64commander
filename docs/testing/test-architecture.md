@@ -145,8 +145,27 @@ Required client behavior:
 - Recover from transient failure without retry storms.
 - Keep real hardware out of ordinary CI load tests.
 
+### Which environments run the governor
+
+`VITE_ENABLE_TEST_PROBES=1` used to disable the device-safety governor as a side effect, so every
+probe build recorded an ungoverned request pattern. The two are now separate settings
+(`HARD27-036`):
+
+- `VITE_DEVICE_SAFETY_GOVERNOR=1` keeps the governor on, `=0` turns it off, and either value wins
+  over every automated-environment signal.
+- `globalThis.__c64uForceInteractionScheduling = true` is the in-test equivalent and still works.
+- With neither set, the governor is off under Vitest, Playwright, `NODE_ENV=test` and any probe
+  build, and on everywhere else.
+- `build` resolves the setting through `scripts/lib/device-safety-governor.sh` before it enables
+  probes, and turns the governor on for any build that produces an APK or targets the real machine.
+  A run that also drives Playwright from the same `dist/` is left undeclared, because the golden
+  traces record the ungoverned pattern. The web E2E, screenshot, perf and Maestro CI jobs therefore
+  still run ungoverned.
+
 Tests:
 
+- `tests/unit/lib/deviceInteraction/deviceSafetyGovernorFlag.test.ts`
+- `tests/unit/scripts/deviceSafetyGovernor.test.ts`
 - `tests/unit/lib/deviceInteraction/latestIntentWriteLane.test.ts`
 - `tests/unit/hooks/useDeviceBoundSlider.test.ts`
 - `tests/unit/configWriteThrottle.test.ts`
