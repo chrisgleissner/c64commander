@@ -309,11 +309,15 @@ TypeScript remains the business-logic source of truth via repository interfaces;
 | Baseline recovery    | Staged + atomic swap | Staged + atomic swap | N/A (no large ingest) |
 
 The iOS row for large-archive ingest said "streaming" and described the intended design rather
-than the shipped one. `HvscIngestionPlugin.swift` reads the whole `.7z` with `Data(contentsOf:)`
-and SWCompression's `SevenZipContainer.open` materialises every entry before any file is written,
-so the peak footprint is the archive plus every extracted file plus the LZMA dictionary. On a
-device with a tighter jetsam limit the process can be killed part-way through. Making that
-genuinely streaming is outstanding; the table now says what the code does (HARD27-018).
+than the shipped one. `HvscIngestionPlugin.swift` hands SWCompression's `SevenZipContainer.open`
+the whole archive and gets back every entry, decompressed, before any file is written, so the
+peak footprint is every extracted file plus the LZMA dictionary. On a device with a tighter
+jetsam limit the process can be killed part-way through. The archive itself is read with
+`.mappedIfSafe`, so it is paged from disk rather than copied onto the heap, which takes the
+archive's own size out of that peak; the decompressed entries remain the dominant term. Making
+the extraction genuinely entry-by-entry needs a decoder that can be driven one entry at a time,
+which is a dependency change rather than a loop change, and is outstanding. The table says what
+the code does (HARD27-018).
 
 Baseline recovery is staged on both platforms as of HARD27-018. iOS extracts into
 `hvsc/library-staging` and promotes it by rename after the row-count check, so a kill or a

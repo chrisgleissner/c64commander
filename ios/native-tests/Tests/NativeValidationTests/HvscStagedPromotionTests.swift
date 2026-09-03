@@ -95,6 +95,13 @@ final class HvscStagedPromotionTests: XCTestCase {
         XCTAssertEqual(body.components(separatedBy: "try? fileManager.moveItem(at: oldRoot, to: libraryRoot)").count - 1, 2)
     }
 
+    func testTheArchiveIsMappedRatherThanReadIntoTheHeap() throws {
+        let source = try pluginSource()
+
+        XCTAssertTrue(source.contains("Data(contentsOf: archiveUrl, options: [.mappedIfSafe])"))
+        XCTAssertFalse(source.contains("Data(contentsOf: archiveUrl)"))
+    }
+
     func testArchitectureTableNoLongerClaimsIosStreamsTheArchive() throws {
         let repoRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

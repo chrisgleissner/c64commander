@@ -179,7 +179,9 @@ public final class HvscIngestionPlugin: CAPPlugin, CAPBridgedPlugin {
                     processedCount: 0, totalCount: nil, currentFile: nil,
                     songsIngested: 0, songsDeleted: 0)
 
-                let archiveData = try Data(contentsOf: archiveUrl)
+                /* Mapped, not copied: the archive is already on disk, so reading it into the heap
+                   added its whole size to a peak footprint that is tight enough to be killed. */
+                let archiveData = try Data(contentsOf: archiveUrl, options: [.mappedIfSafe])
                 let entries = try SevenZipContainer.open(container: archiveData)
 
                 IOSDiagnostics.log(.info, "HvscIngestion: archive opened", details: [
