@@ -8,6 +8,7 @@
 
 import { addErrorLog } from "@/lib/logging";
 import { MockC64U } from "@/lib/native/mockC64u";
+import { isNativePlatform } from "@/lib/native/platform";
 
 let activeMockBaseUrl: string | null = null;
 let activeFtpPort: number | null = null;
@@ -17,6 +18,22 @@ let startPromise: Promise<{ baseUrl: string; ftpPort?: number; token?: string }>
 const loadMockConfigPayload = async () => {
   const module = await import("@/lib/mock/mockConfig");
   return module.getMockConfigPayload();
+};
+
+// HARD27-027: only a native build carries the simulated device (an HTTP server
+// inside the app). A browser build has no such server, so Demo Mode there would
+// be a badge over requests still going to the real, unreachable host. A build
+// under test probes keeps the demo path: the E2E and screenshot runs drive it
+// deliberately, with or without an injected mock server.
+export const isSimulatedDeviceAvailable = (): boolean => {
+  if (isNativePlatform()) return true;
+  if (typeof window !== "undefined") {
+    const win = window as Window & { __c64uMockServerBaseUrl?: string; __c64uTestProbeEnabled?: boolean };
+    if (win.__c64uMockServerBaseUrl) return true;
+    if (win.__c64uTestProbeEnabled) return true;
+  }
+  const env = import.meta.env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
+  return env?.VITE_ENABLE_TEST_PROBES === "1";
 };
 
 export const getActiveMockBaseUrl = () => activeMockBaseUrl;

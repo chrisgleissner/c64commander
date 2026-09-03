@@ -35,6 +35,7 @@ import {
   getActiveMockBaseUrl,
   getActiveMockFtpPort,
   getActiveMockToken,
+  isSimulatedDeviceAvailable,
   startMockServer,
   stopMockServer,
 } from "@/lib/mock/mockServer";
@@ -1123,6 +1124,14 @@ const transitionToDemoActive = async (
       trigger,
       baseUrl: activeMockUrl,
     });
+  } else if (!isSimulatedDeviceAvailable()) {
+    // HARD27-027: without a simulated device there is nothing to demonstrate.
+    // Entering DEMO_ACTIVE anyway counted as connected, so every card queried
+    // the stored real host - powered off, which is why demo was offered - and
+    // failed, while the badge read Demo. Offline is the honest state.
+    addLog("info", "Demo mode has no simulated device on this platform; staying offline", { trigger });
+    await transitionToOfflineNoDemo(trigger);
+    return;
   } else {
     const fallbackHost = resolveDeviceHostFromStorage();
     const fallbackBaseUrl = buildBaseUrlFromDeviceHost(fallbackHost);

@@ -243,6 +243,7 @@ import { variant } from "@/generated/variant";
 import { persistDiscoveredDevice, startDeviceDiscovery } from "@/lib/deviceDiscovery/discoveryManager";
 import { formatDiscoveredDeviceSubtitle, formatDiscoveredDeviceTitle } from "@/lib/deviceDiscovery/display";
 import type { DeviceDiscoveryCandidate } from "@/lib/deviceDiscovery/types";
+import { isSimulatedDeviceAvailable } from "@/lib/mock/mockServer";
 
 type Theme = "light" | "dark" | "system";
 
@@ -507,7 +508,10 @@ export default function SettingsPage() {
   );
   const commoserveEnabled = flags.commoserve_enabled;
   const hvscEnabled = flags.hvsc_enabled;
-  const demoModeFeatureEnabled = flags.demo_mode_enabled;
+  // HARD27-027: the flag says the variant offers Demo Mode; the platform says
+  // whether a simulated device can exist here. A browser build has none, so the
+  // toggle would only route the app at the real host under a Demo badge.
+  const demoModeFeatureEnabled = flags.demo_mode_enabled && isSimulatedDeviceAvailable();
   const resolvedArchiveConfig = useMemo(
     () =>
       resolveArchiveClientConfig(

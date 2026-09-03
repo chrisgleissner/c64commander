@@ -68,6 +68,7 @@ vi.mock("@/lib/mock/mockServer", () => ({
   getActiveMockBaseUrl: () => null,
   getActiveMockFtpPort: () => null,
   getActiveMockToken: () => null,
+  isSimulatedDeviceAvailable: () => true,
 }));
 
 vi.mock("@/lib/config/appSettings", () => ({

@@ -103,6 +103,7 @@ vi.mock("../../../src/lib/mock/mockServer", () => ({
   getActiveMockBaseUrl,
   getActiveMockFtpPort,
   getActiveMockToken,
+  isSimulatedDeviceAvailable: vi.fn(() => true),
 }));
 
 vi.mock("../../../src/lib/deviceDiscovery/discoveryManager", () => ({
