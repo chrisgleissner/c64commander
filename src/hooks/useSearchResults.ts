@@ -14,8 +14,7 @@ import { variant } from "@/generated/variant";
 import { loadSidRadioEnabled } from "@/lib/config/appSettings";
 import { deriveDeviceCapabilities } from "@/lib/deviceCapabilities";
 import { t } from "@/lib/i18n";
-import { addErrorLog } from "@/lib/logging";
-import { PLAYBACK_SESSION_KEY } from "@/pages/playFiles/playFilesUtils";
+import { readStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
 import { loadPickedEntryIds } from "@/lib/search/history";
 import { getSearchEntries, subscribeSearchEntries } from "@/lib/search/registry";
 import { resolveEntry, type RequirementContext } from "@/lib/search/requirements";
@@ -27,20 +26,7 @@ export const entryTitle = (entry: SearchEntry): string => t(entry.titleKey, entr
 export const entrySubtitle = (entry: SearchEntry): string | null =>
   entry.subtitleKey && entry.subtitleDefault ? t(entry.subtitleKey, entry.subtitleDefault) : null;
 
-const hasRestorableSession = (): boolean => {
-  if (typeof sessionStorage === "undefined") return false;
-  try {
-    const raw = sessionStorage.getItem(PLAYBACK_SESSION_KEY);
-    if (!raw) return false;
-    const parsed = JSON.parse(raw) as { currentItemId?: unknown } | null;
-    return Boolean(parsed && typeof parsed === "object" && parsed.currentItemId);
-  } catch (error) {
-    addErrorLog("Failed to read the playback session while resolving a search requirement", {
-      error: (error as Error).message,
-    });
-    return false;
-  }
-};
+const hasRestorableSession = (): boolean => Boolean(readStoredPlaybackSession()?.currentItemId);
 
 /**
  * Everything a requirement is evaluated against, assembled from live app state.

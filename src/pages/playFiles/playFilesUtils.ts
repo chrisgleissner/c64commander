@@ -11,6 +11,9 @@ import { extractAudioMixerItems as extractAudioMixerItemsFromLib } from "@/lib/c
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import { getPlayCategory, type PlayFileCategory } from "@/lib/playback/fileTypes";
 import type { PlaylistItem } from "./types";
+// Re-exported from its owning store so the key and the storage it lives in
+// cannot drift apart. See src/lib/playback/playbackSessionStore.ts.
+export { PLAYBACK_SESSION_KEY } from "@/lib/playback/playbackSessionStore";
 export type { AudioMixerItem } from "@/lib/config/audioMixerItems";
 export const extractAudioMixerItems = extractAudioMixerItemsFromLib;
 
@@ -19,7 +22,6 @@ export const SHARED_PLAYLIST_STORAGE_KEY = "c64u_playlist:v2:shared";
 export const buildPlaylistStorageKey = (deviceId: string) => `c64u_playlist:v1:${deviceId}`;
 export const LAST_DEVICE_ID_KEY = "c64u_last_device_id";
 export const PLAYLIST_STORAGE_PREFIX = "c64u_playlist:v1:";
-export const PLAYBACK_SESSION_KEY = "c64u_playback_session:v1";
 export const DEFAULT_SONG_DURATION_MS = 3 * 60 * 1000;
 export const DURATION_MIN_SECONDS = 1;
 export const DURATION_MAX_SECONDS = 3600;

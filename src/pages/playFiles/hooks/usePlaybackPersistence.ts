@@ -9,7 +9,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from "../types";
 import {
-  PLAYBACK_SESSION_KEY,
   PLAYLIST_STORAGE_PREFIX,
   buildPlaylistStorageKey,
   isPlaybackSessionRestoreStale,
@@ -20,6 +19,11 @@ import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import { resolveLocalRuntimeFile } from "@/lib/sourceNavigation/localSourceAdapter";
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from "@/lib/playback/fileLibraryUtils";
 import type { PlaybackClock } from "@/lib/playback/playbackClock";
+import {
+  clearStoredPlaybackSession,
+  readStoredPlaybackSession,
+  writeStoredPlaybackSession,
+} from "@/lib/playback/playbackSessionStore";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getPlaylistDataRepository } from "@/lib/playlistRepository";
@@ -292,25 +296,12 @@ export function usePlaybackPersistence({
 
   // Restore Session (Step 1: Read)
   useEffect(() => {
-    if (typeof sessionStorage === "undefined") return;
-    try {
-      const raw = sessionStorage.getItem(PLAYBACK_SESSION_KEY);
-      if (!raw) {
-        sessionRestoreSettledRef.current = true;
-        return;
-      }
-      const parsed = JSON.parse(raw) as StoredPlaybackSession;
-      if (!parsed || typeof parsed !== "object") {
-        sessionRestoreSettledRef.current = true;
-        return;
-      }
-      pendingPlaybackRestoreRef.current = parsed;
-    } catch (error) {
+    const stored = readStoredPlaybackSession();
+    if (!stored) {
       sessionRestoreSettledRef.current = true;
-      addErrorLog("Failed to restore playback session", {
-        error: (error as Error).message,
-      });
+      return;
     }
+    pendingPlaybackRestoreRef.current = stored;
   }, []);
 
   // Restore Playlist (Local Storage)
@@ -582,13 +573,12 @@ export function usePlaybackPersistence({
 
   // Persist Session
   useEffect(() => {
-    if (typeof sessionStorage === "undefined") return;
     if (!isPlaying && !isPaused) {
       // A freshly mounted instance starts not-playing; deleting the stored
       // session here would destroy a live session before the async restore
       // applies it (navigation remounts the page — playback must survive).
       if (!sessionRestoreSettledRef.current) return;
-      sessionStorage.removeItem(PLAYBACK_SESSION_KEY);
+      clearStoredPlaybackSession();
       return;
     }
     const currentItemLabel = currentIndex >= 0 ? (playlist[currentIndex]?.label ?? null) : null;
@@ -608,14 +598,7 @@ export function usePlaybackPersistence({
       randomSeed: shuffleSeed,
       updatedAt: new Date().toISOString(),
     };
-    try {
-      sessionStorage.setItem(PLAYBACK_SESSION_KEY, JSON.stringify(payload));
-    } catch (error) {
-      addErrorLog("Failed to persist playback session", {
-        playlistStorageKey,
-        error: (error as Error).message,
-      });
-    }
+    writeStoredPlaybackSession(payload);
   }, [
     currentIndex,
     currentPlaylistItemId,
