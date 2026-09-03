@@ -119,6 +119,7 @@ const usePlaybackHarness = ({
     autoAdvanceDueAtMs,
     setCurrentSubsongCount: vi.fn(),
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
+    setSessionRestoreSettled: vi.fn(),
     resolvedDeviceId: "device-1",
     playlistStorageKey,
     localEntriesBySourceId,

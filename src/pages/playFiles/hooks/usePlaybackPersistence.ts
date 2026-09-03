@@ -87,6 +87,13 @@ interface UsePlaybackPersistenceProps {
   autoAdvanceGuardRef: React.MutableRefObject<any>; // Using any to avoid importing local type from Page
   setTrackInstanceId: (value: number) => void;
   setAutoAdvanceDueAtMs: (value: number | null) => void;
+  /**
+   * Called with `true` once the stored session has been read and either applied or
+   * rejected. The Play page gates the latched transport commands on it: a "play"
+   * from the Home "Last" tile that drains while the restore is still pending sees
+   * `isPaused` false and starts the tune from the beginning instead of resuming.
+   */
+  setSessionRestoreSettled: (settled: boolean) => void;
 }
 
 export function usePlaybackPersistence({
@@ -126,6 +133,7 @@ export function usePlaybackPersistence({
   autoAdvanceGuardRef,
   setTrackInstanceId,
   setAutoAdvanceDueAtMs,
+  setSessionRestoreSettled,
 }: UsePlaybackPersistenceProps) {
   const playlistRepository = getPlaylistDataRepository();
   const repositorySnapshot = usePlaylistRepositorySyncSnapshot(playlistStorageKey);
@@ -133,6 +141,15 @@ export function usePlaybackPersistence({
   // True once the stored session has been read and either applied or rejected;
   // until then the persist effect must not delete the stored session.
   const sessionRestoreSettledRef = useRef(false);
+  const setSessionRestoreSettledRef = useRef(setSessionRestoreSettled);
+  setSessionRestoreSettledRef.current = setSessionRestoreSettled;
+  // One place flips the flag, so the ref the persist effect reads and the state
+  // the page gates its transport latch on cannot disagree.
+  const markSessionRestoreSettled = useCallback(() => {
+    if (sessionRestoreSettledRef.current) return;
+    sessionRestoreSettledRef.current = true;
+    setSessionRestoreSettledRef.current(true);
+  }, []);
   const hydratedPlaylistKeyRef = useRef<string | null>(null);
   const completedInitialRestoreKeyRef = useRef<string | null>(null);
   const hasPlaylistRef = useRef(false);
@@ -298,7 +315,7 @@ export function usePlaybackPersistence({
   useEffect(() => {
     const stored = readStoredPlaybackSession();
     if (!stored) {
-      sessionRestoreSettledRef.current = true;
+      markSessionRestoreSettled();
       return;
     }
     pendingPlaybackRestoreRef.current = stored;
@@ -408,13 +425,13 @@ export function usePlaybackPersistence({
     if (!playlist.length) {
       if (completedInitialRestoreKeyRef.current === playlistStorageKey) {
         pendingPlaybackRestoreRef.current = null;
-        sessionRestoreSettledRef.current = true;
+        markSessionRestoreSettled();
       }
       return;
     }
     if (pending.playlistKey !== playlistStorageKey) {
       pendingPlaybackRestoreRef.current = null;
-      sessionRestoreSettledRef.current = true;
+      markSessionRestoreSettled();
       return;
     }
     const matchedIndexById = pending.currentItemId
@@ -423,7 +440,7 @@ export function usePlaybackPersistence({
     const matchedIndex = matchedIndexById >= 0 ? matchedIndexById : pending.currentIndex;
     if (matchedIndex < 0 || matchedIndex >= playlist.length) {
       pendingPlaybackRestoreRef.current = null;
-      sessionRestoreSettledRef.current = true;
+      markSessionRestoreSettled();
       return;
     }
     const now = Date.now();
@@ -486,7 +503,7 @@ export function usePlaybackPersistence({
       playedClockRef.current.hydrate(Math.max(0, pending.playedMs), null);
     }
     pendingPlaybackRestoreRef.current = null;
-    sessionRestoreSettledRef.current = true;
+    markSessionRestoreSettled();
   }, [
     applyRestoredTraversalState,
     playlist,

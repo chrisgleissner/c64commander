@@ -18,6 +18,16 @@ import { getCurrentPlaybackSnapshotLabel } from "@/lib/snapshot/currentPlaybackS
 
 const PLAYLIST_REPOSITORY_STORAGE_KEY = "c64u_playlist_repo:v1";
 
+/*
+ * The Play page gates its latched transport commands on the settle callback, so the order these
+ * two land in is what decides whether a "play" from the Home "Last" tile resumes the stored
+ * position or restarts the tune. Recorded here so a test can assert it.
+ */
+const restoreOrder: string[] = [];
+const sessionRestoreSettledSpy = vi.fn(() => {
+  restoreOrder.push("settled");
+});
+
 const usePlaybackPersistenceHarness = ({
   resolvedDeviceId = "device-1",
   playlistStorageKey,
@@ -45,7 +55,11 @@ const usePlaybackPersistenceHarness = ({
   const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isPaused, setIsPausedState] = useState(false);
+  const setIsPaused = (value: boolean) => {
+    if (value) restoreOrder.push("paused");
+    setIsPausedState(value);
+  };
   const [elapsedMs, setElapsedMs] = useState(0);
   const [playedMs, setPlayedMs] = useState(0);
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
@@ -77,6 +91,7 @@ const usePlaybackPersistenceHarness = ({
     autoAdvanceDueAtMs,
     setCurrentSubsongCount: vi.fn(),
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
+    setSessionRestoreSettled: sessionRestoreSettledSpy,
     resolvedDeviceId,
     playlistStorageKey,
     localEntriesBySourceId,
@@ -130,6 +145,8 @@ describe("usePlaybackPersistence", () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+    restoreOrder.length = 0;
+    sessionRestoreSettledSpy.mockClear();
     resetPlaylistDataRepositoryForTests();
   });
 
@@ -1821,5 +1838,57 @@ describe("usePlaybackPersistence", () => {
     });
     expect(result.current.elapsedMs).toBe(7000);
     expect(result.current.isPaused).toBe(true);
+  });
+  // HARD27-032: the Play page holds the latched transport commands until this
+  // fires. The Home "Last" tile publishes "play", and a "play" that drains
+  // while the restore is still pending sees isPaused false and starts the tune
+  // from the beginning instead of resuming the stored position.
+  it("does not report the session restore settled before the paused position has been applied", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "local",
+            path: "/Music/demo.sid",
+            name: "demo.sid",
+            sourceId: "local-source",
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+    writeStoredPlaybackSession({
+      playlistKey: playlistStorageKey,
+      currentItemId: null,
+      currentItemLabel: "demo.sid",
+      currentIndex: 0,
+      isPlaying: true,
+      isPaused: true,
+      elapsedMs: 34599,
+      playedMs: 34599,
+      durationMs: 155000,
+      updatedAt: new Date().toISOString(),
+    });
+
+    const localEntriesBySourceId = new Map([["local-source", new Map([["/Music/demo.sid", { name: "demo.sid" }]])]]);
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId,
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.isPaused).toBe(true);
+      expect(sessionRestoreSettledSpy).toHaveBeenCalledWith(true);
+    });
+    expect(result.current.elapsedMs).toBe(34599);
+    expect(restoreOrder.indexOf("paused")).toBeGreaterThanOrEqual(0);
+    expect(restoreOrder.indexOf("paused")).toBeLessThan(restoreOrder.indexOf("settled"));
   });
 });

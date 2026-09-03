@@ -130,6 +130,7 @@ const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean
     autoAdvanceGuardRef,
     setTrackInstanceId: vi.fn(),
     setAutoAdvanceDueAtMs: vi.fn(),
+    setSessionRestoreSettled: vi.fn(),
   });
 
   return {

@@ -261,6 +261,10 @@ export default function PlayFilesPage() {
   const playlistSnapshotRef = useRef(playlist);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  // usePlaybackPersistence sets this once the stored session has been applied or
+  // rejected. Declared here because the transport latch below is declared long
+  // before that hook runs.
+  const [sessionRestoreSettled, setSessionRestoreSettled] = useState(false);
   const [playlistFilterInputText, setPlaylistFilterInputText] = useState("");
   const [playlistFilterText, setPlaylistFilterText] = useState("");
   const debouncedPlaylistFilterText = useDebouncedValue(playlistFilterInputText, 200);
@@ -635,6 +639,11 @@ export default function PlayFilesPage() {
   // F1 and F3 from anywhere, delivered through the latch (spec.md 9.5). Held until the stored
   // playlist has been restored: usePlaybackPersistence reads it in an effect declared below this
   // one, so a command drained on mount ran against an empty playlist and did nothing.
+  //
+  // HARD27-032: also held until the stored session has been applied. The session now survives
+  // process death, so the Home "Last" tile can arrive at a page that has its playlist but not yet
+  // its paused position, and a "play" drained there sees isPaused false and restarts the tune from
+  // the beginning instead of resuming where the user left off.
   useTransportCommands(
     (command) =>
       runTransportCommand(command, {
@@ -645,7 +654,7 @@ export default function PlayFilesPage() {
         next: () => void handleNext(),
         stop: () => void handleStop(),
       }),
-    playlist.length > 0,
+    playlist.length > 0 && sessionRestoreSettled,
   );
   const sleepTimer = useSleepTimer({
     onExpire: () => {
@@ -2333,6 +2342,7 @@ export default function PlayFilesPage() {
     autoAdvanceGuardRef,
     setTrackInstanceId,
     setAutoAdvanceDueAtMs,
+    setSessionRestoreSettled,
   });
 
   useEffect(() => {
