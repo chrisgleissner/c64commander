@@ -50,6 +50,9 @@ type HvscIngestionPlugin = {
   }) => Promise<HvscNativeIngestResult>;
   cancelIngestion: (options?: { traceContext?: NativeTraceContext }) => Promise<void>;
   getIngestionStats: (options?: { traceContext?: NativeTraceContext }) => Promise<{ metadataRows: number }>;
+  getStorageBudget: (options?: {
+    traceContext?: NativeTraceContext;
+  }) => Promise<{ availableBytes: number; libraryPresent: boolean }>;
   readArchiveChunk: (options: {
     relativeArchivePath: string;
     offsetBytes: number;
@@ -84,6 +87,10 @@ export const HvscIngestion = {
     }),
   getIngestionStats: () =>
     plugin.getIngestionStats({
+      traceContext: resolveNativeTraceContext(getActiveAction()),
+    }),
+  getStorageBudget: () =>
+    plugin.getStorageBudget({
       traceContext: resolveNativeTraceContext(getActiveAction()),
     }),
   readArchiveChunk: (options: { relativeArchivePath: string; offsetBytes: number; lengthBytes: number }) =>

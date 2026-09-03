@@ -560,6 +560,9 @@ export type DownloadArchiveOptions = {
   cancelTokens: Map<string, { cancelled: boolean }>;
   emitProgress: (event: Omit<HvscProgressEvent, "ingestionId" | "elapsedTimeMs">) => void;
   retainInMemoryBuffer?: boolean;
+  // Resolved by the caller so the free-space gate and the download share one
+  // HEAD request instead of issuing the same one twice per archive.
+  expectedSizeBytesHint?: number | null;
 };
 
 export const ensureNotCancelledWith = (
@@ -602,7 +605,7 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
     await deleteCachedArchive(archivePath);
     addLog("info", "HVSC download started", { archiveName, url: downloadUrl });
     const downloadHeapBefore = readHeapUsageBytes();
-    const totalBytesHint = await fetchContentLength(downloadUrl);
+    const totalBytesHint = options.expectedSizeBytesHint ?? (await fetchContentLength(downloadUrl));
     expectedSizeBytes = totalBytesHint;
     if (shouldUseNativeDownload()) {
       const cacheDir = getHvscCacheDir();

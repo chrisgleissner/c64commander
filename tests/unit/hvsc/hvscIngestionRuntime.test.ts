@@ -60,6 +60,10 @@ const nativeHvscPlugin = vi.hoisted(() => ({
     archiveBytes: 10,
   })),
   cancelIngestion: vi.fn(async () => undefined),
+  getStorageBudget: vi.fn(async () => ({
+    availableBytes: 8 * 1024 * 1024 * 1024,
+    libraryPresent: false,
+  })),
   addListener: vi.fn(async () => ({ remove: nativeProgressListenerRemove })),
 }));
 
@@ -729,6 +733,50 @@ describe("hvscIngestionRuntime", () => {
     await installOrUpdateHvsc("token-native");
 
     expect(Filesystem.downloadFile).toHaveBeenCalled();
+
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
+    } else {
+      delete (globalThis as { fetch?: typeof fetch }).fetch;
+    }
+  });
+
+  it("refuses to start a baseline install when the device lacks room for the extracted library", async () => {
+    const originalFetch = globalThis.fetch;
+    // 90 MB compressed. The measured HVSC baseline expands to roughly 5.5x its
+    // archive on disk, so this install needs several hundred MB more than the
+    // 300 MB the device reports free.
+    const archiveBytes = 90 * 1024 * 1024;
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: { get: () => String(archiveBytes) },
+    });
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    nativeHvscPlugin.getStorageBudget.mockResolvedValueOnce({
+      availableBytes: 300 * 1024 * 1024,
+      libraryPresent: false,
+    });
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(Filesystem.stat).mockRejectedValue(new Error("missing"));
+    vi.mocked(readCachedArchiveMarker).mockResolvedValue(null as any);
+
+    await expect(installOrUpdateHvsc("token-no-space")).rejects.toThrow(/not enough free space/i);
+    // The point of the gate is that the user is told before the transfer, not
+    // after waiting for it.
+    expect(Filesystem.downloadFile).not.toHaveBeenCalled();
 
     if (originalFetch) {
       globalThis.fetch = originalFetch;

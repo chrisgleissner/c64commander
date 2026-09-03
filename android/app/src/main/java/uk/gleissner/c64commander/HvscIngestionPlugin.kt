@@ -14,6 +14,7 @@ import android.content.ContentValues
 import android.database.DatabaseUtils
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.os.StatFs
 import android.os.Trace
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
@@ -106,6 +107,9 @@ open class HvscIngestionPlugin : Plugin() {
     }
     return message
   }
+
+  /** Overridable so a Robolectric test can supply a known figure; its [StatFs] shadow reports 0. */
+  internal open fun readAvailableBytes(dir: File): Long = StatFs(dir.absolutePath).availableBytes
 
   internal open fun createArchiveExtractor(): HvscArchiveExtractor {
     return DefaultHvscArchiveExtractor { resolveBundledSevenZipExecutable() }
@@ -904,6 +908,34 @@ open class HvscIngestionPlugin : Plugin() {
                 error
         )
       }
+    }
+  }
+
+  /**
+   * Reports the storage the JS install flow needs to size its pre-flight check: how much room is
+   * left on the volume that holds [Context.getFilesDir], and whether a library is already installed.
+   * The second value matters because a baseline reinstall keeps the previous library on disk until
+   * the new one is promoted (see [promoteBaselineLibrary]), so it peaks at two library trees rather
+   * than one. See HARD27-028.
+   */
+  @PluginMethod
+  fun getStorageBudget(call: PluginCall) {
+    try {
+      val filesDir = context.filesDir
+      val payload = JSObject()
+      payload.put("availableBytes", readAvailableBytes(filesDir))
+      payload.put("libraryPresent", File(filesDir, "hvsc/library").isDirectory)
+      call.resolve(payload)
+    } catch (error: Exception) {
+      AppLogger.error(
+              pluginContextOrNull(),
+              logTag,
+              "Failed to read HVSC storage budget",
+              "HvscIngestionPlugin",
+              error,
+              traceFields(call)
+      )
+      call.reject(error.message, error)
     }
   }
 

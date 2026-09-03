@@ -1,0 +1,103 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v3.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
+import { describe, expect, it, vi } from "vitest";
+import {
+  HVSC_LIBRARY_EXPANSION_FACTOR,
+  ensureRoomForHvscInstall,
+  estimateHvscInstallBytes,
+  librariesResidentDuringInstall,
+} from "@/lib/hvsc/hvscStorageBudget";
+
+vi.mock("@/lib/logging", () => ({
+  addLog: vi.fn(),
+}));
+
+const MB = 1024 * 1024;
+const GB = 1024 * MB;
+
+describe("hvscStorageBudget", () => {
+  describe("estimateHvscInstallBytes", () => {
+    it("covers the archive plus one library on a first install", () => {
+      const estimate = estimateHvscInstallBytes(100 * MB, false);
+      expect(estimate.librariesResident).toBe(1);
+      expect(estimate.requiredBytes).toBe(100 * MB + 100 * MB * HVSC_LIBRARY_EXPANSION_FACTOR);
+    });
+
+    it("covers two libraries when one is already installed, because promotion keeps both", () => {
+      const estimate = estimateHvscInstallBytes(100 * MB, true);
+      expect(estimate.librariesResident).toBe(2);
+      expect(estimate.requiredBytes).toBe(100 * MB + 100 * MB * HVSC_LIBRARY_EXPANSION_FACTOR * 2);
+    });
+
+    it("stays above the footprint measured on the Pixel 4 rig", () => {
+      // Measured against an installed HVSC baseline: 82,932 KB of retained
+      // archive and 458,364 KB of extracted library.
+      const measuredArchiveBytes = 82_932 * 1024;
+      const measuredLibraryBytes = 458_364 * 1024;
+      const estimate = estimateHvscInstallBytes(measuredArchiveBytes, false);
+      expect(estimate.requiredBytes).toBeGreaterThan(measuredArchiveBytes + measuredLibraryBytes);
+    });
+
+    it("would be far too small at the archive-doubling rule the review proposed", () => {
+      const measuredArchiveBytes = 82_932 * 1024;
+      const measuredLibraryBytes = 458_364 * 1024;
+      expect(measuredArchiveBytes * 2).toBeLessThan(measuredArchiveBytes + measuredLibraryBytes);
+    });
+  });
+
+  describe("librariesResidentDuringInstall", () => {
+    it("reports one tree when no library is present", () => {
+      expect(librariesResidentDuringInstall(false)).toBe(1);
+    });
+
+    it("reports two trees when a library is present", () => {
+      expect(librariesResidentDuringInstall(true)).toBe(2);
+    });
+  });
+
+  describe("ensureRoomForHvscInstall", () => {
+    it("rejects with the required and available sizes when the device is too full", async () => {
+      const readBudget = vi.fn(async () => ({ availableBytes: 300 * MB, libraryPresent: false }));
+      await expect(ensureRoomForHvscInstall({ archiveBytes: 90 * MB, readBudget })).rejects.toThrow(
+        /Not enough free space.*needs about 0\.6 GB.*has 0\.3 GB free/is,
+      );
+    });
+
+    it("allows an install that fits", async () => {
+      const readBudget = vi.fn(async () => ({ availableBytes: 8 * GB, libraryPresent: false }));
+      await expect(ensureRoomForHvscInstall({ archiveBytes: 90 * MB, readBudget })).resolves.toBeUndefined();
+    });
+
+    it("refuses a reinstall that would fit only if the previous library were already gone", async () => {
+      // 90 MB archive: 0.62 GB with one library resident, 1.2 GB with two.
+      const readBudget = vi.fn(async () => ({ availableBytes: 900 * MB, libraryPresent: true }));
+      await expect(ensureRoomForHvscInstall({ archiveBytes: 90 * MB, readBudget })).rejects.toThrow(
+        /Not enough free space/i,
+      );
+    });
+
+    it("does not block when the archive size is unknown", async () => {
+      const readBudget = vi.fn(async () => ({ availableBytes: 1, libraryPresent: false }));
+      await expect(ensureRoomForHvscInstall({ archiveBytes: null, readBudget })).resolves.toBeUndefined();
+      expect(readBudget).not.toHaveBeenCalled();
+    });
+
+    it("does not block when the platform exposes no storage budget", async () => {
+      const readBudget = vi.fn(async () => {
+        throw new Error("not implemented");
+      });
+      await expect(ensureRoomForHvscInstall({ archiveBytes: 90 * MB, readBudget })).resolves.toBeUndefined();
+    });
+
+    it("does not block when the platform reports a nonsense budget", async () => {
+      const readBudget = vi.fn(async () => ({ availableBytes: 0, libraryPresent: false }));
+      await expect(ensureRoomForHvscInstall({ archiveBytes: 90 * MB, readBudget })).resolves.toBeUndefined();
+    });
+  });
+});
