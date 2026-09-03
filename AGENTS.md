@@ -679,7 +679,13 @@ All TypeScript, TSX, and JSON files must be formatted with Prettier before commi
 
 - **DRY**: avoid duplication. Extract shared logic only when it improves clarity and current maintainability.
 - **KISS**: prefer simple, explicit solutions.
-- **Modularity**: keep files cohesive and responsibilities clear.
+- **Modularity**: keep files cohesive and responsibilities clear. `REVIEW.md` section 9 sets the
+  line: split a file that mixes concerns or grows past ~600 lines, and a file approaching ~1000
+  lines is expected to be refactored. `npm run lint:file-sizes` (part of `npm run lint`) enforces
+  the 1000-line end of that. Files that were already over it when the check landed carry a
+  recorded ceiling in `GRANDFATHERED` in `scripts/check-file-sizes.mjs`; a ceiling only ratchets
+  down, so a file may shrink but never grow past the length it had, and a real split has to lower
+  its entry. Adding a new entry to that list is not the way to pass the check.
 - **Readability first**: prefer clear naming over commentary.
 - **Explicitness**: make configuration, defaults, and assumptions discoverable.
 - **Fail fast**: validate inputs early and surface failures with context.
