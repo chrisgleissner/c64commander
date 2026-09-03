@@ -17,12 +17,13 @@ const serviceNames = (xml: string): string[] =>
 // Normalize for a drift comparison: drop XML comments, blank lines, and the
 // elements/permissions the reduced manifest is allowed to omit, then compare.
 const REMOVED_LINE_MARKERS = [
+  // Matches FOREGROUND_SERVICE and both of its typed variants by prefix.
   "android.permission.FOREGROUND_SERVICE",
   // The notification the reduced manifest has no foreground service to post.
   "android.permission.POST_NOTIFICATIONS",
-  "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
   "android.permission.WAKE_LOCK",
   ".BackgroundExecutionService",
+  ".LibraryInstallService",
 ];
 
 const normalizeShared = (xml: string): string =>
@@ -42,12 +43,15 @@ describe("AndroidManifest parity (full vs no-background)", () => {
     expect(usesPermissions(full)).toEqual([
       "android.permission.CHANGE_WIFI_MULTICAST_STATE",
       "android.permission.FOREGROUND_SERVICE",
+      "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
       "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
       "android.permission.INTERNET",
       "android.permission.POST_NOTIFICATIONS",
       "android.permission.WAKE_LOCK",
     ]);
     expect(serviceNames(full)).toContain(".BackgroundExecutionService");
+    // HARD27-028's HVSC install guard. Its dataSync type needs its own permission.
+    expect(serviceNames(full)).toContain(".LibraryInstallService");
   });
 
   it("the reduced manifest keeps INTERNET + multicast and drops the foreground service", () => {

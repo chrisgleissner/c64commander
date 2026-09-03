@@ -2,9 +2,12 @@
 <!--
   Reduced manifest for variants that disable background execution (e.g. C64U
   Remote). It is identical to AndroidManifest.xml except that it omits the
-  BackgroundExecutionService and the FOREGROUND_SERVICE,
-  FOREGROUND_SERVICE_MEDIA_PLAYBACK and WAKE_LOCK permissions, which are unused
-  when background execution is off. Selection is driven by build.gradle from the
+  BackgroundExecutionService, the LibraryInstallService, and the
+  FOREGROUND_SERVICE, FOREGROUND_SERVICE_MEDIA_PLAYBACK,
+  FOREGROUND_SERVICE_DATA_SYNC, WAKE_LOCK and POST_NOTIFICATIONS permissions,
+  which are unused when background execution is off. The HVSC install guard
+  degrades here: its plugin call is rejected and beginHvscInstallGuard logs a
+  warning rather than failing the install. Selection is driven by build.gradle from the
   generated variant metadata. Keep the shared parts in sync with
   AndroidManifest.xml (enforced by tests/unit/scripts/androidManifestParity.test.ts).
 -->
