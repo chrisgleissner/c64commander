@@ -1,0 +1,22 @@
+{
+  "comment": "HARD27-025: one private-LAN ADDRESS rule, shared by web/server/src/hostValidation.ts and android/.../LanHostClassification.kt. Only address literals and the loopback name appear here, because that part of the rule must give the same answer on both platforms. The name rules are deliberately platform policy and are not shared: the web server short-circuits `c64u`, `localhost` and `*.local` and resolves every other name (HARD27-030), while the Android cookie bypass has no resolver available and matches `c64u`, `u64` and `*.local` by name. `loopback` marks the hosts Android must still delegate cookies for, because there the loopback is the app's own origin rather than an Ultimate. The file lives under the Android test resources so the Kotlin test reads it from the classpath; the TypeScript test reads the same path from the repository root.",
+  "cases": [
+    { "host": "192.168.1.13", "privateLan": true, "loopback": false, "note": "RFC 1918 192.168/16" },
+    { "host": "10.0.0.9", "privateLan": true, "loopback": false, "note": "RFC 1918 10/8" },
+    { "host": "172.16.4.20", "privateLan": true, "loopback": false, "note": "RFC 1918 172.16/12 lower bound" },
+    { "host": "172.31.255.255", "privateLan": true, "loopback": false, "note": "RFC 1918 172.16/12 upper bound" },
+    { "host": "169.254.1.20", "privateLan": true, "loopback": false, "note": "IPv4 link-local" },
+    { "host": "fd00::1", "privateLan": true, "loopback": false, "note": "IPv6 unique local address" },
+    { "host": "fe80::1", "privateLan": true, "loopback": false, "note": "IPv6 link-local" },
+    { "host": "localhost", "privateLan": true, "loopback": true, "note": "loopback by name" },
+    { "host": "127.0.0.1", "privateLan": true, "loopback": true, "note": "IPv4 loopback" },
+    { "host": "127.0.0.2", "privateLan": true, "loopback": true, "note": "the whole 127/8 block is loopback" },
+    { "host": "::1", "privateLan": true, "loopback": true, "note": "IPv6 loopback" },
+    { "host": "8.8.8.8", "privateLan": false, "loopback": false, "note": "public address" },
+    { "host": "172.15.0.1", "privateLan": false, "loopback": false, "note": "just below RFC 1918 172.16/12" },
+    { "host": "172.32.0.1", "privateLan": false, "loopback": false, "note": "just above RFC 1918 172.16/12" },
+    { "host": "2001:db8::1", "privateLan": false, "loopback": false, "note": "public IPv6 documentation range" },
+    { "host": "256.0.0.1", "privateLan": false, "loopback": false, "note": "not a valid IPv4 address" },
+    { "host": "example.com", "privateLan": false, "loopback": false, "note": "a name is not an address; each platform resolves or refuses it by its own policy" }
+  ]
+}

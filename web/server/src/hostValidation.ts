@@ -34,6 +34,11 @@ export const isPrivateIpAddress = (address: string) => {
   return isPrivateIpv4(value) || isPrivateIpv6(value);
 };
 
+// An IPv6 literal keeps its brackets in a URL authority and in Java's
+// `URI.getHost()`, so both forms have to reach the same answer.
+export const normalizeHostname = (hostname: string) =>
+  hostname.trim().toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+
 // The bare hostname of a `host`, `host:port` or `[v6]:port` value.
 export const getHostnameFromHostValue = (hostValue: string): string | null => {
   const lower = hostValue.trim().toLowerCase();
@@ -48,12 +53,40 @@ export const getHostnameFromHostValue = (hostValue: string): string | null => {
   return lower;
 };
 
+// HARD27-025: the private-LAN address rule existed three times with three
+// different answers - here, in an orphaned app module now deleted, and in the
+// Android cookie bypass, which had no IPv6 and no 127/8. The address half of
+// the rule is now defined once here and mirrored by
+// `LanHostClassification.kt`; both are tested against
+// `android/app/src/test/resources/lan-host-classification.json`.
+//
+// The name half is deliberately not shared. This server resolves any name it
+// does not short-circuit and accepts it only when every resolved address is
+// private (HARD27-030), which is safer than matching a product name; the
+// Android cookie bypass runs inside a `CookieHandler` with no resolver
+// available, so it has to match `u64` and `c64u` by name.
+
+// The loopback is a private-LAN address, but on Android it is the app's own
+// origin. Exported so that exception is expressed against one definition.
+export const isLoopbackHost = (hostname: string) => {
+  const value = normalizeHostname(hostname);
+  if (value === "localhost" || value === "::1") return true;
+  return isPrivateIpv4(value) && value.startsWith("127.");
+};
+
+export const isPrivateLanAddress = (hostname: string) => {
+  const value = normalizeHostname(hostname);
+  if (!value) return false;
+  if (value === "localhost") return true;
+  return isPrivateIpAddress(value);
+};
+
 export const isTrustedInsecureHost = (hostValue: string) => {
   const hostname = getHostnameFromHostValue(hostValue);
   if (!hostname) return false;
-  if (hostname === "c64u" || hostname === "localhost") return true;
+  if (hostname === "c64u") return true;
   if (hostname.endsWith(".local")) return true;
-  return isPrivateIpAddress(hostname);
+  return isPrivateLanAddress(hostname);
 };
 
 export const normalizePassword = (value: unknown): string | null => {

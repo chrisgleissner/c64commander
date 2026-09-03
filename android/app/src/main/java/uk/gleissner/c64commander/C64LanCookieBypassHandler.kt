@@ -42,24 +42,17 @@ internal class C64LanCookieBypassHandler(
         return false
       }
 
-      val host = uri.host?.lowercase(Locale.ROOT) ?: return false
-      if (host == "u64" || host == "c64u" || host.endsWith(".local")) {
+      val host = LanHostClassification.normalize(uri.host ?: return false)
+      // No resolver is available inside a CookieHandler, so the two product
+      // hostnames and mDNS names are matched by name here. The web server
+      // resolves them instead; see hostValidation.ts.
+      if (host in LanHostClassification.PRODUCT_HOST_NAMES || host.endsWith(".local")) {
         return true
       }
-
-      val octets = host.split(".")
-      if (octets.size != 4) {
-        return false
-      }
-
-      val numbers = octets.map { part -> part.toIntOrNull() ?: return false }
-      return when {
-        numbers[0] == 10 -> true
-        numbers[0] == 172 && numbers[1] in 16..31 -> true
-        numbers[0] == 192 && numbers[1] == 168 -> true
-        numbers[0] == 169 && numbers[1] == 254 -> true
-        else -> false
-      }
+      // The loopback is a private-LAN address, but on Android it is this app's
+      // own origin - the dev server, the Capacitor bridge - and never an
+      // Ultimate, so its cookies are delegated rather than dropped.
+      return LanHostClassification.isPrivateLanAddress(host) && !LanHostClassification.isLoopback(host)
     }
   }
 }
