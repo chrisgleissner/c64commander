@@ -297,57 +297,16 @@ export const isDocumented = ({ literals, patterns }, id) =>
 export const EXCLUSIONS = new Map([
   ["app-toast", "the toast viewport itself, not a control; its buttons carry their own ids"],
   ["file-origin-icon", "a decorative origin marker on a row whose row is the control"],
+  ["search-results", "the search overlay's listbox container; its options carry their own ids"],
 ]);
 
 /*
  * Interactive controls that were already absent from the inventory when this check landed.
  * The list may only shrink: documenting one and leaving it here is reported as an error.
- * Entries are grouped by the surface they belong to, in the order the inventory would.
+ * It is now empty, so every interactive control in the app has an inventory entry and a
+ * new one has to be documented in the change that adds it.
  */
-export const UNDOCUMENTED_BASELINE = new Set([
-  /* Controls reached from Diagnostics that belong to another section of the inventory */
-  "device-safety-machine-input-cooldown",
-  "navigate-root",
-  "search-results",
-  /* The device password / auth challenge prompts */
-  "device-auth-challenge-cancel",
-  "device-auth-challenge-input",
-  "device-auth-challenge-submit",
-  "startup-manual-device-panel",
-  /* Add items sheet and the archive browser */
-  "add-items-confirm",
-  "add-items-deep-scan",
-  "add-items-filter",
-  "add-items-load-more",
-  "add-items-scope-folder",
-  "add-items-scope-source",
-  "archive-clear-selection",
-  "archive-search-button",
-  "archive-select-all",
-  "source-entry-row",
-  /* Play: the liked-tunes rows and the recently-played overflow row */
-  "liked-tune-play",
-  "liked-tune-unlike",
-  "recently-played-other-row",
-  /* Live View: adopting a sender the app is currently filtering out */
-  "av-mirror-adopt-sender",
-  /* Snapshots and REU restore */
-  "restore-reu-load",
-  "restore-reu-preload",
-  "restore-snapshot-confirm",
-  "snapshot-delete",
-  /* Settings rows added since the last verification pass */
-  "analytic-popup-return",
-  "config-retry",
-  "remote-input-port-toggle",
-  "settings-about-build-info",
-  "settings-app-style-match-my-device",
-  "settings-friendly-sid-names",
-  "settings-notification-duration-slider",
-  "settings-roms-auto",
-  "settings-show-section-descriptions",
-  "view-all-filter-input",
-]);
+export const UNDOCUMENTED_BASELINE = new Set([]);
 
 export const findInventoryDrift = ({ sourceIds, matchers, exclusions, baseline }) => {
   const undocumented = [];

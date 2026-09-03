@@ -213,6 +213,12 @@ not-connected / empty / single-device).
     - Filter snapshots — text — `snapshot-filter-input` — R✅ I✅
     - Type filters — buttons — `snapshot-filter-type-<type>` — R✅ I✅
     - Snapshot row — button — `snapshot-row` — R✅ I✅ (restores; carries its own delete and rename)
+    - Delete a snapshot — button — `snapshot-delete` — the destructive action on the row, which
+      stops the tap propagating to the row's own restore
+    - **Restore confirmation** (`restore-snapshot-dialog`) — Cancel, plus either the single
+      Restore — button — `restore-snapshot-confirm` — or, for an REU snapshot, the two ways it
+      can be applied: Preload on Startup — button — `restore-reu-preload` — and Load into REU —
+      button — `restore-reu-load`
     - RAM folder — button (`...`) — `ram-dump-folder-trigger` — R✅ I✅ — the same control as in Backup, at the end of the list
   - Reset — button (danger) — R✅ I✅ (confirm dialog) — keeps a tile of its own; it is among the most-reached controls in the app
   - Power — button (danger) — `home-power-actions` — R✅ I✅ — opens the **Power sheet** (`home-power-sheet`); disabled only when every row inside it is
@@ -280,6 +286,10 @@ not-connected / empty / single-device).
   - Reset — button — `live-view-stop` — R✅ I✅ `[visible only while a feed is live]` — the card header's own action, so it is reachable while the card is collapsed. Labelled "Reset" to match every other card header; the accessible name is "Stop Live View", which is what it does — it stops both feeds, releasing the multicast receiver and the audio track
   - Audio — Listen / Listening toggle — button — `av-audio-toggle` — R✅ I✅ _(flag `audio_mirror_enabled`; controls the shared app-wide session; the live dot is display-only)_
   - Video — Watch / Watching toggle — button — `av-video-toggle` — R✅ I✅ _(flag `video_mirror_enabled`; the check-preview canvas and fps badge are display-only)_
+  - Adopt this sender — button — `av-mirror-adopt-sender` `[only while packets arrive from a
+    sender the session is filtering out]` — the mirror pins one sender, so a second Ultimate in
+    the same multicast group is dropped rather than blended; this retargets the session at it.
+    Its label names the sender, so the user is not asked to adopt an anonymous address
   - Expand / collapse preview — button — `live-view-expand` — R✅ I✅ _(shown only while a video stream is active; toggles the check preview between check and immersive size)_
   - Stats — expand/collapse toggle — `stream-stats-toggle` — R✅ I✅ _(reveals the telemetry grid + the controls below; diagnostic)_
     - Frame-rate mode — segmented buttons ×4 — `stream-stats-mode-auto` / `-100` / `-50` / `-25` — R✅ I✅ _(user max presented rate; the governor may still demote below it)_
@@ -356,7 +366,9 @@ Listed below in the order they are rendered and walked by the focus ring.
 - Stop the station — button — `sid-radio-stop` — R✅ I✅ — labelled "Stop", on the source row at the
   top of the Now Playing card, beside the station it ends
 - Station chip — button — `sid-radio-chip-toggle` — R✅ I✅ _(expands `sid-radio-chip`; `sid-radio-why` explains the pick)_
-- Liked tunes — button — `sid-radio-liked-tunes-open` — R✅ I✅
+- Liked tunes — button — `sid-radio-liked-tunes-open` — R✅ I✅ — the sheet lists one row per liked
+  tune: Play — button — `liked-tune-play` `[disabled when the tune is not in the installed HVSC]` —
+  and Un-like — button — `liked-tune-unlike`
 - Rank the current tune: ✕ / ♥ — button — `now-playing-notforme` / `now-playing-like` — R✅ I✅
   _(group `now-playing-ranking`; flag `c64u_sid_ranking_enabled`)_ — right-aligned on the title row
   in that order, so the outermost control is the harmless one; both are 44 px outline buttons, the
@@ -367,7 +379,9 @@ Listed below in the order they are rendered and walked by the focus ring.
     station is running this is an interruption: the station keeps its place and carries on
   - Start a station from a result — button — `hvsc-search-start-station` — R✅ I✅ _(per row; hidden
     where the similarity corpus does not know the tune, so it cannot be offered and then fail)_
-  - Recently played — rows `recently-played-row` — R✅ I✅ _(shown on an empty query)_
+  - Recently played — rows `recently-played-row` — R✅ I✅ _(shown on an empty query)_ ; a recent
+    entry from outside the HVSC is `recently-played-other-row`, which replays it directly rather
+    than seeding a search
 - More like this — button — `sid-radio-start` — see above; available while a station is already
   running, which is when it is most wanted
 
@@ -422,6 +436,8 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   Interface). Each expands to `ConfigItemRow`s whose control is a select / slider
   / checkbox / text per item; Audio Mixer adds Reset + per-SID Solo; Clock adds
   Sync Clock; every category adds Refresh.
+- Retry — button — `config-retry` `[only when the category list itself failed to load]` — inside
+  `config-load-error`, which states the device's own message; re-runs the categories request
 
 ### 4.5 Settings (`/settings`)
 
@@ -444,6 +460,11 @@ Making SID Radio a chapter also unblocked the keypad: its minimum-song-length nu
 top-level ring stop, and Up/Down on a number input changes its value, so the ring could not get
 past it to anything below.
 
+- **App style**: one button per style plus **Match my device** — button —
+  `settings-app-style-match-my-device` — which follows the platform's own accent instead
+  of pinning a style ; Card descriptions — checkbox — `settings-show-section-descriptions`
+  — off by default, because the description costs about half the height of every closed
+  card on a small screen
 - **Display**: Theme (Auto/Light/Dark) — segmented buttons — R✅ I✅ ; Text size
   (Default/Large/Larger/Largest) — segmented — `settings-text-size` group with
   `settings-text-size-default|large|larger|largest` — R✅ I✅ ; Display
@@ -453,7 +474,9 @@ past it to anything below.
   (`settings-hide-status-bar`) / Hide navigation bar
   (`settings-hide-navigation-bar`) — R✅ I✅ ; default per build variant
   (`variant.runtime.default_hide_*`; `c64u-remote` ships both on)
-- **Device safety**: Allow circuit override — checkbox —
+- **Device safety**: Machine input cooldown (ms) — number —
+  `device-safety-machine-input-cooldown` — the coalescing window the app holds between
+  `machine:input` writes (0–2000) ; Allow circuit override — checkbox —
   `settings-allow-circuit-override` — R✅ I✅ ; the whole row is the target, so the
   label activates it as well as the box ; Keep device settings after a restart —
   checkbox — `settings-persist-config-to-flash` — R✅ I✅ _(default off: a device
@@ -560,9 +583,20 @@ when SID Radio is on]` ;
   `[disabled: Listen on is not Local — two tunes cannot sound at once on the C64's
 single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
   button — `settings-roms-fetch` — R✅ I✅ ; Remove — button —
-  `settings-roms-remove` — R✅ I✅ `[disabled: no ROMs stored]`
-- **Notifications**: visibility — select — R✅ I✅ ; duration — slider — R✅ I✅
-- **Build/info**: Take the tour — button — `settings-about-take-the-tour` — R✅ I✅ ;
+  `settings-roms-remove` — R✅ I✅ `[disabled: no ROMs stored]` ; Read them
+  automatically — checkbox — `settings-roms-auto` — on by default, because without the
+  ROMs accurate local playback is silent
+- **Play and disk lists**: Items shown before View all — number —
+  `settings-list-preview-limit` ; Friendly SID names — checkbox —
+  `settings-friendly-sid-names`
+- **Notifications**: visibility — select — R✅ I✅ ; duration — slider —
+  `settings-notification-duration-slider` — R✅ I✅ (2–8 s in 0.5 s steps, default 4 s;
+  it commits on release rather than on every step)
+- **Build/info**: the version block — `settings-about-build-info` — is itself the
+  control, with an accessible name of "Build information": repeated taps on it are the
+  developer-mode gesture. It sits on the block rather than on the card so it cannot
+  compete with the section's own toggle ; Take the tour — button —
+  `settings-about-take-the-tour` — R✅ I✅ ;
   REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅
   (`c64u-remote`: C64U User Guide — link — `settings-about-c64u-user-guide`
   — R✅ I✅) ; Open source licenses — button — R✅ I✅ (sub-route
@@ -651,12 +685,25 @@ startup/resume discovery completes while no configured device is reachable):
 Use — button — `startup-use-discovered-device-*` — R✅ I✅ ; Save — button —
 `startup-save-discovered-device-*` — R✅ I✅ ; password entry — password/buttons
 — `startup-device-password-*` — R✅ I✅ `[only for password-protected devices]` ;
-manual host/IP — text input — `startup-manual-device-host-input` — R✅ I✅
-`[when discovery finds no devices]` ; manual Connect — button —
-`startup-manual-device-connect` — R✅ I✅ `[when discovery finds no devices]` ;
+the manual entry form — `startup-manual-device-panel` `[when discovery finds no
+devices]`, which submits on Enter and holds: manual host/IP — text input —
+`startup-manual-device-host-input` — R✅ I✅ ; manual Connect — button —
+`startup-manual-device-connect` — R✅ I✅ ;
 Open Settings — button — `startup-device-discovery-open-settings` — R✅ I✅ ;
 Not now / Close — buttons — `startup-device-discovery-dismiss`,
 `startup-device-discovery-close` — R✅ I✅.
+
+**Device password prompt** (`device-auth-challenge-dialog`, raised whenever a device
+request comes back needing the network password, from any page): Network password —
+password — `device-auth-challenge-input` — autofocused, submits the form on Enter ;
+Cancel — button — `device-auth-challenge-cancel` ; Submit — button —
+`device-auth-challenge-submit` — reads "Connecting" while the retry is in flight. Both
+buttons are disabled during that retry, so the prompt cannot be double-submitted.
+
+**"View all" list overlay** (`SelectableActionList`, the shared list used by the Home,
+Play and Disks lists once they exceed the preview limit set by Settings → List preview
+limit): Filter — text — `view-all-filter-input` — filters the expanded list only, and
+carries its own clear button.
 
 **New disk dialog** (`new-disk-*`, Content Explorer, behind `new_disk_enabled`;
 opened from the Disks library's "New disk" button): Type — select — `new-disk-type`
@@ -690,6 +737,7 @@ navigation already excludes any key event targeted inside an open
 mechanism). Touch and the on-screen keyboard/quick-keys buttons remain
 ordinary focus-ring CTAs in both output modes.
 
+- Joystick port — switch — `remote-input-port-toggle` — R✅ I✅ — port 1 when off, port 2 when on
 - Output mode toggle: Joystick / Type — buttons — `remote-input-mode-joystick`,
   `remote-input-mode-type` — R✅ I✅ ; Joystick disabled with an inline hint on
   devices/firmware without `machine:input` (kernal-fallback tier); hidden in
@@ -1084,6 +1132,9 @@ so Back has a target inside the dialog before it reaches the dialog itself.
   zoom-window list)
 - Latency — funnel — button — `open-latency-filters` — the same filter editor pattern
   as the main list
+- ← Diagnostics — button — `analytic-popup-return` — the return control shared by every
+  screen built on `AnalyticPopup` (health history, latency and the three heat maps); it
+  sits in the title row, so Back has a visible equivalent
 
 **Test-only surface: Switch Lab.** `DeviceSwitchLabPage` and its launcher are bundled
 only in coverage-probe builds (`shouldBundleCoverageProbeModules`), so no release build
@@ -1092,6 +1143,57 @@ renders them and they are not part of the keypad surface. The launcher
 `VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON` is set; the page carries `switch-lab-from-device`,
 `switch-lab-to-device`, `switch-lab-iterations`, `switch-lab-delay-ms` and
 `switch-lab-run-soak`.
+
+---
+
+### 5.3 Add items (`add-items-sheet`)
+
+Opened from Play → **Add items to playlist** (`add-items-to-playlist`, §4.2) and from
+the Mount disk sheet's **Add disks** (`mount-sheet-add-disks`, §4.3). Code-verified
+against source, **not yet enumerated on hardware** — the R/I marks are omitted, as in
+§5.1.
+
+The sheet has three stages: pick a source, browse or search it, confirm the selection.
+
+**Source picker** — Local / C64U / HVSC / CommoServe — buttons — `import-option-*`
+(`import-option-{local,c64u,hvsc,commoserve}`). HVSC and CommoServe appear only when
+their feature flag and library state allow it.
+
+**Header**
+
+- Confirm — button — `add-items-confirm` — labelled by the caller ("Add", "Mount");
+  disabled while nothing is selected or a confirm is already running. It is rendered
+  **twice**: in the header on the compact profile (`showCompactHeaderConfirm`) and in
+  the footer otherwise, so exactly one is on screen at a time
+
+**Search and scope** (`[not shown for an archive source]`)
+
+- Search / filter — text — `add-items-filter` — its accessible name follows the scope:
+  "Filter this folder" or "Search the whole source"
+- Scope (`add-items-search-scope`) `[only when the source can search past the current
+  folder]`:
+  - This folder — button — `add-items-scope-folder`
+  - Everywhere — button — `add-items-scope-source`
+  - Scan — button — `add-items-deep-scan` `[only for a source that has to be walked
+    rather than one that answers as you type]` — runs the source-wide search
+
+**Browser** (`add-items-scroll`) — the folder listing, `ItemSelectionView`.
+
+- Root — button — `navigate-root` — jumps to the source root; disabled at the root
+- Up, Refresh — buttons — no testid; the pair either side of Root
+- Entry row — `source-entry-row` — a focusable row for a folder (Enter opens it) and a
+  plain row for a file, whose checkbox carries the selection. Its expanded detail is
+  `source-entry-detail`
+- Load more — button — `add-items-load-more` `[only while the source has more entries]`
+
+**Archive source** (`ArchiveSelectionView`) — search-first rather than folder-first.
+
+- Search — button — `archive-search-button` — disabled until the composed query has at
+  least one term and while a search is running
+- Select all (N) — button — `archive-select-all` `[only once there are results]`
+- Clear selection — button — `archive-clear-selection` `[only once something is
+  selected]`
+- Result row — `archive-result-row` — the checkbox in the row carries the selection
 
 ---
 
@@ -1133,3 +1235,9 @@ renders them and they are not part of the keypad surface. The launcher
 - Slider correctness cross-checked against the c64u firmware
   (`CPU Speed` read back as `4` after three keypad Right presses, then restored
   to `1`).
+- Mechanical completeness by `npm run lint:reference-docs`, which fails when an
+  interactive `data-testid` in `src/pages` or `src/components` is not mentioned here.
+  Its `UNDOCUMENTED_BASELINE` is empty, so all 298 interactive testids currently have an
+  entry. The check cannot judge keypad reachability: the sections marked as code-verified
+  (§5.1, §5.2, §5.3, and the entries added with them elsewhere) carry no R/I marks and
+  still need a device pass.
