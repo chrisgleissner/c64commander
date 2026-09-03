@@ -22,6 +22,26 @@ describe("normalizeTransportError", () => {
     expect(result.userMessage).toMatch(/IP address/);
   });
 
+  it("classifies the DNS failure Android actually reports", () => {
+    // Captured from CapacitorHttp on the Pixel 4 against an unresolvable host.
+    // Android says "Unable to resolve host", which none of the Node-shaped
+    // patterns above match.
+    const result = normalizeTransportError(
+      new Error('Unable to resolve host "c64u": No address associated with hostname'),
+      { host: "c64u" },
+    );
+    expect(result.class).toBe("dns");
+    expect(result.userMessage).toMatch(/Couldn't resolve 'c64u'/);
+  });
+
+  it("classifies the DNS marker c64api leaves after it flattens the message", () => {
+    // c64api.ts replaces a network failure with "Host unreachable (DNS)" before
+    // the classifier sees it, so the classifier has to recognise its own app's
+    // normalised form or the dns class is unreachable in production.
+    const result = normalizeTransportError(new Error("Host unreachable (DNS)"), { host: "c64u" });
+    expect(result.class).toBe("dns");
+  });
+
   it("classifies no-route errors", () => {
     const result = normalizeTransportError(new Error("Network is unreachable"), { host: "c64u" });
     expect(result.class).toBe("no-route");

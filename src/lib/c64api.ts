@@ -353,9 +353,14 @@ const resolveConfigWriteValue = (category: string, item: string, value: string |
     resolveDeclaredConfigWriteValue(category, item, value, categoryPayload),
   );
 
-const isDnsFailure = (message: string) => /unknown host|enotfound|ename_not_found|dns/i.test(message);
+// Includes Android's "Unable to resolve host", which CapacitorHttp reports for
+// an unresolvable device hostname and which the other patterns do not match.
+const isDnsFailure = (message: string) =>
+  /unknown host|enotfound|ename_not_found|dns|unable to resolve host/i.test(message);
 const isNetworkFailureMessage = (message: string) =>
-  /failed to fetch|networkerror|network request failed|unknown host|enotfound|ename_not_found|dns/i.test(message);
+  /failed to fetch|networkerror|network request failed|unknown host|enotfound|ename_not_found|dns|unable to resolve host/i.test(
+    message,
+  );
 const resolveHostErrorMessage = (message: string) =>
   isDnsFailure(message) ? "Host unreachable (DNS)" : "Host unreachable";
 const isDeviceNotReadyRequestGate = (message: string) => /device not ready for requests/i.test(message);
