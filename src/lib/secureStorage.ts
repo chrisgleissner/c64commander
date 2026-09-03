@@ -7,6 +7,7 @@
  */
 
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
+import { describeValueShape, reportFallback } from "@/lib/diagnostics/fallbackReporter";
 import { SecureStorage } from "@/lib/native/secureStorage";
 import { getSelectedSavedDevice, setSavedDevicePasswordFlag, subscribeSavedDevices } from "@/lib/savedDevices/store";
 
@@ -55,7 +56,10 @@ const parsePasswordState = (raw: string | null): PersistedPasswordState => {
         ),
       };
     }
-  } catch {
+  } catch (error) {
+    // A stored value that is not JSON is a password written before the envelope existed, so it is
+    // still usable. Report the shape only: the value itself is the password.
+    reportFallback("secureStorage.parsePasswordState", raw, { reason: describeValueShape(error) });
     return {
       version: 1,
       legacyDefaultPassword: raw,

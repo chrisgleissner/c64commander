@@ -19,6 +19,7 @@ import { notifyAuthRequired, notifyAuthSatisfied } from "@/lib/auth/authChalleng
 import { isAuthRequiredHttpStatus } from "@/lib/c64api/transportErrors";
 import { handleWebProxyGate } from "@/lib/c64api/webProxyGate";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
+import { reportFallback } from "@/lib/diagnostics/fallbackReporter";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
@@ -713,7 +714,8 @@ const noteRestReachable = (url: string, deviceHost: string, deviceInfo: DeviceIn
   const host = (() => {
     try {
       return new URL(url).host;
-    } catch {
+    } catch (error) {
+      reportFallback("c64api.noteRestReachable", error, { fallbackHost: deviceHost });
       return deviceHost;
     }
   })();

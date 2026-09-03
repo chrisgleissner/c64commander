@@ -219,9 +219,9 @@ const usePoliteAnnouncement = (text: string | null): string => {
 const buzz = (ms: number) => {
   try {
     navigator.vibrate?.(ms);
-  } catch {
+  } catch (error) {
     // Vibration is a nicety, never a requirement.
-    void 0;
+    void error;
   }
 };
 

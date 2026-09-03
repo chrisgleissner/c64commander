@@ -9,6 +9,7 @@
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { buildPayloadPreviewFromBytes } from "@/lib/tracing/payloadPreview";
+import { reportFallback } from "@/lib/diagnostics/fallbackReporter";
 import { buildArchiveQueryParam } from "./queryBuilder";
 import { resolveArchiveClientConfig, sanitizeArchiveHeadersForLogging } from "./config";
 import type {
@@ -38,7 +39,8 @@ type ArchiveFetch = typeof fetch;
 const isNativeArchiveRuntime = () => {
   try {
     return Capacitor.isNativePlatform();
-  } catch {
+  } catch (error) {
+    reportFallback("archive.isNativeArchiveRuntime", error);
     return false;
   }
 };

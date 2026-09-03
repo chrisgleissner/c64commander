@@ -12,6 +12,7 @@ import { formatLocalTime } from "@/lib/diagnostics/timeFormat";
 import { shouldSuppressDiagnosticsSideEffects } from "@/lib/diagnostics/diagnosticsOverlayState";
 import { toDiagnosticsDeviceAttribution, type DiagnosticsDeviceAttribution } from "@/lib/diagnostics/deviceAttribution";
 import { getTraceContextSnapshot } from "@/lib/tracing/traceContext";
+import { setFallbackReporter } from "@/lib/diagnostics/fallbackReporter";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -187,6 +188,13 @@ export const addLog = (level: LogLevel, message: string, details?: unknown) => {
 export const addErrorLog = (message: string, details?: unknown) => {
   addLog("error", message, details);
 };
+
+// Sites that recover from a failure by falling back to a default report it here rather than
+// swallowing it. `fallbackReporter` imports nothing so that `savedDevices/host.ts` can call it
+// without closing an import cycle back through this module; the sink is wired up from this side.
+setFallbackReporter((site, shape, context) => {
+  addLog("warn", `Recovered with a fallback: ${site}`, { site, valueShape: shape, ...context });
+});
 
 const trimStack = (stack?: string | null) => {
   if (!stack) return null;

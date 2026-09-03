@@ -39,7 +39,11 @@ const parseUrl = (url: string) => {
       port: parsed.port ? Number(parsed.port) : parsed.protocol === "https:" ? 443 : 80,
       protocol: parsed.protocol.replace(":", ""),
     };
-  } catch {
+  } catch (error) {
+    // Deliberately not routed through `reportFallback`. This runs inside the diagnostics export,
+    // so a log write here would put an entry in the very log the export is collecting. The
+    // failure is already visible in the snapshot: the record keeps the raw `url` next to the null
+    // hostname, port and protocol.
     return { hostname: null, port: null, protocol: null };
   }
 };

@@ -95,6 +95,26 @@ export default tseslint.config(
       "@typescript-eslint/no-duplicate-type-constituents": "error",
     },
   },
+  {
+    // HARD27-035. REVIEW.md §7 makes a `catch` that neither logs nor rethrows a release blocker:
+    // a corrupted persisted value is normalised away and the first symptom shows up somewhere
+    // else, with nothing in the diagnostics log to connect the two. Six such sites had
+    // accumulated. Requiring the binding does not by itself prove the error is used, but it does
+    // stop the form the six were written in from being added without a second thought, and it
+    // makes each one visible in review. Recover-and-continue sites call
+    // `reportFallback` from `@/lib/diagnostics/fallbackReporter`.
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CatchClause[param=null]",
+          message:
+            "Bind the caught error (`catch (error)`) and either log it, rethrow it, or call reportFallback() from @/lib/diagnostics/fallbackReporter. REVIEW.md \u00a77 treats a silent catch as a release blocker.",
+        },
+      ],
+    },
+  },
   // Telnet and diagnostics paths must use structured addLog/addErrorLog,
   // never raw console.log. console.log lands as a JNI-bridged
   // "Msg: undefined" line in Android logcat when the first arg is undefined,

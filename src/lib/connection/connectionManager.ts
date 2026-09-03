@@ -48,6 +48,7 @@ import { featureFlagManager } from "@/lib/config/featureFlags";
 import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { applyFuzzModeDefaults, getFuzzMockBaseUrl, isFuzzModeEnabled } from "@/lib/fuzz/fuzzMode";
 import { addLog } from "@/lib/logging";
+import { reportFallback } from "@/lib/diagnostics/fallbackReporter";
 import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeStatus } from "@/lib/smoke/smokeMode";
 import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { getHealthCheckStateSnapshot, setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
@@ -593,10 +594,16 @@ export function subscribeConnection(listener: () => void) {
 const normalizeReachabilityHost = (value: string | null | undefined): string | null => {
   const trimmed = value?.trim();
   if (!trimmed) return null;
+  const stripScheme = () => stripPortFromDeviceHost(trimmed.replace(/^https?:\/\//, "")).toLowerCase();
+  // Most callers pass a bare host such as `c64u`, which `new URL` rejects. Only try the URL parse
+  // when the value actually carries a scheme, so the catch below reports a genuinely malformed
+  // value rather than the common case.
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return stripScheme();
   try {
     return stripPortFromDeviceHost(new URL(trimmed).host).toLowerCase();
-  } catch {
-    return stripPortFromDeviceHost(trimmed.replace(/^https?:\/\//, "")).toLowerCase();
+  } catch (error) {
+    reportFallback("connectionManager.normalizeReachabilityHost", error);
+    return stripScheme();
   }
 };
 
