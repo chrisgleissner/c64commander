@@ -933,7 +933,9 @@ button:focus-visible,
     line-height: 1.9rem;
   }
 
-  /* Custom font families */
+  /* Custom font families. Neither family is shipped with the app and the web
+     server's CSP forbids fetching them (HARD27-033), so the fallback after the
+     first name is what renders unless the OS already has the family. */
   .font-mono {
     font-family: "JetBrains Mono", ui-monospace, monospace;
   }
