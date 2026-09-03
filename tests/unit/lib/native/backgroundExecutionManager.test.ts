@@ -82,6 +82,32 @@ describe("backgroundExecutionManager", () => {
     });
   });
 
+  it("HARD27-040: republishes after a start, because an update issued while the start was in flight never reached the service", async () => {
+    // The page publishes in the same commit that starts playback, so the update regularly reaches
+    // the native side before the foreground service exists, and the native side drops it rather
+    // than starting a service metadata alone did not justify. Deduping the post-start publish
+    // against that dropped attempt left the lock screen naming the app instead of the tune.
+    let releaseStart: (() => void) | null = null;
+    mocks.start.mockImplementationOnce(
+      () =>
+        new Promise<undefined>((resolve) => {
+          releaseStart = () => resolve(undefined);
+        }),
+    );
+    const startPromise = startBackgroundExecution({ source: "test" });
+    await Promise.resolve();
+
+    const info = { title: "Nightshift", artist: "Ari Yliaho (Agemixer)", durationMs: 155_000 };
+    await setBackgroundExecutionNowPlaying(info, { source: "test" });
+    expect(mocks.setNowPlaying).toHaveBeenCalledTimes(1);
+
+    releaseStart!();
+    await startPromise;
+
+    expect(mocks.setNowPlaying).toHaveBeenCalledTimes(2);
+    expect(mocks.setNowPlaying).toHaveBeenLastCalledWith(info);
+  });
+
   it("HARD27-040: publishes each new track once and skips an unchanged one", async () => {
     await startBackgroundExecution({ source: "test" });
     await setBackgroundExecutionNowPlaying(

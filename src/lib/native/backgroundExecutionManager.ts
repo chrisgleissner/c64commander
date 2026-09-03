@@ -83,8 +83,12 @@ export const startBackgroundExecution = async (logContext: BackgroundExecutionLo
     addLog("error", "Background execution start failed", buildFailureDetails(error, logContext));
     throw buildOperationError("start", error);
   }
-  // Best effort: the session is running and playing either way, and a lock screen that names the
-  // wrong thing is not a reason to fail the start the user asked for.
+  // The service is new and carries no metadata, and an update the page issued while this start was
+  // in flight was dropped by the native side (metadata must never start a service on its own). So
+  // this publish is not deduped against that dropped attempt.
+  // Best effort otherwise: the session is running and playing either way, and a lock screen that
+  // names the wrong thing is not a reason to fail the start the user asked for.
+  publishedNowPlaying = null;
   await publishNowPlaying(logContext).catch(() => undefined);
 };
 
