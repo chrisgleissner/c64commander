@@ -18,7 +18,7 @@ Optional hardening:
 ### Authentication
 
 - No network password configured: the UI opens directly.
-- Network password configured in **Settings > Device > Network password**: login is required. The server injects the password into proxied C64U requests.
+- Network password configured in **Settings > Device > Network password**: login is required. The server injects the password into requests proxied to the configured device.
 - The password is persisted in `/config/web-config.json`. Successful login creates an authenticated session cookie (`HttpOnly`, `SameSite=Lax`; add `Secure` only for HTTPS deployments).
 
 ### Security settings
@@ -26,6 +26,8 @@ Optional hardening:
 - Plain-HTTP LAN deployments keep session cookies HTTP-compatible by default so the documented Docker flow can authenticate successfully.
 - Set `WEB_COOKIE_SECURE=true` only when the app is served over HTTPS or an HTTPS reverse proxy. Set `WEB_COOKIE_SECURE=false` to force HTTP-compatible cookies explicitly.
 - FTP host override is disabled by default. Set `WEB_ALLOW_REMOTE_FTP_HOSTS=true` only in trusted setups.
+- The configured network password is sent only to the configured device host. A REST request that names another host still reaches it, but the browser has to supply that device's own password; the server never forwards its configured password to a host you did not configure.
+- REST host override is limited to private-range and `.local` targets by default. Set `WEB_ALLOW_REMOTE_REST_HOSTS=true` to allow any target, for example a device reached over a VPN.
 
 ### Logging
 

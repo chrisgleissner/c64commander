@@ -525,6 +525,77 @@ describe("web server platform runtime", () => {
     await new Promise<void>((resolve, reject) => upstream.close((error) => (error ? reject(error) : resolve())));
   });
 
+  // HARD27-016: the configured password authenticates the configured device.
+  // Before the fix the proxy attached it to any private-range host a client
+  // named, so a browser session could make the server deliver it to a host the
+  // operator never configured.
+  it("sends the configured password only to the configured device", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>proxy</body></html>", "utf8");
+
+    const startUpstream = async (seen: Array<string | undefined>) => {
+      const upstream = http.createServer((req, res) => {
+        seen.push(req.headers["x-password"]?.toString());
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ errors: [] }));
+      });
+      await new Promise<void>((resolve, reject) => {
+        upstream.listen(0, "127.0.0.1", () => resolve());
+        upstream.once("error", reject);
+      });
+      const address = upstream.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Invalid upstream address");
+      }
+      return { upstream, port: address.port };
+    };
+
+    const configuredSeen: Array<string | undefined> = [];
+    const foreignSeen: Array<string | undefined> = [];
+    const configured = await startUpstream(configuredSeen);
+    const foreign = await startUpstream(foreignSeen);
+
+    try {
+      const server = await startWebServer({
+        HOST: "127.0.0.1",
+        PORT: "0",
+        WEB_DIST_DIR: distDir,
+        WEB_CONFIG_DIR: configDir,
+        C64U_NETWORK_PASSWORD: "server-device-secret",
+        C64U_DEVICE_HOST: `127.0.0.1:${configured.port}`,
+      });
+      const cookie = await loginAndGetCookie(server.baseUrl, "server-device-secret");
+
+      const toConfigured = await fetch(`${server.baseUrl}/api/rest/v1/version`, {
+        headers: { Cookie: cookie, "X-C64U-Host": `127.0.0.1:${configured.port}` },
+      });
+      expect(toConfigured.status).toBe(200);
+      expect(configuredSeen).toEqual(["server-device-secret"]);
+
+      const toForeign = await fetch(`${server.baseUrl}/api/rest/v1/version`, {
+        headers: { Cookie: cookie, "X-C64U-Host": `127.0.0.1:${foreign.port}` },
+      });
+      expect(toForeign.status).toBe(200);
+      expect(foreignSeen).toEqual([undefined]);
+
+      // The other host stays reachable; the client supplies that device's own
+      // password, and the server neither replaces it nor appends to it.
+      const withClientPassword = await fetch(`${server.baseUrl}/api/rest/v1/version`, {
+        headers: {
+          Cookie: cookie,
+          "X-C64U-Host": `127.0.0.1:${foreign.port}`,
+          "X-Password": "other-device-secret",
+        },
+      });
+      expect(withClientPassword.status).toBe(200);
+      expect(foreignSeen[1]).toBe("other-device-secret");
+    } finally {
+      await new Promise<void>((resolve) => configured.upstream.close(() => resolve()));
+      await new Promise<void>((resolve) => foreign.upstream.close(() => resolve()));
+    }
+  });
+
   it("proxies FTP list/read responses", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");

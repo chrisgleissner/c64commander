@@ -11,6 +11,7 @@ import {
   isPasswordEnvelope,
   safeCompare,
   sanitizeHost,
+  isConfiguredDeviceHost,
   isTrustedInsecureHost,
 } from "./hostValidation.js";
 import { applySecurityHeaders, getClientIp } from "./securityHeaders.js";
@@ -253,7 +254,8 @@ const requiresLogin = (config: AppConfig) => Boolean(config.networkPassword);
 
 const handleRestProxy = async (req: IncomingMessage, res: ServerResponse, config: AppConfig, requestUrl: URL) => {
   const targetHost = sanitizeHost(req.headers["x-c64u-host"]) ?? config.defaultDeviceHost;
-  if (!allowRemoteRestHosts && !isTrustedInsecureHost(targetHost)) {
+  const isConfiguredDevice = isConfiguredDeviceHost(targetHost, config.defaultDeviceHost);
+  if (!allowRemoteRestHosts && !isConfiguredDevice && !isTrustedInsecureHost(targetHost)) {
     writeJson(res, 403, {
       error: "REST host override is disabled for non-local targets",
     });
@@ -270,7 +272,12 @@ const handleRestProxy = async (req: IncomingMessage, res: ServerResponse, config
     if (lower === "x-c64u-host" || lower === "cookie") continue;
     outgoingHeaders[key] = Array.isArray(value) ? value.join(",") : value;
   }
-  if (config.networkPassword) {
+  // HARD27-016: the configured password authenticates the configured device and
+  // nothing else, so another LAN host must supply its own. The client's header
+  // arrives lower-cased and is dropped before the injected one is added, or
+  // fetch() combines the two into one comma-joined value.
+  if (isConfiguredDevice && config.networkPassword) {
+    delete outgoingHeaders["x-password"];
     outgoingHeaders["X-Password"] = config.networkPassword;
   }
 
