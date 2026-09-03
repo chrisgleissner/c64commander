@@ -110,6 +110,7 @@ vi.mock("@/lib/deviceInteraction/deviceStateStore", () => ({
 }));
 
 vi.mock("@/lib/c64api/transportErrors", () => ({
+  isAuthRequiredError: (error: unknown) => /\bHTTP\s+(401|403)\b/.test(String((error as Error)?.message ?? error)),
   normalizeTransportError: (error: unknown, ctx: { host?: string }) => {
     const raw = error instanceof Error ? error.message : String(error ?? "");
     return { class: "unknown", userMessage: raw || "Unknown transport error", rawMessage: raw, host: ctx.host };
