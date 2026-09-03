@@ -637,6 +637,141 @@ describe("web server platform runtime", () => {
     }
   });
 
+  // HARD27-009: /auth/login read its body before any authentication and with no
+  // cap, so any LAN client could stream an unbounded body into the process.
+  it("rejects an oversized body on the unauthenticated login endpoint", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ok</body></html>", "utf8");
+
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+      C64U_NETWORK_PASSWORD: "secret",
+    });
+
+    const oversized = await fetch(`${server.baseUrl}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: Buffer.alloc(200 * 1024, 0x61),
+    });
+    expect(oversized.status).toBe(413);
+    expect(oversized.headers.get("set-cookie")).toBeNull();
+
+    // The server is still serving, and a normal login still works.
+    const cookie = await loginAndGetCookie(server.baseUrl, "secret");
+    expect(cookie).toContain("c64_session=");
+  });
+
+  // HARD27-017: the upstream fetch had no signal, so a wedged device held the
+  // socket and the buffered request body until the OS tore the connection down,
+  // once per browser retry.
+  it("answers 504 when the device does not respond within the proxy timeout", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ok</body></html>", "utf8");
+
+    const openSockets: import("node:net").Socket[] = [];
+    const upstream = http.createServer((req) => {
+      openSockets.push(req.socket);
+      // Never answer, exactly as a wedged device does.
+    });
+    await new Promise<void>((resolve, reject) => {
+      upstream.listen(0, "127.0.0.1", () => resolve());
+      upstream.once("error", reject);
+    });
+    const address = upstream.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Invalid upstream address");
+    }
+
+    try {
+      const server = await startWebServer({
+        HOST: "127.0.0.1",
+        PORT: "0",
+        WEB_DIST_DIR: distDir,
+        WEB_CONFIG_DIR: configDir,
+        C64U_DEVICE_HOST: `127.0.0.1:${address.port}`,
+        WEB_REST_PROXY_TIMEOUT_MS: "400",
+      });
+
+      const startedAt = Date.now();
+      const response = await fetch(`${server.baseUrl}/api/rest/v1/version`);
+      const elapsedMs = Date.now() - startedAt;
+      expect(response.status).toBe(504);
+      expect(await response.json()).toEqual({ error: "REST proxy upstream timed out" });
+      expect(elapsedMs).toBeLessThan(5000);
+    } finally {
+      for (const socket of openSockets) socket.destroy();
+      await new Promise<void>((resolve) => upstream.close(() => resolve()));
+    }
+  });
+
+  // HARD27-009: the FTP read handler collected the whole remote file in memory
+  // and then base64-encoded it into one JSON response, holding roughly three
+  // times the file size in the heap. The Android FTP plugin caps the same
+  // operation at 32 MiB; the server now does too.
+  it("refuses an FTP read over the size limit instead of buffering the file", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    const ftpRoot = await makeTempDir("c64-web-ftp-big-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ftp</body></html>", "utf8");
+    // One MiB over the 32 MiB limit.
+    await writeFile(path.join(ftpRoot, "huge.d64"), Buffer.alloc(33 * 1024 * 1024, 0x41));
+    await writeFile(path.join(ftpRoot, "small.prg"), "SMALL", "utf8");
+
+    const ftpServer = await createMockFtpServer({
+      rootDir: ftpRoot,
+      host: "127.0.0.1",
+      port: 0,
+      pasvMin: 42300,
+      pasvMax: 42400,
+    });
+    ftpServers.push(ftpServer);
+
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+      C64U_NETWORK_PASSWORD: "secret",
+      WEB_ALLOW_REMOTE_FTP_HOSTS: "1",
+    });
+    const cookie = await loginAndGetCookie(server.baseUrl, "secret");
+
+    const readBig = await fetch(`${server.baseUrl}/api/ftp/read`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({
+        host: ftpServer.host,
+        port: ftpServer.port,
+        username: "anonymous",
+        path: "huge.d64",
+      }),
+    });
+    expect(readBig.status).toBe(413);
+    expect((await readBig.json()) as { error: string }).toEqual({
+      error: `File exceeds the ${32 * 1024 * 1024}-byte read limit`,
+    });
+
+    // The endpoint still serves a file inside the limit afterwards.
+    const readSmall = await fetch(`${server.baseUrl}/api/ftp/read`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({
+        host: ftpServer.host,
+        port: ftpServer.port,
+        username: "anonymous",
+        path: "small.prg",
+      }),
+    });
+    expect(readSmall.status).toBe(200);
+    const smallPayload = (await readSmall.json()) as { data: string };
+    expect(Buffer.from(smallPayload.data, "base64").toString("utf8")).toBe("SMALL");
+  }, 60_000);
+
   it("proxies FTP list/read responses", async () => {
     const distDir = await makeTempDir("c64-web-dist-");
     const configDir = await makeTempDir("c64-web-config-");

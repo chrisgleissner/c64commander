@@ -15,7 +15,15 @@ import {
   isTrustedInsecureHost,
 } from "./hostValidation.js";
 import { applySecurityHeaders, getClientIp } from "./securityHeaders.js";
-import { readBody, readJsonBody, writeJson, writeText } from "./httpIO.js";
+import {
+  FILE_BODY_LIMIT_BYTES,
+  FILE_BYTES_LIMIT,
+  PayloadTooLargeError,
+  readBody,
+  readJsonBody,
+  writeJson,
+  writeText,
+} from "./httpIO.js";
 import { createStaticAssetServer } from "./staticAssets.js";
 import { createAuthState } from "./authState.js";
 import { variant } from "./variant.generated.js";
@@ -43,6 +51,14 @@ const LOGIN_FAILURE_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_FAILURE_BLOCK_MS = 5 * 60 * 1000;
 const LOGIN_FAILURE_MAX_ATTEMPTS = 5;
 const MAX_SERVER_LOGS = 500;
+// HARD27-017: the browser sends no timeout of its own, so the proxy bounds the
+// upstream request itself. Fifteen seconds is above the app's own REST timeouts
+// and well below the minutes an unanswered TCP connection can survive.
+const DEFAULT_REST_PROXY_TIMEOUT_MS = 15_000;
+const REST_PROXY_TIMEOUT_MS = (() => {
+  const configured = Number((process.env.WEB_REST_PROXY_TIMEOUT_MS ?? "").trim());
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_REST_PROXY_TIMEOUT_MS;
+})();
 const PORT = Number(process.env.PORT ?? "8064");
 const HOST = process.env.HOST ?? "0.0.0.0";
 const configDir = process.env.WEB_CONFIG_DIR ?? "/config";
@@ -283,7 +299,7 @@ const handleRestProxy = async (req: IncomingMessage, res: ServerResponse, config
   }
   const proxiedPath = requestUrl.pathname.replace(/^\/api\/rest/, "") || "/";
   const target = new URL(`http://${targetHost}${proxiedPath}${requestUrl.search}`);
-  const body = await readBody(req);
+  const body = await readBody(req, FILE_BODY_LIMIT_BYTES);
   const outgoingHeaders: Record<string, string> = {};
   for (const [key, value] of Object.entries(req.headers)) {
     if (!value) continue;
@@ -303,17 +319,27 @@ const handleRestProxy = async (req: IncomingMessage, res: ServerResponse, config
 
   let upstream: Response;
   try {
+    // HARD27-017: without a signal the upstream socket stays open until the
+    // device answers or the OS tears it down. A wedged device plus browser
+    // retries then accumulates sockets and their buffered bodies here.
     upstream = await fetch(target, {
       method: req.method,
       headers: outgoingHeaders,
       body: body.length > 0 ? body : undefined,
+      signal: AbortSignal.timeout(REST_PROXY_TIMEOUT_MS),
     });
   } catch (error) {
-    log("error", "REST proxy upstream error", {
+    const timedOut = (error as Error | undefined)?.name === "TimeoutError";
+    log("error", timedOut ? "REST proxy upstream timed out" : "REST proxy upstream error", {
       targetHost,
       path: requestUrl.pathname,
+      timeoutMs: timedOut ? REST_PROXY_TIMEOUT_MS : undefined,
       ...errorDetails(error),
     });
+    if (timedOut) {
+      writeJson(res, 504, { error: "REST proxy upstream timed out" });
+      return;
+    }
     writeJson(res, 502, { error: "REST proxy upstream request failed" });
     return;
   }
@@ -327,11 +353,23 @@ const handleRestProxy = async (req: IncomingMessage, res: ServerResponse, config
   res.end(responseBody);
 };
 
-const collectStream = async (stream: PassThrough): Promise<Buffer> => {
+// HARD27-009: the whole remote file was collected in memory and then
+// base64-encoded into one response, so a large file on the Ultimate's SD card
+// held roughly three times its size in the heap. The transfer is aborted as soon
+// as it crosses the same 32 MiB the Android FTP plugin enforces.
+const collectStream = async (stream: PassThrough, limitBytes = FILE_BYTES_LIMIT): Promise<Buffer> => {
   const chunks: Buffer[] = [];
+  let total = 0;
   return new Promise((resolve, reject) => {
     stream.on("data", (chunk) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      total += buffer.length;
+      if (total > limitBytes) {
+        chunks.length = 0;
+        stream.destroy(new PayloadTooLargeError(limitBytes));
+        return;
+      }
+      chunks.push(buffer);
     });
     stream.on("error", reject);
     stream.on("end", () => resolve(Buffer.concat(chunks)));
@@ -417,21 +455,40 @@ const handleFtpRead = async (req: IncomingMessage, res: ServerResponse, config: 
       password: config.networkPassword ?? payload.password ?? "",
       secure: false,
     });
-    const collectPromise = collectStream(stream);
-    await ftp.downloadTo(stream, payload.path);
-    stream.end();
+    // The collector aborts the stream once the file crosses the size limit, so
+    // downloadTo rejects too. Settling the collector first makes that abort the
+    // reported cause, and keeps its rejection from going unhandled.
+    let collectError: unknown = null;
+    const collectPromise = collectStream(stream).catch((error: unknown) => {
+      collectError = error;
+      return Buffer.alloc(0);
+    });
+    try {
+      await ftp.downloadTo(stream, payload.path);
+      stream.end();
+    } catch (downloadError) {
+      await collectPromise;
+      throw collectError ?? downloadError;
+    }
     const data = await collectPromise;
+    if (collectError) throw collectError;
     writeJson(res, 200, {
       data: data.toString("base64"),
       sizeBytes: data.byteLength,
     });
   } catch (error) {
-    log("error", "FTP read failed", {
+    const tooLarge = error instanceof PayloadTooLargeError;
+    log(tooLarge ? "warn" : "error", tooLarge ? "FTP read exceeded the size limit" : "FTP read failed", {
       host,
       path: payload.path,
+      limitBytes: tooLarge ? FILE_BYTES_LIMIT : undefined,
       ...errorDetails(error),
     });
-    writeJson(res, 502, { error: "FTP read failed" });
+    if (tooLarge) {
+      writeJson(res, 413, { error: `File exceeds the ${FILE_BYTES_LIMIT}-byte read limit` });
+    } else {
+      writeJson(res, 502, { error: "FTP read failed" });
+    }
   } finally {
     try {
       ftp.close();
@@ -489,7 +546,7 @@ const handleFtpWrite = async (req: IncomingMessage, res: ServerResponse, config:
     password?: string;
     path?: string;
     data?: string;
-  }>(req);
+  }>(req, FILE_BODY_LIMIT_BYTES);
   if (!payload.path) {
     writeJson(res, 400, { error: "Missing FTP path" });
     return;
@@ -696,6 +753,21 @@ export const startWebServer = async () => {
 
       await serveStatic(res, pathname);
     } catch (error) {
+      if (error instanceof PayloadTooLargeError) {
+        log("warn", "Rejected an oversized request body", {
+          path: req.url,
+          limitBytes: error.limitBytes,
+        });
+        if (!res.headersSent) {
+          // The request body is still arriving. Close the connection once the
+          // 413 has been flushed so the client stops sending, rather than
+          // letting the rest of the body drain through the socket.
+          res.setHeader("Connection", "close");
+          res.once("finish", () => req.socket?.destroySoon());
+          writeJson(res, 413, { error: "Request body too large" });
+        }
+        return;
+      }
       log("error", "Unhandled web server error", errorDetails(error));
       writeJson(res, 500, { error: "Internal server error" });
     }

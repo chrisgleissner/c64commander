@@ -30,6 +30,12 @@ Optional hardening:
 - The configured network password is sent only to the configured device host. A REST request that names another host still reaches it, but the browser has to supply that device's own password; the server never forwards its configured password to a host you did not configure.
 - REST host override is limited to private-range and `.local` targets by default. Set `WEB_ALLOW_REMOTE_REST_HOSTS=true` to allow any target, for example a device reached over a VPN.
 
+### Request limits
+
+- JSON request bodies are capped at 64 KiB and file-carrying bodies (the FTP write and REST proxy endpoints) at 48 MiB. An oversized body is answered with 413 and the connection is closed.
+- An FTP read is capped at 32 MiB, the same limit the Android FTP plugin enforces, and a larger file is answered with 413 rather than being buffered.
+- A proxied REST request to the device is aborted after 15 seconds and answered with 504. Set `WEB_REST_PROXY_TIMEOUT_MS` to a different number of milliseconds if a device on a slow link needs longer.
+
 ### Logging
 
 Web server logs go to container stdout/stderr and are mirrored in the in-app diagnostics overlay.
