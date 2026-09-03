@@ -20,8 +20,10 @@ import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { APP_SETTINGS_KEYS, loadEnableSwipeNavigation } from "@/lib/config/appSettings";
 import { useTourActive } from "@/hooks/useTourActive";
 import {
+  addRevealedIndex,
   buildRunwayPanelIndexes,
   resolveAdjacentIndexes,
+  resolveDragRevealedIndex,
   resolveNavigationDirection,
   resolveRunwayTranslatePercent,
   type RunwayPanelIndexes,
@@ -47,6 +49,11 @@ type RunwayState = {
   targetIndex: number;
   transitionDirection: -1 | 0 | 1;
   lastVelocityX: number;
+  /**
+   * Page indexes mounted for the current gesture on top of the active one.
+   * Empty while idle, and only ever grows until the runway settles again.
+   */
+  revealedIndexes: readonly number[];
 };
 
 type RunwayContainerProps = {
@@ -99,6 +106,7 @@ const buildIdleState = (index: number): RunwayState => ({
   targetIndex: index,
   transitionDirection: 0,
   lastVelocityX: 0,
+  revealedIndexes: [],
 });
 
 const didWrapAround = (fromIndex: number, toIndex: number, direction: -1 | 0 | 1) => {
@@ -267,6 +275,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       targetIndex: routeIndex,
       transitionDirection: direction,
       lastVelocityX: current.lastVelocityX,
+      revealedIndexes: addRevealedIndex(addRevealedIndex(current.revealedIndexes, current.centerIndex), routeIndex),
     });
   }, [routeIndex]);
 
@@ -344,6 +353,10 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
         phase: "dragging",
         dragOffsetPx: dx,
         lastVelocityX: velocityX,
+        revealedIndexes: addRevealedIndex(
+          previous.revealedIndexes,
+          resolveDragRevealedIndex(previous.panelIndexes, dx),
+        ),
       }));
     },
     [swipeEnabled],
@@ -378,6 +391,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
         targetIndex,
         transitionDirection: direction,
         lastVelocityX: metadata.velocityX,
+        revealedIndexes: addRevealedIndex(addRevealedIndex(current.revealedIndexes, current.centerIndex), targetIndex),
       });
       navigate(TAB_ROUTES[targetIndex].path);
     },
@@ -406,6 +420,7 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
         targetIndex: current.centerIndex,
         transitionDirection: 0,
         lastVelocityX: metadata.velocityX,
+        revealedIndexes: addRevealedIndex(current.revealedIndexes, current.centerIndex),
       });
     },
     [swipeEnabled],
@@ -469,23 +484,20 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
             import.meta.env.VITE_ENABLE_TEST_PROBES === "1" ||
             (typeof window !== "undefined" &&
               (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled);
-          const renderPlaceholderOnly = !isActive && (runway.phase === "idle" || testProbeActive);
+          const renderPlaceholderOnly =
+            !isActive && (runway.phase === "idle" || testProbeActive || !runway.revealedIndexes.includes(pageIndex));
 
-          // Render idle inactive slots as placeholders so selectors only see the
-          // active page. During transitions we still mount adjacent pages unless
-          // deterministic probe mode is enabled.
+          // Idle inactive slots are placeholders; a gesture also mounts the
+          // panels it revealed. HARD12-022: the departing page stays mounted all
+          // transition and the preview shows its real content, so pages holding
+          // state across the overlap defend themselves per effect (BUG-040 wake
+          // lock, HARD12-006 volume session, HARD12-020 machine execution).
           //
-          // HARD12-022: this full mid-transition mount of the departing (and
-          // arriving) page is real and load-bearing today — the swipe preview
-          // renders actual page content, not a static snapshot, so replacing it
-          // with a placeholder-during-transition is a visible-UX change, not a
-          // pure bugfix. Deliberately deferred as a separate, measured
-          // perf/UX task rather than bundled into hardening; the mitigation
-          // shipped instead is testability (see
-          // SwipeNavigationLayer.test.tsx's HARD12-022 mount/unmount test) plus
-          // per-effect defenses in the pages that hold state across this
-          // overlap (BUG-040 wake lock, HARD12-006 volume session, HARD12-020
-          // machine-execution state).
+          // HARD27-038: a gesture moves one way, so the panel opposite the
+          // centre is off screen throughout and mounting its hook tree was pure
+          // cost during the animation. Revealed panels are never dropped before
+          // the runway settles, so a reversed drag reveals the other neighbour
+          // instead of churning mounts.
           if (renderPlaceholderOnly) {
             return (
               <div

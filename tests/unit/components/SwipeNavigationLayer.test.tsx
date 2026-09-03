@@ -667,4 +667,62 @@ describe("SwipeNavigationLayer", () => {
     expect(mocks.mountCounts.disks).toBe(1);
     expect(mocks.unmountCounts.disks).toBe(0);
   });
+
+  // HARD27-038: a transition moves in exactly one direction, so only the
+  // departing page and the arriving page are ever on screen. The panel on the
+  // opposite side is off screen for the whole transition, and mounting it costs
+  // a full page hook tree - queries, subscriptions and effects - during the
+  // animation frame budget. These three tests pin that it stays a placeholder.
+  it("does not mount the off-direction page during a route transition (HARD27-038)", async () => {
+    renderLayer("/", <NavigationProbe />);
+
+    await screen.findByText("Home Page");
+
+    fireEvent.click(screen.getByRole("button", { name: "Go Config" }));
+
+    // Home (0) to Config (3) resolves to direction 1, so the runway holds
+    // [Docs, Home, Config]. Docs is behind the departing page and never seen.
+    const runway = screen.getByTestId("swipe-navigation-runway");
+    expect(runway).toHaveAttribute("data-runway-phase", "transitioning");
+    expect(await screen.findByText("Config Page")).toBeInTheDocument();
+    expect(screen.getByText("Home Page")).toBeInTheDocument();
+    expect(mocks.mountCounts.docs).toBe(0);
+    expect(screen.getByTestId("swipe-slot-docs").textContent).toBe("");
+  });
+
+  it("does not mount the off-direction page during a committed swipe (HARD27-038)", async () => {
+    renderLayer("/play", undefined, false, true);
+    const runway = await screen.findByTestId("swipe-navigation-runway");
+
+    act(() => {
+      capturedCallbacks?.onCommit(1, { dx: -120, dy: 0, velocityX: -1 });
+    });
+
+    expect(runway).toHaveAttribute("data-runway-phase", "transitioning");
+    expect(screen.getByText("Play Page")).toBeInTheDocument();
+    expect(mocks.mountCounts.disks).toBe(1);
+    expect(mocks.mountCounts.home).toBe(0);
+  });
+
+  it("mounts only the dragged-toward page, and keeps it mounted when the drag reverses (HARD27-038)", async () => {
+    renderLayer("/play", undefined, false, true);
+    const runway = await screen.findByTestId("swipe-navigation-runway");
+
+    // Dragging left pulls the next page (Disks) in from the right edge.
+    act(() => {
+      capturedCallbacks?.onProgress(-80, -1);
+    });
+    expect(runway).toHaveAttribute("data-runway-phase", "dragging");
+    expect(mocks.mountCounts.disks).toBe(1);
+    expect(mocks.mountCounts.home).toBe(0);
+
+    // Reversing reveals the previous page. The page already revealed stays
+    // mounted, so a wavering finger cannot churn mounts and unmounts.
+    act(() => {
+      capturedCallbacks?.onProgress(80, 1);
+    });
+    expect(mocks.mountCounts.home).toBe(1);
+    expect(mocks.mountCounts.disks).toBe(1);
+    expect(mocks.unmountCounts.disks).toBe(0);
+  });
 });
