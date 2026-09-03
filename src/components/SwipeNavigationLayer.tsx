@@ -14,6 +14,7 @@ import { useSwipeGesture, type SwipeDirection, type SwipeGestureMetadata } from 
 import { useInterstitialActive } from "@/components/ui/interstitial-state";
 import { addLog } from "@/lib/logging";
 import { TAB_ROUTES, resolveSwipeTarget, tabIndexForPath } from "@/lib/navigation/tabRoutes";
+import { confirmNavigation } from "@/lib/navigation/navigationGuards";
 import { AppChromeModeProvider } from "@/components/layout/AppChromeContext";
 import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { APP_SETTINGS_KEYS, loadEnableSwipeNavigation } from "@/lib/config/appSettings";
@@ -353,6 +354,11 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
       if (!swipeEnabled) return;
       const current = runwayRef.current;
       if (current.phase === "transitioning") return;
+
+      // Asked before the runway animates, so a refused guard leaves no half-played transition.
+      // This site calls `confirmNavigation` itself rather than using `useGuardedNavigate`, which
+      // would prompt the user a second time after this check.
+      if (!confirmNavigation()) return;
 
       const targetIndex = resolveSwipeTarget(current.centerIndex, direction);
       addLog("debug", "[SwipeNav] transition-start", {

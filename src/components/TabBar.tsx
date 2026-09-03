@@ -8,12 +8,13 @@
 
 import { useEffect, useRef } from "react";
 import { Home, Sliders, Settings, BookOpen, Play, Disc } from "lucide-react";
-import { useLocation, useNavigate, type NavigateFunction } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { useInterstitialActive } from "@/components/ui/interstitial-state";
 import { INTERSTITIAL_Z_INDEX } from "@/components/ui/interstitialStyles";
 import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { wrapUserEvent } from "@/lib/tracing/userTrace";
 import { TAB_ROUTES, tabIndexForPath } from "@/lib/navigation/tabRoutes";
+import { useGuardedNavigate, type GuardedNavigate } from "@/lib/navigation/navigationGuards";
 import { handlePointerButtonClick } from "@/lib/ui/buttonInteraction";
 import { cn } from "@/lib/utils";
 
@@ -48,7 +49,7 @@ function TabBarButton({
   readonly tab: Tab;
   readonly order: number;
   readonly isActive: boolean;
-  readonly navigate: NavigateFunction;
+  readonly navigate: GuardedNavigate;
   readonly activeRef?: React.RefObject<HTMLButtonElement>;
 }) {
   const Icon = tab.icon;
@@ -110,7 +111,7 @@ function TabBarButton({
 
 export function TabBar() {
   const location = useLocation();
-  const navigate = useNavigate();
+  const navigate = useGuardedNavigate();
   const interstitialActive = useInterstitialActive();
   const navRef = useRef<HTMLElement>(null);
   const activeTabRef = useRef<HTMLButtonElement>(null);

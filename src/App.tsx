@@ -53,8 +53,8 @@ import {
   runDiagnosticsReconciler,
   runPlaybackReconciler,
 } from "@/lib/diagnostics/diagnosticsReconciler";
-import { useNavigationGuardBlocker } from "@/lib/navigation/navigationGuards";
-import { tabIndexForPath, TAB_ROUTES } from "@/lib/navigation/tabRoutes";
+import { useGuardedNavigate } from "@/lib/navigation/navigationGuards";
+import { tabIndexForPath, TAB_ROUTES, createTabJumpShortcut } from "@/lib/navigation/tabRoutes";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { t } from "@/lib/i18n";
 
@@ -160,11 +160,6 @@ const DeviceVicPaletteDriver = () => {
   return null;
 };
 
-const GlobalNavigationBlocker = () => {
-  useNavigationGuardBlocker();
-  return null;
-};
-
 export const shouldEnableCoverageProbe = () => {
   if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
   if (!shouldBundleCoverageProbeModules()) return false;
@@ -259,6 +254,8 @@ const KEYPAD_FOCUS_PROFILE_ID = "keypad";
  */
 const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
+  // The keypad tab jump can take the user off a page mid-import, so it asks the guards (HARD27-022).
+  const guardedNavigate = useGuardedNavigate();
   const { flags } = useFeatureFlags();
   const transportShortcutOptions = useMemo(
     () => ({ navigate: (path: string) => navigate(path), currentPath: () => window.location.pathname }),
@@ -271,10 +268,7 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => installAudioFocusPolicy(), []);
   const shortcuts = useMemo<KeypadShortcutHandlers>(
     () => ({
-      jumpToTab: (index) => {
-        const route = TAB_ROUTES[index];
-        if (route) navigate(route.path);
-      },
+      jumpToTab: createTabJumpShortcut(guardedNavigate),
       openDiagnostics: () => requestDiagnosticsOpen("header"),
       openDeviceSwitcher: () => requestDeviceSwitcherOpen(),
       openQuickMenu: () => requestQuickMenuOpen(),
@@ -291,7 +285,7 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
           }
         : undefined,
     }),
-    [navigate, flags.remote_input_enabled, transportShortcutOptions],
+    [navigate, guardedNavigate, flags.remote_input_enabled, transportShortcutOptions],
   );
   return (
     <FocusNavigationProvider
@@ -317,7 +311,6 @@ const AppRoutes = () => {
             <DeviceSwitchLabAutoLauncher enabled={coverageProbeEnabled} />
             <GlobalErrorListener />
             <GlobalButtonInteractionModel />
-            <GlobalNavigationBlocker />
             <RouteRefresher />
             <DeviceVicPaletteDriver />
             <AvMirrorGovernorDriver />

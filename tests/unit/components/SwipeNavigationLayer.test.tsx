@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserRouter, useLocation, useNavigate } from "react-router-dom";
 import { APP_SETTINGS_KEYS } from "@/lib/config/appSettings";
 import { SwipeNavigationLayer } from "@/components/SwipeNavigationLayer";
+import { registerNavigationGuard } from "@/lib/navigation/navigationGuards";
 import { InterstitialStateProvider, useRegisterInterstitial } from "@/components/ui/interstitial-state";
 
 type GestureCallbacks = {
@@ -345,6 +346,30 @@ describe("SwipeNavigationLayer", () => {
     fireEvent.transitionEnd(runway, { target: runway });
     expect(runway).toHaveAttribute("data-runway-phase", "idle");
     expect(screen.getByTestId("swipe-slot-home")).toHaveAttribute("data-slot-active", "true");
+  });
+
+  it("leaves the page and the runway untouched when a guard refuses the swipe commit (HARD27-022)", async () => {
+    renderLayer("/docs", undefined, false, true);
+    const runway = await screen.findByTestId("swipe-navigation-runway");
+    const guard = vi.fn(() => false);
+    const release = registerNavigationGuard(guard);
+
+    try {
+      act(() => {
+        capturedCallbacks?.onCommit(1, { dx: -120, dy: 0, velocityX: -1 });
+      });
+
+      expect(guard).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId("location-probe")).toHaveTextContent("/docs");
+      expect(runway).toHaveAttribute("data-runway-phase", "idle");
+      expect(mocks.addLog).not.toHaveBeenCalledWith(
+        "debug",
+        "[SwipeNav] transition-start",
+        expect.objectContaining({ reason: "swipe" }),
+      );
+    } finally {
+      release();
+    }
   });
 
   it("animates route-driven navigation with reduced-motion settings still enabled", async () => {
