@@ -30,7 +30,7 @@
 
 | Area                | Android                             | iOS                              | Status      |
 | ------------------- | ----------------------------------- | -------------------------------- | ----------- |
-| Native unit tests   | 13 JVM test classes (82 tests)      | 8 XCTest classes (66 tests)      | **Partial** |
+| Native unit tests   | 33 JVM test classes (480 tests)     | 10 XCTest classes (85 tests)     | **Partial** |
 | CI gating           | Required check (android.yaml)       | Stage A / informative (ios.yaml) | **Gap**     |
 | Signed distribution | Debug APK + conditional release APK | Unsigned AltStore IPA only       | **Gap**     |
 | Maestro E2E flows   | 6 ci-critical flows                 | 6 ci-critical-ios flows          | **Parity**  |
@@ -48,13 +48,18 @@ iOS `BackgroundExecutionPlugin` is a stub. SID playback is interrupted when back
 
 **Accepted for MVP**: Yes — Android is the primary platform. iOS background audio is a post-MVP feature.
 
-### 2. No iOS Native Unit Tests
+### 2. iOS Native Unit Tests Cover Logic, Not the Plugin Classes
 
-All iOS plugin implementations live in `NativePlugins.swift` (907 lines). No XCTest coverage exists.
+`ios/native-tests` is a SwiftPM package with 10 XCTest classes (85 tests). It cannot import the app
+target, so each case either runs against a mirror of the logic in `Sources/NativeValidation` or
+asserts on the text of the app source file, and the two are paired so the mirror cannot pass while
+the app has drifted away from it. Nothing instantiates a `CAPPlugin`, so a `CAPPluginCall` is never
+exercised.
 
-**Mitigation path**: Extract individual plugin classes into separate files, add XCTest targets.
+**Mitigation path**: An XCTest target inside the Xcode project, which needs a macOS runner to run at
+all and so cannot fail on the machine that made the change.
 
-**Accepted for MVP**: Yes — iOS Maestro flows provide integration-level coverage. Native unit tests are post-MVP.
+**Accepted for MVP**: Yes — iOS Maestro flows provide integration-level coverage above the mirrors.
 
 ### 3. iOS CI Non-Blocking
 
@@ -66,7 +71,8 @@ iOS CI runs on `macos-15` but defaults to Stage A (informative, non-blocking).
 
 ### 4. `NativePlugins.swift` Size
 
-At 907 lines, approaching the 1000-line limit. Contains 6 plugin implementations + shared infra.
+At 455 lines, within the 1000-line limit. FTP, Telnet and HVSC ingestion have since moved into
+`IOSFtp.swift`, `TelnetSocketPlugin.swift` and `HvscIngestionPlugin.swift`.
 
 **Mitigation path**: Split into per-plugin files (matching Android structure).
 

@@ -37,6 +37,7 @@ public final class HvscIngestionPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "ingestHvsc", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "cancelIngestion", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getIngestionStats", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getStorageBudget", returnType: CAPPluginReturnPromise),
     ]
 
     private let ioQueue = DispatchQueue(label: "uk.gleissner.c64commander.hvscing", qos: .utility)
@@ -379,6 +380,55 @@ public final class HvscIngestionPlugin: CAPPlugin, CAPBridgedPlugin {
                     details: ["origin": "native"], error: error)
                 call.resolve(["metadataRows": 0])
             }
+        }
+    }
+
+    // MARK: - getStorageBudget
+
+    /// Reports the storage the JS install flow needs to size its pre-flight check: how much room is
+    /// left on the volume that holds the Documents directory, and whether a library is already
+    /// installed. The second value matters because a baseline reinstall keeps the previous library
+    /// on disk until the staged one is promoted (see `promoteStagedLibrary`), so it peaks at two
+    /// library trees rather than one.
+    ///
+    /// `volumeAvailableCapacityForImportantUsage` is preferred over `volumeAvailableCapacity`
+    /// because it counts space iOS would reclaim by purging caches for a download the user asked
+    /// for. Both are optional, and a failure resolves 0 rather than rejecting:
+    /// `ensureRoomForHvscInstall` skips the check on 0, so a volume that reports nothing leaves the
+    /// install to proceed as it did before this method existed. See HARD27-028.
+    @objc public func getStorageBudget(_ call: CAPPluginCall) {
+        ioQueue.async {
+            guard let docsDir = FileManager.default.urls(for: .documentDirectory,
+                                                          in: .userDomainMask).first else {
+                IOSDiagnostics.log(.warn, "HvscIngestion.getStorageBudget cannot resolve Documents",
+                    details: ["origin": "native"])
+                call.resolve(["availableBytes": 0, "libraryPresent": false])
+                return
+            }
+
+            var availableBytes: Int64 = 0
+            do {
+                let values = try docsDir.resourceValues(forKeys: [
+                    .volumeAvailableCapacityForImportantUsageKey,
+                    .volumeAvailableCapacityKey,
+                ])
+                if let important = values.volumeAvailableCapacityForImportantUsage, important > 0 {
+                    availableBytes = important
+                } else if let available = values.volumeAvailableCapacity, available > 0 {
+                    availableBytes = Int64(available)
+                }
+            } catch {
+                IOSDiagnostics.log(.warn, "HvscIngestion.getStorageBudget cannot read volume capacity",
+                    details: ["origin": "native"], error: error)
+            }
+
+            // Emptiness, not existence: `resolveLibraryRoot()` creates `hvsc/library` before
+            // extraction starts, so the directory survives an install that wrote nothing.
+            let libraryRoot = docsDir.appendingPathComponent("hvsc/library", isDirectory: true)
+            let entries = try? FileManager.default.contentsOfDirectory(atPath: libraryRoot.path)
+            let libraryPresent = !(entries ?? []).isEmpty
+
+            call.resolve(["availableBytes": availableBytes, "libraryPresent": libraryPresent])
         }
     }
 

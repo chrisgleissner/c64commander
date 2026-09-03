@@ -307,6 +307,7 @@ TypeScript remains the business-logic source of truth via repository interfaces;
 | Large-archive ingest | Native (streaming)   | Native (in memory) | Blocked (5 MiB limit) |
 | HVSC metadata DB     | SQLite               | SQLite             | In-memory             |
 | Baseline recovery    | Staged + atomic swap | Staged + atomic swap | N/A (no large ingest) |
+| Free-space pre-flight | `StatFs` on the files directory | `volumeAvailableCapacityForImportantUsage` on Documents | None (no large ingest) |
 
 The iOS row for large-archive ingest said "streaming" and described the intended design rather
 than the shipped one. `HvscIngestionPlugin.swift` hands SWCompression's `SevenZipContainer.open`
@@ -322,6 +323,18 @@ the code does (HARD27-018).
 Baseline recovery is staged on both platforms as of HARD27-018. iOS extracts into
 `hvsc/library-staging` and promotes it by rename after the row-count check, so a kill or a
 cancellation mid-install leaves the previous library in place rather than deleting it first.
+
+The free-space pre-flight (`ensureRoomForHvscInstall` in `src/lib/hvsc/hvscStorageBudget.ts`) sizes
+its refusal from `HvscIngestion.getStorageBudget`. iOS did not implement that method, so the call
+rejected as unimplemented and the check logged "HVSC storage budget unavailable" and skipped; every
+iOS install therefore ran without one. Both platforms now implement it. iOS prefers
+`volumeAvailableCapacityForImportantUsage` because it counts space iOS would reclaim by purging
+caches for a download the user asked for, and falls back to `volumeAvailableCapacity`. It reports 0
+rather than rejecting when the volume answers neither, which the caller reads as "no budget known"
+and skips, so an unusual volume behaves as it did before the method existed. The two plugins differ
+in how they decide a previous library is resident: Android tests `hvsc/library` for `isDirectory`,
+while iOS tests it for a non-empty listing, because `resolveLibraryRoot()` creates that directory
+before extraction starts and it survives an install that wrote nothing (HARD27-028).
 
 ### Web platform limitations
 

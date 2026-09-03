@@ -94,10 +94,7 @@ export const KNOWN_IOS_METHOD_GAPS = new Map<string, Map<string, string>>([
   ],
   [
     "HvscIngestion",
-    new Map([
-      ["getStorageBudget", "HARD27-028: the free-space check is the outstanding Swift half"],
-      ["downloadArchive", "iOS downloads the archive in TypeScript; only extraction is native"],
-    ]),
+    new Map([["downloadArchive", "iOS downloads the archive in TypeScript; only extraction is native"]]),
   ],
 ]);
 
@@ -168,7 +165,7 @@ describe("iOS plugin method parity", () => {
     const withoutRecord = new Map(KNOWN_IOS_METHOD_GAPS);
     withoutRecord.set("HvscIngestion", new Map());
     const { unexpected } = findParityGaps(swift, typescript, withoutRecord);
-    expect(unexpected).toContainEqual({ jsName: "HvscIngestion", method: "getStorageBudget" });
+    expect(unexpected).toContainEqual({ jsName: "HvscIngestion", method: "downloadArchive" });
   });
 
   it("reports a recorded gap that Swift now implements", () => {
