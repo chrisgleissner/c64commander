@@ -30,8 +30,12 @@ There are exactly four states:
 1. **Flag OFF.** DOM/behavior is byte-for-byte identical to a build without the
    feature. No `data-key-selected`, no extra attributes/tabindex, the global key
    listener is detached.
-2. **Flag ON, before any recognized key, and during pointer/touch use.** Still
-   byte-for-byte identical to the flag-off baseline; modality is `pointer`.
+2. **Flag ON, before any recognized key.** Still byte-for-byte identical to the
+   flag-off baseline; modality is `pointer`. The discovery engine has not started
+   either, so there is no `MutationObserver` and no `tabindex` shim (HARD27-039).
+   It starts on the first recognized key, on any modality flip to
+   `key-navigation`, or at mount if modality is already that — and once started
+   it keeps running, so state 4 below is not byte-for-byte baseline.
 3. **Flag ON, a recognized key takes effect** (focus moved, control activated,
    back handled, layer dismissed, slider value changed, or a T9 composer key
    consumed). Modality becomes `key-navigation`; the current focus-ring item gets

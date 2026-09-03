@@ -79,7 +79,12 @@ listbox]`, poppers) or else the routed page; the bottom `TabBar` is its own
   indicator (`T9 Hostname` / `T9 Multitap`) while the composer is active.
 - **Prime Directive + deferral invariants.** With the flag off the engine never
   runs, no attributes/`tabindex` are written, no key is `preventDefault`ed — the
-  app is byte-for-byte baseline. The global capture-phase handler additionally:
+  app is byte-for-byte baseline. With the flag on it still does not run until key
+  navigation is actually in use: it starts on the first recognized key, on any
+  modality flip to `key-navigation`, or at mount when modality is already that
+  (HARD27-039). A pointer-only user therefore gets no `MutationObserver` and no
+  ring scans, and loses nothing, because the highlight and the guidance bar are
+  gated on the same modality. The global capture-phase handler additionally:
   (1) never lets keyboard `Escape` navigate the route (so Radix's own
   `DismissableLayer` closes a dialog); (2) bails when focus is inside an open
   overlay; (3) defers Enter/Space to a focused native control outside the ring.
