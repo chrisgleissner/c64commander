@@ -8,7 +8,10 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { resetCardMemory } from "../../../helpers/cards";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { enterKeyNavigationModality, leaveKeyNavigationModality } from "../../../../helpers/keypadModality";
+
+afterEach(() => leaveKeyNavigationModality());
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   FocusNavigationProvider,
@@ -126,6 +129,10 @@ const renderInRing = (
   focusContext?: { current: FocusNavigationContextValue | null },
 ) => {
   const { isConnected = true, ...rest } = overrides;
+  // HARD27-039: a keypad user arrives here by key, so the discovery engine is
+  // already running when the component mounts. These tests read the ring without
+  // pressing a key first.
+  enterKeyNavigationModality();
   return render(
     <FocusNavigationProvider profileId="keypad">
       {focusContext ? <FocusContextCapture target={focusContext} /> : null}

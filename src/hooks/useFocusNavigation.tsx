@@ -380,13 +380,33 @@ export const FocusNavigationProvider = ({
 
   const keymap = useMemo(() => resolveInputProfile(profileId), [profileId]);
 
-  // Re-apply the highlight + notify the guidance bar whenever modality flips.
-  useEffect(() => subscribeInputModality(notifyRing), [notifyRing]);
+  /*
+   * HARD27-039: the engine observes the whole body, so with the flag on - the
+   * default for this variant - a touch user scrolling a virtualised list paid
+   * for a ring they never enter. `start()` is idempotent and scans
+   * synchronously, so deferring it to the first key costs that key nothing.
+   */
+  const startEngine = useCallback(() => {
+    if (enabledRef.current) engine.start();
+  }, [engine]);
 
-  // Run the discovery engine only while the flag is on (Prime Directive).
+  // Re-apply the highlight + notify the guidance bar whenever modality flips.
+  // Starting first means the guidance bar sees a populated ring on the flip.
+  useEffect(
+    () =>
+      subscribeInputModality((modality) => {
+        if (modality === "key-navigation") startEngine();
+        notifyRing();
+      }),
+    [notifyRing, startEngine],
+  );
+
+  // Run the discovery engine only while the flag is on (Prime Directive), and
+  // only from the point key navigation is in use. Modality outlives the
+  // provider, so a remount mid-session starts it straight away.
   useEffect(() => {
     if (!enabled) return;
-    engine.start();
+    if (getInputModality() === "key-navigation") engine.start();
     return () => engine.stop();
   }, [enabled, engine]);
 
@@ -425,6 +445,8 @@ export const FocusNavigationProvider = ({
     const handleKeyDown = (event: KeyboardEvent) => {
       const normalized = normalizeKeyEvent(event, keymap);
       const { action } = normalized;
+      // Before any branch below reads the ring, so the first key navigates.
+      if (action !== null) startEngine();
       // Destructive toasts persist until dismissed (ERROR_POLICY §4) and render in their own
       // portal, so the keypad ring never reaches them: on a keypad-only device (no Tab, no touch)
       // an error toast covered the screen with no key able to dismiss it. Reuse the toast's own
@@ -619,7 +641,7 @@ export const FocusNavigationProvider = ({
       window.removeEventListener("pointerdown", handlePointer, true);
       window.removeEventListener("touchstart", handlePointer, true);
     };
-  }, [adoptActiveElement, controller, enabled, keymap, notifyRing]);
+  }, [adoptActiveElement, controller, enabled, keymap, notifyRing, startEngine]);
 
   const value = useMemo<FocusNavigationContextValue>(
     () => ({

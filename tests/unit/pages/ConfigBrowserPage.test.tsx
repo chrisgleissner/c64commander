@@ -21,6 +21,7 @@ import { reportUserError } from "@/lib/uiErrors";
 import { getC64API } from "@/lib/c64api";
 import { resolveAudioMixerResetValue } from "@/lib/config/audioMixer";
 import { toast } from "@/hooks/use-toast";
+import { enterKeyNavigationModality, leaveKeyNavigationModality } from "../../helpers/keypadModality";
 
 const mockUseC64Connection = vi.fn();
 const mockUseC64Categories = vi.fn();
@@ -160,8 +161,11 @@ const FocusContextCapture = ({ target }: { target: { current: FocusNavigationCon
   return null;
 };
 
-const renderConfigBrowserPageInFocusRing = (focusContext?: { current: FocusNavigationContextValue | null }) =>
-  render(
+// HARD27-039: a keypad user reaches this page by key, so the discovery engine is
+// already running when it mounts. These tests read the ring without a key first.
+const renderConfigBrowserPageInFocusRing = (focusContext?: { current: FocusNavigationContextValue | null }) => {
+  enterKeyNavigationModality();
+  return render(
     <RouterProvider
       router={buildRouter(
         <FocusNavigationProvider profileId="keypad">
@@ -175,6 +179,7 @@ const renderConfigBrowserPageInFocusRing = (focusContext?: { current: FocusNavig
       }}
     />,
   );
+};
 
 vi.mock("@/lib/c64api", () => ({
   BACKGROUND_REQUEST_TIMEOUT_MS: 3000,
@@ -220,6 +225,7 @@ const setupDefaultMocks = () => {
 };
 
 afterEach(() => {
+  leaveKeyNavigationModality();
   vi.useRealTimers();
   vi.clearAllMocks();
   // The category cards render through `CollapsibleSection`, which remembers which sections a

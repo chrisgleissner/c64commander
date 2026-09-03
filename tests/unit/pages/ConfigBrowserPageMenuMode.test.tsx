@@ -20,8 +20,11 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ConfigBrowserPage from "@/pages/ConfigBrowserPage";
+
+afterEach(() => leaveKeyNavigationModality());
+import { enterKeyNavigationModality, leaveKeyNavigationModality } from "../../helpers/keypadModality";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const FIXTURE = yaml.load(readFileSync(resolve(REPO_ROOT, "docs/c64/devices/c64u/1.1.0/c64u-config.yaml"), "utf8")) as {
@@ -139,6 +142,10 @@ const renderPage = (focusContext?: { current: FocusNavigationContextValue | null
     initialEntries: ["/"],
     future: { v7_startTransition: true, v7_relativeSplatPath: true },
   });
+  // HARD27-039: a keypad user arrives here by key, so the discovery engine is
+  // already running when the component mounts. These tests read the ring without
+  // pressing a key first.
+  enterKeyNavigationModality();
   return render(
     <QueryClientProvider client={queryClient}>
       <FocusNavigationProvider profileId="keypad">

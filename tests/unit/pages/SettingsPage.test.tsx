@@ -9,6 +9,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { RouterProvider, createMemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { enterKeyNavigationModality, leaveKeyNavigationModality } from "../../helpers/keypadModality";
 import SettingsPage from "@/pages/SettingsPage";
 import { DisplayProfileProvider } from "@/hooks/useDisplayProfile";
 import {
@@ -424,8 +425,11 @@ const FocusContextCapture = ({ target }: { target: { current: FocusNavigationCon
   return null;
 };
 
-const renderSettingsPageInFocusRing = (focusContext?: { current: FocusNavigationContextValue | null }) =>
-  withSectionsOpen(
+// HARD27-039: a keypad user reaches this page by key, so the discovery engine is
+// already running when it mounts. These tests read the ring without a key first.
+const renderSettingsPageInFocusRing = (focusContext?: { current: FocusNavigationContextValue | null }) => {
+  enterKeyNavigationModality();
+  return withSectionsOpen(
     render(
       <FocusNavigationProvider profileId="keypad">
         {focusContext ? <FocusContextCapture target={focusContext} /> : null}
@@ -439,6 +443,7 @@ const renderSettingsPageInFocusRing = (focusContext?: { current: FocusNavigation
       </FocusNavigationProvider>,
     ),
   );
+};
 
 vi.mock("@/lib/uiErrors", () => ({
   reportUserError: vi.fn(),
@@ -667,6 +672,7 @@ vi.mock("@/components/archive/OnlineArchiveDialog", () => ({
 }));
 
 afterEach(() => {
+  leaveKeyNavigationModality();
   vi.clearAllMocks();
 });
 
