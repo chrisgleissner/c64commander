@@ -586,8 +586,8 @@ single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
   `settings-roms-remove` — R✅ I✅ `[disabled: no ROMs stored]` ; Read them
   automatically — checkbox — `settings-roms-auto` — on by default, because without the
   ROMs accurate local playback is silent
-- **Play and disk lists**: Items shown before View all — number —
-  `settings-list-preview-limit` ; Friendly SID names — checkbox —
+- **Play and disk lists**: Items shown before View all — number — `#listPreviewLimit`
+  (no testid; it commits on blur and on Enter) ; Friendly SID names — checkbox —
   `settings-friendly-sid-names`
 - **Notifications**: visibility — select — R✅ I✅ ; duration — slider —
   `settings-notification-duration-slider` — R✅ I✅ (2–8 s in 0.5 s steps, default 4 s;
