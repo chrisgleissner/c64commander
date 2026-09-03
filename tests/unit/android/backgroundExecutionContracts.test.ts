@@ -44,6 +44,33 @@ describe("Android background execution contracts", () => {
     expect(backgroundPluginSource).toContain("areServiceReceiversRegistered = false");
   });
 
+  it("HARD27-040: publishes now-playing metadata to the session the lock screen reads", () => {
+    expect(backgroundPluginSource).toContain("fun setNowPlaying(call: PluginCall)");
+    expect(backgroundServiceSource).toContain("session.setMetadata(metadata.build())");
+    expect(backgroundServiceSource).toContain("MediaMetadata.METADATA_KEY_TITLE");
+    expect(backgroundServiceSource).toContain("MediaMetadata.METADATA_KEY_ARTIST");
+    expect(backgroundServiceSource).toContain("MediaMetadata.METADATA_KEY_DURATION");
+  });
+
+  it("HARD27-040: names the session on the notification, which is what draws the media control", () => {
+    expect(backgroundServiceSource).toContain("Notification.MediaStyle()");
+    expect(backgroundServiceSource).toContain("style.setMediaSession(it)");
+    // The session has to exist before the notification that names its token is built.
+    const startBlock = backgroundServiceSource.slice(
+      backgroundServiceSource.indexOf('AppLogger.info(this, TAG, "Service starting"'),
+      backgroundServiceSource.indexOf("isRunning = true"),
+    );
+    expect(startBlock.indexOf("initializeMediaSession()")).toBeGreaterThanOrEqual(0);
+    expect(startBlock.indexOf("initializeMediaSession()")).toBeLessThan(startBlock.indexOf("startForeground("));
+  });
+
+  it("HARD27-040: the notification's transport buttons relay the same broadcast a media button does", () => {
+    expect(backgroundServiceSource).toContain("PendingIntent.getBroadcast(");
+    expect(backgroundServiceSource).toContain("TRANSPORT_COMMAND_NEXT");
+    expect(backgroundServiceSource).toContain("override fun onSkipToNext()");
+    expect(backgroundServiceSource).toContain("PlaybackState.ACTION_SKIP_TO_NEXT");
+  });
+
   it("relays a media button press to the web layer, retained until Play remounts a listener", () => {
     expect(backgroundPluginSource).toContain('notifyListeners("backgroundTransportCommand", payload, true)');
   });

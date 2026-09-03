@@ -8,8 +8,10 @@
 
 package uk.gleissner.c64commander
 
+import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
+import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.os.Build
 import android.os.Looper
@@ -25,10 +27,34 @@ import org.robolectric.Shadows
 import org.robolectric.shadows.ShadowLooper
 import org.robolectric.android.controller.ServiceController
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.Implementation
+import org.robolectric.annotation.Implements
 import java.util.concurrent.TimeUnit
 
+/**
+ * Robolectric's own MediaSession shadow only stubs the constructor, and the framework class keeps
+ * no field holding the metadata it was given, so the only way to see what the service published is
+ * to record the call. Everything else about the session still runs the real framework code.
+ */
+@Implements(MediaSession::class)
+class RecordingMediaSessionShadow {
+    companion object {
+        @JvmStatic var lastMetadata: MediaMetadata? = null
+    }
+
+    @Implementation
+    protected fun __constructor__(context: Context, tag: String) {
+        // The real constructor talks to the media session service, which Robolectric does not run.
+    }
+
+    @Implementation
+    protected fun setMetadata(metadata: MediaMetadata?) {
+        lastMetadata = metadata
+    }
+}
+
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [Build.VERSION_CODES.TIRAMISU])
+@Config(sdk = [Build.VERSION_CODES.TIRAMISU], shadows = [RecordingMediaSessionShadow::class])
 class BackgroundExecutionServiceTest {
 
     private lateinit var controller: ServiceController<BackgroundExecutionService>
@@ -36,6 +62,7 @@ class BackgroundExecutionServiceTest {
 
     @Before
     fun setUp() {
+        RecordingMediaSessionShadow.lastMetadata = null
         setIsRunning(false)
         setRunningInstance(null)
         setCompanionField("commandGeneration", 0L)
@@ -105,6 +132,14 @@ class BackgroundExecutionServiceTest {
         val state = field.get(session) as android.media.session.PlaybackState?
         assertNotNull("Expected the session to advertise a playback state", state)
         return state!!.state
+    }
+
+    private fun playbackStateActionsOf(session: MediaSession?): Long {
+        val field = MediaSession::class.java.getDeclaredField("mPlaybackState")
+        field.isAccessible = true
+        val state = field.get(session) as android.media.session.PlaybackState?
+        assertNotNull("Expected the session to advertise a playback state", state)
+        return state!!.actions
     }
 
     private fun notificationId(): Int {
@@ -818,6 +853,189 @@ class BackgroundExecutionServiceTest {
         assertEquals(
                 startGeneration,
                 pauseIntent?.getLongExtra(BackgroundExecutionService.EXTRA_COMMAND_GENERATION, 0L),
+        )
+    }
+
+    private fun setNowPlaying(
+            title: String?,
+            artist: String?,
+            durationMs: Long?,
+            startId: Int = 1,
+    ) {
+        val intent = Intent(BackgroundExecutionService.ACTION_SET_NOW_PLAYING)
+        intent.putExtra(BackgroundExecutionService.EXTRA_NOW_PLAYING_TITLE, title)
+        intent.putExtra(BackgroundExecutionService.EXTRA_NOW_PLAYING_ARTIST, artist)
+        if (durationMs != null) {
+            intent.putExtra(BackgroundExecutionService.EXTRA_NOW_PLAYING_DURATION_MS, durationMs)
+        }
+        service.onStartCommand(intent, 0, startId)
+    }
+
+    private fun currentNotification(): android.app.Notification? {
+        val manager = service.getSystemService(android.app.NotificationManager::class.java)
+        return Shadows.shadowOf(manager).getNotification(notificationId())
+                ?: Shadows.shadowOf(service).lastForegroundNotification
+    }
+
+    private fun transportCommandsOfNotificationActions(): List<String?> {
+        val notification = currentNotification()
+        assertNotNull("Expected an active foreground notification", notification)
+        val actions = notification?.actions ?: emptyArray()
+        return actions.map { action ->
+            val shadow = Shadows.shadowOf(action.actionIntent)
+            shadow.savedIntent?.getStringExtra(
+                    BackgroundExecutionService.EXTRA_TRANSPORT_COMMAND
+            )
+        }
+    }
+
+    @Test
+    fun nowPlayingMetadataReachesTheMediaSession() {
+        // HARD27-040: the session carried no metadata at all, so the lock-screen media control the
+        // platform builds from it had no title, artist or duration to show.
+        controller.create()
+        startService()
+
+        setNowPlaying("Nightshift", "Jeroen Tel", 195_000L)
+
+        val metadata = RecordingMediaSessionShadow.lastMetadata
+        assertNotNull("Expected the session to be given now-playing metadata", metadata)
+        assertEquals("Nightshift", metadata?.getString(MediaMetadata.METADATA_KEY_TITLE))
+        assertEquals("Jeroen Tel", metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST))
+        assertEquals(195_000L, metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION))
+    }
+
+    @Test
+    fun nowPlayingTitleAndArtistReachTheNotification() {
+        controller.create()
+        startService()
+
+        setNowPlaying("Nightshift", "Jeroen Tel", 195_000L)
+
+        val notification = currentNotification()
+        assertEquals(
+                "Nightshift",
+                notification?.extras?.getCharSequence(android.app.Notification.EXTRA_TITLE)
+                        ?.toString(),
+        )
+        assertEquals(
+                "Jeroen Tel",
+                notification?.extras?.getCharSequence(android.app.Notification.EXTRA_TEXT)
+                        ?.toString(),
+        )
+    }
+
+    @Test
+    fun aTuneWithoutMetadataStillNamesTheAppOnTheLockScreen() {
+        // A blank title must not produce an empty media control: the session falls back to the app
+        // name, which is also what the notification has always shown.
+        controller.create()
+        startService()
+
+        setNowPlaying("   ", null, 0L)
+
+        assertEquals(
+                service.getString(R.string.app_name),
+                RecordingMediaSessionShadow.lastMetadata?.getString(MediaMetadata.METADATA_KEY_TITLE),
+        )
+    }
+
+    @Test
+    fun notificationOffersPauseNextAndStop() {
+        // HARD27-040: the notification had no actions, so the only way to stop a playing session
+        // was to unlock the phone and open the app.
+        controller.create()
+        startService()
+
+        assertEquals(
+                listOf(
+                        BackgroundExecutionService.TRANSPORT_COMMAND_PLAY_PAUSE,
+                        BackgroundExecutionService.TRANSPORT_COMMAND_NEXT,
+                        BackgroundExecutionService.TRANSPORT_COMMAND_STOP,
+                ),
+                transportCommandsOfNotificationActions(),
+        )
+    }
+
+    @Test
+    fun aPausedNotificationOffersPlayInsteadOfPause() {
+        controller.create()
+        startService()
+
+        setPlaybackState(paused = true)
+
+        assertEquals(
+                listOf(
+                        BackgroundExecutionService.TRANSPORT_COMMAND_PLAY,
+                        BackgroundExecutionService.TRANSPORT_COMMAND_NEXT,
+                        BackgroundExecutionService.TRANSPORT_COMMAND_STOP,
+                ),
+                transportCommandsOfNotificationActions(),
+        )
+    }
+
+    @Test
+    fun theSessionAdvertisesSkipToNextAndRelaysIt() {
+        controller.create()
+        startService()
+
+        val session = getPrivateField("mediaSession") as MediaSession?
+        val actions = playbackStateActionsOf(session)
+        assertTrue(
+                "The lock-screen control cannot offer Next unless the state advertises it",
+                actions and android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT != 0L,
+        )
+
+        service.mediaSessionCallback.onSkipToNext()
+
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val broadcasts = Shadows.shadowOf(appContext as android.app.Application).broadcastIntents
+        val relayed =
+                broadcasts.lastOrNull {
+                    it.action == BackgroundExecutionService.ACTION_TRANSPORT_COMMAND
+                }
+        assertEquals(
+                BackgroundExecutionService.TRANSPORT_COMMAND_NEXT,
+                relayed?.getStringExtra(BackgroundExecutionService.EXTRA_TRANSPORT_COMMAND),
+        )
+    }
+
+    @Test
+    fun nowPlayingDuringAPendingStartIsForwardedWithThatStartsGeneration() {
+        // The page names the tune in the commit that starts playback, so the update regularly
+        // reaches the companion before the service is up.
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+        BackgroundExecutionService.start(appContext)
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        val startIntent = shadowApp.nextStartedService
+        val startGeneration = startIntent?.getLongExtra(BackgroundExecutionService.EXTRA_COMMAND_GENERATION, 0L)
+
+        BackgroundExecutionService.setNowPlaying(appContext, "Nightshift", "Jeroen Tel", 195_000L)
+
+        val queued = shadowApp.nextStartedService
+        assertNotNull("Expected the now-playing update to be forwarded while a start is pending", queued)
+        assertEquals(BackgroundExecutionService.ACTION_SET_NOW_PLAYING, queued?.action)
+        assertEquals(
+                "Nightshift",
+                queued?.getStringExtra(BackgroundExecutionService.EXTRA_NOW_PLAYING_TITLE),
+        )
+        assertEquals(
+                startGeneration,
+                queued?.getLongExtra(BackgroundExecutionService.EXTRA_COMMAND_GENERATION, 0L),
+        )
+    }
+
+    @Test
+    fun nowPlayingWithoutASessionIsDroppedRatherThanStartingOne() {
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        shadowApp.clearStartedServices()
+
+        BackgroundExecutionService.setNowPlaying(appContext, "Nightshift", "Jeroen Tel", 195_000L)
+
+        assertNull(
+                "Metadata must never start a foreground service the web layer did not ask for",
+                shadowApp.nextStartedService,
         )
     }
 }

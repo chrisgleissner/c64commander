@@ -33,6 +33,17 @@ export type BackgroundExecutionEvents = {
   backgroundTransportCommand: BackgroundTransportCommandEvent;
 };
 
+/**
+ * What the lock screen and the notification say is playing. Every field is nullable because a tune
+ * can carry none of them: a SID header names no author more often than not, and a length is only
+ * known once the songlength database has been consulted.
+ */
+export type NowPlayingInfo = {
+  title: string | null;
+  artist: string | null;
+  durationMs: number | null;
+};
+
 export type BackgroundExecutionPlugin = {
   start: (options?: { traceContext?: NativeTraceContext }) => Promise<void>;
   stop: (options?: { traceContext?: NativeTraceContext }) => Promise<void>;
@@ -42,6 +53,11 @@ export type BackgroundExecutionPlugin = {
    * still reaches the web layer (HARD27-007).
    */
   setPlaybackState: (options: { paused: boolean; traceContext?: NativeTraceContext }) => Promise<void>;
+  /**
+   * Publishes the tune the session is playing, so the lock-screen media control names it and its
+   * transport buttons are more than a guess at what is on (HARD27-040).
+   */
+  setNowPlaying: (options: NowPlayingInfo & { traceContext?: NativeTraceContext }) => Promise<void>;
   setDueAtMs: (options: { dueAtMs: number | null; traceContext?: NativeTraceContext }) => Promise<void>;
   checkPermissions: () => Promise<BackgroundExecutionPermissions>;
   requestPermissions: (options: { permissions: string[] }) => Promise<BackgroundExecutionPermissions>;
@@ -68,6 +84,11 @@ export const BackgroundExecution: BackgroundExecutionPlugin = {
     }),
   setPlaybackState: (options) =>
     plugin.setPlaybackState({
+      ...options,
+      traceContext: resolveNativeTraceContext(getActiveAction()),
+    }),
+  setNowPlaying: (options) =>
+    plugin.setNowPlaying({
       ...options,
       traceContext: resolveNativeTraceContext(getActiveAction()),
     }),

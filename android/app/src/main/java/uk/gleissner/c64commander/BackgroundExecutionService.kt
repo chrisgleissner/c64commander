@@ -15,6 +15,8 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.Icon
+import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Build
@@ -23,7 +25,6 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
-import androidx.core.app.NotificationCompat
 
 /**
  * Minimal foreground service that keeps the Android process and WebView JS runtime alive while the
@@ -49,6 +50,10 @@ class BackgroundExecutionService : Service() {
         const val EXTRA_COMMAND_GENERATION = "commandGeneration"
         const val EXTRA_TRANSPORT_COMMAND = "transportCommand"
         const val EXTRA_PAUSED = "paused"
+        const val ACTION_SET_NOW_PLAYING = "uk.gleissner.c64commander.action.SET_NOW_PLAYING"
+        const val EXTRA_NOW_PLAYING_TITLE = "nowPlayingTitle"
+        const val EXTRA_NOW_PLAYING_ARTIST = "nowPlayingArtist"
+        const val EXTRA_NOW_PLAYING_DURATION_MS = "nowPlayingDurationMs"
 
         /**
          * HARD27-007: how long a paused session keeps its notification and MediaSession alive so a
@@ -58,10 +63,18 @@ class BackgroundExecutionService : Service() {
          */
         const val PAUSED_GRACE_PERIOD_MS = 10L * 60L * 1000L
 
-        /** The three transport commands the session's PlaybackState already advertises. */
+        /** The transport commands the session's PlaybackState advertises, in the web layer's own
+         * vocabulary: the service does not interpret them, it relays them. */
         const val TRANSPORT_COMMAND_PLAY = "play"
         const val TRANSPORT_COMMAND_PLAY_PAUSE = "playPause"
         const val TRANSPORT_COMMAND_STOP = "stop"
+        const val TRANSPORT_COMMAND_NEXT = "next"
+
+        /** One PendingIntent request code per notification action; see [transportAction]. */
+        private const val TRANSPORT_REQUEST_PLAY = 1
+        private const val TRANSPORT_REQUEST_PAUSE = 2
+        private const val TRANSPORT_REQUEST_NEXT = 3
+        private const val TRANSPORT_REQUEST_STOP = 4
 
         @Volatile
         var isRunning = false
@@ -144,6 +157,42 @@ class BackgroundExecutionService : Service() {
             }
         }
 
+        /**
+         * HARD27-040: publishes what is playing to the MediaSession and the notification. Only a
+         * live (or starting) session has anywhere to put it, so an update that arrives without one
+         * is dropped rather than starting a service the web layer did not ask for.
+         */
+        fun setNowPlaying(context: Context, title: String?, artist: String?, durationMs: Long?) {
+            val activeService = runningInstance
+            if (isRunning && activeService != null) {
+                activeService.applyNowPlayingUpdate(title, artist, durationMs)
+                return
+            }
+            val pendingGeneration = startPendingGeneration
+            if (pendingGeneration == null) {
+                AppLogger.debug(
+                        context,
+                        TAG,
+                        "Not running — ignoring now-playing update",
+                        "BackgroundExecutionService"
+                )
+                return
+            }
+            val intent = Intent(context, BackgroundExecutionService::class.java)
+            intent.action = ACTION_SET_NOW_PLAYING
+            intent.putExtra(EXTRA_NOW_PLAYING_TITLE, title)
+            intent.putExtra(EXTRA_NOW_PLAYING_ARTIST, artist)
+            if (durationMs != null) {
+                intent.putExtra(EXTRA_NOW_PLAYING_DURATION_MS, durationMs)
+            }
+            intent.putExtra(EXTRA_COMMAND_GENERATION, pendingGeneration)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
+
         fun updateDueAt(context: Context, dueAtMs: Long?) {
             val activeService = runningInstance
             if (isRunning && activeService != null) {
@@ -204,10 +253,15 @@ class BackgroundExecutionService : Service() {
                 override fun onPause() = broadcastTransportCommand(TRANSPORT_COMMAND_PLAY_PAUSE)
 
                 override fun onStop() = broadcastTransportCommand(TRANSPORT_COMMAND_STOP)
+
+                override fun onSkipToNext() = broadcastTransportCommand(TRANSPORT_COMMAND_NEXT)
             }
 
     private val handler = Handler(Looper.getMainLooper())
     private var isPausedState = false
+    private var nowPlayingTitle: String? = null
+    private var nowPlayingArtist: String? = null
+    private var nowPlayingDurationMs: Long? = null
     private var pausedExpiryRunnable: Runnable? = null
     private var dueAtMs: Long? = null
     private var dueAtElapsedMs: Long? = null
@@ -248,14 +302,28 @@ class BackgroundExecutionService : Service() {
         }
         if (!isRunning) {
             AppLogger.info(this, TAG, "Service starting", "BackgroundExecutionService")
+            // The session is created before the notification, because the notification names its
+            // token and that token is what the platform builds the lock-screen media control from
+            // (HARD27-040). Creating it is a few field writes, so the foreground contract is still
+            // satisfied promptly.
+            initializeMediaSession()
             startForeground(NOTIFICATION_ID, buildNotification())
             acquireWakeLock()
-            initializeMediaSession()
             isRunning = true
         }
 
         if (action == ACTION_SET_PLAYBACK_STATE) {
             updatePlaybackStateInternal(intent.getBooleanExtra(EXTRA_PAUSED, false))
+            return START_STICKY
+        }
+
+        if (action == ACTION_SET_NOW_PLAYING) {
+            val duration = intent.getLongExtra(EXTRA_NOW_PLAYING_DURATION_MS, -1L)
+            updateNowPlayingInternal(
+                    intent.getStringExtra(EXTRA_NOW_PLAYING_TITLE),
+                    intent.getStringExtra(EXTRA_NOW_PLAYING_ARTIST),
+                    if (duration > 0L) duration else null,
+            )
             return START_STICKY
         }
 
@@ -332,6 +400,66 @@ class BackgroundExecutionService : Service() {
         )
     }
 
+    private fun applyNowPlayingUpdate(title: String?, artist: String?, durationMs: Long?) {
+        handler.post { updateNowPlayingInternal(title, artist, durationMs) }
+    }
+
+    /**
+     * The tune the notification and the session name. Blank fields are normalised to null so an
+     * empty title falls back to the app name rather than showing an empty lock-screen control.
+     */
+    private fun updateNowPlayingInternal(title: String?, artist: String?, durationMs: Long?) {
+        val nextTitle = title?.trim()?.ifEmpty { null }
+        val nextArtist = artist?.trim()?.ifEmpty { null }
+        val nextDuration = durationMs?.takeIf { it > 0L }
+        if (nextTitle == nowPlayingTitle &&
+                        nextArtist == nowPlayingArtist &&
+                        nextDuration == nowPlayingDurationMs
+        ) {
+            return
+        }
+        nowPlayingTitle = nextTitle
+        nowPlayingArtist = nextArtist
+        nowPlayingDurationMs = nextDuration
+        publishNowPlayingMetadata()
+        refreshNotification()
+        AppLogger.debug(
+                this,
+                TAG,
+                "Now playing updated (hasTitle=${nextTitle != null}, hasArtist=${nextArtist != null})",
+                "BackgroundExecutionService"
+        )
+    }
+
+    /**
+     * What the lock screen reads. Published even before the web layer names a tune, so the control
+     * carries the app name rather than an empty title.
+     */
+    private fun publishNowPlayingMetadata() {
+        val session = mediaSession ?: return
+        try {
+            val metadata =
+                    MediaMetadata.Builder()
+                            .putString(
+                                    MediaMetadata.METADATA_KEY_TITLE,
+                                    nowPlayingTitle ?: getString(R.string.app_name)
+                            )
+            nowPlayingArtist?.let { metadata.putString(MediaMetadata.METADATA_KEY_ARTIST, it) }
+            nowPlayingDurationMs?.let {
+                metadata.putLong(MediaMetadata.METADATA_KEY_DURATION, it)
+            }
+            session.setMetadata(metadata.build())
+        } catch (e: Exception) {
+            AppLogger.warn(
+                    this,
+                    TAG,
+                    "Failed to publish now-playing metadata",
+                    "BackgroundExecutionService",
+                    e
+            )
+        }
+    }
+
     private fun schedulePausedExpiry() {
         cancelPausedExpiry()
         val runnable = Runnable {
@@ -380,7 +508,8 @@ class BackgroundExecutionService : Service() {
                             PlaybackState.ACTION_PLAY or
                                     PlaybackState.ACTION_PAUSE or
                                     PlaybackState.ACTION_PLAY_PAUSE or
-                                    PlaybackState.ACTION_STOP,
+                                    PlaybackState.ACTION_STOP or
+                                    PlaybackState.ACTION_SKIP_TO_NEXT,
                     )
                     .build()
 
@@ -414,6 +543,12 @@ class BackgroundExecutionService : Service() {
         }
     }
 
+    /**
+     * A media notification rather than a status line (HARD27-040). The platform builds the
+     * lock-screen and quick-settings media control from the session named here, so without the
+     * token, the metadata and these actions the tune's title and its transport buttons appear
+     * nowhere and the only way to stop playback is to unlock the phone and open the app.
+     */
     private fun buildNotification(): Notification {
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
         val pendingIntent =
@@ -424,13 +559,97 @@ class BackgroundExecutionService : Service() {
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle(getString(R.string.app_name))
-                .setContentText(if (isPausedState) "Playback paused" else "Playback active")
+        val builder =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    Notification.Builder(this, CHANNEL_ID)
+                } else {
+                    @Suppress("DEPRECATION")
+                    Notification.Builder(this).setPriority(Notification.PRIORITY_LOW)
+                }
+
+        builder.setContentTitle(nowPlayingTitle ?: getString(R.string.app_name))
+                .setContentText(nowPlayingArtist ?: playbackStateText())
                 .setSmallIcon(android.R.drawable.ic_media_play)
                 .setOngoing(true)
                 .setContentIntent(pendingIntent)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
+                // The lock screen hides a notification's content by default; a media control that
+                // will not say what is playing defeats the point of publishing the metadata.
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+
+        // Play or Pause is first, because a collapsed control shows the leading actions.
+        if (isPausedState) {
+            builder.addAction(
+                    transportAction(
+                            android.R.drawable.ic_media_play,
+                            "Play",
+                            TRANSPORT_COMMAND_PLAY,
+                            TRANSPORT_REQUEST_PLAY,
+                    )
+            )
+        } else {
+            builder.addAction(
+                    transportAction(
+                            android.R.drawable.ic_media_pause,
+                            "Pause",
+                            TRANSPORT_COMMAND_PLAY_PAUSE,
+                            TRANSPORT_REQUEST_PAUSE,
+                    )
+            )
+        }
+        builder.addAction(
+                transportAction(
+                        android.R.drawable.ic_media_next,
+                        "Next",
+                        TRANSPORT_COMMAND_NEXT,
+                        TRANSPORT_REQUEST_NEXT,
+                )
+        )
+        builder.addAction(
+                transportAction(
+                        android.R.drawable.ic_menu_close_clear_cancel,
+                        "Stop",
+                        TRANSPORT_COMMAND_STOP,
+                        TRANSPORT_REQUEST_STOP,
+                )
+        )
+
+        val style = Notification.MediaStyle().setShowActionsInCompactView(0, 1, 2)
+        mediaSession?.sessionToken?.let { style.setMediaSession(it) }
+        builder.setStyle(style)
+
+        return builder.build()
+    }
+
+    private fun playbackStateText(): String =
+            if (isPausedState) "Playback paused" else "Playback active"
+
+    /**
+     * A notification button relays the same broadcast a media-button press does, so the web layer
+     * has one transport entry point. Each action needs its own request code: two intents with the
+     * same action and package are the same intent as far as PendingIntent is concerned, and the
+     * extras that distinguish them are not compared.
+     */
+    private fun transportAction(
+            icon: Int,
+            label: String,
+            command: String,
+            requestCode: Int
+    ): Notification.Action {
+        val intent = Intent(ACTION_TRANSPORT_COMMAND)
+        intent.setPackage(packageName)
+        intent.putExtra(EXTRA_TRANSPORT_COMMAND, command)
+        val pendingIntent =
+                PendingIntent.getBroadcast(
+                        this,
+                        requestCode,
+                        intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+        return Notification.Action.Builder(
+                        Icon.createWithResource(this, icon),
+                        label,
+                        pendingIntent
+                )
                 .build()
     }
 
@@ -472,6 +691,7 @@ class BackgroundExecutionService : Service() {
             )
             session.isActive = true
             mediaSession = session
+            publishNowPlayingMetadata()
             AppLogger.debug(this, TAG, "MediaSession initialized", "BackgroundExecutionService")
         } catch (e: Exception) {
             AppLogger.warn(

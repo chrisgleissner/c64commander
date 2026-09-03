@@ -79,6 +79,14 @@ export class BackgroundExecutionWeb implements BackgroundExecutionPlugin {
     return undefined;
   }
 
+  /**
+   * The browser's own Media Session API is not wired up here: the web build has no background
+   * playback to control, so there is no session for metadata to describe.
+   */
+  async setNowPlaying(): Promise<void> {
+    return undefined;
+  }
+
   /** The browser has no foreground-service notification, so there is nothing to ask for. */
   async checkPermissions(): Promise<BackgroundExecutionPermissions> {
     return { notifications: "granted" };

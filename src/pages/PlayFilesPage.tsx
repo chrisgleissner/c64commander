@@ -79,6 +79,7 @@ import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import {
   isBackgroundExecutionActive,
+  setBackgroundExecutionNowPlaying,
   setBackgroundExecutionPaused,
   startBackgroundExecution,
   stopBackgroundExecution,
@@ -1879,6 +1880,37 @@ export default function PlayFilesPage() {
         chipCount: currentItemCredits.chipCount,
       })
     : null;
+
+  /*
+   * What the lock screen and the notification shade say is playing (HARD27-040).
+   *
+   * Handed over on every track change, and whether or not a background session is running: the
+   * manager keeps the last tune and republishes it once a session starts, because the page names
+   * the track in the commit before the one that starts playback.
+   */
+  const nowPlayingTitle = currentDisplay?.title ?? currentItem?.label ?? null;
+  const nowPlayingArtist = currentItemCredits.author;
+  useEffect(() => {
+    void setBackgroundExecutionNowPlaying(
+      { title: nowPlayingTitle, artist: nowPlayingArtist, durationMs: currentDurationMs ?? null },
+      {
+        source: "playback-controller",
+        reason: "now-playing",
+        context: { trackInstanceId },
+      },
+    ).catch((error) => {
+      reportUserError({
+        operation: "setBackgroundExecutionNowPlaying",
+        title: "Now-playing metadata update failed",
+        description: "The lock-screen media control may not name the current tune.",
+        error,
+        context: { trackInstanceId },
+        // The tune plays either way; a media control naming the wrong thing is
+        // diagnostics material, never a toast (ERROR_POLICY §3).
+        background: true,
+      });
+    });
+  }, [currentDurationMs, nowPlayingArtist, nowPlayingTitle, trackInstanceId]);
 
   // How much of the tune the on-device engine has rendered, as a percentage of its length. Only the
   // local engine has this: libsidplayfp cannot rewind, so a seek beyond what is rendered has to be

@@ -212,6 +212,29 @@ open class BackgroundExecutionPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun setNowPlaying(call: PluginCall) {
+        try {
+            BackgroundExecutionService.setNowPlaying(
+                    context,
+                    call.getString("title"),
+                    call.getString("artist"),
+                    call.getLong("durationMs"),
+            )
+            call.resolve()
+        } catch (e: Exception) {
+            AppLogger.error(
+                    pluginContextOrNull(),
+                    logTag,
+                    "Failed to update background now-playing metadata",
+                    "BackgroundExecutionPlugin",
+                    e,
+                    traceFields(call)
+            )
+            call.reject("Failed to update background now-playing metadata", e)
+        }
+    }
+
+    @PluginMethod
     fun stop(call: PluginCall) {
         try {
             BackgroundExecutionService.updateDueAt(context, null)

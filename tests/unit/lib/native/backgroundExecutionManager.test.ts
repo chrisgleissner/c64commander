@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   start: vi.fn(async () => undefined),
   stop: vi.fn(async () => undefined),
   setPlaybackState: vi.fn(async () => undefined),
+  setNowPlaying: vi.fn(async () => undefined),
   addLog: vi.fn(),
   getLifecycleState: vi.fn(() => "active"),
   classifyError: vi.fn(() => ({
@@ -17,6 +18,7 @@ vi.mock("@/lib/native/backgroundExecution", () => ({
     start: mocks.start,
     stop: mocks.stop,
     setPlaybackState: mocks.setPlaybackState,
+    setNowPlaying: mocks.setNowPlaying,
   },
 }));
 
@@ -35,6 +37,7 @@ vi.mock("@/lib/tracing/failureTaxonomy", () => ({
 import {
   isBackgroundExecutionActive,
   resetBackgroundExecutionState,
+  setBackgroundExecutionNowPlaying,
   setBackgroundExecutionPaused,
   startBackgroundExecution,
   stopBackgroundExecution,
@@ -46,6 +49,7 @@ describe("backgroundExecutionManager", () => {
     mocks.start.mockReset();
     mocks.stop.mockReset();
     mocks.setPlaybackState.mockReset();
+    mocks.setNowPlaying.mockReset();
     mocks.addLog.mockReset();
     mocks.getLifecycleState.mockReturnValue("active");
     mocks.classifyError.mockReturnValue({
@@ -56,6 +60,101 @@ describe("backgroundExecutionManager", () => {
 
   afterEach(() => {
     resetBackgroundExecutionState();
+  });
+
+  it("HARD27-040: publishes the tune a start was issued for, which was named before the session existed", async () => {
+    // The page names the track in the commit before the one that starts playback, so a manager
+    // that only published while a session was live would leave the lock screen naming the app.
+    await setBackgroundExecutionNowPlaying(
+      { title: "Nightshift", artist: "Jeroen Tel", durationMs: 195_000 },
+      {
+        source: "test",
+      },
+    );
+    expect(mocks.setNowPlaying).not.toHaveBeenCalled();
+
+    await startBackgroundExecution({ source: "test" });
+
+    expect(mocks.setNowPlaying).toHaveBeenCalledWith({
+      title: "Nightshift",
+      artist: "Jeroen Tel",
+      durationMs: 195_000,
+    });
+  });
+
+  it("HARD27-040: publishes each new track once and skips an unchanged one", async () => {
+    await startBackgroundExecution({ source: "test" });
+    await setBackgroundExecutionNowPlaying(
+      { title: "Nightshift", artist: "Jeroen Tel", durationMs: 195_000 },
+      {
+        source: "test",
+      },
+    );
+    await setBackgroundExecutionNowPlaying(
+      { title: "Nightshift", artist: "Jeroen Tel", durationMs: 195_000 },
+      {
+        source: "test",
+      },
+    );
+    expect(mocks.setNowPlaying).toHaveBeenCalledTimes(1);
+
+    await setBackgroundExecutionNowPlaying(
+      { title: "Comic Bakery", artist: "Martin Galway", durationMs: 240_000 },
+      {
+        source: "test",
+      },
+    );
+    expect(mocks.setNowPlaying).toHaveBeenLastCalledWith({
+      title: "Comic Bakery",
+      artist: "Martin Galway",
+      durationMs: 240_000,
+    });
+    expect(mocks.setNowPlaying).toHaveBeenCalledTimes(2);
+  });
+
+  it("HARD27-040: a failed metadata publish is logged, thrown and still retryable", async () => {
+    await startBackgroundExecution({ source: "test" });
+    mocks.setNowPlaying.mockRejectedValueOnce(new Error("plugin-failed"));
+
+    const info = { title: "Nightshift", artist: "Jeroen Tel", durationMs: 195_000 };
+    await expect(setBackgroundExecutionNowPlaying(info, { source: "test" })).rejects.toThrow(
+      "Background execution now-playing failed: plugin-failed",
+    );
+    expect(mocks.addLog).toHaveBeenCalledWith(
+      "error",
+      "Background execution now-playing update failed",
+      expect.objectContaining({ source: "test" }),
+    );
+
+    // The dedupe must not have swallowed the tune that never reached the session.
+    await setBackgroundExecutionNowPlaying(info, { source: "test" });
+    expect(mocks.setNowPlaying).toHaveBeenCalledTimes(2);
+  });
+
+  it("HARD27-040: a start whose metadata publish fails still starts background execution", async () => {
+    await setBackgroundExecutionNowPlaying(
+      { title: "Nightshift", artist: null, durationMs: null },
+      {
+        source: "test",
+      },
+    );
+    mocks.setNowPlaying.mockRejectedValueOnce(new Error("plugin-failed"));
+
+    await expect(startBackgroundExecution({ source: "test" })).resolves.toBeUndefined();
+    expect(isBackgroundExecutionActive()).toBe(true);
+  });
+
+  it("HARD27-040: stopping forgets the tune, so the next session republishes it", async () => {
+    await startBackgroundExecution({ source: "test" });
+    const info = { title: "Nightshift", artist: "Jeroen Tel", durationMs: 195_000 };
+    await setBackgroundExecutionNowPlaying(info, { source: "test" });
+    await stopBackgroundExecution({ source: "test" });
+
+    await startBackgroundExecution({ source: "test" });
+    expect(mocks.setNowPlaying).toHaveBeenCalledTimes(1);
+
+    await setBackgroundExecutionNowPlaying(info, { source: "test" });
+    expect(mocks.setNowPlaying).toHaveBeenCalledTimes(2);
   });
 
   it("HARD27-007: publishes the paused state of a live session and stays silent without one", async () => {
