@@ -448,7 +448,6 @@ vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
   clearLogs: vi.fn(),
-  formatLogsForShare: vi.fn(() => "payload"),
   getErrorLogs: vi.fn(() => []),
   getLogs: vi.fn(() => []),
 }));

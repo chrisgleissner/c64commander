@@ -45,7 +45,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/components/ui/toaster", () => ({ Toaster: () => <div data-testid="toaster" /> }));
-vi.mock("@/components/ui/sonner", () => ({ Toaster: () => <div data-testid="sonner" /> }));
 vi.mock("@/components/ui/tooltip", () => ({
   TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));

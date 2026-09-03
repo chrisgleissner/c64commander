@@ -8,7 +8,7 @@
 
 const DIAGNOSTICS_TIMESTAMP_PLACEHOLDER = "--:--:--.---";
 
-export const formatLocalTime = (value?: string | number | Date | null) => {
+const formatLocalTime = (value?: string | number | Date | null) => {
   if (value === null || value === undefined) return "—";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "—";

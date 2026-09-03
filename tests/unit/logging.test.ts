@@ -12,7 +12,6 @@ import {
   addLog,
   buildErrorLogDetails,
   clearLogs,
-  formatLogsForShare,
   getErrorLogs,
   getLogs,
   resetLoggingCacheForTests,
@@ -116,11 +115,9 @@ describe("logging", () => {
     window.removeEventListener("c64u-logs-updated", handler as EventListener);
   });
 
-  it("clears logs and formats entries for sharing", () => {
+  it("clears logs", () => {
     addLog("warn", "warning", { note: "check" });
-    const formatted = formatLogsForShare(getLogs());
-    expect(formatted).toContain("WARN");
-    expect(formatted).toContain("warning");
+    expect(getLogs()).toHaveLength(1);
 
     clearLogs();
     expect(getLogs()).toHaveLength(0);
@@ -320,14 +317,6 @@ describe("logging", () => {
 
     expect(infoSpy).toHaveBeenCalled();
     expect(debugSpy).toHaveBeenCalled();
-  });
-
-  it("redacts logs when requested", () => {
-    addLog("info", "sensetive info");
-    const formatted = formatLogsForShare(getLogs(), { redacted: true });
-    // Assuming redaction replaces common patterns, but here message is plain.
-    // Redaction logic is in exportRedaction.
-    expect(formatted).toContain("sensetive info"); // redaction targets specifics like IPs.
   });
 
   it("generates ID without crypto", () => {

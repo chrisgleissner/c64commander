@@ -32,8 +32,6 @@ const redactText = (input: string) => {
   return output;
 };
 
-export const redactExportText = (input: string) => redactText(input);
-
 export const redactExportValue = (value: unknown, keyHint?: string): unknown => {
   if (typeof keyHint === "string") {
     if (SENSITIVE_KEY_REGEX.test(keyHint)) return REDACTED;

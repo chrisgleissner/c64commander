@@ -7,7 +7,6 @@
  */
 
 import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
@@ -365,7 +364,6 @@ const App = () => (
         <DisplayProfileProvider>
           <TooltipProvider>
             <Toaster />
-            <Sonner />
             <FeatureFlagsProvider>
               <RefreshControlProvider>
                 <AppErrorBoundary>
