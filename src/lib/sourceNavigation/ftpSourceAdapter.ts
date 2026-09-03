@@ -162,12 +162,14 @@ const listFilesRecursive = async (
 
   assertNotAborted();
   /*
-   * iOS lists no `listDirectoryRecursive` in its `pluginMethods`, so this rejected with
-   * Capacitor's raw `"FtpClient.listDirectoryRecursive()" is not implemented on ios`, which
-   * reached the user as an error toast when they selected a folder in Play or Disks. The walker
-   * below is not a native-versus-web distinction - it is a complete implementation that web has
-   * always used, with the same depth and entry caps - so falling through to it is a real
-   * degradation rather than a failure. Latched, because the method stays absent (HARD27-003).
+   * A native platform without this method rejected with Capacitor's raw
+   * `"FtpClient.listDirectoryRecursive()" is not implemented on ios`, which reached the user as an
+   * error toast when they selected a folder in Play or Disks. iOS implements it now, so this is a
+   * safety net rather than the iOS path, and it stays because it is the only thing standing
+   * between a future missing bridge method and a raw Capacitor message on screen. The walker below
+   * is not a native-versus-web distinction - it is a complete implementation web has always used,
+   * with the same depth and entry caps - so falling through to it is a real degradation rather
+   * than a failure. Latched, because a missing method stays missing (HARD27-003).
    */
   if (isNativePlatform() && !isKnownUnavailable(FTP_LIST_RECURSIVE_METHOD)) {
     const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();

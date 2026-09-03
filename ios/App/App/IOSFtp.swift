@@ -99,6 +99,116 @@ final class FtpReadCancellationRegistry {
     }
 }
 
+/*
+ * The recursive FTP walk, expressed over a "list one directory" closure so the traversal can be
+ * tested without a socket. `FtpRecursiveWalkTests` in `ios/native-tests` exercises the mirror of
+ * this in `FtpRecursiveWalk`, and asserts this file agrees with it.
+ *
+ * The caps and the early-exit rule are Android's, deliberately: the two plugins answer the same
+ * TypeScript contract, and the app reports a truncated walk through `partialFailures` and
+ * `timedOut` rather than presenting it as a complete listing (HARD9-078, HARD9-081).
+ */
+struct FtpRecursiveFailure {
+    let path: String
+    let message: String
+}
+
+struct FtpRecursiveResult {
+    var entries: [FtpEntry] = []
+    var failures: [FtpRecursiveFailure] = []
+    var timedOut = false
+}
+
+enum FtpRecursiveWalkLimits {
+    static let defaultMaxDepth = 8
+    static let defaultMaxEntries = 5_000
+
+    static func clampDepth(_ raw: Int?) -> Int { min(max(raw ?? defaultMaxDepth, 0), 32) }
+    static func clampEntries(_ raw: Int?) -> Int { min(max(raw ?? defaultMaxEntries, 1), 50_000) }
+
+    static func cappedMessage(maxEntries: Int) -> String {
+        "FTP recursive listing stopped after \(maxEntries) entries"
+    }
+
+    static func maxDepthMessage(maxDepth: Int) -> String {
+        "FTP recursive listing max depth \(maxDepth) reached"
+    }
+}
+
+/*
+ * A listing error that means the firmware's single-threaded FTP is already wedging on PASV
+ * cycles. Continuing would pile more data channels onto it, so the whole walk stops and the
+ * caller is told the listing is incomplete rather than being handed a silent truncation.
+ */
+struct FtpListingTimeout: Error {
+    let underlying: Error
+}
+
+func walkFtpDirectory(
+    root: String,
+    maxDepth: Int,
+    maxEntries: Int,
+    list: (String) throws -> [FtpEntry]
+) -> FtpRecursiveResult {
+    var result = FtpRecursiveResult()
+    var queue: [(path: String, depth: Int)] = [(root, 0)]
+    var visited = Set<String>()
+    var examined = 0
+    var capped = false
+
+    while !queue.isEmpty && !capped && !result.timedOut {
+        let current = queue.removeFirst()
+        if !visited.insert(current.path).inserted { continue }
+
+        let files: [FtpEntry]
+        do {
+            files = try list(current.path)
+        } catch let timeout as FtpListingTimeout {
+            result.failures.append(
+                FtpRecursiveFailure(
+                    path: current.path,
+                    message: timeout.underlying.localizedDescription
+                )
+            )
+            result.timedOut = true
+            break
+        } catch {
+            result.failures.append(FtpRecursiveFailure(path: current.path, message: error.localizedDescription))
+            continue
+        }
+
+        for file in files {
+            examined += 1
+            if examined > maxEntries {
+                result.failures.append(
+                    FtpRecursiveFailure(
+                        path: current.path,
+                        message: FtpRecursiveWalkLimits.cappedMessage(maxEntries: maxEntries)
+                    )
+                )
+                capped = true
+                break
+            }
+            if file.type == "directory" {
+                if current.depth < maxDepth {
+                    queue.append((file.path, current.depth + 1))
+                } else {
+                    result.failures.append(
+                        FtpRecursiveFailure(
+                            path: file.path,
+                            message: FtpRecursiveWalkLimits.maxDepthMessage(maxDepth: maxDepth)
+                        )
+                    )
+                }
+            } else {
+                result.entries.append(file)
+            }
+        }
+    }
+
+    return result
+}
+
 @objc(FtpClientPlugin)
 public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "FtpClientPlugin"
@@ -110,6 +220,7 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "makeDirectory", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pingFtp", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "cancelRead", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "listDirectoryRecursive", returnType: CAPPluginReturnPromise),
     ]
 
     private let queue = DispatchQueue(label: "uk.gleissner.c64commander.ftp")
@@ -143,6 +254,70 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
             } catch {
                 let details = FtpRequestOptions.failureDetails(for: call, operation: "listDirectory")
                 IOSDiagnostics.log(.error, "FTP listDirectory failed", details: details, error: error)
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
+
+    /*
+     * Answers the same contract as Android's `listDirectoryRecursive`: `entries` holds files only,
+     * `partialFailures` names each folder that could not be listed or was cut off by a cap, and
+     * `timedOut` says the walk stopped early. iOS had no implementation at all, so selecting a
+     * folder in Play or Disks rejected with Capacitor's "not implemented on ios" and the user saw
+     * a raw error toast (HARD27-003).
+     *
+     * One connection for the whole walk rather than one per folder: the Ultimate's FTP is
+     * single-threaded and reconnecting per directory is what the PASV-cycle wedge is made of.
+     */
+    @objc public func listDirectoryRecursive(_ call: CAPPluginCall) {
+        queue.async {
+            do {
+                let options = try FtpRequestOptions(call: call)
+                let root = call.getString("path").flatMap { $0.isEmpty ? nil : $0 } ?? "/"
+                let maxDepth = FtpRecursiveWalkLimits.clampDepth(call.getInt("maxDepth"))
+                let maxEntries = FtpRecursiveWalkLimits.clampEntries(call.getInt("maxEntries"))
+
+                let session = FtpSession(
+                    host: options.host,
+                    port: options.port,
+                    timeout: options.timeout,
+                    connectTimeout: options.connectTimeout
+                )
+                defer { session.disconnect() }
+                try session.connect()
+                try session.login(username: options.username, password: options.password)
+
+                let result = walkFtpDirectory(root: root, maxDepth: maxDepth, maxEntries: maxEntries) { path in
+                    do {
+                        return try session.listDirectory(path: path)
+                    } catch {
+                        /*
+                         * A data-channel timeout is the wedge signal; anything else is one bad
+                         * folder and the walk carries on past it.
+                         */
+                        if FtpSession.isDataChannelTimeout(error) {
+                            throw FtpListingTimeout(underlying: error)
+                        }
+                        throw error
+                    }
+                }
+
+                call.resolve([
+                    "entries": result.entries.map { entry in
+                        [
+                            "name": entry.name,
+                            "path": entry.path,
+                            "type": entry.type,
+                            "size": entry.size as Any,
+                            "modifiedAt": entry.modifiedAt as Any,
+                        ] as [String: Any]
+                    },
+                    "partialFailures": result.failures.map { ["path": $0.path, "message": $0.message] },
+                    "timedOut": result.timedOut,
+                ])
+            } catch {
+                let details = FtpRequestOptions.failureDetails(for: call, operation: "listDirectoryRecursive")
+                IOSDiagnostics.log(.error, "FTP listDirectoryRecursive failed", details: details, error: error)
                 call.reject(error.localizedDescription)
             }
         }
@@ -773,6 +948,17 @@ final class FtpSession {
         }
 
         return bytes
+    }
+
+    /*
+     * Android detects the wedge as a `SocketTimeoutException`. iOS raises its timeouts as
+     * `NativePluginError.operationFailed` with a message, and `POSIXError.ETIMEDOUT` comes back
+     * from the socket layer, so both are matched. Message matching is fragile in general; the
+     * messages are all defined in this file and `FtpRecursiveWalkTests` pins them.
+     */
+    static func isDataChannelTimeout(_ error: Error) -> Bool {
+        if let posix = error as? POSIXError, posix.code == .ETIMEDOUT { return true }
+        return error.localizedDescription.range(of: "time.?d? ?out", options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     static let maxReadFileBytes = 32 * 1024 * 1024

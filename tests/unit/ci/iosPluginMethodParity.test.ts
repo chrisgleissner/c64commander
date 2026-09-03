@@ -73,16 +73,11 @@ export const readTypeScriptPluginContracts = (dir = NATIVE_CONTRACT_DIR): Map<st
  * Every entry needs a reason, and the list may only shrink: a method that has since been
  * implemented is reported so the entry is removed in the same change.
  *
- * HARD27-003 named the FtpClient and DeviceDiscovery rows. Building this check found the
- * other four, which the review did not report.
+ * HARD27-003 named the FtpClient and DeviceDiscovery rows; those are implemented and gone from
+ * this list. Building the check found the four below, which the review did not report, and each
+ * is a deliberate platform difference rather than an oversight.
  */
 export const KNOWN_IOS_METHOD_GAPS = new Map<string, Map<string, string>>([
-  [
-    "FtpClient",
-    new Map([
-      ["listDirectoryRecursive", "HARD27-003: folder import rejects on iOS; callers fall back to the JS walker"],
-    ]),
-  ],
   [
     "BackgroundExecution",
     new Map([
@@ -171,9 +166,9 @@ describe("iOS plugin method parity", () => {
   it("reports a TypeScript method that Swift does not implement and nothing records", () => {
     // The state HARD27-003 found: a declared method with no Swift counterpart and no record.
     const withoutRecord = new Map(KNOWN_IOS_METHOD_GAPS);
-    withoutRecord.set("FtpClient", new Map());
+    withoutRecord.set("HvscIngestion", new Map());
     const { unexpected } = findParityGaps(swift, typescript, withoutRecord);
-    expect(unexpected).toContainEqual({ jsName: "FtpClient", method: "listDirectoryRecursive" });
+    expect(unexpected).toContainEqual({ jsName: "HvscIngestion", method: "getStorageBudget" });
   });
 
   it("reports a recorded gap that Swift now implements", () => {

@@ -5,7 +5,7 @@
 | Feature                   | Android                                              | iOS                                                                                                                                                                                                                     | Status                |
 | ------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
 | FolderPickerPlugin        | SAF-based                                            | UIDocumentPicker + security-scoped bookmarks; both read paths bounded at 32 MiB with Android's message (HARD27-012). `releasePersistedUris` is absent because a bookmark is released when it goes out of scope           | **Parity**            |
-| FtpClientPlugin           | Apache FTPClient                                     | CFStream/socket FTP, without `listDirectoryRecursive` — a recursive listing falls back to the TypeScript walker. `cancelRead` uses a cancellation registry the read loop polls (HARD27-003); reads apply the same idle timeout and 32 MiB cap as Android (HARD27-012) | **Partial**           |
+| FtpClientPlugin           | Apache FTPClient                                     | CFStream/socket FTP. `listDirectoryRecursive` walks one connection with Android's depth and entry caps and the same early exit on a data-channel timeout; `cancelRead` uses a cancellation registry the read loop polls (HARD27-003); reads apply Android's idle timeout and 32 MiB cap (HARD27-012) | **Parity**            |
 | SecureStoragePlugin       | EncryptedSharedPreferences                           | Keychain                                                                                                                                                                                                                | **Parity**            |
 | FeatureFlagsPlugin        | SharedPreferences                                    | UserDefaults                                                                                                                                                                                                            | **Parity**            |
 | BackgroundExecutionPlugin | Full foreground service + WakeLock + auto-skip alarm | `AVAudioSession` category set + `beginBackgroundTask` + main-queue due timer (fires `onBackgroundAutoSkipDue` when elapsed) — partial implementation: timer may expire before song end under iOS background-task limits | **Partial**           |
@@ -30,7 +30,7 @@
 
 | Area                | Android                             | iOS                              | Status      |
 | ------------------- | ----------------------------------- | -------------------------------- | ----------- |
-| Native unit tests   | 13 JVM test classes (82 tests)      | 7 XCTest classes (57 tests)      | **Partial** |
+| Native unit tests   | 13 JVM test classes (82 tests)      | 8 XCTest classes (66 tests)      | **Partial** |
 | CI gating           | Required check (android.yaml)       | Stage A / informative (ios.yaml) | **Gap**     |
 | Signed distribution | Debug APK + conditional release APK | Unsigned AltStore IPA only       | **Gap**     |
 | Maestro E2E flows   | 6 ci-critical flows                 | 6 ci-critical-ios flows          | **Parity**  |
