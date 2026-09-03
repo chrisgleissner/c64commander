@@ -1224,3 +1224,126 @@ describe("web server platform runtime", () => {
     await server.close();
   });
 });
+
+describe("web server session gate and LAN host policy", () => {
+  // HARD27-029: the documented entry point is the root, but every path except
+  // /login answered 401 JSON when a password was configured.
+  it("serves the login page for an unauthenticated navigation to any path", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>app</body></html>", "utf8");
+
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+      C64U_NETWORK_PASSWORD: "secret",
+    });
+
+    for (const requestPath of ["/", "/play", "/settings"]) {
+      const response = await fetch(`${server.baseUrl}${requestPath}`, {
+        headers: { Accept: "text/html,application/xhtml+xml" },
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain("text/html");
+      expect(await response.text()).toContain('<form id="login-form">');
+    }
+  });
+
+  // HARD27-029: the client maps a 401 to "the device wants its network
+  // password". The server's own gate must be distinguishable from that.
+  it("marks its own session gate so the client does not raise the device password dialog", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>app</body></html>", "utf8");
+
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+      C64U_NETWORK_PASSWORD: "secret",
+    });
+
+    const response = await fetch(`${server.baseUrl}/api/rest/v1/version`, {
+      headers: { Accept: "application/json" },
+    });
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain("c64commander-session");
+    expect(response.headers.get("x-c64commander-gate")).toBe("session-expired");
+  });
+
+  // HARD27-030: a second Ultimate on the LAN got REST but no file browsing,
+  // because the FTP handlers compared the requested host with the configured
+  // default instead of applying a LAN policy.
+  it("proxies FTP for a second private-range device under the default policy", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    const ftpRoot = await makeTempDir("c64-web-ftp-root-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ftp</body></html>", "utf8");
+    await mkdir(path.join(ftpRoot, "MUSIC"));
+    await writeFile(path.join(ftpRoot, "MUSIC", "second.sid"), "PSID_DATA", "utf8");
+
+    const ftpServer = await createMockFtpServer({
+      rootDir: ftpRoot,
+      host: "127.0.0.1",
+      port: 0,
+      pasvMin: 42200,
+      pasvMax: 42300,
+    });
+    ftpServers.push(ftpServer);
+
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+      C64U_DEVICE_HOST: "c64u",
+    });
+
+    const listRes = await fetch(`${server.baseUrl}/api/ftp/list`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        host: ftpServer.host,
+        port: ftpServer.port,
+        username: "anonymous",
+        path: "/MUSIC",
+      }),
+    });
+    expect(listRes.status).toBe(200);
+    const listPayload = (await listRes.json()) as { entries: Array<{ name: string }> };
+    expect(listPayload.entries.some((entry) => entry.name === "second.sid")).toBe(true);
+  });
+
+  // HARD27-030: a policy rejection must not be answered with a status the
+  // client reads as the device demanding a password.
+  it("refuses a public host with a policy signal of its own", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>app</body></html>", "utf8");
+
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+      C64U_DEVICE_HOST: "c64u",
+    });
+
+    const restRes = await fetch(`${server.baseUrl}/api/rest/v1/version`, {
+      headers: { "X-C64U-Host": "example.com" },
+    });
+    expect(restRes.status).toBe(403);
+    expect(restRes.headers.get("x-c64commander-gate")).toBe("host-policy");
+
+    const ftpRes = await fetch(`${server.baseUrl}/api/ftp/list`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ host: "example.com", path: "/" }),
+    });
+    expect(ftpRes.status).toBe(403);
+    expect(ftpRes.headers.get("x-c64commander-gate")).toBe("host-policy");
+  });
+});

@@ -20,6 +20,7 @@ Optional hardening:
 - No network password configured: the UI opens directly.
 - Network password configured in **Settings > Device > Network password**: login is required. The server injects the password into requests proxied to the configured device.
 - The password is persisted in `/config/web-config.json`. Successful login creates an authenticated session cookie (`HttpOnly`, `SameSite=Lax`; add `Secure` only for HTTPS deployments).
+- Sessions are held in the server's memory with a 24-hour lifetime, so restarting the container signs every browser out. An unauthenticated page navigation is answered with the login page whatever the path, and the app's own requests get a 401 carrying `X-C64Commander-Gate: session-expired`, which sends the browser back to the login page instead of asking for the device's network password.
 - The password is stored in plaintext, so the server writes `/config/web-config.json` with mode `0600` and tightens an existing file to `0600` on startup. Give the host directory behind the `/config` volume to the user the container runs as, and do not make it group- or world-readable.
 
 ### Security settings
@@ -29,9 +30,10 @@ Optional hardening:
 - Failed logins are limited per key (5 in 10 minutes, then a 5-minute block) and across all keys (30 in 10 minutes). The second budget stops a client that varies its forwarded address to get a fresh key per attempt. A successful login clears both.
 - Plain-HTTP LAN deployments keep session cookies HTTP-compatible by default so the documented Docker flow can authenticate successfully.
 - `WEB_COOKIE_SECURE` overrides the cookie flag in either direction. Set it to `true` for an HTTPS deployment you have not marked as proxied, or to `false` to force HTTP-compatible cookies behind a trusted proxy.
-- FTP host override is disabled by default. Set `WEB_ALLOW_REMOTE_FTP_HOSTS=true` only in trusted setups.
+- FTP and REST both reach any host that resolves entirely to private-range addresses, which covers a device saved under a LAN name such as `u64` or `c64u.lan` and a second Ultimate alongside the configured one. A name that resolves to a public address is refused with 403 and `X-C64Commander-Gate: host-policy`, which the app reports as a policy rejection rather than a password prompt. Resolution results are cached for a minute.
+- Set `WEB_ALLOW_REMOTE_FTP_HOSTS=true` to lift the FTP restriction entirely, for example for a device reached over a VPN. Only do so in trusted setups.
 - The configured network password is sent only to the configured device host. A REST request that names another host still reaches it, but the browser has to supply that device's own password; the server never forwards its configured password to a host you did not configure.
-- REST host override is limited to private-range and `.local` targets by default. Set `WEB_ALLOW_REMOTE_REST_HOSTS=true` to allow any target, for example a device reached over a VPN.
+- Set `WEB_ALLOW_REMOTE_REST_HOSTS=true` to lift the REST restriction entirely and allow any target.
 
 ### Request limits
 

@@ -17,6 +17,7 @@ import {
 import { updateSelectedSavedDeviceConnection } from "@/lib/savedDevices/store";
 import { notifyAuthRequired, notifyAuthSatisfied } from "@/lib/auth/authChallenge";
 import { isAuthRequiredHttpStatus } from "@/lib/c64api/transportErrors";
+import { handleWebProxyGate } from "@/lib/c64api/webProxyGate";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
@@ -1141,8 +1142,13 @@ export class C64API {
    * Forbidden responses yields exactly one popup. Identity (saved-device id +
    * label) is resolved from this client's host by the auth-challenge store.
    */
-  private maybeRaiseAuthChallenge(status: number, suppress: boolean) {
+  private maybeRaiseAuthChallenge(status: number, suppress: boolean, headers?: Headers | null) {
     if (suppress || !isAuthRequiredHttpStatus(status)) return;
+    // HARD27-029/HARD27-030: on web the same statuses also carry the proxy's own
+    // session and host-policy gates. No device saw those requests, so the device
+    // password cannot satisfy them; the gate handler takes the user to the login
+    // page instead.
+    if (handleWebProxyGate(headers)) return;
     notifyAuthRequired({ host: this.deviceHost });
   }
 
@@ -1822,7 +1828,7 @@ export class C64API {
                       recordTraceError(action, err, failure);
                     }
                     responseRecorded = true;
-                    this.maybeRaiseAuthChallenge(response.status, suppressAuthChallenge);
+                    this.maybeRaiseAuthChallenge(response.status, suppressAuthChallenge, response.headers);
                     throw err;
                   }
 
@@ -2709,6 +2715,7 @@ export class C64API {
       this.maybeRaiseAuthChallenge(
         response.status,
         Boolean(options.__c64uSuppressAuthChallenge) || options.__c64uIntent === "system",
+        response.headers,
       );
       throw new Error(`readMemory failed: HTTP ${response.status}`);
     }

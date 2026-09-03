@@ -233,9 +233,13 @@ test.describe("Web platform auth + proxy @web-platform", () => {
       },
     });
     expect(blockedProxy.status()).toBe(401);
+    expect(blockedProxy.headers()["x-c64commander-gate"]).toBe("session-expired");
 
+    // HARD27-029: the root is the documented entry point, so an unauthenticated
+    // navigation is answered with the login page rather than a JSON error.
     const blockedRoot = await page.goto("/");
-    expect(blockedRoot?.status()).toBe(401);
+    expect(blockedRoot?.status()).toBe(200);
+    expect(await page.content()).toContain('id="login-form"');
 
     const wrongLoginResponse = await request.post("/auth/login", {
       data: { password: "wrong" },

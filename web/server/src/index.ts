@@ -12,8 +12,8 @@ import {
   safeCompare,
   sanitizeHost,
   isConfiguredDeviceHost,
-  isTrustedInsecureHost,
 } from "./hostValidation.js";
+import { createLanHostPolicy } from "./hostPolicy.js";
 import { applySecurityHeaders, getClientIp, isForwardedHttps } from "./securityHeaders.js";
 import {
   FILE_BODY_LIMIT_BYTES,
@@ -111,6 +111,30 @@ const allowRemoteRestHosts = (() => {
   const value = (process.env.WEB_ALLOW_REMOTE_REST_HOSTS ?? "").trim().toLowerCase();
   return value === "true" || value === "1";
 })();
+
+// HARD27-030: "on my LAN" is decided by resolving the requested name, so a
+// device saved as `u64`, `ultimate64` or `c64u.lan` is proxied like any private
+// IP literal. The two WEB_ALLOW_REMOTE_* switches stay as the explicit opt-in
+// for a target outside that range.
+const lanHostPolicy = createLanHostPolicy({});
+
+// A gate the server closed itself, told apart from the device's own 401/403 so
+// the app redirects to the login page instead of asking for the device password
+// (HARD27-029, HARD27-030).
+const GATE_HEADER = "X-C64Commander-Gate";
+
+const writeGateError = (
+  res: ServerResponse,
+  status: number,
+  gate: "session-expired" | "host-policy",
+  payload: Record<string, unknown>,
+) => {
+  res.setHeader(GATE_HEADER, gate);
+  if (gate === "session-expired") {
+    res.setHeader("WWW-Authenticate", 'c64commander-session realm="C64 Commander"');
+  }
+  writeJson(res, status, payload);
+};
 
 // A/V mirror stream bridge. Disabled unless WEB_STREAM_BRIDGE is truthy, so the default
 // deployment opens no extra UDP ports. When on, the device streams VIC video / audio to
@@ -307,8 +331,8 @@ const requiresLogin = (config: AppConfig) => Boolean(config.networkPassword);
 const handleRestProxy = async (req: IncomingMessage, res: ServerResponse, config: AppConfig, requestUrl: URL) => {
   const targetHost = sanitizeHost(req.headers["x-c64u-host"]) ?? config.defaultDeviceHost;
   const isConfiguredDevice = isConfiguredDeviceHost(targetHost, config.defaultDeviceHost);
-  if (!allowRemoteRestHosts && !isConfiguredDevice && !isTrustedInsecureHost(targetHost)) {
-    writeJson(res, 403, {
+  if (!allowRemoteRestHosts && !isConfiguredDevice && !(await lanHostPolicy.isLanHost(targetHost))) {
+    writeGateError(res, 403, "host-policy", {
       error: "REST host override is disabled for non-local targets",
     });
     return;
@@ -401,8 +425,12 @@ const handleFtpList = async (req: IncomingMessage, res: ServerResponse, config: 
     path?: string;
   }>(req);
   const requestedHost = sanitizeHost(payload.host) ?? config.defaultDeviceHost;
-  if (!allowRemoteFtpHosts && requestedHost !== config.defaultDeviceHost) {
-    writeJson(res, 403, { error: "FTP host override is disabled" });
+  if (
+    !allowRemoteFtpHosts &&
+    !isConfiguredDeviceHost(requestedHost, config.defaultDeviceHost) &&
+    !(await lanHostPolicy.isLanHost(requestedHost))
+  ) {
+    writeGateError(res, 403, "host-policy", { error: "FTP host override is disabled for non-local targets" });
     return;
   }
   const host = requestedHost;
@@ -455,8 +483,12 @@ const handleFtpRead = async (req: IncomingMessage, res: ServerResponse, config: 
     return;
   }
   const requestedHost = sanitizeHost(payload.host) ?? config.defaultDeviceHost;
-  if (!allowRemoteFtpHosts && requestedHost !== config.defaultDeviceHost) {
-    writeJson(res, 403, { error: "FTP host override is disabled" });
+  if (
+    !allowRemoteFtpHosts &&
+    !isConfiguredDeviceHost(requestedHost, config.defaultDeviceHost) &&
+    !(await lanHostPolicy.isLanHost(requestedHost))
+  ) {
+    writeGateError(res, 403, "host-policy", { error: "FTP host override is disabled for non-local targets" });
     return;
   }
   const host = requestedHost;
@@ -522,8 +554,12 @@ const handleFtpPing = async (req: IncomingMessage, res: ServerResponse, config: 
     password?: string;
   }>(req);
   const requestedHost = sanitizeHost(payload.host) ?? config.defaultDeviceHost;
-  if (!allowRemoteFtpHosts && requestedHost !== config.defaultDeviceHost) {
-    writeJson(res, 403, { error: "FTP host override is disabled" });
+  if (
+    !allowRemoteFtpHosts &&
+    !isConfiguredDeviceHost(requestedHost, config.defaultDeviceHost) &&
+    !(await lanHostPolicy.isLanHost(requestedHost))
+  ) {
+    writeGateError(res, 403, "host-policy", { error: "FTP host override is disabled for non-local targets" });
     return;
   }
   const host = requestedHost;
@@ -572,8 +608,12 @@ const handleFtpWrite = async (req: IncomingMessage, res: ServerResponse, config:
     return;
   }
   const requestedHost = sanitizeHost(payload.host) ?? config.defaultDeviceHost;
-  if (!allowRemoteFtpHosts && requestedHost !== config.defaultDeviceHost) {
-    writeJson(res, 403, { error: "FTP host override is disabled" });
+  if (
+    !allowRemoteFtpHosts &&
+    !isConfiguredDeviceHost(requestedHost, config.defaultDeviceHost) &&
+    !(await lanHostPolicy.isLanHost(requestedHost))
+  ) {
+    writeGateError(res, 403, "host-policy", { error: "FTP host override is disabled for non-local targets" });
     return;
   }
   const host = requestedHost;
@@ -670,11 +710,18 @@ export const startWebServer = async () => {
       const isPublicLoginPage = pathname === "/login";
 
       if (needsAuth && !authenticated) {
-        if (isPublicLoginPage) {
+        // HARD27-029: the documented entry point is the root, and a session
+        // expires after a day or when the container restarts. A browser
+        // navigation is answered with the login page wherever it lands, so the
+        // user sees a password field instead of a JSON error page. Everything
+        // else - the app's own fetches - gets a 401 the client can tell apart
+        // from the device asking for its network password.
+        const acceptsHtml = (req.headers.accept ?? "").toLowerCase().includes("text/html");
+        if (isPublicLoginPage || (method === "GET" && acceptsHtml)) {
           writeText(res, 200, loginHtml(), "text/html; charset=utf-8");
           return;
         }
-        writeJson(res, 401, { error: "Authentication required" });
+        writeGateError(res, 401, "session-expired", { error: "Authentication required" });
         return;
       }
 

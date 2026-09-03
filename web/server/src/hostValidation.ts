@@ -1,7 +1,7 @@
 import net from "node:net";
 import { timingSafeEqual } from "node:crypto";
 
-const isPrivateIpv4 = (hostname: string) => {
+export const isPrivateIpv4 = (hostname: string) => {
   const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(hostname);
   if (!match) return false;
   const octets = match.slice(1).map((value) => Number(value));
@@ -14,7 +14,7 @@ const isPrivateIpv4 = (hostname: string) => {
   return false;
 };
 
-const isPrivateIpv6 = (hostname: string) => {
+export const isPrivateIpv6 = (hostname: string) => {
   const value = hostname.trim().toLowerCase();
   if (!value.includes(":")) return false;
   if (value === "::1") return true;
@@ -29,24 +29,31 @@ const isPrivateIpv6 = (hostname: string) => {
   return false;
 };
 
-export const isTrustedInsecureHost = (hostValue: string) => {
-  const lower = hostValue.trim().toLowerCase();
-  if (!lower) return false;
-  if (lower === "c64u" || lower === "localhost") return true;
-  if (lower === "127.0.0.1") return true;
-  if (lower.endsWith(".local")) return true;
+export const isPrivateIpAddress = (address: string) => {
+  const value = address.trim().toLowerCase();
+  return isPrivateIpv4(value) || isPrivateIpv6(value);
+};
 
+// The bare hostname of a `host`, `host:port` or `[v6]:port` value.
+export const getHostnameFromHostValue = (hostValue: string): string | null => {
+  const lower = hostValue.trim().toLowerCase();
+  if (!lower) return null;
   if (lower.startsWith("[")) {
     const closingBracketIndex = lower.indexOf("]");
-    if (closingBracketIndex > 0) {
-      const ipv6Host = lower.slice(1, closingBracketIndex);
-      return isPrivateIpv6(ipv6Host);
-    }
+    return closingBracketIndex > 1 ? lower.slice(1, closingBracketIndex) : null;
   }
+  if (lower.includes(":") && lower.indexOf(":") === lower.lastIndexOf(":")) {
+    return lower.split(":")[0] || null;
+  }
+  return lower;
+};
 
-  const hostWithoutPort =
-    lower.includes(":") && lower.indexOf(":") === lower.lastIndexOf(":") ? lower.split(":")[0] : lower;
-  return isPrivateIpv4(hostWithoutPort) || isPrivateIpv6(hostWithoutPort);
+export const isTrustedInsecureHost = (hostValue: string) => {
+  const hostname = getHostnameFromHostValue(hostValue);
+  if (!hostname) return false;
+  if (hostname === "c64u" || hostname === "localhost") return true;
+  if (hostname.endsWith(".local")) return true;
+  return isPrivateIpAddress(hostname);
 };
 
 export const normalizePassword = (value: unknown): string | null => {
