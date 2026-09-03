@@ -18,17 +18,10 @@ import {
   setRuntimeFtpPortOverride,
   setStoredFtpPort,
 } from "@/lib/ftp/ftpConfig";
+import { getSelectedSavedDevice, resetSavedDevicesCacheForTests } from "@/lib/savedDevices/store";
 
 const FTP_PORT_KEY = "c64u_ftp_port";
 const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
-
-const { mockUpdateSelectedSavedDevicePorts } = vi.hoisted(() => ({
-  mockUpdateSelectedSavedDevicePorts: vi.fn(),
-}));
-
-vi.mock("@/lib/savedDevices/store", () => ({
-  updateSelectedSavedDevicePorts: mockUpdateSelectedSavedDevicePorts,
-}));
 
 const { mockGetPassword } = vi.hoisted(() => ({
   mockGetPassword: vi.fn(async () => "secret" as string | null),
@@ -52,8 +45,7 @@ describe("ftpConfig", () => {
   beforeEach(() => {
     localStorage.clear();
     clearRuntimeFtpPortOverride();
-    mockUpdateSelectedSavedDevicePorts.mockReset();
-    mockUpdateSelectedSavedDevicePorts.mockImplementation(() => undefined);
+    resetSavedDevicesCacheForTests();
   });
 
   afterEach(() => {
@@ -88,55 +80,72 @@ describe("ftpConfig", () => {
     expect(getStoredFtpPort()).toBe(2121);
   });
 
-  it("ignores invalid saved-device FTP ports outside the TCP range", () => {
+  it("ignores a saved-device FTP port outside the TCP range", () => {
     localStorage.setItem(
       SAVED_DEVICES_STORAGE_KEY,
       JSON.stringify({
+        version: 1,
         selectedDeviceId: "saved-device-1",
-        devices: [{ id: "saved-device-1", ftpPort: 70000 }],
+        devices: [{ id: "saved-device-1", host: "c64u", ftpPort: 70000 }],
       }),
     );
+
+    expect(getStoredFtpPort()).toBe(21);
+  });
+
+  it("falls back to the legacy FTP port key when no saved-devices envelope exists", () => {
     localStorage.setItem(FTP_PORT_KEY, "2121");
 
     expect(getStoredFtpPort()).toBe(2121);
   });
 
-  it("warns and falls back when saved-device FTP storage is malformed", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  it("recovers the store's default when the saved-devices envelope is malformed", () => {
     localStorage.setItem(SAVED_DEVICES_STORAGE_KEY, "{");
-    localStorage.setItem(FTP_PORT_KEY, "2121");
 
-    expect(getStoredFtpPort()).toBe(2121);
-    expect(warnSpy).toHaveBeenCalledWith(
-      "Failed to parse saved devices while resolving FTP port",
-      expect.objectContaining({ error: expect.any(SyntaxError) }),
-    );
-
-    warnSpy.mockRestore();
+    expect(getStoredFtpPort()).toBe(21);
   });
 
-  it("warns and applies the manual fallback when saved-device FTP sync fails", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    mockUpdateSelectedSavedDevicePorts.mockImplementationOnce(() => {
-      throw new Error("sync failed");
-    });
+  // HARD27-025: this module used to parse the saved-devices envelope itself, so an envelope
+  // whose devices carry no `ftpPort` (what a renamed or added field looks like) made the FTP
+  // client connect on the legacy global port while the Settings screen, which reads the store,
+  // showed the store's default. Both must answer with the same number.
+  it("resolves the port the store resolves for an envelope with no port fields", () => {
     localStorage.setItem(
       SAVED_DEVICES_STORAGE_KEY,
-      JSON.stringify({
-        selectedDeviceId: "saved-device-1",
-        devices: [{ id: "saved-device-1", ftpPort: 21 }],
-      }),
+      JSON.stringify({ version: 1, selectedDeviceId: "a", devices: [{ id: "a", host: "c64u" }] }),
     );
+    localStorage.setItem(FTP_PORT_KEY, "2121");
 
-    setStoredFtpPort(2121);
+    const resolved = getStoredFtpPort();
 
-    expect(JSON.parse(localStorage.getItem(SAVED_DEVICES_STORAGE_KEY) ?? "{}").devices[0].ftpPort).toBe(2121);
-    expect(warnSpy).toHaveBeenCalledWith(
-      "Failed to sync FTP port to selected saved device",
-      expect.objectContaining({ error: expect.any(Error) }),
-    );
+    expect(resolved).toBe(getSelectedSavedDevice()?.ftpPort);
+    expect(resolved).toBe(21);
+  });
 
-    warnSpy.mockRestore();
+  it("warns and leaves the store untouched when the saved-device sync throws", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const realStorage = globalThis.localStorage;
+    const failingStorage = {
+      ...realStorage,
+      getItem: (key: string) => realStorage.getItem(key),
+      removeItem: (key: string) => realStorage.removeItem(key),
+      setItem: (key: string, value: string) => {
+        if (key === SAVED_DEVICES_STORAGE_KEY) throw new Error("quota exceeded");
+        realStorage.setItem(key, value);
+      },
+    };
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, value: failingStorage });
+
+    try {
+      expect(() => setStoredFtpPort(2121)).not.toThrow();
+      expect(warnSpy).toHaveBeenCalledWith(
+        "Failed to sync FTP port to selected saved device",
+        expect.objectContaining({ error: expect.any(Error) }),
+      );
+    } finally {
+      Object.defineProperty(globalThis, "localStorage", { configurable: true, value: realStorage });
+      warnSpy.mockRestore();
+    }
   });
 
   it("stores and clears FTP bridge URL", () => {
