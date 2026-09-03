@@ -406,16 +406,19 @@ public final class HvscIngestionPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
 
-            var availableBytes: Int64 = 0
+            // `Int` rather than `Int64`: every other numeric this app resolves is an `Int`, which
+            // is what Capacitor coerces to a JS number without a bridging cast. iOS is 64-bit, so
+            // it holds any byte count a volume can report.
+            var availableBytes = 0
             do {
                 let values = try docsDir.resourceValues(forKeys: [
                     .volumeAvailableCapacityForImportantUsageKey,
                     .volumeAvailableCapacityKey,
                 ])
                 if let important = values.volumeAvailableCapacityForImportantUsage, important > 0 {
-                    availableBytes = important
+                    availableBytes = Int(important)
                 } else if let available = values.volumeAvailableCapacity, available > 0 {
-                    availableBytes = Int64(available)
+                    availableBytes = available
                 }
             } catch {
                 IOSDiagnostics.log(.warn, "HvscIngestion.getStorageBudget cannot read volume capacity",

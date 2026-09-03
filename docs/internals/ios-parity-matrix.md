@@ -30,7 +30,7 @@
 
 | Area                | Android                             | iOS                              | Status      |
 | ------------------- | ----------------------------------- | -------------------------------- | ----------- |
-| Native unit tests   | 33 JVM test classes (480 tests)     | 10 XCTest classes (85 tests)     | **Partial** |
+| Native unit tests   | 33 JVM test classes (480 tests)     | 10 XCTest classes (86 tests)     | **Partial** |
 | CI gating           | Required check (android.yaml)       | Stage A / informative (ios.yaml) | **Gap**     |
 | Signed distribution | Debug APK + conditional release APK | Unsigned AltStore IPA only       | **Gap**     |
 | Maestro E2E flows   | 6 ci-critical flows                 | 6 ci-critical-ios flows          | **Parity**  |
@@ -50,7 +50,7 @@ iOS `BackgroundExecutionPlugin` is a stub. SID playback is interrupted when back
 
 ### 2. iOS Native Unit Tests Cover Logic, Not the Plugin Classes
 
-`ios/native-tests` is a SwiftPM package with 10 XCTest classes (85 tests). It cannot import the app
+`ios/native-tests` is a SwiftPM package with 10 XCTest classes (86 tests). It cannot import the app
 target, so each case either runs against a mirror of the logic in `Sources/NativeValidation` or
 asserts on the text of the app source file, and the two are paired so the mirror cannot pass while
 the app has drifted away from it. Nothing instantiates a `CAPPlugin`, so a `CAPPluginCall` is never

@@ -65,6 +65,16 @@ final class HvscStorageBudgetTests: XCTestCase {
         )
     }
 
+    func testTheImportantUsageFigureIsNarrowedToIntTheWayThePluginResolvesIt() {
+        // The plugin resolves an `Int`, which is what Capacitor coerces to a JS number without a
+        // bridging cast; `volumeAvailableCapacityForImportantUsage` is an `Int64`.
+        let wide: Int64 = 64_424_509_440
+        XCTAssertEqual(
+            HvscStorageBudget.availableBytes(importantUsageCapacity: wide, volumeAvailableCapacity: nil),
+            64_424_509_440
+        )
+    }
+
     // MARK: - libraryPresent
 
     func testAnUnreadableLibraryDirectoryCountsAsAbsent() {
@@ -96,6 +106,7 @@ final class HvscStorageBudgetTests: XCTestCase {
         let source = try pluginSource()
 
         XCTAssertTrue(source.contains(".volumeAvailableCapacityForImportantUsageKey"))
+        XCTAssertTrue(source.contains("availableBytes = Int(important)"))
         XCTAssertTrue(source.contains(".volumeAvailableCapacityKey"))
         let importantRange = try XCTUnwrap(source.range(of: "values.volumeAvailableCapacityForImportantUsage"))
         let plainRange = try XCTUnwrap(source.range(of: "} else if let available = values.volumeAvailableCapacity"))

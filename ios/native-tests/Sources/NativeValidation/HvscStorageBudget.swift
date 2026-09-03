@@ -27,9 +27,9 @@ public enum HvscStorageBudget {
     /// one costs a retry.
     public static func availableBytes(
         importantUsageCapacity: Int64?,
-        volumeAvailableCapacity: Int64?
-    ) -> Int64 {
-        if let important = importantUsageCapacity, important > 0 { return important }
+        volumeAvailableCapacity: Int?
+    ) -> Int {
+        if let important = importantUsageCapacity, important > 0 { return Int(important) }
         if let available = volumeAvailableCapacity, available > 0 { return available }
         return 0
     }
