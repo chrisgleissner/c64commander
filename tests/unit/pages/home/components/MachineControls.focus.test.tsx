@@ -12,12 +12,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MachineControls } from "@/pages/home/components/MachineControls";
 import { enterKeyNavigationModality, leaveKeyNavigationModality } from "../../../../helpers/keypadModality";
 
-afterEach(() => leaveKeyNavigationModality());
 import {
   FocusNavigationProvider,
   useFocusNavigationContext,
   type FocusNavigationContextValue,
 } from "@/hooks/useFocusNavigation";
+
+// HARD27-039: modality is a module-level singleton shared by every test here.
+afterEach(() => leaveKeyNavigationModality());
 
 // The other MachineControls suite stubs QuickActionCard; here we deliberately use
 // the REAL card so the keypad focus ring (focusId/focusOrder) is exercised. Keep

@@ -23,8 +23,10 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ConfigBrowserPage from "@/pages/ConfigBrowserPage";
 
-afterEach(() => leaveKeyNavigationModality());
 import { enterKeyNavigationModality, leaveKeyNavigationModality } from "../../helpers/keypadModality";
+
+// HARD27-039: modality is a module-level singleton shared by every test here.
+afterEach(() => leaveKeyNavigationModality());
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const FIXTURE = yaml.load(readFileSync(resolve(REPO_ROOT, "docs/c64/devices/c64u/1.1.0/c64u-config.yaml"), "utf8")) as {

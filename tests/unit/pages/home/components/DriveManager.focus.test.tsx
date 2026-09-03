@@ -10,7 +10,6 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { resetCardMemory } from "../../../helpers/cards";
 import { enterKeyNavigationModality, leaveKeyNavigationModality } from "../../../../helpers/keypadModality";
 
-afterEach(() => leaveKeyNavigationModality());
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -109,6 +108,9 @@ vi.mock("@/components/ui/select", () => ({
 }));
 
 import { DriveManager } from "@/pages/home/components/DriveManager";
+
+// HARD27-039: modality is a module-level singleton shared by every test here.
+afterEach(() => leaveKeyNavigationModality());
 
 const baseProps = {
   handleAction: vi.fn().mockImplementation((fn: () => Promise<void>) => fn()),

@@ -13,7 +13,6 @@ import type { NowPlayingMetadataSegment } from "@/lib/playback/nowPlayingMetadat
 import { CTA_HIGHLIGHT_DURATION_MS, CTA_PERSISTENT_ACTIVE_ATTR } from "@/lib/ui/buttonInteraction";
 import { enterKeyNavigationModality, leaveKeyNavigationModality } from "../../../../helpers/keypadModality";
 
-afterEach(() => leaveKeyNavigationModality());
 import {
   PlaybackControlsCard,
   type PlaybackControlsCardProps,
@@ -23,6 +22,9 @@ import {
   useFocusNavigationContext,
   type FocusNavigationContextValue,
 } from "@/hooks/useFocusNavigation";
+
+// HARD27-039: modality is a module-level singleton shared by every test here.
+afterEach(() => leaveKeyNavigationModality());
 
 /**
  * The metadata line, as the card now takes it: labelled parts rather than a finished string, so the
