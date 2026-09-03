@@ -7,9 +7,9 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { applySecurityHeaders } from "../../../web/server/src/securityHeaders";
 
-const startHeaderTestServer = async () => {
+const startHeaderTestServer = async (trustProxy = true) => {
   const server = createServer((req, res) => {
-    applySecurityHeaders(req, res);
+    applySecurityHeaders(req, res, trustProxy);
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({ path: req.url }));
   });
@@ -79,6 +79,20 @@ describe("securityHeaders server integration", () => {
 
     expect(shellHeaders).toEqual(expectedHeaders);
     expect(authHeaders).toEqual(expectedHeaders);
+  });
+
+  // HARD27-008: without a trusted proxy in front, X-Forwarded-Proto is a header
+  // any LAN client can set, so it must not be able to produce HSTS.
+  it("ignores a forwarded https protocol when no proxy is trusted", async () => {
+    const { server, baseUrl } = await startHeaderTestServer(false);
+    servers.push(server);
+
+    const headers = await readSecurityHeaders(`${baseUrl}/`, {
+      "x-forwarded-proto": "https",
+    });
+
+    expect(headers.hsts).toBeNull();
+    expect(headers.frameOptions).toBe("DENY");
   });
 
   it("omits HSTS on non-https forwarded requests while preserving the base header matrix", async () => {

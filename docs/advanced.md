@@ -24,8 +24,11 @@ Optional hardening:
 
 ### Security settings
 
+- Set `WEB_TRUST_PROXY=true` when a reverse proxy you control sits in front of the server. One switch governs all three proxy-dependent behaviours: the login rate limiter keys on `X-Forwarded-For`, `X-Forwarded-Proto: https` produces an HSTS header, and it also marks the session cookie `Secure`.
+- Leave `WEB_TRUST_PROXY` unset for the default Docker deployment, which binds `0.0.0.0:8064` directly. Both forwarded headers are then ignored, because any client on the LAN can send them: the rate limiter keys on the socket address instead, and no HSTS or `Secure` flag is emitted.
+- Failed logins are limited per key (5 in 10 minutes, then a 5-minute block) and across all keys (30 in 10 minutes). The second budget stops a client that varies its forwarded address to get a fresh key per attempt. A successful login clears both.
 - Plain-HTTP LAN deployments keep session cookies HTTP-compatible by default so the documented Docker flow can authenticate successfully.
-- Set `WEB_COOKIE_SECURE=true` only when the app is served over HTTPS or an HTTPS reverse proxy. Set `WEB_COOKIE_SECURE=false` to force HTTP-compatible cookies explicitly.
+- `WEB_COOKIE_SECURE` overrides the cookie flag in either direction. Set it to `true` for an HTTPS deployment you have not marked as proxied, or to `false` to force HTTP-compatible cookies behind a trusted proxy.
 - FTP host override is disabled by default. Set `WEB_ALLOW_REMOTE_FTP_HOSTS=true` only in trusted setups.
 - The configured network password is sent only to the configured device host. A REST request that names another host still reaches it, but the browser has to supply that device's own password; the server never forwards its configured password to a host you did not configure.
 - REST host override is limited to private-range and `.local` targets by default. Set `WEB_ALLOW_REMOTE_REST_HOSTS=true` to allow any target, for example a device reached over a VPN.

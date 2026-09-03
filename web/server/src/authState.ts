@@ -28,10 +28,13 @@ const parseCookies = (headerValue: string | undefined): Record<string, string> =
 export const createAuthState = (options: {
   cookieName: string;
   sessionTtlMs: number;
-  isSecureCookieEnabled: boolean;
+  // null means "decide per request from the trusted forwarded protocol"; a
+  // boolean is the operator's explicit WEB_COOKIE_SECURE answer.
+  isSecureCookieEnabled: boolean | null;
   loginFailureWindowMs: number;
   loginFailureBlockMs: number;
   loginFailureMaxAttempts: number;
+  loginFailureGlobalMaxAttempts: number;
 }) => {
   const {
     cookieName,
@@ -40,12 +43,27 @@ export const createAuthState = (options: {
     loginFailureWindowMs,
     loginFailureBlockMs,
     loginFailureMaxAttempts,
+    loginFailureGlobalMaxAttempts,
   } = options;
 
   const sessions = new Map<string, SessionRecord>();
   const loginAttempts = new Map<string, LoginAttemptRecord>();
+  // HARD27-008: a per-key limiter cannot stop a client that varies its key. When
+  // WEB_TRUST_PROXY is on, X-Forwarded-For is one such key, so a budget across
+  // all keys backs the per-key one up.
+  let globalAttempts: LoginAttemptRecord = { failures: 0, firstFailureAtMs: 0, blockedUntilMs: 0 };
+
+  const isGloballyBlocked = () => {
+    const now = Date.now();
+    if (globalAttempts.blockedUntilMs > now) return true;
+    if (globalAttempts.failures > 0 && now - globalAttempts.firstFailureAtMs > loginFailureWindowMs) {
+      globalAttempts = { failures: 0, firstFailureAtMs: 0, blockedUntilMs: 0 };
+    }
+    return false;
+  };
 
   const isLoginBlocked = (clientIp: string) => {
+    if (isGloballyBlocked()) return true;
     const attempt = loginAttempts.get(clientIp);
     if (!attempt) return false;
     if (attempt.blockedUntilMs > Date.now()) return true;
@@ -57,6 +75,14 @@ export const createAuthState = (options: {
 
   const recordFailedLogin = (clientIp: string) => {
     const now = Date.now();
+    if (globalAttempts.failures === 0 || now - globalAttempts.firstFailureAtMs > loginFailureWindowMs) {
+      globalAttempts = { failures: 1, firstFailureAtMs: now, blockedUntilMs: 0 };
+    } else {
+      globalAttempts.failures += 1;
+      if (globalAttempts.failures >= loginFailureGlobalMaxAttempts) {
+        globalAttempts.blockedUntilMs = now + loginFailureBlockMs;
+      }
+    }
     const existing = loginAttempts.get(clientIp);
     if (!existing || now - existing.firstFailureAtMs > loginFailureWindowMs) {
       loginAttempts.set(clientIp, {
@@ -73,8 +99,12 @@ export const createAuthState = (options: {
     loginAttempts.set(clientIp, existing);
   };
 
+  // A correct password proves the caller is not the brute-forcer the budget is
+  // there to stop, so it releases the global budget too. Otherwise a spoofing
+  // attacker could lock the operator out for the block period.
   const clearFailedLogins = (clientIp: string) => {
     loginAttempts.delete(clientIp);
+    globalAttempts = { failures: 0, firstFailureAtMs: 0, blockedUntilMs: 0 };
   };
 
   const isAuthenticated = (req: IncomingMessage): boolean => {
@@ -89,7 +119,7 @@ export const createAuthState = (options: {
     return true;
   };
 
-  const issueSessionCookie = (res: ServerResponse) => {
+  const issueSessionCookie = (res: ServerResponse, forwardedHttps = false) => {
     const token = randomBytes(24).toString("base64url");
     const createdAtMs = Date.now();
     const session: SessionRecord = {
@@ -98,19 +128,19 @@ export const createAuthState = (options: {
       expiresAtMs: createdAtMs + sessionTtlMs,
     };
     sessions.set(token, session);
-    const securePart = isSecureCookieEnabled ? "; Secure" : "";
+    const securePart = (isSecureCookieEnabled ?? forwardedHttps) ? "; Secure" : "";
     res.setHeader(
       "Set-Cookie",
       `${cookieName}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${Math.floor(sessionTtlMs / 1000)}${securePart}`,
     );
   };
 
-  const clearSessionCookie = (req: IncomingMessage, res: ServerResponse) => {
+  const clearSessionCookie = (req: IncomingMessage, res: ServerResponse, forwardedHttps = false) => {
     const token = parseCookies(req.headers.cookie)[cookieName];
     if (token) {
       sessions.delete(token);
     }
-    const securePart = isSecureCookieEnabled ? "; Secure" : "";
+    const securePart = (isSecureCookieEnabled ?? forwardedHttps) ? "; Secure" : "";
     res.setHeader("Set-Cookie", `${cookieName}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${securePart}`);
   };
 

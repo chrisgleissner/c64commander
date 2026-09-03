@@ -121,6 +121,9 @@ describe("web server platform runtime", () => {
       PORT: "0",
       WEB_DIST_DIR: distDir,
       WEB_CONFIG_DIR: configDir,
+      // HARD27-008: HSTS now follows the forwarded protocol only behind a proxy
+      // the operator has declared.
+      WEB_TRUST_PROXY: "1",
     });
 
     const expectedHeaders = {
@@ -405,6 +408,7 @@ describe("web server platform runtime", () => {
       PORT: "0",
       NODE_ENV: "production",
       WEB_COOKIE_SECURE: "1",
+      WEB_TRUST_PROXY: "1",
       WEB_DIST_DIR: distDir,
       WEB_CONFIG_DIR: configDir,
       C64U_NETWORK_PASSWORD: "secret",
@@ -635,6 +639,129 @@ describe("web server platform runtime", () => {
       await new Promise<void>((resolve) => configured.upstream.close(() => resolve()));
       await new Promise<void>((resolve) => foreign.upstream.close(() => resolve()));
     }
+  });
+
+  // HARD27-008: the login limiter keyed on getClientIp, which returned the first
+  // X-Forwarded-For value whenever the header was present. The shipped Docker
+  // image binds 0.0.0.0:8064 with no proxy in front, so any LAN client could
+  // send a fresh forwarded address per attempt, be counted against a different
+  // key each time, and never be blocked.
+  it("blocks brute-forced logins that vary X-Forwarded-For when no proxy is trusted", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ok</body></html>", "utf8");
+
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+      C64U_NETWORK_PASSWORD: "secret",
+    });
+
+    const attempt = (forwardedFor: string) =>
+      fetch(`${server.baseUrl}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Forwarded-For": forwardedFor },
+        body: JSON.stringify({ password: "wrong" }),
+      });
+
+    const statuses: number[] = [];
+    for (let index = 0; index < 6; index += 1) {
+      statuses.push((await attempt(`198.51.100.${index}`)).status);
+    }
+    expect(statuses.slice(0, 5)).toEqual([401, 401, 401, 401, 401]);
+    expect(statuses[5]).toBe(429);
+
+    // The block holds even for a correct password, and even from a seventh
+    // forwarded address, because the key is the socket the request arrived on.
+    const correct = await fetch(`${server.baseUrl}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": "203.0.113.9" },
+      body: JSON.stringify({ password: "secret" }),
+    });
+    expect(correct.status).toBe(429);
+  });
+
+  // HARD27-008: the same switch has to govern every proxy-dependent behaviour.
+  // Behind a declared proxy the forwarded address keys the limiter again, and
+  // the session cookie is marked Secure from the forwarded protocol rather than
+  // needing a second env variable.
+  it("keys the limiter on the forwarded address and derives Secure from it when a proxy is trusted", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ok</body></html>", "utf8");
+
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+      C64U_NETWORK_PASSWORD: "secret",
+      WEB_TRUST_PROXY: "1",
+    });
+
+    // Five failures from one forwarded address block that address.
+    for (let index = 0; index < 5; index += 1) {
+      const response = await fetch(`${server.baseUrl}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Forwarded-For": "198.51.100.5" },
+        body: JSON.stringify({ password: "wrong" }),
+      });
+      expect(response.status).toBe(401);
+    }
+    const blocked = await fetch(`${server.baseUrl}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": "198.51.100.5" },
+      body: JSON.stringify({ password: "wrong" }),
+    });
+    expect(blocked.status).toBe(429);
+
+    // A different forwarded address is a different key and is not blocked yet.
+    const other = await fetch(`${server.baseUrl}/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Forwarded-For": "198.51.100.6",
+        "X-Forwarded-Proto": "https",
+      },
+      body: JSON.stringify({ password: "secret" }),
+    });
+    expect(other.status).toBe(200);
+    // No WEB_COOKIE_SECURE is set; Secure comes from the forwarded protocol.
+    expect(other.headers.get("set-cookie")).toContain("; Secure");
+  });
+
+  // HARD27-008: a per-key limiter alone cannot stop a client that varies its
+  // key, so a budget across all keys backs it up once the forwarded address is
+  // trusted.
+  it("stops a key-rotating brute force with the global attempt budget", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ok</body></html>", "utf8");
+
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+      C64U_NETWORK_PASSWORD: "secret",
+      WEB_TRUST_PROXY: "1",
+    });
+
+    const statuses: number[] = [];
+    for (let index = 0; index < 31; index += 1) {
+      const response = await fetch(`${server.baseUrl}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Forwarded-For": `198.51.100.${index}` },
+        body: JSON.stringify({ password: "wrong" }),
+      });
+      statuses.push(response.status);
+    }
+    // Thirty distinct keys each get their first failure counted, and the
+    // thirty-first attempt is refused by the budget rather than the per-key rule.
+    expect(statuses.slice(0, 30).every((status) => status === 401)).toBe(true);
+    expect(statuses[30]).toBe(429);
   });
 
   // HARD27-009: /auth/login read its body before any authentication and with no

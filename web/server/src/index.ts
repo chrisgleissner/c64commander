@@ -14,7 +14,7 @@ import {
   isConfiguredDeviceHost,
   isTrustedInsecureHost,
 } from "./hostValidation.js";
-import { applySecurityHeaders, getClientIp } from "./securityHeaders.js";
+import { applySecurityHeaders, getClientIp, isForwardedHttps } from "./securityHeaders.js";
 import {
   FILE_BODY_LIMIT_BYTES,
   FILE_BYTES_LIMIT,
@@ -50,6 +50,10 @@ const SESSION_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 const LOGIN_FAILURE_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_FAILURE_BLOCK_MS = 5 * 60 * 1000;
 const LOGIN_FAILURE_MAX_ATTEMPTS = 5;
+// The budget across every key, so a client that varies its forwarded address
+// cannot escape the per-key limiter. Generous enough that several people on the
+// LAN can each mistype their password.
+const LOGIN_FAILURE_GLOBAL_MAX_ATTEMPTS = 30;
 const MAX_SERVER_LOGS = 500;
 // HARD27-017: the browser sends no timeout of its own, so the proxy bounds the
 // upstream request itself. Fifteen seconds is above the app's own REST timeouts
@@ -80,11 +84,22 @@ const hopByHopHeaders = new Set([
 
 const serverLogs: ServerLogEntry[] = [];
 
+// HARD27-008: one switch governs every behaviour that depends on a reverse proxy
+// being in front — whether X-Forwarded-For keys the login limiter, whether
+// X-Forwarded-Proto can produce HSTS, and whether the session cookie may be
+// marked Secure.
+const trustProxy = (() => {
+  const value = (process.env.WEB_TRUST_PROXY ?? "").trim().toLowerCase();
+  return value === "true" || value === "1";
+})();
+
+// null defers the decision to the forwarded protocol of each request; an
+// explicit WEB_COOKIE_SECURE still wins in either direction.
 const isSecureCookieEnabled = (() => {
   const explicit = (process.env.WEB_COOKIE_SECURE ?? "").trim().toLowerCase();
   if (explicit === "true" || explicit === "1") return true;
   if (explicit === "false" || explicit === "0") return false;
-  return false;
+  return trustProxy ? null : false;
 })();
 
 const allowRemoteFtpHosts = (() => {
@@ -173,6 +188,7 @@ const {
   loginFailureWindowMs: LOGIN_FAILURE_WINDOW_MS,
   loginFailureBlockMs: LOGIN_FAILURE_BLOCK_MS,
   loginFailureMaxAttempts: LOGIN_FAILURE_MAX_ATTEMPTS,
+  loginFailureGlobalMaxAttempts: LOGIN_FAILURE_GLOBAL_MAX_ATTEMPTS,
 });
 
 const buildDefaultConfig = (): AppConfig => ({
@@ -599,7 +615,7 @@ export const startWebServer = async () => {
 
   const server = http.createServer(async (req, res) => {
     try {
-      applySecurityHeaders(req, res);
+      applySecurityHeaders(req, res, trustProxy);
       const method = (req.method ?? "GET").toUpperCase();
       const requestUrl = new URL(req.url ?? "/", "http://localhost");
       const pathname = requestUrl.pathname;
@@ -622,7 +638,7 @@ export const startWebServer = async () => {
           writeJson(res, 405, { error: "Method not allowed" });
           return;
         }
-        const clientIp = getClientIp(req);
+        const clientIp = getClientIp(req, trustProxy);
         if (isLoginBlocked(clientIp)) {
           writeJson(res, 429, {
             error: "Too many failed login attempts. Try again later.",
@@ -638,13 +654,13 @@ export const startWebServer = async () => {
           return;
         }
         clearFailedLogins(clientIp);
-        issueSessionCookie(res);
+        issueSessionCookie(res, isForwardedHttps(req, trustProxy));
         writeJson(res, 200, { ok: true });
         return;
       }
 
       if (pathname === "/auth/logout") {
-        clearSessionCookie(req, res);
+        clearSessionCookie(req, res, isForwardedHttps(req, trustProxy));
         writeJson(res, 200, { ok: true });
         return;
       }
@@ -679,7 +695,7 @@ export const startWebServer = async () => {
           config = { ...config, networkPassword: password };
           await saveConfig(config);
           if (password && !authenticated) {
-            issueSessionCookie(res);
+            issueSessionCookie(res, isForwardedHttps(req, trustProxy));
           }
           writeJson(res, 200, { ok: true, hasPassword: Boolean(password) });
           return;
@@ -687,7 +703,7 @@ export const startWebServer = async () => {
         if (method === "DELETE") {
           config = { ...config, networkPassword: null };
           await saveConfig(config);
-          clearSessionCookie(req, res);
+          clearSessionCookie(req, res, isForwardedHttps(req, trustProxy));
           writeJson(res, 200, { ok: true });
           return;
         }
