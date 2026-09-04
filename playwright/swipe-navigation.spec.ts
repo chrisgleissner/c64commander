@@ -279,6 +279,12 @@ test.describe("Swipe navigation", () => {
     await attachStepScreenshot(page, testInfo, "config-via-tab");
     await expect(page).toHaveURL(/\/config$/);
     await expect(page.getByTestId("swipe-slot-config")).toHaveAttribute("data-slot-active", "true");
+    // The Maestro tab walk asserts this id to tell one tab from another, because the tab-bar
+    // labels it would otherwise match render outside the page and are present whichever tab is
+    // selected. That only works while exactly one `page-*` id is in the real browser DOM and it
+    // names the slot on screen, so this checks both in Chromium rather than in jsdom alone.
+    await expect(page.locator("#page-config")).toHaveAttribute("data-slot-active", "true");
+    await expect(page.locator("[id^='page-']")).toHaveCount(1);
   });
 
   test("rapid consecutive swipes do not corrupt state", async ({ page }, testInfo) => {
