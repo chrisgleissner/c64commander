@@ -144,6 +144,13 @@ jobs:
       - name: Build packaged app assets
         run: npm run build
 
+      # The only other caller passes --skip-if-missing, and no job that runs `npm run lint`
+      # builds the app, so until this step existed the gzipped chunk budget had never been
+      # measured in CI. This job produces a plain production dist, which is the build the
+      # budget is about.
+      - name: Check bundle budgets
+        run: node scripts/check-bundle-budgets.mjs
+
       - name: Verify packaged notice drift
         run: bash scripts/package-third-party-notice.sh --check
 

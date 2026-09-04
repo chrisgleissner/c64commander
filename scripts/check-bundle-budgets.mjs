@@ -56,6 +56,14 @@ const files = readdirSync(distDir)
   })
   .sort((a, b) => b.gzBytes - a.gzBytes);
 
+// A dist/assets that holds no JavaScript chunk means the build did not produce
+// what this budget is meant to measure, so treat it as a failure rather than
+// reporting "0 chunks" and passing.
+if (files.length === 0) {
+  console.error(`[bundle-budgets] ${distDir} contains no .js chunk, so nothing was measured.`);
+  process.exit(2);
+}
+
 const overBudget = files.filter((f) => f.gzBytes > BUDGET_BYTES);
 
 console.log(`[bundle-budgets] ${files.length} chunks, budget ${formatKB(BUDGET_BYTES)} gzipped`);
