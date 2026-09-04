@@ -462,7 +462,13 @@ run_maestro_and_capture() {
 
   log "Launching Maestro attempt ${attempt}/${MAESTRO_MAX_ATTEMPTS} for ${flow} (yaml=${flow_yaml}, junit=${junit_file}, rawLog=${raw_log_file}, heartbeat=${heartbeat_seconds}s)"
 
-  python3 - "$MAESTRO_BIN" "$flow_yaml" "$UDID" "$junit_file" "$raw_log_file" "$attempt" "$heartbeat_seconds" <<'PY'
+  # The python block below is the Maestro invocation and the JUnit summary, and its exit
+  # status is the only report of whether the flow passed. It has to be captured here: the
+  # function continues with a `cp` and a `log`, and a function returns the status of its
+  # last command, so an uncaptured status is discarded. The caller also runs this function
+  # on the left of `&&`, which suppresses `set -e` inside it.
+  local maestro_status=0
+  python3 - "$MAESTRO_BIN" "$flow_yaml" "$UDID" "$junit_file" "$raw_log_file" "$attempt" "$heartbeat_seconds" <<'PY' || maestro_status=$?
 import json
 import os
 import subprocess
@@ -626,7 +632,8 @@ sys.exit(junit_status)
 PY
 
   cp "$raw_log_file" "$raw_log_latest_file"
-  log "Completed Maestro attempt ${attempt}/${MAESTRO_MAX_ATTEMPTS} for ${flow} (copied latest raw log to ${raw_log_latest_file})"
+  log "Completed Maestro attempt ${attempt}/${MAESTRO_MAX_ATTEMPTS} for ${flow} (exit=${maestro_status}, copied latest raw log to ${raw_log_latest_file})"
+  return $maestro_status
 }
 
 is_driver_startup_timeout_failure() {
