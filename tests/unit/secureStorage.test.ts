@@ -18,6 +18,7 @@ import {
   setPassword,
 } from "@/lib/secureStorage";
 import { SecureStorage } from "@/lib/native/secureStorage";
+import { resetFallbackReporterForTests, setFallbackReporter } from "@/lib/diagnostics/fallbackReporter";
 import { addSavedDevice, getSavedDevicesSnapshot, selectSavedDevice } from "@/lib/savedDevices/store";
 
 const HAS_PASSWORD_KEY = "c64u_has_password";
@@ -33,6 +34,7 @@ vi.mock("@/lib/native/secureStorage", () => ({
 describe("secureStorage", () => {
   beforeEach(() => {
     localStorage.clear();
+    resetFallbackReporterForTests();
     resetStoredPasswordCache();
     vi.mocked(SecureStorage.setPassword).mockClear();
     vi.mocked(SecureStorage.getPassword).mockClear();
@@ -69,6 +71,24 @@ describe("secureStorage", () => {
     await expect(getPassword()).rejects.toThrow("keystore unavailable");
 
     expect(await getPassword()).toBe("stored-secret");
+  });
+
+  // A pre-envelope password is stored as a bare string, so JSON.parse throws. V8 quotes the first
+  // characters of its input in that SyntaxError message, so reporting the message would put the
+  // password itself into the diagnostics log, which the user can export.
+  it("keeps a legacy plaintext password out of the fallback report for an unparsable value", async () => {
+    const sink = vi.fn();
+    setFallbackReporter(sink);
+    localStorage.setItem(HAS_PASSWORD_KEY, "1");
+    vi.mocked(SecureStorage.getPassword).mockResolvedValueOnce({ value: "hunter2-not-a-real-password" });
+
+    expect(await getPassword()).toBe("hunter2-not-a-real-password");
+
+    expect(sink).toHaveBeenCalledTimes(1);
+    const [site, shape, context] = sink.mock.calls[0] as [string, string, Record<string, unknown>];
+    expect(site).toBe("secureStorage.parsePasswordState");
+    expect(context).toEqual({ reason: "SyntaxError" });
+    expect(JSON.stringify([shape, context])).not.toContain("hunter2");
   });
 
   it("never writes password to localStorage when setting", async () => {

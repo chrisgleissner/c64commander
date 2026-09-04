@@ -58,8 +58,11 @@ const parsePasswordState = (raw: string | null): PersistedPasswordState => {
     }
   } catch (error) {
     // A stored value that is not JSON is a password written before the envelope existed, so it is
-    // still usable. Report the shape only: the value itself is the password.
-    reportFallback("secureStorage.parsePasswordState", raw, { reason: describeValueShape(error) });
+    // still usable. Only the error's name is reported, never its message: V8 quotes the first
+    // characters of the input in a JSON.parse SyntaxError, and here that input is the password.
+    reportFallback("secureStorage.parsePasswordState", raw, {
+      reason: error instanceof Error ? error.name : describeValueShape(error),
+    });
     return {
       version: 1,
       legacyDefaultPassword: raw,
