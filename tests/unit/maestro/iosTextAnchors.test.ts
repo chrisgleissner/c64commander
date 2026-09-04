@@ -166,6 +166,15 @@ describe("iOS Maestro text anchors", () => {
       false,
     );
 
+    // The header title is drawn by FittedText. While it hid the drawn wording behind `aria-hidden`
+    // and named the span with `aria-label` alone, WebKit dropped the title from the accessibility
+    // tree: on run 33842686343 this anchor matched nothing while "Stable Features 9/9 on" was on
+    // screen. The wording stays readable when it is the accessible name, and is restated in a
+    // visually hidden node when an abbreviation is drawn instead.
+    const fitted = readSource("src/components/ui/FittedText.tsx");
+    expect(fitted).toContain("aria-hidden={drawnIsAccessibleName ? undefined : true}");
+    expect(fitted).toContain('<span className="sr-only">{accessibleName}</span>');
+
     const flow = readFileSync(path.join(maestroRoot, "ios-config-persistence.yaml"), "utf8");
     // Once before the restart and once after it.
     expect(flow.match(new RegExp(`tapOn:\\n\\s+text: "${FEATURE_GROUP_ANCHOR}"`, "g"))?.length).toBe(2);

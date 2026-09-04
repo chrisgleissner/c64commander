@@ -39,7 +39,10 @@ export interface FittedTextProps {
  * without writing to the DOM to test a fit or laying out each candidate.
  *
  * The accessible name is the full wording regardless of which one is drawn, so a screen reader and
- * the keypad ring always announce the same thing.
+ * the keypad ring always announce the same thing. It is carried both by `aria-label` and by a
+ * visually hidden text node, because WebKit does not apply `aria-label` to a span with no role:
+ * on iOS run 33842686343 the "Stable Features" section header was absent from the accessibility
+ * tree entirely, leaving its name as just the badge and the summary.
  */
 export const FittedText = ({ variants, label, className }: FittedTextProps) => {
   const hostRef = useRef<HTMLSpanElement | null>(null);
@@ -70,6 +73,10 @@ export const FittedText = ({ variants, label, className }: FittedTextProps) => {
   }, [fit]);
 
   const accessibleName = label ?? variants[0] ?? "";
+  const drawn = variants[index] ?? accessibleName;
+  // The drawn wording is the accessible name in the common case, so it is left in the tree rather
+  // than hidden and restated. Only an abbreviation is hidden and paired with the full wording.
+  const drawnIsAccessibleName = drawn === accessibleName;
   return (
     <span
       ref={hostRef}
@@ -78,7 +85,8 @@ export const FittedText = ({ variants, label, className }: FittedTextProps) => {
       className={cn("block whitespace-nowrap", className)}
       aria-label={accessibleName}
     >
-      <span aria-hidden>{variants[index] ?? accessibleName}</span>
+      <span aria-hidden={drawnIsAccessibleName ? undefined : true}>{drawn}</span>
+      {drawnIsAccessibleName ? null : <span className="sr-only">{accessibleName}</span>}
     </span>
   );
 };

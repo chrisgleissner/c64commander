@@ -401,18 +401,25 @@ with open(outfile, "w", encoding="utf-8") as handle:
 PY
 }
 
+# `require_debug_server` (third argument, default "yes") gates the dump on the in-app debug
+# HTTP server. That server answers "is this a DEBUG build whose server bound the port", not
+# "is the app running", and on run 33840657287 all three snapshots were skipped as
+# "app-not-running" while the failure screenshot taken moments later showed the app rendered
+# on screen. `maestro hierarchy` goes through the Maestro driver and needs no such server, so
+# the failure path passes "no": a flow that has already failed is worth its ~16s timeout.
 capture_accessibility_snapshot() {
   local flow_dir="$1"
   local snapshot_name="$2"
+  local require_debug_server="${3:-yes}"
   local out_dir="${flow_dir}/accessibility"
   local out_file="${out_dir}/${snapshot_name}.txt"
   local started_ms
   started_ms=$(ms_timestamp)
   mkdir -p "$out_dir"
 
-  if ! debug_server_reachable; then
-    log "Accessibility snapshot ${snapshot_name} skipped — the app is not running (nothing to dump)"
-    trace_event "$flow_dir" "app.accessibility.snapshot" "maestro" "{\"name\":\"${snapshot_name}\",\"status\":\"skipped-app-not-running\"}"
+  if [[ "$require_debug_server" == "yes" ]] && ! debug_server_reachable; then
+    log "Accessibility snapshot ${snapshot_name} skipped — the in-app debug server did not answer"
+    trace_event "$flow_dir" "app.accessibility.snapshot" "maestro" "{\"name\":\"${snapshot_name}\",\"status\":\"skipped-debug-server-unreachable\"}"
     return
   fi
 
@@ -1135,7 +1142,7 @@ TJSON
   # On failure, capture infra diagnostics
   if [[ $flow_exit -ne 0 ]]; then
     log "Flow ${flow} failed (exit=${flow_exit}) — capturing diagnostics"
-    capture_accessibility_snapshot "$flow_dir" "failure"
+    capture_accessibility_snapshot "$flow_dir" "failure" "no"
     capture_infra_diagnostics "$flow"
   fi
 

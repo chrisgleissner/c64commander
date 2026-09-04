@@ -48,23 +48,30 @@ afterEach(() => {
 
 const VARIANTS = ["Soft IEC Drive", "IEC Drive", "IEC"] as const;
 
+/**
+ * The drawn wording, not the whole subtree. When an abbreviation is drawn the host also carries the
+ * full wording in a visually hidden node, so `toHaveTextContent` on the host would pass for a
+ * component that drew the full wording at every width.
+ */
+const drawnWording = (accessibleName: string) => screen.getByLabelText(accessibleName).children[0];
+
 describe("FittedText", () => {
   it("draws the longest wording that fits", () => {
     setAvailableWidth("Soft IEC Drive".length * CHAR_PX);
     render(<FittedText variants={VARIANTS} />);
 
-    expect(screen.getByLabelText("Soft IEC Drive")).toHaveTextContent(/^Soft IEC Drive$/);
+    expect(drawnWording("Soft IEC Drive")).toHaveTextContent(/^Soft IEC Drive$/);
   });
 
   it("steps down a wording at a time as the space narrows", () => {
     setAvailableWidth("IEC Drive".length * CHAR_PX);
     const { unmount } = render(<FittedText variants={VARIANTS} />);
-    expect(screen.getByLabelText("Soft IEC Drive")).toHaveTextContent(/^IEC Drive$/);
+    expect(drawnWording("Soft IEC Drive")).toHaveTextContent(/^IEC Drive$/);
     unmount();
 
     setAvailableWidth("IEC".length * CHAR_PX);
     render(<FittedText variants={VARIANTS} />);
-    expect(screen.getByLabelText("Soft IEC Drive")).toHaveTextContent(/^IEC$/);
+    expect(drawnWording("Soft IEC Drive")).toHaveTextContent(/^IEC$/);
   });
 
   it("falls back to the shortest wording rather than truncating when none fits", () => {
@@ -73,7 +80,7 @@ describe("FittedText", () => {
     setAvailableWidth(5);
     render(<FittedText variants={VARIANTS} />);
 
-    expect(screen.getByLabelText("Soft IEC Drive")).toHaveTextContent(/^IEC$/);
+    expect(drawnWording("Soft IEC Drive")).toHaveTextContent(/^IEC$/);
   });
 
   it("keeps the full wording as the accessible name however narrow the space is", () => {
@@ -84,11 +91,45 @@ describe("FittedText", () => {
     expect(screen.getByLabelText("Soft IEC Drive")).toBeInTheDocument();
   });
 
+  /**
+   * `aria-label` alone was not enough. WebKit does not apply it to a span with no role, so on iOS
+   * run 33842686343 the "Stable Features" section header carried no title at all in the
+   * accessibility tree — Maestro found no element matching "Stable.*" while the words were on
+   * screen. A name an ancestor can compute from content is one every engine agrees on.
+   */
+  it("carries the accessible name as text rather than only as an aria-label", () => {
+    setAvailableWidth(5);
+    const { container } = render(<FittedText variants={VARIANTS} />);
+
+    const named = container.querySelector("[aria-label='Soft IEC Drive']");
+    const readable = Array.from(named?.children ?? []).filter((child) => !child.hasAttribute("aria-hidden"));
+
+    expect(readable.map((child) => child.textContent)).toEqual(["Soft IEC Drive"]);
+    // Hidden from sight, not from the accessibility tree.
+    expect(readable[0]).toHaveClass("sr-only");
+  });
+
+  /**
+   * Only an abbreviation needs restating. Hiding a wording that already is the accessible name and
+   * then repeating it puts the same words in the tree twice, which a `getByText` query then finds
+   * two of.
+   */
+  it("leaves the drawn wording readable, and adds no second node, when it is the accessible name", () => {
+    setAvailableWidth("Soft IEC Drive".length * CHAR_PX);
+    const { container } = render(<FittedText variants={VARIANTS} />);
+
+    const named = container.querySelector("[aria-label='Soft IEC Drive']");
+
+    expect(named?.children).toHaveLength(1);
+    expect(named?.children[0].hasAttribute("aria-hidden")).toBe(false);
+    expect(named).toHaveTextContent(/^Soft IEC Drive$/);
+  });
+
   it("uses an explicit label as the accessible name when the drawn wordings are all abbreviations", () => {
     setAvailableWidth(1000);
     render(<FittedText variants={["Experimental", "Exp."]} label="Experimental Features" />);
 
-    expect(screen.getByLabelText("Experimental Features")).toHaveTextContent(/^Experimental$/);
+    expect(drawnWording("Experimental Features")).toHaveTextContent(/^Experimental$/);
   });
 
   it("leaves the choice alone while the element has no width", () => {
@@ -97,6 +138,6 @@ describe("FittedText", () => {
     setAvailableWidth(0);
     render(<FittedText variants={VARIANTS} />);
 
-    expect(screen.getByLabelText("Soft IEC Drive")).toHaveTextContent(/^Soft IEC Drive$/);
+    expect(drawnWording("Soft IEC Drive")).toHaveTextContent(/^Soft IEC Drive$/);
   });
 });
