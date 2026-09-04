@@ -641,6 +641,92 @@ describe("web server platform runtime", () => {
     }
   });
 
+  // HARD27-016 on the FTP paths. The REST proxy now attaches the configured
+  // password only to the configured device, but the four FTP handlers still
+  // read `config.networkPassword ?? payload.password`, so they send it to every
+  // host they accept. That set used to be the configured device alone; the
+  // HARD27-030 LAN policy widened it to any private-range host, which makes the
+  // configured device's password reachable by a browser session that names
+  // another host, and makes that host's own password unusable.
+  it("sends the configured password over FTP only to the configured device", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    const ftpRoot = await makeTempDir("c64-web-ftp-pw-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ftp</body></html>", "utf8");
+    await writeFile(path.join(ftpRoot, "test.sid"), "PSID_DATA", "utf8");
+
+    const foreignFtp = await createMockFtpServer({
+      rootDir: ftpRoot,
+      password: "other-device-secret",
+      pasvMin: 40410,
+      pasvMax: 40460,
+    });
+    ftpServers.push(foreignFtp);
+
+    const foreignServer = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+      C64U_NETWORK_PASSWORD: "server-device-secret",
+      C64U_DEVICE_HOST: "c64u",
+    });
+    const foreignCookie = await loginAndGetCookie(foreignServer.baseUrl, "server-device-secret");
+
+    // The client names a LAN host that is not the configured device and supplies
+    // that host's own password.
+    const toForeign = await fetch(`${foreignServer.baseUrl}/api/ftp/list`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: foreignCookie },
+      body: JSON.stringify({
+        host: foreignFtp.host,
+        port: foreignFtp.port,
+        username: "tester",
+        password: "other-device-secret",
+        path: "/",
+      }),
+    });
+    expect(toForeign.status).toBe(200);
+    expect(foreignFtp.passwords).toEqual(["other-device-secret"]);
+    expect(foreignFtp.passwords).not.toContain("server-device-secret");
+
+    // The configured device is still authenticated by the server's own password,
+    // with no password in the request body.
+    const configuredFtp = await createMockFtpServer({
+      rootDir: ftpRoot,
+      password: "server-device-secret",
+      pasvMin: 40461,
+      pasvMax: 40510,
+    });
+    ftpServers.push(configuredFtp);
+
+    // Its own config directory: the first server persists its defaults, and a
+    // shared directory would give this one the previous defaultDeviceHost.
+    const configuredConfigDir = await makeTempDir("c64-web-config-");
+    const configuredServer = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configuredConfigDir,
+      C64U_NETWORK_PASSWORD: "server-device-secret",
+      C64U_DEVICE_HOST: configuredFtp.host,
+    });
+    const configuredCookie = await loginAndGetCookie(configuredServer.baseUrl, "server-device-secret");
+
+    const toConfigured = await fetch(`${configuredServer.baseUrl}/api/ftp/list`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: configuredCookie },
+      body: JSON.stringify({
+        host: configuredFtp.host,
+        port: configuredFtp.port,
+        username: "tester",
+        path: "/",
+      }),
+    });
+    expect(toConfigured.status).toBe(200);
+    expect(configuredFtp.passwords).toEqual(["server-device-secret"]);
+  });
+
   // HARD27-008: the login limiter keyed on getClientIp, which returned the first
   // X-Forwarded-For value whenever the header was present. The shipped Docker
   // image binds 0.0.0.0:8064 with no proxy in front, so any LAN client could

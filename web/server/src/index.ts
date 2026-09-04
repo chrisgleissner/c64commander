@@ -416,6 +416,15 @@ const collectStream = async (stream: PassThrough, limitBytes = FILE_BYTES_LIMIT)
   });
 };
 
+// HARD27-016 on the FTP paths: the configured password authenticates the
+// configured device and nothing else. The LAN host policy admits any
+// private-range host, so a request that names a different one must carry that
+// device's own password instead of being handed the server's.
+const ftpPasswordFor = (host: string, config: AppConfig, supplied: string | undefined): string => {
+  const configured = isConfiguredDeviceHost(host, config.defaultDeviceHost) ? config.networkPassword : null;
+  return configured ?? supplied ?? "";
+};
+
 const handleFtpList = async (req: IncomingMessage, res: ServerResponse, config: AppConfig) => {
   const payload = await readJsonBody<{
     host?: string;
@@ -441,7 +450,7 @@ const handleFtpList = async (req: IncomingMessage, res: ServerResponse, config: 
       host,
       port: Number(payload.port ?? 21),
       user: payload.username ?? "anonymous",
-      password: config.networkPassword ?? payload.password ?? "",
+      password: ftpPasswordFor(host, config, payload.password),
       secure: false,
     });
     const entries = await ftp.list(payload.path ?? "/");
@@ -500,7 +509,7 @@ const handleFtpRead = async (req: IncomingMessage, res: ServerResponse, config: 
       host,
       port: Number(payload.port ?? 21),
       user: payload.username ?? "anonymous",
-      password: config.networkPassword ?? payload.password ?? "",
+      password: ftpPasswordFor(host, config, payload.password),
       secure: false,
     });
     // The collector aborts the stream once the file crosses the size limit, so
@@ -570,7 +579,7 @@ const handleFtpPing = async (req: IncomingMessage, res: ServerResponse, config: 
       host,
       port: Number(payload.port ?? 21),
       user: payload.username ?? "anonymous",
-      password: config.networkPassword ?? payload.password ?? "",
+      password: ftpPasswordFor(host, config, payload.password),
       secure: false,
     });
     await ftp.send("NOOP");
@@ -624,7 +633,7 @@ const handleFtpWrite = async (req: IncomingMessage, res: ServerResponse, config:
       host,
       port: Number(payload.port ?? 21),
       user: payload.username ?? "anonymous",
-      password: config.networkPassword ?? payload.password ?? "",
+      password: ftpPasswordFor(host, config, payload.password),
       secure: false,
     });
     const data = Buffer.from(payload.data, "base64");
