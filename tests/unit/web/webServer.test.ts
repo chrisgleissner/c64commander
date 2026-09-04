@@ -727,6 +727,51 @@ describe("web server platform runtime", () => {
     expect(configuredFtp.passwords).toEqual(["server-device-secret"]);
   });
 
+  // `C64U_DEVICE_HOST` may carry the device's REST port, and the web client
+  // strips that port before naming the host in an FTP request body, because the
+  // FTP port travels in its own field. Comparing host and port would therefore
+  // read the request's absent REST port as the HTTP default and decide the
+  // configured device is a foreign host, which withholds the password the
+  // device actually needs.
+  it("sends the configured password over FTP when the configured device host carries a REST port", async () => {
+    const distDir = await makeTempDir("c64-web-dist-");
+    const configDir = await makeTempDir("c64-web-config-");
+    const ftpRoot = await makeTempDir("c64-web-ftp-port-");
+    await writeFile(path.join(distDir, "index.html"), "<html><body>ftp</body></html>", "utf8");
+    await writeFile(path.join(ftpRoot, "test.sid"), "PSID_DATA", "utf8");
+
+    const deviceFtp = await createMockFtpServer({
+      rootDir: ftpRoot,
+      password: "server-device-secret",
+      pasvMin: 40511,
+      pasvMax: 40560,
+    });
+    ftpServers.push(deviceFtp);
+
+    const server = await startWebServer({
+      HOST: "127.0.0.1",
+      PORT: "0",
+      WEB_DIST_DIR: distDir,
+      WEB_CONFIG_DIR: configDir,
+      C64U_NETWORK_PASSWORD: "server-device-secret",
+      C64U_DEVICE_HOST: `${deviceFtp.host}:8080`,
+    });
+    const cookie = await loginAndGetCookie(server.baseUrl, "server-device-secret");
+
+    const response = await fetch(`${server.baseUrl}/api/ftp/list`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({
+        host: deviceFtp.host,
+        port: deviceFtp.port,
+        username: "tester",
+        path: "/",
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(deviceFtp.passwords).toEqual(["server-device-secret"]);
+  });
+
   // HARD27-008: the login limiter keyed on getClientIp, which returned the first
   // X-Forwarded-For value whenever the header was present. The shipped Docker
   // image binds 0.0.0.0:8064 with no proxy in front, so any LAN client could

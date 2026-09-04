@@ -12,6 +12,7 @@ import {
   safeCompare,
   sanitizeHost,
   isConfiguredDeviceHost,
+  getHostnameFromHostValue,
 } from "./hostValidation.js";
 import { createLanHostPolicy } from "./hostPolicy.js";
 import { applySecurityHeaders, getClientIp, isForwardedHttps } from "./securityHeaders.js";
@@ -420,8 +421,20 @@ const collectStream = async (stream: PassThrough, limitBytes = FILE_BYTES_LIMIT)
 // configured device and nothing else. The LAN host policy admits any
 // private-range host, so a request that names a different one must carry that
 // device's own password instead of being handed the server's.
+//
+// The comparison is by hostname alone, unlike the REST proxy's. An FTP request
+// carries its port in its own field and names the host without one, while
+// `defaultDeviceHost` may carry the device's REST port, so comparing ports here
+// would read the request's absent REST port as the HTTP default and treat the
+// configured device as a foreign host.
+const isConfiguredDeviceFtpHost = (host: string, configuredDeviceHost: string): boolean => {
+  const candidate = getHostnameFromHostValue(host);
+  const configured = getHostnameFromHostValue(configuredDeviceHost);
+  return candidate !== null && configured !== null && candidate === configured;
+};
+
 const ftpPasswordFor = (host: string, config: AppConfig, supplied: string | undefined): string => {
-  const configured = isConfiguredDeviceHost(host, config.defaultDeviceHost) ? config.networkPassword : null;
+  const configured = isConfiguredDeviceFtpHost(host, config.defaultDeviceHost) ? config.networkPassword : null;
   return configured ?? supplied ?? "";
 };
 
