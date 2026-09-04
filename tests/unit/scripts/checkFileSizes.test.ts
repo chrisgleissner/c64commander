@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   GRANDFATHERED,
+  GROWTH_ALLOWANCE_LINES,
   RATCHET_BAND,
   THRESHOLD,
   countLines,
@@ -49,9 +50,21 @@ describe("check-file-sizes: the ratchet", () => {
     expect(crossed).toEqual([{ file: "fresh.ts", lines: THRESHOLD + 1 }]);
   });
 
-  it("reports a grandfathered file that grew past its ceiling", () => {
-    const { grown } = findSizeViolations({ sizes: new Map([["big.ts", 1201]]), grandfathered });
-    expect(grown).toEqual([{ file: "big.ts", lines: 1201, ceiling: 1200 }]);
+  it("reports a grandfathered file that grew past its ceiling and the growth allowance", () => {
+    const lines = 1200 + GROWTH_ALLOWANCE_LINES + 1;
+    const { grown } = findSizeViolations({ sizes: new Map([["big.ts", lines]]), grandfathered });
+    expect(grown).toEqual([{ file: "big.ts", lines, ceiling: 1200 }]);
+  });
+
+  // A ceiling recorded to the exact line count leaves a bug fix in one of these files no way to
+  // pass, so a small fixed allowance sits above it. The ceiling itself never rises, so this is a
+  // one-off headroom rather than a per-change budget.
+  it("allows a fix to push a grandfathered file a few lines past its ceiling", () => {
+    const { grown } = findSizeViolations({
+      sizes: new Map([["big.ts", 1200 + GROWTH_ALLOWANCE_LINES]]),
+      grandfathered,
+    });
+    expect(grown).toEqual([]);
   });
 
   it("allows a grandfathered file to sit anywhere inside its band", () => {
@@ -96,13 +109,15 @@ describe("check-file-sizes: the repository as it stands", () => {
     ).toEqual([]);
   });
 
-  it("fails when a real file grows, checked against a ceiling one line below its length", () => {
+  it("fails when a real file grows past a ceiling tightened below its length and allowance", () => {
     // Exercises the production comparison against the real measured tree rather than a
     // synthetic map: dropping any single ceiling by one line must be reported.
     const [file, ceiling] = [...GRANDFATHERED][0];
-    const tightened = new Map(GRANDFATHERED).set(file, ceiling - 1);
+    const lines = sizes.get(file);
+    expect(lines, `${file} is not in the measured tree`).toBeTypeOf("number");
+    const tightened = new Map(GRANDFATHERED).set(file, (lines as number) - GROWTH_ALLOWANCE_LINES - 1);
     const { grown } = findSizeViolations({ sizes, grandfathered: tightened });
-    expect(grown).toEqual([{ file, lines: ceiling, ceiling: ceiling - 1 }]);
+    expect(grown).toEqual([{ file, lines, ceiling: (lines as number) - GROWTH_ALLOWANCE_LINES - 1 }]);
   });
 
   it("grandfathers only files that are genuinely over the threshold", () => {

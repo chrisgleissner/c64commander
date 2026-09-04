@@ -683,9 +683,11 @@ All TypeScript, TSX, and JSON files must be formatted with Prettier before commi
   line: split a file that mixes concerns or grows past ~600 lines, and a file approaching ~1000
   lines is expected to be refactored. `npm run lint:file-sizes` (part of `npm run lint`) enforces
   the 1000-line end of that. Files that were already over it when the check landed carry a
-  recorded ceiling in `GRANDFATHERED` in `scripts/check-file-sizes.mjs`; a ceiling only ratchets
-  down, so a file may shrink but never grow past the length it had, and a real split has to lower
-  its entry. Adding a new entry to that list is not the way to pass the check.
+  recorded ceiling in `GRANDFATHERED` in `scripts/check-file-sizes.mjs`. A ceiling only ratchets
+  down: it never rises, a real split has to lower its entry, and adding a new entry to that list is
+  not the way to pass the check. A file may sit up to `GROWTH_ALLOWANCE_LINES` (25) above its
+  recorded ceiling, which is there so a defect fix in one of these files is possible at all; it is
+  a one-off headroom above a fixed number, not a budget that renews per change.
 - **Readability first**: prefer clear naming over commentary.
 - **Explicitness**: make configuration, defaults, and assumptions discoverable.
 - **Fail fast**: validate inputs early and surface failures with context.
