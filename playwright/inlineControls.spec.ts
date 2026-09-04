@@ -115,6 +115,13 @@ test.describe("Home inline value controls", () => {
           if (element.children.length > 0) continue;
           const style = getComputedStyle(element);
           if (style.overflowX !== "hidden" && style.overflowX !== "clip") continue;
+          // A screen-reader-only node is clipped on purpose: `sr-only` is a 1px box with
+          // `clip: rect(0, 0, 0, 0)` holding wording no one reads on screen. `FittedText` emits one
+          // beside an abbreviated drive-card title so WebKit still exposes the full name, and it
+          // reported as "SPAN \"Soft IEC\" has 1px for 61px of text". This test is about text a
+          // reader can see, so those nodes are not candidates.
+          // Same test as `isVisuallyHidden` in playwright/smallScreenLayoutAudit.ts.
+          if (style.clip === "rect(0px, 0px, 0px, 0px)" || style.clipPath === "inset(50%)") continue;
           if (element.scrollWidth - element.clientWidth <= 1) continue;
           const text = (element.textContent ?? "").trim();
           if (text.includes("/")) continue; // a path may be elided
