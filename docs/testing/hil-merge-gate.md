@@ -19,6 +19,11 @@ node tools/hil/merge_gate.mjs --quiet-check
 node tools/hil/merge_gate.mjs --only input
 ```
 
+Exit codes: `0` only when at least one stage ran and passed and none failed, `1` when a stage
+failed, `2` when the gate refused to run or ran nothing. An unrecognised `--only` name is a `2`
+that lists the stage names, because a name that matches no stage would otherwise select nothing
+and leave the gate reporting success for a run that measured nothing.
+
 Prerequisites: the branch's APK installed and foregrounded on the attached Pixel, `adb forward`
 pointed at its WebView (the `hil-attach` skill), the Ultimate reachable, and a microphone in front
 of the phone for the audible stages.

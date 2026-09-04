@@ -371,14 +371,64 @@ let initialMirror = null;
 /** The Ultimate's own master volume, which the app mutes on pause. */
 let initialMasterVolume = null;
 
+/**
+ * Every stage name this gate knows, in run order.
+ *
+ * `--only` is checked against this list before the run starts, because an unrecognised name
+ * silently selects nothing and the gate then reports success having measured nothing.
+ */
+export const STAGE_NAMES = [
+  "preflight",
+  "input",
+  "search-latency",
+  "wire",
+  "av-clarity",
+  "av-latency",
+  "sid-remote",
+  "sid-local",
+  "crossfade",
+];
+
+/** Names in `--only` that no stage answers to. A non-empty result must stop the run. */
+export const unknownOnlyStages = (only, known = STAGE_NAMES) => only.filter((name) => !known.includes(name));
+
+/**
+ * The gate's exit code, from its results alone.
+ *
+ * A run that executed no stage is not a pass. Neither is one whose every stage was skipped or is
+ * still pending: both leave the gate green with nothing verified, which is the outcome a merge
+ * gate exists to prevent.
+ */
+export const gateVerdict = (stageResults) => {
+  const failed = stageResults.filter((r) => r.status === "fail");
+  if (failed.length) {
+    return { exitCode: 1, message: `${failed.length} stage(s) failed: ${failed.map((f) => f.name).join(", ")}` };
+  }
+  if (!stageResults.some((r) => r.status === "pass")) {
+    return {
+      exitCode: 2,
+      message:
+        stageResults.length === 0
+          ? "no stage ran; this run verifies nothing (check --only against the stage list)"
+          : `no stage passed; all ${stageResults.length} stage(s) were skipped or pending and this run verifies nothing`,
+    };
+  }
+  return { exitCode: 0, message: "" };
+};
+
+const register = (name) => {
+  if (!STAGE_NAMES.includes(name)) throw new Error(`stage "${name}" is missing from STAGE_NAMES`);
+  return !ONLY.length || ONLY.includes(name);
+};
+
 /** A stage this gate is supposed to have and does not yet. Never counted as a pass. */
 const pending = (name, what) => {
-  if (ONLY.length && !ONLY.includes(name)) return;
+  if (!register(name)) return;
   results.push({ name, status: "pending", detail: what });
 };
 
 const stage = async (name, audible, body) => {
-  if (ONLY.length && !ONLY.includes(name)) return;
+  if (!register(name)) return;
   if (QUIET && audible) {
     results.push({ name, status: "skipped", detail: "audible stage, --quiet-check" });
     console.log(`\n=== ${name}: skipped (audible) ===`);
@@ -860,6 +910,12 @@ const main = async () => {
     process.exit(2);
   }
 
+  const unknown = unknownOnlyStages(ONLY);
+  if (unknown.length) {
+    console.error(`--only names no such stage: ${unknown.join(", ")}\nstages: ${STAGE_NAMES.join(", ")}`);
+    process.exit(2);
+  }
+
   await stage("preflight", false, preflight);
   if (results.some((r) => r.name === "preflight" && r.status === "fail")) {
     console.error("\npreflight failed; nothing after it would mean anything");
@@ -1056,7 +1112,6 @@ return JSON.stringify({samples});})()`);
 
   await restoreRig();
 
-  const failed = results.filter((r) => r.status === "fail");
   const notCovered = results.filter((r) => r.status === "pending");
   console.log(`\n${"stage".padEnd(14)} result`);
   for (const r of results) console.log(`${r.name.padEnd(14)} ${r.status}${r.detail ? `  ${r.detail}` : ""}`);
@@ -1074,9 +1129,10 @@ return JSON.stringify({samples});})()`);
     console.log(`wrote ${JSON_OUT}`);
   }
 
-  if (failed.length) {
-    console.error(`\n${failed.length} stage(s) failed: ${failed.map((f) => f.name).join(", ")}`);
-    process.exit(1);
+  const verdict = gateVerdict(results);
+  if (verdict.exitCode !== 0) {
+    console.error(`\n${verdict.message}`);
+    process.exit(verdict.exitCode);
   }
 };
 
