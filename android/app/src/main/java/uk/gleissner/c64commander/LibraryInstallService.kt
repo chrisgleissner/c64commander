@@ -33,13 +33,36 @@ class LibraryInstallService : Service() {
         private const val CHANNEL_ID = "c64_library_install"
         private const val NOTIFICATION_ID = 2
         private const val WAKELOCK_TAG = "c64commander:library_install"
+        const val EXTRA_COMMAND_GENERATION = "commandGeneration"
 
+        @Volatile
         @JvmStatic
         var isRunning = false
             private set
 
+        /**
+         * Tells a start that is still in flight apart from one the caller has since stopped.
+         *
+         * `startForegroundService` only enqueues the intent, so `onStartCommand` can run after
+         * `stop`. Without this the stop was dropped — it returned early while [isRunning] was still
+         * false — and the service then started, took a `PARTIAL_WAKE_LOCK`, and had no other stop
+         * path, because it is `START_NOT_STICKY` with no expiry. An install that ends quickly
+         * reaches that window: `fetchLatestHvscVersions` throwing offline, or a run that finds
+         * nothing to do, both return within a few hundred milliseconds of the start.
+         *
+         * [BackgroundExecutionService] solves the same race the same way (HARD20-007).
+         */
+        @Volatile private var commandGeneration = 0L
+
+        @Synchronized
+        private fun nextCommandGeneration(): Long {
+            commandGeneration += 1L
+            return commandGeneration
+        }
+
         fun start(context: Context) {
             val intent = Intent(context, LibraryInstallService::class.java)
+            intent.putExtra(EXTRA_COMMAND_GENERATION, nextCommandGeneration())
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
@@ -48,12 +71,17 @@ class LibraryInstallService : Service() {
         }
 
         fun stop(context: Context) {
+            nextCommandGeneration()
             if (!isRunning) {
                 AppLogger.debug(context, TAG, "Not running — ignoring stop request", TAG)
                 return
             }
             context.stopService(Intent(context, LibraryInstallService::class.java))
         }
+
+        /** Whether an intent carrying [intentGeneration] is still the current command. */
+        @JvmStatic
+        fun isCurrentGeneration(intentGeneration: Long): Boolean = intentGeneration >= commandGeneration
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
@@ -68,6 +96,12 @@ class LibraryInstallService : Service() {
      * service restarted after the process died would hold a wake lock for work that no longer runs.
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val intentGeneration = intent?.getLongExtra(EXTRA_COMMAND_GENERATION, 0L) ?: 0L
+        if (!isCurrentGeneration(intentGeneration)) {
+            AppLogger.debug(this, TAG, "Ignoring a start the caller has already stopped", TAG)
+            satisfyForegroundContractAndStop(startId)
+            return START_NOT_STICKY
+        }
         if (!isRunning) {
             try {
                 enterForeground()
@@ -81,6 +115,33 @@ class LibraryInstallService : Service() {
             AppLogger.info(this, TAG, "Library install guard started", TAG)
         }
         return START_NOT_STICKY
+    }
+
+    /**
+     * A `startForegroundService` intent must reach `startForeground` even when the command it
+     * carries is discarded, or the system kills the process. Entering and immediately leaving the
+     * foreground satisfies that without leaving a notification behind. Mirrors
+     * [BackgroundExecutionService.satisfyForegroundContractAndStop].
+     */
+    private fun satisfyForegroundContractAndStop(startId: Int) {
+        if (!isRunning) {
+            try {
+                enterForeground()
+                stopForegroundCompat()
+            } catch (e: Exception) {
+                AppLogger.warn(this, TAG, "Foreground service refused while discarding a stale start", TAG, e)
+            }
+        }
+        stopSelf(startId)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun stopForegroundCompat() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            stopForeground(true)
+        }
     }
 
     override fun onDestroy() {
