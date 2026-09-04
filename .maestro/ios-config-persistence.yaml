@@ -18,13 +18,33 @@ tags:
 # downloads", which production never renders — FEATURE_FLAG_DEFINITIONS says "HVSC downloads".
 - runFlow: subflows/ios-open-settings-tab.yaml
 
-# Scroll until the HVSC checkbox label is in view.
-- scrollUntilVisible:
-    element:
-      text: "HVSC downloads.*"
-    direction: DOWN
-    speed: 80
-    timeout: ${LONG_TIMEOUT}
+# Only the Connection section carries defaultOpen, so the feature-group section starts closed
+# and its body — the flag row — is not in the tree at all. The open state is persisted per
+# section id in localStorage and survives the restart below, so an unconditional tap would
+# close the section on the second pass. Tapping only when the row is absent, inside a retry,
+# reaches the row from either starting state.
+- retry:
+    maxRetries: 3
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Stable.*"
+          direction: DOWN
+          speed: 80
+          timeout: ${LONG_TIMEOUT}
+      - runFlow:
+          when:
+            notVisible: "HVSC downloads.*"
+          commands:
+            - tapOn:
+                text: "Stable.*"
+            - waitForAnimationToEnd
+      - scrollUntilVisible:
+          element:
+            text: "HVSC downloads.*"
+          direction: DOWN
+          speed: 80
+          timeout: ${LONG_TIMEOUT}
 - assertVisible:
     text: "HVSC downloads.*"
     checked: true
@@ -34,12 +54,28 @@ tags:
 - launchApp:
     stopApp: true
 - runFlow: subflows/ios-open-settings-tab.yaml
-- scrollUntilVisible:
-    element:
-      text: "HVSC downloads.*"
-    direction: DOWN
-    speed: 80
-    timeout: ${LONG_TIMEOUT}
+- retry:
+    maxRetries: 3
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Stable.*"
+          direction: DOWN
+          speed: 80
+          timeout: ${LONG_TIMEOUT}
+      - runFlow:
+          when:
+            notVisible: "HVSC downloads.*"
+          commands:
+            - tapOn:
+                text: "Stable.*"
+            - waitForAnimationToEnd
+      - scrollUntilVisible:
+          element:
+            text: "HVSC downloads.*"
+          direction: DOWN
+          speed: 80
+          timeout: ${LONG_TIMEOUT}
 - assertVisible:
     text: "HVSC downloads.*"
     checked: true

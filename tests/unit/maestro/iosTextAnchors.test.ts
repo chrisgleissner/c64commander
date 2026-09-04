@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { loadAll } from "js-yaml";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { FEATURE_FLAG_DEFINITIONS } from "@/lib/config/featureFlagsRegistry.generated";
+import { FEATURE_FLAG_DEFINITIONS, FEATURE_FLAG_GROUPS } from "@/lib/config/featureFlagsRegistry.generated";
 
 /*
  * The iOS Maestro flows failed on three text anchors that production has never presented as a
@@ -102,6 +102,7 @@ const selectorsIn = (filePath: string): string[] => {
 const CONNECTION_ANCHOR = "Connection.*";
 const HVSC_FLAG_ANCHOR = "HVSC downloads.*";
 const PLAY_ANCHOR = "(Your playlist|Select a playlist item to start|Playlist)";
+const FEATURE_GROUP_ANCHOR = "Stable.*";
 
 /** Anchors that read as correct and match nothing, so a flow burns its timeout and fails later. */
 const RETIRED_ANCHORS = ["Connection", "Playlist", "Enable HVSC downloads"];
@@ -144,6 +145,28 @@ describe("iOS Maestro text anchors", () => {
 
     const flow = readFileSync(path.join(maestroRoot, "ios-config-persistence.yaml"), "utf8");
     expect(flow).toContain(`"${HVSC_FLAG_ANCHOR}"`);
+  });
+
+  it("opens the feature-group section the flag row lives in", () => {
+    // `connection` is the only section SettingsPage opens by default, so the feature groups render
+    // closed and their bodies are not in the tree. Scrolling alone never reaches the flag row.
+    const settingsSource = readSource("src/pages/SettingsPage.tsx");
+    expect(settingsSource.match(/defaultOpen/g)?.length).toBe(1);
+    const connectionAnchor = settingsSource.indexOf('id="connection"');
+    expect(settingsSource.indexOf("defaultOpen")).toBeGreaterThan(connectionAnchor);
+
+    const stable = FEATURE_FLAG_GROUPS.stable;
+    const experimental = FEATURE_FLAG_GROUPS.experimental;
+    // The header button holds the title, a "N/M on" badge and the description, so the anchor has
+    // to be a prefix match. It must not also match the experimental group's header.
+    expect(matchesWholeText(FEATURE_GROUP_ANCHOR, `${stable.label} 4/4 on ${stable.description}`)).toBe(true);
+    expect(matchesWholeText(FEATURE_GROUP_ANCHOR, `${experimental.label} 0/2 on ${experimental.description}`)).toBe(
+      false,
+    );
+
+    const flow = readFileSync(path.join(maestroRoot, "ios-config-persistence.yaml"), "utf8");
+    // Once before the restart and once after it.
+    expect(flow.match(new RegExp(`tapOn:\\n\\s+text: "${FEATURE_GROUP_ANCHOR}"`, "g"))?.length).toBe(2);
   });
 
   it("anchors the Play page on strings production draws above the fold", () => {
