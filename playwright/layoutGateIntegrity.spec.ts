@@ -8,7 +8,8 @@
 
 import { test, expect } from "@playwright/test";
 import type { Page, TestInfo } from "@playwright/test";
-import { allowVisualOverflow, attachStepScreenshotTolerant } from "./testArtifacts";
+import { allowVisualOverflow, attachStepScreenshotTolerant, finalizeEvidence } from "./testArtifacts";
+import { disableTraceAssertions } from "./traceUtils";
 import { VisualBoundaryError } from "./viewportValidation";
 
 const OVERFLOW_PROBE_ID = "layout-gate-integrity-probe";
@@ -41,7 +42,8 @@ const removeOverflowProbe = async (page: Page) => {
 test.describe("Layout gate integrity", () => {
   // A trivial document rather than the app, so the gate's own contract is under
   // test and not whatever the app happens to render on this viewport.
-  test.beforeEach(async ({ page }: { page: Page }) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    disableTraceAssertions(testInfo, "The gate's own contract; no traced user journey.");
     // The viewport meta tag matters: without it the layout viewport falls back to
     // 980px and the document is already wider than the device, which would make
     // the clean-page assertion below fail for a reason unrelated to the gate.
@@ -49,6 +51,14 @@ test.describe("Layout gate integrity", () => {
       '<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1" />' +
         "</head><body><main>layout gate probe host</main></body></html>",
     );
+  });
+
+  // These tests attach step screenshots, so they produce an evidence folder.
+  // `validate:evidence` requires every such folder to carry meta.json and video.webm,
+  // and `finalizeEvidence` is what writes both. Without this the CI evidence gate fails
+  // on a folder these tests created.
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await finalizeEvidence(page, testInfo);
   });
 
   test("a step screenshot reports a boundary violation instead of swallowing it", async ({
