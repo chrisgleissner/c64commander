@@ -710,9 +710,13 @@ jobs:
           EXPECT_WEB_COVERAGE: "1"
         run: node scripts/verify-coverage-artifacts.mjs
 
+      # Lines is raised to 94 with real headroom: the merged report is 95.25% on
+      # main and 95.41% here. Branches stays at 91 deliberately — it is 94.01% on
+      # main, so a 94 gate would pass by a hundredth of a point and turn main red
+      # on the first small regression. Raise it once branch coverage has room.
       - name: Enforce coverage threshold
         env:
-          COVERAGE_MIN: "91"
+          COVERAGE_MIN: "94"
           COVERAGE_MIN_BRANCH: "91"
           COVERAGE_FILE: "coverage/lcov-merged.info"
         run: node scripts/check-coverage-threshold.mjs

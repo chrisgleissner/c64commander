@@ -57,7 +57,7 @@
     "test:web-platform": "npm run test:web-server",
     "test:watch": "vitest",
     "test:coverage": "node scripts/run-unit-coverage.mjs",
-    "coverage:gate": "npm run test:coverage:all && COVERAGE_MIN=91 COVERAGE_MIN_BRANCH=91 COVERAGE_FILE=coverage/lcov-merged.info node scripts/check-coverage-threshold.mjs",
+    "coverage:gate": "npm run test:coverage:all && COVERAGE_MIN=94 COVERAGE_MIN_BRANCH=91 COVERAGE_FILE=coverage/lcov-merged.info node scripts/check-coverage-threshold.mjs",
     "test:agents": "bash -c 'if [ -f .venv/bin/python3 ]; then PYTHON=$(pwd)/.venv/bin/python3; else PYTHON=python3; fi; cd agents && $PYTHON -m pytest --cov=openhands --cov-branch --cov-report=term-missing --cov-report=xml:coverage-agents.xml tests/'",
     "test:coverage:all": "./scripts/collect-coverage.sh",
     "perf:prepare:archives": "node scripts/hvsc/prepare-perf-archives.mjs --out=ci-artifacts/hvsc-performance/archive-preparation.json",

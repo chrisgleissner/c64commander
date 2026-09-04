@@ -509,7 +509,7 @@ VITE_COVERAGE=true npm run test:e2e
 npx nyc report --temp-dir .nyc_output --report-dir coverage/e2e --reporter=lcov --reporter=text-summary
 npx lcov-result-merger "coverage/{lcov.info,e2e/lcov.info}" coverage/lcov-merged.info
 EXPECT_WEB_COVERAGE=1 node scripts/verify-coverage-artifacts.mjs
-COVERAGE_MIN=91 COVERAGE_MIN_BRANCH=91 node scripts/check-coverage-threshold.mjs
+COVERAGE_MIN=94 COVERAGE_MIN_BRANCH=91 node scripts/check-coverage-threshold.mjs
 ```
 
 Local reproduction (Android coverage):
