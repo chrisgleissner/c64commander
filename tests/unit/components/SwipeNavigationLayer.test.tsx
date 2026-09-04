@@ -323,6 +323,34 @@ describe("SwipeNavigationLayer", () => {
     expect(screen.queryByText("Disks Page")).not.toBeInTheDocument();
   });
 
+  it("names the active slot with a page id so a Maestro navigation assertion can fail", async () => {
+    renderLayer("/settings");
+
+    expect(await screen.findByText("Settings Page")).toBeInTheDocument();
+    // Maestro `id:` matches the HTML id attribute, so this is the only anchor a flow can
+    // use to tell one tab from another: the tab-bar labels render outside the page and are
+    // present whichever tab is selected.
+    expect(screen.getByTestId("swipe-slot-settings")).toHaveAttribute("id", "page-settings");
+    expect(screen.getByTestId("swipe-slot-config")).not.toHaveAttribute("id");
+    expect(screen.getByTestId("swipe-slot-docs")).not.toHaveAttribute("id");
+    expect(document.querySelectorAll("[id^='page-']")).toHaveLength(1);
+  });
+
+  it("moves the page id to the tab the swipe is committing to", async () => {
+    renderLayer("/play", undefined, false, true);
+    const runway = await screen.findByTestId("swipe-navigation-runway");
+
+    act(() => {
+      capturedCallbacks?.onCommit(1, { dx: -180, dy: 2, velocityX: -1.4 });
+    });
+    expect(screen.getByTestId("swipe-slot-disks")).toHaveAttribute("id", "page-disks");
+    expect(screen.getByTestId("swipe-slot-play")).not.toHaveAttribute("id");
+
+    fireEvent.transitionEnd(runway, { target: runway });
+    expect(screen.getByTestId("swipe-slot-disks")).toHaveAttribute("id", "page-disks");
+    expect(document.querySelectorAll("[id^='page-']")).toHaveLength(1);
+  });
+
   it("commits swipe navigation with wrap-around and settles on transition end", async () => {
     renderLayer("/docs", undefined, false, true);
     const runway = await screen.findByTestId("swipe-navigation-runway");

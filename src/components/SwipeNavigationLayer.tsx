@@ -521,6 +521,11 @@ function RunwayContainer({ routeIndex, profile, navigate }: RunwayContainerProps
               style={{ width: "33.333333%", flexShrink: 0 }}
               aria-hidden={!isActive}
               inert={isActive ? undefined : ""}
+              // Only the active slot carries this id, so exactly one `page-*` id exists at a
+              // time and it names the tab on screen. Maestro matches `id:` against the HTML id
+              // attribute, and the tab-bar labels it would otherwise assert on render outside
+              // the page and are present whichever tab is selected.
+              id={isActive ? `page-${TAB_ROUTES[pageIndex].label.toLowerCase()}` : undefined}
               data-testid={`swipe-slot-${TAB_ROUTES[pageIndex].label.toLowerCase()}`}
               data-route-index={pageIndex}
               data-slot-active={isActive ? "true" : "false"}

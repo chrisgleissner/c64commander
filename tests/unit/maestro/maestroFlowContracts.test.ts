@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadAll } from "js-yaml";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 import path from "node:path";
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
@@ -370,6 +371,58 @@ describe("Maestro flow contracts", () => {
     }
 
     expect([...guarded].sort()).toEqual([...tabIds].sort());
+  });
+
+  // The tab-bar labels render outside the page and are present whichever tab is selected,
+  // so `assertVisible: "Settings"` passes on a tab tap that did nothing and on a page that
+  // never rendered - which is how a crashed page and an un-renamed device shipped in 0.9.6.
+  // SwipeNavigationLayer puts a `page-<tab>` id on the active slot alone, and Maestro
+  // matches `id:` against the HTML id attribute, so that id is the discriminating anchor.
+  it("proves each tab tap landed with the active slot id, not the tab-bar label", () => {
+    const flow = readYaml(path.resolve(process.cwd(), ".maestro/subflows/common-navigation.yaml"));
+    const steps = Array.isArray(flow) ? (flow.flat() as JsonValue[]) : [];
+
+    const assertedPageId = (command: JsonValue): string | null => {
+      if (!command || typeof command !== "object" || Array.isArray(command)) return null;
+      const assertVisible = (command as Record<string, JsonValue>).assertVisible;
+      if (!assertVisible || typeof assertVisible !== "object" || Array.isArray(assertVisible)) return null;
+      const id = (assertVisible as Record<string, JsonValue>).id;
+      return typeof id === "string" && id.startsWith("page-") ? id : null;
+    };
+
+    const proved = new Set<string>();
+    for (const step of steps) {
+      if (!step || typeof step !== "object" || Array.isArray(step)) continue;
+      const retry = (step as Record<string, JsonValue>).retry;
+      if (!retry || typeof retry !== "object" || Array.isArray(retry)) continue;
+      const commands = (retry as Record<string, JsonValue>).commands;
+      if (!Array.isArray(commands)) continue;
+
+      const tapIndex = commands.findIndex((command) => {
+        if (!command || typeof command !== "object" || Array.isArray(command)) return false;
+        const tapOn = (command as Record<string, JsonValue>).tapOn;
+        if (!tapOn || typeof tapOn !== "object" || Array.isArray(tapOn)) return false;
+        const id = (tapOn as Record<string, JsonValue>).id;
+        return typeof id === "string" && id.startsWith("tab-");
+      });
+
+      // The first block taps no tab: it dismisses the startup dialogs and waits for the
+      // app to come up, so its page id is the one the app boots into.
+      const searchFrom = tapIndex < 0 ? 0 : tapIndex + 1;
+      for (let index = searchFrom; index < commands.length; index += 1) {
+        const pageId = assertedPageId(commands[index] as JsonValue);
+        if (pageId) proved.add(pageId);
+      }
+    }
+
+    // Derived from the production route table, so a renamed tab cannot leave this passing
+    // against a stale copy of the labels.
+    const pageIdFor = (label: string) => `page-${label.toLowerCase()}`;
+    expect([...proved].sort()).toEqual(
+      [pageIdFor("Home"), pageIdFor("Play"), pageIdFor("Settings"), pageIdFor("Config")]
+        .filter((id) => TAB_ROUTES.some((route) => pageIdFor(route.label) === id))
+        .sort(),
+    );
   });
 
   it("keeps local binary playback picker navigation independent of DocumentsUI toolbar ids", () => {
