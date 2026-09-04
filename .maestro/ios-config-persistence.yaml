@@ -13,17 +13,20 @@ tags:
   - ios
   - ci-critical-ios
 ---
+# The row is a <label> wrapping title, description and checkbox, so the checkbox's whole text
+# is "HVSC downloads Show the HVSC source in Add Items." The flow waited for "Enable HVSC
+# downloads", which production never renders — FEATURE_FLAG_DEFINITIONS says "HVSC downloads".
 - runFlow: subflows/ios-open-settings-tab.yaml
 
 # Scroll until the HVSC checkbox label is in view.
 - scrollUntilVisible:
     element:
-      text: "Enable HVSC downloads"
+      text: "HVSC downloads.*"
     direction: DOWN
     speed: 80
     timeout: ${LONG_TIMEOUT}
 - assertVisible:
-    text: "Enable HVSC downloads"
+    text: "HVSC downloads.*"
     checked: true
 - takeScreenshot: ios-hvsc-setting-visible
 
@@ -33,11 +36,11 @@ tags:
 - runFlow: subflows/ios-open-settings-tab.yaml
 - scrollUntilVisible:
     element:
-      text: "Enable HVSC downloads"
+      text: "HVSC downloads.*"
     direction: DOWN
     speed: 80
     timeout: ${LONG_TIMEOUT}
 - assertVisible:
-    text: "Enable HVSC downloads"
+    text: "HVSC downloads.*"
     checked: true
 - takeScreenshot: ios-hvsc-setting-persisted

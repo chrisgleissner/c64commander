@@ -7,6 +7,15 @@ tags:
   - ios
   - ci-critical-ios
 ---
+# "Connection.*", not "Connection": the section header is one <button> whose whole text is
+# "Connection Saved devices, discovery, passwords, demo mode".
+# See subflows/ios-open-settings-tab.yaml.
+#
+# Play anchor is an alternation, not "Playlist": PlaylistPanel's title sits below the fold on
+# iOS and assertVisible only counts what is on screen, so the flow failed on a correctly
+# rendered page. The first two are what the page draws at the top with nothing playing —
+# SidRadioChip's source caption and PlaybackControlsCard's idle title.
+# Bound to production by tests/unit/maestro/iosTextAnchors.test.ts.
 - runFlow: subflows/launch-and-wait.yaml
 - assertVisible: "Home"
 - tapOn:
@@ -19,10 +28,10 @@ tags:
     point: "75%,95%"
     optional: true
 - extendedWaitUntil:
-    visible: "Connection"
+    visible: "Connection.*"
     timeout: ${LONG_TIMEOUT}
 - assertVisible: "Settings"
-- assertVisible: "Connection"
+- assertVisible: "Connection.*"
 - tapOn:
     id: "tab-play"
     optional: true
@@ -33,9 +42,9 @@ tags:
     point: "25%,95%"
     optional: true
 - extendedWaitUntil:
-    visible: "Playlist"
+    visible: "(Your playlist|Select a playlist item to start|Playlist)"
     timeout: ${TIMEOUT}
-- assertVisible: "Playlist"
+- assertVisible: "(Your playlist|Select a playlist item to start|Playlist)"
 - scrollUntilVisible:
     element:
       text: "Add items to playlist"

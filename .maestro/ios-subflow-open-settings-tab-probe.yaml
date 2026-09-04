@@ -7,6 +7,6 @@ tags:
 ---
 - runFlow: subflows/ios-open-settings-tab.yaml
 - extendedWaitUntil:
-    visible: "Connection"
+    visible: "Connection.*"
     timeout: ${TIMEOUT}
-- assertVisible: "Connection"
+- assertVisible: "Connection.*"

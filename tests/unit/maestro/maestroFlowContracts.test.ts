@@ -381,7 +381,8 @@ describe("Maestro flow contracts", () => {
   it("defines the consolidated iOS CI smoke flow without common-navigation overhead", () => {
     const rawSource = readFileSync(path.resolve(process.cwd(), ".maestro/ios-ci-smoke.yaml"), "utf8");
     expect(rawSource).toContain("runFlow: subflows/launch-and-wait.yaml");
-    expect(rawSource).toContain('assertVisible: "Connection"');
+    // The section header is one button carrying title and summary; see iosTextAnchors.test.ts.
+    expect(rawSource).toContain('assertVisible: "Connection.*"');
     expect(rawSource).toContain('assertVisible: "Add file / folder from Local"');
     expect(rawSource).toContain('assertVisible: "Add file / folder from C64U"');
     expect(rawSource).not.toContain("common-navigation");

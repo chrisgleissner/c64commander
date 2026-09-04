@@ -6,7 +6,7 @@ tags:
 ---
 - runFlow: subflows/ios-open-play-tab.yaml
 - assertVisible:
-    text: "Playlist"
+    text: "(Your playlist|Select a playlist item to start|Playlist)"
 - assertVisible:
     text: "Add items to playlist"
     optional: true
