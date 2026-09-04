@@ -3,6 +3,8 @@ import { loadAll } from "js-yaml";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { FEATURE_FLAG_DEFINITIONS, FEATURE_FLAG_GROUPS } from "@/lib/config/featureFlagsRegistry.generated";
+import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
+import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 
 /*
  * The iOS Maestro flows failed on three text anchors that production has never presented as a
@@ -206,5 +208,217 @@ describe("iOS Maestro text anchors", () => {
 
     expect(planted).toEqual(["Connection", "Playlist", PLAY_ANCHOR]);
     expect(planted.filter((selector) => RETIRED_ANCHORS.includes(selector))).toEqual(["Connection", "Playlist"]);
+  });
+});
+
+/*
+ * The guard above binds the three anchors that had already failed a run. Every other anchor the
+ * CI flows depend on was still unbound, and each one costs a runner cycle of over an hour to
+ * disprove. The block below closes that gap: it walks the `runFlow` graph of the flows
+ * `ios.yaml` runs, collects the selectors that steer a run, and requires each one to be derived
+ * from production here. A selector added to a CI flow without a derivation fails this test
+ * rather than the run.
+ *
+ * A steering selector is one that changes what the run does: an assertion, a wait, a `when`
+ * condition, or a tap that is not marked optional. `optional: true` is excluded because
+ * `launch-and-wait` taps two dozen dismissal buttons that way and none of them has to exist.
+ * A `when` is included even though it cannot fail on its own — a `when` that stops matching
+ * silently skips the block it guards, which is how the demo-mode dismissal would be lost.
+ */
+
+/** Keys whose string value Maestro matches an element by. */
+const SELECTOR_KEYS = new Set(["visible", "notVisible", "assertVisible", "assertNotVisible", "text"]);
+
+/** Selectors that steer a run, per the definition above. */
+const collectSteeringSelectors = (value: JsonValue, out: string[]): void => {
+  if (Array.isArray(value)) {
+    value.forEach((entry) => collectSteeringSelectors(entry, out));
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  const node = value as { [key: string]: JsonValue };
+  if (node.optional === true) return;
+  for (const [key, child] of Object.entries(node)) {
+    if (SELECTOR_KEYS.has(key) && typeof child === "string") out.push(child);
+    collectSteeringSelectors(child, out);
+  }
+};
+
+/** Every `runFlow` target of a flow, as a path relative to the flow's own directory. */
+const runFlowTargets = (value: JsonValue, out: string[]): void => {
+  if (Array.isArray(value)) {
+    value.forEach((entry) => runFlowTargets(entry, out));
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  const node = value as { [key: string]: JsonValue };
+  const runFlow = node.runFlow;
+  if (typeof runFlow === "string") out.push(runFlow);
+  else if (runFlow && typeof runFlow === "object" && !Array.isArray(runFlow)) {
+    const file = (runFlow as { [key: string]: JsonValue }).file;
+    if (typeof file === "string") out.push(file);
+  }
+  for (const child of Object.values(node)) runFlowTargets(child, out);
+};
+
+/** The flow itself plus every flow it reaches through `runFlow`, transitively. */
+const flowClosure = (entryPath: string): string[] => {
+  const seen = new Set<string>();
+  const pending = [path.resolve(entryPath)];
+  while (pending.length > 0) {
+    const current = pending.pop() as string;
+    if (seen.has(current)) continue;
+    seen.add(current);
+    const targets: string[] = [];
+    runFlowTargets(loadAll(readFileSync(current, "utf8")) as JsonValue, targets);
+    for (const target of targets) pending.push(path.resolve(path.dirname(current), target));
+  }
+  return [...seen].sort();
+};
+
+const steeringSelectorsOf = (entryPath: string): string[] => {
+  const out: string[] = [];
+  for (const file of flowClosure(entryPath)) {
+    collectSteeringSelectors(loadAll(readFileSync(file, "utf8")) as JsonValue, out);
+  }
+  return [...new Set(out)];
+};
+
+/** The label of a primary tab, which `TabBar` renders as the button's own text. */
+const tabLabel = (routePath: string): string => {
+  const route = TAB_ROUTES.find((candidate) => candidate.path === routePath);
+  if (!route) throw new Error(`TAB_ROUTES no longer declares a tab for ${routePath}`);
+  return route.label;
+};
+
+/**
+ * A translated string's fallback, which is what an untranslated CI build presents. Read from the
+ * call site so a reworded fallback fails here.
+ */
+const translationFallback = (relativePath: string, key: string): string => {
+  const match = new RegExp(`t\\("${key.replace(/\./g, "\\.")}",\\s*"([^"]+)"\\)`).exec(readSource(relativePath));
+  if (!match) throw new Error(`${relativePath} no longer calls t("${key}", ...) with a literal fallback`);
+  return match[1];
+};
+
+/** An `aria-label` literal, which is the accessible name WKWebView exposes for a button. */
+const ariaLabel = (relativePath: string, label: string): string => {
+  if (!readSource(relativePath).includes(`aria-label="${label}"`)) {
+    throw new Error(`${relativePath} no longer sets aria-label="${label}"`);
+  }
+  return label;
+};
+
+/**
+ * A string production renders as one element's whole text. Read from the source so a reworded
+ * caption fails here — `>Choose source<` for a single-line element, or the string alone on its
+ * own line for one JSX-formatted across lines.
+ */
+const elementText = (relativePath: string, text: string): string => {
+  const source = readSource(relativePath);
+  if (!source.includes(`>${text}<`) && !new RegExp(`^\\s*${text}\\s*$`, "m").test(source)) {
+    throw new Error(`${relativePath} no longer renders "${text}" as an element's whole text`);
+  }
+  return text;
+};
+
+/** Each steering anchor, with the production value it has to match. */
+const anchorDerivations = (): { selector: string; name: string }[] => [
+  { selector: "Home", name: tabLabel("/") },
+  { selector: "Settings", name: tabLabel("/settings") },
+  { selector: "Play", name: tabLabel("/play") },
+  { selector: CONNECTION_ANCHOR, name: settingsSectionName("connection") },
+  { selector: HVSC_FLAG_ANCHOR, name: featureFlagRowName("hvsc_enabled") },
+  {
+    selector: "Search the app",
+    name: translationFallback("src/pages/home/components/HomeSearchField.tsx", "search.openFromHome"),
+  },
+  { selector: "Something went wrong", name: translationFallback("src/App.tsx", "app.error.title") },
+  {
+    selector: "Add items to playlist",
+    name: ariaLabel("src/pages/playFiles/components/PlaylistPanel.tsx", "Add items to playlist"),
+  },
+  {
+    selector: "Add file / folder from Local",
+    name: ariaLabel(
+      "src/components/itemSelection/ItemSelectionDialog.tsx",
+      `Add file / folder from ${SOURCE_LABELS.local}`,
+    ),
+  },
+  { selector: "Add file / folder from C64U", name: `Add file / folder from ${SOURCE_LABELS.c64u}` },
+  {
+    selector: "Choose source",
+    name: elementText("src/components/itemSelection/ItemSelectionDialog.tsx", "Choose source"),
+  },
+  {
+    selector: "Continue in Demo Mode",
+    name: elementText("src/components/DemoModeInterstitial.tsx", "Continue in Demo Mode"),
+  },
+];
+
+describe("iOS CI flow anchors are all bound to production", () => {
+  const ciFlowPaths = () => ciFlowNames().map((name) => path.join(maestroRoot, `${name}.yaml`));
+
+  it("follows runFlow into the subflows the CI flows depend on", () => {
+    const closure = flowClosure(path.join(maestroRoot, "ios-secure-storage-persist.yaml")).map((file) =>
+      path.relative(maestroRoot, file),
+    );
+
+    // ios-secure-storage-persist -> ios-open-play-add-items -> launch-and-wait -> continue-demo.
+    expect(closure).toContain("ios-secure-storage-persist.yaml");
+    expect(closure).toContain(path.join("subflows", "ios-open-play-add-items.yaml"));
+    expect(closure).toContain(path.join("subflows", "launch-and-wait.yaml"));
+  });
+
+  it("counts assertions, waits and required taps but not optional ones", () => {
+    const out: string[] = [];
+    collectSteeringSelectors(
+      [
+        { assertVisible: "Fatal" },
+        { tapOn: { text: "Dismissed", optional: true } },
+        { extendedWaitUntil: { visible: "Waited", timeout: 1 } },
+        { extendedWaitUntil: { visible: "Skipped", optional: true } },
+      ],
+      out,
+    );
+
+    expect(out).toEqual(["Fatal", "Waited"]);
+  });
+
+  it("derives every steering anchor of every CI flow from production", () => {
+    const derivations = anchorDerivations();
+    const derived = new Map(derivations.map((entry) => [entry.selector, entry.name]));
+
+    // Every derivation matches the production string it was read from.
+    for (const { selector, name } of derivations) {
+      expect(matchesWholeText(selector, name), `${selector} does not match production's "${name}"`).toBe(true);
+    }
+    // The alternation anchors are checked against their own production strings above.
+    const checkedElsewhere = new Set([PLAY_ANCHOR, FEATURE_GROUP_ANCHOR]);
+
+    const unbound: string[] = [];
+    for (const flow of ciFlowPaths()) {
+      for (const selector of steeringSelectorsOf(flow)) {
+        if (!derived.has(selector) && !checkedElsewhere.has(selector)) {
+          unbound.push(`${path.relative(maestroRoot, flow)}: ${selector}`);
+        }
+      }
+    }
+
+    expect(unbound, "a CI flow steers on an anchor no test binds to production").toEqual([]);
+  });
+
+  it("proves the C64U source anchor falls back to the static label", () => {
+    // ItemSelectionDialog names the button after the source's own name, so the anchor is only
+    // "C64U" while the Play page builds that source without one.
+    const dialog = readSource("src/components/itemSelection/ItemSelectionDialog.tsx");
+    expect(dialog).toContain(
+      "aria-label={`Add file / folder from ${c64UltimateSource?.name?.trim() || SOURCE_LABELS.c64u}`}",
+    );
+    expect(SOURCE_LABELS.c64u).toBe("C64U");
+
+    const playPage = readSource("src/pages/PlayFilesPage.tsx");
+    expect(playPage).toContain("createUltimateSourceLocation()");
+    expect(playPage).not.toContain("createUltimateSourceLocation({");
   });
 });
