@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   EXCLUSIONS,
+  MIN_SOURCE_TESTIDS,
   UNDOCUMENTED_BASELINE,
   collectInteractiveTestIds,
   collectInventoryMatchers,
@@ -203,8 +204,17 @@ describe("check-reference-docs: the repository as it stands", () => {
   });
 
   it("passes: no new undocumented control and no stale baseline entry", () => {
+    const sourceIds = collectSourceTestIds();
+
+    // Both assertions below are satisfied by an empty set of source ids, which is
+    // what a renamed source root produces. The count is the evidence that the
+    // inventory was compared against the app at all.
+    expect(sourceIds.size, "no interactive testid was read, so nothing was compared").toBeGreaterThanOrEqual(
+      MIN_SOURCE_TESTIDS,
+    );
+
     const { undocumented, staleBaseline } = findInventoryDrift({
-      sourceIds: collectSourceTestIds(),
+      sourceIds,
       matchers: collectInventoryMatchers(readFileSync("docs/cta-inventory.md", "utf8")),
       exclusions: EXCLUSIONS,
       baseline: UNDOCUMENTED_BASELINE,

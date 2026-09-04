@@ -323,6 +323,13 @@ export const findInventoryDrift = ({ sourceIds, matchers, exclusions, baseline }
   return { undocumented, staleBaseline };
 };
 
+/*
+ * A walk that returns nothing leaves every comparison below empty, and the gate reports
+ * success having read no source file at all. That is how a renamed or moved source root
+ * removes the inventory check without a red check anywhere. The app carries 298 today.
+ */
+export const MIN_SOURCE_TESTIDS = 200;
+
 const main = () => {
   const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
   const stackDrift = findStackDrift(
@@ -331,6 +338,15 @@ const main = () => {
   );
 
   const sourceIds = collectSourceTestIds();
+  if (sourceIds.size < MIN_SOURCE_TESTIDS) {
+    console.error(
+      `Only ${sourceIds.size} interactive testids were found under ${SOURCE_DIRS.join(", ")}, ` +
+        `fewer than the ${MIN_SOURCE_TESTIDS} expected.\n` +
+        "Nothing was compared against the inventory, so this is a failure rather than a pass.",
+    );
+    process.exit(2);
+  }
+
   const matchers = collectInventoryMatchers(readFileSync(INVENTORY_DOC, "utf8"));
   const { undocumented, staleBaseline } = findInventoryDrift({
     sourceIds,

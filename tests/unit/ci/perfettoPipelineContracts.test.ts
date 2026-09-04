@@ -4,6 +4,22 @@ import path from "node:path";
 
 const readRepoFile = (...parts: string[]) => readFileSync(path.resolve(process.cwd(), ...parts), "utf8");
 
+const SQL_DIR = path.resolve(process.cwd(), "ci", "telemetry", "android", "perfetto-sql");
+
+/** The metric families the extraction step needs a query for. */
+const REQUIRED_SQL_QUERIES = [
+  "app_trace_sections.sql",
+  "cpu_usage.sql",
+  "frame_jank.sql",
+  "memory_rss.sql",
+  "scheduling_latency.sql",
+];
+
+const sqlQueryFiles = () =>
+  readdirSync(SQL_DIR)
+    .filter((file) => file.endsWith(".sql"))
+    .sort();
+
 describe("Perfetto pipeline contracts", () => {
   it("Perfetto config captures sched, ftrace, FrameTimeline, and app atrace", () => {
     const cfg = readRepoFile("ci", "telemetry", "android", "perfetto-hvsc.cfg");
@@ -29,26 +45,25 @@ describe("Perfetto pipeline contracts", () => {
   });
 
   it("SQL extraction queries exist for all required metric families", () => {
-    const sqlDir = path.resolve(process.cwd(), "ci", "telemetry", "android", "perfetto-sql");
-    expect(existsSync(sqlDir)).toBe(true);
-    const files = readdirSync(sqlDir)
-      .filter((f) => f.endsWith(".sql"))
-      .sort();
-
-    // Required query families
-    expect(files).toContain("app_trace_sections.sql");
-    expect(files).toContain("cpu_usage.sql");
-    expect(files).toContain("frame_jank.sql");
-    expect(files).toContain("memory_rss.sql");
-    expect(files).toContain("scheduling_latency.sql");
+    expect(existsSync(SQL_DIR)).toBe(true);
+    const files = sqlQueryFiles();
+    for (const query of REQUIRED_SQL_QUERIES) {
+      expect(files, `${query} is missing from ${SQL_DIR}`).toContain(query);
+    }
   });
 
   it("SQL queries target the c64commander process", () => {
-    const sqlDir = path.resolve(process.cwd(), "ci", "telemetry", "android", "perfetto-sql");
-    const files = readdirSync(sqlDir).filter((f) => f.endsWith(".sql"));
+    const files = sqlQueryFiles();
+
+    // The loop below runs no assertion at all when the directory yields
+    // nothing, so the files it is about to read have to be there first.
+    for (const query of REQUIRED_SQL_QUERIES) {
+      expect(files, `${query} was not read, so it was not checked`).toContain(query);
+    }
+
     for (const file of files) {
-      const sql = readFileSync(path.join(sqlDir, file), "utf8");
-      expect(sql).toContain("c64commander");
+      const sql = readFileSync(path.join(SQL_DIR, file), "utf8");
+      expect(sql, `${file} does not name the process it measures`).toContain("c64commander");
     }
   });
 
