@@ -79,6 +79,13 @@ export const analyzeStartupInitializers = (xmltree) => {
 
 const looksGoogle = (name, markers) => markers.some((marker) => name.includes(marker));
 
+/**
+ * A badging dump names the package on its first line. Without that line the output is
+ * not a badging dump, and the two `uses-` scans below find nothing and report a pass
+ * having read nothing at all. The call site treats that as a failure.
+ */
+export const namesAPackage = (badging) => /^package: name='[^']+'/m.test(badging);
+
 // Parse `aapt[2] dump badging` for hard Google dependencies.
 export const analyzeGmsUsage = (badging) => {
   const requiredLibraries = [];
@@ -165,7 +172,13 @@ export const verifyApkNoGms = (apkPath) => {
   if (!fs.existsSync(apkPath)) {
     throw new ApkGmsError(`APK not found: ${apkPath}`);
   }
-  const result = analyzeGmsUsage(runBadging(apkPath));
+  const badging = runBadging(apkPath);
+  if (!namesAPackage(badging)) {
+    throw new ApkGmsError(
+      `aapt2/aapt dump badging on ${apkPath} named no package, so its output was not scanned for Google dependencies.`,
+    );
+  }
+  const result = analyzeGmsUsage(badging);
   if (!result.ok) {
     throw new ApkGmsError(
       `APK declares a hard Google dependency: libraries=[${result.requiredLibraries.join(", ")}] features=[${result.requiredFeatures.join(", ")}]`,

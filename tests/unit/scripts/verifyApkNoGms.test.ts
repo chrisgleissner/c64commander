@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ApkGmsError,
   analyzeGmsUsage,
+  namesAPackage,
   verifyApkNoGms,
   analyzeStartupInitializers,
   declaresInitializer,
@@ -42,6 +43,25 @@ describe("analyzeGmsUsage", () => {
   it("flags a required Google uses-feature", () => {
     const badging = ["package: name='x' versionName='1'", "uses-feature:'com.google.android.gms.feature'"].join("\n");
     expect(analyzeGmsUsage(badging).ok).toBe(false);
+  });
+});
+
+describe("the badging output is a badging output", () => {
+  // Both scans in analyzeGmsUsage report a pass on input they did not understand,
+  // so the dump has to prove it is a dump before its silence means anything.
+  it("reports a pass on output it read nothing from", () => {
+    expect(analyzeGmsUsage("").ok).toBe(true);
+    expect(analyzeGmsUsage("aapt2: unknown command\n").ok).toBe(true);
+  });
+
+  it("recognises a real dump by the package line", () => {
+    expect(namesAPackage("package: name='uk.gleissner.c64commander' versionCode='1' versionName='1.0'")).toBe(true);
+  });
+
+  it("rejects output with no package line", () => {
+    expect(namesAPackage("")).toBe(false);
+    expect(namesAPackage("aapt2: unknown command\n")).toBe(false);
+    expect(namesAPackage("application-label:'C64 Commander'")).toBe(false);
   });
 });
 
