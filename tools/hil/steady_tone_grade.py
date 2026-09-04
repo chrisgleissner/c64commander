@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 import wave
 
@@ -298,6 +299,13 @@ def self_test() -> int:
     return 0 if failures == 0 else 1
 
 
+def _dump_json(result: dict) -> str:
+    # json.dumps emits the bare token NaN for a float("nan") cents (no tone measured), which is
+    # not valid JSON and makes a strict parser on the other end (merge_gate.mjs's JSON.parse) throw.
+    safe = {k: (None if isinstance(v, float) and math.isnan(v) else v) for k, v in result.items()}
+    return json.dumps(safe)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("file", nargs="?")
@@ -327,11 +335,11 @@ def main() -> int:
     # A refusal to grade is not a defect report, and the two must not be confused by whatever runs
     # this: 2 means the recording could not be graded, 1 means it was graded and found wanting.
     if result["verdict"] in ("NO TONE", "TOO QUIET TO GRADE"):
-        print(json.dumps(result) if args.json else f"VERDICT     {result['verdict']}  ({faults[0]})")
+        print(_dump_json(result) if args.json else f"VERDICT     {result['verdict']}  ({faults[0]})")
         return 2
 
     if args.json:
-        print(json.dumps(result))
+        print(_dump_json(result))
     else:
         print(f"file        {result['file']}  {result['seconds']}s")
         print(f"tone        {result['measured_hz']} Hz vs {result['expected_hz']:g} Hz = {result['cents']:+.1f} cents")

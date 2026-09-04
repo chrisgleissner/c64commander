@@ -10,6 +10,7 @@ graded as NO TONE.
 These are synthetic signals rather than recordings, so they run anywhere and need no rig.
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -18,7 +19,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from steady_tone_grade import grade, verdict_for  # noqa: E402
+from steady_tone_grade import _dump_json, grade, verdict_for  # noqa: E402
 
 RATE = 48000
 SECONDS = 3.0
@@ -69,6 +70,21 @@ def test_an_empty_room_is_still_refused(tmp_path: Path) -> None:
     # Excluding the overtones must not cost that.
     result = graded(tmp_path, "silence")
     assert result["verdict"] == "NO TONE"
+
+
+def _reject_non_finite(token: str) -> None:
+    raise ValueError(f"not valid JSON: {token}")
+
+
+def test_an_empty_room_still_serializes_as_strict_json(tmp_path: Path) -> None:
+    # No tone measured means "cents" is float("nan"). json.dumps's default behaviour emits the
+    # bare token NaN, which merge_gate.mjs's JSON.parse (a strict parser) rejects outright,
+    # turning a refusal-to-grade into a crash instead of a reported verdict.
+    result = graded(tmp_path, "silence")
+    assert result["cents"] != result["cents"]  # nan != nan
+    dumped = _dump_json(result)
+    parsed = json.loads(dumped, parse_constant=_reject_non_finite)
+    assert parsed["cents"] is None
 
 
 def test_a_gap_in_the_middle_is_found(tmp_path: Path) -> None:
