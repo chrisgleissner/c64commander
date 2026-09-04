@@ -15,10 +15,12 @@ env:
 
 # Navigate to the Play files tab
 - tapOn:
-    point: "75%,95%"
+    id: "tab-play"
 - extendedWaitUntil:
     visible: "Play files"
     timeout: ${TIMEOUT}
+- assertVisible:
+    id: "page-play"
 
 # Start playback
 - tapOn: "Play"

@@ -47,6 +47,8 @@ env:
 - tapOn:
     id: "tab-play"
 - waitForAnimationToEnd
+- assertVisible:
+    id: "page-play"
 # Scroll to find HVSC download. Continue from current position — the 3 swipes
 # above already moved us partway down. Each retry scrolls one more screenfull.
 - retry:

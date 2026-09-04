@@ -14,10 +14,12 @@ env:
 
 # Navigate to Play files tab
 - tapOn:
-    point: "75%,95%"
+    id: "tab-play"
 - extendedWaitUntil:
     visible: "Play files"
     timeout: ${TIMEOUT}
+- assertVisible:
+    id: "page-play"
 
 # SID: play a SID track, wait for auto-advance
 - tapOn: "SID"

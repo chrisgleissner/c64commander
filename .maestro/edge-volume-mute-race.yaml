@@ -14,10 +14,12 @@ env:
 
 # Navigate to the Play files tab
 - tapOn:
-    point: "75%,95%"
+    id: "tab-play"
 - extendedWaitUntil:
     visible: "Play files"
     timeout: ${TIMEOUT}
+- assertVisible:
+    id: "page-play"
 
 # Assert the playback volume controls are visible (connected + playing assumed in this flow)
 - assertVisible: "Playback volume"

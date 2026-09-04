@@ -36,10 +36,11 @@ tags:
 # Open Settings and enable the experimental "Keypad / T9 input" flag.
 - tapOn:
     id: "tab-settings"
-    optional: true
 - extendedWaitUntil:
     visible: "Settings"
     timeout: ${TIMEOUT}
+- assertVisible:
+    id: "page-settings"
 - scrollUntilVisible:
     element:
       text: "Keypad / T9 input"
@@ -61,18 +62,20 @@ tags:
 # key takes effect, so capture Home for review after injecting keys externally.
 - tapOn:
     id: "tab-home"
-    optional: true
 - extendedWaitUntil:
     visible: "Home"
     timeout: ${TIMEOUT}
+- assertVisible:
+    id: "page-home"
 - takeScreenshot: keypad-home-before-keys
 
 # Prove touch still works (and would clear any key-selected highlight): a plain
 # tap navigates as always, with no keypad affordance left behind.
 - tapOn:
     id: "tab-config"
-    optional: true
 - extendedWaitUntil:
     visible: "Config"
     timeout: ${TIMEOUT}
+- assertVisible:
+    id: "page-config"
 - takeScreenshot: keypad-touch-still-works

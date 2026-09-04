@@ -47,6 +47,8 @@ env:
 - tapOn:
     id: "tab-play"
 - waitForAnimationToEnd
+- assertVisible:
+    id: "page-play"
 # Scroll to find HVSC download.
 - retry:
     maxRetries: 15

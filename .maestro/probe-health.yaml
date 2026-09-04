@@ -18,29 +18,33 @@ env:
     visible:
       text: "Home"
     timeout: ${SHORT_TIMEOUT}
-- assertVisible: "Home"
+- assertVisible:
+    id: "page-home"
 
 # Step 3: Take a screenshot to prove UI is rendered
 - takeScreenshot: probe-health-home
 
 # Step 4: Verify navigation is responsive - tap a tab
 - tapOn:
-    point: "25%,95%"
+    id: "tab-play"
 
 # Step 5: Verify navigation worked
 - extendedWaitUntil:
     visible: "Playlist"
     timeout: ${TIMEOUT}
+- assertVisible:
+    id: "page-play"
 
 # Step 6: Return to home
 - tapOn:
-    point: "8%,95%"
+    id: "tab-home"
 
 # Step 7: Final verification
 - extendedWaitUntil:
     visible:
       text: "Home"
     timeout: ${SHORT_TIMEOUT}
-- assertVisible: "Home"
+- assertVisible:
+    id: "page-home"
 
 - takeScreenshot: probe-health-complete

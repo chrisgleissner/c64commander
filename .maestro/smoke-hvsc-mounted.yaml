@@ -109,10 +109,12 @@ env:
       text: "Play"
     timeout: ${SHORT_TIMEOUT}
 - tapOn:
-    point: "25%,95%"
+    id: "tab-play"
 - extendedWaitUntil:
     visible: "Playlist"
     timeout: ${TIMEOUT}
+- assertVisible:
+    id: "page-play"
 - scrollUntilVisible:
     element: "35_Years.sid"
     direction: DOWN

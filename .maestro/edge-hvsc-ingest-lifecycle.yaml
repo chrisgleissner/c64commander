@@ -13,15 +13,35 @@ env:
 # verify the progress stages transition monotonically to completion.
 - runFlow: subflows/launch-and-wait.yaml
 
-# Navigate to the HVSC / Music tab
 - tapOn:
-    point: "50%,95%"
+    id: "tab-play"
 - extendedWaitUntil:
-    visible: "Music"
+    visible: "Play files"
     timeout: ${TIMEOUT}
-
-# Open HVSC settings/install
-- tapOn: "Install HVSC"
+- assertVisible:
+    id: "page-play"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: play-section-toggle-hvsc
+    direction: DOWN
+    speed: 80
+    timeout: ${LONG_TIMEOUT}
+    visibilityPercentage: 50
+    centerElement: true
+- tapOn:
+    id: play-section-toggle-hvsc
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: hvsc-download
+    direction: DOWN
+    speed: 80
+    timeout: ${LONG_TIMEOUT}
+    visibilityPercentage: 50
+    centerElement: true
+- tapOn:
+    id: hvsc-download
 - extendedWaitUntil:
     visible: "Downloading"
     timeout: ${LONG_TIMEOUT}

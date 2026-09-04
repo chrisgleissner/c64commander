@@ -147,6 +147,92 @@ const findScrollUntilVisibleStep = (
   });
 };
 
+const androidFlowFiles = (): string[] =>
+  listYamlFiles(maestroRoot)
+    .map((filePath) => path.relative(process.cwd(), filePath))
+    .filter((filePath) => !path.basename(filePath).startsWith("ios-"));
+
+// A retry block holds its own command list, and both guards below reason about the order
+// commands run in, so the block is replaced by the commands it wraps rather than skipped.
+const flattenCommands = (value: JsonValue, out: JsonValue[] = []): JsonValue[] => {
+  if (Array.isArray(value)) {
+    value.forEach((entry) => flattenCommands(entry, out));
+    return out;
+  }
+  if (!value || typeof value !== "object") {
+    return out;
+  }
+  const retry = (value as Record<string, JsonValue>).retry;
+  if (retry && typeof retry === "object" && !Array.isArray(retry)) {
+    flattenCommands((retry as Record<string, JsonValue>).commands ?? null, out);
+    return out;
+  }
+  out.push(value);
+  return out;
+};
+
+const commandOption = (command: JsonValue, key: string): Record<string, JsonValue> | null => {
+  if (!command || typeof command !== "object" || Array.isArray(command)) return null;
+  const option = (command as Record<string, JsonValue>)[key];
+  if (!option || typeof option !== "object" || Array.isArray(option)) return null;
+  return option as Record<string, JsonValue>;
+};
+
+const tappedTabName = (command: JsonValue): string | null => {
+  const tapOn = commandOption(command, "tapOn");
+  const id = tapOn?.id;
+  return typeof id === "string" && id.startsWith("tab-") ? id.slice("tab-".length) : null;
+};
+
+const assertedPageName = (command: JsonValue): string | null => {
+  const assertVisible = commandOption(command, "assertVisible");
+  const id = assertVisible?.id;
+  return typeof id === "string" && id.startsWith("page-") ? id.slice("page-".length) : null;
+};
+
+const TAB_BAR_COORDINATE = /^\s*\d+(?:\.\d+)?%\s*,\s*(\d+(?:\.\d+)?)%\s*$/;
+
+const collectTabBarCoordinateTaps = (commands: JsonValue[], filePath: string): string[] => {
+  const errors: string[] = [];
+  commands.forEach((command, index) => {
+    const point = commandOption(command, "tapOn")?.point;
+    if (typeof point !== "string") return;
+    const match = TAB_BAR_COORDINATE.exec(point);
+    if (!match) return;
+    if (Number(match[1]) < 90) return;
+    errors.push(`${filePath}: [${index}] taps the tab bar at "${point}" instead of a tab id`);
+  });
+  return errors;
+};
+
+const collectUnprovedTabTaps = (commands: JsonValue[], filePath: string): string[] => {
+  const errors: string[] = [];
+  let pendingTab: { name: string; index: number } | null = null;
+
+  const reportPending = () => {
+    if (!pendingTab) return;
+    errors.push(
+      `${filePath}: [${pendingTab.index}] tapped tab-${pendingTab.name} without asserting page-${pendingTab.name}`,
+    );
+    pendingTab = null;
+  };
+
+  commands.forEach((command, index) => {
+    const pageName = assertedPageName(command);
+    if (pageName && pendingTab?.name === pageName) {
+      pendingTab = null;
+      return;
+    }
+    const tabName = tappedTabName(command);
+    if (!tabName) return;
+    reportPending();
+    pendingTab = { name: tabName, index };
+  });
+
+  reportPending();
+  return errors;
+};
+
 describe("Maestro flow contracts", () => {
   // The guard below asserts that a collected error list is empty, so it passes having
   // read nothing if `.maestro` moves or `listYamlFiles` stops matching. These two check
@@ -423,6 +509,71 @@ describe("Maestro flow contracts", () => {
         .filter((id) => TAB_ROUTES.some((route) => pageIdFor(route.label) === id))
         .sort(),
     );
+  });
+
+  // The tab bar is `overflow-x-auto` and TabBar scrolls the active tab into view, so the
+  // x position of a given tab depends on the route the app is already on. A fixed
+  // `point: "75%,95%"` therefore addresses whichever tab happens to sit under that column
+  // at that moment, and y=95% is also inside the Android gesture-navigation edge.
+  it("keeps Android tab navigation on tab ids rather than viewport coordinates", () => {
+    const errors: string[] = [];
+    for (const filePath of androidFlowFiles()) {
+      const commands = flattenCommands(readYaml(path.resolve(process.cwd(), filePath)));
+      errors.push(...collectTabBarCoordinateTaps(commands, filePath));
+    }
+    expect(errors).toEqual([]);
+  });
+
+  // Tab-bar labels render outside the page and are present whichever tab is selected, so
+  // `assertVisible: "Settings"` passes on a tap that did nothing and on a page that never
+  // rendered. SwipeNavigationLayer puts a `page-<tab>` id on the active slot alone, so that
+  // id is the only selector in the DOM that distinguishes the two.
+  it("proves every Android tab tap landed with the matching page id", () => {
+    const errors: string[] = [];
+    for (const filePath of androidFlowFiles()) {
+      const commands = flattenCommands(readYaml(path.resolve(process.cwd(), filePath)));
+      errors.push(...collectUnprovedTabTaps(commands, filePath));
+    }
+    expect(errors).toEqual([]);
+  });
+
+  it("rejects a planted coordinate tab tap and an unproved tab tap", () => {
+    expect(
+      collectTabBarCoordinateTaps(
+        flattenCommands([{ tapOn: { point: "75%,95%" } }, { tapOn: { point: "50%,40%" } }]),
+        ".maestro/planted.yaml",
+      ),
+    ).toEqual(['.maestro/planted.yaml: [0] taps the tab bar at "75%,95%" instead of a tab id']);
+
+    expect(
+      collectUnprovedTabTaps(
+        flattenCommands([
+          { retry: { maxRetries: 3, commands: [{ tapOn: { id: "tab-play" } }, { assertVisible: "Play files" }] } },
+          { tapOn: { id: "tab-home" } },
+          { assertVisible: { id: "page-home" } },
+        ]),
+        ".maestro/planted.yaml",
+      ),
+    ).toEqual([".maestro/planted.yaml: [0] tapped tab-play without asserting page-play"]);
+  });
+
+  // The page ids the guards above accept have to be the ones SwipeNavigationLayer emits,
+  // so a renamed tab cannot leave a stale flow passing.
+  it("derives the accepted page ids from the production route table", () => {
+    const pageIds = new Set<string>();
+    for (const filePath of androidFlowFiles()) {
+      for (const command of flattenCommands(readYaml(path.resolve(process.cwd(), filePath)))) {
+        const pageName = assertedPageName(command);
+        if (pageName) pageIds.add(pageName);
+      }
+    }
+    expect(pageIds.size).toBeGreaterThan(0);
+    for (const pageName of pageIds) {
+      expect(
+        TAB_ROUTES.some((route) => route.label.toLowerCase() === pageName),
+        `page-${pageName} is not a tab in TAB_ROUTES`,
+      ).toBe(true);
+    }
   });
 
   it("keeps local binary playback picker navigation independent of DocumentsUI toolbar ids", () => {

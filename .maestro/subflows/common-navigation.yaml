@@ -28,23 +28,12 @@ tags:
           text: "Close app"
           optional: true
       - waitForAnimationToEnd
-      # This wait names the tab bar's own label, which cannot distinguish a rendered
-      # page from a crashed one - the tab bar renders outside the page. It is kept only
-      # as a cheap readiness signal. Every navigation in this file is proved by the two
-      # checks that follow it: a `page-*` id assertion and an assertNotVisible.
-      #
-      # Page-content anchors were tried throughout this file and only "Play files"
-      # survived. Two things defeat them. Maestro matches a selector against an
-      # element's whole text, and the browser merges inline spans into their containing
-      # row, so "Firmware" is only ever part of "App <version> Device <host> Firmware
-      # <version>". And the configuration menu's entries depend on the firmware the
-      # device reports, so "Memory & ROMs" is not there in demo mode.
-      #
-      # SwipeNavigationLayer therefore puts an `id` on the active slot alone, named after
-      # the tab on screen. Maestro matches `id:` against the HTML id attribute, so
-      # `page-settings` addresses the Settings slot and no other, and it is absent when a
-      # tab tap did nothing. The assertNotVisible checks cover the crashed-page case, and
-      # neither check depends on page text.
+      # Every wait below names a tab-bar label, which renders outside the page and is
+      # present whichever tab is selected, so it is a readiness signal only. The
+      # `page-*` id that follows it is what proves the tap landed: SwipeNavigationLayer
+      # puts it on the active slot alone. Page *text* anchors were tried here and only
+      # "Play files" survived, because Maestro matches whole element text and the
+      # configuration menu's entries depend on the firmware the device reports.
       - extendedWaitUntil:
           visible:
             text: "Home"
@@ -72,9 +61,8 @@ tags:
       - extendedWaitUntil:
           visible: "Play files"
           timeout: ${TIMEOUT}
-      # Inside the retry, not after it. The picker can re-arm between the wait above and a
-      # check placed after the block, and it covers the tab bar, so the assertion then fails
-      # on a tab that had already rendered. Here a late dialog costs one more attempt.
+      # Inside the retry, not after it: the picker can re-arm between the wait above and a
+      # check placed after the block, and it covers the tab bar.
       - assertVisible: "Play files"
       - assertVisible:
           id: "page-play"
@@ -94,19 +82,9 @@ tags:
       - tapOn:
           id: "tab-settings"
           optional: true
-      # This wait matches the tab bar, which is present whichever tab is selected, so it
-      # only says the app is up. The page id asserted below is what says the tap landed.
       - extendedWaitUntil:
           visible: "Settings"
           timeout: ${SHORT_TIMEOUT}
-      # Inside the retry, not after it. The picker can re-arm between the wait above and a
-      # check placed after the block, and it covers the tab bar, so the assertion then fails
-      # on a tab that had already rendered. Here a late dialog costs one more attempt.
-      #
-      # This assertion, not the wait above, is what proves the tab tap navigated. Exactly one
-      # `page-*` id is in the DOM at a time and it names the slot on screen
-      # (SwipeNavigationLayer), so unlike the tab-bar label it is absent when the tap did
-      # nothing and when the app is still on the previous tab.
       - assertVisible:
           id: "page-settings"
       - assertNotVisible: "Something went wrong"
@@ -121,19 +99,9 @@ tags:
       - tapOn:
           id: "tab-config"
           optional: true
-      # This wait matches the tab bar, which is present whichever tab is selected, so it
-      # only says the app is up. The page id asserted below is what says the tap landed.
       - extendedWaitUntil:
           visible: "Config"
           timeout: ${SHORT_TIMEOUT}
-      # Inside the retry, not after it. The picker can re-arm between the wait above and a
-      # check placed after the block, and it covers the tab bar, so the assertion then fails
-      # on a tab that had already rendered. Here a late dialog costs one more attempt.
-      #
-      # This assertion, not the wait above, is what proves the tab tap navigated. Exactly one
-      # `page-*` id is in the DOM at a time and it names the slot on screen
-      # (SwipeNavigationLayer), so unlike the tab-bar label it is absent when the tap did
-      # nothing and when the app is still on the previous tab.
       - assertVisible:
           id: "page-config"
       - assertNotVisible: "Something went wrong"
@@ -148,19 +116,9 @@ tags:
       - tapOn:
           id: "tab-home"
           optional: true
-      # This wait matches the tab bar, which is present whichever tab is selected, so it
-      # only says the app is up. The page id asserted below is what says the tap landed.
       - extendedWaitUntil:
           visible: "Home"
           timeout: ${SHORT_TIMEOUT}
-      # Inside the retry, not after it. The picker can re-arm between the wait above and a
-      # check placed after the block, and it covers the tab bar, so the assertion then fails
-      # on a tab that had already rendered. Here a late dialog costs one more attempt.
-      #
-      # This assertion, not the wait above, is what proves the tab tap navigated. Exactly one
-      # `page-*` id is in the DOM at a time and it names the slot on screen
-      # (SwipeNavigationLayer), so unlike the tab-bar label it is absent when the tap did
-      # nothing and when the app is still on the previous tab.
       - assertVisible:
           id: "page-home"
       - assertNotVisible: "Something went wrong"

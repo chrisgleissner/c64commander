@@ -54,8 +54,12 @@ env:
 - extendedWaitUntil:
     visible: "Play files"
     timeout: ${TIMEOUT}
+- assertVisible:
+    id: "page-play"
 - tapOn:
     id: "tab-home"
+- assertVisible:
+    id: "page-home"
 - repeat:
     while:
       notVisible: "CPU Speed"
@@ -90,8 +94,12 @@ env:
 - extendedWaitUntil:
     visible: "Play files"
     timeout: ${TIMEOUT}
+- assertVisible:
+    id: "page-play"
 - tapOn:
     id: "tab-home"
+- assertVisible:
+    id: "page-home"
 - repeat:
     while:
       notVisible: "CPU Speed"
