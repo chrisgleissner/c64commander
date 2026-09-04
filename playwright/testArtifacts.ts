@@ -9,7 +9,7 @@
 import type { Page, Request, Response, TestInfo } from "@playwright/test";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { validateViewport, enforceVisualBoundaries } from "./viewportValidation";
+import { validateViewport, enforceVisualBoundaries, VisualBoundaryError } from "./viewportValidation";
 import { getTraceAssertionConfig, getTraces, saveTracesFromPage } from "./traceUtils";
 import { assertGoldenTraceEligibility } from "./goldenTraceRegistry";
 import { compareOrPromoteTraceFiles, formatTraceErrors, resolveGoldenDirForEvidence } from "./traceComparison.js";
@@ -116,6 +116,25 @@ export const attachStepScreenshot = async (page: Page, testInfo: TestInfo, label
   const allowOverflow = testInfo.annotations.some((a) => a.type === "allow-visual-overflow");
   if (!allowOverflow) {
     await enforceVisualBoundaries(page, testInfo);
+  }
+};
+
+/**
+ * Step screenshot that tolerates a capture problem but not a layout one.
+ *
+ * Several specs used to wrap `attachStepScreenshot` in a `try`/`catch` that
+ * logged every error as "Step screenshot failed". Capture errors are already
+ * handled inside `attachStepScreenshot`, so the only error those wrappers
+ * actually suppressed was the boundary violation, which turned the layout gate
+ * off for the whole spec. This helper keeps the tolerance and re-throws the
+ * violation. Use `allowVisualOverflow(testInfo, reason)` to waive one on purpose.
+ */
+export const attachStepScreenshotTolerant = async (page: Page, testInfo: TestInfo, label: string) => {
+  try {
+    await attachStepScreenshot(page, testInfo, label);
+  } catch (error) {
+    if (error instanceof VisualBoundaryError) throw error;
+    console.warn(`Step screenshot failed for "${label}"`, error);
   }
 };
 

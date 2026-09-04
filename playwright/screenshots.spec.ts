@@ -1270,6 +1270,11 @@ const captureScreenshot = async (
   const skipTrackedDuplicatePrune = !FORCE_REGENERATE_SCREENSHOTS && shouldSkipFuzzyScreenshotPrune(repoPath);
   const headBlobId = catalog.pathBlobIds.get(repoPath);
 
+  // The step screenshot is taken outside this try. Inside it, a boundary
+  // violation would be reported as a dedupe failure and execution would fall
+  // through to the write below, overwriting the file just restored from HEAD.
+  let restoredFromHead = false;
+
   if (!FORCE_REGENERATE_SCREENSHOTS && headBlobId) {
     try {
       const headPngBuffer = await loadHeadScreenshotBuffer(repoPath);
@@ -1281,12 +1286,16 @@ const captureScreenshot = async (
 
       if (action === "restore-head") {
         await execFile("git", ["restore", "--source=HEAD", "--worktree", "--", repoPath]);
-        await attachStepScreenshot(page, testInfo, screenshotLabel(relativePath));
-        return;
+        restoredFromHead = true;
       }
     } catch (error) {
       console.warn(`[screenshots] Pixel dedupe failed for ${relativePath}.`, error);
     }
+  }
+
+  if (restoredFromHead) {
+    await attachStepScreenshot(page, testInfo, screenshotLabel(relativePath));
+    return;
   }
 
   await fs.writeFile(filePath, screenshotBuffer);

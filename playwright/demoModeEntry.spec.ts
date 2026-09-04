@@ -28,7 +28,7 @@ import { markTourTaken } from "./uiMocks";
 import {
   allowWarnings,
   assertNoUiIssues,
-  attachStepScreenshot,
+  attachStepScreenshotTolerant,
   finalizeEvidence,
   startStrictUiMonitoring,
 } from "./testArtifacts";
@@ -48,13 +48,7 @@ type SeedOptions = {
 /** Every route reachable from the tab bar. `/docs` is excluded: it renders the manual, not CTAs. */
 const MAIN_ROUTES = ["/", "/play", "/disks", "/config", "/settings"] as const;
 
-const snap = async (page: Page, testInfo: TestInfo, label: string) => {
-  try {
-    await attachStepScreenshot(page, testInfo, label);
-  } catch (error) {
-    console.warn(`Step screenshot failed for "${label}"`, error);
-  }
-};
+const snap = attachStepScreenshotTolerant;
 
 /**
  * Seed the page as a handset would look to the connection manager.

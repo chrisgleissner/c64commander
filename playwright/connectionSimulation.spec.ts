@@ -13,7 +13,7 @@ import { seedUiMocks } from "./uiMocks";
 import {
   allowWarnings,
   assertNoUiIssues,
-  attachStepScreenshot,
+  attachStepScreenshotTolerant,
   finalizeEvidence,
   startStrictUiMonitoring,
 } from "./testArtifacts";
@@ -21,13 +21,7 @@ import { saveCoverageFromPage } from "./withCoverage";
 import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from "./traceUtils";
 import { enableGoldenTrace } from "./goldenTraceRegistry";
 
-const snap = async (page: Page, testInfo: TestInfo, label: string) => {
-  try {
-    await attachStepScreenshot(page, testInfo, label);
-  } catch (error) {
-    console.warn(`Step screenshot failed for "${label}"`, error);
-  }
-};
+const snap = attachStepScreenshotTolerant;
 
 const hostnameFromHost = (host: string) => new URL(`http://${host}`).hostname;
 

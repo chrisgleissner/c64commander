@@ -9,6 +9,18 @@
 import type { Page, TestInfo } from "@playwright/test";
 
 /**
+ * Thrown when an element leaves the viewport. Kept as its own type so a spec
+ * that tolerates screenshot-capture failures cannot also swallow a layout
+ * violation; `allowVisualOverflow` is the sanctioned way to waive one.
+ */
+export class VisualBoundaryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "VisualBoundaryError";
+  }
+}
+
+/**
  * Runtime viewport validation - MUST be called in every test.
  * Ensures viewport configuration is correct and screenshots will be valid.
  */
@@ -164,7 +176,7 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
       )
       .join("\n");
 
-    throw new Error(
+    throw new VisualBoundaryError(
       `Visual boundary violations detected (${violations.length} total):\n\n${details}\n\n` +
         `Device: ${testInfo.project.name}\n` +
         `Viewport: ${viewport.width}×${viewport.height}`,
@@ -205,7 +217,7 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
         )?.clientWidth ?? document.documentElement.clientWidth),
     }));
 
-    throw new Error(
+    throw new VisualBoundaryError(
       `Horizontal scroll detected:\n` +
         `  Scroll width: ${scrollInfo.scrollWidth}px\n` +
         `  Client width: ${scrollInfo.clientWidth}px\n` +

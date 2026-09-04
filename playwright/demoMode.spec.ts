@@ -15,7 +15,7 @@ import { TOUR_STATE_KEY, TOUR_TAKEN_STATE } from "./tourState";
 import {
   allowWarnings,
   assertNoUiIssues,
-  attachStepScreenshot,
+  attachStepScreenshotTolerant,
   finalizeEvidence,
   startStrictUiMonitoring,
 } from "./testArtifacts";
@@ -30,13 +30,7 @@ const CURRENT_DEVICE_HOST_KEY = `${variant.id}:device_host`;
 // re-applies the API routing, well inside the read's own 3 s timeout.
 const DEMO_INFO_RESPONSE_DELAY_MS = 1200;
 
-const snap = async (page: Page, testInfo: TestInfo, label: string) => {
-  try {
-    await attachStepScreenshot(page, testInfo, label);
-  } catch (error) {
-    console.warn(`Step screenshot failed for "${label}"`, error);
-  }
-};
+const snap = attachStepScreenshotTolerant;
 
 const clickWithoutNavigationWait = async (page: Page, locator: Locator, attempts = 3) => {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
