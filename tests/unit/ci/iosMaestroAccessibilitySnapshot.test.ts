@@ -20,7 +20,7 @@ describe("iOS Maestro accessibility snapshot", () => {
 
     expect(run.status, `harness exited ${run.status}:\n${output}`).toBe(0);
     expect(output).toContain("Failed: 0");
-    expect(output).toContain("Passed: 3");
+    expect(output).toContain("Passed: 4");
   });
 
   it("keeps the harness bound to the production runner rather than to its own copy", () => {

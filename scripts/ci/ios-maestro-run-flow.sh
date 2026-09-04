@@ -407,6 +407,11 @@ PY
 # "app-not-running" while the failure screenshot taken moments later showed the app rendered
 # on screen. `maestro hierarchy` goes through the Maestro driver and needs no such server, so
 # the failure path passes "no": a flow that has already failed is worth its ~16s timeout.
+#
+# `--device` is a root option, not a `hierarchy` one. `App` declares `["--device", "--udid"]`
+# and `PrintHierarchyCommand` reads `parent?.deviceId`; `test` declares its own, which is why
+# `maestro test --device` works and `maestro hierarchy --device` exits with
+# `Unknown options: '--device', '<udid>'` — the whole dump on run 33845624818.
 capture_accessibility_snapshot() {
   local flow_dir="$1"
   local snapshot_name="$2"
@@ -425,7 +430,7 @@ capture_accessibility_snapshot() {
 
   log "Capturing accessibility snapshot ${snapshot_name} -> ${out_file}"
 
-  if "$MAESTRO_BIN" hierarchy --device "$UDID" > "$out_file" 2>&1; then
+  if "$MAESTRO_BIN" --device "$UDID" hierarchy > "$out_file" 2>&1; then
     trace_event "$flow_dir" "app.accessibility.snapshot" "maestro" "{\"name\":\"${snapshot_name}\",\"status\":\"ok\"}"
     if [[ ! -f "${flow_dir}/.a11y-first" ]]; then
       touch "${flow_dir}/.a11y-first"

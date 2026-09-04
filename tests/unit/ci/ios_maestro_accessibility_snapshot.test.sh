@@ -38,9 +38,39 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 
 UDID="stub-udid"
 MAESTRO_BIN="$WORK_DIR/maestro"
+SEEN_ARGV_FILE="$WORK_DIR/maestro-argv.txt"
+export SEEN_ARGV_FILE
+# The stub enforces Maestro 2.2.0's own argument grammar rather than accepting any argv. A stub
+# that accepted anything is why `maestro hierarchy --device <udid>` reached run 33845624818 and
+# produced a 664-byte usage message instead of a view hierarchy: in `App.kt` `--device`/`--udid`
+# is declared on the root command and `PrintHierarchyCommand` reads it from its parent, so it has
+# to precede the subcommand. `test` declares its own `--device`, which is why the flow runs work.
 cat > "$MAESTRO_BIN" <<'STUB'
 #!/usr/bin/env bash
-# argv is "hierarchy --device <udid>"; the dump itself is what the caller redirects.
+set -uo pipefail
+device=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --device|--udid) device="$2"; shift 2 ;;
+    -p|--platform|--host|--port) shift 2 ;;
+    --verbose) shift ;;
+    *) break ;;
+  esac
+done
+printf '%s\n' "$*" > "${SEEN_ARGV_FILE:-/dev/null}"
+[[ "${1:-}" == "hierarchy" ]] || { echo "Unmatched argument at index 0: '${1:-}'" >&2; exit 2; }
+shift
+for arg in "$@"; do
+  case "$arg" in
+    -h|--help|--compact|--ansi|--no-ansi|--reinstall-driver|--no-reinstall-driver) ;;
+    *)
+      echo "Unknown options: '$arg'" >&2
+      echo "Usage: maestro hierarchy [-h] [--compact] [--[no-]ansi] [--[no-]reinstall-driver]" >&2
+      exit 2
+      ;;
+  esac
+done
+[[ -n "$device" ]] || { echo "No device selected" >&2; exit 2; }
 echo "Element: Connection Saved devices, discovery, passwords, demo mode"
 STUB
 chmod +x "$MAESTRO_BIN"
@@ -73,8 +103,10 @@ run_case() {
 
   capture_accessibility_snapshot "$flow_dir" "failure" "$@"
 
+  # A usage message is also a non-empty file, and that is exactly what run 33845624818 recorded
+  # as the failure dump. "Dumped" therefore means the file holds a hierarchy.
   local dumped="no"
-  if [[ -s "$flow_dir/accessibility/failure.txt" ]]; then
+  if grep -q "^Element: " "$flow_dir/accessibility/failure.txt" 2>/dev/null; then
     dumped="yes"
   fi
   local status="missing"
@@ -96,6 +128,15 @@ echo "capture_accessibility_snapshot regression tests"
 run_case "dumps the hierarchy when the debug server answers" 0 "yes" "ok"
 run_case "skips when the debug server is unreachable and it is required" 1 "no" "skipped-debug-server-unreachable"
 run_case "dumps when the debug server is unreachable but not required" 1 "yes" "ok" "no"
+
+# The device has to reach the Maestro session, or the dump is taken against no device at all.
+if grep -q "^hierarchy$" "$SEEN_ARGV_FILE"; then
+  echo "  PASS: passes the device as a root option, ahead of the subcommand"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: expected the subcommand argv to be exactly 'hierarchy', got '$(cat "$SEEN_ARGV_FILE")'"
+  FAIL=$((FAIL + 1))
+fi
 
 echo
 echo "Passed: $PASS"
