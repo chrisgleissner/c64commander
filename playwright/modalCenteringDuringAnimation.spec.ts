@@ -9,6 +9,7 @@
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { DISPLAY_PROFILE_SEQUENCE } from "../src/lib/displayProfiles";
+import { MOTION_MODE_STORAGE_KEY } from "../src/lib/startup/runtimeMotionBudget";
 import {
   APP_DIALOG_CONTENT_CLASS,
   APP_SHEET_CONTENT_CLASS,
@@ -37,7 +38,7 @@ const measureAnimatedOverlay = async (
   options: { className: string; dataState: "open" | "closed"; inlineTransform: string | null },
 ): Promise<ProbeSample[]> =>
   page.evaluate(
-    async ({ className, dataState, inlineTransform, fractions }) => {
+    ({ className, dataState, inlineTransform, fractions }) => {
       const probe = document.createElement("div");
       probe.className = className;
       probe.setAttribute("data-state", dataState);
@@ -51,17 +52,7 @@ const measureAnimatedOverlay = async (
       // Force a style flush so the CSS animation exists before it is queried.
       void probe.getBoundingClientRect();
 
-      // Two things can leave the probe with no animation on the first query: the
-      // compiled stylesheet may still be loading, and a just-inserted element's
-      // CSS animation is not always registered with the Web Animations API in
-      // the same task. Poll a bounded number of frames, then pause immediately
-      // so a 150ms animation cannot finish and disappear before it is sampled.
-      let animations = probe.getAnimations();
-      for (let frame = 0; animations.length === 0 && frame < 120; frame += 1) {
-        await new Promise(requestAnimationFrame);
-        animations = probe.getAnimations();
-      }
-      for (const animation of animations) animation.pause();
+      const animations = probe.getAnimations();
       const samples: ProbeSample[] = [];
       for (const fraction of fractions) {
         for (const animation of animations) {
@@ -110,11 +101,22 @@ const expectWithinViewport = (samples: ProbeSample[], viewportWidth: number, lab
 
 test.describe("Centered overlays stay on screen for the whole open and close animation", () => {
   test.beforeEach(async ({ page }: { page: Page }) => {
+    // `resolveRuntimeMotionMode` treats four cores or fewer as a low-end device and
+    // reduces motion, which caps every animation at 0.001ms. A GitHub Actions runner
+    // has four cores, so the probe's animation was already finished when it was
+    // queried and the whole spec failed there while passing on an eight-core host.
+    // The defect under test only exists while an animation runs, so the override
+    // pins the mode the spec is about.
+    await page.addInitScript(([key, mode]) => window.localStorage.setItem(key, mode), [
+      MOTION_MODE_STORAGE_KEY,
+      "standard",
+    ] as const);
     // The app is loaded only so the compiled Tailwind stylesheet is present; the
     // probe is injected rather than driven through a real dialog so that every
     // surface can be covered without seven different navigation flows.
     await page.goto("/", { waitUntil: "load" });
     await page.waitForFunction(() => document.styleSheets.length > 0);
+    await expect.poll(() => page.evaluate(() => document.documentElement.dataset.c64MotionMode)).toBe("standard");
   });
 
   for (const profile of DISPLAY_PROFILE_SEQUENCE) {
