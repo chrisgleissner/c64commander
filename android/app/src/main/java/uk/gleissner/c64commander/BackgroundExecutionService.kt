@@ -263,6 +263,8 @@ class BackgroundExecutionService : Service() {
     private var nowPlayingArtist: String? = null
     private var nowPlayingDurationMs: Long? = null
     private var pausedExpiryRunnable: Runnable? = null
+    /** The paused session's deadline on the monotonic clock; see [schedulePausedExpiry]. */
+    private var pausedExpiryElapsedMs: Long? = null
     private var dueAtMs: Long? = null
     private var dueAtElapsedMs: Long? = null
     private var dueRunnable: Runnable? = null
@@ -460,10 +462,33 @@ class BackgroundExecutionService : Service() {
         }
     }
 
+    /**
+     * Ends the paused session after [PAUSED_GRACE_PERIOD_MS] of wall clock.
+     *
+     * `Handler.postDelayed` counts uptime, which stops while the device is asleep — and the wake
+     * lock is released the moment playback pauses, so the device is free to sleep straight away.
+     * The deadline is therefore recorded against `elapsedRealtime`, which does not stop, and the
+     * callback checks it before acting: a callback that arrives early reschedules for the
+     * remainder rather than ending a session the user may still resume. The due-at watchdog in
+     * this same service uses the same monotonic clock for the same reason.
+     *
+     * A callback cannot arrive while the device is asleep, so a long sleep still delays the stop
+     * past the deadline; the residual cost of that is a notification and the process's foreground
+     * priority, with no wake lock, until the device next wakes.
+     */
     private fun schedulePausedExpiry() {
         cancelPausedExpiry()
-        val runnable = Runnable {
+        val expiryElapsedMs = SystemClock.elapsedRealtime() + PAUSED_GRACE_PERIOD_MS
+        pausedExpiryElapsedMs = expiryElapsedMs
+        lateinit var runnable: Runnable
+        runnable = Runnable {
+            val remainingMs = expiryElapsedMs - SystemClock.elapsedRealtime()
+            if (remainingMs > 0L) {
+                handler.postDelayed(runnable, remainingMs)
+                return@Runnable
+            }
             pausedExpiryRunnable = null
+            pausedExpiryElapsedMs = null
             AppLogger.info(
                     this,
                     TAG,
@@ -479,6 +504,7 @@ class BackgroundExecutionService : Service() {
     private fun cancelPausedExpiry() {
         pausedExpiryRunnable?.let { handler.removeCallbacks(it) }
         pausedExpiryRunnable = null
+        pausedExpiryElapsedMs = null
     }
 
     private fun refreshNotification() {

@@ -627,10 +627,32 @@ internal class AudioPipeline(
     )
   }
 
+  /**
+   * Stop the pipeline and release the track.
+   *
+   * The player thread has to be off the track first. `AudioTrack.write(..., WRITE_BLOCKING)` waits
+   * for buffer space and does not return on [Thread.interrupt], and a paused track never drains, so
+   * after [pause] that write blocks indefinitely — the reachable `pauseAudioTrack` then
+   * `closeAudioTrack` sequence would otherwise release the track from under it. Flushing frees the
+   * space it is waiting for; resuming would too, but would play the tail of the paused buffer on
+   * the way out. The join bounds the wait.
+   */
   fun close() {
     running = false
-    player?.interrupt()
+    val playerThread = player
     player = null
+    try {
+      if (started && paused) track.flush()
+    } catch (error: Exception) {
+      Log.d(TAG, "AudioPipeline close flush ignored", error)
+    }
+    paused = false
+    playerThread?.interrupt()
+    try {
+      playerThread?.join(CLOSE_JOIN_TIMEOUT_MS)
+    } catch (error: InterruptedException) {
+      Thread.currentThread().interrupt()
+    }
     try {
       if (started) track.pause()
       track.flush()
@@ -979,6 +1001,8 @@ internal class AudioPipeline(
 
   internal companion object {
     private const val TAG = "AudioPipeline"
+    /** How long [close] waits for the player thread to leave a blocking write before releasing. */
+    private const val CLOSE_JOIN_TIMEOUT_MS = 250L
     const val BYTES_PER_FRAME = 4 // stereo * S16
     private const val CHANNELS = 2
     private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_OUT_STEREO

@@ -196,8 +196,13 @@ class StreamUdpPlugin : Plugin() {
     notifyListeners("audiofocus", event)
   }
 
-  private var audioFocusRequest: AudioFocusRequest? = null
-  private var audioFocusHeld = false
+  // Written from the AudioManager callback on the main Looper and read and written from the
+  // Capacitor plugin thread. Without @Volatile the `false` written on AUDIOFOCUS_LOSS need not be
+  // visible to the next requestPlaybackAudioFocus(), which would then return early and leave the
+  // resumed track playing with focus it no longer holds — the exact no-op the loss handler exists
+  // to prevent. The sibling nativeAudioOwnsPlayback and audioPipeline are @Volatile for this.
+  @Volatile private var audioFocusRequest: AudioFocusRequest? = null
+  @Volatile private var audioFocusHeld = false
 
   private val audioFocusListener =
     AudioManager.OnAudioFocusChangeListener { focusChange ->
@@ -1192,6 +1197,9 @@ class StreamUdpPlugin : Plugin() {
       audioPipeline?.close()
       audioPipeline = null
     }
+    // Paired with the close above, as closeAudioTrack pairs them: focus kept past a destroyed
+    // plugin never tells whatever was interrupted that it may resume.
+    abandonPlaybackAudioFocus()
     releaseMulticastLock()
     executor.shutdownNow()
   }
