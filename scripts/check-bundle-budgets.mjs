@@ -23,6 +23,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { resolve, basename } from "node:path";
+import { pathToFileURL } from "node:url";
 
 export const BUDGET_BYTES = 250 * 1024; // 250 KB gzipped, per research R-BUN-1
 
@@ -93,4 +94,7 @@ const main = () => {
   process.exit(0);
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+// `import.meta.url` is percent-encoded and a raw path is not, so comparing the two directly
+// makes this never match in a checkout whose path contains a space or any other encoded
+// character — and the gate would then exit 0 having checked nothing.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

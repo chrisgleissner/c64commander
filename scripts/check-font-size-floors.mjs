@@ -23,6 +23,7 @@
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const MIN_ARBITRARY_PX = 11;
 /*
@@ -100,4 +101,7 @@ const main = () => {
   console.log(`Font size floor: ${scanned.length} files, no arbitrary sizes below ${MIN_ARBITRARY_PX}px.`);
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+// `import.meta.url` is percent-encoded and a raw path is not, so comparing the two directly
+// makes this never match in a checkout whose path contains a space or any other encoded
+// character — and the gate would then exit 0 having checked nothing.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

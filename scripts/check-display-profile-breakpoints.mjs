@@ -9,6 +9,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 export const AUDITED_FILES = [
   'src/components/lists/SelectableActionList.tsx',
@@ -72,4 +73,7 @@ const main = () => {
   console.log(`Display-profile breakpoint guard passed: ${files.length} audited surfaces.`);
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+// `import.meta.url` is percent-encoded and a raw path is not, so comparing the two directly
+// makes this never match in a checkout whose path contains a space or any other encoded
+// character — and the gate would then exit 0 having checked nothing.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

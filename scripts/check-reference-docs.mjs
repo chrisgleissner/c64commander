@@ -24,6 +24,7 @@
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const ARCHITECTURE_DOC = "docs/architecture.md";
 const INVENTORY_DOC = "docs/cta-inventory.md";
@@ -114,12 +115,25 @@ export const INTERACTIVE_TAGS = new Set([
 /*
  * Reads the opening tag that starts at `start`, ignoring any `>` inside a JSX expression
  * so a prop such as `onClick={() => x > 1}` does not truncate the tag.
+ *
+ * Quoted values are skipped for the same reason, and it is not hypothetical: a `>` inside an
+ * attribute ended the tag early, `findOpeningTagFor` then found no tag for the attribute, and the
+ * control was dropped from this gate without a word. `aria-label="Next >"` does it, and so does a
+ * Tailwind child selector such as `className="[&>svg]:size-4"`, of which several already exist in
+ * `src/components/ui`.
  */
 export const readOpeningTag = (source, start) => {
   let depth = 0;
+  let quote = null;
   for (let index = start; index < source.length; index += 1) {
     const char = source[index];
-    if (char === "{") depth += 1;
+    if (quote !== null) {
+      if (char === "\\") index += 1;
+      else if (char === quote) quote = null;
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") quote = char;
+    else if (char === "{") depth += 1;
     else if (char === "}") depth -= 1;
     else if (char === ">" && depth === 0) return source.slice(start, index + 1);
   }
@@ -183,9 +197,13 @@ export const isInteractiveTag = (openingTag) => {
 };
 
 /*
- * Only literal ids are collected. A testid built from a template literal is documented in
- * the inventory as a `{placeholder}` pattern, and its literal prefix is already carried by
- * a sibling entry, so matching them here would report the pattern rather than a control.
+ * Only literal ids are collected, which is the gate's main limitation and is recorded here
+ * rather than implied. A testid built at runtime — `data-testid={testId}`,
+ * `data-testid={action.testId}`, a ternary between two names — has no literal text to compare
+ * against the inventory, so those controls are outside this check and stay the on-device pass's
+ * job. Around thirty such expressions exist today. Where a template literal does carry a literal
+ * prefix, the inventory documents it as a `{placeholder}` pattern and a sibling entry covers the
+ * prefix, so matching it here would report the pattern rather than a control.
  */
 export const collectInteractiveTestIds = (source) => {
   const ids = new Set();
@@ -394,4 +412,7 @@ const main = () => {
   );
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+// `import.meta.url` is percent-encoded and a raw path is not, so comparing the two directly
+// makes this never match in a checkout whose path contains a space or any other encoded
+// character — and the gate would then exit 0 having checked nothing.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

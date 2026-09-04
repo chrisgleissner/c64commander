@@ -17,19 +17,25 @@
  * recorded in `GRANDFATHERED`, and the check enforces three things:
  *
  *   - a file not in the list may not cross the threshold at all;
- *   - a file in the list may not exceed its recorded ceiling;
+ *   - a file in the list may not exceed its recorded ceiling by more than
+ *     `GROWTH_ALLOWANCE_LINES`;
  *   - a recorded ceiling that is more than `RATCHET_BAND` too generous has to be lowered,
  *     so a real split tightens the budget instead of leaving headroom behind.
  *
- * The band exists so ordinary edits do not churn this file. It is wide enough that adding
- * a function does not demand a ceiling update and narrow enough that extracting a module
- * does.
+ * The growth allowance is small and absolute rather than proportional, so it does not scale
+ * with how far over the line a file already is. It exists because a ceiling recorded to the
+ * exact line count leaves a defect fix in one of these files no way to pass: a two-line
+ * correction in the largest file in the repository would turn CI red and force a hand-edit
+ * of this script, which is friction rather than pressure. The ceiling itself never rises,
+ * so the allowance is a one-off, not a per-change budget: total growth above the recorded
+ * length is capped at those lines for good, and any real work has to lower the entry.
  *
  * Four files sit just under the threshold and are the next ones to watch:
  * `FtpClientPlugin.kt`, `appSettings.ts`, `hvscDownload.ts` and `web/server/src/index.ts`.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 export const THRESHOLD = 1000;
 
@@ -38,6 +44,12 @@ export const THRESHOLD = 1000;
  * before the entry counts as stale.
  */
 export const RATCHET_BAND = 0.1;
+
+/*
+ * Lines a grandfathered file may exceed its recorded ceiling by. Enough for a bug fix and a
+ * comment explaining it; far short of a feature.
+ */
+export const GROWTH_ALLOWANCE_LINES = 25;
 
 export const ROOTS = ["src", "android/app/src/main", "web/server/src"];
 
@@ -112,7 +124,13 @@ export const measureSources = (roots = ROOTS) => {
   return sizes;
 };
 
-export const findSizeViolations = ({ sizes, grandfathered, threshold = THRESHOLD, band = RATCHET_BAND }) => {
+export const findSizeViolations = ({
+  sizes,
+  grandfathered,
+  threshold = THRESHOLD,
+  band = RATCHET_BAND,
+  growthAllowance = GROWTH_ALLOWANCE_LINES,
+}) => {
   const crossed = [];
   const grown = [];
   const staleCeilings = [];
@@ -123,7 +141,7 @@ export const findSizeViolations = ({ sizes, grandfathered, threshold = THRESHOLD
       if (lines > threshold) crossed.push({ file, lines });
       continue;
     }
-    if (lines > ceiling) grown.push({ file, lines, ceiling });
+    if (lines > ceiling + growthAllowance) grown.push({ file, lines, ceiling });
     else if (lines <= threshold)
       staleCeilings.push({ file, lines, ceiling, reason: "is back under the threshold, so remove its entry" });
     else if (lines < Math.round(ceiling * (1 - band)))
@@ -157,7 +175,9 @@ const main = () => {
 
   if (grown.length > 0) {
     failed = true;
-    console.error("File(s) already over the threshold grew further. These may only get shorter.\n");
+    console.error(
+      `File(s) already over the threshold grew more than ${GROWTH_ALLOWANCE_LINES} lines past their ceiling. Shorten them, or split them and lower the ceiling.\n`,
+    );
     for (const { file, lines, ceiling } of grown) console.error(`  ${file}  ${lines} lines, ceiling ${ceiling}`);
     console.error("");
   }
@@ -177,4 +197,7 @@ const main = () => {
   );
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+// `import.meta.url` is percent-encoded and a raw path is not, so comparing the two directly
+// makes this never match in a checkout whose path contains a space or any other encoded
+// character — and the gate would then exit 0 having checked nothing.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
