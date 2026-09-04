@@ -6,6 +6,7 @@ import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { saveCoverageFromPage } from "./withCoverage";
 import { dismissStartupDiscoveryDialog, markTourTaken } from "./uiMocks";
+import { requireWebPlatformApi, WEB_PLATFORM_SETUP_HINT } from "./webPlatformApi";
 
 test.afterEach(async ({ page }, testInfo) => {
   await saveCoverageFromPage(page, testInfo.title);
@@ -93,28 +94,7 @@ type ProxyResponseLike = {
   json: () => Promise<unknown>;
 };
 
-const ensureWebAuthApi = async (request: RequestLike): Promise<boolean> => {
-  const authStatus = await request.get("/auth/status");
-  if (authStatus.status() !== 200) {
-    return false;
-  }
-  const contentType = authStatus.headers()["content-type"] ?? "";
-  if (!contentType.includes("application/json")) {
-    return false;
-  }
-  try {
-    const payload = (await authStatus.json()) as {
-      requiresLogin?: unknown;
-      authenticated?: unknown;
-    };
-    return typeof payload.requiresLogin === "boolean" && typeof payload.authenticated === "boolean";
-  } catch (error) {
-    console.warn("Failed to parse /auth/status payload in web auth probe", {
-      error,
-    });
-    return false;
-  }
-};
+const requireWebAuthApi = (request: RequestLike): Promise<void> => requireWebPlatformApi((url) => request.get(url));
 
 const cookieFromSetCookieHeader = (setCookieHeader: string | undefined): string => {
   if (!setCookieHeader) {
@@ -194,21 +174,23 @@ test.describe("Web platform auth + proxy @web-platform", () => {
   test("health and root page load with no password", async ({ page, request }) => {
     const health = await request.get("/healthz");
     expect(health.status()).toBe(200);
+    // A static preview server answers /healthz with the SPA shell and a 200, so the status alone
+    // does not tell the two servers apart. The payload does.
+    expect(health.headers()["content-type"] ?? "").toContain("application/json");
+    expect(await health.json()).toEqual({ ok: true });
     const root = await page.goto("/");
     expect(root?.status()).toBe(200);
   });
 
   test("auth matrix and protected routes", async ({ page, request }) => {
-    if (!(await ensureWebAuthApi(request))) {
-      test.skip(true, "Web platform auth JSON endpoints are unavailable in this runtime");
-    }
+    await requireWebAuthApi(request);
 
     const setPassword = await request.put("/api/secure-storage/password", {
       data: { value: "secret" },
     });
-    if (setPassword.status() === 404) {
-      test.skip(true, "Web platform secure-storage endpoints are unavailable in this runtime");
-    }
+    expect(setPassword.status(), `PUT /api/secure-storage/password answered 404. ${WEB_PLATFORM_SETUP_HINT}`).not.toBe(
+      404,
+    );
     if (setPassword.status() === 401) {
       const login = await request.post("/auth/login", {
         data: { password: "secret" },
@@ -279,31 +261,24 @@ test.describe("Web platform auth + proxy @web-platform", () => {
   });
 
   test("high-value click path: Play page opens Add items modal", async ({ page, request }) => {
-    if (!(await ensureWebAuthApi(request))) {
-      test.skip(true, "Web platform auth JSON endpoints are unavailable in this runtime");
-    }
+    await requireWebAuthApi(request);
 
     const clearPassword = await request.delete("/api/secure-storage/password");
-    if (clearPassword.status() === 404) {
-      test.skip(true, "Web platform secure-storage endpoints are unavailable in this runtime");
-    }
+    expect(
+      clearPassword.status(),
+      `DELETE /api/secure-storage/password answered 404. ${WEB_PLATFORM_SETUP_HINT}`,
+    ).not.toBe(404);
     if (clearPassword.status() === 401) {
       const login = await request.post("/auth/login", {
         data: { password: "secret" },
       });
-      if (login.status() !== 200) {
-        test.skip(true, "Unable to reset auth state with known test password");
-      }
+      expect(login.status(), "login with the known test password must succeed").toBe(200);
       const loginCookie = cookieFromSetCookieHeader(login.headers()["set-cookie"]);
-      if (!loginCookie) {
-        test.skip(true, "Unable to obtain auth cookie for deterministic setup");
-      }
+      expect(loginCookie, "a successful login must set a session cookie").not.toBe("");
       const retryClear = await request.delete("/api/secure-storage/password", {
         headers: { Cookie: loginCookie },
       });
-      if (retryClear.status() !== 200) {
-        test.skip(true, "Unable to clear configured password for deterministic setup");
-      }
+      expect(retryClear.status(), "an authenticated client must be able to clear the password").toBe(200);
     } else {
       expect(clearPassword.status()).toBe(200);
     }
@@ -322,31 +297,24 @@ test.describe("Web platform auth + proxy @web-platform", () => {
   });
 
   test("edge path: unreachable upstream returns deterministic proxy error", async ({ request }) => {
-    if (!(await ensureWebAuthApi(request))) {
-      test.skip(true, "Web platform auth JSON endpoints are unavailable in this runtime");
-    }
+    await requireWebAuthApi(request);
 
     const clearPassword = await request.delete("/api/secure-storage/password");
-    if (clearPassword.status() === 404) {
-      test.skip(true, "Web platform secure-storage endpoints are unavailable in this runtime");
-    }
+    expect(
+      clearPassword.status(),
+      `DELETE /api/secure-storage/password answered 404. ${WEB_PLATFORM_SETUP_HINT}`,
+    ).not.toBe(404);
     if (clearPassword.status() === 401) {
       const login = await request.post("/auth/login", {
         data: { password: "secret" },
       });
-      if (login.status() !== 200) {
-        test.skip(true, "Unable to reset auth state with known test password");
-      }
+      expect(login.status(), "login with the known test password must succeed").toBe(200);
       const loginCookie = cookieFromSetCookieHeader(login.headers()["set-cookie"]);
-      if (!loginCookie) {
-        test.skip(true, "Unable to obtain auth cookie for deterministic setup");
-      }
+      expect(loginCookie, "a successful login must set a session cookie").not.toBe("");
       const retryClear = await request.delete("/api/secure-storage/password", {
         headers: { Cookie: loginCookie },
       });
-      if (retryClear.status() !== 200) {
-        test.skip(true, "Unable to clear configured password for deterministic setup");
-      }
+      expect(retryClear.status(), "an authenticated client must be able to clear the password").toBe(200);
     } else {
       expect(clearPassword.status()).toBe(200);
     }
@@ -361,12 +329,12 @@ test.describe("Web platform auth + proxy @web-platform", () => {
     expect(payload.error).toContain("REST proxy upstream request failed");
   });
 
-  test("persistence: password survives server restart with shared /config", async ({ request }, testInfo) => {
+  // This test starts its own server, so it needs no fixture. Playwright requires the first
+  // argument to be an object pattern even when it is empty.
+  // eslint-disable-next-line no-empty-pattern
+  test("persistence: password survives server restart with shared /config", async ({}, testInfo) => {
     if (testInfo.project.name !== "web") {
       test.skip(true, "Standalone web-server restart check is only supported in web project");
-    }
-    if (!(await ensureWebAuthApi(request))) {
-      test.skip(true, "Web platform auth JSON endpoints are unavailable in this runtime");
     }
 
     const configDir = await mkdtemp(path.join(os.tmpdir(), "c64-web-config-"));
