@@ -93,6 +93,20 @@ const drain = async (ticks = 12) => {
   for (let i = 0; i < ticks; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
+/**
+ * Drains until the worker has done a named piece of work, rather than for a fixed number of ticks.
+ * The engine module arrives through a dynamic `import()`, whose cost is Vite's transform pipeline
+ * and therefore the load on the machine: in the whole-suite run of 976ee5ef5 the 12 ticks above
+ * elapsed before `open` had finished, leaving the four queued renders unstarted and
+ * `peakConcurrent` at 0. A stall still fails here — the wait is bounded and the assertion unchanged.
+ */
+const drainUntil = async (done: () => boolean, ticks = 400) => {
+  for (let i = 0; i < ticks && !done(); i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+};
+
+const opened = () => posted.some((message) => message.type === "opened");
+const chunkCount = () => posted.filter((message) => message.type === "chunk").length;
+
 // The worker module captures `self` once at evaluation time, so the scope is
 // installed and the module imported exactly once; per-test state is reset below.
 beforeAll(async () => {
@@ -144,15 +158,15 @@ describe("localSid.worker message serialization", () => {
       sampleRate: 48000,
       roms: FAKE_ROMS(),
     } as LocalSidMainToWorker);
-    await drain();
+    await drainUntil(opened);
 
     // The engine pumps up to MAX_IN_FLIGHT_RENDERS renders back-to-back.
     for (let i = 0; i < 4; i += 1) {
       send({ type: "render", id: 1, seconds: 0.5 } as LocalSidMainToWorker);
     }
-    await drain();
+    await drainUntil(() => chunkCount() >= 4);
 
-    expect(peakConcurrent).toBe(1);
+    expect(peakConcurrent, `opened=${opened()} chunks=${chunkCount()} renderOrder=${renderOrder.join(",")}`).toBe(1);
   });
 
   it("renders consecutive spans in order — no span is replayed", async () => {
@@ -165,11 +179,11 @@ describe("localSid.worker message serialization", () => {
       sampleRate: 48000,
       roms: FAKE_ROMS(),
     } as LocalSidMainToWorker);
-    await drain();
+    await drainUntil(opened);
     for (let i = 0; i < 4; i += 1) {
       send({ type: "render", id: 1, seconds: 0.5 } as LocalSidMainToWorker);
     }
-    await drain();
+    await drainUntil(() => chunkCount() >= 4);
 
     expect(renderOrder).toEqual([0, 1, 2, 3]);
     const chunks = posted.filter((m) => m.type === "chunk") as Extract<LocalSidWorkerToMain, { type: "chunk" }>[];
@@ -189,11 +203,11 @@ describe("localSid.worker message serialization", () => {
       roms: FAKE_ROMS(),
     } as LocalSidMainToWorker);
     send({ type: "render", id: 1, seconds: 0.5 } as LocalSidMainToWorker);
-    await drain();
+    await drainUntil(() => chunkCount() >= 1);
 
     const types = posted.map((m) => m.type);
     expect(types.indexOf("opened")).toBeLessThan(types.indexOf("chunk"));
-    expect(peakConcurrent).toBe(1);
+    expect(peakConcurrent, `opened=${opened()} chunks=${chunkCount()}`).toBe(1);
   });
 
   /**
