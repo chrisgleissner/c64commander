@@ -9,8 +9,8 @@ env:
   SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
   TIMEOUT: ${TIMEOUT || "15000"}
 ---
-# edge-hvsc-repeat-cancel-resume: start HVSC ingest, cancel mid-extraction,
-# then restart and verify the ingest reaches completion without crash.
+# edge-hvsc-repeat-cancel-resume: start an HVSC install, stop it during the download phase,
+# then restart it and verify the install reaches the ready state without crashing.
 - runFlow: subflows/launch-and-wait.yaml
 
 - tapOn:
@@ -40,31 +40,34 @@ env:
     timeout: ${LONG_TIMEOUT}
     visibilityPercentage: 50
     centerElement: true
-# Start first ingest
+# Start the first install. The card's status label goes "Downloading", then "Indexing", then
+# "Ready" — there is no "Extracting" label, so the cancel happens during the download phase.
 - tapOn:
     id: hvsc-download
 - extendedWaitUntil:
-    visible: "Extracting"
+    visible: "Downloading"
     timeout: ${LONG_TIMEOUT}
 
-- takeScreenshot: hvsc-repeat-extracting-first
+- takeScreenshot: hvsc-repeat-downloading-first
 
-# Cancel during extraction
-- tapOn: "Cancel"
+# Stop the running install. The control is labelled "Stop", not "Cancel", and it is only in the
+# tree while an install is running, so it is addressed by its id.
+- tapOn:
+    id: hvsc-stop
 - extendedWaitUntil:
-    visible: "Cancelled"
+    visible: "Canceled"
     timeout: ${TIMEOUT}
 
 - takeScreenshot: hvsc-repeat-cancelled
 
-# Restart ingest
+# Restart, and let it run to completion. Restarting clears the cancel reason.
 - tapOn:
     id: hvsc-download
 - extendedWaitUntil:
     visible: "Downloading"
     timeout: ${LONG_TIMEOUT}
 - extendedWaitUntil:
-    visible: "Ready"
+    visible: "HVSC ready"
     timeout: ${LONG_TIMEOUT}
 
 - takeScreenshot: hvsc-repeat-complete

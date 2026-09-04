@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { loadAll } from "js-yaml";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
+import { HVSC_CANCELED_STATUS_REASON } from "@/lib/hvsc/hvscCancellation";
+import { resolveHvscPreparationSnapshot, type HvscPreparationStateInput } from "@/lib/hvsc/hvscPreparationState";
+import { HVSC_STAGE_LABELS } from "@/lib/hvsc/hvscStageModel";
+import { HVSC_FAILED_HEADING, HVSC_READY_HEADING } from "@/pages/playFiles/components/HvscControls";
 import path from "node:path";
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
@@ -231,6 +235,83 @@ const collectUnprovedTabTaps = (commands: JsonValue[], filePath: string): string
 
   reportPending();
   return errors;
+};
+
+/*
+ * The HVSC edge flows waited for "Extracting" and "Cancelled", which the card has never rendered:
+ * the status labels come from `resolveHvscPreparationSnapshot` and the cancel reason from
+ * `HVSC_CANCELED_STATUS_REASON`. A wait for absent text does not fail, it burns its timeout and
+ * then fails on the step after, so the vocabulary below is derived from production rather than
+ * copied, and a rename breaks this test instead of the flow.
+ */
+const HVSC_PREPARATION_BASE: HvscPreparationStateInput = {
+  available: true,
+  installedVersion: 0,
+  ingestionState: null,
+  activeStage: null,
+  downloadStatus: "idle",
+  extractionStatus: "idle",
+  metadataStatus: "idle",
+  hasCachedArchive: false,
+  inlineError: null,
+};
+
+const HVSC_PREPARATION_CASES: HvscPreparationStateInput[] = [
+  HVSC_PREPARATION_BASE,
+  { ...HVSC_PREPARATION_BASE, available: false },
+  { ...HVSC_PREPARATION_BASE, downloadStatus: "in-progress" },
+  { ...HVSC_PREPARATION_BASE, extractionStatus: "in-progress" },
+  { ...HVSC_PREPARATION_BASE, metadataStatus: "in-progress" },
+  { ...HVSC_PREPARATION_BASE, hasCachedArchive: true },
+  { ...HVSC_PREPARATION_BASE, installedVersion: 1, ingestionState: "ready" },
+  { ...HVSC_PREPARATION_BASE, inlineError: HVSC_CANCELED_STATUS_REASON },
+  { ...HVSC_PREPARATION_BASE, extractionStatus: "failure", inlineError: "boom" },
+];
+
+const renderableHvscTexts = (): Set<string> =>
+  new Set<string>([
+    ...HVSC_PREPARATION_CASES.map((input) => resolveHvscPreparationSnapshot(input).statusLabel),
+    ...Object.values(HVSC_STAGE_LABELS),
+    HVSC_CANCELED_STATUS_REASON,
+    HVSC_READY_HEADING,
+    HVSC_FAILED_HEADING,
+  ]);
+
+/** Every string a flow waits for or asserts, in order, as `visible`/`notVisible`/`assertVisible`. */
+const collectWaitTexts = (value: JsonValue, texts: string[]) => {
+  if (Array.isArray(value)) {
+    value.forEach((entry) => collectWaitTexts(entry, texts));
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+
+  for (const [key, child] of Object.entries(value)) {
+    if ((key === "visible" || key === "notVisible" || key === "assertVisible") && typeof child === "string") {
+      texts.push(child);
+    }
+    collectWaitTexts(child as JsonValue, texts);
+  }
+};
+
+/**
+ * The commands after the flow first taps `hvsc-download`. Before that tap the flow is still
+ * navigating, and its waits ("Play files") belong to other pages.
+ */
+const commandsAfterHvscInstallTap = (filePath: string): JsonValue[] => {
+  const docs = readYaml(filePath) as JsonValue[];
+  const commands = docs.find((doc) => Array.isArray(doc)) as JsonValue[] | undefined;
+  if (!commands) return [];
+  const tapIndex = commands.findIndex(
+    (command) => JSON.stringify(command) === JSON.stringify({ tapOn: { id: "hvsc-download" } }),
+  );
+  return tapIndex === -1 ? [] : commands.slice(tapIndex);
+};
+
+const unrenderableHvscWaits = (filePath: string): string[] => {
+  const renderable = renderableHvscTexts();
+  const texts: string[] = [];
+  collectWaitTexts(commandsAfterHvscInstallTap(filePath), texts);
+  return texts.filter((text) => !renderable.has(text));
 };
 
 describe("Maestro flow contracts", () => {
@@ -606,5 +687,55 @@ describe("Maestro flow contracts", () => {
     expect(rawSource).toContain("authoritativeValue == output.secondProbe.targetValue");
     expect(rawSource).toContain("C64U_HOME_CPU_SPEED_SLIDER_*");
     expect(readYaml(path.resolve(process.cwd(), ".maestro/edge-home-cpu-speed-latency.yaml"))).toBeTruthy();
+  });
+
+  it("waits only for HVSC status text the card can render", () => {
+    const flows = ["edge-hvsc-ingest-lifecycle.yaml", "edge-hvsc-repeat-cancel-resume.yaml"];
+
+    for (const flow of flows) {
+      const filePath = path.resolve(maestroRoot, flow);
+      const commands = commandsAfterHvscInstallTap(filePath);
+      expect(commands.length, `${flow} never taps hvsc-download, so this guard reads nothing`).toBeGreaterThan(0);
+
+      const texts: string[] = [];
+      collectWaitTexts(commands, texts);
+      expect(texts.length, `${flow} waits for no text after starting the install`).toBeGreaterThan(0);
+      expect(unrenderableHvscWaits(filePath), `${flow} waits for text the HVSC card never renders`).toEqual([]);
+    }
+  });
+
+  it("proves the install reaches the ready heading and the stop control is addressed by id", () => {
+    const lifecycle = readFileSync(path.resolve(maestroRoot, "edge-hvsc-ingest-lifecycle.yaml"), "utf8");
+    const cancelResume = readFileSync(path.resolve(maestroRoot, "edge-hvsc-repeat-cancel-resume.yaml"), "utf8");
+
+    // "Downloading" then "Indexing" is the card's own phase order, so the pair is what makes the
+    // flow a lifecycle test rather than a launch test.
+    expect(lifecycle.indexOf('visible: "Downloading"')).toBeGreaterThan(-1);
+    expect(lifecycle.indexOf('visible: "Indexing"')).toBeGreaterThan(lifecycle.indexOf('visible: "Downloading"'));
+    expect(lifecycle.indexOf(`visible: "${HVSC_READY_HEADING}"`)).toBeGreaterThan(
+      lifecycle.indexOf('visible: "Indexing"'),
+    );
+
+    // The stop control carries an HTML id and is only in the tree while an install runs. Tapping
+    // it by the text "Cancel" matched nothing, because the button is labelled "Stop".
+    expect(cancelResume).toContain("id: hvsc-stop");
+    expect(cancelResume).not.toContain('tapOn: "Cancel"');
+    expect(cancelResume.indexOf(`visible: "${HVSC_CANCELED_STATUS_REASON}"`)).toBeGreaterThan(
+      cancelResume.indexOf("id: hvsc-stop"),
+    );
+  });
+
+  it("rejects a planted wait for HVSC text the card never renders", () => {
+    const renderable = renderableHvscTexts();
+    const planted: string[] = [];
+    collectWaitTexts(
+      [{ extendedWaitUntil: { visible: "Extracting" } }, { extendedWaitUntil: { visible: "Cancelled" } }],
+      planted,
+    );
+
+    expect(planted).toEqual(["Extracting", "Cancelled"]);
+    expect(planted.filter((text) => !renderable.has(text))).toEqual(["Extracting", "Cancelled"]);
+    expect(renderable.has("Downloading")).toBe(true);
+    expect(renderable.has("Indexing")).toBe(true);
   });
 });

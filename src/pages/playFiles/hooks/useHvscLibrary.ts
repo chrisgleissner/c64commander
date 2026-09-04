@@ -36,6 +36,7 @@ import {
   isHvscBridgeAvailable,
   isHvscIngestionBridgeAvailable,
   isHvscCancellationError,
+  HVSC_CANCELED_STATUS_REASON,
   recoverStaleIngestionState,
   type HvscPreparationPhase,
   type HvscPreparationSnapshot,
@@ -992,7 +993,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
       setHvscStage(null);
       setHvscActionLabel(null);
       setHvscCurrentFile(null);
-      setHvscErrorMessage("Canceled");
+      setHvscErrorMessage(HVSC_CANCELED_STATUS_REASON);
       updateHvscSummary((prev) => ({
         ...prev,
         download:
@@ -1006,7 +1007,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
                 totalBytes: null,
                 sizeBytes: null,
                 errorCategory: null,
-                errorMessage: "Canceled",
+                errorMessage: HVSC_CANCELED_STATUS_REASON,
               }
             : prev.download,
         extraction:
@@ -1019,7 +1020,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
                 filesExtracted: null,
                 totalFiles: null,
                 errorCategory: null,
-                errorMessage: "Canceled",
+                errorMessage: HVSC_CANCELED_STATUS_REASON,
               }
             : prev.extraction,
         lastUpdatedAt: stoppedAt,
