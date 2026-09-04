@@ -92,6 +92,19 @@ const findViolations = (files: Array<{ file: string; content: string }>): Violat
   });
 
 describe("device gateway guard", () => {
+  // The corpus guard below asserts that a violation list is empty, so it passes having
+  // read nothing if `walkFiles` stops finding sources. The planted cases that follow it
+  // exercise every detector, but only this test proves the real tree was scanned.
+  it("walks the src tree it claims to cover", () => {
+    expect(fs.existsSync(srcRoot), "src is not a directory, so this guard scans nothing").toBe(true);
+    const files = walkFiles(srcRoot);
+    expect(files.length, "the src walk found no source file").toBeGreaterThan(100);
+    expect(
+      files.some((file) => path.relative(srcRoot, file).includes(path.sep)),
+      "the walk did not descend into src subdirectories",
+    ).toBe(true);
+  });
+
   it("keeps direct device endpoint access inside the approved gateway modules", () => {
     const files = walkFiles(srcRoot).map((absolutePath) => ({
       file: path.relative(repoRoot, absolutePath).replaceAll(path.sep, "/"),

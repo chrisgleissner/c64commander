@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadAll } from "js-yaml";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
@@ -147,6 +147,40 @@ const findScrollUntilVisibleStep = (
 };
 
 describe("Maestro flow contracts", () => {
+  // The guard below asserts that a collected error list is empty, so it passes having
+  // read nothing if `.maestro` moves or `listYamlFiles` stops matching. These two check
+  // that the walk still finds the flows and that both collectors still reject a bad flow.
+  it("walks the Maestro flow tree it claims to cover", () => {
+    expect(existsSync(maestroRoot), ".maestro is not a directory, so this guard parses nothing").toBe(true);
+    const files = listYamlFiles(maestroRoot);
+    expect(files.length, "the Maestro flow walk found no YAML file").toBeGreaterThan(40);
+    expect(
+      files.some((filePath) => path.relative(maestroRoot, filePath).includes(path.sep)),
+      "the walk did not descend into .maestro subdirectories",
+    ).toBe(true);
+  });
+
+  it("rejects a planted scrollUntilVisible and retry violation", () => {
+    const errors: string[] = [];
+    collectScrollUntilVisibleErrors(
+      [{ scrollUntilVisible: { element: { id: "tab-home" } } }],
+      ".maestro/planted.yaml",
+      errors,
+    );
+    collectRetryCommandErrors(
+      [{ retry: { maxRetries: "three", commands: [{ tapOn: { id: "a" }, assertVisible: "b" }] } }],
+      ".maestro/planted.yaml",
+      errors,
+    );
+
+    expect(errors).toEqual([
+      ".maestro/planted.yaml: [0].scrollUntilVisible must define direction",
+      ".maestro/planted.yaml: [0].scrollUntilVisible must define timeout",
+      ".maestro/planted.yaml: [0].retry.maxRetries must be a number",
+      ".maestro/planted.yaml: [0].retry.commands[0] must contain exactly one command key; found tapOn, assertVisible",
+    ]);
+  });
+
   it("parses every Maestro YAML file and hardens scrollUntilVisible and retry usage", () => {
     const files = listYamlFiles(maestroRoot);
     const errors: string[] = [];
