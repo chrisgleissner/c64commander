@@ -59,15 +59,35 @@ const BADGE_STATES = [
 type HeaderDefect = { kind: string; where: string; detail: string };
 
 /**
+ * The audit's findings together with how many drawn header elements produced them.
+ *
+ * Every case below asserts the defect list is empty, which is also what an audit of an
+ * empty header returns. `inspected` makes that case fail instead.
+ */
+type HeaderAudit = { defects: HeaderDefect[]; inspected: number };
+
+/**
+ * Drawn elements the header must contain before an audit of it means anything. The
+ * thinnest measured today is 17, on the compact profile; the expanded profile draws 21.
+ * A header reduced to a bare title and its wrapper would draw a handful, so this floor
+ * separates a header that rendered from one that did not.
+ */
+const MIN_HEADER_ELEMENTS = 10;
+
+/**
  * Measures the rendered header and reports anything drawn only in part.
  *
  * Runs in the page, so it is one self-contained function rather than imported helpers.
  */
-const auditHeader = (page: Page): Promise<HeaderDefect[]> =>
+const auditHeader = (page: Page): Promise<HeaderAudit> =>
   page.evaluate(() => {
     const defects: { kind: string; where: string; detail: string }[] = [];
     const header = document.querySelector("header");
-    if (!header) return [{ kind: "missing-header", where: "header", detail: "no <header> on the page" }];
+    if (!header)
+      return {
+        defects: [{ kind: "missing-header", where: "header", detail: "no <header> on the page" }],
+        inspected: 0,
+      };
 
     const describe = (element: Element): string => {
       const testId = element.getAttribute("data-testid");
@@ -182,7 +202,16 @@ const auditHeader = (page: Page): Promise<HeaderDefect[]> =>
     //    a width check alone does not see, because both boxes still fit.
     const titleZone = header.querySelector('[data-testid="app-bar-title-zone"]');
     const badge = header.querySelector('[data-testid="unified-health-badge"]');
-    if (titleZone && badge) {
+    // Absence is a defect, not a reason to skip. Renaming either test id would otherwise
+    // remove this check from every case in the spec without failing one of them.
+    if (!titleZone || !badge) {
+      defects.push({
+        kind: "header-zone-missing",
+        where: "app-bar-row",
+        detail:
+          `${!titleZone ? "app-bar-title-zone " : ""}${!badge ? "unified-health-badge " : ""}not in the header`.trim(),
+      });
+    } else {
       const a = titleZone.getBoundingClientRect();
       const b = badge.getBoundingClientRect();
       const overlap = Math.min(a.right, b.right) - Math.max(a.left, b.left);
@@ -217,7 +246,7 @@ const auditHeader = (page: Page): Promise<HeaderDefect[]> =>
       }
     }
 
-    return defects;
+    return { defects, inspected: elements.length };
   });
 
 const waitForConnected = async (page: Page) => {
@@ -263,9 +292,13 @@ test.describe("Header states are drawn whole", () => {
           for (const badge of BADGE_STATES) {
             await seedBadgeHealthTraceState(page, { health: badge.health, problemCount: badge.problemCount });
             await page.waitForTimeout(120);
-            const defects = await auditHeader(page);
-            if (defects.length > 0) {
-              allDefects.push(format(`${profileId}/${scale} ${target.title} + ${badge.name}`, defects));
+            const audit = await auditHeader(page);
+            const context = `${profileId}/${scale} ${target.title} + ${badge.name}`;
+            expect(audit.inspected, `${context}: header drew ${audit.inspected} elements`).toBeGreaterThanOrEqual(
+              MIN_HEADER_ELEMENTS,
+            );
+            if (audit.defects.length > 0) {
+              allDefects.push(format(context, audit.defects));
             }
           }
         }
@@ -287,8 +320,11 @@ test.describe("Header states are drawn whole", () => {
       await page.waitForTimeout(250);
       await seedBadgeHealthTraceState(page, { health: "Unhealthy", problemCount: 1808 });
       await page.waitForTimeout(120);
-      const defects = await auditHeader(page);
-      if (defects.length > 0) allDefects.push(format(`dark ${target.title}`, defects));
+      const audit = await auditHeader(page);
+      expect(audit.inspected, `dark ${target.title}: header drew ${audit.inspected} elements`).toBeGreaterThanOrEqual(
+        MIN_HEADER_ELEMENTS,
+      );
+      if (audit.defects.length > 0) allDefects.push(format(`dark ${target.title}`, audit.defects));
     }
     expect(allDefects, allDefects.join("\n\n")).toEqual([]);
   });
@@ -316,8 +352,12 @@ test.describe("Header states are drawn whole", () => {
         await context.locator("header").first().waitFor({ state: "visible", timeout: 30_000 });
         await context.waitForTimeout(1200);
 
-        const defects = await auditHeader(context);
-        expect(defects, format(`${profileId} disconnected`, defects)).toEqual([]);
+        const audit = await auditHeader(context);
+        expect(
+          audit.inspected,
+          `${profileId} disconnected: header drew ${audit.inspected} elements`,
+        ).toBeGreaterThanOrEqual(MIN_HEADER_ELEMENTS);
+        expect(audit.defects, format(`${profileId} disconnected`, audit.defects)).toEqual([]);
       } finally {
         await context.close();
       }

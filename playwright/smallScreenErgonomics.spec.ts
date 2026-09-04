@@ -81,6 +81,41 @@ const MIN_TARGET_PX = 44;
 
 type TextViolation = { text: string; fontPx: number; selector: string };
 type TargetViolation = { label: string; width: number; height: number; selector: string };
+type BodyTextViolation = { text: string; fontPx: number };
+
+/**
+ * Each sweep below returns what it found together with how much it looked at.
+ *
+ * Every assertion here is that a violation list is empty, which is also what a sweep
+ * that measured nothing returns. The counts turn that case into a failure. This is not
+ * hypothetical: `compactTextSweep.spec.ts` was measuring 3 of Home's 91 text elements
+ * and passing, because opening the disclosures on the page left the rest of it
+ * `aria-hidden`.
+ */
+type Swept<T> = { violations: T[]; inspected: number };
+
+/**
+ * Text-bearing elements a route must render before its type-size sweep means anything.
+ * The thinnest route today is Docs at 22, and the app chrome alone accounts for around
+ * ten, so this floor catches a route that rendered nothing rather than describing how
+ * much content a route ought to have.
+ */
+const MIN_TEXT_ELEMENTS = 15;
+
+/**
+ * Reachable controls a route must render before its target-size sweep means anything.
+ * The thinnest route today is Disks at 24. The app chrome alone - the tab bar and the
+ * header - accounts for roughly ten, so this floor separates a route that rendered its
+ * content from one that rendered only the frame around it.
+ */
+const MIN_TARGETS = 15;
+
+/**
+ * Paragraph-like elements the six tab routes must render between them before the body
+ * text floor means anything. They render 36 today, unevenly: Settings 28, Play 5, Disks
+ * 2, Docs 1, and Home and Config none at all.
+ */
+const MIN_BODY_TEXT_ELEMENTS = 10;
 
 const collectTextViolations = (page: Page, floor: number) =>
   page.evaluate((minPx) => {
@@ -98,6 +133,7 @@ const collectTextViolations = (page: Page, floor: number) =>
 
     const results: Array<{ text: string; fontPx: number; selector: string }> = [];
     const seen = new Set<Element>();
+    let inspected = 0;
 
     for (const element of Array.from(document.querySelectorAll<HTMLElement>("body *"))) {
       if (seen.has(element)) continue;
@@ -122,12 +158,14 @@ const collectTextViolations = (page: Page, floor: number) =>
       if (rect.right <= 0 || rect.bottom <= 0 || rect.left >= window.innerWidth) continue;
 
       const fontPx = Number.parseFloat(style.fontSize);
-      if (!Number.isFinite(fontPx) || fontPx >= minPx) continue;
+      if (!Number.isFinite(fontPx)) continue;
+      inspected += 1;
+      if (fontPx >= minPx) continue;
 
       seen.add(element);
       results.push({ text: ownText.slice(0, 40), fontPx, selector: describe(element) });
     }
-    return results;
+    return { violations: results, inspected };
   }, floor);
 
 const collectTargetViolations = (page: Page, floor: number) =>
@@ -147,6 +185,7 @@ const collectTargetViolations = (page: Page, floor: number) =>
 
     const selector = 'button, a[href], input, select, textarea, [role="button"], [role="tab"], [role="switch"]';
     const results: Array<{ label: string; width: number; height: number; selector: string }> = [];
+    let inspected = 0;
 
     for (const element of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
       const style = window.getComputedStyle(element);
@@ -158,6 +197,8 @@ const collectTargetViolations = (page: Page, floor: number) =>
       if (rect.right <= 0 || rect.bottom <= 0 || rect.left >= window.innerWidth) continue;
       // Hidden inputs and the like.
       if (element.tagName === "INPUT" && (element as HTMLInputElement).type === "hidden") continue;
+
+      inspected += 1;
 
       // Measure the effective target, not just the control. A small checkbox inside a
       // label is pressed by pressing anywhere on the label - that is the browser's own
@@ -185,8 +226,39 @@ const collectTargetViolations = (page: Page, floor: number) =>
         selector: describe(element),
       });
     }
-    return results;
+    return { violations: results, inspected };
   }, floor);
+
+/**
+ * Paragraph-like prose inside the route's own content, ignoring the app chrome. Only
+ * runs of at least twelve characters count, so a one-word list item is not treated as
+ * something the user sits and reads.
+ */
+const collectBodyTextViolations = (page: Page, floor: number): Promise<Swept<BodyTextViolation>> =>
+  page
+    .locator("main")
+    .first()
+    .evaluate((root, minPx) => {
+      const offenders: Array<{ text: string; fontPx: number }> = [];
+      let inspected = 0;
+      for (const element of Array.from(root.querySelectorAll<HTMLElement>("p, li, dd, dt"))) {
+        const own = Array.from(element.childNodes)
+          .filter((node) => node.nodeType === Node.TEXT_NODE)
+          .map((node) => node.textContent ?? "")
+          .join("")
+          .trim();
+        if (own.length < 12) continue;
+        const style = window.getComputedStyle(element);
+        if (style.display === "none" || style.visibility === "hidden") continue;
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) continue;
+        const fontPx = Number.parseFloat(style.fontSize);
+        if (!Number.isFinite(fontPx)) continue;
+        inspected += 1;
+        if (fontPx < minPx) offenders.push({ text: own.slice(0, 40), fontPx });
+      }
+      return { violations: offenders, inspected };
+    }, floor);
 
 const expectNoHorizontalOverflow = async (page: Page) => {
   const overflow = await page.evaluate(() => ({
@@ -265,50 +337,55 @@ test.describe("Small screen ergonomics", () => {
 
       await expectNoHorizontalOverflow(page);
 
-      const textViolations = (await collectTextViolations(page, MIN_TEXT_PX)) as TextViolation[];
+      const text = (await collectTextViolations(page, MIN_TEXT_PX)) as Swept<TextViolation>;
       expect(
-        textViolations,
+        text.inspected,
+        `${route.label} rendered ${text.inspected} text elements, so the type-size sweep measured almost nothing`,
+      ).toBeGreaterThanOrEqual(MIN_TEXT_ELEMENTS);
+      expect(
+        text.violations,
         `Text below the ${MIN_TEXT_PX}px legibility floor on ${route.label}:\n` +
-          textViolations.map((v) => `  ${v.fontPx}px  ${v.selector}  "${v.text}"`).join("\n"),
+          text.violations.map((v) => `  ${v.fontPx}px  ${v.selector}  "${v.text}"`).join("\n"),
       ).toEqual([]);
 
-      const targetViolations = (await collectTargetViolations(page, MIN_TARGET_PX)) as TargetViolation[];
+      const targets = (await collectTargetViolations(page, MIN_TARGET_PX)) as Swept<TargetViolation>;
       expect(
-        targetViolations,
+        targets.inspected,
+        `${route.label} rendered ${targets.inspected} reachable controls, so the target-size sweep measured almost nothing`,
+      ).toBeGreaterThanOrEqual(MIN_TARGETS);
+      expect(
+        targets.violations,
         `Controls below the ${MIN_TARGET_PX}px target size on ${route.label}:\n` +
-          targetViolations.map((v) => `  ${v.width}x${v.height}  ${v.selector}  "${v.label}"`).join("\n"),
+          targets.violations.map((v) => `  ${v.width}x${v.height}  ${v.selector}  "${v.label}"`).join("\n"),
       ).toEqual([]);
     });
   }
 
   test("body text is not stepped down to fit the smallest screen @layout", async ({ page }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
-    await settle(page);
+    // Every tab, not just Home. Home renders no paragraph-like prose at all - it is tiles
+    // and controls - so when this test only visited Home it inspected zero elements and
+    // had never once compared a font size against the floor.
+    const violations: Array<{ route: string; text: string; fontPx: number }> = [];
+    const perRoute: Array<{ route: string; inspected: number }> = [];
 
-    const main = page.locator("main").first();
-    const bodyTextSizes = await main.evaluate((root, minPx) => {
-      const offenders: Array<{ text: string; fontPx: number }> = [];
-      for (const element of Array.from(root.querySelectorAll<HTMLElement>("p, li, dd, dt"))) {
-        const own = Array.from(element.childNodes)
-          .filter((node) => node.nodeType === Node.TEXT_NODE)
-          .map((node) => node.textContent ?? "")
-          .join("")
-          .trim();
-        if (own.length < 12) continue;
-        const style = window.getComputedStyle(element);
-        if (style.display === "none" || style.visibility === "hidden") continue;
-        const rect = element.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0) continue;
-        const fontPx = Number.parseFloat(style.fontSize);
-        if (fontPx < minPx) offenders.push({ text: own.slice(0, 40), fontPx });
-      }
-      return offenders;
-    }, MIN_BODY_TEXT_PX);
+    for (const route of TAB_ROUTES) {
+      await page.goto(route.path, { waitUntil: "domcontentloaded" });
+      await settle(page);
+      const swept = await collectBodyTextViolations(page, MIN_BODY_TEXT_PX);
+      perRoute.push({ route: route.label, inspected: swept.inspected });
+      for (const violation of swept.violations) violations.push({ route: route.label, ...violation });
+    }
 
+    const inspected = perRoute.reduce((sum, entry) => sum + entry.inspected, 0);
     expect(
-      bodyTextSizes,
+      inspected,
+      `No route rendered paragraph-like body text, so this floor measured nothing:\n` +
+        perRoute.map((entry) => `  ${entry.route}: ${entry.inspected}`).join("\n"),
+    ).toBeGreaterThanOrEqual(MIN_BODY_TEXT_ELEMENTS);
+    expect(
+      violations,
       `Body text below the ${MIN_BODY_TEXT_PX}px floor:\n` +
-        bodyTextSizes.map((v) => `  ${v.fontPx}px  "${v.text}"`).join("\n"),
+        violations.map((v) => `  ${v.route}  ${v.fontPx}px  "${v.text}"`).join("\n"),
     ).toEqual([]);
   });
 });
