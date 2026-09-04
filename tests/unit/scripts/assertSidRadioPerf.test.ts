@@ -101,6 +101,23 @@ describe("assert-sid-radio-perf", () => {
     }
   });
 
+  // Absent parts used to coerce to 0, so a composite budget with neither part measured resolved to
+  // a sum of 0 that satisfies every max bound - a fabricated measurement, not a skip.
+  it("treats a composite metric with a missing part as unmeasured rather than as zero", () => {
+    expect(resolveMetric({ bundleLoadMs: 100 }, "bundleLoadMs+reverseIndexMs")).toBeUndefined();
+    expect(resolveMetric({}, "bundleLoadMs+reverseIndexMs")).toBeUndefined();
+    expect(resolveMetric({ bundleLoadMs: 100, reverseIndexMs: 10 }, "bundleLoadMs+reverseIndexMs")).toBe(110);
+  });
+
+  // A stats blob whose metric paths all moved reported "PASS - 0 checked" and exited 0, so a
+  // renamed measurement would have retired the whole gate silently.
+  it("does not pass a blob in which nothing at all was measured", () => {
+    const result = assertSidRadioPerf({}, thresholds());
+    expect(result.checked).toBe(0);
+    expect(result.failures).toEqual([]);
+    expect(result.passed).toBe(false);
+  });
+
   it("skips (does not fail) metrics missing from the stats blob", () => {
     const result = assertSidRadioPerf(
       { bundleLoadMs: 100, reverseIndexMs: 10, engineThreadIsMain: false },
