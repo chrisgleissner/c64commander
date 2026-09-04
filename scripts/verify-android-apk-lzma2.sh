@@ -29,7 +29,11 @@ find_dex_string() {
   fi
 
   while IFS= read -r dex_entry; do
-    if unzip -p "$apk_path" "$dex_entry" | strings | grep -q "$needle"; then
+    # `grep -q` exits on the first match, which kills the writer ahead of it with SIGPIPE.
+    # Under `set -o pipefail` that dead writer, not grep, would decide the pipeline status,
+    # so a class present near the start of a large DEX was reported as absent. The subshell
+    # turns pipefail off for this one pipeline, leaving grep's own verdict as the status.
+    if ( set +o pipefail; unzip -p "$apk_path" "$dex_entry" | strings | grep -q "$needle" ); then
       return 0
     fi
   done <<< "$dex"
@@ -46,7 +50,9 @@ find_with_apkanalyzer() {
     return 2
   fi
 
-  if "$apkanalyzer" dex packages "$apk_path" | grep -q "$needle"; then
+  # Same SIGPIPE-under-pipefail hazard as find_dex_string: apkanalyzer lists every package,
+  # and grep exits as soon as it matches one. See the comment there.
+  if ( set +o pipefail; "$apkanalyzer" dex packages "$apk_path" | grep -q "$needle" ); then
     return 0
   fi
   return 1

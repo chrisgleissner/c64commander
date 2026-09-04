@@ -74,6 +74,23 @@ assert_exit "rejects an APK missing the SevenZFile class" 1 "$WORK_DIR/no-sevenz
 make_apk "$WORK_DIR/no-dex.apk" "AndroidManifest.xml" "not a dex entry"
 assert_exit "rejects an APK with no classes*.dex entries" 1 "$WORK_DIR/no-dex.apk"
 
+# A pipeline reader that short-circuits kills its writer with SIGPIPE, and `set -o pipefail`
+# then reports the whole pipeline as failed even though the reader matched. Both cases below
+# put the needle at the start of a producer's output and follow it with more than one pipe
+# buffer, so `grep -q` exits while the producer is still writing.
+BIG_APK="$WORK_DIR/keeps-writing.apk"
+python3 - "$BIG_APK" "$LZMA_CLASS" "$SEVENZ_CLASS" <<'PY'
+import sys
+import zipfile
+
+apk_path, lzma_class, sevenz_class = sys.argv[1:4]
+lines = ["dex035 %s %s padding" % (lzma_class, sevenz_class)]
+lines += ["filler_line_long_enough_for_strings_%06d" % index for index in range(40000)]
+with zipfile.ZipFile(apk_path, "w") as apk:
+    apk.writestr("classes.dex", "\n".join(lines))
+PY
+assert_exit "accepts an APK whose classes.dex keeps writing after the match" 0 "$BIG_APK"
+
 assert_exit "rejects a missing APK path" 1 "$WORK_DIR/does-not-exist.apk"
 
 assert_exit "rejects an invocation with no APK arguments" 1
@@ -119,6 +136,15 @@ echo "org.example.Unrelated"
 STUB
 chmod +x "$STUB_APKANALYZER"
 assert_stub_exit "rejects an APK apkanalyzer reports no runtime classes for" 1 "$WORK_DIR/complete.apk"
+
+cat > "$STUB_APKANALYZER" <<'STUB'
+#!/usr/bin/env bash
+echo "org.tukaani.xz.LZMA2Options"
+echo "org.apache.commons.compress.archivers.sevenz.SevenZFile"
+seq 1 40000 | sed 's/^/org.example.filler.package/'
+STUB
+chmod +x "$STUB_APKANALYZER"
+assert_stub_exit "accepts an APK apkanalyzer keeps listing packages for after the match" 0 "$WORK_DIR/opaque.apk"
 
 echo
 echo "Passed: $PASS"
