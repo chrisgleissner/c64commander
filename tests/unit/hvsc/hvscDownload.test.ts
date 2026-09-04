@@ -865,6 +865,65 @@ describe("hvscDownload", () => {
       expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith("hvsc-baseline-84.7z");
     });
 
+    // The native plugin answers "already exists" when the archive is on disk from an earlier
+    // attempt. That is not a failure: the file is deleted and the transfer falls back to fetch,
+    // which is the path that produced the archive before the native downloader existed.
+    it("native download: falls back to fetch when the plugin says the file already exists", async () => {
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      const payload = new Uint8Array(64).fill(3);
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: () => null },
+        arrayBuffer: async () => payload.buffer,
+      });
+      vi.mocked(Filesystem.downloadFile).mockRejectedValue(new Error("File already exists"));
+      vi.mocked(Filesystem.stat).mockResolvedValue({ size: payload.byteLength, type: "file" } as any);
+
+      const { deleteCachedArchive, writeCachedArchive } = await import("@/lib/hvsc/hvscFilesystem");
+
+      await downloadArchive(makeOptions());
+
+      expect(vi.mocked(deleteCachedArchive)).toHaveBeenCalledWith("hvsc-baseline-84.7z");
+      expect(vi.mocked(writeCachedArchive)).toHaveBeenCalled();
+    });
+
+    it("native download: propagates a transfer failure that is not an already-exists", async () => {
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, headers: { get: () => null } });
+      vi.mocked(Filesystem.downloadFile).mockRejectedValue(new Error("network unreachable"));
+      vi.mocked(Filesystem.stat).mockResolvedValue({ size: 0, type: "file" } as any);
+
+      await expect(downloadArchive(makeOptions())).rejects.toThrow("network unreachable");
+    });
+
+    // The 400 ms stat poll is the only progress signal until the plugin starts emitting its own,
+    // and the file is not readable at its final path until the transfer completes, so the poll
+    // failing is the ordinary case rather than an error worth repeating every tick.
+    it("native download: logs a failing progress poll once rather than on every tick", async () => {
+      vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+      const payload = new Uint8Array(32).fill(5);
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: () => null },
+        arrayBuffer: async () => payload.buffer,
+      });
+      let settle: (() => void) | null = null;
+      vi.mocked(Filesystem.downloadFile).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            settle = () => resolve({} as any);
+          }),
+      );
+      vi.mocked(Filesystem.stat).mockRejectedValue(new Error("Missing path"));
+
+      const pending = downloadArchive(makeOptions());
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      settle?.();
+      vi.mocked(Filesystem.stat).mockResolvedValue({ size: payload.byteLength, type: "file" } as any);
+
+      await expect(pending).resolves.toBeNull();
+    });
+
     it("native download: rejects a final size that differs from the expected content length", async () => {
       vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
       globalThis.fetch = vi.fn().mockResolvedValue({

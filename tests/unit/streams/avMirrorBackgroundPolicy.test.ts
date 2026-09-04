@@ -151,6 +151,22 @@ describe("AvMirrorBackgroundPolicy (HARD27-021)", () => {
 
     expect(policy.suspendedState).toBeNull();
   });
+
+  // Video and audio are restarted by separate awaited calls with their own handlers, so a failing
+  // video restart is a distinct path from a failing audio one — and it must still let the audio
+  // restart run rather than abandoning the rest of the restore.
+  it("restarts audio even when the video restart fails", async () => {
+    const session = createSession({ audioLive: true, videoLive: true });
+    session.startVideo.mockRejectedValueOnce(new Error("streams:start refused"));
+    const policy = new AvMirrorBackgroundPolicy(session);
+
+    await policy.handleHidden();
+    await policy.handleVisible();
+
+    expect(session.startVideo).toHaveBeenCalledTimes(1);
+    expect(session.startAudio).toHaveBeenCalledTimes(1);
+    expect(policy.suspendedState).toBeNull();
+  });
 });
 
 describe("installAvMirrorBackgroundPolicy (HARD27-021)", () => {

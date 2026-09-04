@@ -110,4 +110,24 @@ describe("foreign-sender eviction credentials (HARD27-019)", () => {
     await expect(resolveForeignSenderPassword(FOREIGN_IP)).resolves.toBeNull();
     expect(getPasswordForDevice).not.toHaveBeenCalled();
   });
+
+  it("sends no password for a saved device that has none", async () => {
+    saveDevices([device({ hasPassword: false })]);
+
+    await expect(resolveForeignSenderPassword(FOREIGN_IP)).resolves.toBeNull();
+    expect(getPasswordForDevice).not.toHaveBeenCalled();
+  });
+
+  it("sends no password for an empty host", async () => {
+    await expect(resolveForeignSenderPassword("   ")).resolves.toBeNull();
+  });
+
+  // The lookup is a convenience on the way to an eviction that has to happen either way, so a
+  // store that cannot be read costs the authentication rather than the stop.
+  it("falls back to no password when the saved-device lookup throws", async () => {
+    saveDevices([device({ hasPassword: true })]);
+    vi.mocked(getPasswordForDevice).mockRejectedValue(new Error("keystore unavailable"));
+
+    await expect(resolveForeignSenderPassword(FOREIGN_IP)).resolves.toBeNull();
+  });
 });

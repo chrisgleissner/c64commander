@@ -102,4 +102,26 @@ describe("useScreenWakeLock (HARD27-021)", () => {
     expect(() => view.unmount()).not.toThrow();
     expect(release).not.toHaveBeenCalled();
   });
+
+  // The request is asynchronous, so the component can unmount while it is in flight. The sentinel
+  // that then arrives has nobody left to hold it and must be released, or the screen stays awake
+  // after Live View is gone.
+  it("releases a lock that arrives after the hook has gone", async () => {
+    let resolveRequest: ((sentinel: { release: () => Promise<void> }) => void) | null = null;
+    request.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve as (sentinel: { release: () => Promise<void> }) => void;
+        }),
+    );
+    const view = render(<Probe active />);
+
+    view.unmount();
+    await act(async () => {
+      resolveRequest?.({ release });
+      await Promise.resolve();
+    });
+
+    expect(release).toHaveBeenCalled();
+  });
 });

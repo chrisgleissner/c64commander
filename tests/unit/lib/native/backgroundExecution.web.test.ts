@@ -21,6 +21,25 @@ describe("BackgroundExecutionWeb", () => {
     vi.useRealTimers();
   });
 
+  // The browser has no foreground service and no media session, so both of the calls the Android
+  // service added are deliberate no-ops here. They still have to resolve: the manager awaits them
+  // and reports a rejection as a failed publish.
+  it("accepts a playback-state publish and does nothing with it", async () => {
+    const plugin = new BackgroundExecutionWeb();
+
+    await expect(plugin.setPlaybackState({ paused: true })).resolves.toBeUndefined();
+    await expect(plugin.setPlaybackState({ paused: false })).resolves.toBeUndefined();
+  });
+
+  it("accepts a now-playing publish and does nothing with it", async () => {
+    const plugin = new BackgroundExecutionWeb();
+
+    await expect(
+      plugin.setNowPlaying({ title: "Commando", artist: "Rob Hubbard", durationMs: 214000 }),
+    ).resolves.toBeUndefined();
+    await expect(plugin.setNowPlaying({ title: null, artist: null, durationMs: null })).resolves.toBeUndefined();
+  });
+
   it("logs when wake lock is unavailable", async () => {
     const plugin = new BackgroundExecutionWeb();
     await plugin.start();

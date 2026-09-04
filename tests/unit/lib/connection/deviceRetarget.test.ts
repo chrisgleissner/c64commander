@@ -293,6 +293,20 @@ describe("stopAvMirrorForDeviceRetarget / restartAvMirrorAfterDeviceRetarget (HA
     expect(mocks.startAudio).not.toHaveBeenCalled();
   });
 
+  // The two restarts are separate fire-and-forget calls with separate handlers, so covering one
+  // says nothing about the other.
+  it("logs a failed video restart instead of rejecting into the caller", async () => {
+    mocks.startVideo.mockRejectedValueOnce(new Error("streams:start refused"));
+
+    expect(() =>
+      restartAvMirrorAfterDeviceRetarget({ videoWasLive: true, audioWasLive: false }, "device-b"),
+    ).not.toThrow();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mocks.startVideo).toHaveBeenCalledTimes(1);
+  });
+
   it("logs a restart failure instead of rejecting into the caller", async () => {
     mocks.startAudio.mockRejectedValueOnce(new Error("streams:start refused"));
 

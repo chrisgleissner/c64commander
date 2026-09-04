@@ -438,6 +438,41 @@ describe("on-device playback through the native track", () => {
     expect(backend.flushes).toBe(0);
   });
 
+  // A refused pause or resume must not stop the transport: the sink's own state has already moved,
+  // and the worst case is the speaker not following it, which the next chunk corrects.
+  it("logs a refused pause and a refused resume rather than raising them", async () => {
+    const backend = createBackend();
+    backend.pauseAudioTrack = async () => {
+      throw new Error("track released");
+    };
+    backend.resumeAudioTrack = async () => {
+      throw new Error("track released");
+    };
+    const sink = createNativeLocalSidSink(RATE, backend);
+    scheduleChunk(sink, 4);
+    await settle(200);
+
+    expect(() => sink!.suspend?.()).not.toThrow();
+    await settle();
+    expect(() => sink!.resume?.()).not.toThrow();
+    await settle();
+  });
+
+  // Without the plugin's pause method the flush is the only way to stop the speaker. It costs the
+  // ring's audio, which is heard as a jump forward, so it is a fallback rather than the design.
+  it("falls back to a flush on a plugin build with no pause method", async () => {
+    const backend = createBackend();
+    delete (backend as { pauseAudioTrack?: unknown }).pauseAudioTrack;
+    const sink = createNativeLocalSidSink(RATE, backend);
+    scheduleChunk(sink, 4);
+    await settle(200);
+
+    sink!.suspend?.();
+    await settle();
+
+    expect(backend.flushes).toBeGreaterThan(0);
+  });
+
   it("keeps the completions owed for audio a pause did not throw away", async () => {
     // They are what drives the engine to render more. Discarding them on a pause stopped the chain:
     // no completion, no render, nothing written, and the playhead could not advance again.

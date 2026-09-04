@@ -97,4 +97,52 @@ describe("leftover device streams (HARD27-021)", () => {
     await expect(stopLeftoverDeviceStreams()).resolves.toBeUndefined();
     expect(stopAt).not.toHaveBeenCalled();
   });
+
+  // A record that was not written is a sweep that will not happen, but it must never break the
+  // start or stop it was riding on.
+  it("keeps going when localStorage refuses the record", () => {
+    // Scoped to this key: the failure handler logs, and the logger uses localStorage too.
+    const realSetItem = Storage.prototype.setItem;
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (key === "c64u_device_streams_running") throw new DOMException("quota", "QuotaExceededError");
+      realSetItem.call(this, key, value);
+    });
+    try {
+      expect(() => recordDeviceStreamStarted("video", "192.168.1.148")).not.toThrow();
+    } finally {
+      setItem.mockRestore();
+    }
+
+    expect(getLeftoverDeviceStreamsForTests()).toEqual({});
+  });
+
+  it("keeps going when localStorage refuses to be read", () => {
+    const realGetItem = Storage.prototype.getItem;
+    const getItem = vi.spyOn(Storage.prototype, "getItem").mockImplementation(function (this: Storage, key: string) {
+      if (key === "c64u_device_streams_running") throw new DOMException("denied", "SecurityError");
+      return realGetItem.call(this, key);
+    });
+    try {
+      expect(getLeftoverDeviceStreamsForTests()).toEqual({});
+    } finally {
+      getItem.mockRestore();
+    }
+  });
+
+  it("ignores a stored record that is not an object", () => {
+    localStorage.setItem("c64u_device_streams_running", '"not-an-object"');
+
+    expect(getLeftoverDeviceStreamsForTests()).toEqual({});
+  });
+
+  it("removes the record entirely once nothing is left running", () => {
+    recordDeviceStreamStarted("audio", "192.168.1.148");
+    recordDeviceStreamStopped("audio");
+
+    expect(localStorage.getItem("c64u_device_streams_running")).toBeNull();
+  });
 });

@@ -139,4 +139,23 @@ describe("hvscResumableDownload", () => {
       transferredBytes: 1_000,
     });
   });
+
+  // The listener is removed in a finally, so a remove that rejects would otherwise become an
+  // unhandled rejection on the way out of an otherwise successful download.
+  it("logs a listener that cannot be removed rather than failing the download", async () => {
+    removeListener.mockRejectedValue(new Error("listener already gone"));
+    nativeMock.downloadArchive.mockResolvedValue({ totalBytes: 1_000, resumedFromBytes: 0, transferredBytes: 1_000 });
+
+    await expect(downloadArchiveWithResume(baseOptions)).resolves.toEqual({
+      totalBytes: 1_000,
+      resumedFromBytes: 0,
+      transferredBytes: 1_000,
+    });
+
+    expect(addLogMock).toHaveBeenCalledWith(
+      "warn",
+      "Failed to remove the HVSC resumable download progress listener",
+      expect.objectContaining({ archiveName: "HVSC_85.zip" }),
+    );
+  });
 });

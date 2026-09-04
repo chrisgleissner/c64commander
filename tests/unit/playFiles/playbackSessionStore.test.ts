@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   PLAYBACK_SESSION_KEY,
   clearStoredPlaybackSession,
@@ -78,5 +78,41 @@ describe("playbackSessionStore", () => {
   it("returns null for an unparseable payload instead of throwing", () => {
     localStorage.setItem(PLAYBACK_SESSION_KEY, "{invalid");
     expect(readStoredPlaybackSession()).toBeNull();
+  });
+
+  // Storage can refuse a write in a private-browsing context or when the quota is full. The
+  // session is a convenience for the next launch, so losing it must not fail the playback that
+  // was reporting its position.
+  it("does not throw when the session cannot be written", () => {
+    const realSetItem = Storage.prototype.setItem;
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (key === PLAYBACK_SESSION_KEY) throw new DOMException("quota", "QuotaExceededError");
+      realSetItem.call(this, key, value);
+    });
+    try {
+      expect(() => writeStoredPlaybackSession(session())).not.toThrow();
+    } finally {
+      setItem.mockRestore();
+    }
+  });
+
+  it("does not throw when the session cannot be cleared", () => {
+    const realRemoveItem = Storage.prototype.removeItem;
+    const removeItem = vi.spyOn(Storage.prototype, "removeItem").mockImplementation(function (
+      this: Storage,
+      key: string,
+    ) {
+      if (key === PLAYBACK_SESSION_KEY) throw new DOMException("denied", "SecurityError");
+      realRemoveItem.call(this, key);
+    });
+    try {
+      expect(() => clearStoredPlaybackSession()).not.toThrow();
+    } finally {
+      removeItem.mockRestore();
+    }
   });
 });
