@@ -1429,15 +1429,22 @@ jobs:
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
           SERIAL=$(adb devices | awk '/emulator-/ {print $1; exit}')
           if [[ -z "$SERIAL" ]]; then
-            echo "::warning::No emulator serial found for memory class assertion; skipping check"
-            exit 0
+            echo "::error::No emulator serial found for the memory class assertion"
+            adb devices -l || true
+            exit 1
           fi
-          adb -s "$SERIAL" logcat -c || true
-          adb -s "$SERIAL" shell am start -n "$ANDROID_APPLICATION_ID/.MainActivity" >/dev/null 2>&1 || true
+          # MainActivity logs the memory class from onCreate. A plain `am start` does not
+          # re-enter onCreate when the activity is already on top after the Maestro flows, so
+          # the assertion needs a forced stop and `am start -S` to guarantee a fresh process.
+          adb -s "$SERIAL" shell am force-stop "$ANDROID_APPLICATION_ID"
+          adb -s "$SERIAL" logcat -c
+          adb -s "$SERIAL" shell am start -S -W -n "$ANDROID_APPLICATION_ID/.MainActivity" >/dev/null
           if ! timeout 45 bash -c 'until adb -s "$0" logcat -d | grep -q "Android memory class detected:"; do sleep 2; done' "$SERIAL"; then
-            echo "::warning::MainActivity memory class log not found after launch+retry"
+            echo "::error::MainActivity did not log the detected Android memory class after a forced relaunch"
             adb -s "$SERIAL" logcat -d | tail -n 200 || true
+            exit 1
           fi
+          adb -s "$SERIAL" logcat -d | grep -m 1 "Android memory class detected:"
 
       - name: Stop Android telemetry monitor
         if: always()
