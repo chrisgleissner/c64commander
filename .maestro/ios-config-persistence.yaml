@@ -3,6 +3,14 @@
 # on native builds, restarts the app, and confirms the flag persisted.
 # Uses text selector for the checkbox label because id: selectors do not
 # reliably resolve for WebView elements in iOS WKWebView accessibility tree.
+#
+# Every scrollUntilVisible below sets visibilityPercentage, because Maestro's default of 100 is
+# unreachable here. WKWebView reports these full-width rows as 615 points wide on a 390-point
+# screen, so Maestro's own visible-area calculation caps them at 63%, and the scroll runs to the
+# end of the page and fails with "No visible element found" while the row is on screen. That is
+# how runs 33842686343 and 33849007627 both failed on "Stable.*". 50 leaves margin under the cap
+# and still requires the row to be about four fifths visible vertically before the scroll stops,
+# so the tap that follows lands on screen. tests/unit/maestro/iosTextAnchors.test.ts guards this.
 
 appId: uk.gleissner.c64commander
 env:
@@ -31,6 +39,7 @@ tags:
             text: "Stable.*"
           direction: DOWN
           speed: 80
+          visibilityPercentage: 50
           timeout: ${LONG_TIMEOUT}
       - runFlow:
           when:
@@ -44,6 +53,7 @@ tags:
             text: "HVSC downloads.*"
           direction: DOWN
           speed: 80
+          visibilityPercentage: 50
           timeout: ${LONG_TIMEOUT}
 - assertVisible:
     text: "HVSC downloads.*"
@@ -62,6 +72,7 @@ tags:
             text: "Stable.*"
           direction: DOWN
           speed: 80
+          visibilityPercentage: 50
           timeout: ${LONG_TIMEOUT}
       - runFlow:
           when:
@@ -75,6 +86,7 @@ tags:
             text: "HVSC downloads.*"
           direction: DOWN
           speed: 80
+          visibilityPercentage: 50
           timeout: ${LONG_TIMEOUT}
 - assertVisible:
     text: "HVSC downloads.*"

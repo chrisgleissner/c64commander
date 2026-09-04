@@ -106,6 +106,52 @@ const HVSC_FLAG_ANCHOR = "HVSC downloads.*";
 const PLAY_ANCHOR = "(Your playlist|Select a playlist item to start|Playlist)";
 const FEATURE_GROUP_ANCHOR = "Stable.*";
 
+/**
+ * Every `scrollUntilVisible` node in a flow, so the guard below can read its options.
+ */
+const scrollUntilVisibleNodes = (value: JsonValue, out: { [key: string]: JsonValue }[]): void => {
+  if (Array.isArray(value)) {
+    value.forEach((entry) => scrollUntilVisibleNodes(entry, out));
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const [key, child] of Object.entries(value)) {
+    if (key === "scrollUntilVisible" && child && typeof child === "object" && !Array.isArray(child)) {
+      out.push(child as { [key: string]: JsonValue });
+    }
+    scrollUntilVisibleNodes(child as JsonValue, out);
+  }
+};
+
+/**
+ * The highest `visibilityPercentage` a `scrollUntilVisible` may ask for when it is anchored on a
+ * row that fills the width of the page.
+ *
+ * Maestro 2.2.0 defaults `visibilityPercentage` to 100 and computes it in `UiElement`
+ * `getVisiblePercentage` as the element's bounds clipped to the screen, divided by the element's
+ * own area. WKWebView reports accessibility frames for this app's full-width rows wider than the
+ * screen: on run 33849007627 the simulator was 390 points wide and every Settings row in the
+ * accessibility dump had bounds `[0,y][615,y+54]`, which caps horizontal visibility at
+ * 390/615 = 63%. The vertical coordinates in that dump match the failure screenshot exactly, so
+ * the width is one the app does not control rather than a layout that overflows on screen.
+ *
+ * A full-width row can therefore never reach 100%. `scrollUntilVisible` scrolls to the end of the
+ * page and fails with `No visible element found` while the element is plainly on screen, which is
+ * how runs 33842686343 and 33849007627 both failed `ios-config-persistence` on `"Stable.*"`.
+ * 60 is the ceiling this guard enforces: below the 63% cap, and high enough that the row must
+ * also be mostly visible vertically before the scroll stops, which keeps a following `tapOn` on a
+ * centre point that is on screen. The flows themselves ask for 50, which leaves margin under the
+ * cap and still requires about four fifths of the row's height to be on screen.
+ *
+ * A narrower control is not affected: `"Add items to playlist"` is reported inside the screen and
+ * has passed at 100 on every run, and lowering its threshold would let the scroll stop with the
+ * button's centre off screen.
+ */
+const MAX_IOS_VISIBILITY_PERCENTAGE = 60;
+
+/** The anchors of elements the app draws as a row spanning the page width. */
+const FULL_WIDTH_ROW_ANCHORS = [CONNECTION_ANCHOR, HVSC_FLAG_ANCHOR, FEATURE_GROUP_ANCHOR];
+
 /** Anchors that read as correct and match nothing, so a flow burns its timeout and fails later. */
 const RETIRED_ANCHORS = ["Connection", "Playlist", "Enable HVSC downloads"];
 
@@ -178,6 +224,39 @@ describe("iOS Maestro text anchors", () => {
     const flow = readFileSync(path.join(maestroRoot, "ios-config-persistence.yaml"), "utf8");
     // Once before the restart and once after it.
     expect(flow.match(new RegExp(`tapOn:\\n\\s+text: "${FEATURE_GROUP_ANCHOR}"`, "g"))?.length).toBe(2);
+  });
+
+  it("never asks an iOS scroll for more of a full-width row than WKWebView reports on screen", () => {
+    const implicit: string[] = [];
+    const tooDemanding: string[] = [];
+    let checked = 0;
+    for (const name of ciFlowNames()) {
+      const file = path.join(maestroRoot, `${name}.yaml`);
+      const nodes: { [key: string]: JsonValue }[] = [];
+      scrollUntilVisibleNodes(loadAll(readFileSync(file, "utf8")) as JsonValue, nodes);
+      for (const node of nodes) {
+        checked += 1;
+        const percentage = node.visibilityPercentage;
+        const anchors: string[] = [];
+        collectTextSelectors(node.element ?? null, anchors);
+        const label = `${name}.yaml ${JSON.stringify(anchors)}`;
+        // An inherited default is not a decision, and the default is the value that fails.
+        if (typeof percentage !== "number") {
+          implicit.push(label);
+          continue;
+        }
+        if (
+          anchors.some((anchor) => FULL_WIDTH_ROW_ANCHORS.includes(anchor)) &&
+          percentage > MAX_IOS_VISIBILITY_PERCENTAGE
+        ) {
+          tooDemanding.push(`${label}: ${percentage}`);
+        }
+      }
+    }
+
+    expect(checked, "no scrollUntilVisible was read, so this guard checks nothing").toBeGreaterThan(0);
+    expect(implicit, implicit.join("\n")).toEqual([]);
+    expect(tooDemanding, tooDemanding.join("\n")).toEqual([]);
   });
 
   it("anchors the Play page on strings production draws above the fold", () => {

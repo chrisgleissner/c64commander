@@ -45,10 +45,15 @@ tags:
     visible: "(Your playlist|Select a playlist item to start|Playlist)"
     timeout: ${TIMEOUT}
 - assertVisible: "(Your playlist|Select a playlist item to start|Playlist)"
+# 100 is stated rather than inherited. This button is narrower than the screen, so WKWebView
+# reports it inside the screen bounds and it has reached full visibility on every run; lowering
+# the threshold would let the scroll stop with the button's centre off screen. The full-width
+# Settings rows in ios-config-persistence.yaml cannot reach 100 and set a lower value there.
 - scrollUntilVisible:
     element:
       text: "Add items to playlist"
     direction: DOWN
+    visibilityPercentage: 100
     timeout: ${TIMEOUT}
 - assertVisible: "Add items to playlist"
 - tapOn:
