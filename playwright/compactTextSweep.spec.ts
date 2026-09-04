@@ -26,7 +26,7 @@ import { expect, test } from "@playwright/test";
 import { createMockC64Server } from "../tests/mocks/mockC64Server";
 import { seedUiMocks } from "./uiMocks";
 import { disableTraceAssertions } from "./traceUtils";
-import { auditSmallScreenLayout, formatDefects, type LayoutDefect } from "./smallScreenLayoutAudit";
+import { auditSmallScreenLayout, expectAuditedLayout } from "./smallScreenLayoutAudit";
 
 const ALL_FLAGS = [
   "hvsc_enabled",
@@ -85,8 +85,15 @@ test.describe("Compact text sweep with every feature switched on", () => {
       // Open every disclosure this page has, so nothing is measured only while folded away.
       // Bounded: each click can reveal more toggles, and Home has enough of them that an
       // unbounded loop spends the whole test budget opening things.
+      //
+      // Comboboxes and menu triggers also carry `aria-expanded`, and opening one makes Radix
+      // mark the rest of the app `aria-hidden`, which the audit skips by design. Clicking them
+      // left the Home sweep measuring 3 of its 91 text elements. Same exclusion as
+      // `smallScreenLayoutIntegrity.spec.ts`.
       for (let round = 0; round < 3; round += 1) {
-        const collapsed = await page.locator('[aria-expanded="false"]').all();
+        const collapsed = await page
+          .locator('button[aria-expanded="false"]:not([role="combobox"]):not([aria-haspopup])')
+          .all();
         if (collapsed.length === 0) break;
         for (const toggle of collapsed.slice(0, 20)) {
           await toggle.click({ timeout: 1000 }).catch(() => undefined);
@@ -95,8 +102,7 @@ test.describe("Compact text sweep with every feature switched on", () => {
       }
       await page.waitForTimeout(600);
 
-      const defects: LayoutDefect[] = await auditSmallScreenLayout(page);
-      expect(defects, formatDefects(`${route.label} with every feature on`, defects)).toEqual([]);
+      expectAuditedLayout(await auditSmallScreenLayout(page), `${route.label} with every feature on`);
     });
   }
 });

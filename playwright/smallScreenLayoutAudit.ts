@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 /**
@@ -33,6 +34,21 @@ export type LayoutDefect = {
   text: string;
 };
 
+/**
+ * What the audit found, together with how much of the page it looked at.
+ *
+ * Every consumer asserts that `defects` is empty, so an audit that measured nothing -
+ * a page that failed to render, or a selector that stopped matching - would pass. The
+ * two counts make that case fail instead.
+ */
+export type LayoutAudit = {
+  defects: LayoutDefect[];
+  /** Elements holding their own visible text that were measured. */
+  inspectedLeaves: number;
+  /** Words the mid-word-break check compared line rectangles for. */
+  inspectedWords: number;
+};
+
 export type LayoutAuditOptions = {
   /**
    * Selectors whose subtree is not measured. Used for surfaces that are legitimately
@@ -50,7 +66,7 @@ export type LayoutAuditOptions = {
  * way, so skipping `[inert]` and `[aria-hidden="true"]` subtrees measures exactly what
  * the user can currently see and reach.
  */
-export const auditSmallScreenLayout = async (page: Page, options: LayoutAuditOptions = {}): Promise<LayoutDefect[]> =>
+export const auditSmallScreenLayout = async (page: Page, options: LayoutAuditOptions = {}): Promise<LayoutAudit> =>
   page.evaluate((opts: LayoutAuditOptions) => {
     const TOL = 1.5;
     const ignoreSelectors = opts.ignore ?? [];
@@ -405,6 +421,7 @@ export const auditSmallScreenLayout = async (page: Page, options: LayoutAuditOpt
     const range = document.createRange();
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     const seenBreaks = new Set<string>();
+    let inspectedWords = 0;
 
     while (walker.nextNode()) {
       const node = walker.currentNode as Text;
@@ -437,6 +454,7 @@ export const auditSmallScreenLayout = async (page: Page, options: LayoutAuditOpt
       for (const match of Array.from(value.matchAll(/\S+/g))) {
         const word = match[0];
         if (word.length < 2) continue;
+        inspectedWords += 1;
         const start = match.index ?? 0;
         range.setStart(node, start);
         range.setEnd(node, start + word.length);
@@ -502,8 +520,46 @@ export const auditSmallScreenLayout = async (page: Page, options: LayoutAuditOpt
     }
     range.detach();
 
-    return defects as Array<{ kind: LayoutDefectKind; selector: string; detail: string; text: string }>;
+    return {
+      defects: defects as Array<{ kind: LayoutDefectKind; selector: string; detail: string; text: string }>,
+      inspectedLeaves: leaves.length,
+      inspectedWords,
+    };
   }, options);
+
+export type LayoutCoverageFloor = { minLeaves: number; minWords: number };
+
+/**
+ * A whole page. The thinnest one any caller audits today is Docs at 320px, and it
+ * measures far more than this.
+ */
+export const PAGE_COVERAGE_FLOOR: LayoutCoverageFloor = { minLeaves: 15, minWords: 30 };
+
+/**
+ * A single dialog, sheet or menu. Radix marks the page behind it `aria-hidden`, which the
+ * audit skips by design, so only the open surface is measured and the count is small: the
+ * Add items and Add disks source pickers contribute 3 text elements each, and the Restore
+ * snapshot dialog compares 13 words. The floor is set below those, because what it has to
+ * catch is a surface that contributed nothing at all.
+ */
+export const DIALOG_COVERAGE_FLOOR: LayoutCoverageFloor = { minLeaves: 3, minWords: 3 };
+
+/** Asserts that the audit both looked at the surface and found nothing wrong with it. */
+export const expectAuditedLayout = (
+  audit: LayoutAudit,
+  where: string,
+  floor: LayoutCoverageFloor = PAGE_COVERAGE_FLOOR,
+) => {
+  expect(
+    audit.inspectedLeaves,
+    `${where}: the layout audit measured ${audit.inspectedLeaves} text elements, so it measured almost nothing`,
+  ).toBeGreaterThanOrEqual(floor.minLeaves);
+  expect(
+    audit.inspectedWords,
+    `${where}: the mid-word-break check compared ${audit.inspectedWords} words, so it measured almost nothing`,
+  ).toBeGreaterThanOrEqual(floor.minWords);
+  expect(audit.defects, formatDefects(where, audit.defects)).toEqual([]);
+};
 
 export const formatDefects = (where: string, defects: LayoutDefect[]): string =>
   `${defects.length} layout defect(s) on ${where}:\n` +
