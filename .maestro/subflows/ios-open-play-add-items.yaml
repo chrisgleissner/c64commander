@@ -26,10 +26,16 @@ tags:
 - assertVisible: "(Your playlist|Select a playlist item to start|Playlist)"
 # WKWebView exposes aria-label ("Add items to playlist") instead of inner text
 # ("Add items") in the accessibility tree, so match against the aria-label.
+#
+# Both scrolls state visibilityPercentage rather than inheriting it. The default is also 100, so
+# behaviour is unchanged, but 100 is what made ios-config-persistence fail on the full-width
+# Settings rows. This button is small, is reported inside the screen, and has passed at 100 on
+# every run. tests/unit/maestro/iosTextAnchors.test.ts requires the option to be stated.
 - scrollUntilVisible:
     element:
       text: "Add items to playlist"
     direction: DOWN
+    visibilityPercentage: 100
     timeout: ${TIMEOUT}
 - waitForAnimationToEnd
 - takeScreenshot: play-files
@@ -40,6 +46,7 @@ tags:
           element:
             text: "Add items to playlist"
           direction: DOWN
+          visibilityPercentage: 100
           timeout: ${TIMEOUT}
       - tapOn:
           text: "Add items to playlist"

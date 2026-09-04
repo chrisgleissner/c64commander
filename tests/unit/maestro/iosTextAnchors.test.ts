@@ -230,8 +230,7 @@ describe("iOS Maestro text anchors", () => {
     const implicit: string[] = [];
     const tooDemanding: string[] = [];
     let checked = 0;
-    for (const name of ciFlowNames()) {
-      const file = path.join(maestroRoot, `${name}.yaml`);
+    for (const file of ciFlowNames().flatMap((name) => flowClosure(path.join(maestroRoot, `${name}.yaml`)))) {
       const nodes: { [key: string]: JsonValue }[] = [];
       scrollUntilVisibleNodes(loadAll(readFileSync(file, "utf8")) as JsonValue, nodes);
       for (const node of nodes) {
@@ -239,7 +238,7 @@ describe("iOS Maestro text anchors", () => {
         const percentage = node.visibilityPercentage;
         const anchors: string[] = [];
         collectTextSelectors(node.element ?? null, anchors);
-        const label = `${name}.yaml ${JSON.stringify(anchors)}`;
+        const label = `${path.relative(maestroRoot, file)} ${JSON.stringify(anchors)}`;
         // An inherited default is not a decision, and the default is the value that fails.
         if (typeof percentage !== "number") {
           implicit.push(label);
