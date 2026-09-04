@@ -51,6 +51,19 @@ tags:
 - retry:
     maxRetries: 3
     commands:
+      # An attempt only reaches this after the wait below failed, which includes the case where the
+      # dialog is open on a source rather than on the interstitial. ItemSelectionDialog resets the
+      # chosen source in an effect that runs when `open` becomes true, so reopening is the only way
+      # back to "Choose source"; without this the retry would re-wait on a state that cannot change.
+      # "Close" is the accessible name of the dialog header's close control.
+      - runFlow:
+          when:
+            visible: "Add items"
+          commands:
+            - tapOn:
+                text: "Close"
+                optional: true
+            - waitForAnimationToEnd
       - runFlow:
           when:
             notVisible: "Add items"
