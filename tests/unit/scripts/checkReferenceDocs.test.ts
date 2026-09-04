@@ -137,6 +137,16 @@ describe("check-reference-docs: deciding what is a control", () => {
     expect(collectInteractiveTestIds(comparison)).toEqual(new Set(["compare-row"]));
   });
 
+  // A `>` inside a quoted attribute used to end the opening tag early, so the control was dropped
+  // from the gate silently. Tailwind child selectors put one in a className on real components.
+  it("reads past a > inside a quoted attribute value", () => {
+    const ariaLabel = '<button aria-label="Next > last" data-testid="next-page">n</button>';
+    expect(collectInteractiveTestIds(ariaLabel)).toEqual(new Set(["next-page"]));
+
+    const tailwind = '<button className="[&>svg]:size-4" data-testid="icon-button">i</button>';
+    expect(collectInteractiveTestIds(tailwind)).toEqual(new Set(["icon-button"]));
+  });
+
   it("still ignores a testid on a non-interactive tag that follows a generic", () => {
     const source = '<p title={String(new Set<Kind>())} data-testid="type-summary">n</p>';
     expect(collectInteractiveTestIds(source)).toEqual(new Set());
