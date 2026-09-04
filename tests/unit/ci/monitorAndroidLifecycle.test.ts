@@ -35,6 +35,16 @@ describe("Android monitor lifecycle state machine", () => {
     expect(monitorScript).toContain("main process disappeared unexpectedly");
   });
 
+  /**
+   * The shell harness hard-codes the two-sample missing streak before a gap counts as a
+   * disappearance. Nothing bound that constant to the monitor, so raising or lowering the
+   * production threshold would have left the harness asserting the old behaviour.
+   */
+  it("keeps the two-sample missing streak the shell harness reproduces", () => {
+    expect(monitorScript).toContain("if (( ${missing_streak[$role]} >= 2 )); then");
+    expect(monitorScript).toContain("missing_streak[$role]=0");
+  });
+
   it("passes shell lifecycle harness (recover-vs-terminal state transitions)", () => {
     const harnessPath = path.resolve(process.cwd(), "tests/unit/ci/monitor_android_lifecycle.test.sh");
     const result = execSync(`bash "${harnessPath}"`, { encoding: "utf8" });

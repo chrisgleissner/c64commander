@@ -49,6 +49,19 @@ describe("iOS monitor lifecycle state machine", () => {
     expect(monitorScript).toContain('"main_disappeared": ${main_disappeared}');
   });
 
+  /**
+   * The shell harness exercises the simctl-unreliable downgrade, but nothing bound that branch
+   * to the monitor, so the harness could have kept asserting a distinction the script no longer
+   * made.
+   */
+  it("separates the simctl-unreliable disappearance with its own exit code", () => {
+    expect(monitorScript).toContain("main_disappeared_during_flow_simctl_unreliable=0");
+    expect(monitorScript).toContain("main_disappeared_during_flow_simctl_unreliable=1");
+    expect(monitorScript).toContain('if [[ "$main_disappeared_during_flow_simctl_unreliable" == "1" ]]; then');
+    expect(monitorScript).toContain("simctl unavailable at detection; reliability reduced");
+    expect(monitorScript).toContain("exit 4");
+  });
+
   it("passes shell lifecycle harness (flag-based state transitions)", () => {
     const harnessPath = path.resolve(process.cwd(), "tests/unit/ci/monitor_ios_lifecycle.test.sh");
     const result = execSync(`bash "${harnessPath}"`, { encoding: "utf8" });
