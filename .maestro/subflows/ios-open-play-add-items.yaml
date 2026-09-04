@@ -39,19 +39,32 @@ tags:
     timeout: ${TIMEOUT}
 - waitForAnimationToEnd
 - takeScreenshot: play-files
+# The scroll and the tap only run while the dialog is still closed. A retry re-runs its whole
+# command list, so without that condition an attempt whose trailing wait failed would scroll again
+# for a button the previous attempt had already pressed and which the open dialog now covers. On
+# iOS the swipe then lands on the source list underneath: run 33845624818 failed here with
+# `No visible element found: "Add items to playlist"`, and its failure screenshot shows the dialog
+# open on the CommoServe browser, a source neither this subflow nor its callers tap.
+# "Add items" is the dialog title and is matched as one element's whole text, so it does not also
+# match the "Add items to playlist" button on the page behind it.
+# Bound to production by tests/unit/maestro/iosTextAnchors.test.ts.
 - retry:
     maxRetries: 3
     commands:
-      - scrollUntilVisible:
-          element:
-            text: "Add items to playlist"
-          direction: DOWN
-          visibilityPercentage: 100
-          timeout: ${TIMEOUT}
-      - tapOn:
-          text: "Add items to playlist"
-          optional: true
-      - waitForAnimationToEnd
+      - runFlow:
+          when:
+            notVisible: "Add items"
+          commands:
+            - scrollUntilVisible:
+                element:
+                  text: "Add items to playlist"
+                direction: DOWN
+                visibilityPercentage: 100
+                timeout: ${TIMEOUT}
+            - tapOn:
+                text: "Add items to playlist"
+                optional: true
+            - waitForAnimationToEnd
       - extendedWaitUntil:
           visible: "Choose source"
           timeout: ${TIMEOUT}

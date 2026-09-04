@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadAll } from "js-yaml";
-import { readFileSync, readdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { FEATURE_FLAG_DEFINITIONS, FEATURE_FLAG_GROUPS } from "@/lib/config/featureFlagsRegistry.generated";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
@@ -155,6 +156,66 @@ const FULL_WIDTH_ROW_ANCHORS = [CONNECTION_ANCHOR, HVSC_FLAG_ANCHOR, FEATURE_GRO
 /** Anchors that read as correct and match nothing, so a flow burns its timeout and fails later. */
 const RETIRED_ANCHORS = ["Connection", "Playlist", "Enable HVSC downloads"];
 
+/**
+ * Every `retry` block that scrolls to an anchor it also taps unconditionally, reported as
+ * `<flow> <anchor>`.
+ *
+ * A `retry` re-runs its whole command list, but only the command that failed is known to have
+ * failed. The commands before it succeeded and their effects are still on screen, so an attempt
+ * that taps a button and then fails on a later command leaves the next attempt scrolling for a
+ * button it has already pressed. When the tap opens a modal, that button is behind the modal and
+ * no scroll can reach it, and on iOS the scroll gesture itself lands on whatever the modal draws
+ * under the swipe. Run 33845624818 failed `ios-secure-storage-persist` with
+ * `No visible element found: "Add items to playlist"` while its failure screenshot shows the
+ * Add items dialog open on the CommoServe browser — a source no command in that flow or its
+ * subflows taps.
+ *
+ * A tap inside a `retry` on an anchor the same block scrolls to therefore has to sit behind a
+ * `runFlow` condition that is false once the tap has taken effect, so the attempt re-establishes
+ * its starting state instead of repeating a step that already succeeded.
+ */
+const retryTapsWhatItScrollsFor = (entryPath: string): string[] => {
+  const out: string[] = [];
+  const collect = (value: JsonValue, guarded: boolean, scrolls: string[], taps: string[]): void => {
+    if (Array.isArray(value)) {
+      for (const child of value) collect(child, guarded, scrolls, taps);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    const node = value as { [key: string]: JsonValue };
+    const runFlow = node.runFlow;
+    const conditional =
+      guarded ||
+      (Boolean(runFlow) && typeof runFlow === "object" && !Array.isArray(runFlow) && "when" in (runFlow as object));
+    if (node.scrollUntilVisible) {
+      collectTextSelectors((node.scrollUntilVisible as { [key: string]: JsonValue }).element ?? null, scrolls);
+    }
+    if (node.tapOn && !conditional) collectTextSelectors(node.tapOn, taps);
+    for (const child of Object.values(node)) collect(child, conditional, scrolls, taps);
+  };
+  const walk = (value: JsonValue, file: string): void => {
+    if (Array.isArray(value)) {
+      for (const child of value) walk(child, file);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    const node = value as { [key: string]: JsonValue };
+    if (node.retry) {
+      const scrolls: string[] = [];
+      const taps: string[] = [];
+      collect(node.retry, false, scrolls, taps);
+      for (const anchor of new Set(scrolls.filter((candidate) => taps.includes(candidate)))) {
+        out.push(`${file} ${anchor}`);
+      }
+    }
+    for (const child of Object.values(node)) walk(child, file);
+  };
+  for (const file of flowClosure(entryPath)) {
+    walk(loadAll(readFileSync(file, "utf8")) as JsonValue, path.relative(maestroRoot, file));
+  }
+  return out;
+};
+
 describe("iOS Maestro text anchors", () => {
   it("reads the iOS flows and the CI flow list it claims to cover", () => {
     const files = iosFlowFiles();
@@ -256,6 +317,46 @@ describe("iOS Maestro text anchors", () => {
     expect(checked, "no scrollUntilVisible was read, so this guard checks nothing").toBeGreaterThan(0);
     expect(implicit, implicit.join("\n")).toEqual([]);
     expect(tooDemanding, tooDemanding.join("\n")).toEqual([]);
+  });
+
+  it("never re-scrolls for a button a retry attempt has already tapped", () => {
+    const repeated = ciFlowNames().flatMap((name) => retryTapsWhatItScrollsFor(path.join(maestroRoot, `${name}.yaml`)));
+    expect([...new Set(repeated)], repeated.join("\n")).toEqual([]);
+
+    // The condition that guards the tap has to distinguish the dialog from the button behind it.
+    expect(matchesWholeText("Add items", "Add items to playlist")).toBe(false);
+  });
+
+  it("rejects a planted retry that taps the button it scrolls for", () => {
+    const planted = mkdtempSync(path.join(tmpdir(), "ios-retry-scroll-"));
+    const file = path.join(planted, "planted.yaml");
+    writeFileSync(
+      file,
+      [
+        "appId: uk.gleissner.c64commander",
+        "---",
+        "- retry:",
+        "    maxRetries: 3",
+        "    commands:",
+        "      - scrollUntilVisible:",
+        "          element:",
+        '            text: "Add items to playlist"',
+        "          direction: DOWN",
+        "          visibilityPercentage: 100",
+        "      - tapOn:",
+        '          text: "Add items to playlist"',
+        "      - extendedWaitUntil:",
+        '          visible: "Choose source"',
+        "",
+      ].join("\n"),
+    );
+    try {
+      const reported = retryTapsWhatItScrollsFor(file);
+      expect(reported).toHaveLength(1);
+      expect(reported[0]).toContain("Add items to playlist");
+    } finally {
+      rmSync(planted, { recursive: true, force: true });
+    }
   });
 
   it("anchors the Play page on strings production draws above the fold", () => {
@@ -409,6 +510,14 @@ const elementText = (relativePath: string, text: string): string => {
   return text;
 };
 
+/** The title an `ItemSelectionDialog` call site passes, which the dialog draws as its heading. */
+const dialogTitle = (relativePath: string, title: string): string => {
+  if (!readSource(relativePath).includes(`title="${title}"`)) {
+    throw new Error(`${relativePath} no longer opens a dialog with title="${title}"`);
+  }
+  return title;
+};
+
 /** Each steering anchor, with the production value it has to match. */
 const anchorDerivations = (): { selector: string; name: string }[] => [
   { selector: "Home", name: tabLabel("/") },
@@ -433,6 +542,7 @@ const anchorDerivations = (): { selector: string; name: string }[] => [
     ),
   },
   { selector: "Add file / folder from C64U", name: `Add file / folder from ${SOURCE_LABELS.c64u}` },
+  { selector: "Add items", name: dialogTitle("src/pages/PlayFilesPage.tsx", "Add items") },
   {
     selector: "Choose source",
     name: elementText("src/components/itemSelection/ItemSelectionDialog.tsx", "Choose source"),
