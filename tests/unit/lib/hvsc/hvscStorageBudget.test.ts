@@ -11,7 +11,7 @@ import {
   HVSC_LIBRARY_EXPANSION_FACTOR,
   ensureRoomForHvscInstall,
   estimateHvscInstallBytes,
-  librariesResidentDuringInstall,
+  librariesToMakeRoomFor,
 } from "@/lib/hvsc/hvscStorageBudget";
 
 vi.mock("@/lib/logging", () => ({
@@ -23,16 +23,10 @@ const GB = 1024 * MB;
 
 describe("hvscStorageBudget", () => {
   describe("estimateHvscInstallBytes", () => {
-    it("covers the archive plus one library on a first install", () => {
-      const estimate = estimateHvscInstallBytes(100 * MB, false);
+    it("covers the archive plus one library", () => {
+      const estimate = estimateHvscInstallBytes(100 * MB);
       expect(estimate.librariesResident).toBe(1);
       expect(estimate.requiredBytes).toBe(100 * MB + 100 * MB * HVSC_LIBRARY_EXPANSION_FACTOR);
-    });
-
-    it("covers two libraries when one is already installed, because promotion keeps both", () => {
-      const estimate = estimateHvscInstallBytes(100 * MB, true);
-      expect(estimate.librariesResident).toBe(2);
-      expect(estimate.requiredBytes).toBe(100 * MB + 100 * MB * HVSC_LIBRARY_EXPANSION_FACTOR * 2);
     });
 
     it("stays above the footprint measured on the Pixel 4 rig", () => {
@@ -40,7 +34,7 @@ describe("hvscStorageBudget", () => {
       // archive and 458,364 KB of extracted library.
       const measuredArchiveBytes = 82_932 * 1024;
       const measuredLibraryBytes = 458_364 * 1024;
-      const estimate = estimateHvscInstallBytes(measuredArchiveBytes, false);
+      const estimate = estimateHvscInstallBytes(measuredArchiveBytes);
       expect(estimate.requiredBytes).toBeGreaterThan(measuredArchiveBytes + measuredLibraryBytes);
     });
 
@@ -51,13 +45,9 @@ describe("hvscStorageBudget", () => {
     });
   });
 
-  describe("librariesResidentDuringInstall", () => {
-    it("reports one tree when no library is present", () => {
-      expect(librariesResidentDuringInstall(false)).toBe(1);
-    });
-
-    it("reports two trees when a library is present", () => {
-      expect(librariesResidentDuringInstall(true)).toBe(2);
+  describe("librariesToMakeRoomFor", () => {
+    it("counts only the tree the extractor is about to write", () => {
+      expect(librariesToMakeRoomFor()).toBe(1);
     });
   });
 
@@ -74,9 +64,16 @@ describe("hvscStorageBudget", () => {
       await expect(ensureRoomForHvscInstall({ archiveBytes: 90 * MB, readBudget })).resolves.toBeUndefined();
     });
 
-    it("refuses a reinstall that would fit only if the previous library were already gone", async () => {
-      // 90 MB archive: 0.62 GB with one library resident, 1.2 GB with two.
+    // The device reports FREE space, from which the installed library is already
+    // excluded, so charging that library against it again refused reinstalls
+    // that fit: a 90 MB archive needs 0.62 GB of free space, not 1.2 GB.
+    it("allows a reinstall on the free space the new tree actually needs", async () => {
       const readBudget = vi.fn(async () => ({ availableBytes: 900 * MB, libraryPresent: true }));
+      await expect(ensureRoomForHvscInstall({ archiveBytes: 90 * MB, readBudget })).resolves.toBeUndefined();
+    });
+
+    it("still refuses a reinstall that the new tree alone does not fit into", async () => {
+      const readBudget = vi.fn(async () => ({ availableBytes: 400 * MB, libraryPresent: true }));
       await expect(ensureRoomForHvscInstall({ archiveBytes: 90 * MB, readBudget })).rejects.toThrow(
         /Not enough free space/i,
       );

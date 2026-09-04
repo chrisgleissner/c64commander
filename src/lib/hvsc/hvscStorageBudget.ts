@@ -20,14 +20,18 @@ import { HvscIngestion } from "@/lib/native/hvscIngestion";
 export const HVSC_LIBRARY_EXPANSION_FACTOR = 6;
 
 /**
- * A baseline reinstall keeps the previous library on disk while the new one is
- * built: the extractor writes into `hvsc/library-staging`, and promotion renames
- * the live library to `hvsc/library-old` before renaming staging into place, so
- * both trees exist at once and the old one is only deleted after the swap
- * succeeds (`HvscIngestionPlugin.promoteBaselineLibrary`). A first install has
- * no previous library and therefore peaks at one copy.
+ * Library trees the install has to make room for, which is one whether or not a
+ * library is already installed.
+ *
+ * A baseline reinstall does keep two trees on disk at once — the extractor
+ * writes into `hvsc/library-staging`, and promotion renames the live library to
+ * `hvsc/library-old` before renaming staging into place
+ * (`HvscIngestionPlugin.promoteBaselineLibrary`) — but the existing tree is
+ * already occupying its space, and the figure this is compared against is FREE
+ * space. Charging the resident library against free space again asked a
+ * reinstall for roughly twice what it needs and refused installs that fit.
  */
-export const librariesResidentDuringInstall = (libraryPresent: boolean) => (libraryPresent ? 2 : 1);
+export const librariesToMakeRoomFor = () => 1;
 
 export type HvscStorageEstimate = {
   requiredBytes: number;
@@ -36,11 +40,11 @@ export type HvscStorageEstimate = {
 };
 
 /**
- * Peak disk the install needs: the downloaded archive, which is retained in the
- * cache, plus every library tree that is resident at the same time.
+ * Free disk the install needs: the downloaded archive, which is retained in the
+ * cache, plus the one library tree the extractor is about to create.
  */
-export const estimateHvscInstallBytes = (archiveBytes: number, libraryPresent: boolean): HvscStorageEstimate => {
-  const librariesResident = librariesResidentDuringInstall(libraryPresent);
+export const estimateHvscInstallBytes = (archiveBytes: number): HvscStorageEstimate => {
+  const librariesResident = librariesToMakeRoomFor();
   return {
     archiveBytes,
     librariesResident,
@@ -83,12 +87,13 @@ export const ensureRoomForHvscInstall = async (options: {
   }
   if (!Number.isFinite(budget?.availableBytes) || budget.availableBytes <= 0) return;
 
-  const estimate = estimateHvscInstallBytes(archiveBytes, budget.libraryPresent);
+  const estimate = estimateHvscInstallBytes(archiveBytes);
   addLog("info", "HVSC storage budget checked", {
     archiveBytes,
     requiredBytes: estimate.requiredBytes,
     availableBytes: budget.availableBytes,
     librariesResident: estimate.librariesResident,
+    libraryPresent: budget.libraryPresent,
   });
   if (budget.availableBytes >= estimate.requiredBytes) return;
 

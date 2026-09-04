@@ -34,7 +34,9 @@ public enum HvscStorageBudget {
         return 0
     }
 
-    /// Reports whether a previous library is resident, which doubles the peak the install needs.
+    /// Reports whether a previous library is resident. It is a diagnostic the JavaScript
+    /// pre-flight check logs, not a multiplier: the free-space figure already excludes the
+    /// resident library, so only the tree the extractor is about to write has to fit.
     ///
     /// Emptiness rather than existence is the test because `resolveLibraryRoot()` creates
     /// `hvsc/library` unconditionally before extraction starts, so the directory outlives an

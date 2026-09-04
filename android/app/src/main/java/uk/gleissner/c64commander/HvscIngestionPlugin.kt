@@ -920,9 +920,10 @@ open class HvscIngestionPlugin : Plugin() {
   /**
    * Reports the storage the JS install flow needs to size its pre-flight check: how much room is
    * left on the volume that holds [Context.getFilesDir], and whether a library is already installed.
-   * The second value matters because a baseline reinstall keeps the previous library on disk until
-   * the new one is promoted (see [promoteBaselineLibrary]), so it peaks at two library trees rather
-   * than one. See HARD27-028.
+   * A baseline reinstall does keep two library trees on disk at once, because the previous one
+   * survives until the new one is promoted (see [promoteBaselineLibrary]), but the free-space
+   * figure already excludes the resident tree, so the second value is reported as a diagnostic
+   * rather than as a multiplier on the estimate. See HARD27-028.
    */
   @PluginMethod
   fun getStorageBudget(call: PluginCall) {
