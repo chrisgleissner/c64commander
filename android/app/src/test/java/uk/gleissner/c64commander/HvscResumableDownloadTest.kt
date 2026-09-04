@@ -162,6 +162,45 @@ class HvscResumableDownloadTest {
     )
   }
 
+  /**
+   * The caller omits `expectedTotalBytes` whenever the HEAD that would have measured the archive
+   * failed (`hvscResumableDownload.ts`), so a completeness check gated on it alone checks nothing
+   * on exactly the path where the size is least certain. The response's own `Content-Range` total
+   * has to stand in, or a truncated body is promoted over the real archive and the resume state is
+   * gone.
+   */
+  @Test
+  fun `a truncated resume is rejected using the size the response declared`() {
+    partFile.parentFile.mkdirs()
+    partFile.writeBytes(body.copyOfRange(0, 100_000))
+    truncateResponseAfterBytes = 5_000
+
+    val error =
+            try {
+              downloader()
+                      .download(
+                              url = url(),
+                              partFile = partFile,
+                              targetFile = targetFile,
+                      )
+              null
+            } catch (thrown: Exception) {
+              thrown
+            }
+
+    assertTrue("the short download must fail rather than promote", error is java.io.IOException)
+    assertTrue(
+            "the message must name the shortfall: ${error?.message}",
+            error?.message?.contains("incomplete") == true,
+    )
+    assertFalse("a short archive must not be promoted", targetFile.exists())
+    assertEquals(
+            "the part file is kept so the next attempt resumes",
+            105_000L,
+            partFile.length(),
+    )
+  }
+
   @Test
   fun `a server that ignores Range is not appended to`() {
     rangeSupported = false

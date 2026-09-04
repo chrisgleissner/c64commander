@@ -57,6 +57,13 @@ class HvscResumableDownload(
 
     var transferred = 0L
     var attempts = 0
+    // The size the response itself declared, so a transfer that ends early is caught even when the
+    // caller could not supply an expected size. `hvscResumableDownload.ts` omits it whenever the
+    // HEAD that would have measured the archive failed, and without this check a connection closed
+    // mid-body ended the read loop with no exception at all: the short `.part` was then promoted
+    // over the real archive, so the resume state was destroyed and the failure only surfaced as an
+    // opaque 7z extraction error.
+    var declaredTotalBytes = 0L
     while (true) {
       if (isCancelled()) throw HvscDownloadCancelledException("HVSC download cancelled")
       attempts++
@@ -95,6 +102,7 @@ class HvscResumableDownload(
         val append = resumeFrom > 0L && status == HttpURLConnection.HTTP_PARTIAL
         if (!append) resumeFrom = 0L
         val totalBytes = resolveTotalBytes(connection, resumeFrom, expectedTotalBytes)
+        declaredTotalBytes = totalBytes
         transferred =
                 copyBody(connection, partFile, append, resumeFrom, totalBytes, isCancelled, onProgress)
         break
@@ -108,16 +116,21 @@ class HvscResumableDownload(
     }
 
     val writtenBytes = partFile.length()
-    if (expectedTotalBytes != null && expectedTotalBytes > 0L && writtenBytes != expectedTotalBytes) {
-      if (writtenBytes > expectedTotalBytes) {
+    // The caller's figure wins where it has one, because it came from the version manifest rather
+    // than from the same response being checked.
+    val requiredBytes =
+            if (expectedTotalBytes != null && expectedTotalBytes > 0L) expectedTotalBytes
+            else declaredTotalBytes
+    if (requiredBytes > 0L && writtenBytes != requiredBytes) {
+      if (writtenBytes > requiredBytes) {
         partFile.delete()
         throw IOException(
-                "HVSC download wrote $writtenBytes bytes, more than the expected $expectedTotalBytes; the partial file was discarded"
+                "HVSC download wrote $writtenBytes bytes, more than the expected $requiredBytes; the partial file was discarded"
         )
       }
       // Keep the short part: the next attempt continues from where this one stopped.
       throw IOException(
-              "HVSC download is incomplete: $writtenBytes of $expectedTotalBytes bytes; a retry will resume"
+              "HVSC download is incomplete: $writtenBytes of $requiredBytes bytes; a retry will resume"
       )
     }
 
