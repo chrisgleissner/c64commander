@@ -41,7 +41,15 @@ export const normalizeTransportError = (error: unknown, context: { host?: string
   const lower = raw.toLowerCase();
   const hostLabel = context.host ? `'${context.host}'` : "device";
 
-  if (/(unknown host|enotfound|ename_not_found|getaddrinfo|dns lookup|cannot resolve)/i.test(lower)) {
+  // "unable to resolve host" is what Android's CapacitorHttp reports, and
+  // "host unreachable (dns)" is the form c64api leaves behind once it has
+  // flattened a network failure. Neither is a Node-shaped message, and missing
+  // both made the dns class unreachable on the Android app path.
+  if (
+    /(unknown host|enotfound|ename_not_found|getaddrinfo|dns lookup|cannot resolve|unable to resolve host|host unreachable \(dns\))/i.test(
+      lower,
+    )
+  ) {
     return {
       class: "dns",
       userMessage: `Couldn't resolve ${hostLabel}. Check the device's hostname, or use its IP address.`,

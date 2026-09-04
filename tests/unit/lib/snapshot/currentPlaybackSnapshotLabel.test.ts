@@ -18,12 +18,13 @@ vi.mock("@/lib/logging", () => ({
 
 describe("getCurrentPlaybackSnapshotLabel", () => {
   beforeEach(() => {
+    localStorage.clear();
     sessionStorage.clear();
     vi.clearAllMocks();
   });
 
   it("returns the trimmed current item label from the playback session", () => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       PLAYBACK_SESSION_KEY,
       JSON.stringify({
         currentItemLabel: "  Wizball.sid  ",
@@ -38,7 +39,7 @@ describe("getCurrentPlaybackSnapshotLabel", () => {
   });
 
   it("returns undefined when the stored label is blank", () => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       PLAYBACK_SESSION_KEY,
       JSON.stringify({
         currentItemLabel: "   ",
@@ -49,22 +50,33 @@ describe("getCurrentPlaybackSnapshotLabel", () => {
   });
 
   it("logs and returns undefined when the session payload is invalid JSON", () => {
-    sessionStorage.setItem(PLAYBACK_SESSION_KEY, "{invalid");
+    localStorage.setItem(PLAYBACK_SESSION_KEY, "{invalid");
 
     expect(getCurrentPlaybackSnapshotLabel()).toBeUndefined();
     expect(addErrorLogMock).toHaveBeenCalledWith(
-      "Failed to read current playback snapshot label",
+      "Failed to read the stored playback session",
       expect.objectContaining({ error: expect.any(String) }),
     );
   });
 
   it("returns undefined when the session payload is a JSON primitive (not an object)", () => {
-    sessionStorage.setItem(PLAYBACK_SESSION_KEY, '"just-a-string"');
+    localStorage.setItem(PLAYBACK_SESSION_KEY, '"just-a-string"');
     expect(getCurrentPlaybackSnapshotLabel()).toBeUndefined();
   });
 
   it("returns undefined when currentItemLabel is not a string", () => {
-    sessionStorage.setItem(PLAYBACK_SESSION_KEY, JSON.stringify({ currentItemLabel: 42 }));
+    localStorage.setItem(PLAYBACK_SESSION_KEY, JSON.stringify({ currentItemLabel: 42 }));
     expect(getCurrentPlaybackSnapshotLabel()).toBeUndefined();
+  });
+
+  // HARD27-032 moved the session to localStorage. A build upgraded in place can
+  // still have one in sessionStorage, and that session is not thrown away.
+  it("reads a session left in sessionStorage by a build from before the move", () => {
+    sessionStorage.setItem(PLAYBACK_SESSION_KEY, JSON.stringify({ currentItemLabel: "Commando.sid" }));
+
+    expect(getCurrentPlaybackSnapshotLabel()).toBe("Commando.sid");
+    // Migrated, so it survives the next process death instead of dying with it.
+    expect(localStorage.getItem(PLAYBACK_SESSION_KEY)).not.toBeNull();
+    expect(sessionStorage.getItem(PLAYBACK_SESSION_KEY)).toBeNull();
   });
 });

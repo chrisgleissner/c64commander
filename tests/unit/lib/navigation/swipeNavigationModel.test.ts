@@ -8,8 +8,10 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  addRevealedIndex,
   buildRunwayPanelIndexes,
   resolveAdjacentIndexes,
+  resolveDragRevealedIndex,
   resolveNavigationDirection,
   resolveRunwayTranslatePercent,
 } from "@/lib/navigation/swipeNavigationModel";
@@ -71,6 +73,39 @@ describe("swipeNavigationModel", () => {
 
     it("returns -100/3 for neutral direction (0)", () => {
       expect(resolveRunwayTranslatePercent(0)).toBeCloseTo(-(100 / 3));
+    });
+  });
+
+  // HARD27-038: these two decide which adjacent page the runway mounts.
+  describe("resolveDragRevealedIndex", () => {
+    const panels = [5, 0, 1] as const;
+
+    it("reveals the previous page when the track is dragged right", () => {
+      expect(resolveDragRevealedIndex(panels, 40)).toBe(5);
+    });
+
+    it("reveals the next page when the track is dragged left", () => {
+      expect(resolveDragRevealedIndex(panels, -40)).toBe(1);
+    });
+
+    it("reveals nothing while the finger has not moved", () => {
+      expect(resolveDragRevealedIndex(panels, 0)).toBeNull();
+    });
+  });
+
+  describe("addRevealedIndex", () => {
+    it("appends an index that is not already revealed", () => {
+      expect(addRevealedIndex([1], 2)).toEqual([1, 2]);
+    });
+
+    it("keeps the same array when the index is already revealed", () => {
+      const revealed = [1, 2];
+      expect(addRevealedIndex(revealed, 2)).toBe(revealed);
+    });
+
+    it("keeps the same array for a null index", () => {
+      const revealed = [1];
+      expect(addRevealedIndex(revealed, null)).toBe(revealed);
     });
   });
 });

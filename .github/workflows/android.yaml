@@ -144,6 +144,13 @@ jobs:
       - name: Build packaged app assets
         run: npm run build
 
+      # The only other caller passes --skip-if-missing, and no job that runs `npm run lint`
+      # builds the app, so until this step existed the gzipped chunk budget had never been
+      # measured in CI. This job produces a plain production dist, which is the build the
+      # budget is about.
+      - name: Check bundle budgets
+        run: node scripts/check-bundle-budgets.mjs
+
       - name: Verify packaged notice drift
         run: bash scripts/package-third-party-notice.sh --check
 
@@ -703,9 +710,13 @@ jobs:
           EXPECT_WEB_COVERAGE: "1"
         run: node scripts/verify-coverage-artifacts.mjs
 
+      # Lines is raised to 94 with real headroom: the merged report is 95.25% on
+      # main and 95.41% here. Branches stays at 91 deliberately — it is 94.01% on
+      # main, so a 94 gate would pass by a hundredth of a point and turn main red
+      # on the first small regression. Raise it once branch coverage has room.
       - name: Enforce coverage threshold
         env:
-          COVERAGE_MIN: "91"
+          COVERAGE_MIN: "94"
           COVERAGE_MIN_BRANCH: "91"
           COVERAGE_FILE: "coverage/lcov-merged.info"
         run: node scripts/check-coverage-threshold.mjs
@@ -1422,15 +1433,22 @@ jobs:
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
           SERIAL=$(adb devices | awk '/emulator-/ {print $1; exit}')
           if [[ -z "$SERIAL" ]]; then
-            echo "::warning::No emulator serial found for memory class assertion; skipping check"
-            exit 0
+            echo "::error::No emulator serial found for the memory class assertion"
+            adb devices -l || true
+            exit 1
           fi
-          adb -s "$SERIAL" logcat -c || true
-          adb -s "$SERIAL" shell am start -n "$ANDROID_APPLICATION_ID/.MainActivity" >/dev/null 2>&1 || true
+          # MainActivity logs the memory class from onCreate. A plain `am start` does not
+          # re-enter onCreate when the activity is already on top after the Maestro flows, so
+          # the assertion needs a forced stop and `am start -S` to guarantee a fresh process.
+          adb -s "$SERIAL" shell am force-stop "$ANDROID_APPLICATION_ID"
+          adb -s "$SERIAL" logcat -c
+          adb -s "$SERIAL" shell am start -S -W -n "$ANDROID_APPLICATION_ID/.MainActivity" >/dev/null
           if ! timeout 45 bash -c 'until adb -s "$0" logcat -d | grep -q "Android memory class detected:"; do sleep 2; done' "$SERIAL"; then
-            echo "::warning::MainActivity memory class log not found after launch+retry"
+            echo "::error::MainActivity did not log the detected Android memory class after a forced relaunch"
             adb -s "$SERIAL" logcat -d | tail -n 200 || true
+            exit 1
           fi
+          adb -s "$SERIAL" logcat -d | grep -m 1 "Android memory class detected:"
 
       - name: Stop Android telemetry monitor
         if: always()

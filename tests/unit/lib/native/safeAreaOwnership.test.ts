@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -40,6 +40,9 @@ const sourceFiles = (dir: string): string[] =>
     return /\.(ts|tsx|css)$/.test(entry) ? [full] : [];
   });
 
+/** A `g` flag would carry `lastIndex` between `.test()` calls, so this pattern has none. */
+const SECOND_WRITER = /setProperty\(\s*["'`]--(native-)?safe-area-inset-/;
+
 describe("safe-area custom property ownership", () => {
   it("reads the owned property names out of the Capacitor plugin that writes them", () => {
     expect(capacitorOwnedProperties).toEqual([
@@ -61,9 +64,32 @@ describe("safe-area custom property ownership", () => {
     }
   });
 
+  // The next guard asserts that a filtered list is empty, so it passes having read
+  // nothing if the walk stops finding files. These two check that the walk still
+  // covers src/ and that the pattern still recognises a second writer.
+  it("walks the src tree it claims to cover", () => {
+    const srcRoot = path.join(repoRoot, "src");
+    expect(existsSync(srcRoot), "src is not a directory, so this guard scans nothing").toBe(true);
+    const files = sourceFiles(srcRoot);
+    expect(files.length, "the src walk found no source file").toBeGreaterThan(100);
+    expect(
+      files.some((file) => path.relative(srcRoot, file).includes(path.sep)),
+      "the walk did not descend into src subdirectories",
+    ).toBe(true);
+  });
+
+  it("recognises a planted second writer of a safe-area inset property", () => {
+    const planted = [
+      'document.documentElement.style.setProperty("--safe-area-inset-top", "0px");',
+      "el.style.setProperty(\n  '--native-safe-area-inset-bottom',\n  value,\n);",
+      'element.style.setProperty("--c64-unrelated", value);',
+    ];
+    expect(planted.map((source) => SECOND_WRITER.test(source))).toEqual([true, true, false]);
+  });
+
   it("has no second writer of a safe-area inset property anywhere under src/", () => {
     const offenders = sourceFiles(path.join(repoRoot, "src"))
-      .filter((file) => /setProperty\(\s*["'`]--(native-)?safe-area-inset-/.test(readFileSync(file, "utf8")))
+      .filter((file) => SECOND_WRITER.test(readFileSync(file, "utf8")))
       .map((file) => path.relative(repoRoot, file));
     expect(offenders, "only Capacitor's SystemBars plugin may write the safe-area insets").toEqual([]);
   });

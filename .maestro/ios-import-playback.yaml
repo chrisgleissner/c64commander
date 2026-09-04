@@ -14,8 +14,8 @@ tags:
 - runFlow: subflows/ios-open-play-tab.yaml
 
 - extendedWaitUntil:
-    visible: "Playlist"
+    visible: "(Your playlist|Select a playlist item to start|Playlist)"
     timeout: ${TIMEOUT}
-- assertVisible: "Playlist"
+- assertVisible: "(Your playlist|Select a playlist item to start|Playlist)"
 - assertVisible: "Add items to playlist"
 - takeScreenshot: ios-playback-entry

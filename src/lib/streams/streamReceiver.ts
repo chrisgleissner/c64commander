@@ -9,7 +9,8 @@
 import { addLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
 import { StreamUdp } from "@/lib/native/streamUdp";
-import type { PluginListenerHandle } from "@capacitor/core";
+import type { SenderFilterDiagnostics } from "./senderMismatch";
+import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
 
 /**
  * Content Explorer capabilities D/E — platform stream receiver seam.
@@ -64,6 +65,21 @@ export interface StreamReceiver {
   /** Returns true iff the NATIVE side will decimate (assembly on); false → keep JS decimation. */
   setNativeCadence?(fraction: number): boolean;
   onStateChange(handler: (state: StreamConnectionState) => void): void;
+  /**
+   * Optional: what the transport's sender filter has dropped, and whose packets those were.
+   *
+   * Present only where a filter exists (the native plugin). The mirror controllers read it when a
+   * live stream goes silent, because a filter aimed at the wrong address of a dual-homed Ultimate
+   * is silent in exactly the same way as a stream that stopped — see `streams/senderMismatch`.
+   */
+  readDiagnostics?(): Promise<SenderFilterDiagnostics | null>;
+  /**
+   * Optional: point the sender filter at a different machine on the already-bound socket.
+   *
+   * Used by the one-tap recovery from a filter mismatch, and cheaper than a restart: the socket
+   * stays in the multicast group, so the next packet from the adopted sender is accepted.
+   */
+  setExpectedSource?(host: string | null): Promise<void>;
   /** The host:port the device should stream to (the receiver's own address). */
   readonly destination: string;
   /**
@@ -227,7 +243,7 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
   private closed = false;
   private readonly name: StreamName;
   private readonly assemble: boolean;
-  private readonly listeners: Promise<PluginListenerHandle>[] = [];
+  private readonly listeners: Promise<PluginListenerHandle | undefined>[] = [];
   private readonly readyPromise: Promise<void>;
 
   constructor(options: StreamReceiverOptions) {
@@ -244,28 +260,34 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
       (options.demoLoopback ? `${DEMO_LOOPBACK_HOST}:${port}` : multicastDestination(options.name, port));
     // Always listen for per-packet datagrams (audio, and the video fallback when assembly is off).
     this.listeners.push(
-      StreamUdp.addListener("datagram", (event) => {
-        if (event.name !== this.name || !this.datagramHandler) return;
-        // Prefer the native wire-arrival stamp; fall back for pre-timestamp plugin builds.
-        this.datagramHandler(base64ToBytes(event.data), typeof event.t === "number" ? event.t : nowMs());
-      }),
+      this.trackListener(
+        "datagram",
+        StreamUdp.addListener("datagram", (event) => {
+          if (event.name !== this.name || !this.datagramHandler) return;
+          // Prefer the native wire-arrival stamp; fall back for pre-timestamp plugin builds.
+          this.datagramHandler(base64ToBytes(event.data), typeof event.t === "number" ? event.t : nowMs());
+        }),
+      ),
     );
     // In assembly mode the plugin emits whole frames instead — one bridge hop per frame, not per packet.
     if (this.assemble) {
       this.listeners.push(
-        StreamUdp.addListener("videoframe", (event) => {
-          if (event.name !== this.name || !this.frameHandler) return;
-          // Decimated frames (present=false) carry no payload — skip the base64 decode entirely.
-          const present = event.present !== false;
-          this.frameHandler(
-            present ? base64ToBytes(event.data) : NativeUdpStreamReceiver.EMPTY,
-            event.height,
-            typeof event.t === "number" ? event.t : nowMs(),
-            event.dropped ?? 0,
-            event.lost ?? 0,
-            present,
-          );
-        }),
+        this.trackListener(
+          "videoframe",
+          StreamUdp.addListener("videoframe", (event) => {
+            if (event.name !== this.name || !this.frameHandler) return;
+            // Decimated frames (present=false) carry no payload — skip the base64 decode entirely.
+            const present = event.present !== false;
+            this.frameHandler(
+              present ? base64ToBytes(event.data) : NativeUdpStreamReceiver.EMPTY,
+              event.height,
+              typeof event.t === "number" ? event.t : nowMs(),
+              event.dropped ?? 0,
+              event.lost ?? 0,
+              present,
+            );
+          }),
+        ),
       );
     }
     this.readyPromise = StreamUdp.bind({
@@ -333,6 +355,46 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
     handler("connecting");
   }
 
+  /**
+   * Read the plugin's sender-filter counters. Null when the plugin cannot answer — a diagnosis that
+   * cannot be made must not replace the plain "stopped arriving" message with an error of its own.
+   */
+  async readDiagnostics(): Promise<SenderFilterDiagnostics | null> {
+    try {
+      return await StreamUdp.readStreamDiagnostics({ name: this.name });
+    } catch (error) {
+      addLog("debug", "Native stream diagnostics read failed", {
+        name: this.name,
+        error: (error as Error)?.message ?? String(error),
+      });
+      return null;
+    }
+  }
+
+  /** Retarget the sender filter on the bound socket (the mismatch recovery). */
+  async setExpectedSource(host: string | null): Promise<void> {
+    await StreamUdp.setExpectedSource({ name: this.name, host });
+  }
+
+  /**
+   * A registration that rejects — the plugin is missing on this platform — would otherwise be an
+   * unhandled rejection, because the only `.catch` used to be added later in `close()`. Resolve to
+   * `undefined` instead so the reason is logged once and `close()` has nothing to remove.
+   */
+  private trackListener(
+    event: string,
+    registration: Promise<PluginListenerHandle>,
+  ): Promise<PluginListenerHandle | undefined> {
+    return registration.catch((error: unknown) => {
+      addLog("warn", "Stream receiver: registering a native listener failed", {
+        name: this.name,
+        event,
+        error: (error as Error)?.message ?? String(error),
+      });
+      return undefined;
+    });
+  }
+
   close(): void {
     this.closed = true;
     // Logged, not swallowed. A close that fails leaves the native socket bound to the multicast
@@ -346,7 +408,7 @@ export class NativeUdpStreamReceiver implements StreamReceiver {
     });
     for (const listener of this.listeners) {
       void listener
-        .then((handle) => handle.remove())
+        .then((handle) => handle?.remove())
         .catch((error: unknown) => {
           addLog("warn", "Stream receiver: removing a native listener failed", {
             name: this.name,
@@ -380,6 +442,15 @@ const defaultSocketFactory = (url: string): WebSocketLike => {
 };
 
 /**
+ * Whether this platform can receive a stream at all. Native needs the StreamUdp plugin, which is
+ * registered on Android only; web/Docker uses the server's UDP -> WebSocket bridge. iOS has
+ * neither, so the UI that offers Live View has to ask this rather than assume "native means yes"
+ * (HARD27-002).
+ */
+export const hasStreamTransport = (): boolean =>
+  isNativePlatform() ? Capacitor.isPluginAvailable("StreamUdp") : typeof WebSocket !== "undefined";
+
+/**
  * Resolve a receiver for the platform: native binds a UDP socket via the StreamUdp plugin;
  * web/Docker consumes the server's UDP -> WebSocket bridge (a caller may inject a
  * socketFactory for tests). Either falls back to an unsupported receiver on construction error.
@@ -397,6 +468,12 @@ export const createStreamReceiver = (options: StreamReceiverOptions): StreamRece
     return new UnsupportedStreamReceiver();
   };
   if (isNativePlatform()) {
+    // "Native" is not the capability — the StreamUdp plugin is. It is registered on Android only,
+    // so on iOS this used to build a receiver whose every plugin call rejects: two unhandled
+    // rejections plus a generic "could not start streaming" instead of a deliberate degradation.
+    if (!Capacitor.isPluginAvailable("StreamUdp")) {
+      return unsupported("native-udp", new Error("The StreamUdp plugin is not available on this platform"));
+    }
     try {
       return new NativeUdpStreamReceiver(options);
     } catch (error) {

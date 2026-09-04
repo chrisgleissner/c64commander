@@ -7,14 +7,19 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MachineControls } from "@/pages/home/components/MachineControls";
+import { enterKeyNavigationModality, leaveKeyNavigationModality } from "../../../../helpers/keypadModality";
+
 import {
   FocusNavigationProvider,
   useFocusNavigationContext,
   type FocusNavigationContextValue,
 } from "@/hooks/useFocusNavigation";
+
+// HARD27-039: modality is a module-level singleton shared by every test here.
+afterEach(() => leaveKeyNavigationModality());
 
 // The other MachineControls suite stubs QuickActionCard; here we deliberately use
 // the REAL card so the keypad focus ring (focusId/focusOrder) is exercised. Keep
@@ -66,13 +71,18 @@ const FocusContextCapture = ({ target }: { target: { current: FocusNavigationCon
 const renderInRing = (
   overrides: Partial<typeof baseProps> = {},
   focusContext?: { current: FocusNavigationContextValue | null },
-) =>
-  render(
+) => {
+  // HARD27-039: a keypad user arrives here by key, so the discovery engine is
+  // already running when the component mounts. These tests read the ring without
+  // pressing a key first.
+  enterKeyNavigationModality();
+  return render(
     <FocusNavigationProvider profileId="keypad">
       {focusContext ? <FocusContextCapture target={focusContext} /> : null}
       <MachineControls {...baseProps} {...overrides} />
     </FocusNavigationProvider>,
   );
+};
 
 describe("MachineControls keypad focus ring (C64U Remote)", () => {
   beforeEach(() => {

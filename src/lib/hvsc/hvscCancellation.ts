@@ -38,3 +38,11 @@ export const isHvscCancellationError = (error: unknown) => {
   // word (e.g. "cancelled by network peer") still surfaces as a real failure.
   return typeof candidate.message === "string" && /cancell?ed\.?$/i.test(candidate.message.trim());
 };
+
+/**
+ * What the HVSC card shows as the reason after the user stops a running install.
+ * `edge-hvsc-repeat-cancel-resume` waits for this exact string, and `maestroFlowContracts` checks
+ * the flow's wait text against it, so a rename fails that test instead of leaving the flow
+ * waiting for text nothing renders.
+ */
+export const HVSC_CANCELED_STATUS_REASON = "Canceled";

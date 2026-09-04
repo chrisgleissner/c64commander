@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   isBackgroundExecutionEnabled,
+  resolveBackgroundExecutionAction,
+  resolveBackgroundExecutionPaused,
   shouldStartBackgroundExecution,
   shouldStopBackgroundExecution,
   shouldSyncBackgroundExecutionDueAt,
@@ -50,21 +52,13 @@ describe("backgroundExecutionPolicy", () => {
     ).toBe(false);
   });
 
-  it("stops native background execution when playback stops, pauses, or the feature is disabled", () => {
+  it("stops native background execution when playback stops or the feature is disabled", () => {
     expect(
       shouldStopBackgroundExecution({
         backgroundExecutionEnabled: true,
         backgroundExecutionActive: true,
         isPlaying: false,
         isPaused: false,
-      }),
-    ).toBe(true);
-    expect(
-      shouldStopBackgroundExecution({
-        backgroundExecutionEnabled: true,
-        backgroundExecutionActive: true,
-        isPlaying: true,
-        isPaused: true,
       }),
     ).toBe(true);
     expect(
@@ -123,6 +117,100 @@ describe("backgroundExecutionPolicy", () => {
         playlistEnded: true,
       }),
     ).toBe(false);
+  });
+
+  it("HARD27-007: keeps the session alive across a plain pause so the MediaSession survives", () => {
+    // Stopping the service on pause released the MediaSession, so the headset or lock-screen Play
+    // that followed reached nothing at all.
+    expect(
+      shouldStopBackgroundExecution({
+        backgroundExecutionEnabled: true,
+        backgroundExecutionActive: true,
+        isPlaying: true,
+        isPaused: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("HARD27-007: reports the paused state of a live session, and nothing when there is no session", () => {
+    expect(
+      resolveBackgroundExecutionPaused({
+        backgroundExecutionEnabled: true,
+        backgroundExecutionActive: true,
+        isPlaying: true,
+        isPaused: true,
+      }),
+    ).toBe(true);
+    expect(
+      resolveBackgroundExecutionPaused({
+        backgroundExecutionEnabled: true,
+        backgroundExecutionActive: true,
+        isPlaying: true,
+        isPaused: false,
+      }),
+    ).toBe(false);
+    // Nothing to tell: no session, the feature is off, playback stopped, or the playlist ended —
+    // all four are cases the stop path already owns.
+    expect(
+      resolveBackgroundExecutionPaused({
+        backgroundExecutionEnabled: true,
+        backgroundExecutionActive: false,
+        isPlaying: true,
+        isPaused: true,
+      }),
+    ).toBeNull();
+    expect(
+      resolveBackgroundExecutionPaused({
+        backgroundExecutionEnabled: false,
+        backgroundExecutionActive: true,
+        isPlaying: true,
+        isPaused: true,
+      }),
+    ).toBeNull();
+    expect(
+      resolveBackgroundExecutionPaused({
+        backgroundExecutionEnabled: true,
+        backgroundExecutionActive: true,
+        isPlaying: false,
+        isPaused: false,
+      }),
+    ).toBeNull();
+    expect(
+      resolveBackgroundExecutionPaused({
+        backgroundExecutionEnabled: true,
+        backgroundExecutionActive: true,
+        isPlaying: true,
+        isPaused: true,
+        playlistEnded: true,
+      }),
+    ).toBeNull();
+  });
+
+  it("HARD27-007: resolves one action per playback-state change, in the order the page applies them", () => {
+    const decision = {
+      backgroundExecutionEnabled: true,
+      backgroundExecutionActive: false,
+      isPlaying: true,
+      isPaused: false,
+    };
+    expect(resolveBackgroundExecutionAction(decision)).toBe("start");
+    expect(resolveBackgroundExecutionAction({ ...decision, backgroundExecutionActive: true })).toBe("publish-playing");
+    expect(resolveBackgroundExecutionAction({ ...decision, backgroundExecutionActive: true, isPaused: true })).toBe(
+      "publish-paused",
+    );
+    expect(resolveBackgroundExecutionAction({ ...decision, backgroundExecutionActive: true, isPlaying: false })).toBe(
+      "stop",
+    );
+    // A playlist that auto-ended stops rather than pausing, even while isPaused is true: there is
+    // no auto-advance left to service, so the wake lock has no job (HARD12-018).
+    expect(
+      resolveBackgroundExecutionAction({
+        ...decision,
+        backgroundExecutionActive: true,
+        isPaused: true,
+        playlistEnded: true,
+      }),
+    ).toBe("stop");
   });
 
   it("syncs due-at timestamps whenever the enabled native Android path needs a new dueAtMs", () => {

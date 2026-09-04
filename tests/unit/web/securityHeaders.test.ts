@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { applySecurityHeaders, getClientIp } from "../../../web/server/src/securityHeaders";
+import { applySecurityHeaders, getClientIp, isForwardedHttps } from "../../../web/server/src/securityHeaders";
 
 const createRequest = (headers: IncomingMessage["headers"] = {}, remoteAddress?: string) =>
   ({
@@ -19,22 +19,39 @@ const createResponse = () =>
   }) as unknown as ServerResponse & { setHeader: ReturnType<typeof vi.fn> };
 
 describe("securityHeaders", () => {
-  it("prefers the first forwarded client IP when present", () => {
+  it("prefers the first forwarded client IP when a proxy is trusted", () => {
     const req = createRequest({ "x-forwarded-for": "198.51.100.12, 10.0.0.7" }, "10.0.0.7");
 
-    expect(getClientIp(req)).toBe("198.51.100.12");
+    expect(getClientIp(req, true)).toBe("198.51.100.12");
+  });
+
+  // HARD27-008: the login limiter keys on this value. Any LAN client can send a
+  // fresh X-Forwarded-For per request, so without a trusted proxy the socket
+  // address is the only key that cannot be varied at will.
+  it("ignores the forwarded client IP when no proxy is trusted", () => {
+    const req = createRequest({ "x-forwarded-for": "198.51.100.12, 10.0.0.7" }, "10.0.0.7");
+
+    expect(getClientIp(req, false)).toBe("10.0.0.7");
+    expect(getClientIp(createRequest({ "x-forwarded-for": "198.51.100.12" }, undefined), false)).toBe("unknown");
   });
 
   it("falls back to the socket address or unknown when no forwarded IP exists", () => {
-    expect(getClientIp(createRequest({}, "10.0.0.7"))).toBe("10.0.0.7");
-    expect(getClientIp(createRequest({}, undefined))).toBe("unknown");
+    expect(getClientIp(createRequest({}, "10.0.0.7"), true)).toBe("10.0.0.7");
+    expect(getClientIp(createRequest({}, undefined), true)).toBe("unknown");
+  });
+
+  it("reports the forwarded protocol only when a proxy is trusted", () => {
+    expect(isForwardedHttps(createRequest({ "x-forwarded-proto": "https, http" }), true)).toBe(true);
+    expect(isForwardedHttps(createRequest({ "x-forwarded-proto": "https" }), false)).toBe(false);
+    expect(isForwardedHttps(createRequest({ "x-forwarded-proto": "http" }), true)).toBe(false);
+    expect(isForwardedHttps(createRequest({}), true)).toBe(false);
   });
 
   it("applies the base security headers and HSTS for forwarded https requests", () => {
     const req = createRequest({ "x-forwarded-proto": "https, http" });
     const res = createResponse();
 
-    applySecurityHeaders(req, res);
+    applySecurityHeaders(req, res, true);
 
     expect(res.setHeader).toHaveBeenCalledWith("X-Frame-Options", "DENY");
     expect(res.setHeader).toHaveBeenCalledWith("X-Content-Type-Options", "nosniff");
@@ -48,7 +65,7 @@ describe("securityHeaders", () => {
 
   it("omits HSTS when the forwarded protocol is absent or not https", () => {
     const nonHttpsResponse = createResponse();
-    applySecurityHeaders(createRequest({ "x-forwarded-proto": "http" }), nonHttpsResponse);
+    applySecurityHeaders(createRequest({ "x-forwarded-proto": "http" }), nonHttpsResponse, true);
 
     expect(nonHttpsResponse.setHeader).not.toHaveBeenCalledWith(
       "Strict-Transport-Security",
@@ -56,7 +73,7 @@ describe("securityHeaders", () => {
     );
 
     const missingHeaderResponse = createResponse();
-    applySecurityHeaders(createRequest({}), missingHeaderResponse);
+    applySecurityHeaders(createRequest({}), missingHeaderResponse, true);
 
     expect(missingHeaderResponse.setHeader).not.toHaveBeenCalledWith(
       "Strict-Transport-Security",

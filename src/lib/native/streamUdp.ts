@@ -105,6 +105,41 @@ export interface StreamUdpAudioStats {
    * into it uninvited — see `streams/foreignSenderGuard`.
    */
   senders?: string[];
+  /** Packets the sender filter dropped because they came from another address — see {@link StreamUdpStreamDiagnostics}. */
+  rejectedPackets?: number;
+  /** The address those dropped packets came from, most recently. */
+  lastRejectedSource?: string;
+}
+
+/**
+ * What the native sender filter has done to one stream.
+ *
+ * Read when a mirror that believed it was live goes silent, because a filter pointed at the wrong
+ * address of a dual-homed Ultimate produces exactly the same symptoms as a stream that stopped: the
+ * socket receives at full rate and every packet is dropped before it is counted as an arrival.
+ */
+export interface StreamUdpStreamDiagnostics {
+  /** Packets dropped because they came from a machine other than {@link expectedSource}. */
+  rejectedPackets: number;
+  /** The address the dropped packets came from, most recently. Absent when nothing was dropped. */
+  lastRejectedSource?: string;
+  /** The resolved address the filter is accepting. Absent means the filter is open. */
+  expectedSource?: string;
+  /** Distinct source IPs seen on this stream's group. */
+  senders?: string[];
+}
+
+/**
+ * What the platform did to this app's audio focus, as the native sink saw it.
+ *
+ * `duck` is reported for completeness — the pipeline has already attenuated itself by the time the
+ * event arrives, because the samples it applies to are native. The rest are decisions only the web
+ * layer can take, since it is the only side that knows whether a tune or the mirror is playing.
+ */
+export type StreamUdpAudioFocusChange = "loss" | "loss-transient" | "duck" | "gain";
+
+export interface StreamUdpAudioFocusEvent {
+  change: StreamUdpAudioFocusChange;
 }
 
 /**
@@ -168,8 +203,17 @@ export interface StreamUdpPlugin {
    * scheduled chunk-by-chunk from the JS thread. No-op (zeroed stats) if no pipeline is open.
    */
   writeAudioTrack(options: { data: string }): Promise<StreamUdpAudioStats>;
-  /** Drop queued-but-unplayed audio, so a pause or seek is immediate despite a deep ring. */
+  /** Drop queued-but-unplayed audio, so a seek is immediate despite a deep ring. */
   flushAudioTrack(options?: Record<string, never>): Promise<void>;
+  /**
+   * Hold the speaker for a listener's pause, keeping the ring and the track's own buffer intact.
+   *
+   * Distinct from {@link flushAudioTrack}, which is for a seek: a seek invalidates the queued audio,
+   * a pause does not, and discarding it on a pause is heard as a jump forward on resume.
+   */
+  pauseAudioTrack(options?: Record<string, never>): Promise<void>;
+  /** Continue a {@link pauseAudioTrack} from the sample it stopped on. */
+  resumeAudioTrack(options?: Record<string, never>): Promise<void>;
   /**
    * Read the pipeline's live depth, underruns and arrival evenness — the governor's audio-headroom
    * signal, polled periodically since native (not JS) drives playback. Zeroed if none is open.
@@ -178,6 +222,21 @@ export interface StreamUdpPlugin {
    * or it would keep clearing the maxima a diagnostic run is collecting.
    */
   readAudioStats(options?: { reset?: boolean }): Promise<StreamUdpAudioStats>;
+  /**
+   * Read what the sender filter dropped on one stream, and whose packets those were.
+   *
+   * Separate from {@link readAudioStats} because video has no audio pipeline to hang stats off, and
+   * the video mirror is the surface where a filter mismatch is most visible (a frozen picture under
+   * a control that still reads "Watching").
+   */
+  readStreamDiagnostics(options: { name: string }): Promise<StreamUdpStreamDiagnostics>;
+  /**
+   * Ask for audio focus again for a sink that is already open.
+   *
+   * `openAudioTrack` takes focus, but a pause leaves the track open, so a resume has no open call to
+   * ride on. Without this, a tune resumed after another app interrupted it played with no focus.
+   */
+  requestAudioFocus(): Promise<{ granted: boolean }>;
   /** Stop + release the native audio sink. Safe to call when none is open. */
   closeAudioTrack(options?: Record<string, never>): Promise<void>;
   /**
@@ -192,6 +251,10 @@ export interface StreamUdpPlugin {
    */
   setAudioAnalysis(options: { enabled: boolean }): Promise<void>;
   addListener(eventName: "datagram", listener: (event: StreamUdpDatagramEvent) => void): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: "audiofocus",
+    listener: (event: StreamUdpAudioFocusEvent) => void,
+  ): Promise<PluginListenerHandle>;
   addListener(
     eventName: "videoframe",
     listener: (event: StreamUdpVideoFrameEvent) => void,

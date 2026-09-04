@@ -193,6 +193,56 @@ open class BackgroundExecutionPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun setPlaybackState(call: PluginCall) {
+        val paused = call.getBoolean("paused") ?: false
+        try {
+            BackgroundExecutionService.setPlaybackState(context, paused)
+            call.resolve()
+        } catch (e: Exception) {
+            AppLogger.error(
+                    pluginContextOrNull(),
+                    logTag,
+                    "Failed to update background playback state",
+                    "BackgroundExecutionPlugin",
+                    e,
+                    traceFields(call)
+            )
+            call.reject("Failed to update background playback state", e)
+        }
+    }
+
+    /**
+     * `PluginCall.getLong` returns null unless the JSON parser already made the value a Long, and a
+     * tune's length in milliseconds fits in an Integer until it is about 24 days long. Reading the
+     * raw number and widening it here is what keeps the duration from being silently dropped.
+     */
+    internal fun readDurationMs(call: PluginCall): Long? =
+            (call.data.opt("durationMs") as? Number)?.toLong()
+
+    @PluginMethod
+    fun setNowPlaying(call: PluginCall) {
+        try {
+            BackgroundExecutionService.setNowPlaying(
+                    context,
+                    call.getString("title"),
+                    call.getString("artist"),
+                    readDurationMs(call),
+            )
+            call.resolve()
+        } catch (e: Exception) {
+            AppLogger.error(
+                    pluginContextOrNull(),
+                    logTag,
+                    "Failed to update background now-playing metadata",
+                    "BackgroundExecutionPlugin",
+                    e,
+                    traceFields(call)
+            )
+            call.reject("Failed to update background now-playing metadata", e)
+        }
+    }
+
+    @PluginMethod
     fun stop(call: PluginCall) {
         try {
             BackgroundExecutionService.updateDueAt(context, null)

@@ -6,13 +6,12 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { updateSelectedSavedDevicePorts } from "@/lib/savedDevices/store";
+import { getSelectedSavedDevicePorts, updateSelectedSavedDevicePorts } from "@/lib/savedDevices/store";
 import { resolveDeviceHostFromStorage, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { getPassword } from "@/lib/secureStorage";
 
 const FTP_PORT_KEY = "c64u_ftp_port";
 const FTP_BRIDGE_URL_KEY = "c64u_ftp_bridge_url";
-const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
 const DEFAULT_FTP_PORT = 21;
 
 let runtimeFtpPortOverride: number | null = null;
@@ -23,31 +22,15 @@ let runtimeFtpPasswordOverride: string | null = null;
 
 const isValidFtpPort = (port: number) => Number.isInteger(port) && port >= 1 && port <= 65535;
 
+// The port comes from the saved-devices store, which is also what the Settings screen shows.
+// Resolving it from the raw envelope here gave the FTP client a different answer whenever the
+// store's normalisation and this module's parser disagreed (HARD27-025). The store migrates the
+// legacy `c64u_ftp_port` key into the device it creates, so that key needs no separate read.
 export const getStoredFtpPort = () => {
   if (runtimeFtpPortOverride !== null) return runtimeFtpPortOverride;
   if (typeof localStorage === "undefined") return DEFAULT_FTP_PORT;
-  if (typeof localStorage !== "undefined") {
-    const savedDevicesRaw = localStorage.getItem(SAVED_DEVICES_STORAGE_KEY);
-    if (savedDevicesRaw) {
-      try {
-        const parsed = JSON.parse(savedDevicesRaw) as {
-          selectedDeviceId?: string;
-          devices?: Array<{ id?: string; ftpPort?: number }>;
-        };
-        const devices = Array.isArray(parsed.devices) ? parsed.devices : [];
-        const selected = devices.find((device) => device.id === parsed.selectedDeviceId) ?? devices[0];
-        if (typeof selected?.ftpPort === "number" && isValidFtpPort(selected.ftpPort)) {
-          return selected.ftpPort;
-        }
-      } catch (error) {
-        console.warn("Failed to parse saved devices while resolving FTP port", { error });
-      }
-    }
-  }
-  const raw = localStorage.getItem(FTP_PORT_KEY);
-  const parsed = raw ? Number(raw) : NaN;
-  if (!isValidFtpPort(parsed)) return DEFAULT_FTP_PORT;
-  return parsed;
+  const { ftpPort } = getSelectedSavedDevicePorts();
+  return isValidFtpPort(ftpPort) ? ftpPort : DEFAULT_FTP_PORT;
 };
 
 export const setStoredFtpPort = (port: number) => {
@@ -58,24 +41,6 @@ export const setStoredFtpPort = (port: number) => {
     updateSelectedSavedDevicePorts({ ftpPort: port });
   } catch (error) {
     console.warn("Failed to sync FTP port to selected saved device", { error });
-    const savedDevicesRaw = localStorage.getItem(SAVED_DEVICES_STORAGE_KEY);
-    if (!savedDevicesRaw) return;
-    try {
-      const parsed = JSON.parse(savedDevicesRaw) as {
-        selectedDeviceId?: string;
-        devices?: Array<{ id?: string; ftpPort?: number }>;
-      };
-      if (!Array.isArray(parsed.devices) || !parsed.selectedDeviceId) return;
-      const next = {
-        ...parsed,
-        devices: parsed.devices.map((device) =>
-          device.id === parsed.selectedDeviceId ? { ...device, ftpPort: port } : device,
-        ),
-      };
-      localStorage.setItem(SAVED_DEVICES_STORAGE_KEY, JSON.stringify(next));
-    } catch (fallbackError) {
-      console.warn("Failed to update saved-device fallback FTP port", { error: fallbackError });
-    }
   }
 };
 

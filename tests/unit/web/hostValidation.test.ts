@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import {
+  isConfiguredDeviceHost,
   isTrustedInsecureHost,
   normalizePassword,
   sanitizeHost,
@@ -56,6 +57,24 @@ describe("hostValidation", () => {
     expect(sanitizeHost("two:ports:8080")).toBeNull();
     expect(sanitizeHost("-bad-host")).toBeNull();
     expect(sanitizeHost(`${"a".repeat(254)}.local`)).toBeNull();
+  });
+
+  // HARD27-016: the proxy decides whether to attach the configured device
+  // password by comparing the target with the configured host, so the two
+  // spellings of the same device have to compare equal.
+  it("treats a missing port as the HTTP default when matching the configured device", () => {
+    expect(isConfiguredDeviceHost("c64u", "c64u:80")).toBe(true);
+    expect(isConfiguredDeviceHost("C64U:80", "c64u")).toBe(true);
+    expect(isConfiguredDeviceHost("[fe80::1]", "[FE80::1]:80")).toBe(true);
+    expect(isConfiguredDeviceHost("192.168.1.64:8080", "192.168.1.64:8080")).toBe(true);
+  });
+
+  it("does not treat another host, port or empty value as the configured device", () => {
+    expect(isConfiguredDeviceHost("10.0.0.9", "192.168.1.64")).toBe(false);
+    expect(isConfiguredDeviceHost("192.168.1.64:8080", "192.168.1.64")).toBe(false);
+    expect(isConfiguredDeviceHost("localhost", "c64u")).toBe(false);
+    expect(isConfiguredDeviceHost("", "c64u")).toBe(false);
+    expect(isConfiguredDeviceHost("c64u", "")).toBe(false);
   });
 
   it("compares secrets safely only when lengths match", () => {

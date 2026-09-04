@@ -7,7 +7,6 @@
  */
 
 import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
@@ -35,6 +34,7 @@ import { TraceContextBridge } from "@/components/TraceContextBridge";
 import { GlobalDiagnosticsOverlay } from "@/components/diagnostics/GlobalDiagnosticsOverlay";
 import { createTransportShortcut } from "@/lib/input/transportShortcuts";
 import { installNativeMediaButtons } from "@/lib/input/nativeMediaButtons";
+import { installAudioFocusPolicy } from "@/lib/audio/audioFocusPolicy";
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
 import { SearchKeyListener } from "@/components/search/SearchKeyListener";
 import { SearchOverlayHost } from "@/components/search/SearchOverlayHost";
@@ -52,8 +52,8 @@ import {
   runDiagnosticsReconciler,
   runPlaybackReconciler,
 } from "@/lib/diagnostics/diagnosticsReconciler";
-import { useNavigationGuardBlocker } from "@/lib/navigation/navigationGuards";
-import { tabIndexForPath, TAB_ROUTES } from "@/lib/navigation/tabRoutes";
+import { useGuardedNavigate } from "@/lib/navigation/navigationGuards";
+import { tabIndexForPath, TAB_ROUTES, createTabJumpShortcut } from "@/lib/navigation/tabRoutes";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { t } from "@/lib/i18n";
 
@@ -159,11 +159,6 @@ const DeviceVicPaletteDriver = () => {
   return null;
 };
 
-const GlobalNavigationBlocker = () => {
-  useNavigationGuardBlocker();
-  return null;
-};
-
 export const shouldEnableCoverageProbe = () => {
   if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") return true;
   if (!shouldBundleCoverageProbeModules()) return false;
@@ -258,6 +253,8 @@ const KEYPAD_FOCUS_PROFILE_ID = "keypad";
  */
 const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
+  // The keypad tab jump can take the user off a page mid-import, so it asks the guards (HARD27-022).
+  const guardedNavigate = useGuardedNavigate();
   const { flags } = useFeatureFlags();
   const transportShortcutOptions = useMemo(
     () => ({ navigate: (path: string) => navigate(path), currentPath: () => window.location.pathname }),
@@ -265,12 +262,12 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
   );
   // Headset / lock screen / Bluetooth, through the same factory F1 and F3 use.
   useEffect(() => installNativeMediaButtons(transportShortcutOptions), [transportShortcutOptions]);
+  // Another app taking the speaker has to reach whichever source is playing, so this is installed
+  // app-wide rather than by the Play page (HARD27-006).
+  useEffect(() => installAudioFocusPolicy(), []);
   const shortcuts = useMemo<KeypadShortcutHandlers>(
     () => ({
-      jumpToTab: (index) => {
-        const route = TAB_ROUTES[index];
-        if (route) navigate(route.path);
-      },
+      jumpToTab: createTabJumpShortcut(guardedNavigate),
       openDiagnostics: () => requestDiagnosticsOpen("header"),
       openDeviceSwitcher: () => requestDeviceSwitcherOpen(),
       openQuickMenu: () => requestQuickMenuOpen(),
@@ -287,7 +284,7 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
           }
         : undefined,
     }),
-    [navigate, flags.remote_input_enabled, transportShortcutOptions],
+    [navigate, guardedNavigate, flags.remote_input_enabled, transportShortcutOptions],
   );
   return (
     <FocusNavigationProvider
@@ -313,7 +310,6 @@ const AppRoutes = () => {
             <DeviceSwitchLabAutoLauncher enabled={coverageProbeEnabled} />
             <GlobalErrorListener />
             <GlobalButtonInteractionModel />
-            <GlobalNavigationBlocker />
             <RouteRefresher />
             <DeviceVicPaletteDriver />
             <AvMirrorGovernorDriver />
@@ -368,7 +364,6 @@ const App = () => (
         <DisplayProfileProvider>
           <TooltipProvider>
             <Toaster />
-            <Sonner />
             <FeatureFlagsProvider>
               <RefreshControlProvider>
                 <AppErrorBoundary>

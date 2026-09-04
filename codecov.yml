@@ -3,17 +3,21 @@ codecov:
   notify:
     wait_for_ci: yes
 
+# Both targets are percentages and must carry the % sign. They were `0.91`, which
+# Codecov reads as 0.91% rather than 91%, so every patch passed however little of
+# it was covered: PR #412 was reported at 89.94% patch coverage with a green
+# check. The intent was 91%; the requirement is now 94%.
 coverage:
   status:
     project:
       default:
-        target: 0.91
+        target: 94%
         threshold: 0%
         informational: false
         if_not_found: success
     patch:
       default:
-        target: 0.91
+        target: 94%
         threshold: 0%
         informational: false
         if_not_found: error

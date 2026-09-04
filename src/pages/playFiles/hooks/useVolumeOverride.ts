@@ -490,6 +490,9 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
               category: "Audio Mixer",
               updates: write.updates,
               skipInvalidation: true,
+              // HARD27-011: a playback volume override is not a setting the
+              // user chose, so it must never reach the device's flash.
+              transient: true,
             }),
             AUDIO_MIXER_WRITE_TIMEOUT_MS,
             `${write.context} audio mixer update`,
@@ -533,12 +536,18 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
   const applyAudioMixerUpdates = useCallback(
     async (updates: Record<string, string | number>, context: string) => {
       if (!Object.keys(updates).length) return;
+      // HARD27-011: every write from this hook is playback state, not user
+      // configuration. A restore returns the mixer to the user's own values and
+      // releases a flash save that the override was holding.
+      const isRestore = context.startsWith("Restore");
       const startAudioMixerWrite = () =>
         withTimeout(
           updateConfigBatch.mutateAsync({
             category: "Audio Mixer",
             updates,
             skipInvalidation: true,
+            transient: true,
+            transientRestore: isRestore,
           }),
           AUDIO_MIXER_WRITE_TIMEOUT_MS,
           `${context} audio mixer update`,

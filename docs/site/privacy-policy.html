@@ -194,7 +194,7 @@
       </p>
 
       <h2>Permissions</h2>
-      <p>The app declares six Android permissions:</p>
+      <p>The app declares seven Android permissions:</p>
       <ul>
         <li><strong>Internet</strong>, to reach your C64 Ultimate.</li>
         <li><strong>Multicast</strong>, to receive the picture and sound it sends out.</li>
@@ -202,7 +202,11 @@
           <strong>Foreground service</strong> and <strong>media playback</strong>, so music keeps playing when you leave
           the app.
         </li>
-        <li><strong>Wake lock</strong>, so it keeps playing with the screen off.</li>
+        <li>
+          <strong>Data sync</strong>, so installing the HVSC music library carries on when you leave the app. That
+          install is the app's longest job, and it downloads and unpacks tens of thousands of tunes.
+        </li>
+        <li><strong>Wake lock</strong>, so it keeps playing, and keeps installing, with the screen off.</li>
         <li>
           <strong>Notifications</strong>, to show the playback notification while music plays in the background. This is
           the only one Android asks you to approve. It is requested the first time you start playback that carries on

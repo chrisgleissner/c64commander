@@ -29,6 +29,7 @@ import {
   readNativeNetworkStatus,
   shouldStartDemoModeForOfflineDevice,
 } from "../../../../src/lib/connection/offlineStartup";
+import { resetPluginAvailabilityForTests } from "../../../../src/lib/native/pluginAvailability";
 
 describe("shouldStartDemoModeForOfflineDevice", () => {
   const offlineAndroid = {
@@ -68,6 +69,8 @@ describe("readNativeNetworkStatus", () => {
     isNativePlatform.mockReturnValue(true);
     getNetworkStatus.mockReset();
     addLog.mockClear();
+    // The unavailable-method latch is a module singleton shared by every test in this file.
+    resetPluginAvailabilityForTests();
   });
 
   afterEach(() => {
@@ -92,9 +95,36 @@ describe("readNativeNetworkStatus", () => {
     await expect(isDeviceConfirmedOffline()).resolves.toBe(false);
     expect(addLog).toHaveBeenCalledWith(
       "info",
-      "Native network status unavailable; treating connectivity as unknown",
-      expect.objectContaining({ error: expect.stringContaining("getNetworkStatus") }),
+      "Native network status is unavailable on this platform; connectivity stays unknown",
+      expect.objectContaining({ method: "DeviceDiscovery.getNetworkStatus" }),
     );
+  });
+
+  it("reports a missing method once, not on every probe (HARD27-003)", async () => {
+    /*
+     * iOS lists no getNetworkStatus in its pluginMethods. This runs on every foreground
+     * discovery and on every background probe - a 5 s cadence - so the previous per-rejection
+     * log filled the 500-entry diagnostics buffer during any offline or Demo Mode session.
+     */
+    getNetworkStatus.mockRejectedValue(Object.assign(new Error("not implemented on ios"), { code: "UNIMPLEMENTED" }));
+
+    for (let probe = 0; probe < 20; probe += 1) {
+      await expect(readNativeNetworkStatus()).resolves.toEqual({ online: true, supported: false });
+    }
+
+    expect(addLog.mock.calls.filter((call) => call[0] === "info")).toHaveLength(1);
+    // Latched, so the bridge is not called again either.
+    expect(getNetworkStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("still logs a real bridge failure every time, because it may stop happening", async () => {
+    getNetworkStatus.mockRejectedValue(new Error("network is unreachable"));
+
+    await readNativeNetworkStatus();
+    await readNativeNetworkStatus();
+
+    expect(addLog.mock.calls.filter((call) => call[0] === "info")).toHaveLength(2);
+    expect(getNetworkStatus).toHaveBeenCalledTimes(2);
   });
 
   it("reports connectivity as unknown rather than waiting forever on a bridge that never answers", async () => {

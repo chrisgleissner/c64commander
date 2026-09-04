@@ -36,6 +36,7 @@ import {
   isHvscBridgeAvailable,
   isHvscIngestionBridgeAvailable,
   isHvscCancellationError,
+  HVSC_CANCELED_STATUS_REASON,
   recoverStaleIngestionState,
   type HvscPreparationPhase,
   type HvscPreparationSnapshot,
@@ -135,13 +136,11 @@ const HVSC_EXTRACTION_STAGES = new Set([
 const HVSC_READY_MESSAGE = "Ready to use: Add items -> HVSC.";
 
 /**
- * @param hvscEnabled the resolved `hvsc_enabled` feature flag
- *   (`shouldShowHvscControls(featureFlags)`). HARD19-026: the hook's background
- *   lifecycle (status/recover/hydration) must respect this flag, not just
- *   native-bridge presence — otherwise a user who installed HVSC then disabled
- *   it (a supported flow, default-off on C64U Remote) still runs minutes of
- *   native I/O per Play visit, recreating the HVSC-starvation load that knocks
- *   Remote Input offline. Callers MUST pass the live flag so re-enabling resumes.
+ * @param hvscEnabled resolved `hvsc_enabled` flag (`shouldShowHvscControls(featureFlags)`), passed live
+ *   so re-enabling resumes. HARD19-026: the background lifecycle (status/recover/hydration) must respect
+ *   it, not just native-bridge presence — a user who installed HVSC then disabled it (a supported flow,
+ *   default-off on C64U Remote) otherwise runs minutes of native I/O per Play visit, recreating the
+ *   HVSC-starvation load that knocks Remote Input offline.
  */
 export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
   const [hvscStatus, setHvscStatus] = useState<HvscStatus | null>(null);
@@ -992,7 +991,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
       setHvscStage(null);
       setHvscActionLabel(null);
       setHvscCurrentFile(null);
-      setHvscErrorMessage("Canceled");
+      setHvscErrorMessage(HVSC_CANCELED_STATUS_REASON);
       updateHvscSummary((prev) => ({
         ...prev,
         download:
@@ -1006,7 +1005,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
                 totalBytes: null,
                 sizeBytes: null,
                 errorCategory: null,
-                errorMessage: "Canceled",
+                errorMessage: HVSC_CANCELED_STATUS_REASON,
               }
             : prev.download,
         extraction:
@@ -1019,7 +1018,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
                 filesExtracted: null,
                 totalFiles: null,
                 errorCategory: null,
-                errorMessage: "Canceled",
+                errorMessage: HVSC_CANCELED_STATUS_REASON,
               }
             : prev.extraction,
         lastUpdatedAt: stoppedAt,

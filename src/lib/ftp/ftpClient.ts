@@ -7,7 +7,7 @@
  */
 
 import type { PluginListenerHandle } from "@capacitor/core";
-import { addErrorLog, buildErrorLogDetails } from "@/lib/logging";
+import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { decrementFtpInFlight, incrementFtpInFlight } from "@/lib/diagnostics/diagnosticsActivity";
 import {
   FtpClient,
@@ -21,6 +21,7 @@ import {
   type FtpWriteOptions,
 } from "@/lib/native/ftpClient";
 import { resolveNativeTraceContext } from "@/lib/native/nativeTraceContext";
+import { isKnownUnavailable, isPluginMethodUnimplemented, recordUnavailable } from "@/lib/native/pluginAvailability";
 import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import { recordFtpOperation, recordTraceError } from "@/lib/tracing/traceSession";
 import { withFtpInteraction, type InteractionIntent } from "@/lib/deviceInteraction/deviceInteractionManager";
@@ -51,6 +52,8 @@ export type FtpReadInteractionOptions = FtpReadOptions & {
   onProgress?: (progress: FtpReadProgress) => void;
   signal?: AbortSignal;
 };
+
+const FTP_CANCEL_READ_METHOD = "FtpClient.cancelRead";
 
 let ftpReadRequestCounter = 0;
 
@@ -315,7 +318,20 @@ const executeFtpRead = async (
     }
     if (requestId && signal) {
       const requestCancel = () => {
+        // iOS lists no `cancelRead` in its `pluginMethods`, so every aborted read - every page
+        // leave with a large transfer in flight - rejected here and wrote an error-level entry.
+        // The read is abandoned either way; only the native stream stays open until it finishes.
+        // Latched, so the degradation is reported once rather than on every abort (HARD27-003).
+        if (isKnownUnavailable(FTP_CANCEL_READ_METHOD)) return;
         void FtpClient.cancelRead({ requestId }).catch((error) => {
+          if (isPluginMethodUnimplemented(error)) {
+            if (recordUnavailable(FTP_CANCEL_READ_METHOD)) {
+              addLog("info", "FTP reads are not cancelled natively on this platform", {
+                method: FTP_CANCEL_READ_METHOD,
+              });
+            }
+            return;
+          }
           addErrorLog(
             "FTP cancelRead failed",
             buildErrorLogDetails(error as Error, {

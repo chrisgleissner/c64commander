@@ -7,6 +7,15 @@ tags:
   - ios
   - ci-critical-ios
 ---
+# "Connection.*", not "Connection": the section header is one <button> whose whole text is
+# "Connection Saved devices, discovery, passwords, demo mode".
+# See subflows/ios-open-settings-tab.yaml.
+#
+# Play anchor is an alternation, not "Playlist": PlaylistPanel's title sits below the fold on
+# iOS and assertVisible only counts what is on screen, so the flow failed on a correctly
+# rendered page. The first two are what the page draws at the top with nothing playing —
+# SidRadioChip's source caption and PlaybackControlsCard's idle title.
+# Bound to production by tests/unit/maestro/iosTextAnchors.test.ts.
 - runFlow: subflows/launch-and-wait.yaml
 - assertVisible: "Home"
 - tapOn:
@@ -19,10 +28,10 @@ tags:
     point: "75%,95%"
     optional: true
 - extendedWaitUntil:
-    visible: "Connection"
+    visible: "Connection.*"
     timeout: ${LONG_TIMEOUT}
 - assertVisible: "Settings"
-- assertVisible: "Connection"
+- assertVisible: "Connection.*"
 - tapOn:
     id: "tab-play"
     optional: true
@@ -33,21 +42,53 @@ tags:
     point: "25%,95%"
     optional: true
 - extendedWaitUntil:
-    visible: "Playlist"
+    visible: "(Your playlist|Select a playlist item to start|Playlist)"
     timeout: ${TIMEOUT}
-- assertVisible: "Playlist"
-- scrollUntilVisible:
-    element:
-      text: "Add items to playlist"
-    direction: DOWN
-    timeout: ${TIMEOUT}
-- assertVisible: "Add items to playlist"
-- tapOn:
-    text: "Add items to playlist"
-    optional: true
-- extendedWaitUntil:
-    visible: "Choose source"
-    timeout: ${TIMEOUT}
+- assertVisible: "(Your playlist|Select a playlist item to start|Playlist)"
+# 100 is stated rather than inherited. This button is narrower than the screen, so WKWebView
+# reports it inside the screen bounds and it has reached full visibility on every run; lowering
+# the threshold would let the scroll stop with the button's centre off screen. The full-width
+# Settings rows in ios-config-persistence.yaml cannot reach 100 and set a lower value there.
+#
+# The dialog is closed first when it is already open. ItemSelectionDialog resets the chosen source
+# in an effect that runs when `open` becomes true, so a dialog that is already open on a source
+# cannot show the "Choose source" interstitial again, however long the wait below runs. Run
+# 33856876503 failed that way: the dialog was open on the CommoServe browser, `assertVisible` still
+# passed because the Play page behind the web dialog stays in the WKWebView accessibility tree, and
+# the tap then landed inside the dialog. Closing it makes the next open reset the source.
+# "Add items" is the dialog title and is matched as one element's whole text, so it does not also
+# match the "Add items to playlist" button on the page behind it. "Close" is the accessible name of
+# the dialog header's close control.
+# Bound to production by tests/unit/maestro/iosTextAnchors.test.ts.
+- retry:
+    maxRetries: 3
+    commands:
+      - runFlow:
+          when:
+            visible: "Add items"
+          commands:
+            - tapOn:
+                text: "Close"
+                optional: true
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            notVisible: "Add items"
+          commands:
+            - scrollUntilVisible:
+                element:
+                  text: "Add items to playlist"
+                direction: DOWN
+                visibilityPercentage: 100
+                timeout: ${TIMEOUT}
+            - assertVisible: "Add items to playlist"
+            - tapOn:
+                text: "Add items to playlist"
+                optional: true
+            - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "Choose source"
+          timeout: ${TIMEOUT}
 - assertVisible: "Add file / folder from Local"
 - assertVisible: "Add file / folder from C64U"
 - takeScreenshot: ios-ci-smoke-source-options

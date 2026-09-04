@@ -25,6 +25,7 @@ import {
 import { accurateEngineViable, recordRenderMeasurement, renderRatio, startupBufferSeconds } from "./renderThroughput";
 import { addLog, addErrorLog } from "@/lib/logging";
 import { claimPhoneAudio, phoneAudioOwner, releasePhoneAudio } from "@/lib/audio/phoneAudioOwnership";
+import { reacquirePlaybackAudioFocus } from "@/lib/audio/audioFocusPolicy";
 import { clearLocalAudioHealth, reportLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
 import { notifyPlaybackActivityChanged } from "./playbackActivitySignal";
 import type { PendingSeekState } from "./pendingSeekStatus";
@@ -229,8 +230,17 @@ const SEEK_ACK_TIMEOUT_MS = 20_000;
  * play the C64's audio straight over the top of a local tune, because the two
  * subsystems had no common notion of who holds the speaker. Now they do.
  */
-const claimAudioOwnership = (engine: { stopPlayback: () => void }): void => {
-  claimPhoneAudio("local-sid", engine, () => engine.stopPlayback());
+const claimAudioOwnership = (engine: {
+  stopPlayback: () => void;
+  pause: () => Promise<void>;
+  resume: () => Promise<void>;
+}): void => {
+  // The interrupt handlers are what an audio-focus loss uses (HARD27-006): suspending the clock
+  // holds the tune's position, so the listener gets the same tune back rather than a restart.
+  claimPhoneAudio("local-sid", engine, () => engine.stopPlayback(), {
+    pause: () => void engine.pause(),
+    resume: () => void engine.resume(),
+  });
 };
 
 const releaseAudioOwnership = (engine: object): void => {
@@ -1987,6 +1997,9 @@ export class LocalSidEngine {
   /** Resume after {@link pause}. */
   async resume(): Promise<void> {
     this.paused = false;
+    // The sink stayed open across the pause, so nothing else asks for audio focus on the way back
+    // in. Whatever interrupted this tune holds it until this call (HARD27-006).
+    void reacquirePlaybackAudioFocus();
     // The buffer drained while the clock was suspended; give the pipeline the same grace a fresh
     // start gets rather than judging it on how long the pause lasted.
     this.lastAudioAtMs = Date.now();

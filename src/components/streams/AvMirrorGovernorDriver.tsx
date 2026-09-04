@@ -9,6 +9,7 @@
 import { useEffect } from "react";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { STATS_TICK_MS } from "@/hooks/useStreamStats";
+import { installAvMirrorBackgroundPolicy } from "@/lib/streams/avMirrorBackgroundPolicy";
 
 /**
  * App-wide Live View governor + telemetry lifecycle. The session's timer-free {@link avMirrorSession.tick}
@@ -32,5 +33,8 @@ export function AvMirrorGovernorDriver() {
     }, STATS_TICK_MS);
     return () => window.clearInterval(id);
   }, []);
+  // HARD27-021: the same app-wide mount owns the mirror's backgrounding policy, so hiding the app
+  // stops the streams instead of leaving the phone receiving and the Ultimate multicasting.
+  useEffect(() => installAvMirrorBackgroundPolicy(), []);
   return null;
 }

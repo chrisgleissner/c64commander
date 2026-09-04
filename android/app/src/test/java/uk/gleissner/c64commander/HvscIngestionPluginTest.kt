@@ -21,11 +21,14 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
+import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
@@ -42,6 +45,7 @@ import uk.gleissner.c64commander.hvsc.MemoryBudget
 private open class TestableHvscIngestionPlugin : HvscIngestionPlugin() {
   val progressEvents = mutableListOf<JSObject>()
   var fakeExtractor: HvscArchiveExtractor? = null
+  var fakeAvailableBytes: Long? = null
 
   public override fun notifyListeners(eventName: String?, data: JSObject?) {
     if (eventName == "hvscProgress" && data != null) {
@@ -54,6 +58,8 @@ private open class TestableHvscIngestionPlugin : HvscIngestionPlugin() {
   // deletion application, payload construction) with a canned extraction
   // result instead of a real 7z/zip archive.
   public override fun createArchiveExtractor(): HvscArchiveExtractor = fakeExtractor ?: super.createArchiveExtractor()
+
+  public override fun readAvailableBytes(dir: File): Long = fakeAvailableBytes ?: super.readAvailableBytes(dir)
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -106,6 +112,36 @@ class HvscIngestionPluginTest {
     plugin.cancelIngestion(call)
 
     verify(call).resolve()
+  }
+
+  @Test
+  fun getStorageBudgetReportsAvailableBytesAndNoLibraryWhenNoneInstalled() {
+    val call = mock(PluginCall::class.java)
+    val payloadCaptor = ArgumentCaptor.forClass(JSObject::class.java)
+    File(context.filesDir, "hvsc/library").deleteRecursively()
+    plugin.fakeAvailableBytes = 1_234_567_890L
+
+    plugin.getStorageBudget(call)
+
+    verify(call).resolve(payloadCaptor.capture())
+    val payload = payloadCaptor.value
+    assertEquals(1_234_567_890L, payload.getLong("availableBytes"))
+    assertFalse(payload.getBool("libraryPresent")!!)
+    verify(call, never()).reject(anyString())
+  }
+
+  @Test
+  fun getStorageBudgetReportsAnInstalledLibrary() {
+    val call = mock(PluginCall::class.java)
+    val payloadCaptor = ArgumentCaptor.forClass(JSObject::class.java)
+    // A reinstall keeps this tree on disk beside the new one until promotion
+    // succeeds, so the JS gate must budget for two libraries when it exists.
+    File(context.filesDir, "hvsc/library").mkdirs()
+
+    plugin.getStorageBudget(call)
+
+    verify(call).resolve(payloadCaptor.capture())
+    assertTrue(payloadCaptor.value.getBool("libraryPresent")!!)
   }
 
   @Test

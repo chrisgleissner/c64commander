@@ -6,10 +6,12 @@ env:
 ---
 - runFlow: subflows/launch-and-wait.yaml
 - tapOn:
-    point: "25%,95%"
+    id: "tab-play"
 - extendedWaitUntil:
     visible: "Playlist"
     timeout: ${SHORT_TIMEOUT}
+- assertVisible:
+    id: "page-play"
 - assertVisible: "Playlist"
 - assertVisible: "Select a playlist item to start"
 - assertVisible: "Play"

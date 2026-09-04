@@ -33,6 +33,8 @@ export type MockFtpServer = {
   host: string;
   port: number;
   rootDir: string;
+  /** Every password the server was offered, in order, so a caller can assert which one reached it. */
+  passwords: string[];
   close: () => Promise<void>;
 };
 
@@ -50,6 +52,7 @@ export async function createMockFtpServer(options: MockFtpServerOptions): Promis
   const rootDir = path.resolve(options.rootDir);
   const port = options.port ?? 0;
   const password = options.password ?? "";
+  const passwords: string[] = [];
   const pasvMin = options.pasvMin ?? 40100;
   const pasvMax = options.pasvMax ?? 40200;
   const server = new FtpServer(host, {
@@ -76,6 +79,7 @@ export async function createMockFtpServer(options: MockFtpServerOptions): Promis
     connection.on(
       "command:pass",
       (suppliedPassword: string | undefined, success: (value: string) => void, failure: (error: Error) => void) => {
+        passwords.push(suppliedPassword ?? "");
         const ok = !password || suppliedPassword === password;
         if (!ok) {
           failure(new Error("FTP login failed"));
@@ -101,6 +105,7 @@ export async function createMockFtpServer(options: MockFtpServerOptions): Promis
     host,
     port: address.port,
     rootDir,
+    passwords,
     close: async () => {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => {

@@ -26,6 +26,19 @@ export type HvscNativeIngestResult = {
   archiveBytes: number;
 };
 
+export type HvscNativeDownloadResult = {
+  totalBytes: number;
+  resumedFromBytes: number;
+  transferredBytes: number;
+};
+
+export type HvscNativeDownloadProgressEvent = {
+  relativeArchivePath: string;
+  downloadedBytes: number;
+  totalBytes: number;
+  percent?: number;
+};
+
 export type HvscNativeProgressEvent = {
   stage: string;
   message: string;
@@ -50,16 +63,33 @@ type HvscIngestionPlugin = {
   }) => Promise<HvscNativeIngestResult>;
   cancelIngestion: (options?: { traceContext?: NativeTraceContext }) => Promise<void>;
   getIngestionStats: (options?: { traceContext?: NativeTraceContext }) => Promise<{ metadataRows: number }>;
+  getStorageBudget: (options?: {
+    traceContext?: NativeTraceContext;
+  }) => Promise<{ availableBytes: number; libraryPresent: boolean }>;
   readArchiveChunk: (options: {
     relativeArchivePath: string;
     offsetBytes: number;
     lengthBytes: number;
     traceContext?: NativeTraceContext;
   }) => Promise<{ data: string; sizeBytes: number; eof: boolean }>;
-  addListener: (
-    eventName: "hvscProgress",
-    listenerFunc: (event: HvscNativeProgressEvent) => void,
-  ) => Promise<{ remove: () => Promise<void> }>;
+  // Only Android implements this; iOS and the web reject it as unimplemented and the caller
+  // falls back to the whole-file download. See HARD27-028.
+  downloadArchive: (options: {
+    relativeArchivePath: string;
+    url: string;
+    expectedTotalBytes?: number;
+    traceContext?: NativeTraceContext;
+  }) => Promise<HvscNativeDownloadResult>;
+  addListener: {
+    (
+      eventName: "hvscProgress",
+      listenerFunc: (event: HvscNativeProgressEvent) => void,
+    ): Promise<{ remove: () => Promise<void> }>;
+    (
+      eventName: "hvscDownloadProgress",
+      listenerFunc: (event: HvscNativeDownloadProgressEvent) => void,
+    ): Promise<{ remove: () => Promise<void> }>;
+  };
 };
 
 const plugin = registerPlugin<HvscIngestionPlugin>("HvscIngestion");
@@ -86,11 +116,22 @@ export const HvscIngestion = {
     plugin.getIngestionStats({
       traceContext: resolveNativeTraceContext(getActiveAction()),
     }),
+  getStorageBudget: () =>
+    plugin.getStorageBudget({
+      traceContext: resolveNativeTraceContext(getActiveAction()),
+    }),
   readArchiveChunk: (options: { relativeArchivePath: string; offsetBytes: number; lengthBytes: number }) =>
     plugin.readArchiveChunk({
       ...options,
       traceContext: resolveNativeTraceContext(getActiveAction()),
     }),
+  downloadArchive: (options: { relativeArchivePath: string; url: string; expectedTotalBytes?: number }) =>
+    plugin.downloadArchive({
+      ...options,
+      traceContext: resolveNativeTraceContext(getActiveAction()),
+    }),
   addProgressListener: (listener: (event: HvscNativeProgressEvent) => void) =>
     plugin.addListener("hvscProgress", listener),
+  addDownloadProgressListener: (listener: (event: HvscNativeDownloadProgressEvent) => void) =>
+    plugin.addListener("hvscDownloadProgress", listener),
 };

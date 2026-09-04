@@ -84,6 +84,7 @@ vi.mock("../../../src/lib/mock/mockServer", () => ({
   getActiveMockBaseUrl: vi.fn(() => null),
   getActiveMockFtpPort: vi.fn(() => null),
   getActiveMockToken: vi.fn(() => null),
+  isSimulatedDeviceAvailable: vi.fn(() => true),
 }));
 
 const ensureStorage = () => {

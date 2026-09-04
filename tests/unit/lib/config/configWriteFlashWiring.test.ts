@@ -105,6 +105,80 @@ describe("config writes and flash persistence", () => {
     expect(savedToFlash()).toHaveLength(0);
   });
 
+  // HARD27-011: playback-time mixer writes — the volume override and the pause mute — reach the
+  // device through `updateConfigBatch`, which had no way to say "this is not a setting the user
+  // chose". With "Keep device settings after a restart" on, every override and every pause was
+  // written to the device's flash 1.5 s later, and a kill mid-playback left the override as the
+  // device's persisted configuration.
+  it("does not persist a batch write the app intends to undo", async () => {
+    savePersistConfigToFlash(true);
+    const api = new C64API("http://127.0.0.1");
+
+    await api.updateConfigBatch(
+      { "U64 Specific Settings": { "Palette Definition": "night.vpl" } },
+      { __c64uTransientConfigWrite: true },
+    );
+    await settle();
+
+    expect(savedToFlash()).toHaveLength(0);
+  });
+
+  it("holds a save armed by a user write while a transient write is outstanding", async () => {
+    savePersistConfigToFlash(true);
+    const api = new C64API("http://127.0.0.1");
+
+    // The user edits a setting on the Config page, which arms the save.
+    await api.setConfigValue("U64 Specific Settings", "Palette Definition", "night.vpl");
+    // Playback starts and applies a volume override before the quiet period elapses. Without the
+    // hold, the armed save fires and writes the override to flash.
+    await api.updateConfigBatch(
+      { "U64 Specific Settings": { "Palette Definition": "override.vpl" } },
+      { __c64uTransientConfigWrite: true },
+    );
+    await settle();
+
+    expect(savedToFlash()).toHaveLength(0);
+  });
+
+  it("saves the user's own write once the transient write has been restored", async () => {
+    savePersistConfigToFlash(true);
+    const api = new C64API("http://127.0.0.1");
+
+    await api.setConfigValue("U64 Specific Settings", "Palette Definition", "night.vpl");
+    await api.updateConfigBatch(
+      { "U64 Specific Settings": { "Palette Definition": "override.vpl" } },
+      { __c64uTransientConfigWrite: true },
+    );
+    await settle();
+    expect(savedToFlash()).toHaveLength(0);
+
+    // Playback stops and restores the user's value; the held save may now go out.
+    await api.updateConfigBatch(
+      { "U64 Specific Settings": { "Palette Definition": "night.vpl" } },
+      { __c64uTransientConfigWrite: true, __c64uTransientConfigRestore: true },
+    );
+    await settle();
+
+    expect(savedToFlash()).toHaveLength(1);
+  });
+
+  it("does not save on a restore when no user write was pending", async () => {
+    savePersistConfigToFlash(true);
+    const api = new C64API("http://127.0.0.1");
+
+    await api.updateConfigBatch(
+      { "U64 Specific Settings": { "Palette Definition": "override.vpl" } },
+      { __c64uTransientConfigWrite: true },
+    );
+    await api.updateConfigBatch(
+      { "U64 Specific Settings": { "Palette Definition": "night.vpl" } },
+      { __c64uTransientConfigWrite: true, __c64uTransientConfigRestore: true },
+    );
+    await settle();
+
+    expect(savedToFlash()).toHaveLength(0);
+  });
+
   it("does not persist a write the app intends to undo", async () => {
     // The launch-safety cartridge swap and the health-check probe both set a value, act, and set it
     // back. Writing the intermediate value to flash would make a workaround permanent if the

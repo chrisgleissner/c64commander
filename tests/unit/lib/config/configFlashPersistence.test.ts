@@ -32,6 +32,8 @@ import {
   hasUnsavedConfigChanges,
   noteConfigWritten,
   notePersistedToFlash,
+  noteTransientConfigWriteSettled,
+  noteTransientConfigWritten,
   saveConfigToFlashNow,
 } from "@/lib/config/configFlashPersistence";
 
@@ -175,6 +177,45 @@ describe("configFlashPersistence", () => {
     savePersistConfigToFlash(true);
     noteConfigWritten(() => mocks.saveConfig());
     notePersistedToFlash();
+    await settle();
+
+    expect(mocks.saveConfig).not.toHaveBeenCalled();
+    expect(hasUnsavedConfigChanges()).toBe(false);
+  });
+
+  // HARD27-011: a playback-time mixer write reaches the device through the same funnel as a
+  // Config-page edit. Skipping the arm is not enough on its own — a user edit moments earlier may
+  // already have armed a save, and that save would write the transient value to flash. The timer
+  // is held instead, so the user's own edit is still persisted once the undo lands.
+  it("holds an armed save across a transient write and lets it out after the undo", async () => {
+    savePersistConfigToFlash(true);
+    noteConfigWritten(() => mocks.saveConfig());
+
+    noteTransientConfigWritten();
+    await settle();
+    expect(mocks.saveConfig).not.toHaveBeenCalled();
+    expect(hasUnsavedConfigChanges()).toBe(true);
+
+    noteTransientConfigWriteSettled();
+    await settle();
+    expect(mocks.saveConfig).toHaveBeenCalledTimes(1);
+  });
+
+  it("does nothing for a transient write when no save was armed", async () => {
+    noteTransientConfigWritten();
+    noteTransientConfigWriteSettled();
+    await settle();
+
+    expect(mocks.saveConfig).not.toHaveBeenCalled();
+  });
+
+  it("drops a held save when the setting is turned off before the undo lands", async () => {
+    savePersistConfigToFlash(true);
+    noteConfigWritten(() => mocks.saveConfig());
+    noteTransientConfigWritten();
+
+    savePersistConfigToFlash(false);
+    noteTransientConfigWriteSettled();
     await settle();
 
     expect(mocks.saveConfig).not.toHaveBeenCalled();

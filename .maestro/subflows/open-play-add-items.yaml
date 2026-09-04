@@ -32,14 +32,12 @@ tags:
             text: "Home"
           timeout: ${TIMEOUT}
 - tapOn:
-    point: "25%,95%"
-    optional: true
-- tapOn:
-    text: "Play"
-    optional: true
+    id: "tab-play"
 - extendedWaitUntil:
     visible: "Playlist"
     timeout: ${TIMEOUT}
+- assertVisible:
+    id: "page-play"
 - assertVisible: "Playlist"
 - scrollUntilVisible:
     element:

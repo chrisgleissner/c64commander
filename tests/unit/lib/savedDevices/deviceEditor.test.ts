@@ -3,6 +3,7 @@ import {
   applySavedDeviceDraftHostInput,
   applySavedDeviceDraftNameInput,
   buildSavedDeviceEditorDraft,
+  isLocalOnlySavedDeviceEdit,
 } from "@/lib/savedDevices/deviceEditor";
 
 describe("deviceEditor", () => {
@@ -69,5 +70,33 @@ describe("deviceEditor", () => {
       nameSource: "INFERRED",
       host: "c64u",
     });
+  });
+});
+
+describe("isLocalOnlySavedDeviceEdit (HARD27-037)", () => {
+  const current = { host: "c64u", httpPort: 80 };
+
+  it("treats a rename as a local-only edit", () => {
+    expect(isLocalOnlySavedDeviceEdit(current, { host: "c64u", httpPort: 80 }, false, true)).toBe(true);
+  });
+
+  it("ignores host case and surrounding whitespace", () => {
+    expect(isLocalOnlySavedDeviceEdit(current, { host: " C64U ", httpPort: 80 }, false, true)).toBe(true);
+  });
+
+  it("is not local-only when the host changed", () => {
+    expect(isLocalOnlySavedDeviceEdit(current, { host: "192.168.1.15", httpPort: 80 }, false, true)).toBe(false);
+  });
+
+  it("is not local-only when the HTTP port changed", () => {
+    expect(isLocalOnlySavedDeviceEdit(current, { host: "c64u", httpPort: 8080 }, false, true)).toBe(false);
+  });
+
+  it("is not local-only when a password is being set", () => {
+    expect(isLocalOnlySavedDeviceEdit(current, { host: "c64u", httpPort: 80 }, true, true)).toBe(false);
+  });
+
+  it("is not local-only when nothing changed, so Save & Connect still probes", () => {
+    expect(isLocalOnlySavedDeviceEdit(current, { host: "c64u", httpPort: 80 }, false, false)).toBe(false);
   });
 });

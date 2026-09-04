@@ -75,11 +75,14 @@ describe("launchSafety — withCartridgeParked", () => {
     expect(order).toEqual(["set:<empty>", "run", "set:Retro Replay"]);
     // Both writes are marked transient. Parking is a workaround the app intends to undo, so if the
     // user has asked for device settings to be kept, an empty cartridge must not be what gets kept.
+    // HARD27-011: the second write is additionally marked as the restore, which releases a flash
+    // save that the parking write was holding.
     expect(api.setConfigValue).toHaveBeenNthCalledWith(1, CART_CATEGORY, CART_ITEM, "", {
       __c64uTransientConfigWrite: true,
     });
     expect(api.setConfigValue).toHaveBeenNthCalledWith(2, CART_CATEGORY, CART_ITEM, "Retro Replay", {
       __c64uTransientConfigWrite: true,
+      __c64uTransientConfigRestore: true,
     });
   });
 
@@ -95,6 +98,7 @@ describe("launchSafety — withCartridgeParked", () => {
     });
     expect(api.setConfigValue).toHaveBeenNthCalledWith(2, CART_CATEGORY, CART_ITEM, "Action Replay", {
       __c64uTransientConfigWrite: true,
+      __c64uTransientConfigRestore: true,
     });
   });
 

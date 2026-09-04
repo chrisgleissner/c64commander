@@ -61,17 +61,34 @@ const loginHtml = () => `<!doctype html>
   </body>
 </html>`;
 
+// HARD27-031: WebAssembly.instantiateStreaming rejects a response whose type is
+// not application/wasm, so the SID engine dropped to arrayBuffer compilation and
+// logged a warning on every start. Extensions are looked up in one table so a
+// new asset type is a single entry.
+const CONTENT_TYPES_BY_EXTENSION: ReadonlyMap<string, string> = new Map([
+  [".html", "text/html; charset=utf-8"],
+  [".js", "application/javascript; charset=utf-8"],
+  [".mjs", "application/javascript; charset=utf-8"],
+  [".css", "text/css; charset=utf-8"],
+  [".json", "application/json; charset=utf-8"],
+  [".map", "application/json; charset=utf-8"],
+  [".webmanifest", "application/manifest+json"],
+  [".wasm", "application/wasm"],
+  [".svg", "image/svg+xml"],
+  [".png", "image/png"],
+  [".jpg", "image/jpeg"],
+  [".jpeg", "image/jpeg"],
+  [".ico", "image/x-icon"],
+  [".webm", "video/webm"],
+  [".woff2", "font/woff2"],
+  [".txt", "text/plain; charset=utf-8"],
+]);
+
 const getContentType = (filePath: string) => {
-  if (filePath.endsWith(".html")) return "text/html; charset=utf-8";
-  if (filePath.endsWith(".js")) return "application/javascript; charset=utf-8";
-  if (filePath.endsWith(".css")) return "text/css; charset=utf-8";
-  if (filePath.endsWith(".json")) return "application/json; charset=utf-8";
-  if (filePath.endsWith(".svg")) return "image/svg+xml";
-  if (filePath.endsWith(".png")) return "image/png";
-  if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) return "image/jpeg";
-  if (filePath.endsWith(".webm")) return "video/webm";
-  if (filePath.endsWith(".woff2")) return "font/woff2";
-  return "application/octet-stream";
+  const extensionIndex = filePath.lastIndexOf(".");
+  if (extensionIndex < 0) return "application/octet-stream";
+  const extension = filePath.slice(extensionIndex).toLowerCase();
+  return CONTENT_TYPES_BY_EXTENSION.get(extension) ?? "application/octet-stream";
 };
 
 export const createStaticAssetServer = (options: {

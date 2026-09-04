@@ -29,8 +29,33 @@ export type ModalPresentation = {
   footerClassName: string;
 };
 
-const centeredBaseClass =
-  "fixed left-[50dvw] grid w-[min(calc(100dvw-1.5rem),var(--display-profile-modal-max-width))] translate-x-[-50%] gap-4 overflow-hidden rounded-[var(--interstitial-radius)] border bg-background p-6 shadow-[var(--interstitial-shadow)] outline-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95";
+// The `enter` and `exit` keyframes of tailwindcss-animate assign the whole
+// `transform` property, so they discard the `translateX(-50%)` that centres the
+// overlay unless the class list also names an enter and exit translate. Without
+// the two `left-1/2` classes below, a modal animates in from `translateX(0)` and
+// is off centre — and past the right edge on a narrow viewport — for the whole
+// animation. Keep them next to any horizontal centering transform.
+const centeredAnimationClass =
+  "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-left-1/2 data-[state=closed]:slide-out-to-left-1/2";
+
+const centeredBaseClass = `fixed left-[50dvw] grid w-[min(calc(100dvw-1.5rem),var(--display-profile-modal-max-width))] translate-x-[-50%] gap-4 overflow-hidden rounded-[var(--interstitial-radius)] border bg-background p-6 shadow-[var(--interstitial-shadow)] outline-none ${centeredAnimationClass}`;
+
+/** Class list of `AppDialogContent`; kept here so every centered overlay shares one definition. */
+export const APP_DIALOG_CONTENT_CLASS = `fixed left-[50dvw] flex w-[min(90dvw,32rem)] max-w-[calc(100dvw-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-[var(--interstitial-radius)] border bg-background p-0 shadow-[var(--interstitial-shadow)] ${centeredAnimationClass}`;
+
+/**
+ * Class list of `AppSheetContent`. The sheet is full width and not transform-centred below the `sm`
+ * breakpoint, so its enter and exit translate only needs the `sm:` variant.
+ */
+export const APP_SHEET_CONTENT_CLASS = [
+  "fixed inset-x-0 bottom-0 flex min-h-0 w-full flex-col overflow-hidden border border-b-0 bg-background p-0",
+  "rounded-t-[var(--interstitial-radius)] shadow-[var(--interstitial-shadow)]",
+  "sm:left-1/2 sm:right-auto sm:w-[min(100vw-2rem,56rem)] sm:-translate-x-1/2",
+  "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+  "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
+  "sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=closed]:slide-out-to-left-1/2",
+  "pb-[var(--app-sheet-bottom-clearance)]",
+].join(" ");
 
 const stickyFooterClass =
   "sticky bottom-0 z-10 mt-auto border-t border-border bg-background pb-[calc(1rem+var(--safe-area-inset-bottom))]";

@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { useAvMirror, useAvMirrorCanvas } from "@/hooks/useAvMirror";
 import { useMirrorViewport } from "@/hooks/useMirrorViewport";
 import { useStreamVideoBadges } from "@/hooks/useStreamVideoBadges";
+import { useScreenWakeLock } from "@/hooks/useScreenWakeLock";
 import { viewportRect, type Viewport } from "@/lib/streams/mirrorViewport";
 import type { MirrorLock } from "@/hooks/useMirrorViewport";
 import type { LockState } from "@/lib/streams/subjectTracker";
@@ -151,6 +152,9 @@ export const AvMirrorImmersive = forwardRef<AvMirrorImmersiveHandle, AvMirrorImm
   ref,
 ) {
   const { videoLive, video } = useAvMirror(session);
+  // Watching a picture is the one flow with no touch input, so the display timeout would otherwise
+  // lock the screen part-way through it.
+  useScreenWakeLock(videoLive);
   const showBadges = useStreamVideoBadges();
   const [follow, setFollow] = useState(false);
   const { viewport, lock, zoomBy, panBy, centerOn, reset, lockOn, releaseLock } = useMirrorViewport({

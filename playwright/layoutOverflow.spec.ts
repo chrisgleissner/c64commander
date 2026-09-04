@@ -534,22 +534,23 @@ test.describe("Layout overflow safeguards", () => {
       const [titleBox, badgeCriticalBox, badgeBox, sheetBox] = await Promise.all([
         readRect(titleZone),
         badge.evaluate((element) => {
-          const nodes = Array.from(element.querySelectorAll<HTMLElement>('[data-overlay-critical="badge"]'));
-          const rects = nodes.map((node) => node.getBoundingClientRect());
-          return rects.reduce(
-            (combined, rect) => ({
-              top: Math.min(combined.top, rect.top),
-              right: Math.max(combined.right, rect.right),
-              bottom: Math.max(combined.bottom, rect.bottom),
-              left: Math.min(combined.left, rect.left),
-            }),
-            {
-              top: rects[0]?.top ?? 0,
-              right: rects[0]?.right ?? 0,
-              bottom: rects[0]?.bottom ?? 0,
-              left: rects[0]?.left ?? 0,
+          const rects = Array.from(element.querySelectorAll<HTMLElement>('[data-overlay-critical="badge"]')).map(
+            (node) => {
+              const rect = node.getBoundingClientRect();
+              return { top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left };
             },
           );
+          // Returning a zero box for an empty match would make the safe-zone assertion below
+          // pass against `bottom - 1 === -1`, so removing or renaming the attribute would
+          // silently delete the check rather than fail it. `getBadgeCriticalBounds` in
+          // `interstitialStyles.ts` returns null in the same case for the same reason.
+          if (rects.length === 0) return null;
+          return rects.reduce((combined, rect) => ({
+            top: Math.min(combined.top, rect.top),
+            right: Math.max(combined.right, rect.right),
+            bottom: Math.max(combined.bottom, rect.bottom),
+            left: Math.min(combined.left, rect.left),
+          }));
         }),
         readRect(badge),
         readRect(lightingSheet),
@@ -558,8 +559,9 @@ test.describe("Layout overflow safeguards", () => {
       expect(sheetBox.top, "workflow sheet should stop below the title safe zone").toBeGreaterThanOrEqual(
         titleBox.bottom - 1,
       );
+      expect(badgeCriticalBox, "the badge draws no [data-overlay-critical] node to measure").not.toBeNull();
       expect(sheetBox.top, "workflow sheet should stop below the badge critical safe zone").toBeGreaterThanOrEqual(
-        badgeCriticalBox.bottom - 1,
+        (badgeCriticalBox as { bottom: number }).bottom - 1,
       );
       expect(sheetBox.top, "workflow sheet should not cover the badge body").toBeGreaterThanOrEqual(badgeBox.top - 1);
 

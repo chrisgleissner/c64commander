@@ -13,19 +13,13 @@ import { dismissStartupDiscoveryDialog, seedUiMocks } from "./uiMocks";
 import {
   allowWarnings,
   assertNoUiIssues,
-  attachStepScreenshot,
+  attachStepScreenshotTolerant,
   finalizeEvidence,
   startStrictUiMonitoring,
 } from "./testArtifacts";
 import { saveCoverageFromPage } from "./withCoverage";
 
-const snap = async (page: Page, testInfo: TestInfo, label: string) => {
-  try {
-    await attachStepScreenshot(page, testInfo, label);
-  } catch (error) {
-    console.warn(`Step screenshot failed for "${label}"`, error);
-  }
-};
+const snap = attachStepScreenshotTolerant;
 
 const ensureTechnicalDetailsExpanded = async (_dialog: Locator) => {
   // no-op: technical details section removed from redesigned DiagnosticsDialog

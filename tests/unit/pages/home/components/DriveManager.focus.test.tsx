@@ -8,7 +8,9 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import { resetCardMemory } from "../../../helpers/cards";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { enterKeyNavigationModality, leaveKeyNavigationModality } from "../../../../helpers/keypadModality";
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   FocusNavigationProvider,
@@ -107,6 +109,9 @@ vi.mock("@/components/ui/select", () => ({
 
 import { DriveManager } from "@/pages/home/components/DriveManager";
 
+// HARD27-039: modality is a module-level singleton shared by every test here.
+afterEach(() => leaveKeyNavigationModality());
+
 const baseProps = {
   handleAction: vi.fn().mockImplementation((fn: () => Promise<void>) => fn()),
   machineTaskBusy: false,
@@ -126,6 +131,10 @@ const renderInRing = (
   focusContext?: { current: FocusNavigationContextValue | null },
 ) => {
   const { isConnected = true, ...rest } = overrides;
+  // HARD27-039: a keypad user arrives here by key, so the discovery engine is
+  // already running when the component mounts. These tests read the ring without
+  // pressing a key first.
+  enterKeyNavigationModality();
   return render(
     <FocusNavigationProvider profileId="keypad">
       {focusContext ? <FocusContextCapture target={focusContext} /> : null}

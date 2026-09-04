@@ -357,6 +357,75 @@ class DeviceDiscoveryPluginTest {
   }
 
   @Test
+  fun buildTargetsCarriesTheSavedHttpPortOfAKnownHost() {
+    // HARD27-020: a saved device on a custom port arrives as "host:port" and must be
+    // probed on that port, not on 80.
+    val targets = plugin.buildTargets(listOf("c64u:8080", "u64"), includeLanScan = false)
+    assertEquals(8080, targets.single { it.host == "c64u" }.port)
+    assertEquals(80, targets.single { it.host == "u64" }.port)
+  }
+
+  @Test
+  fun buildTargetsTreatsAnInvalidOrAbsentPortSuffixAsPartOfTheHost() {
+    val targets = plugin.buildTargets(
+      listOf("c64u:not-a-port", "c64u:0", "c64u:70000", "fe80::1", "[fe80::2]:8080"),
+      includeLanScan = false,
+    )
+    // An unparseable suffix and a bare IPv6 literal stay verbatim on the default port.
+    assertTrue(targets.any { it.host == "c64u:not-a-port" && it.port == 80 })
+    assertTrue(targets.any { it.host == "c64u:0" && it.port == 80 })
+    assertTrue(targets.any { it.host == "c64u:70000" && it.port == 80 })
+    assertTrue(targets.any { it.host == "fe80::1" && it.port == 80 })
+    // A bracketed IPv6 literal keeps its brackets and yields its port.
+    assertTrue(targets.any { it.host == "[fe80::2]" && it.port == 8080 })
+  }
+
+  @Test
+  fun buildTargetsSweepsTheLanOnPort80BeforeAnySavedCustomPort() {
+    plugin.lanHostEnumerator = { listOf("192.168.1.2", "192.168.1.3") }
+    val targets = plugin.buildTargets(listOf("c64u:8080"), includeLanScan = true)
+    val lanTargets = targets.filter { it.source == "lan-scan" }
+    // runProbes drains the pool in submission order under one deadline, so the default
+    // sweep must be submitted in full before the saved custom port widens it.
+    assertEquals(
+      listOf("192.168.1.2:80", "192.168.1.3:80", "192.168.1.2:8080", "192.168.1.3:8080"),
+      lanTargets.map { "${it.host}:${it.port}" },
+    )
+  }
+
+  @Test
+  fun buildTargetsSweepsTheLanOnlyOnPort80WithoutASavedCustomPort() {
+    plugin.lanHostEnumerator = { listOf("192.168.1.2", "192.168.1.3") }
+    val targets = plugin.buildTargets(listOf("c64u"), includeLanScan = true)
+    val lanTargets = targets.filter { it.source == "lan-scan" }
+    assertEquals(listOf("192.168.1.2:80", "192.168.1.3:80"), lanTargets.map { "${it.host}:${it.port}" })
+  }
+
+  @Test
+  fun effectiveConcurrencyLeavesASinglePortSweepAtTheRequestedSize() {
+    // 254 LAN hosts plus the known hosts, 650ms per probe, a 10s deadline: 24 workers
+    // already drain that inside 80% of the budget, so nothing is raised.
+    assertEquals(24, plugin.effectiveConcurrency(targetCount = 264, timeoutMs = 10_000, connectTimeoutMs = 650, requested = 24))
+  }
+
+  @Test
+  fun effectiveConcurrencyGrowsSoAWidenedSweepStillFitsTheDeadline() {
+    // The same scan with one saved device on a custom port doubles the target count.
+    val concurrency = plugin.effectiveConcurrency(targetCount = 518, timeoutMs = 10_000, connectTimeoutMs = 650, requested = 24)
+    assertTrue("Expected more than the requested 24 workers, got $concurrency", concurrency > 24)
+    // Every target must be reachable inside 80% of the deadline.
+    assertTrue(518L * 650 / concurrency <= 8_000)
+  }
+
+  @Test
+  fun effectiveConcurrencyIsCappedAndNeverDropsBelowTheRequestedSize() {
+    assertEquals(64, plugin.effectiveConcurrency(targetCount = 100_000, timeoutMs = 10_000, connectTimeoutMs = 650, requested = 24))
+    // A caller that asks for more than the cap keeps what it asked for.
+    assertEquals(64, plugin.effectiveConcurrency(targetCount = 10, timeoutMs = 10_000, connectTimeoutMs = 650, requested = 64))
+    assertEquals(8, plugin.effectiveConcurrency(targetCount = 0, timeoutMs = 10_000, connectTimeoutMs = 650, requested = 8))
+  }
+
+  @Test
   fun parseKnownHostsTrimsAndDropsBlanks() {
     val call = mock(PluginCall::class.java)
     val array = JSArray().apply {

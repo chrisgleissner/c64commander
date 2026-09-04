@@ -3,6 +3,14 @@
 # on native builds, restarts the app, and confirms the flag persisted.
 # Uses text selector for the checkbox label because id: selectors do not
 # reliably resolve for WebView elements in iOS WKWebView accessibility tree.
+#
+# Every scrollUntilVisible below sets visibilityPercentage, because Maestro's default of 100 is
+# unreachable here. WKWebView reports these full-width rows as 615 points wide on a 390-point
+# screen, so Maestro's own visible-area calculation caps them at 63%, and the scroll runs to the
+# end of the page and fails with "No visible element found" while the row is on screen. That is
+# how runs 33842686343 and 33849007627 both failed on "Stable.*". 50 leaves margin under the cap
+# and still requires the row to be about four fifths visible vertically before the scroll stops,
+# so the tap that follows lands on screen. tests/unit/maestro/iosTextAnchors.test.ts guards this.
 
 appId: uk.gleissner.c64commander
 env:
@@ -13,17 +21,42 @@ tags:
   - ios
   - ci-critical-ios
 ---
+# The row is a <label> wrapping title, description and checkbox, so the checkbox's whole text
+# is "HVSC downloads Show the HVSC source in Add Items." The flow waited for "Enable HVSC
+# downloads", which production never renders — FEATURE_FLAG_DEFINITIONS says "HVSC downloads".
 - runFlow: subflows/ios-open-settings-tab.yaml
 
-# Scroll until the HVSC checkbox label is in view.
-- scrollUntilVisible:
-    element:
-      text: "Enable HVSC downloads"
-    direction: DOWN
-    speed: 80
-    timeout: ${LONG_TIMEOUT}
+# Only the Connection section carries defaultOpen, so the feature-group section starts closed
+# and its body — the flag row — is not in the tree at all. The open state is persisted per
+# section id in localStorage and survives the restart below, so an unconditional tap would
+# close the section on the second pass. Tapping only when the row is absent, inside a retry,
+# reaches the row from either starting state.
+- retry:
+    maxRetries: 3
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Stable.*"
+          direction: DOWN
+          speed: 80
+          visibilityPercentage: 50
+          timeout: ${LONG_TIMEOUT}
+      - runFlow:
+          when:
+            notVisible: "HVSC downloads.*"
+          commands:
+            - tapOn:
+                text: "Stable.*"
+            - waitForAnimationToEnd
+      - scrollUntilVisible:
+          element:
+            text: "HVSC downloads.*"
+          direction: DOWN
+          speed: 80
+          visibilityPercentage: 50
+          timeout: ${LONG_TIMEOUT}
 - assertVisible:
-    text: "Enable HVSC downloads"
+    text: "HVSC downloads.*"
     checked: true
 - takeScreenshot: ios-hvsc-setting-visible
 
@@ -31,13 +64,31 @@ tags:
 - launchApp:
     stopApp: true
 - runFlow: subflows/ios-open-settings-tab.yaml
-- scrollUntilVisible:
-    element:
-      text: "Enable HVSC downloads"
-    direction: DOWN
-    speed: 80
-    timeout: ${LONG_TIMEOUT}
+- retry:
+    maxRetries: 3
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Stable.*"
+          direction: DOWN
+          speed: 80
+          visibilityPercentage: 50
+          timeout: ${LONG_TIMEOUT}
+      - runFlow:
+          when:
+            notVisible: "HVSC downloads.*"
+          commands:
+            - tapOn:
+                text: "Stable.*"
+            - waitForAnimationToEnd
+      - scrollUntilVisible:
+          element:
+            text: "HVSC downloads.*"
+          direction: DOWN
+          speed: 80
+          visibilityPercentage: 50
+          timeout: ${LONG_TIMEOUT}
 - assertVisible:
-    text: "Enable HVSC downloads"
+    text: "HVSC downloads.*"
     checked: true
 - takeScreenshot: ios-hvsc-setting-persisted

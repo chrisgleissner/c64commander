@@ -195,7 +195,7 @@ The transport controls run the session: play, stop, pause and resume, previous a
 
 Each row has its own menu, holding the item's details and its **playback config**, a device configuration the app can apply before that one item runs. To take items out of the list, tick them and choose **Remove selected items**.
 
-Playback carries on when you leave the app or lock your phone or tablet, and the playlist and your place in it are still there the next time you open it.
+Playback carries on when you leave the app or lock your phone or tablet, and the playlist and your place in it are still there the next time you open it. On Android a notification names the tune while it plays and carries **Pause**, **Next** and **Stop**, so the lock screen can run the session without opening the app. Pausing leaves that notification in place, with **Play** in the first slot, for ten minutes; after that the session ends and the next **Play** starts a new one.
 
 Play is the quick way to start a disk and see what it does. Disks is the place to go when the drives, the grouping or the collection itself is what you are after.
 

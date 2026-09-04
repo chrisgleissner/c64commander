@@ -136,6 +136,7 @@ import {
   type DeviceControlResult,
 } from "@/lib/deviceControl/deviceControl";
 import { deriveDeviceCapabilities, detectStreamingFromConfig } from "@/lib/deviceCapabilities";
+import { hasStreamTransport } from "@/lib/streams/streamReceiver";
 import { STREAM_ITEMS } from "@/lib/config/homeStreams";
 import { INLINE_SUMMARY_CONTROL_CLASS } from "@/pages/home/inlineControlStyles";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
@@ -209,6 +210,9 @@ function HomePageContent() {
 
   // Dynamic device capabilities. Feature gates below consume these predicates
   // (supportsStreaming / supportsPowerCycle) rather than raw product-family literals.
+  // Platform transport, not a device capability: iOS registers no StreamUdp plugin, so Live View
+  // has nothing to receive on and is hidden rather than offered and then failing (HARD27-002).
+  const streamTransportAvailable = hasStreamTransport();
   // Capabilities are runtime-derived: streaming from the Data Streams config (VIC/Audio
   // items), else from /v1/info core_version presence (the U64-family marker); power-cycle
   // and Power Off likewise from core_version. No product-family literal gates any feature —
@@ -1360,7 +1364,10 @@ function HomePageContent() {
             </p>
           ) : null}
 
-          {liveViewEnabled && (audioMirrorEnabled || videoMirrorEnabled) && deviceCapabilities.supportsStreaming ? (
+          {liveViewEnabled &&
+          (audioMirrorEnabled || videoMirrorEnabled) &&
+          deviceCapabilities.supportsStreaming &&
+          streamTransportAvailable ? (
             <LiveViewCard
               audioEnabled={audioMirrorEnabled}
               videoEnabled={videoMirrorEnabled}
@@ -1895,7 +1902,7 @@ function HomePageContent() {
             }}
           />
 
-          {deviceCapabilities.supportsStreaming ? (
+          {deviceCapabilities.supportsStreaming && streamTransportAvailable ? (
             <StreamStatus forceClosed={offlineArrangement} isConnected={isActive} />
           ) : null}
 

@@ -16,6 +16,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 interface Captured {
+  adoptSender?: ReturnType<typeof vi.fn>;
+  getSignals?: ReturnType<typeof vi.fn>;
   deps: {
     onChange: (s: {
       state: string;
@@ -47,6 +49,15 @@ vi.mock("@/lib/streams/audioMirrorController", () => ({
     start = vi.fn(async () => {});
     stop = vi.fn(async () => {});
     isOnWifi = vi.fn(() => false);
+    // Present on the real controller, so the session reads it rather than falling back to zeros.
+    getSignals = vi.fn(() => ({
+      audioBufferMs: 0,
+      audioUnderruns: 0,
+      audioConcealed: 0,
+      audioLostPackets: 0,
+      audioRejectedPackets: 0,
+    }));
+    adoptSender = vi.fn(async () => {});
     constructor(deps: Captured["deps"]) {
       this.deps = deps;
       audioInstances.push(this as unknown as Captured);
@@ -59,6 +70,7 @@ vi.mock("@/lib/streams/videoMirrorController", () => ({
     deps: Captured["deps"];
     start = vi.fn(async () => {});
     stop = vi.fn(async () => {});
+    adoptSender = vi.fn(async () => {});
     constructor(deps: Captured["deps"]) {
       this.deps = deps;
       videoInstances.push(this as unknown as Captured);
@@ -67,6 +79,7 @@ vi.mock("@/lib/streams/videoMirrorController", () => ({
 }));
 
 import { AvMirrorSession, WIFI_AUDIO_BLOCKS_VIDEO, avMirrorSession } from "@/lib/streams/avMirrorSession";
+import { __resetPhoneAudioOwnership, claimPhoneAudio } from "@/lib/audio/phoneAudioOwnership";
 
 const makeSession = () => {
   audioInstances.length = 0;
@@ -113,8 +126,16 @@ describe("AvMirrorSession", () => {
     const unsubscribe = session.subscribe((snap) => seen.push(snap));
     expect(seen).toHaveLength(1);
     expect(session.getSnapshot()).toEqual({
-      audio: { state: "off", droppedPackets: 0, error: null },
-      video: { state: "off", fps: 0, droppedPackets: 0, framesLost: 0, standard: "PAL", error: null },
+      audio: { state: "off", droppedPackets: 0, error: null, foreignSenderNotice: null, senderMismatch: null },
+      video: {
+        state: "off",
+        fps: 0,
+        droppedPackets: 0,
+        framesLost: 0,
+        standard: "PAL",
+        error: null,
+        senderMismatch: null,
+      },
     });
     expect(session.audioLive).toBe(false);
     expect(session.videoLive).toBe(false);
@@ -331,6 +352,58 @@ describe("AvMirrorSession", () => {
       await Promise.all([p1, p2]);
       // stop ran strictly after start fully completed — never interleaved.
       expect(order).toEqual(["start:begin", "start:end", "stop:begin", "stop:end"]);
+    });
+  });
+
+  // HARD27-005: the audio and video streams come from the same machine on two multicast groups, so
+  // an address that is wrong for one is wrong for the other. Adopting a sender therefore retargets
+  // both, and a user told which address to use is not told twice.
+  it("adopts a sender on both streams at once", async () => {
+    const { session, audio, video } = makeSession();
+
+    await session.adoptSender("192.168.1.131");
+
+    expect(audio.adoptSender).toHaveBeenCalledWith("192.168.1.131");
+    expect(video.adoptSender).toHaveBeenCalledWith("192.168.1.131");
+  });
+
+  it("adopts on the stream that can, when the other refuses", async () => {
+    const { session, audio, video } = makeSession();
+    audio.adoptSender?.mockRejectedValueOnce(new Error("socket closed"));
+
+    await expect(session.adoptSender("192.168.1.131")).resolves.toBeUndefined();
+
+    expect(video.adoptSender).toHaveBeenCalledWith("192.168.1.131");
+  });
+
+  // The mirror claims the phone's speaker when its audio starts, so that a local tune is silenced
+  // before the first C64 packet arrives. The other half of that bargain is being evicted when the
+  // tune claims it back: if the mirror does not stop, both play at once.
+  describe("phone-audio eviction", () => {
+    beforeEach(() => {
+      __resetPhoneAudioOwnership();
+    });
+
+    it("stops mirror audio when another source claims the speaker", async () => {
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      audio.stop.mockClear();
+
+      claimPhoneAudio("local-sid", {}, vi.fn(), { pause: vi.fn(), resume: vi.fn() });
+      await vi.waitFor(() => {
+        expect(audio.stop).toHaveBeenCalled();
+      });
+    });
+
+    it("logs rather than throwing when the eviction stop fails", async () => {
+      const { session, audio } = makeSession();
+      await session.startAudio();
+      audio.stop.mockRejectedValueOnce(new Error("streams:stop refused"));
+
+      expect(() => claimPhoneAudio("local-sid", {}, vi.fn(), { pause: vi.fn(), resume: vi.fn() })).not.toThrow();
+      await vi.waitFor(() => {
+        expect(audio.stop).toHaveBeenCalled();
+      });
     });
   });
 });

@@ -11,10 +11,12 @@ env:
 ---
 - runFlow: subflows/launch-and-wait.yaml
 - tapOn:
-    point: "25%,95%"
+    id: "tab-play"
 - extendedWaitUntil:
     visible: "Playlist"
     timeout: ${SHORT_TIMEOUT}
+- assertVisible:
+    id: "page-play"
 - setAirplaneMode:
     value: enabled
 - extendedWaitUntil:

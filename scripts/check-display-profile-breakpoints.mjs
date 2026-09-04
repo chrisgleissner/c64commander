@@ -1,7 +1,17 @@
-import { readFileSync } from 'node:fs';
+#!/usr/bin/env node
+/*
+ * Fails the build when a display-profile audited surface uses a raw Tailwind
+ * responsive breakpoint prefix.
+ *
+ * Those surfaces size themselves from the display profile the app resolved, not from
+ * the viewport width Tailwind sees, so an `sm:` or `lg:` prefix on one of them
+ * reintroduces a second, disagreeing source of layout.
+ */
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
-const auditedFiles = [
+export const AUDITED_FILES = [
   'src/components/lists/SelectableActionList.tsx',
   'src/components/QuickActionCard.tsx',
   'src/components/ConfigItemRow.tsx',
@@ -14,30 +24,56 @@ const auditedFiles = [
   'src/pages/SettingsPage.tsx',
 ];
 
-const forbiddenPattern = /\b(?:sm|md|lg|xl|2xl):/g;
-const violations = [];
+/** No `g` flag: `lastIndex` would persist between calls and skip files. */
+export const FORBIDDEN_PATTERN = /\b(?:sm|md|lg|xl|2xl):/;
 
-for (const relativePath of auditedFiles) {
-  const absolutePath = path.resolve(relativePath);
-  const source = readFileSync(absolutePath, 'utf8');
-  const matches = [...source.matchAll(forbiddenPattern)];
-  if (matches.length === 0) {
-    continue;
+export const findViolations = (files) =>
+  files.flatMap(({ path: relativePath, source }) => {
+    const matches = [...source.matchAll(new RegExp(FORBIDDEN_PATTERN, 'g'))].map((match) => match[0]);
+    return matches.length === 0 ? [] : [{ path: relativePath, matches }];
+  });
+
+/**
+ * Reads the audited list. A missing entry is reported rather than skipped: a surface
+ * that was renamed out of the list would otherwise stop being audited in silence.
+ */
+export const readAuditedFiles = (root = process.cwd()) => {
+  const missing = AUDITED_FILES.filter((relativePath) => !existsSync(path.resolve(root, relativePath)));
+  if (missing.length > 0) {
+    const error = new Error(`Audited display-profile surfaces no longer exist: ${missing.join(', ')}`);
+    error.missing = missing;
+    throw error;
+  }
+  return AUDITED_FILES.map((relativePath) => ({
+    path: relativePath,
+    source: readFileSync(path.resolve(root, relativePath), 'utf8'),
+  }));
+};
+
+const main = () => {
+  let files;
+  try {
+    files = readAuditedFiles();
+  } catch (error) {
+    console.error(error.message);
+    console.error('Update AUDITED_FILES in scripts/check-display-profile-breakpoints.mjs to the new path.');
+    process.exit(2);
   }
 
-  violations.push({
-    path: relativePath,
-    matches: matches.map((match) => match[0]),
-  });
-}
+  const violations = findViolations(files);
+  if (violations.length > 0) {
+    const summary = violations
+      .map(({ path: relativePath, matches }) => `${relativePath}: ${Array.from(new Set(matches)).join(', ')}`)
+      .join('\n');
+    console.error('Display-profile audited surfaces must not use raw responsive breakpoint prefixes.');
+    console.error(summary);
+    process.exit(1);
+  }
 
-if (violations.length > 0) {
-  const summary = violations
-    .map(({ path: relativePath, matches }) => `${relativePath}: ${Array.from(new Set(matches)).join(', ')}`)
-    .join('\n');
-  console.error('Display-profile audited surfaces must not use raw responsive breakpoint prefixes.');
-  console.error(summary);
-  process.exit(1);
-}
+  console.log(`Display-profile breakpoint guard passed: ${files.length} audited surfaces.`);
+};
 
-console.log('Display-profile breakpoint guard passed.');
+// `import.meta.url` is percent-encoded and a raw path is not, so comparing the two directly
+// makes this never match in a checkout whose path contains a space or any other encoded
+// character — and the gate would then exit 0 having checked nothing.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

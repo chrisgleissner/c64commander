@@ -14,7 +14,12 @@ import { DISPLAY_PROFILE_VIEWPORTS } from "./displayProfileViewports";
 import { applyDisplayProfileViewport } from "./displayProfileViewportUtils";
 import { TAB_ROUTES } from "../src/lib/navigation/tabRoutes";
 import { LARGEST_TEXT_SCALE_ID } from "../src/lib/textScale";
-import { auditSmallScreenLayout, formatDefects, type LayoutDefect } from "./smallScreenLayoutAudit";
+import {
+  DIALOG_COVERAGE_FLOOR,
+  auditSmallScreenLayout,
+  expectAuditedLayout,
+  type LayoutCoverageFloor,
+} from "./smallScreenLayoutAudit";
 
 /**
  * Does the text still fit at 320 CSS pixels?
@@ -80,9 +85,8 @@ const expandAllSections = async (root: Locator, page: Page) => {
   await page.waitForTimeout(700);
 };
 
-const auditAndAssert = async (page: Page, where: string) => {
-  const defects: LayoutDefect[] = await auditSmallScreenLayout(page, { ignore: IGNORED_SURFACES });
-  expect(defects, formatDefects(where, defects)).toEqual([]);
+const auditAndAssert = async (page: Page, where: string, floor?: LayoutCoverageFloor) => {
+  expectAuditedLayout(await auditSmallScreenLayout(page, { ignore: IGNORED_SURFACES }), where, floor);
 };
 
 /**
@@ -374,9 +378,11 @@ test.describe("Small screen layout integrity", () => {
       await expect(surface).toBeVisible({ timeout: 15_000 });
       await page.waitForTimeout(700);
 
-      await auditAndAssert(page, `${dialog.name} (as it opens)`);
+      // Radix marks the page behind an open dialog `aria-hidden`, and the audit skips that
+      // subtree, so these two cases measure the dialog alone and use the smaller floor.
+      await auditAndAssert(page, `${dialog.name} (as it opens)`, DIALOG_COVERAGE_FLOOR);
       await expandAllSections(surface, page);
-      await auditAndAssert(page, `${dialog.name} (every section open)`);
+      await auditAndAssert(page, `${dialog.name} (every section open)`, DIALOG_COVERAGE_FLOOR);
     });
   }
 

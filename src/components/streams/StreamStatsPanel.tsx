@@ -312,6 +312,10 @@ export function StreamStatsPanel({ session, className, onExport }: StreamStatsPa
             <div className="grid grid-cols-2 gap-2">
               <Stat label="Concealed" value={num(live.audioConcealed)} testid="concealed" />
               <Stat label="Dropped pkts" value={num(live.audioLostPackets)} testid="dropped-packets" />
+              {/* Packets that DID arrive and were thrown away by the sender filter. Beside the loss
+                  counters because a non-zero value here with zero arrivals means the stream is
+                  reaching the phone from an address the app is not accepting. */}
+              <Stat label="Refused pkts" value={num(live.audioRejectedPackets)} testid="rejected-packets" />
               <Stat label="Buf min" value={ms(summary.audioBufferMsMin)} testid="audio-buffer-min" />
             </div>
           </section>

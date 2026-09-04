@@ -7,14 +7,14 @@
  */
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FocusNavigationProvider,
   useDismissibleNavigationLayer,
   useFocusItem,
   useFocusNavigation,
 } from "@/hooks/useFocusNavigation";
-import { NavigationController } from "@/lib/input";
+import { NavigationController, resetInputModality, setInputModality } from "@/lib/input";
 import { saveDebugLoggingEnabled } from "@/lib/config/appSettings";
 import { clearLogs, getLogs } from "@/lib/logging";
 
@@ -887,5 +887,87 @@ describe("Back dismisses a persistent error toast the keypad ring cannot otherwi
     fireEvent.keyDown(document.body, { code: "GoBack" });
 
     expect(onNavigateBack).toHaveBeenCalledTimes(1);
+  });
+});
+
+/*
+ * HARD27-039: with the keypad flag on - the default for the C64 Commander
+ * variant - the discovery engine used to observe the whole body from mount, so
+ * a touch user scrolling a virtualised list rebuilt the ring on the main thread
+ * for a modality they never entered. It now waits for the first key.
+ */
+describe("FocusNavigationProvider — the discovery engine waits for a key (HARD27-039)", () => {
+  let observedTargets: Node[] = [];
+  let realMutationObserver: typeof MutationObserver;
+
+  beforeEach(() => {
+    resetInputModality();
+    observedTargets = [];
+    realMutationObserver = globalThis.MutationObserver;
+    class RecordingMutationObserver extends realMutationObserver {
+      observe(target: Node, options?: MutationObserverInit) {
+        observedTargets.push(target);
+        super.observe(target, options);
+      }
+    }
+    globalThis.MutationObserver = RecordingMutationObserver as typeof MutationObserver;
+  });
+
+  afterEach(() => {
+    globalThis.MutationObserver = realMutationObserver;
+    resetInputModality();
+  });
+
+  it("attaches no observer while the user has only ever used the pointer", () => {
+    render(
+      <FocusNavigationProvider profileId="keypad">
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+
+    expect(observedTargets).toEqual([]);
+    expect(button("A")).not.toHaveAttribute(SELECTED);
+  });
+
+  it("starts on the first navigation key, and that first key still moves the ring", () => {
+    render(
+      <FocusNavigationProvider profileId="keypad">
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+
+    // The ring assembles with A current, so Down lands on B - the same place
+    // the eagerly started engine put it. The first key is not swallowed.
+    expect(observedTargets).toEqual([document.body]);
+    expect(document.activeElement).toBe(button("B"));
+    expect(button("B")).toHaveAttribute(SELECTED, "true");
+  });
+
+  it("starts when another surface flips modality without going through the keymap", () => {
+    render(
+      <FocusNavigationProvider profileId="keypad">
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+    expect(observedTargets).toEqual([]);
+
+    // A slider or the T9 composer flips modality from its own handler.
+    setInputModality("key-navigation");
+
+    expect(observedTargets).toEqual([document.body]);
+  });
+
+  it("starts on mount when a key user has already been navigating", () => {
+    setInputModality("key-navigation");
+
+    render(
+      <FocusNavigationProvider profileId="keypad">
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+
+    expect(observedTargets).toEqual([document.body]);
   });
 });

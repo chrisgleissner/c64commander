@@ -21,6 +21,7 @@ type PauseMuteCaptureApi = {
   getCategory: (category: string, options?: { __c64uIntent?: "user" }) => Promise<Record<string, unknown>>;
   updateConfigBatch: (
     payload: Record<string, Record<string, string | number>>,
+    options?: { __c64uTransientConfigWrite?: boolean; __c64uTransientConfigRestore?: boolean },
   ) => Promise<{ errors?: string[] } | undefined>;
 };
 
@@ -64,7 +65,9 @@ export const capturePauseMuteToPersistedSnapshot = async (
     if (!Object.keys(muteUpdates).length) return false;
 
     // Multi-item write MUST stay a single updateConfigBatch POST (never decomposed).
-    const result = await api.updateConfigBatch({ "Audio Mixer": muteUpdates });
+    // HARD27-011: the pause mute is undone on resume, so it must not be written
+    // to the device's flash by the "Keep device settings after a restart" policy.
+    const result = await api.updateConfigBatch({ "Audio Mixer": muteUpdates }, { __c64uTransientConfigWrite: true });
     const firmwareErrors = Array.isArray(result?.errors)
       ? result.errors.filter((entry) => entry.trim().length > 0)
       : [];

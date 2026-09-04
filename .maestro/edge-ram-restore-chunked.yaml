@@ -12,12 +12,13 @@ env:
 # verify the UI reports success without crash or device disconnect.
 - runFlow: subflows/launch-and-wait.yaml
 
-# Navigate to Home tab
 - tapOn:
-    point: "12%,95%"
+    id: "tab-home"
 - extendedWaitUntil:
     visible: "Home"
     timeout: ${TIMEOUT}
+- assertVisible:
+    id: "page-home"
 
 - takeScreenshot: ram-restore-before-dump
 
@@ -48,4 +49,5 @@ env:
 - assertNotVisible: "Disconnected"
 
 # Home tab still reachable — device stable
-- assertVisible: "Home"
+- assertVisible:
+    id: "page-home"

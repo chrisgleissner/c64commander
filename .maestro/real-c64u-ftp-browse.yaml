@@ -17,6 +17,8 @@ env:
           id: "tab-play"
           optional: true
       - waitForAnimationToEnd
+      - assertVisible:
+          id: "page-play"
       - extendedWaitUntil:
           visible:
             text: "PLAY FILES"

@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
   invalidateForVisibilityResume: vi.fn(),
-  useNavigationGuardBlocker: vi.fn(),
   registerGlobalButtonInteractionModel: vi.fn(),
   installConsoleDiagnosticsBridge: vi.fn(),
   startNativeDiagnosticsBridge: vi.fn().mockResolvedValue(undefined),
@@ -46,7 +45,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/components/ui/toaster", () => ({ Toaster: () => <div data-testid="toaster" /> }));
-vi.mock("@/components/ui/sonner", () => ({ Toaster: () => <div data-testid="sonner" /> }));
 vi.mock("@/components/ui/tooltip", () => ({
   TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -174,7 +172,6 @@ vi.mock("@/lib/logging", () => ({ addErrorLog: mocks.addErrorLog, addLog: mocks.
 vi.mock("@/lib/query/c64QueryInvalidation", () => ({
   invalidateForVisibilityResume: mocks.invalidateForVisibilityResume,
 }));
-vi.mock("@/lib/navigation/navigationGuards", () => ({ useNavigationGuardBlocker: mocks.useNavigationGuardBlocker }));
 vi.mock("@/lib/ui/buttonInteraction", () => ({
   registerGlobalButtonInteractionModel: mocks.registerGlobalButtonInteractionModel,
 }));
@@ -253,7 +250,6 @@ describe("App runtime wiring", () => {
     mocks.addErrorLog.mockReset();
     mocks.addLog.mockReset();
     mocks.invalidateForVisibilityResume.mockReset();
-    mocks.useNavigationGuardBlocker.mockReset();
     mocks.registerGlobalButtonInteractionModel.mockReset();
     mocks.installConsoleDiagnosticsBridge.mockReset();
     mocks.startNativeDiagnosticsBridge.mockClear();
@@ -312,7 +308,6 @@ describe("App runtime wiring", () => {
     expect(await screen.findByText("Coverage Probe Page")).toBeInTheDocument();
     expect(screen.getByTestId("test-heartbeat")).toBeInTheDocument();
     expect(mocks.registerGlobalButtonInteractionModel).toHaveBeenCalledTimes(1);
-    expect(mocks.useNavigationGuardBlocker).toHaveBeenCalledTimes(1);
   });
 
   it("resolves the coverage probe route across repeated mounts (HARD9-095 memoization)", async () => {

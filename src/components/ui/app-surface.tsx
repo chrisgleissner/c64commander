@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/interstitialStyles";
 import { useCenteredOverlayPosition, useWorkflowSheetPosition } from "@/components/ui/useCenteredOverlayPosition";
 import { useRegisterInterstitial } from "@/components/ui/interstitial-state";
+import { APP_DIALOG_CONTENT_CLASS, APP_SHEET_CONTENT_CLASS } from "@/lib/modalPresentation";
 
 const APP_SHEET_BOTTOM_CLEARANCE = "calc(5rem + var(--safe-area-inset-bottom))";
 
@@ -216,15 +217,7 @@ const AppSheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive
         <AppSurfaceHeaderContext.Provider value={{ closeTestId, showClose }}>
           <DialogPrimitive.Content
             ref={composedRef}
-            className={cn(
-              "fixed inset-x-0 bottom-0 flex min-h-0 w-full flex-col overflow-hidden border border-b-0 bg-background p-0",
-              "rounded-t-[var(--interstitial-radius)] shadow-[var(--interstitial-shadow)]",
-              "sm:left-1/2 sm:right-auto sm:w-[min(100vw-2rem,56rem)] sm:-translate-x-1/2",
-              "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-              "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
-              "pb-[var(--app-sheet-bottom-clearance)]",
-              className,
-            )}
+            className={cn(APP_SHEET_CONTENT_CLASS, className)}
             style={contentStyle}
             data-app-surface="sheet"
             data-interstitial-depth={layer?.depth ?? 1}
@@ -313,11 +306,7 @@ const AppDialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitiv
         <AppSurfaceHeaderContext.Provider value={{ closeTestId, showClose: showClose && !hideClose }}>
           <DialogPrimitive.Content
             ref={composedRef}
-            className={cn(
-              "fixed left-[50dvw] flex w-[min(90dvw,32rem)] max-w-[calc(100dvw-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-[var(--interstitial-radius)] border bg-background p-0 shadow-[var(--interstitial-shadow)]",
-              "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
-              className,
-            )}
+            className={cn(APP_DIALOG_CONTENT_CLASS, className)}
             data-app-surface="dialog"
             data-interstitial-depth={layer?.depth ?? 1}
             style={{

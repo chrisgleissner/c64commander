@@ -177,3 +177,34 @@ describe("staticAssets", () => {
     statSpy.mockRestore();
   });
 });
+
+describe("staticAssets content types", () => {
+  it("serves WebAssembly, manifest and icon files with their own media types", async () => {
+    const distDir = await fs.mkdtemp(path.join(os.tmpdir(), "c64-static-mime-"));
+    tempDirs.push(distDir);
+    await fs.mkdir(path.join(distDir, "wasm"), { recursive: true });
+    await fs.writeFile(path.join(distDir, "wasm", "engine.wasm"), Buffer.from([0x00, 0x61, 0x73, 0x6d]));
+    await fs.writeFile(path.join(distDir, "manifest.webmanifest"), "{}");
+    await fs.writeFile(path.join(distDir, "favicon.ico"), Buffer.from([0x00]));
+    await fs.writeFile(path.join(distDir, "robots.txt"), "User-agent: *");
+
+    const server = createStaticAssetServer({
+      distDir,
+      logError: vi.fn(),
+      errorDetails: () => ({ cause: "test" }),
+    });
+
+    const expectContentType = async (requestPath: string, contentType: string) => {
+      const res = createResponse();
+      await server.serveStatic(res as any, requestPath);
+      expect(res.writeHead).toHaveBeenCalledWith(200, expect.objectContaining({ "Content-Type": contentType }));
+    };
+
+    // WebAssembly.instantiateStreaming rejects any response that is not
+    // application/wasm, which drops the SID engine to arrayBuffer compilation.
+    await expectContentType("/wasm/engine.wasm", "application/wasm");
+    await expectContentType("/manifest.webmanifest", "application/manifest+json");
+    await expectContentType("/favicon.ico", "image/x-icon");
+    await expectContentType("/robots.txt", "text/plain; charset=utf-8");
+  });
+});

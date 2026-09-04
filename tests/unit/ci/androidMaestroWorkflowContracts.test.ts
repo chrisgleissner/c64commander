@@ -115,4 +115,53 @@ describe("Android Maestro workflow contracts", () => {
     expect(workflow).toContain('rm -rf "$HOME/.android/cache"');
     expect(workflow).toContain("install_android_sdk_components");
   });
+
+  /**
+   * The step named "Assert memory class logging" reported every failure as a ::warning:: and
+   * then exited zero, so a MainActivity that had stopped logging its detected memory class kept
+   * the job green. It also relaunched with a plain `am start`, which does not re-enter onCreate
+   * when MainActivity is already on top after the Maestro flows, so the log line could be
+   * missing for a reason that has nothing to do with the app.
+   */
+  it("fails the job when MainActivity does not log its detected memory class after a forced relaunch", () => {
+    const workflow = readRepoFile(".github", "workflows", "android.yaml");
+    const step = workflow.slice(
+      workflow.indexOf("- name: Assert memory class logging"),
+      workflow.indexOf("- name: Stop Android telemetry monitor"),
+    );
+
+    expect(step).not.toBe("");
+    expect(step).not.toContain("::warning::");
+    expect(step).toContain('echo "::error::No emulator serial found for the memory class assertion"');
+    expect(step).toContain(
+      'echo "::error::MainActivity did not log the detected Android memory class after a forced relaunch"',
+    );
+    expect(step.match(/exit 1/g) ?? []).toHaveLength(2);
+
+    // A forced stop plus `am start -S` is what guarantees the fresh onCreate the grep depends on.
+    expect(step).toContain('adb -s "$SERIAL" shell am force-stop "$ANDROID_APPLICATION_ID"');
+    expect(step).toContain('adb -s "$SERIAL" shell am start -S -W -n "$ANDROID_APPLICATION_ID/.MainActivity"');
+
+    const forceStopIndex = step.indexOf("shell am force-stop");
+    const clearIndex = step.indexOf("logcat -c");
+    const startIndex = step.indexOf("shell am start -S");
+    expect(clearIndex).toBeGreaterThan(forceStopIndex);
+    expect(startIndex).toBeGreaterThan(clearIndex);
+  });
+
+  it("keeps the memory class log line the assertion greps for in MainActivity", () => {
+    const mainActivity = readRepoFile(
+      "android",
+      "app",
+      "src",
+      "main",
+      "java",
+      "uk",
+      "gleissner",
+      "c64commander",
+      "MainActivity.kt",
+    );
+
+    expect(mainActivity).toContain('"Android memory class detected: memoryClass=$memoryClass');
+  });
 });

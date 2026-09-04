@@ -43,6 +43,7 @@
         </provider>
 
         <service android:name=".BackgroundExecutionService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
+        <service android:name=".LibraryInstallService" android:exported="false" android:foregroundServiceType="dataSync" />
     </application>
 
     <!-- Permissions -->
@@ -51,6 +52,7 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- From API 33 the foreground-service notification is dropped without this. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

@@ -7,12 +7,14 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { redactExportText, redactExportValue } from "@/lib/diagnostics/exportRedaction";
+import { redactExportValue } from "@/lib/diagnostics/exportRedaction";
 
 describe("exportRedaction", () => {
   it("redacts IPs, hosts, paths, and credentials in text", () => {
     const input = "Host c64u.local 192.168.0.10 path /mnt/usb/secret password=supersecret token: abc123";
-    const output = redactExportText(input);
+    // A bare string goes through the same `redactText` rules as a string nested in an exported
+    // object, so this asserts them on the path the trace export actually uses.
+    const output = redactExportValue(input) as string;
     expect(output).not.toContain("192.168.0.10");
     expect(output).not.toContain("c64u.local");
     expect(output).not.toContain("/mnt/usb/secret");

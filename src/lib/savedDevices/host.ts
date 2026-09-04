@@ -1,3 +1,5 @@
+import { reportFallback } from "@/lib/diagnostics/fallbackReporter";
+
 export const DEFAULT_SAVED_DEVICE_HOST = "c64u";
 export const DEFAULT_SAVED_DEVICE_HTTP_PORT = 80;
 
@@ -8,7 +10,10 @@ export const normalizeSavedDeviceHostInput = (input?: string | null) => {
     try {
       const url = new URL(raw);
       return (url.host || url.hostname || DEFAULT_SAVED_DEVICE_HOST).trim() || DEFAULT_SAVED_DEVICE_HOST;
-    } catch {
+    } catch (error) {
+      reportFallback("savedDevices.normalizeSavedDeviceHostInput", error, {
+        fallbackHost: DEFAULT_SAVED_DEVICE_HOST,
+      });
       return DEFAULT_SAVED_DEVICE_HOST;
     }
   }

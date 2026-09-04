@@ -8,7 +8,7 @@
 
 import { DeviceDiscovery, type NativeDeviceDiscoveryCandidate } from "@/lib/native/deviceDiscovery";
 import { addLog, buildErrorLogDetails } from "@/lib/logging";
-import { buildDeviceHostWithHttpPort } from "@/lib/c64api/hostConfig";
+import { buildDeviceHostWithHttpPort, getDeviceHostHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import {
   addSavedDevice,
   completeSavedDeviceVerification,
@@ -188,12 +188,24 @@ export const rankDiscoveredCandidates = (candidates: DeviceDiscoveryCandidate[])
   });
 };
 
+// HARD27-020: a saved device on a non-default HTTP port has to be probed on THAT port,
+// otherwise the rediscovery that exists to recover from an address change can never find
+// it. Each entry is a `host:port` pair (bare host when the port is 80), which the native
+// side parses back into a target; the port also widens the LAN sweep there.
 const buildKnownHosts = () => {
   const savedDevices = getSavedDevicesSnapshot();
   const hosts = new Set<string>();
   for (const device of savedDevices.devices) {
-    if (device.host.trim()) hosts.add(device.host.trim());
-    if (device.lastKnownHostname?.trim()) hosts.add(device.lastKnownHostname.trim());
+    // A port written into the host string wins over the httpPort field, matching how the
+    // runtime target is resolved at connection time.
+    const embeddedPort = getDeviceHostHttpPort(device.host);
+    const httpPort = embeddedPort === DEFAULT_HTTP_PORT ? device.httpPort : embeddedPort;
+    // Both helpers substitute the default host for a blank input, so only non-blank
+    // values are normalised — a device with no recorded hostname must add nothing.
+    if (device.host.trim()) hosts.add(buildDeviceHostWithHttpPort(stripPortFromDeviceHost(device.host), httpPort));
+    if (device.lastKnownHostname?.trim()) {
+      hosts.add(buildDeviceHostWithHttpPort(stripPortFromDeviceHost(device.lastKnownHostname), httpPort));
+    }
   }
   for (const host of PRODUCT_HOST_CANDIDATES) hosts.add(host);
   return Array.from(hosts);

@@ -401,24 +401,36 @@ with open(outfile, "w", encoding="utf-8") as handle:
 PY
 }
 
+# `require_debug_server` (third argument, default "yes") gates the dump on the in-app debug
+# HTTP server. That server answers "is this a DEBUG build whose server bound the port", not
+# "is the app running", and on run 33840657287 all three snapshots were skipped as
+# "app-not-running" while the failure screenshot taken moments later showed the app rendered
+# on screen. `maestro hierarchy` goes through the Maestro driver and needs no such server, so
+# the failure path passes "no": a flow that has already failed is worth its ~16s timeout.
+#
+# `--device` is a root option, not a `hierarchy` one. `App` declares `["--device", "--udid"]`
+# and `PrintHierarchyCommand` reads `parent?.deviceId`; `test` declares its own, which is why
+# `maestro test --device` works and `maestro hierarchy --device` exits with
+# `Unknown options: '--device', '<udid>'` — the whole dump on run 33845624818.
 capture_accessibility_snapshot() {
   local flow_dir="$1"
   local snapshot_name="$2"
+  local require_debug_server="${3:-yes}"
   local out_dir="${flow_dir}/accessibility"
   local out_file="${out_dir}/${snapshot_name}.txt"
   local started_ms
   started_ms=$(ms_timestamp)
   mkdir -p "$out_dir"
 
-  if ! debug_server_reachable; then
-    log "Accessibility snapshot ${snapshot_name} skipped — the app is not running (nothing to dump)"
-    trace_event "$flow_dir" "app.accessibility.snapshot" "maestro" "{\"name\":\"${snapshot_name}\",\"status\":\"skipped-app-not-running\"}"
+  if [[ "$require_debug_server" == "yes" ]] && ! debug_server_reachable; then
+    log "Accessibility snapshot ${snapshot_name} skipped — the in-app debug server did not answer"
+    trace_event "$flow_dir" "app.accessibility.snapshot" "maestro" "{\"name\":\"${snapshot_name}\",\"status\":\"skipped-debug-server-unreachable\"}"
     return
   fi
 
   log "Capturing accessibility snapshot ${snapshot_name} -> ${out_file}"
 
-  if "$MAESTRO_BIN" hierarchy --device "$UDID" > "$out_file" 2>&1; then
+  if "$MAESTRO_BIN" --device "$UDID" hierarchy > "$out_file" 2>&1; then
     trace_event "$flow_dir" "app.accessibility.snapshot" "maestro" "{\"name\":\"${snapshot_name}\",\"status\":\"ok\"}"
     if [[ ! -f "${flow_dir}/.a11y-first" ]]; then
       touch "${flow_dir}/.a11y-first"
@@ -462,7 +474,13 @@ run_maestro_and_capture() {
 
   log "Launching Maestro attempt ${attempt}/${MAESTRO_MAX_ATTEMPTS} for ${flow} (yaml=${flow_yaml}, junit=${junit_file}, rawLog=${raw_log_file}, heartbeat=${heartbeat_seconds}s)"
 
-  python3 - "$MAESTRO_BIN" "$flow_yaml" "$UDID" "$junit_file" "$raw_log_file" "$attempt" "$heartbeat_seconds" <<'PY'
+  # The python block below is the Maestro invocation and the JUnit summary, and its exit
+  # status is the only report of whether the flow passed. It has to be captured here: the
+  # function continues with a `cp` and a `log`, and a function returns the status of its
+  # last command, so an uncaptured status is discarded. The caller also runs this function
+  # on the left of `&&`, which suppresses `set -e` inside it.
+  local maestro_status=0
+  python3 - "$MAESTRO_BIN" "$flow_yaml" "$UDID" "$junit_file" "$raw_log_file" "$attempt" "$heartbeat_seconds" <<'PY' || maestro_status=$?
 import json
 import os
 import subprocess
@@ -626,7 +644,8 @@ sys.exit(junit_status)
 PY
 
   cp "$raw_log_file" "$raw_log_latest_file"
-  log "Completed Maestro attempt ${attempt}/${MAESTRO_MAX_ATTEMPTS} for ${flow} (copied latest raw log to ${raw_log_latest_file})"
+  log "Completed Maestro attempt ${attempt}/${MAESTRO_MAX_ATTEMPTS} for ${flow} (exit=${maestro_status}, copied latest raw log to ${raw_log_latest_file})"
+  return $maestro_status
 }
 
 is_driver_startup_timeout_failure() {
@@ -1128,7 +1147,7 @@ TJSON
   # On failure, capture infra diagnostics
   if [[ $flow_exit -ne 0 ]]; then
     log "Flow ${flow} failed (exit=${flow_exit}) — capturing diagnostics"
-    capture_accessibility_snapshot "$flow_dir" "failure"
+    capture_accessibility_snapshot "$flow_dir" "failure" "no"
     capture_infra_diagnostics "$flow"
   fi
 

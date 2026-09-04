@@ -25,6 +25,11 @@ export type NativeDeviceDiscoveryCandidate = {
 };
 
 export type NativeDeviceDiscoveryOptions = {
+  /**
+   * Hosts to probe ahead of (and in addition to) the LAN sweep. Each entry is a
+   * `host:port` pair, or a bare host when the port is the default 80; the native side
+   * also sweeps the LAN on every distinct non-default port seen here (HARD27-020).
+   */
   knownHosts?: string[];
   includeLanScan?: boolean;
   timeoutMs?: number;

@@ -19,7 +19,8 @@ import { withFtpInteraction } from "@/lib/deviceInteraction/deviceInteractionMan
 import { getActiveAction, runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import { recordFtpOperation, recordTraceError } from "@/lib/tracing/traceSession";
 import { decrementFtpInFlight, incrementFtpInFlight } from "@/lib/diagnostics/diagnosticsActivity";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
+import { resetPluginAvailabilityForTests } from "@/lib/native/pluginAvailability";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/native/ftpClient", () => ({
@@ -55,6 +56,9 @@ describe("ftpClient", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // The unavailable-method latch is a module singleton shared by every test in this file.
+    resetPluginAvailabilityForTests();
+    vi.mocked(FtpClient.cancelRead).mockResolvedValue(undefined);
   });
 
   describe("listFtpDirectory", () => {
@@ -254,6 +258,64 @@ describe("ftpClient", () => {
 
       resolveRead({ data: "QQ==", sizeBytes: 1 });
       await promise;
+    });
+
+    it("reports an unimplemented cancelRead once and stops calling it (HARD27-003)", async () => {
+      /*
+       * iOS lists no cancelRead in its pluginMethods, so every aborted read - every page leave
+       * with a large transfer in flight - wrote an error-level "FTP cancelRead failed" entry.
+       * The read is abandoned either way; only the native stream stays open until it finishes.
+       */
+      vi.mocked(FtpClient.cancelRead).mockRejectedValue(
+        Object.assign(new Error('"FtpClient.cancelRead()" is not implemented on ios'), { code: "UNIMPLEMENTED" }),
+      );
+
+      const runAbortedRead = async () => {
+        let resolveRead: (value: { data: string; sizeBytes: number }) => void = () => {};
+        vi.mocked(FtpClient.readFile).mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveRead = resolve;
+            }),
+        );
+        const controller = new AbortController();
+        const promise = readFtpFile({ ...mockReadOptions, onProgress: vi.fn(), signal: controller.signal } as any);
+        await vi.waitFor(() => expect(FtpClient.readFile).toHaveBeenCalled());
+        controller.abort();
+        resolveRead({ data: "QQ==", sizeBytes: 1 });
+        await promise;
+      };
+
+      await runAbortedRead();
+      await runAbortedRead();
+      await runAbortedRead();
+      await vi.waitFor(() => expect(vi.mocked(addLog).mock.calls.some((call) => call[0] === "info")).toBe(true));
+
+      expect(FtpClient.cancelRead).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(addErrorLog).mock.calls.map((call) => call[0])).not.toContain("FTP cancelRead failed");
+      expect(vi.mocked(addLog).mock.calls.filter((call) => call[0] === "info")).toHaveLength(1);
+    });
+
+    it("still reports a cancelRead that failed on its own terms", async () => {
+      vi.mocked(FtpClient.cancelRead).mockRejectedValue(new Error("data channel already closed"));
+
+      let resolveRead: (value: { data: string; sizeBytes: number }) => void = () => {};
+      vi.mocked(FtpClient.readFile).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveRead = resolve;
+          }),
+      );
+      const controller = new AbortController();
+      const promise = readFtpFile({ ...mockReadOptions, onProgress: vi.fn(), signal: controller.signal } as any);
+      await vi.waitFor(() => expect(FtpClient.readFile).toHaveBeenCalled());
+      controller.abort();
+      resolveRead({ data: "QQ==", sizeBytes: 1 });
+      await promise;
+
+      await vi.waitFor(() =>
+        expect(vi.mocked(addErrorLog).mock.calls.map((call) => call[0])).toContain("FTP cancelRead failed"),
+      );
     });
 
     it("never registers a progress listener for a plain read (no onProgress/signal)", async () => {

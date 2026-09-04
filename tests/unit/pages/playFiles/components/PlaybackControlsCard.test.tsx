@@ -7,10 +7,12 @@
  */
 
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PENDING_ANNOUNCEMENT_INTERVAL_MS, type PendingSeekPresentation } from "@/lib/playback/pendingSeekStatus";
 import type { NowPlayingMetadataSegment } from "@/lib/playback/nowPlayingMetadata";
 import { CTA_HIGHLIGHT_DURATION_MS, CTA_PERSISTENT_ACTIVE_ATTR } from "@/lib/ui/buttonInteraction";
+import { enterKeyNavigationModality, leaveKeyNavigationModality } from "../../../../helpers/keypadModality";
+
 import {
   PlaybackControlsCard,
   type PlaybackControlsCardProps,
@@ -20,6 +22,9 @@ import {
   useFocusNavigationContext,
   type FocusNavigationContextValue,
 } from "@/hooks/useFocusNavigation";
+
+// HARD27-039: modality is a module-level singleton shared by every test here.
+afterEach(() => leaveKeyNavigationModality());
 
 /**
  * The metadata line, as the card now takes it: labelled parts rather than a finished string, so the
@@ -302,6 +307,10 @@ describe("PlaybackControlsCard", () => {
       reshuffleDisabled: false,
     });
 
+    // HARD27-039: a keypad user arrives here by key, so the discovery engine is
+    // already running when the card mounts. This test reads the ring before any
+    // key press.
+    enterKeyNavigationModality();
     render(
       <FocusNavigationProvider profileId="keypad">
         <FocusContextCapture target={focusContext} />

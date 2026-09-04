@@ -12,6 +12,7 @@ import { useRef, useState } from "react";
 import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import { buildPlaylistStorageKey, PLAYBACK_SESSION_KEY } from "@/pages/playFiles/playFilesUtils";
+import { readStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
 import { resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository";
 
 // Flexible harness allowing custom buildPlaylistItem and initial state
@@ -118,6 +119,7 @@ const usePlaybackHarness = ({
     autoAdvanceDueAtMs,
     setCurrentSubsongCount: vi.fn(),
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
+    setSessionRestoreSettled: vi.fn(),
     resolvedDeviceId: "device-1",
     playlistStorageKey,
     localEntriesBySourceId,
@@ -374,15 +376,16 @@ describe("usePlaybackPersistence – edge cases", () => {
       }),
     );
 
-    // Spy on sessionStorage.setItem specifically (not Storage.prototype)
-    // Capture the original prototype method before spying to avoid recursion
+    // Spy on localStorage.setItem specifically (not Storage.prototype), which is
+    // where the session is written since HARD27-032. Capture the original
+    // prototype method before spying to avoid recursion.
     const originalProtoSetItem = Storage.prototype.setItem;
-    const setItemSpy = vi.spyOn(sessionStorage, "setItem").mockImplementation((key: string, value: string) => {
+    const setItemSpy = vi.spyOn(localStorage, "setItem").mockImplementation((key: string, value: string) => {
       if (key === PLAYBACK_SESSION_KEY) {
         throw new Error("Storage quota exceeded");
       }
       // Use prototype directly to avoid calling the spy again
-      originalProtoSetItem.call(sessionStorage, key, value);
+      originalProtoSetItem.call(localStorage, key, value);
     });
 
     const { result } = renderHook(() => usePlaybackHarness({ playlistStorageKey }));
@@ -496,16 +499,11 @@ describe("usePlaybackPersistence – edge cases", () => {
     });
 
     await waitFor(() => {
-      const raw = sessionStorage.getItem(PLAYBACK_SESSION_KEY);
-      expect(raw).not.toBeNull();
-      const parsed = JSON.parse(raw as string) as {
-        currentItemId: string | null;
-        currentIndex: number;
-        autoAdvanceDueAtMs: number | null;
-      };
-      expect(parsed.currentItemId).toBeNull();
-      expect(parsed.currentIndex).toBe(-1);
-      expect(parsed.autoAdvanceDueAtMs).toBe(autoAdvanceDueAtMs);
+      const parsed = readStoredPlaybackSession();
+      expect(parsed).not.toBeNull();
+      expect(parsed?.currentItemId).toBeNull();
+      expect(parsed?.currentIndex).toBe(-1);
+      expect(parsed?.autoAdvanceDueAtMs).toBe(autoAdvanceDueAtMs);
     });
   });
 

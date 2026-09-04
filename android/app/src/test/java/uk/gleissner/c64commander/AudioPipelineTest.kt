@@ -77,8 +77,12 @@ class AudioPipelineTest {
     @Volatile var underruns = 0
       private set
 
+    /** Frozen while the track is paused, exactly as a real AudioTrack's head position is. */
+    @Volatile private var pausedAtFrames = -1L
+
     private fun framesPlayed(): Long {
       if (startedAtNanos == 0L) return 0
+      if (pausedAtFrames >= 0) return minOf(pausedAtFrames, framesWritten)
       val elapsed = System.nanoTime() - startedAtNanos
       val played = elapsed * sampleRate / 1_000_000_000L
       return minOf(played, framesWritten)
@@ -95,7 +99,15 @@ class AudioPipelineTest {
       `when`(track.sampleRate).thenReturn(sampleRate)
       `when`(track.channelCount).thenReturn(2)
       `when`(track.play()).thenAnswer {
-        startedAtNanos = System.nanoTime()
+        // A resume continues from the head position the pause froze; only a first start is from zero.
+        startedAtNanos =
+            if (pausedAtFrames >= 0) System.nanoTime() - pausedAtFrames * 1_000_000_000L / sampleRate
+            else System.nanoTime()
+        pausedAtFrames = -1
+        null
+      }
+      `when`(track.pause()).thenAnswer {
+        pausedAtFrames = framesPlayed()
         null
       }
       `when`(track.playbackHeadPosition).thenAnswer { framesPlayed().toInt() }
@@ -318,6 +330,38 @@ class AudioPipelineTest {
   }
 
   @Test
+  fun aPauseStopsTheSpeakerWithoutDrainingWhatIsQueued() {
+    // On-device playback pauses by holding the track, not by flushing it. Flushing discarded the
+    // ring, and the JS sink then rebased its write counter onto the played position while its
+    // scheduler still counted that audio as in flight — a render gate that never reopened, measured
+    // on a Pixel 4 as a transport clock that froze on resume and never moved again.
+    val speaker = FakeSpeaker(sampleRate, record = true)
+    val pipeline = AudioPipeline(sampleRate, 200, trackFactory = speaker.factory)
+    pipeline.start()
+    try {
+      feedEven(pipeline, 1, 1.0)
+      val playedBeforePause = synchronized(speaker.played) { speaker.played.size() }
+      assertTrue("nothing played before the pause", playedBeforePause > 0)
+
+      pipeline.pause()
+      Thread.sleep(300)
+      val playedWhilePaused = synchronized(speaker.played) { speaker.played.size() }
+      // Feeding continues while paused, as the sink's queue does; none of it may reach the speaker.
+      feedEven(pipeline, 1, 1.0)
+      assertEquals(playedWhilePaused, synchronized(speaker.played) { speaker.played.size() })
+
+      pipeline.resume()
+      Thread.sleep(300)
+      assertTrue(
+          "the speaker did not continue after the resume",
+          synchronized(speaker.played) { speaker.played.size() } > playedWhilePaused,
+      )
+    } finally {
+      pipeline.close()
+    }
+  }
+
+  @Test
   fun anEvenStreamPlaysWithoutDefects() {
     // The control. With no burstiness there is nothing to absorb, so any defect here would mean the
     // pipeline itself is broken rather than the link.
@@ -457,6 +501,36 @@ class AudioPipelineTest {
     } finally {
       pipeline.close()
     }
+  }
+
+  @Test
+  fun duckingAttenuatesTheOutputAndUnduckingRestoresIt() {
+    // HARD27-006: a navigation prompt or any other transient focus holder should hear the tune drop
+    // under it, not stop. Ducking is separate from the volume gain so neither can wipe the other,
+    // which is what this measures: the same tone, at the same requested gain, ducked and not.
+    val outputRate = 48000
+    fun rmsWithDuck(ducked: Boolean): Double {
+      val speaker = FakeSpeaker(outputRate, record = true)
+      val pipeline = AudioPipeline(sampleRate, 120, outputRate, 240, speaker.factory)
+      try {
+        pipeline.setGain(1.0)
+        pipeline.setDucked(ducked)
+        pipeline.start()
+        feedTone(pipeline, 1000.0, seconds = 2)
+        val pcm = synchronized(speaker.played) { speaker.played.toByteArray() }
+        assertTrue("nothing reached the speaker", pcm.size > outputRate)
+        // Skip the first quarter second: the gain ramp is deliberately gradual.
+        val tail = pcm.copyOfRange(outputRate, pcm.size)
+        return rms(channel(tail, 0))
+      } finally {
+        pipeline.close()
+      }
+    }
+
+    val open = rmsWithDuck(false)
+    val ducked = rmsWithDuck(true)
+    assertEquals("un-ducked output changed level", TONE_AMPLITUDE.toDouble() / Math.sqrt(2.0), open, 900.0)
+    assertEquals("ducked output is not attenuated by the duck gain", open * 0.2, ducked, open * 0.05)
   }
 
   @Test

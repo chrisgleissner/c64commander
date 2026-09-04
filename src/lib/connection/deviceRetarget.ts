@@ -18,6 +18,72 @@ import { getSavedDeviceById } from "@/lib/savedDevices/store";
 import { getRegisteredQueryClient } from "@/lib/query/queryClientRegistry";
 import { invalidateForSavedDeviceSwitch } from "@/lib/query/c64QueryInvalidation";
 import { toast } from "@/hooks/use-toast";
+import { avMirrorSession } from "@/lib/streams/avMirrorSession";
+import { hasActivePlaybackToStop, stopActivePlaybackBeforeDeviceSwitch } from "@/lib/playback/activePlaybackSession";
+
+/** What the A/V mirror was doing before a retarget, so the caller can follow it to the new device. */
+export interface AvMirrorRetargetState {
+  videoWasLive: boolean;
+  audioWasLive: boolean;
+}
+
+/** A dead old device must never hold a retarget open, so the stop is raced against this bound. */
+const AV_MIRROR_STOP_TIMEOUT_MS = 1500;
+
+/**
+ * What the mirror is doing right now. Synchronous like `hasActivePlaybackToStop`, so a switch path
+ * can skip the stop — and the microtask it costs — when Live View is off.
+ */
+export function readAvMirrorRetargetState(): AvMirrorRetargetState {
+  return { videoWasLive: avMirrorSession.videoLive, audioWasLive: avMirrorSession.audioLive };
+}
+
+/** True when `stopAvMirrorForDeviceRetarget` has work to do. */
+export function hasLiveAvMirror(state: AvMirrorRetargetState): boolean {
+  return state.videoWasLive || state.audioWasLive;
+}
+
+/**
+ * Stop the A/V mirror while `getC64API()` still targets the OLD device.
+ *
+ * Both Ultimates stream to the SAME multicast group, so the old one has to be told to stop before
+ * the retarget; otherwise the receiver interleaves frames from both, and its expected source stays
+ * bound to the old host so nothing the new device sends is accepted.
+ */
+export async function stopAvMirrorForDeviceRetarget(fromDeviceId: string | null): Promise<void> {
+  await Promise.race([
+    avMirrorSession.stopAll(),
+    new Promise((resolve) => setTimeout(resolve, AV_MIRROR_STOP_TIMEOUT_MS)),
+  ]).catch((error) => {
+    addLog("warn", "Live View: failed to stop the A/V mirror before device retarget", {
+      fromDeviceId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
+}
+
+/**
+ * Follow the mirror to the newly-verified device. Fire-and-forget so a slow `streams:start` cannot
+ * delay the retarget resolving; each start binds a fresh receiver on the new host.
+ */
+export function restartAvMirrorAfterDeviceRetarget(state: AvMirrorRetargetState, toDeviceId: string): void {
+  if (state.videoWasLive) {
+    void avMirrorSession.startVideo().catch((error) => {
+      addLog("warn", "Live View: failed to restart video on the new device after retarget", {
+        toDeviceId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }
+  if (state.audioWasLive) {
+    void avMirrorSession.startAudio().catch((error) => {
+      addLog("warn", "Live View: failed to restart audio on the new device after retarget", {
+        toDeviceId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }
+}
 
 /**
  * Cross-device hygiene for any path that retargets the app from one device to
@@ -31,16 +97,22 @@ import { toast } from "@/hooks/use-toast";
  * sequencing because its steps are split around a fallible password resolve and
  * the API-retarget/verification boundary (HARD12-003, HARD16-009, HARD12-011), so
  * it does NOT route through this helper — its hygiene is the reference this helper
- * mirrors. Any future addition here (e.g. the HARD19-017 injection-queue drain)
- * must also be reflected in `executeSavedDeviceSwitch`.
+ * mirrors. The two steps that were previously duplicated and drifted apart, the
+ * playback stop and the A/V mirror stop, now live in shared helpers both paths
+ * call (HARD27-010). Any future addition here (e.g. the HARD19-017
+ * injection-queue drain) must also be reflected in `executeSavedDeviceSwitch`.
  *
  * Safe to call pre-UI (during startup): every step tolerates uninitialised
  * singletons, and query invalidation is skipped when no client is registered yet.
  *
  * @param fromDeviceId the previously-selected device id (may be null on cold start)
  * @param toDeviceId   the device being retargeted to
+ * @returns what the A/V mirror was doing, for the caller to restart after verification
  */
-export async function prepareForDeviceRetarget(fromDeviceId: string | null, toDeviceId: string): Promise<void> {
+export async function prepareForDeviceRetarget(
+  fromDeviceId: string | null,
+  toDeviceId: string,
+): Promise<AvMirrorRetargetState> {
   // 1. Release any Remote Input held on the OLD device FIRST, while the runtime
   //    API still targets it. Internally time-bounded and caught, so a dead old
   //    device cannot stall the retarget.
@@ -51,6 +123,16 @@ export async function prepareForDeviceRetarget(fromDeviceId: string | null, toDe
   // 1b. HARD19-017: cancel any queued/in-flight kernal-fallback keyboard-buffer
   //     injections so remaining PETSCII writes do not land on the new device.
   drainKernalFallbackInjectionQueue();
+
+  // 1c. HARD27-010: silence the tune and stop the mirror while the runtime API still targets the
+  //     old device, exactly as the canonical switch does. Skip the await when nothing is playing.
+  if (hasActivePlaybackToStop()) {
+    await stopActivePlaybackBeforeDeviceSwitch();
+  }
+  const mirrorState = readAvMirrorRetargetState();
+  if (hasLiveAvMirror(mirrorState)) {
+    await stopAvMirrorForDeviceRetarget(fromDeviceId);
+  }
 
   const fromDevice = fromDeviceId && fromDeviceId !== toDeviceId ? getSavedDeviceById(fromDeviceId) : null;
 
@@ -100,4 +182,6 @@ export async function prepareForDeviceRetarget(fromDeviceId: string | null, toDe
   if (queryClient) {
     invalidateForSavedDeviceSwitch(queryClient);
   }
+
+  return mirrorState;
 }

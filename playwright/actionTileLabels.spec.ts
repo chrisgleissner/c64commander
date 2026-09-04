@@ -45,13 +45,26 @@ const MATRIX = [
 ] as const;
 
 type ClippedLabel = { grid: string; label: string; needs: number; has: number };
+type LabelSweep = { clipped: ClippedLabel[]; grids: string[]; spans: number; tiles: number };
 
-const findClippedLabels = (page: Page) =>
-  page.evaluate((): ClippedLabel[] => {
+/*
+ * The sweep reports what it inspected as well as what it found. Asserting only that
+ * `clipped` is empty passes when the selector matches nothing, so renaming the
+ * `quick-action` class would have removed all eleven of these layout cases with no
+ * red check anywhere.
+ */
+const sweepTileLabels = (page: Page) =>
+  page.evaluate((): LabelSweep => {
     const clipped: ClippedLabel[] = [];
+    const grids = new Set<string>();
+    let tiles = 0;
+    let spans = 0;
     for (const tile of document.querySelectorAll<HTMLElement>("button.quick-action")) {
       const grid = tile.closest("[data-testid]")?.getAttribute("data-testid") ?? "unknown";
+      tiles += 1;
+      grids.add(grid);
       for (const span of tile.querySelectorAll<HTMLElement>("span")) {
+        spans += 1;
         if (span.scrollWidth - span.clientWidth <= 1 && span.scrollHeight - span.clientHeight <= 1) continue;
         clipped.push({
           grid,
@@ -61,8 +74,31 @@ const findClippedLabels = (page: Page) =>
         });
       }
     }
-    return clipped;
+    return { clipped, grids: [...grids].sort(), spans, tiles };
   });
+
+/*
+ * Every case below must inspect at least this much, or it measured nothing. The
+ * thinnest case today inspects 12 tiles across 2 grids, so a case that opened no
+ * Config actions section, or found no tile at all, fails here instead of passing.
+ */
+const MIN_TILES = 8;
+const MIN_SPANS = 8;
+const MIN_GRIDS = 2;
+
+const expectNoClippedLabel = (sweep: LabelSweep, label: string) => {
+  expect(sweep.tiles, `${label}: the tile sweep found no quick-action button`).toBeGreaterThanOrEqual(MIN_TILES);
+  expect(sweep.spans, `${label}: the tile sweep found no label span`).toBeGreaterThanOrEqual(MIN_SPANS);
+  expect(
+    sweep.grids.length,
+    `${label}: the tile sweep covered only ${sweep.grids.join(", ") || "no grid"}`,
+  ).toBeGreaterThanOrEqual(MIN_GRIDS);
+  expect(
+    sweep.clipped,
+    `${label}: inspected ${sweep.tiles} tiles in ${sweep.grids.join(", ")}\n` +
+      sweep.clipped.map((c) => `${c.grid}: "${c.label}" needs ${c.needs}px, has ${c.has}px`).join("\n"),
+  ).toEqual([]);
+};
 
 const openHomeSection = async (page: Page, id: string) => {
   const toggle = page.getByTestId(`home-section-toggle-${id}`);
@@ -105,11 +141,7 @@ test.describe("Action tile labels are drawn whole", () => {
         await openHomeSection(page, "config-actions");
         await page.waitForTimeout(400);
 
-        const clipped = await findClippedLabels(page);
-        expect(
-          clipped,
-          clipped.map((c) => `${c.grid}: "${c.label}" needs ${c.needs}px, has ${c.has}px`).join("\n"),
-        ).toEqual([]);
+        expectNoClippedLabel(await sweepTileLabels(page), `${profile} at ${width}px, ${scale} text`);
       });
     }
   }
@@ -131,10 +163,6 @@ test.describe("Action tile labels are drawn whole", () => {
       timeout: 15_000,
     });
 
-    const clipped = await findClippedLabels(page);
-    expect(
-      clipped,
-      clipped.map((c) => `${c.grid}: "${c.label}" needs ${c.needs}px, has ${c.has}px`).join("\n"),
-    ).toEqual([]);
+    expectNoClippedLabel(await sweepTileLabels(page), "paused Pause tile");
   });
 });

@@ -13,6 +13,13 @@ vi.mock("@/lib/native/platform", async (importOriginal) => ({
   isNativePlatform: () => true,
 }));
 
+// The receiver factory selects on plugin availability, not on "native" (HARD27-002) — these cases
+// are the Android path, where StreamUdp is registered.
+vi.mock("@capacitor/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@capacitor/core")>();
+  return { ...actual, Capacitor: { ...actual.Capacitor, isPluginAvailable: () => true } };
+});
+
 const streamUdp = vi.hoisted(() => {
   const listeners: Record<string, ((event: Record<string, unknown>) => void) | null> = {
     datagram: null,
@@ -22,6 +29,8 @@ const streamUdp = vi.hoisted(() => {
   return {
     bind: vi.fn().mockResolvedValue({ localIp: "192.168.1.206", port: 11000 }),
     close: vi.fn().mockResolvedValue(undefined),
+    readStreamDiagnostics: vi.fn().mockResolvedValue({ rejectedPackets: 0 }),
+    setExpectedSource: vi.fn().mockResolvedValue(undefined),
     addListener: vi.fn((event: string, listener: (event: Record<string, unknown>) => void) => {
       listeners[event] = listener;
       return Promise.resolve({ remove });
@@ -34,7 +43,13 @@ const streamUdp = vi.hoisted(() => {
 });
 
 vi.mock("@/lib/native/streamUdp", () => ({
-  StreamUdp: { bind: streamUdp.bind, close: streamUdp.close, addListener: streamUdp.addListener },
+  StreamUdp: {
+    bind: streamUdp.bind,
+    close: streamUdp.close,
+    addListener: streamUdp.addListener,
+    readStreamDiagnostics: streamUdp.readStreamDiagnostics,
+    setExpectedSource: streamUdp.setExpectedSource,
+  },
 }));
 
 import { createStreamReceiver, NativeUdpStreamReceiver } from "@/lib/streams/streamReceiver";
@@ -46,6 +61,8 @@ describe("NativeUdpStreamReceiver (native platform)", () => {
     streamUdp.bind.mockClear();
     streamUdp.close.mockClear();
     streamUdp.remove.mockClear();
+    streamUdp.readStreamDiagnostics.mockClear().mockResolvedValue({ rejectedPackets: 0 });
+    streamUdp.setExpectedSource.mockClear().mockResolvedValue(undefined);
     streamUdp.bind.mockResolvedValue({ localIp: "192.168.1.206", port: 11000 });
   });
 
@@ -176,6 +193,47 @@ describe("NativeUdpStreamReceiver (native platform)", () => {
       destination: "127.0.0.1:9999",
     });
     expect(receiver.destination).toBe("127.0.0.1:9999");
+    receiver.close();
+  });
+
+  // A filter aimed at the wrong address of a dual-homed Ultimate is silent in exactly the way a
+  // stopped stream is, so the plugin's rejection counters are the only thing that separates them.
+  it("reads the plugin's sender-filter counters", async () => {
+    streamUdp.readStreamDiagnostics.mockResolvedValue({
+      rejectedPackets: 812,
+      lastRejectedSource: "192.168.1.131",
+      expectedSource: "192.168.1.148",
+    });
+    const receiver = createStreamReceiver({ name: "video", port: 11000 });
+
+    await expect(receiver.readDiagnostics?.()).resolves.toEqual({
+      rejectedPackets: 812,
+      lastRejectedSource: "192.168.1.131",
+      expectedSource: "192.168.1.148",
+    });
+    expect(streamUdp.readStreamDiagnostics).toHaveBeenCalledWith({ name: "video" });
+    receiver.close();
+  });
+
+  // A diagnosis that cannot be made must not replace the plain "stopped arriving" message with an
+  // error of its own, so a plugin that will not answer resolves null rather than rejecting.
+  it("answers null when the plugin cannot report its counters", async () => {
+    streamUdp.readStreamDiagnostics.mockRejectedValue(new Error("not implemented"));
+    const receiver = createStreamReceiver({ name: "audio", port: 11001 });
+
+    await expect(receiver.readDiagnostics?.()).resolves.toBeNull();
+    receiver.close();
+  });
+
+  it("retargets the sender filter on the socket it already bound", async () => {
+    const receiver = createStreamReceiver({ name: "video", port: 11000, expectedSource: "192.168.1.148" });
+    await receiver.ready?.();
+
+    await receiver.setExpectedSource?.("192.168.1.131");
+
+    expect(streamUdp.setExpectedSource).toHaveBeenCalledWith({ name: "video", host: "192.168.1.131" });
+    // The socket is not rebound: staying in the multicast group is the point of the retarget.
+    expect(streamUdp.bind).toHaveBeenCalledTimes(1);
     receiver.close();
   });
 });

@@ -17,7 +17,9 @@ import {
 import { updateSelectedSavedDeviceConnection } from "@/lib/savedDevices/store";
 import { notifyAuthRequired, notifyAuthSatisfied } from "@/lib/auth/authChallenge";
 import { isAuthRequiredHttpStatus } from "@/lib/c64api/transportErrors";
+import { handleWebProxyGate } from "@/lib/c64api/webProxyGate";
 import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
+import { reportFallback } from "@/lib/diagnostics/fallbackReporter";
 import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import { getSmokeConfig, isSmokeModeEnabled, isSmokeReadOnlyEnabled } from "@/lib/smoke/smokeMode";
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from "@/lib/fuzz/fuzzMode";
@@ -30,7 +32,12 @@ import {
   validateConfigBatchWrite,
   validateConfigWrite,
 } from "@/lib/config/validateConfigWrite";
-import { noteConfigWritten, notePersistedToFlash } from "@/lib/config/configFlashPersistence";
+import {
+  noteConfigWritten,
+  noteTransientConfigWritten,
+  noteTransientConfigWriteSettled,
+  notePersistedToFlash,
+} from "@/lib/config/configFlashPersistence";
 import { normalizeConfigItem } from "@/lib/config/normalizeConfigItem";
 import { runWithImplicitAction } from "@/lib/tracing/actionTrace";
 import { recordRestRequest, recordRestResponse, recordTraceError } from "@/lib/tracing/traceSession";
@@ -346,9 +353,14 @@ const resolveConfigWriteValue = (category: string, item: string, value: string |
     resolveDeclaredConfigWriteValue(category, item, value, categoryPayload),
   );
 
-const isDnsFailure = (message: string) => /unknown host|enotfound|ename_not_found|dns/i.test(message);
+// Includes Android's "Unable to resolve host", which CapacitorHttp reports for
+// an unresolvable device hostname and which the other patterns do not match.
+const isDnsFailure = (message: string) =>
+  /unknown host|enotfound|ename_not_found|dns|unable to resolve host/i.test(message);
 const isNetworkFailureMessage = (message: string) =>
-  /failed to fetch|networkerror|network request failed|unknown host|enotfound|ename_not_found|dns/i.test(message);
+  /failed to fetch|networkerror|network request failed|unknown host|enotfound|ename_not_found|dns|unable to resolve host/i.test(
+    message,
+  );
 const resolveHostErrorMessage = (message: string) =>
   isDnsFailure(message) ? "Host unreachable (DNS)" : "Host unreachable";
 const isDeviceNotReadyRequestGate = (message: string) => /device not ready for requests/i.test(message);
@@ -568,23 +580,76 @@ const pumpNativeDeviceRequestQueue = () => {
     next.resolve();
   }
 };
+// HARD27-014: a handler registers the native call it started, so the lane can stay
+// held until the socket is actually gone rather than until the JavaScript promise
+// settles. `CapacitorHttp.request` takes no abort signal and cannot be cancelled, so
+// an aborted request rejects its promise while the native call keeps the connection
+// open for up to its own timeout.
+// Grace on top of the native connect/read timeout before the lane stops waiting for a
+// native call. OkHttp applies its read timeout per read, so a slow-but-alive response can
+// legitimately outlive `requestTimeoutMs`; the grace keeps that case from being logged and
+// released as a wedge.
+const NATIVE_CALL_HOLD_GRACE_MS = 2000;
+
+export type HoldNativeDeviceCall = (nativeCall: Promise<unknown>, holdTimeoutMs: number) => void;
+
+const noopHoldNativeDeviceCall: HoldNativeDeviceCall = () => {};
+
+// Resolve when the native call settles, or when `holdTimeoutMs` passes — whichever
+// comes first. The deadline is what stops a wedged native bridge from holding the
+// lane forever; without it a single call that never settles would stall every later
+// device request for the lifetime of the process.
+const awaitNativeCallWithinHoldDeadline = (nativeCall: Promise<unknown>, holdTimeoutMs: number): Promise<void> => {
+  const deadlineMs = Number.isFinite(holdTimeoutMs) ? Math.max(0, holdTimeoutMs) : 0;
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      addLog("warn", "Native device call outlived its connection-lane hold deadline", { deadlineMs });
+      resolve();
+    }, deadlineMs);
+    const settle = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    void nativeCall.then(settle, settle);
+  });
+};
+
 // Run `run` once a device connection slot is free, allowing at most
 // `maxConcurrent` native device requests in flight at a time (1 = fully
 // serialized — one connection). The limit comes from the resolved device-safety
 // profile (restMaxConcurrency): CONSERVATIVE = 1 for the unfixed-firmware c64u,
-// higher for firmware that shipped the Ultimate network-stack fixes. Exported for
-// unit testing. See docs/c64/c64u-firmware-tcp-wedge-report.md.
-export const serializeNativeDeviceRequest = async <T>(run: () => Promise<T>, maxConcurrent = 1): Promise<T> => {
+// higher for firmware that shipped the Ultimate network-stack fixes.
+//
+// The slot is freed once `run` has settled AND every native call it registered with
+// `hold` has settled (or hit its hold deadline). Freeing it on the JavaScript promise
+// alone let an abort — React Query cancellation, a saved-device switch, a discovery
+// restart — start the next request while the aborted request's socket was still open,
+// which is exactly the overlapping-connection pattern that can wedge the unfixed
+// firmware. Exported for unit testing. See docs/c64/c64u-firmware-tcp-wedge-report.md.
+export const serializeNativeDeviceRequest = async <T>(
+  run: (hold: HoldNativeDeviceCall) => Promise<T>,
+  maxConcurrent = 1,
+): Promise<T> => {
   const limit = Number.isFinite(maxConcurrent) ? Math.max(1, Math.floor(maxConcurrent)) : 1;
   await new Promise<void>((resolve) => {
     nativeDeviceRequestQueue.push({ limit, resolve });
     pumpNativeDeviceRequestQueue();
   });
-  try {
-    return await run();
-  } finally {
+  const heldNativeCalls: Array<Promise<void>> = [];
+  const hold: HoldNativeDeviceCall = (nativeCall, holdTimeoutMs) => {
+    heldNativeCalls.push(awaitNativeCallWithinHoldDeadline(nativeCall, holdTimeoutMs));
+  };
+  const releaseLane = () => {
     activeNativeDeviceRequests = Math.max(0, activeNativeDeviceRequests - 1);
     pumpNativeDeviceRequestQueue();
+  };
+  try {
+    return await run(hold);
+  } finally {
+    // Detach the caller's promise from the lane: an abort must reject immediately,
+    // and only the slot waits for the native call.
+    if (heldNativeCalls.length === 0) releaseLane();
+    else void Promise.all(heldNativeCalls).then(releaseLane);
   }
 };
 
@@ -654,7 +719,8 @@ const noteRestReachable = (url: string, deviceHost: string, deviceInfo: DeviceIn
   const host = (() => {
     try {
       return new URL(url).host;
-    } catch {
+    } catch (error) {
+      reportFallback("c64api.noteRestReachable", error, { fallbackHost: deviceHost });
       return deviceHost;
     }
   })();
@@ -916,6 +982,13 @@ type C64ReadRequestOptions = RequestInit & {
    */
   __c64uTransientConfigWrite?: boolean;
   /**
+   * A transient config write that RESTORES the user's own value.
+   *
+   * Implies `__c64uTransientConfigWrite`. The device is back to what the user chose, so a flash save
+   * that was armed before the transient write and held by it may now go out. See HARD27-011.
+   */
+  __c64uTransientConfigRestore?: boolean;
+  /**
    * An explicit, user-forced probe (the Diagnostics "Run health check" button).
    * Implies every bypass flag AND overrides the device-state gate, so it always
    * reaches the wire regardless of a stale circuit/backoff/cooldown/ERROR state.
@@ -1076,8 +1149,13 @@ export class C64API {
    * Forbidden responses yields exactly one popup. Identity (saved-device id +
    * label) is resolved from this client's host by the auth-challenge store.
    */
-  private maybeRaiseAuthChallenge(status: number, suppress: boolean) {
+  private maybeRaiseAuthChallenge(status: number, suppress: boolean, headers?: Headers | null) {
     if (suppress || !isAuthRequiredHttpStatus(status)) return;
+    // HARD27-029/HARD27-030: on web the same statuses also carry the proxy's own
+    // session and host-policy gates. No device saw those requests, so the device
+    // password cannot satisfy them; the gate handler takes the user to the login
+    // page instead.
+    if (handleWebProxyGate(headers)) return;
     notifyAuthRequired({ host: this.deviceHost });
   }
 
@@ -1595,12 +1673,15 @@ export class C64API {
     }
 
     const serializeOnDevice = isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
-    const runNativeSerialized = <R>(handler: () => Promise<R>) =>
+    // Only the shared bulk-REST lane holds its slot for the native call (HARD27-014).
+    // The machine-input lane keeps the previous release-on-settle behaviour so its
+    // 10/sec floor is not put at risk; see DECISIONS.md.
+    const runNativeSerialized = <R>(handler: (hold: HoldNativeDeviceCall) => Promise<R>) =>
       serializeOnDevice
         ? useInputLane
-          ? serializeMachineInputRequest(handler)
+          ? serializeMachineInputRequest(() => handler(noopHoldNativeDeviceCall))
           : serializeNativeDeviceRequest(handler, loadDeviceSafetyConfig().restMaxConcurrency)
-        : handler();
+        : handler(noopHoldNativeDeviceCall);
     const runRequest = () =>
       runWithImplicitAction(`rest.${method.toLowerCase()} ${path}`, async (action) =>
         withRestInteraction(
@@ -1622,7 +1703,7 @@ export class C64API {
             useInputLane,
           },
           () =>
-            runNativeSerialized(async () => {
+            runNativeSerialized(async (holdNativeCall) => {
               const requestId = buildRequestId();
               const idleContext = getIdleContext();
               const scheduledRequest = intent === "background";
@@ -1699,18 +1780,25 @@ export class C64API {
                   // capacitorHttpDeviceFetch). Web/proxy transports keep the standard fetch path.
                   const useNativeDeviceTransport =
                     isNativePlatform() && !baseUrl.includes(WEB_PROXY_PATH) && !isLocalProxy(baseUrl);
+                  const nativeCall = useNativeDeviceTransport
+                    ? capacitorHttpDeviceFetch(url, { method, headers, body: requestOptions.body }, requestTimeoutMs)
+                    : null;
+                  if (nativeCall) {
+                    // Keep the connection lane held until this uncancellable native call is
+                    // done, even if the abort below rejects our promise first (HARD27-014).
+                    holdNativeCall(nativeCall, requestTimeoutMs + NATIVE_CALL_HOLD_GRACE_MS);
+                  }
                   const response = await awaitPromiseWithAbortSignal(
-                    useNativeDeviceTransport
-                      ? capacitorHttpDeviceFetch(url, { method, headers, body: requestOptions.body }, requestTimeoutMs)
-                      : fetchWithSignalCompatibility(
-                          url,
-                          {
-                            ...requestOptions,
-                            headers,
-                            credentials: requestOptions.credentials ?? "omit",
-                          },
-                          timedSignal.signal,
-                        ),
+                    nativeCall ??
+                      fetchWithSignalCompatibility(
+                        url,
+                        {
+                          ...requestOptions,
+                          headers,
+                          credentials: requestOptions.credentials ?? "omit",
+                        },
+                        timedSignal.signal,
+                      ),
                     timedSignal.signal,
                   );
                   throwIfSuperseded();
@@ -1747,7 +1835,7 @@ export class C64API {
                       recordTraceError(action, err, failure);
                     }
                     responseRecorded = true;
-                    this.maybeRaiseAuthChallenge(response.status, suppressAuthChallenge);
+                    this.maybeRaiseAuthChallenge(response.status, suppressAuthChallenge, response.headers);
                     throw err;
                   }
 
@@ -2367,8 +2455,27 @@ export class C64API {
     // The device has now EFFECTUATED this value but has not written it to flash — that needs a
     // separate `save_to_flash`, which is what this arms. Only after the write was accepted: a
     // rejected write left nothing to persist.
-    if (!options.__c64uTransientConfigWrite) noteConfigWritten(() => this.saveConfig({ __c64uIntent: "user" }));
+    this.noteConfigWriteForFlash(options);
     return response;
+  }
+
+  /**
+   * Tells the flash-persist policy what kind of write just landed.
+   *
+   * HARD27-011: this is the one place that decides it, so every config write funnel classifies
+   * alike. A restore releases a save the transient write was holding; a transient write holds it;
+   * anything else is a user setting and arms the save.
+   */
+  private noteConfigWriteForFlash(options: C64ReadRequestOptions): void {
+    if (options.__c64uTransientConfigRestore) {
+      noteTransientConfigWriteSettled();
+      return;
+    }
+    if (options.__c64uTransientConfigWrite) {
+      noteTransientConfigWritten();
+      return;
+    }
+    noteConfigWritten(() => this.saveConfig({ __c64uIntent: "user" }));
   }
 
   // HARD19-025: the firmware reports flash-save/load and reset-to-default failures
@@ -2402,7 +2509,10 @@ export class C64API {
     return response;
   }
 
-  async updateConfigBatch(payload: Record<string, Record<string, string | number>>): Promise<{ errors: string[] }> {
+  async updateConfigBatch(
+    payload: Record<string, Record<string, string | number>>,
+    options: C64ReadRequestOptions = {},
+  ): Promise<{ errors: string[] }> {
     const categories = Object.entries(payload);
     const resolvedEntriesByCategory: Record<string, Array<[string, string | number]>> = {};
     await Promise.all(
@@ -2458,11 +2568,13 @@ export class C64API {
               {
                 method: "PUT",
                 ...CONFIG_WRITE_REQUEST_OPTIONS,
+                ...options,
               },
             )
           : this.request("/v1/configs", {
               method: "POST",
               ...CONFIG_WRITE_REQUEST_OPTIONS,
+              ...options,
               body: JSON.stringify(requestPayload),
             });
       const response = await scheduleConfigWrite(run);
@@ -2473,7 +2585,7 @@ export class C64API {
         });
       });
       errors.push(...(response.errors ?? []));
-      noteConfigWritten(() => this.saveConfig({ __c64uIntent: "user" }));
+      this.noteConfigWriteForFlash(options);
     }
     return { errors };
   }
@@ -2570,12 +2682,17 @@ export class C64API {
     return response;
   }
 
-  async stopStream(stream: string): Promise<{ errors: string[] }> {
+  /**
+   * `options.suppressAuthChallenge` keeps a 401/403 from opening the app-wide password dialog.
+   * Set by the foreign-sender eviction, which addresses a machine the user did not select.
+   */
+  async stopStream(stream: string, options: { suppressAuthChallenge?: boolean } = {}): Promise<{ errors: string[] }> {
     const response = await this.request<{ errors: string[] }>(`/v1/streams/${encodeURIComponent(stream)}:stop`, {
       method: "PUT",
       timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
       __c64uSkipSuccessBodyInspection: true,
       __c64uInspectSkippedSuccessBody: true,
+      __c64uSuppressAuthChallenge: options.suppressAuthChallenge,
     });
     this.assertActionAccepted(response, `stream ${stream} stop`);
     return response;
@@ -2605,6 +2722,7 @@ export class C64API {
       this.maybeRaiseAuthChallenge(
         response.status,
         Boolean(options.__c64uSuppressAuthChallenge) || options.__c64uIntent === "system",
+        response.headers,
       );
       throw new Error(`readMemory failed: HTTP ${response.status}`);
     }

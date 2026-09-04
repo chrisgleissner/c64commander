@@ -17,6 +17,12 @@ It complements:
 > same change**. See the rule in `AGENTS.md` ("CTA inventory upkeep"). Counts in
 > §3 are a quick tripwire: if a page's interactive-element count changes and this
 > file did not, the change is incomplete.
+>
+> `npm run lint:reference-docs` checks the mechanical half: every `data-testid` on
+> an interactive element in `src/pages` or `src/components` has to be mentioned
+> here. It reads the abbreviations this document already uses — `a|b|c`, `{a,b}`,
+> `<slot>` and `*` — so an entry may keep naming a family in one token. It cannot
+> judge keypad reachability, which still needs the §7 device pass.
 
 Last verified on real hardware: **Pixel 4 (Android 16)** against a real **c64u**
 (firmware 1.1.0), app `0.8.8-b92e0`, branch `feat/keyboard-input`,
@@ -174,6 +180,10 @@ not-connected / empty / single-device).
   - Live View — button — `home-tile-home.section.live-view` — R✅ I✅ `[disabled: no device, or Live View off]`
 - **Connect a C64** (`home-connect-c64`) — button — `home-connect-c64-setup` — R✅ I✅
   `[visible only in the offline arrangement, in place of Quick Actions]`
+- **Lighting** — the card naming the look currently on the machine (chips `home-lighting-profile-chip`, `home-lighting-automation-chip`, `home-lighting-lock-chip` are display-only). Code-verified, not yet enumerated on hardware.
+  - Why this look? — button — `home-lighting-why` — opens the **Context Lens** sheet
+  - Hold look / Resume auto — button — `home-lighting-lock-toggle` — one button, two labels: it holds the current look against automation, or releases it again
+  - Studio — button — `home-lighting-studio` — opens **Lighting Studio** (§5.1)
 - **Header**
   - Quick menu — button — `app-bar-quick-menu` — R✅ I✅
   - Status badge — button — `unified-health-badge` — R✅ I✅
@@ -203,6 +213,12 @@ not-connected / empty / single-device).
     - Filter snapshots — text — `snapshot-filter-input` — R✅ I✅
     - Type filters — buttons — `snapshot-filter-type-<type>` — R✅ I✅
     - Snapshot row — button — `snapshot-row` — R✅ I✅ (restores; carries its own delete and rename)
+    - Delete a snapshot — button — `snapshot-delete` — the destructive action on the row, which
+      stops the tap propagating to the row's own restore
+    - **Restore confirmation** (`restore-snapshot-dialog`) — Cancel, plus either the single
+      Restore — button — `restore-snapshot-confirm` — or, for an REU snapshot, the two ways it
+      can be applied: Preload on Startup — button — `restore-reu-preload` — and Load into REU —
+      button — `restore-reu-load`
     - RAM folder — button (`...`) — `ram-dump-folder-trigger` — R✅ I✅ — the same control as in Backup, at the end of the list
   - Reset — button (danger) — R✅ I✅ (confirm dialog) — keeps a tile of its own; it is among the most-reached controls in the app
   - Power — button (danger) — `home-power-actions` — R✅ I✅ — opens the **Power sheet** (`home-power-sheet`); disabled only when every row inside it is
@@ -267,8 +283,13 @@ not-connected / empty / single-device).
   - (edit mode) endpoint — text — `home-stream-endpoint-*` — R✅ I✅
   - _Live View precedence:_ while Live View is receiving a feed (VIC↔video, Audio↔audio) that row goes **read-only** — edit/start/stop are hidden/disabled, replaced by a `home-stream-liveview-badge-*` chip + `home-stream-liveview-note-*` explanation (display-only); controls return when Live View stops.
 - **Live View** (`live-view-card`) _(Content Explorer A/V Mirror; mounted only when the device advertises streaming and `audio_mirror_enabled` or `video_mirror_enabled` is on)_
+  - Reset — button — `live-view-stop` — R✅ I✅ `[visible only while a feed is live]` — the card header's own action, so it is reachable while the card is collapsed. Labelled "Reset" to match every other card header; the accessible name is "Stop Live View", which is what it does — it stops both feeds, releasing the multicast receiver and the audio track
   - Audio — Listen / Listening toggle — button — `av-audio-toggle` — R✅ I✅ _(flag `audio_mirror_enabled`; controls the shared app-wide session; the live dot is display-only)_
   - Video — Watch / Watching toggle — button — `av-video-toggle` — R✅ I✅ _(flag `video_mirror_enabled`; the check-preview canvas and fps badge are display-only)_
+  - Adopt this sender — button — `av-mirror-adopt-sender` `[only while packets arrive from a
+    sender the session is filtering out]` — the mirror pins one sender, so a second Ultimate in
+    the same multicast group is dropped rather than blended; this retargets the session at it.
+    Its label names the sender, so the user is not asked to adopt an anonymous address
   - Expand / collapse preview — button — `live-view-expand` — R✅ I✅ _(shown only while a video stream is active; toggles the check preview between check and immersive size)_
   - Stats — expand/collapse toggle — `stream-stats-toggle` — R✅ I✅ _(reveals the telemetry grid + the controls below; diagnostic)_
     - Frame-rate mode — segmented buttons ×4 — `stream-stats-mode-auto` / `-100` / `-50` / `-25` — R✅ I✅ _(user max presented rate; the governor may still demote below it)_
@@ -298,7 +319,7 @@ not-connected / empty / single-device).
 - Now playing, two lines: author · released — `playback-current-credits`; SID model · clock · tune position · length — `playback-current-facts`
 - Mute — button — `volume-mute` — R✅ I✅ `[disabled]` (icon-only; the accessible name carries the
   state, and on the on-device route it attenuates the samples rather than the device's volume)
-- Volume — slider — R✅ I✅ `[disabled]` — shares one row with Mute and the dB readout (`volume-row`);
+- Volume — slider — `volume-slider` — R✅ I✅ `[disabled]` — shares one row with Mute and the dB readout (`volume-row`);
   the former `volume-caption` label is gone, the readout is fixed-width so the row cannot reflow
 - Shuffle / Repeat — checkbox — `playback-shuffle|playback-repeat` — R✅ I✅ — **not rendered** while
   a SID Radio station drives the queue. A station owns the play order, so these are
@@ -307,7 +328,7 @@ not-connected / empty / single-device).
 - Reshuffle — button — `playlist-reshuffle` — R✅ I✅ `[disabled]` — likewise **not rendered** during
   a station. The row that holds all three is dropped with them, so a station leaves no empty or
   greyed row behind.
-- Duration — slider — R✅ I✅
+- Duration — slider — `duration-slider` — R✅ I✅
 - Duration override — text — `duration-input` (`mm:ss`) — R✅ I✅ ; Change — button — R✅ I✅
 - Add items to playlist — button — `add-items-to-playlist` — R✅ I✅ (opens picker)
 - Include subfolders — checkbox — `playback-recurse` — R✅ I✅ — in the **Add items** sheet
@@ -318,8 +339,11 @@ not-connected / empty / single-device).
 - Type filters: SID / MOD / PRG / CRT / Disk — checkbox — `playlist-type-*` — R✅ I✅
 - Select all — button — `playlist-list-toggle-select-all` — R✅ I✅
 - HVSC: Download / Ingest / Reindex / Reset — button — R✅ I✅ _(flag `hvsc_enabled`)_
+- HVSC: Stop — button — `hvsc-stop` — R✅ I✅ `[visible only while an install, ingest or reindex is running]` — cancels the operation in progress
+- **HVSC preparation sheet** — the progress surface those long operations open. Its footer holds one set of actions per outcome, so at most two are on screen at a time: Browse HVSC (`hvsc-preparation-browse`, on success), Cancel and Retry (`hvsc-preparation-cancel`, `hvsc-preparation-retry`, on failure), and Cancel alone while it is still running. The phase, throughput and error lines (`hvsc-preparation-{phase,throughput,error}`) are display-only
 - Game Mode — button — `play-open-game-mode` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — starts the remembered picture/sound and opens the **Remote Input sheet** in Game Mode (§5). **Leads** Remote Input for a `prg`/`crt`/`disk` item (overwhelmingly likely to be a game) and **follows** it for a `sid`/`mod` item.
 - Remote Input — button — `play-open-controller` — R✅ I✅ _(flag `remote_input_enabled`; visible only while `isPlaying`)_ — opens the **Remote Input sheet** (§5). Both controller actions sit in the sheet-actions row **after** SID Radio and Liked Tunes: all of them open a sheet, and the two station actions are about what plays next while these leave the music behind.
+- Tune notes — expand/collapse — `tune-details-toggle` — R✅ I✅ — reveals `tune-details-body`, which carries the STIL entry for the tune. The chevron leads the label and the button is only as wide as its content, so no part of its target sits beneath the favourite action on the line above
 - Progress bar (seek) — button — `playback-progress-seek` — R✅ I✅ — tap or drag to jump within the tune; **also operable without a pointer**: `ArrowLeft`/`ArrowRight` step ±2%. Rendered only for audio this device renders (see _Listen on_ below); on the C64 route the bar is a plain indicator (`playback-progress`) and not focusable, because the machine plays the SID on its own chip and cannot be scrubbed.
 - Previous / Next **held** — scrub — same `playlist-prev|next` buttons — R✅ I✅ — a hold scrubs the current tune instead of changing track (local playback only); a tap still skips.
 
@@ -342,7 +366,9 @@ Listed below in the order they are rendered and walked by the focus ring.
 - Stop the station — button — `sid-radio-stop` — R✅ I✅ — labelled "Stop", on the source row at the
   top of the Now Playing card, beside the station it ends
 - Station chip — button — `sid-radio-chip-toggle` — R✅ I✅ _(expands `sid-radio-chip`; `sid-radio-why` explains the pick)_
-- Liked tunes — button — `sid-radio-liked-tunes-open` — R✅ I✅
+- Liked tunes — button — `sid-radio-liked-tunes-open` — R✅ I✅ — the sheet lists one row per liked
+  tune: Play — button — `liked-tune-play` `[disabled when the tune is not in the installed HVSC]` —
+  and Un-like — button — `liked-tune-unlike`
 - Rank the current tune: ✕ / ♥ — button — `now-playing-notforme` / `now-playing-like` — R✅ I✅
   _(group `now-playing-ranking`; flag `c64u_sid_ranking_enabled`)_ — right-aligned on the title row
   in that order, so the outermost control is the harmless one; both are 44 px outline buttons, the
@@ -353,7 +379,9 @@ Listed below in the order they are rendered and walked by the focus ring.
     station is running this is an interruption: the station keeps its place and carries on
   - Start a station from a result — button — `hvsc-search-start-station` — R✅ I✅ _(per row; hidden
     where the similarity corpus does not know the tune, so it cannot be offered and then fail)_
-  - Recently played — rows `recently-played-row` — R✅ I✅ _(shown on an empty query)_
+  - Recently played — rows `recently-played-row` — R✅ I✅ _(shown on an empty query)_ ; a recent
+    entry from outside the HVSC is `recently-played-other-row`, which replays it directly rather
+    than seeding a search
 - More like this — button — `sid-radio-start` — see above; available while a station is already
   running, which is when it is most wanted
 
@@ -408,6 +436,8 @@ Mount disk sheet: Available disks list — filter text — `list-filter-input` �
   Interface). Each expands to `ConfigItemRow`s whose control is a select / slider
   / checkbox / text per item; Audio Mixer adds Reset + per-SID Solo; Clock adds
   Sync Clock; every category adds Refresh.
+- Retry — button — `config-retry` `[only when the category list itself failed to load]` — inside
+  `config-load-error`, which states the device's own message; re-runs the categories request
 
 ### 4.5 Settings (`/settings`)
 
@@ -430,6 +460,11 @@ Making SID Radio a chapter also unblocked the keypad: its minimum-song-length nu
 top-level ring stop, and Up/Down on a number input changes its value, so the ring could not get
 past it to anything below.
 
+- **App style**: one button per style plus **Match my device** — button —
+  `settings-app-style-match-my-device` — which follows the platform's own accent instead
+  of pinning a style ; Card descriptions — checkbox — `settings-show-section-descriptions`
+  — off by default, because the description costs about half the height of every closed
+  card on a small screen
 - **Display**: Theme (Auto/Light/Dark) — segmented buttons — R✅ I✅ ; Text size
   (Default/Large/Larger/Largest) — segmented — `settings-text-size` group with
   `settings-text-size-default|large|larger|largest` — R✅ I✅ ; Display
@@ -439,7 +474,9 @@ past it to anything below.
   (`settings-hide-status-bar`) / Hide navigation bar
   (`settings-hide-navigation-bar`) — R✅ I✅ ; default per build variant
   (`variant.runtime.default_hide_*`; `c64u-remote` ships both on)
-- **Device safety**: Allow circuit override — checkbox —
+- **Device safety**: Machine input cooldown (ms) — number —
+  `device-safety-machine-input-cooldown` — the coalescing window the app holds between
+  `machine:input` writes (0–2000) ; Allow circuit override — checkbox —
   `settings-allow-circuit-override` — R✅ I✅ ; the whole row is the target, so the
   label activates it as well as the box ; Keep device settings after a restart —
   checkbox — `settings-persist-config-to-flash` — R✅ I✅ _(default off: a device
@@ -546,9 +583,20 @@ when SID Radio is on]` ;
   `[disabled: Listen on is not Local — two tunes cannot sound at once on the C64's
 single chip]` ; C64 ROMs (`settings-local-engine-roms`): Fetch from device —
   button — `settings-roms-fetch` — R✅ I✅ ; Remove — button —
-  `settings-roms-remove` — R✅ I✅ `[disabled: no ROMs stored]`
-- **Notifications**: visibility — select — R✅ I✅ ; duration — slider — R✅ I✅
-- **Build/info**: Take the tour — button — `settings-about-take-the-tour` — R✅ I✅ ;
+  `settings-roms-remove` — R✅ I✅ `[disabled: no ROMs stored]` ; Read them
+  automatically — checkbox — `settings-roms-auto` — on by default, because without the
+  ROMs accurate local playback is silent
+- **Play and disk lists**: Items shown before View all — number — `#listPreviewLimit`
+  (no testid; it commits on blur and on Enter) ; Friendly SID names — checkbox —
+  `settings-friendly-sid-names`
+- **Notifications**: visibility — select — R✅ I✅ ; duration — slider —
+  `settings-notification-duration-slider` — R✅ I✅ (2–8 s in 0.5 s steps, default 4 s;
+  it commits on release rather than on every step)
+- **Build/info**: the version block — `settings-about-build-info` — is itself the
+  control, with an accessible name of "Build information": repeated taps on it are the
+  developer-mode gesture. It sits on the block rather than on the card so it cannot
+  compete with the section's own toggle ; Take the tour — button —
+  `settings-about-take-the-tour` — R✅ I✅ ;
   REST API docs — link — `settings-about-rest-api-docs` — R✅ I✅
   (`c64u-remote`: C64U User Guide — link — `settings-about-c64u-user-guide`
   — R✅ I✅) ; Open source licenses — button — R✅ I✅ (sub-route
@@ -637,12 +685,25 @@ startup/resume discovery completes while no configured device is reachable):
 Use — button — `startup-use-discovered-device-*` — R✅ I✅ ; Save — button —
 `startup-save-discovered-device-*` — R✅ I✅ ; password entry — password/buttons
 — `startup-device-password-*` — R✅ I✅ `[only for password-protected devices]` ;
-manual host/IP — text input — `startup-manual-device-host-input` — R✅ I✅
-`[when discovery finds no devices]` ; manual Connect — button —
-`startup-manual-device-connect` — R✅ I✅ `[when discovery finds no devices]` ;
+the manual entry form — `startup-manual-device-panel` `[when discovery finds no
+devices]`, which submits on Enter and holds: manual host/IP — text input —
+`startup-manual-device-host-input` — R✅ I✅ ; manual Connect — button —
+`startup-manual-device-connect` — R✅ I✅ ;
 Open Settings — button — `startup-device-discovery-open-settings` — R✅ I✅ ;
 Not now / Close — buttons — `startup-device-discovery-dismiss`,
 `startup-device-discovery-close` — R✅ I✅.
+
+**Device password prompt** (`device-auth-challenge-dialog`, raised whenever a device
+request comes back needing the network password, from any page): Network password —
+password — `device-auth-challenge-input` — autofocused, submits the form on Enter ;
+Cancel — button — `device-auth-challenge-cancel` ; Submit — button —
+`device-auth-challenge-submit` — reads "Connecting" while the retry is in flight. Both
+buttons are disabled during that retry, so the prompt cannot be double-submitted.
+
+**"View all" list overlay** (`SelectableActionList`, the shared list used by the Home,
+Play and Disks lists once they exceed the preview limit set by Settings → List preview
+limit): Filter — text — `view-all-filter-input` — filters the expanded list only, and
+carries its own clear button.
 
 **New disk dialog** (`new-disk-*`, Content Explorer, behind `new_disk_enabled`;
 opened from the Disks library's "New disk" button): Type — select — `new-disk-type`
@@ -676,6 +737,7 @@ navigation already excludes any key event targeted inside an open
 mechanism). Touch and the on-screen keyboard/quick-keys buttons remain
 ordinary focus-ring CTAs in both output modes.
 
+- Joystick port — switch — `remote-input-port-toggle` — R✅ I✅ — port 1 when off, port 2 when on
 - Output mode toggle: Joystick / Type — buttons — `remote-input-mode-joystick`,
   `remote-input-mode-type` — R✅ I✅ ; Joystick disabled with an inline hint on
   devices/firmware without `machine:input` (kernal-fallback tier); hidden in
@@ -899,6 +961,240 @@ Per-entry testids `keypad-quick-menu-tab-<label>`, `keypad-quick-menu-game-mode`
 `keypad-quick-menu-sections-expand`, `keypad-quick-menu-sections-collapse`,
 `keypad-quick-menu-section-descriptions`.
 
+### 5.1 Lighting Studio (`lighting-studio-sheet`)
+
+Opened from the Home lighting card's **Studio** button (`home-lighting-studio`,
+§4.1). Code-verified against source, **not yet enumerated on hardware** — the R/I
+marks are omitted below rather than guessed, the way §3's Content Explorer note
+describes for the flag-gated controls there.
+
+The sheet has a header, a device mockup, three sections and a footer. Listed in
+DOM order, which is the order the focus ring walks.
+
+**Header** (`lighting-header-actions`)
+
+- Why — button — `lighting-open-context-lens` — opens the **Context Lens** sheet
+  (`lighting-context-lens-sheet`), which explains why the current look was chosen
+- Unlock look — button — `lighting-unlock` `[visible only while a manual lock is held]`
+
+**Device mockup** (`lighting-device-mockup`) — the C64 picture that chooses which
+surface is being edited. It is a graphic, so all but one of its `lighting-mockup-*`
+ids mark geometry rather than controls.
+
+- Case / Keys — button — `lighting-select-surface-case`, `lighting-select-surface-keyboard` —
+  Keys is **not rendered** when the connected machine has no keyboard lighting
+  (`lighting-keyboard-unsupported` explains why in its place)
+- Case shell — `lighting-mockup-case-shell` — the case drawing itself carries
+  `role="button"` and the accessible name "Edit case lighting", so tapping the picture
+  selects the case surface too. A second route to `lighting-select-surface-case` rather
+  than a control of its own
+
+**Profiles** (`lighting-profiles-section`)
+
+- Profile name — text — `lighting-profile-save-name`
+- Save — button — `lighting-profile-save` — saves the current draft under that name
+- Selected profile (`lighting-profile-detail-card`), for the profile a chip selects:
+  - Rename field — text — `lighting-profile-rename-input`
+  - Apply — button — `lighting-profile-apply`
+  - Duplicate — button — `lighting-profile-duplicate`
+  - Pin / Unpin — button — `lighting-profile-pin`
+  - Rename — button — `lighting-profile-rename`
+  - Delete — button — `lighting-profile-delete`
+
+**Compose** (`lighting-compose-section`)
+
+- Link mode — select — `lighting-link-mode` — how the two surfaces track each other
+
+**Automation** (`lighting-automation-section`) — four independent rules, each a switch
+with its own controls beneath it, revealed only while that switch is on.
+
+- Connection sentinel — checkbox — `lighting-connection-sentinel-toggle` — maps link
+  state to looks; a per-state profile select sits beneath it for each state
+- Quiet Launch — checkbox — `lighting-quiet-launch-toggle` — a calm look at startup,
+  handed off afterwards; Launch profile — select — `lighting-quiet-launch-profile`
+- Source identity map — checkbox — `lighting-source-identity-toggle` — reflects the
+  active source on Play and Disks; a per-bucket select sits beneath it for each bucket
+- Circadian palette — checkbox — `lighting-circadian-toggle` — offline sun phases. Its
+  location can come from three places and all three are shown at once:
+  - Use device location — checkbox — `lighting-use-device-location` ; Refresh — button —
+    `lighting-request-device-location` (status in `lighting-device-location-status`)
+  - Latitude / Longitude — number — `lighting-manual-latitude`, `lighting-manual-longitude`
+    (errors in `lighting-manual-{latitude,longitude}-error`) ; Use manual coordinates —
+    button — `lighting-apply-manual-coordinates`
+  - City — text — `lighting-city-search` ; results `lighting-city-results` ; Use city —
+    button — `lighting-apply-city`
+
+**Footer**
+
+- Clear preview — button — `lighting-clear-preview` (label shortens to "Clear" on the
+  compact profile)
+- Preview — button — `lighting-preview`
+- Apply — button — `lighting-apply-draft`
+
+---
+
+### 5.2 Diagnostics (`diagnostics-dialog`)
+
+Opened from Settings → **Diagnostics** (`diagnostics-open-dialog`, §4.5), from the
+Quick Menu (`keypad-quick-menu-diagnostics`, §5.0.2) or with the **✱** key (§1).
+Code-verified against source, **not yet enumerated on hardware** — the R/I marks
+are omitted below rather than guessed, as in §5.1.
+
+The dialog is a sheet: a header with the overflow menu, a health header, a filter
+bar, the activity list, and a set of sub-screens the overflow menu opens. Listed in
+DOM order.
+
+**Sheet header**
+
+- ⋯ — button — `diagnostics-overflow-menu` — toggles the **Views** panel described
+  below. The panel is a dismissable layer, so Back/Escape closes the panel and not
+  the whole dialog
+
+**Views panel** (`diagnostics-overflow-panel`) — three groups, in this order.
+
+- Connection details — button — `diagnostics-connection-details-action` — opens the
+  connection surface (below)
+- Manage devices — button — `diagnostics-manage-devices-action` — closes the dialog
+  and navigates to Settings
+- Screens, each replacing the dialog body:
+  - Config drift — button — `open-config-drift-screen`
+  - Decision state — button — `open-decision-state-screen`
+  - Latency — button — `open-latency-screen`
+  - Key Explorer — button — `open-key-explorer-screen` (the popup itself is §5.0.2)
+  - Health history — button — `open-timeline-screen`
+  - REST heat map — button — `open-rest-heatmap-screen`
+  - FTP heat map — button — `open-ftp-heatmap-screen`
+  - Config heat map — button — `open-config-heatmap-screen`
+- Sticky footer:
+  - Share all — button — `diagnostics-share-all`
+  - Share filtered — button — `diagnostics-share-filtered` — shares only the entries
+    the current filters leave visible
+  - Clear all — button — `diagnostics-clear-all-trigger` — opens a confirmation whose
+    **Clear** is `diagnostics-clear-all-confirm` and whose Cancel is the shared
+    `AlertDialogCancel`
+
+**Health header** (`diagnostics-header`)
+
+- Device line — button — `diagnostics-device-line` — Enter/OK opens the connection
+  surface in view mode; long-press or context-menu opens it in edit mode
+- Run health check — button — `run-health-check`
+- Use simulated device — button — `use-simulated-device-action` `[only while no
+  device is reachable]` — pins Demo Mode
+- Expand/collapse — button — `diagnostics-header-toggle` `[rendered only once a health
+  check has run or is running]` — reveals `diagnostics-header-expanded`
+
+**Filter bar** (`filters-collapsed-bar`)
+
+- Funnel — button — `open-filters-editor` — opens the filter editor sheet
+  (`filters-editor-surface`), whose quick filters each set severity, evidence types,
+  contributor and device filter in one action:
+  - Errors only — button — `quick-filter-errors`
+  - Problems only — button — `quick-filter-problems`
+  - REST — button — `quick-filter-rest`
+  - FTP — button — `quick-filter-ftp`
+  - Reset — button — `quick-filter-reset`
+
+**Activity list** (`evidence-list`) — rows expand in place; the list also pages on
+scroll, so the button is a keypad-reachable equivalent of reaching the end.
+
+- Load more — button — `load-more-activity` `[only while more entries exist]`
+
+**Connection surface** — one dialog with a view mode and an edit mode.
+
+- Edit — button — `connection-view-edit` `[view mode]`
+- Edit fields — `connection-edit-*`, the shared saved-device editor fields
+- Cancel — button — `connection-edit-cancel` `[edit mode]`
+- Save — button — `connection-edit-save` `[edit mode]`
+
+**Connection actions** (`connection-actions-region`) — rendered inside the dialog and
+in the connection summary. In panel mode it is collapsible.
+
+- Connection actions — button — `connection-actions-toggle` `[panel mode only]`
+- Retry connection — button — `retry-connection-action`
+- Switch device — button — `switch-device-toggle` — reveals an inline host/port form:
+  - Host — text — `switch-device-host-input`
+  - Port — number — `switch-device-port-input`
+  - Connect — button — `switch-device-connect` `[disabled while the host is empty]`
+  - Cancel — button — `switch-device-cancel`
+  - Open connection settings — link — `open-connection-settings` — navigates to Settings
+    for the editing the inline form does not offer
+
+**Sub-screens.** Each replaces the dialog body and returns with its own Back control,
+so Back has a target inside the dialog before it reaches the dialog itself.
+
+- Device detail — Back — button — `device-detail-back`
+- Config drift (`config-drift-surface`) — Back — button — `config-drift-back` ;
+  Refresh — button — `config-drift-refresh`
+- Decision state (`decision-state-surface`) — Back — button — `decision-state-back` ;
+  Resync / repair — button — `decision-state-repair`
+- Health history (`health-history-popup`) — Zoom in — button — `health-history-zoom-in` ;
+  Zoom out — button — `health-history-zoom-out` (each disabled at its end of the
+  zoom-window list)
+- Latency — funnel — button — `open-latency-filters` — the same filter editor pattern
+  as the main list
+- ← Diagnostics — button — `analytic-popup-return` — the return control shared by every
+  screen built on `AnalyticPopup` (health history, latency and the three heat maps); it
+  sits in the title row, so Back has a visible equivalent
+
+**Test-only surface: Switch Lab.** `DeviceSwitchLabPage` and its launcher are bundled
+only in coverage-probe builds (`shouldBundleCoverageProbeModules`), so no release build
+renders them and they are not part of the keypad surface. The launcher
+`switch-lab-launcher` appears only on `/__device-switch__` or when
+`VITE_DEBUG_DEVICE_SWITCH_SOAK_JSON` is set; the page carries `switch-lab-from-device`,
+`switch-lab-to-device`, `switch-lab-iterations`, `switch-lab-delay-ms` and
+`switch-lab-run-soak`.
+
+---
+
+### 5.3 Add items (`add-items-sheet`)
+
+Opened from Play → **Add items to playlist** (`add-items-to-playlist`, §4.2) and from
+the Mount disk sheet's **Add disks** (`mount-sheet-add-disks`, §4.3). Code-verified
+against source, **not yet enumerated on hardware** — the R/I marks are omitted, as in
+§5.1.
+
+The sheet has three stages: pick a source, browse or search it, confirm the selection.
+
+**Source picker** — Local / C64U / HVSC / CommoServe — buttons — `import-option-*`
+(`import-option-{local,c64u,hvsc,commoserve}`). HVSC and CommoServe appear only when
+their feature flag and library state allow it.
+
+**Header**
+
+- Confirm — button — `add-items-confirm` — labelled by the caller ("Add", "Mount");
+  disabled while nothing is selected or a confirm is already running. It is rendered
+  **twice**: in the header on the compact profile (`showCompactHeaderConfirm`) and in
+  the footer otherwise, so exactly one is on screen at a time
+
+**Search and scope** (`[not shown for an archive source]`)
+
+- Search / filter — text — `add-items-filter` — its accessible name follows the scope:
+  "Filter this folder" or "Search the whole source"
+- Scope (`add-items-search-scope`) `[only when the source can search past the current
+  folder]`:
+  - This folder — button — `add-items-scope-folder`
+  - Everywhere — button — `add-items-scope-source`
+  - Scan — button — `add-items-deep-scan` `[only for a source that has to be walked
+    rather than one that answers as you type]` — runs the source-wide search
+
+**Browser** (`add-items-scroll`) — the folder listing, `ItemSelectionView`.
+
+- Root — button — `navigate-root` — jumps to the source root; disabled at the root
+- Up, Refresh — buttons — no testid; the pair either side of Root
+- Entry row — `source-entry-row` — a focusable row for a folder (Enter opens it) and a
+  plain row for a file, whose checkbox carries the selection. Its expanded detail is
+  `source-entry-detail`
+- Load more — button — `add-items-load-more` `[only while the source has more entries]`
+
+**Archive source** (`ArchiveSelectionView`) — search-first rather than folder-first.
+
+- Search — button — `archive-search-button` — disabled until the composed query has at
+  least one term and while a search is running
+- Select all (N) — button — `archive-select-all` `[only once there are results]`
+- Clear selection — button — `archive-clear-selection` `[only once something is
+  selected]`
+- Result row — `archive-result-row` — the checkbox in the row carries the selection
+
 ---
 
 ## 6. Known findings / limitations (as of last verification)
@@ -939,3 +1235,9 @@ Per-entry testids `keypad-quick-menu-tab-<label>`, `keypad-quick-menu-game-mode`
 - Slider correctness cross-checked against the c64u firmware
   (`CPU Speed` read back as `4` after three keypad Right presses, then restored
   to `1`).
+- Mechanical completeness by `npm run lint:reference-docs`, which fails when an
+  interactive `data-testid` in `src/pages` or `src/components` is not mentioned here.
+  Its `UNDOCUMENTED_BASELINE` is empty, so all 298 interactive testids currently have an
+  entry. The check cannot judge keypad reachability: the sections marked as code-verified
+  (§5.1, §5.2, §5.3, and the entries added with them elsewhere) carry no R/I marks and
+  still need a device pass.

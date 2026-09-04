@@ -593,6 +593,26 @@ maestro_duration=$((maestro_end_time - maestro_start_time))
 log "Maestro execution duration: ${maestro_duration}s"
 write_timing "maestro_seconds" "$maestro_duration"
 
+# Every required flow name has siblings that start with it - smoke-launch has
+# smoke-launch-resume and smoke-launch-sequence, smoke-hvsc has smoke-hvsc-lowram and
+# smoke-hvsc-mounted. A bare substring search is therefore satisfied by a sibling, so the
+# check could report that smoke-launch ran when only smoke-launch-resume did. The flow name
+# has to be followed by something that cannot continue it: the closing quote of a
+# name="..." attribute, a file extension, or whitespace.
+assert_required_flows_present() {
+  local report="$1"
+  shift
+  local missing=0
+  local flow
+  for flow in "$@"; do
+    if ! grep -Eq "${flow}([^-A-Za-z0-9_]|\$)" "$report"; then
+      log "GATE VIOLATION: Required flow '$flow' missing from Maestro report"
+      missing=1
+    fi
+  done
+  return "$missing"
+}
+
 if [[ -f "$RAW_OUTPUT_DIR/maestro-report.xml" ]]; then
   if grep -q "<failure" "$RAW_OUTPUT_DIR/maestro-report.xml" || grep -q "<error" "$RAW_OUTPUT_DIR/maestro-report.xml"; then
     log "Maestro report contains failures"
@@ -605,12 +625,9 @@ if [[ -f "$RAW_OUTPUT_DIR/maestro-report.xml" ]]; then
     REQUIRED_FLOWS+=("smoke-hvsc-lowram")
   fi
   if [[ "${CI:-false}" == "true" ]]; then
-    for FLOW in "${REQUIRED_FLOWS[@]}"; do
-      if ! grep -q "$FLOW" "$RAW_OUTPUT_DIR/maestro-report.xml"; then
-        log "GATE VIOLATION: Required flow '$FLOW' missing from Maestro report"
-        MAESTRO_EXIT_CODE=1
-      fi
-    done
+    if ! assert_required_flows_present "$RAW_OUTPUT_DIR/maestro-report.xml" "${REQUIRED_FLOWS[@]}"; then
+      MAESTRO_EXIT_CODE=1
+    fi
   fi
 else
   log "Maestro report missing at $RAW_OUTPUT_DIR/maestro-report.xml"

@@ -16,10 +16,18 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_THRESHOLDS_PATH = path.resolve(SCRIPT_DIR, "../ci/perf/sid-radio-perf-thresholds.json");
 
-/** Resolve a (possibly composite `a+b`) metric expression against a stats object. */
+/**
+ * Resolve a (possibly composite `a+b`) metric expression against a stats object.
+ *
+ * A composite whose parts are not all present is UNMEASURED, not zero. Coercing an absent part to
+ * zero understates the sum, and a sum of two absent parts is a zero that passes every `max` budget
+ * — a fabricated perfect measurement rather than a skipped one.
+ */
 export const resolveMetric = (stats, metric) => {
   if (metric.includes("+")) {
-    return metric.split("+").reduce((sum, key) => sum + (Number(stats[key.trim()]) || 0), 0);
+    const parts = metric.split("+").map((key) => stats[key.trim()]);
+    if (parts.some((part) => part === undefined || part === null)) return undefined;
+    return parts.reduce((sum, part) => sum + Number(part), 0);
   }
   return stats[metric];
 };
@@ -61,7 +69,9 @@ export const assertSidRadioPerf = (stats, thresholdsDoc) => {
       }
     }
   }
-  return { passed: failures.length === 0, failures, checked, skipped };
+  // A blob in which EVERY metric is missing is not a clean run. Individual unmeasured metrics are
+  // skipped by design, but nothing checked means the gate validated no budget at all.
+  return { passed: failures.length === 0 && checked > 0, failures, checked, skipped };
 };
 
 const main = () => {
@@ -77,6 +87,11 @@ const main = () => {
   for (const failure of result.failures) {
     console.error(
       `[sid-radio-perf] REGRESSION ${failure.name}: ${failure.metric}=${failure.actual} violates ${failure.bound} ${failure.pinned}`,
+    );
+  }
+  if (result.checked === 0) {
+    console.error(
+      `[sid-radio-perf] NOTHING MEASURED — every one of the ${result.skipped.length} budgets is absent from ${statsArg}`,
     );
   }
   console.log(

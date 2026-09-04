@@ -23,8 +23,8 @@
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
-const SRC_DIR = path.resolve("src");
 const MIN_ARBITRARY_PX = 11;
 /*
  * rem and em are matched as well as px, and converted at the 16px root the compact profile
@@ -35,7 +35,9 @@ const PATTERN = /text-\[(\d+(?:\.\d+)?)(px|rem|em)\]/g;
 const PX_PER_REM = 16;
 const EXTENSIONS = new Set([".ts", ".tsx", ".css"]);
 
-const walk = (dir) => {
+export { MIN_ARBITRARY_PX, PATTERN, PX_PER_REM };
+
+export const walk = (dir) => {
   const entries = [];
   for (const name of readdirSync(dir)) {
     const full = path.join(dir, name);
@@ -48,34 +50,58 @@ const walk = (dir) => {
   return entries;
 };
 
-const violations = [];
-
-for (const file of walk(SRC_DIR)) {
-  const source = readFileSync(file, "utf8");
-  source.split("\n").forEach((line, index) => {
-    for (const match of line.matchAll(PATTERN)) {
-      const px = match[2] === "px" ? Number.parseFloat(match[1]) : Number.parseFloat(match[1]) * PX_PER_REM;
-      if (px < MIN_ARBITRARY_PX) {
-        violations.push({
-          file: path.relative(process.cwd(), file),
-          line: index + 1,
-          value: match[0],
-        });
+export const findViolations = (files) =>
+  files.flatMap(({ file, source }) =>
+    source.split("\n").flatMap((line, index) => {
+      const lineViolations = [];
+      for (const match of line.matchAll(PATTERN)) {
+        const px = match[2] === "px" ? Number.parseFloat(match[1]) : Number.parseFloat(match[1]) * PX_PER_REM;
+        if (px < MIN_ARBITRARY_PX) {
+          lineViolations.push({ file, line: index + 1, value: match[0] });
+        }
       }
-    }
-  });
-}
-
-if (violations.length > 0) {
-  console.error(
-    `Font sizes below ${MIN_ARBITRARY_PX}px are not allowed: they bypass the compact-profile\n` +
-      "type scale and stay tiny on the smallest supported screen.\n" +
-      "Use a scale step (text-xs and up), or text-[11px] if a dense surface needs it.\n",
+      return lineViolations;
+    }),
   );
-  for (const { file, line, value } of violations) {
-    console.error(`  ${file}:${line}  ${value}`);
-  }
-  process.exit(1);
-}
 
-console.log(`Font size floor: no arbitrary sizes below ${MIN_ARBITRARY_PX}px.`);
+/*
+ * A walk that returns nothing would let this gate report success having read no file
+ * at all, which is how a renamed source root removes a guard without a red check.
+ */
+export const MIN_SCANNED_FILES = 100;
+
+const main = () => {
+  const srcDir = path.resolve("src");
+  const scanned = walk(srcDir);
+
+  if (scanned.length < MIN_SCANNED_FILES) {
+    console.error(
+      `Font size floor scanned ${scanned.length} files under ${srcDir}, fewer than the ${MIN_SCANNED_FILES} expected.\n` +
+        "Nothing was measured, so this is a failure rather than a pass.",
+    );
+    process.exit(2);
+  }
+
+  const violations = findViolations(
+    scanned.map((file) => ({ file: path.relative(process.cwd(), file), source: readFileSync(file, "utf8") })),
+  );
+
+  if (violations.length > 0) {
+    console.error(
+      `Font sizes below ${MIN_ARBITRARY_PX}px are not allowed: they bypass the compact-profile\n` +
+        "type scale and stay tiny on the smallest supported screen.\n" +
+        "Use a scale step (text-xs and up), or text-[11px] if a dense surface needs it.\n",
+    );
+    for (const { file, line, value } of violations) {
+      console.error(`  ${file}:${line}  ${value}`);
+    }
+    process.exit(1);
+  }
+
+  console.log(`Font size floor: ${scanned.length} files, no arbitrary sizes below ${MIN_ARBITRARY_PX}px.`);
+};
+
+// `import.meta.url` is percent-encoded and a raw path is not, so comparing the two directly
+// makes this never match in a checkout whose path contains a space or any other encoded
+// character — and the gate would then exit 0 having checked nothing.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BrowserRouter, useLocation, useNavigate } from "react-router-dom";
 import { APP_SETTINGS_KEYS } from "@/lib/config/appSettings";
 import { SwipeNavigationLayer } from "@/components/SwipeNavigationLayer";
+import { registerNavigationGuard } from "@/lib/navigation/navigationGuards";
 import { InterstitialStateProvider, useRegisterInterstitial } from "@/components/ui/interstitial-state";
 
 type GestureCallbacks = {
@@ -322,6 +323,34 @@ describe("SwipeNavigationLayer", () => {
     expect(screen.queryByText("Disks Page")).not.toBeInTheDocument();
   });
 
+  it("names the active slot with a page id so a Maestro navigation assertion can fail", async () => {
+    renderLayer("/settings");
+
+    expect(await screen.findByText("Settings Page")).toBeInTheDocument();
+    // Maestro `id:` matches the HTML id attribute, so this is the only anchor a flow can
+    // use to tell one tab from another: the tab-bar labels render outside the page and are
+    // present whichever tab is selected.
+    expect(screen.getByTestId("swipe-slot-settings")).toHaveAttribute("id", "page-settings");
+    expect(screen.getByTestId("swipe-slot-config")).not.toHaveAttribute("id");
+    expect(screen.getByTestId("swipe-slot-docs")).not.toHaveAttribute("id");
+    expect(document.querySelectorAll("[id^='page-']")).toHaveLength(1);
+  });
+
+  it("moves the page id to the tab the swipe is committing to", async () => {
+    renderLayer("/play", undefined, false, true);
+    const runway = await screen.findByTestId("swipe-navigation-runway");
+
+    act(() => {
+      capturedCallbacks?.onCommit(1, { dx: -180, dy: 2, velocityX: -1.4 });
+    });
+    expect(screen.getByTestId("swipe-slot-disks")).toHaveAttribute("id", "page-disks");
+    expect(screen.getByTestId("swipe-slot-play")).not.toHaveAttribute("id");
+
+    fireEvent.transitionEnd(runway, { target: runway });
+    expect(screen.getByTestId("swipe-slot-disks")).toHaveAttribute("id", "page-disks");
+    expect(document.querySelectorAll("[id^='page-']")).toHaveLength(1);
+  });
+
   it("commits swipe navigation with wrap-around and settles on transition end", async () => {
     renderLayer("/docs", undefined, false, true);
     const runway = await screen.findByTestId("swipe-navigation-runway");
@@ -345,6 +374,30 @@ describe("SwipeNavigationLayer", () => {
     fireEvent.transitionEnd(runway, { target: runway });
     expect(runway).toHaveAttribute("data-runway-phase", "idle");
     expect(screen.getByTestId("swipe-slot-home")).toHaveAttribute("data-slot-active", "true");
+  });
+
+  it("leaves the page and the runway untouched when a guard refuses the swipe commit (HARD27-022)", async () => {
+    renderLayer("/docs", undefined, false, true);
+    const runway = await screen.findByTestId("swipe-navigation-runway");
+    const guard = vi.fn(() => false);
+    const release = registerNavigationGuard(guard);
+
+    try {
+      act(() => {
+        capturedCallbacks?.onCommit(1, { dx: -120, dy: 0, velocityX: -1 });
+      });
+
+      expect(guard).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId("location-probe")).toHaveTextContent("/docs");
+      expect(runway).toHaveAttribute("data-runway-phase", "idle");
+      expect(mocks.addLog).not.toHaveBeenCalledWith(
+        "debug",
+        "[SwipeNav] transition-start",
+        expect.objectContaining({ reason: "swipe" }),
+      );
+    } finally {
+      release();
+    }
   });
 
   it("animates route-driven navigation with reduced-motion settings still enabled", async () => {
@@ -639,6 +692,64 @@ describe("SwipeNavigationLayer", () => {
     // more than once (a double-teardown that would double-run cleanup).
     expect(screen.queryByText("Play Page")).not.toBeInTheDocument();
     expect(mocks.unmountCounts.play).toBe(1);
+    expect(mocks.mountCounts.disks).toBe(1);
+    expect(mocks.unmountCounts.disks).toBe(0);
+  });
+
+  // HARD27-038: a transition moves in exactly one direction, so only the
+  // departing page and the arriving page are ever on screen. The panel on the
+  // opposite side is off screen for the whole transition, and mounting it costs
+  // a full page hook tree - queries, subscriptions and effects - during the
+  // animation frame budget. These three tests pin that it stays a placeholder.
+  it("does not mount the off-direction page during a route transition (HARD27-038)", async () => {
+    renderLayer("/", <NavigationProbe />);
+
+    await screen.findByText("Home Page");
+
+    fireEvent.click(screen.getByRole("button", { name: "Go Config" }));
+
+    // Home (0) to Config (3) resolves to direction 1, so the runway holds
+    // [Docs, Home, Config]. Docs is behind the departing page and never seen.
+    const runway = screen.getByTestId("swipe-navigation-runway");
+    expect(runway).toHaveAttribute("data-runway-phase", "transitioning");
+    expect(await screen.findByText("Config Page")).toBeInTheDocument();
+    expect(screen.getByText("Home Page")).toBeInTheDocument();
+    expect(mocks.mountCounts.docs).toBe(0);
+    expect(screen.getByTestId("swipe-slot-docs").textContent).toBe("");
+  });
+
+  it("does not mount the off-direction page during a committed swipe (HARD27-038)", async () => {
+    renderLayer("/play", undefined, false, true);
+    const runway = await screen.findByTestId("swipe-navigation-runway");
+
+    act(() => {
+      capturedCallbacks?.onCommit(1, { dx: -120, dy: 0, velocityX: -1 });
+    });
+
+    expect(runway).toHaveAttribute("data-runway-phase", "transitioning");
+    expect(screen.getByText("Play Page")).toBeInTheDocument();
+    expect(mocks.mountCounts.disks).toBe(1);
+    expect(mocks.mountCounts.home).toBe(0);
+  });
+
+  it("mounts only the dragged-toward page, and keeps it mounted when the drag reverses (HARD27-038)", async () => {
+    renderLayer("/play", undefined, false, true);
+    const runway = await screen.findByTestId("swipe-navigation-runway");
+
+    // Dragging left pulls the next page (Disks) in from the right edge.
+    act(() => {
+      capturedCallbacks?.onProgress(-80, -1);
+    });
+    expect(runway).toHaveAttribute("data-runway-phase", "dragging");
+    expect(mocks.mountCounts.disks).toBe(1);
+    expect(mocks.mountCounts.home).toBe(0);
+
+    // Reversing reveals the previous page. The page already revealed stays
+    // mounted, so a wavering finger cannot churn mounts and unmounts.
+    act(() => {
+      capturedCallbacks?.onProgress(80, 1);
+    });
+    expect(mocks.mountCounts.home).toBe(1);
     expect(mocks.mountCounts.disks).toBe(1);
     expect(mocks.unmountCounts.disks).toBe(0);
   });

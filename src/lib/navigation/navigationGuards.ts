@@ -6,14 +6,13 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useContext, useEffect } from "react";
-import { UNSAFE_NavigationContext, useLocation } from "react-router-dom";
+import { useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 
 type NavigationGuard = () => boolean;
-type RetryTransition = { retry: () => void };
-type BlockableNavigator = {
-  block?: (blocker: (transition: RetryTransition) => void) => () => void;
-};
+
+/** Narrower than `NavigateFunction`: a route path only, so no caller reaches an unguarded form. */
+export type GuardedNavigate = (path: string, options?: { replace?: boolean }) => void;
 
 const navigationGuards = new Set<NavigationGuard>();
 
@@ -33,43 +32,19 @@ export const confirmNavigation = () => {
   return true;
 };
 
-export const installNavigationBlocker = (navigator: BlockableNavigator) => {
-  if (typeof navigator.block !== "function") {
-    return () => undefined;
-  }
-
-  let unblock: (() => void) | null = null;
-  let pendingTransition: RetryTransition | null = null;
-
-  const handleTransition = (transition: RetryTransition) => {
-    if (!confirmNavigation()) {
-      return;
-    }
-
-    if (!unblock) {
-      pendingTransition = transition;
-      return;
-    }
-
-    unblock();
-    transition.retry();
-  };
-
-  unblock = navigator.block(handleTransition);
-
-  if (pendingTransition) {
-    const transition: RetryTransition = pendingTransition;
-    pendingTransition = null;
-    unblock();
-    transition.retry();
-  }
-
-  return unblock;
-};
-
-export const useNavigationGuardBlocker = () => {
-  const { navigator } = useContext(UNSAFE_NavigationContext);
-  const location = useLocation();
-
-  useEffect(() => installNavigationBlocker(navigator as BlockableNavigator), [location.key, navigator]);
+/**
+ * The entry point for user-initiated page changes (tab bar, swipe commit, keypad tab jump).
+ * `BrowserRouter`'s navigator has had no `block` since react-router 6.4 and the app uses no data
+ * router, so only the call sites can honour a guard. `navigateToSearchTarget` calls
+ * `confirmNavigation` directly for the same reason.
+ */
+export const useGuardedNavigate = (): GuardedNavigate => {
+  const navigate = useNavigate();
+  return useCallback<GuardedNavigate>(
+    (path, options) => {
+      if (!confirmNavigation()) return;
+      navigate(path, options);
+    },
+    [navigate],
+  );
 };

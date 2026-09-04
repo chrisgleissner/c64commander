@@ -313,19 +313,24 @@ Workflows live in `.github/workflows/`. Read them before claiming CI covers some
 - For any plan/task that includes code changes, run coverage before declaring completion.
 - **`npm run test:coverage` is unit-only.** It sets its own Vitest thresholds to 0 and
   enforces nothing. It is not the CI gate.
-- **The CI gate is 91% lines and 91% branches on the merged unit + E2E LCOV.** It is
-  `scripts/check-coverage-threshold.mjs` with `COVERAGE_MIN=91 COVERAGE_MIN_BRANCH=91
+- **The CI gate is 94% lines and 91% branches on the merged unit + E2E LCOV.** It is
+  `scripts/check-coverage-threshold.mjs` with `COVERAGE_MIN=94 COVERAGE_MIN_BRANCH=91
   COVERAGE_FILE=coverage/lcov-merged.info`, run by the `web-coverage-merge` job. Reproduce
   it locally with `npm run coverage:gate` (which runs `npm run test:coverage:all` first,
-  i.e. unit + instrumented build + E2E + merge).
+  i.e. unit + instrumented build + E2E + merge). Branches is the lower of the two on
+  purpose: it measures 94.01% on `main`, so a 94 gate there would pass by a hundredth of a
+  point. Raise it when branch coverage has headroom, not before.
 - For changes under `agents/`, also run `npm run test:agents`; `agents/pyproject.toml` sets
   `fail_under = 90` on branch coverage.
 - Global coverage is necessary but not sufficient for PR convergence. **Changed-line (patch)
   coverage is a separate gate**: `codecov.yml` sets both project and patch targets to
-  **0.91** with a 0% threshold, and `if_not_found: error` on patch.
+  **94%** with a 0% threshold, and `if_not_found: error` on patch. Both values carry the `%`
+  sign and must keep it — they read `0.91` until PR #412, which Codecov interprets as 0.91%
+  rather than 91%, so the patch gate passed everything: that PR was reported at 89.94% patch
+  coverage with a green check.
 - Never infer patch coverage from global totals. Use the Codecov patch report or a local
   changed-line check against the merged coverage output.
-- If patch coverage fails, treat it as a blocker even when global coverage is above 91%.
+- If patch coverage fails, treat it as a blocker even when global coverage is above 94%.
 - Minimize formatting-only churn in executable files: it creates extra patch lines that
   must be covered.
 
@@ -563,6 +568,15 @@ in §7 and reconcile any delta. A `UI_CHANGE` or `DOC_PLUS_CODE` task that touch
 controls but leaves this file unchanged is **incomplete**. When in doubt, update
 it — an over-listed control is cheaper than a missing one.
 
+`npm run lint:reference-docs` (part of `npm run lint`) enforces the mechanical half
+of this rule without a device. It scans `src/pages` and `src/components` for a
+`data-testid` on an interactive element and fails when the inventory does not
+mention it. Controls that were already undocumented when the check landed are
+listed in `UNDOCUMENTED_BASELINE` in `scripts/check-reference-docs.mjs`; that list
+may only shrink, so documenting one means deleting its baseline entry in the same
+change. The check cannot judge keypad reachability, so it does not replace the
+on-device pass — it only stops the gap from growing.
+
 ### User-visible text casing
 
 Sentence case for every piece of UI text: dialog and sheet titles, section headings, control
@@ -670,7 +684,15 @@ All TypeScript, TSX, and JSON files must be formatted with Prettier before commi
 
 - **DRY**: avoid duplication. Extract shared logic only when it improves clarity and current maintainability.
 - **KISS**: prefer simple, explicit solutions.
-- **Modularity**: keep files cohesive and responsibilities clear.
+- **Modularity**: keep files cohesive and responsibilities clear. `REVIEW.md` section 9 sets the
+  line: split a file that mixes concerns or grows past ~600 lines, and a file approaching ~1000
+  lines is expected to be refactored. `npm run lint:file-sizes` (part of `npm run lint`) enforces
+  the 1000-line end of that. Files that were already over it when the check landed carry a
+  recorded ceiling in `GRANDFATHERED` in `scripts/check-file-sizes.mjs`. A ceiling only ratchets
+  down: it never rises, a real split has to lower its entry, and adding a new entry to that list is
+  not the way to pass the check. A file may sit up to `GROWTH_ALLOWANCE_LINES` (25) above its
+  recorded ceiling, which is there so a defect fix in one of these files is possible at all; it is
+  a one-off headroom above a fixed number, not a budget that renews per change.
 - **Readability first**: prefer clear naming over commentary.
 - **Explicitness**: make configuration, defaults, and assumptions discoverable.
 - **Fail fast**: validate inputs early and surface failures with context.

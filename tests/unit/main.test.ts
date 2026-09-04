@@ -20,7 +20,6 @@ const mocks = vi.hoisted(() => ({
   registerServiceWorker: vi.fn(),
   applyFullScreenFromSettings: vi.fn(),
   applyScreenOrientationFromSettings: vi.fn(),
-  loadRemoteFonts: vi.fn(),
   addErrorLog: vi.fn(),
   primeSecureStorageAfterStartup: vi.fn(async () => undefined),
 }));
@@ -54,7 +53,6 @@ vi.mock("@/lib/native/fullScreen", () => ({ applyFullScreenFromSettings: mocks.a
 vi.mock("@/lib/native/screenOrientation", () => ({
   applyScreenOrientationFromSettings: mocks.applyScreenOrientationFromSettings,
 }));
-vi.mock("@/lib/startup/fontLoading", () => ({ loadRemoteFonts: mocks.loadRemoteFonts }));
 vi.mock("@/lib/startup/secureStorageBootstrap", () => ({
   primeSecureStorageAfterStartup: mocks.primeSecureStorageAfterStartup,
 }));
@@ -97,7 +95,6 @@ describe("main.tsx deferred startup bootstrap (HARD9-094)", () => {
     expect(rafSpy).not.toHaveBeenCalled();
     expect(mocks.markStartupBootstrapComplete).toHaveBeenCalledTimes(1);
     expect(mocks.registerFetchTrace).toHaveBeenCalledTimes(1);
-    expect(mocks.loadRemoteFonts).toHaveBeenCalledTimes(1);
   });
 
   it("still uses the double rAF gate when the document launches visible", async () => {

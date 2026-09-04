@@ -13,8 +13,20 @@ import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersi
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import { PLAYBACK_SESSION_KEY, buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import { resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository";
+import { readStoredPlaybackSession, writeStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
+import { getCurrentPlaybackSnapshotLabel } from "@/lib/snapshot/currentPlaybackSnapshotLabel";
 
 const PLAYLIST_REPOSITORY_STORAGE_KEY = "c64u_playlist_repo:v1";
+
+/*
+ * The Play page gates its latched transport commands on the settle callback, so the order these
+ * two land in is what decides whether a "play" from the Home "Last" tile resumes the stored
+ * position or restarts the tune. Recorded here so a test can assert it.
+ */
+const restoreOrder: string[] = [];
+const sessionRestoreSettledSpy = vi.fn(() => {
+  restoreOrder.push("settled");
+});
 
 const usePlaybackPersistenceHarness = ({
   resolvedDeviceId = "device-1",
@@ -43,7 +55,11 @@ const usePlaybackPersistenceHarness = ({
   const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isPaused, setIsPausedState] = useState(false);
+  const setIsPaused = (value: boolean) => {
+    if (value) restoreOrder.push("paused");
+    setIsPausedState(value);
+  };
   const [elapsedMs, setElapsedMs] = useState(0);
   const [playedMs, setPlayedMs] = useState(0);
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
@@ -75,6 +91,7 @@ const usePlaybackPersistenceHarness = ({
     autoAdvanceDueAtMs,
     setCurrentSubsongCount: vi.fn(),
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
+    setSessionRestoreSettled: sessionRestoreSettledSpy,
     resolvedDeviceId,
     playlistStorageKey,
     localEntriesBySourceId,
@@ -128,6 +145,8 @@ describe("usePlaybackPersistence", () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+    restoreOrder.length = 0;
+    sessionRestoreSettledSpy.mockClear();
     resetPlaylistDataRepositoryForTests();
   });
 
@@ -212,14 +231,14 @@ describe("usePlaybackPersistence", () => {
 
     // The freshly mounted (not yet restored) instance must not destroy the
     // stored session: a navigation remount would otherwise kill live playback.
-    expect(sessionStorage.getItem(PLAYBACK_SESSION_KEY)).not.toBeNull();
+    expect(readStoredPlaybackSession()).not.toBeNull();
 
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.isPlaying).toBe(true);
     });
     expect(result.current.elapsedMs).toBe(5000);
-    expect(JSON.parse(sessionStorage.getItem(PLAYBACK_SESSION_KEY)!).isPlaying).toBe(true);
+    expect(readStoredPlaybackSession()?.isPlaying).toBe(true);
   });
 
   it("clears a stored playing session when playlist hydration settles empty", async () => {
@@ -249,7 +268,7 @@ describe("usePlaybackPersistence", () => {
     );
 
     await waitFor(() => {
-      expect(sessionStorage.getItem(PLAYBACK_SESSION_KEY)).toBeNull();
+      expect(readStoredPlaybackSession()).toBeNull();
     });
   });
 
@@ -1203,9 +1222,8 @@ describe("usePlaybackPersistence", () => {
     );
 
     await waitFor(() => {
-      const raw = sessionStorage.getItem(PLAYBACK_SESSION_KEY);
-      expect(raw).not.toBeNull();
-      const parsed = JSON.parse(raw as string) as { autoAdvanceDueAtMs?: number | null };
+      const parsed = readStoredPlaybackSession();
+      expect(parsed).not.toBeNull();
       expect(parsed.autoAdvanceDueAtMs).toBe(liveDueAtMs);
     });
   });
@@ -1693,5 +1711,184 @@ describe("usePlaybackPersistence", () => {
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
     });
+  });
+  // HARD27-032: the OS ends the app's process while it is backgrounded, which
+  // takes sessionStorage with it. The session behind the Home "Last" tile, the
+  // "Resume session" search action and the position restore has to outlive that.
+  it("keeps the persisted session readable after the process dies and sessionStorage is gone", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "local",
+            path: "/Music/demo.sid",
+            name: "demo.sid",
+            sourceId: "local-source",
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+    sessionStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: null,
+        currentItemLabel: "demo.sid",
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 5000,
+        playedMs: 5000,
+        durationMs: 60000,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    const localEntriesBySourceId = new Map([["local-source", new Map([["/Music/demo.sid", { name: "demo.sid" }]])]]);
+
+    const { result, unmount } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId,
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.isPlaying).toBe(true);
+      expect(readStoredPlaybackSession()?.currentItemLabel).toBe("demo.sid");
+    });
+
+    unmount();
+    // Process death: everything the tab held in memory and in sessionStorage is
+    // gone; localStorage and IndexedDB are what the next launch starts from.
+    sessionStorage.clear();
+
+    const survived = readStoredPlaybackSession();
+    expect(survived?.currentItemLabel).toBe("demo.sid");
+    expect(survived?.currentIndex).toBe(0);
+    expect(survived?.elapsedMs).toBe(5000);
+    // The same store is what the Home tile reads, so the tile names the tune.
+    expect(getCurrentPlaybackSnapshotLabel()).toBe("demo.sid");
+  });
+
+  it("restores the playlist position from a session that outlived the process", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "local",
+            path: "/Music/demo.sid",
+            name: "demo.sid",
+            sourceId: "local-source",
+            addedAt: new Date().toISOString(),
+          },
+          {
+            source: "local",
+            path: "/Music/second.sid",
+            name: "second.sid",
+            sourceId: "local-source",
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+    writeStoredPlaybackSession({
+      playlistKey: playlistStorageKey,
+      currentItemId: null,
+      currentItemLabel: "second.sid",
+      currentIndex: 1,
+      isPlaying: true,
+      isPaused: true,
+      elapsedMs: 7000,
+      playedMs: 7000,
+      durationMs: 60000,
+      updatedAt: new Date().toISOString(),
+    });
+    sessionStorage.clear();
+
+    const localEntriesBySourceId = new Map([
+      [
+        "local-source",
+        new Map([
+          ["/Music/demo.sid", { name: "demo.sid" }],
+          ["/Music/second.sid", { name: "second.sid" }],
+        ]),
+      ],
+    ]);
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId,
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(2);
+      expect(result.current.currentIndex).toBe(1);
+    });
+    expect(result.current.elapsedMs).toBe(7000);
+    expect(result.current.isPaused).toBe(true);
+  });
+  // HARD27-032: the Play page holds the latched transport commands until this
+  // fires. The Home "Last" tile publishes "play", and a "play" that drains
+  // while the restore is still pending sees isPaused false and starts the tune
+  // from the beginning instead of resuming the stored position.
+  it("does not report the session restore settled before the paused position has been applied", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "local",
+            path: "/Music/demo.sid",
+            name: "demo.sid",
+            sourceId: "local-source",
+            addedAt: new Date().toISOString(),
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+    writeStoredPlaybackSession({
+      playlistKey: playlistStorageKey,
+      currentItemId: null,
+      currentItemLabel: "demo.sid",
+      currentIndex: 0,
+      isPlaying: true,
+      isPaused: true,
+      elapsedMs: 34599,
+      playedMs: 34599,
+      durationMs: 155000,
+      updatedAt: new Date().toISOString(),
+    });
+
+    const localEntriesBySourceId = new Map([["local-source", new Map([["/Music/demo.sid", { name: "demo.sid" }]])]]);
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId,
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.isPaused).toBe(true);
+      expect(sessionRestoreSettledSpy).toHaveBeenCalledWith(true);
+    });
+    expect(result.current.elapsedMs).toBe(34599);
+    expect(restoreOrder.indexOf("paused")).toBeGreaterThanOrEqual(0);
+    expect(restoreOrder.indexOf("paused")).toBeLessThan(restoreOrder.indexOf("settled"));
   });
 });

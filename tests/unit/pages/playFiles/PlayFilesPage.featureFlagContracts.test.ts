@@ -12,8 +12,7 @@ describe("PlayFilesPage feature-flag contracts", () => {
     expect(playFilesPageSource).toContain(
       "const backgroundExecutionEnabled = isBackgroundExecutionEnabled(featureFlags);",
     );
-    expect(playFilesPageSource).toContain("shouldStartBackgroundExecution({");
-    expect(playFilesPageSource).toContain("shouldStopBackgroundExecution({");
+    expect(playFilesPageSource).toContain("resolveBackgroundExecutionAction({");
     expect(playFilesPageSource).toContain("shouldSyncBackgroundExecutionDueAt(");
   });
 
@@ -85,8 +84,9 @@ describe("PlayFilesPage feature-flag contracts", () => {
     expect(playFilesPageSource).toContain("const backgroundCleanupTrackInstanceIdRef = useRef(trackInstanceId);");
     expect(playFilesPageSource).toContain("backgroundCleanupTrackInstanceIdRef.current = trackInstanceId;");
     expect(playFilesPageSource).toContain("const latestPlaybackState = playbackStateRef.current;");
+    // HARD27-007: a paused session is kept alive too, so the unmount guard no longer excludes it.
     expect(playFilesPageSource).toMatch(
-      /if\s*\(\s*\(?\s*latestPlaybackState\.isPlaying\s*&&\s*!latestPlaybackState\.isPaused\s*\)?[\s\S]*?\{\s*$/m,
+      /if\s*\(\s*latestPlaybackState\.isPlaying\s*\|\|\s*!hasObservedActivePlaybackRef\.current\s*\)\s*\{/m,
     );
     expect(playFilesPageSource).toContain("Leaving background playback guard active across Play page unmount");
     expect(playFilesPageSource).toMatch(/void stopBackgroundExecutionRef\s*\.current\(\{/);

@@ -13,7 +13,6 @@ import { History, Monitor, Play, Radio, type LucideIcon } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useRequirementContext } from "@/hooks/useSearchResults";
 import { t } from "@/lib/i18n";
-import { addErrorLog } from "@/lib/logging";
 import { loadRecentlyPlayed } from "@/lib/sidRadio/recentlyPlayed";
 import { resolveSearchHandler } from "@/lib/search/handlers";
 import { navigateToSearchTarget } from "@/lib/search/navigate";
@@ -21,7 +20,7 @@ import { resolveEntry } from "@/lib/search/requirements";
 import { isHvscInstalled } from "@/lib/hvsc/hvscStateStore";
 import { PROMOTED_ENTRY_IDS } from "@/lib/search/promoted";
 import { getSearchEntries } from "@/lib/search/registry";
-import { PLAYBACK_SESSION_KEY } from "@/pages/playFiles/playFilesUtils";
+import { readStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
 import type { ResolvedSearchEntry } from "@/lib/search/types";
 
 /**
@@ -62,17 +61,9 @@ interface Tile {
 }
 
 const readSessionLabel = (): string | null => {
-  if (typeof sessionStorage === "undefined") return null;
-  try {
-    const raw = sessionStorage.getItem(PLAYBACK_SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { currentItemLabel?: unknown; currentItemId?: unknown } | null;
-    if (!parsed || !parsed.currentItemId) return null;
-    return typeof parsed.currentItemLabel === "string" ? parsed.currentItemLabel : null;
-  } catch (error) {
-    addErrorLog("Failed to read the playback session for the Resume tile", { error: (error as Error).message });
-    return null;
-  }
+  const session = readStoredPlaybackSession();
+  if (!session?.currentItemId) return null;
+  return typeof session.currentItemLabel === "string" ? session.currentItemLabel : null;
 };
 
 export const useListenActions = (): ListenAction[] => {

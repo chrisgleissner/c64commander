@@ -18,7 +18,7 @@ const runScript = (cwd: string, env: Record<string, string> = {}) => {
 };
 
 describe("check-coverage-threshold", () => {
-  it("defaults both line and branch thresholds to 91 percent", () => {
+  it("defaults to the CI gate: 94 percent lines and 91 percent branches", () => {
     const root = mkdtempSync(path.join(os.tmpdir(), "coverage-default-threshold-"));
     try {
       mkdirSync(path.join(root, "coverage"), { recursive: true });
@@ -61,7 +61,7 @@ describe("check-coverage-threshold", () => {
       });
 
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain("Line coverage below minimum threshold: 90.00% < 91%");
+      expect(result.stderr).toContain("Line coverage below minimum threshold: 90.00% < 94%");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

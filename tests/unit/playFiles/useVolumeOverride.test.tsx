@@ -1307,6 +1307,49 @@ describe("useVolumeOverride", () => {
     expect(result.current.volumeSessionSnapshotRef.current).toBeNull();
   });
 
+  // HARD27-011: a playback volume override is not a setting the user chose. With "Keep device
+  // settings after a restart" on, it was written to the device's flash 1.5 s after each write, and
+  // a process kill mid-playback left the override as the device's persisted configuration. Every
+  // write from this hook must therefore be marked transient, and the restore must be marked as the
+  // restore so a flash save the override was holding is released.
+  it("marks every mixer write as transient, and the restore as the restore", async () => {
+    buildEnabledSidRestoreUpdatesMock.mockReturnValue({ "SID 1": "5" });
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.volumeState.index).toBe(0);
+    });
+
+    await act(async () => {
+      await result.current.handleVolumeAsyncChange(1);
+    });
+
+    await waitFor(() => {
+      expect(mutateAsyncMock).toHaveBeenCalled();
+    });
+    for (const [variables] of mutateAsyncMock.mock.calls) {
+      expect(variables).toMatchObject({ transient: true });
+      expect(variables.transientRestore).not.toBe(true);
+    }
+
+    mutateAsyncMock.mockClear();
+    result.current.volumeSessionActiveRef.current = true;
+    result.current.volumeSessionSnapshotRef.current = { "SID 1": "0" };
+
+    await result.current.restoreVolumeOverrides("playback-ended");
+
+    expect(mutateAsyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: "Audio Mixer",
+        updates: { "SID 1": "5" },
+        transient: true,
+        transientRestore: true,
+      }),
+    );
+  });
+
   it("discards an active volume session locally without writing anything to a device (HARD11-002)", async () => {
     const { result } = renderHook(() =>
       useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),

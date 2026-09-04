@@ -79,6 +79,8 @@ import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 import { FolderPicker } from "@/lib/native/folderPicker";
 import {
   isBackgroundExecutionActive,
+  setBackgroundExecutionNowPlaying,
+  setBackgroundExecutionPaused,
   startBackgroundExecution,
   stopBackgroundExecution,
 } from "@/lib/native/backgroundExecutionManager";
@@ -148,8 +150,7 @@ import { useDebouncedValue } from "@/pages/playFiles/hooks/useDebouncedValue";
 import { useQueryFilteredPlaylist } from "@/pages/playFiles/hooks/useQueryFilteredPlaylist";
 import {
   isBackgroundExecutionEnabled,
-  shouldStartBackgroundExecution,
-  shouldStopBackgroundExecution,
+  resolveBackgroundExecutionAction,
   shouldSyncBackgroundExecutionDueAt,
 } from "@/pages/playFiles/backgroundExecutionPolicy";
 import { setPlaybackTraceSnapshot } from "@/pages/playFiles/playbackTraceStore";
@@ -260,6 +261,10 @@ export default function PlayFilesPage() {
   const playlistSnapshotRef = useRef(playlist);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  // usePlaybackPersistence sets this once the stored session has been applied or
+  // rejected. Declared here because the transport latch below is declared long
+  // before that hook runs.
+  const [sessionRestoreSettled, setSessionRestoreSettled] = useState(false);
   const [playlistFilterInputText, setPlaylistFilterInputText] = useState("");
   const [playlistFilterText, setPlaylistFilterText] = useState("");
   const debouncedPlaylistFilterText = useDebouncedValue(playlistFilterInputText, 200);
@@ -634,16 +639,22 @@ export default function PlayFilesPage() {
   // F1 and F3 from anywhere, delivered through the latch (spec.md 9.5). Held until the stored
   // playlist has been restored: usePlaybackPersistence reads it in an effect declared below this
   // one, so a command drained on mount ran against an empty playlist and did nothing.
+  //
+  // HARD27-032: also held until the stored session has been applied. The session now survives
+  // process death, so the Home "Last" tile can arrive at a page that has its playlist but not yet
+  // its paused position, and a "play" drained there sees isPaused false and restarts the tune from
+  // the beginning instead of resuming where the user left off.
   useTransportCommands(
     (command) =>
       runTransportCommand(command, {
         isPlaying,
+        isPaused,
         play: () => void handlePlay(),
         pauseResume: () => void handlePauseResume(),
         next: () => void handleNext(),
         stop: () => void handleStop(),
       }),
-    playlist.length > 0,
+    playlist.length > 0 && sessionRestoreSettled,
   );
   const sleepTimer = useSleepTimer({
     onExpire: () => {
@@ -738,15 +749,14 @@ export default function PlayFilesPage() {
   }, [isPaused, isPlaying]);
 
   useEffect(() => {
-    if (
-      shouldStartBackgroundExecution({
-        backgroundExecutionEnabled,
-        backgroundExecutionActive: backgroundExecutionActiveRef.current,
-        isPlaying,
-        isPaused,
-        playlistEnded,
-      })
-    ) {
+    const backgroundExecutionAction = resolveBackgroundExecutionAction({
+      backgroundExecutionEnabled,
+      backgroundExecutionActive: backgroundExecutionActiveRef.current,
+      isPlaying,
+      isPaused,
+      playlistEnded,
+    });
+    if (backgroundExecutionAction === "start") {
       backgroundExecutionActiveRef.current = true;
       void startBackgroundExecution({
         source: "playback-controller",
@@ -767,15 +777,29 @@ export default function PlayFilesPage() {
       void queueBackgroundDueAtUpdate(autoAdvanceDueAtMs);
       return;
     }
-    if (
-      !shouldStopBackgroundExecution({
-        backgroundExecutionEnabled,
-        backgroundExecutionActive: backgroundExecutionActiveRef.current,
-        isPlaying,
-        isPaused,
-        playlistEnded,
-      })
-    ) {
+    if (backgroundExecutionAction === "publish-paused" || backgroundExecutionAction === "publish-playing") {
+      // HARD27-007: a pause or resume of a live session updates the service in place. Stopping it
+      // on pause released the MediaSession, so the headset Play that followed reached nothing.
+      const paused = backgroundExecutionAction === "publish-paused";
+      void setBackgroundExecutionPaused(paused, {
+        source: "playback-controller",
+        reason: paused ? "pause" : "resume",
+        context: { trackInstanceId },
+      }).catch((error) => {
+        reportUserError({
+          operation: "setBackgroundExecutionPaused",
+          title: "Background playback state update failed",
+          description: "Lock-screen and headset controls may not match the current playback state.",
+          error,
+          context: { trackInstanceId, paused },
+          // System bookkeeping around a transport action the user already saw
+          // succeed; diagnostics material, never a toast (ERROR_POLICY §3).
+          background: true,
+        });
+      });
+      return;
+    }
+    if (backgroundExecutionAction !== "stop") {
       return;
     }
     // Never let an instance that only adopted the running session (and has not
@@ -787,7 +811,7 @@ export default function PlayFilesPage() {
     backgroundExecutionActiveRef.current = false;
     void stopBackgroundExecution({
       source: "playback-controller",
-      reason: isPaused ? "pause" : "stop",
+      reason: "stop",
       context: { trackInstanceId },
     }).catch((error) => {
       reportUserError({
@@ -795,7 +819,7 @@ export default function PlayFilesPage() {
         title: "Background playback cleanup failed",
         description: "Background playback guard could not be fully stopped.",
         error,
-        context: { trackInstanceId, reason: isPaused ? "pause" : "stop" },
+        context: { trackInstanceId, reason: "stop" },
         // Background guard cleanup is system work; failures are diagnostics
         // material, never a toast (ERROR_POLICY §3).
         background: true,
@@ -817,8 +841,11 @@ export default function PlayFilesPage() {
       const latestPlaybackState = playbackStateRef.current;
       // Keep the wake lock when this instance is still playing OR when it never
       // observed playback (a transient instance that only adopted the running
-      // session must not release the live session's lock — BUG-040).
-      if ((latestPlaybackState.isPlaying && !latestPlaybackState.isPaused) || !hasObservedActivePlaybackRef.current) {
+      // session must not release the live session's lock — BUG-040). A paused
+      // session is kept too (HARD27-007): the service has already dropped its
+      // wake lock and its own grace period bounds how long it survives, so
+      // tabbing away from Play must not be what kills the headset controls.
+      if (latestPlaybackState.isPlaying || !hasObservedActivePlaybackRef.current) {
         addLog("debug", "Leaving background playback guard active across Play page unmount", {
           trackInstanceId: backgroundCleanupTrackInstanceIdRef.current,
           dueAtMs: autoAdvanceGuardRef.current?.dueAtMs ?? null,
@@ -1863,6 +1890,37 @@ export default function PlayFilesPage() {
       })
     : null;
 
+  /*
+   * What the lock screen and the notification shade say is playing (HARD27-040).
+   *
+   * Handed over on every track change, and whether or not a background session is running: the
+   * manager keeps the last tune and republishes it once a session starts, because the page names
+   * the track in the commit before the one that starts playback.
+   */
+  const nowPlayingTitle = currentDisplay?.title ?? currentItem?.label ?? null;
+  const nowPlayingArtist = currentItemCredits.author;
+  useEffect(() => {
+    void setBackgroundExecutionNowPlaying(
+      { title: nowPlayingTitle, artist: nowPlayingArtist, durationMs: currentDurationMs ?? null },
+      {
+        source: "playback-controller",
+        reason: "now-playing",
+        context: { trackInstanceId },
+      },
+    ).catch((error) => {
+      reportUserError({
+        operation: "setBackgroundExecutionNowPlaying",
+        title: "Now-playing metadata update failed",
+        description: "The lock-screen media control may not name the current tune.",
+        error,
+        context: { trackInstanceId },
+        // The tune plays either way; a media control naming the wrong thing is
+        // diagnostics material, never a toast (ERROR_POLICY §3).
+        background: true,
+      });
+    });
+  }, [currentDurationMs, nowPlayingArtist, nowPlayingTitle, trackInstanceId]);
+
   // How much of the tune the on-device engine has rendered, as a percentage of its length. Only the
   // local engine has this: libsidplayfp cannot rewind, so a seek beyond what is rendered has to be
   // rendered up to. Polled rather than pushed — it changes a few times a second at most.
@@ -2284,6 +2342,7 @@ export default function PlayFilesPage() {
     autoAdvanceGuardRef,
     setTrackInstanceId,
     setAutoAdvanceDueAtMs,
+    setSessionRestoreSettled,
   });
 
   useEffect(() => {

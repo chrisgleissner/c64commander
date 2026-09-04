@@ -67,7 +67,18 @@ describe("the published site", () => {
     // index.md is the specific shape that fails: nothing converts it, so the
     // directory URL above it returns 404. Markdown that is plainly a data
     // sample, such as the telemetry example, is a file rather than a page.
-    const indexMarkdown = filesUnder(publishedRoot).filter((file) => path.basename(file) === "index.md");
+    const published = filesUnder(publishedRoot);
+
+    // The filter below is satisfied by an empty walk, so the walk has to prove
+    // it read the site: every promised page is a file it must have returned.
+    for (const page of PROMISED_PAGES) {
+      expect(published, `the walk of ${publishedRelative} did not reach ${page}`).toContain(page);
+    }
+    expect(published.length, "the walk of the published directory found nothing").toBeGreaterThan(
+      PROMISED_PAGES.length,
+    );
+
+    const indexMarkdown = published.filter((file) => path.basename(file) === "index.md");
     expect(indexMarkdown, "these would 404 as directory URLs").toEqual([]);
   });
 
@@ -91,10 +102,23 @@ describe("the published site", () => {
   it("keeps the pages self-contained, so reading them tells no one anything", () => {
     for (const page of PROMISED_PAGES) {
       const html = readPage(page);
-      const remoteAssets = [
-        ...html.matchAll(/<(?:link|script|img)\b[^>]*\b(?:href|src)\s*=\s*"(https?:\/\/[^"]+)"/gi),
-      ].map((match) => match[1]);
-      expect(remoteAssets, `${page} loads a third-party resource`).toEqual([]);
+
+      // Naming the elements and requiring double quotes made the check easy to
+      // slip past: a single-quoted img, or one of the several other attributes
+      // that fetch a URL, was invisible to it. The rule is instead that the only
+      // remote URL a page may carry is the destination of a link the reader
+      // chooses to follow. Anything left after the anchors are removed - a src,
+      // a stylesheet link, a url() inside the inline style - is fetched on load.
+      const remoteLinks = [...html.matchAll(/<a\b[^>]*\bhref\s*=\s*["']?https?:\/\//gi)];
+      const withoutAnchors = html.replace(/<a\b[^>]*>/gi, "");
+      const fetchedOnLoad = [...withoutAnchors.matchAll(/https?:\/\/[^"'\s>)]+/gi)].map((match) => match[0]);
+      expect(fetchedOnLoad, `${page} loads a third-party resource`).toEqual([]);
+
+      // An empty result also means a scan that read nothing. Both pages link
+      // out to the repository, so finding no outbound link at all is a defect
+      // in this test rather than a property of the page.
+      expect(remoteLinks.length, `found no outbound link in ${page}, so the scan read nothing`).toBeGreaterThan(0);
+
       expect(html, `${page} imports a webfont`).not.toMatch(/@import|fonts\.googleapis\.com/i);
     }
   });
@@ -149,6 +173,7 @@ describe("the privacy policy", () => {
       CHANGE_WIFI_MULTICAST_STATE: "multicast",
       FOREGROUND_SERVICE: "foreground service",
       FOREGROUND_SERVICE_MEDIA_PLAYBACK: "media playback",
+      FOREGROUND_SERVICE_DATA_SYNC: "data sync",
       WAKE_LOCK: "wake lock",
       POST_NOTIFICATIONS: "notifications",
     };

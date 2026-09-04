@@ -13,14 +13,12 @@ env:
 ---
 - runFlow: subflows/launch-and-wait.yaml
 - tapOn:
-    point: "25%,95%"
-    optional: true
-- tapOn:
-    text: "Play"
-    optional: true
+    id: "tab-play"
 - extendedWaitUntil:
     visible: "Playlist"
     timeout: ${TIMEOUT}
+- assertVisible:
+    id: "page-play"
 - tapOn:
     id: "add-items-to-playlist"
     optional: true
@@ -73,11 +71,12 @@ env:
     optional: true
 - launchApp
 - tapOn:
-    point: "8%,95%"
-    optional: true
+    id: "tab-home"
 - extendedWaitUntil:
     visible:
       text: "Home"
     timeout: ${LONG_TIMEOUT}
+- assertVisible:
+    id: "page-home"
 
 - takeScreenshot: picker-cancelled

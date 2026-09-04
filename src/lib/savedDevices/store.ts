@@ -714,6 +714,19 @@ export const getSelectedSavedDevice = () => {
   return current.devices.find((device) => device.id === current.selectedDeviceId) ?? current.devices[0] ?? null;
 };
 
+/**
+ * Ports of the selected saved device, taken from the envelope the store has already parsed and
+ * normalised. The FTP and Telnet port resolvers call this instead of re-parsing the raw envelope
+ * themselves, so a schema change is read in one place (HARD27-025).
+ */
+export const getSelectedSavedDevicePorts = () => {
+  const selectedDevice = getSelectedSavedDevice();
+  return {
+    ftpPort: selectedDevice?.ftpPort ?? DEFAULT_FTP_PORT,
+    telnetPort: selectedDevice?.telnetPort ?? DEFAULT_TELNET_PORT,
+  };
+};
+
 export const getSelectedSavedDeviceProductFamilySync = (): ProductFamilyCode | null => {
   const current = getSavedDevicesSnapshot();
   const selectedDevice =

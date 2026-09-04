@@ -198,9 +198,12 @@ internal class AudioPipeline(
    * jumps between one frame and the next is audible as a click.
    */
   @Volatile private var targetGain: Double = 1.0
+  /** Ducking attenuation, multiplied with [targetGain]. See [setDucked]. */
+  @Volatile private var duckGain: Double = 1.0
   private var appliedGain: Double = 1.0
   @Volatile private var running = true
   @Volatile private var started = false
+  @Volatile private var paused = false
 
   private var totalFramesWritten: Long = 0
   private var player: Thread? = null
@@ -298,6 +301,34 @@ internal class AudioPipeline(
   }
 
   /**
+   * Stop the speaker without discarding anything, which is what a listener's pause has to be.
+   *
+   * [flush] is wrong for a pause: the ring runs seconds deep, so it drops rendered audio, and the
+   * JS sink then rebases onto the played position while its scheduler still counts that audio as in
+   * flight — a gate that never reopens, so the transport clock froze on resume and never moved.
+   */
+  fun pause() {
+    if (paused) return
+    paused = true
+    try {
+      if (started) track.pause()
+    } catch (error: Exception) {
+      Log.w(TAG, "AudioTrack pause failed", error)
+    }
+  }
+
+  /** Continue a [pause] from the sample it stopped on. */
+  fun resume() {
+    if (!paused) return
+    paused = false
+    try {
+      if (started) track.play()
+    } catch (error: Exception) {
+      Log.w(TAG, "AudioTrack resume failed", error)
+    }
+  }
+
+  /**
    * Set the master attenuation, 0.0 (silent) to 1.0 (unchanged).
    *
    * Only ever attenuates: values above unity are clamped, so this cannot push a sample into clipping
@@ -305,6 +336,17 @@ internal class AudioPipeline(
    */
   fun setGain(gain: Double) {
     targetGain = if (gain.isFinite()) gain.coerceIn(0.0, 1.0) else 1.0
+  }
+
+  /**
+   * Attenuate while another app holds transient focus with ducking allowed.
+   *
+   * Kept apart from [setGain] and multiplied with it, so a duck cannot wipe the level the listener
+   * chose and the volume slider cannot cancel a duck. Ramped by the same slew as any other gain
+   * change, so ducking in and out is not a click.
+   */
+  fun setDucked(ducked: Boolean) {
+    duckGain = if (ducked) DUCK_GAIN else 1.0
   }
 
   fun offer(data: ByteArray, offset: Int, length: Int) {
@@ -585,10 +627,32 @@ internal class AudioPipeline(
     )
   }
 
+  /**
+   * Stop the pipeline and release the track.
+   *
+   * The player thread has to be off the track first. `AudioTrack.write(..., WRITE_BLOCKING)` waits
+   * for buffer space and does not return on [Thread.interrupt], and a paused track never drains, so
+   * after [pause] that write blocks indefinitely — the reachable `pauseAudioTrack` then
+   * `closeAudioTrack` sequence would otherwise release the track from under it. Flushing frees the
+   * space it is waiting for; resuming would too, but would play the tail of the paused buffer on
+   * the way out. The join bounds the wait.
+   */
   fun close() {
     running = false
-    player?.interrupt()
+    val playerThread = player
     player = null
+    try {
+      if (started && paused) track.flush()
+    } catch (error: Exception) {
+      Log.d(TAG, "AudioPipeline close flush ignored", error)
+    }
+    paused = false
+    playerThread?.interrupt()
+    try {
+      playerThread?.join(CLOSE_JOIN_TIMEOUT_MS)
+    } catch (error: InterruptedException) {
+      Thread.currentThread().interrupt()
+    }
     try {
       if (started) track.pause()
       track.flush()
@@ -630,6 +694,12 @@ internal class AudioPipeline(
     srcScratch = ShortArray(((outFrames * nominalRatio() * (1 + MAX_DRIFT) + 2).toInt() + 2) * CHANNELS)
     while (running) {
       try {
+        if (paused) {
+          // Parked, not spinning on the ring: a paused pipeline must not consume what it holds, or
+          // the audio the listener paused on would be gone by the time they came back to it.
+          LockSupport.parkNanos(POLL_NANOS)
+          continue
+        }
         if (!started) {
           // Prime for BOTH buffers, not just the cushion. The first writes fill the speaker track,
           // and every frame of that comes out of the ring — so priming to the cushion target alone
@@ -861,7 +931,7 @@ internal class AudioPipeline(
     // Ramp towards the requested level rather than jumping to it. `GAIN_RAMP_FRAMES` is a whole
     // number of frames at the output rate, so the slew is the same wall-clock duration whatever the
     // device resamples to.
-    val target = targetGain
+    val target = targetGain * duckGain
     if (appliedGain != target) {
       val step = 1.0 / GAIN_RAMP_FRAMES
       appliedGain = if (appliedGain < target) minOf(target, appliedGain + step) else maxOf(target, appliedGain - step)
@@ -931,6 +1001,8 @@ internal class AudioPipeline(
 
   internal companion object {
     private const val TAG = "AudioPipeline"
+    /** How long [close] waits for the player thread to leave a blocking write before releasing. */
+    private const val CLOSE_JOIN_TIMEOUT_MS = 250L
     const val BYTES_PER_FRAME = 4 // stereo * S16
     private const val CHANNELS = 2
     private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_OUT_STEREO
@@ -949,6 +1021,9 @@ internal class AudioPipeline(
      * same whichever path is playing. Long enough that no step is audible as a click, short enough
      * that the control still feels immediate.
      */
+    /** How far output drops while ducking. The usual platform duck is about this deep. */
+    private const val DUCK_GAIN = 0.2
+
     private const val GAIN_RAMP_FRAMES = 960.0
 
     private const val TRACK_BURSTS = 4

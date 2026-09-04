@@ -34,6 +34,7 @@ import { VicStreamAssembler, parseVicHeader } from "./vicStream";
 import { videoStandardForHeight, type VideoStandard } from "./vicDecode";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
 import { StreamArrivalWatchdog } from "./streamArrivalWatchdog";
+import { describeSenderMismatch, detectSenderMismatch, type SenderMismatch } from "./senderMismatch";
 
 export type VideoMirrorState = "off" | "connecting" | "live" | "error";
 
@@ -92,6 +93,14 @@ export interface VideoMirrorSnapshot {
   /** Video standard detected from the actual received frame height (PAL 272 / NTSC 240). */
   standard: VideoStandard;
   error: string | null;
+  /**
+   * The stream is arriving from an address the native filter is not accepting.
+   *
+   * Set only when a live stream went silent AND the plugin was dropping packets at that moment, so
+   * it explains the silence rather than merely noting a second sender. Carries the address the
+   * one-tap recovery adopts.
+   */
+  senderMismatch: SenderMismatch | null;
 }
 
 export interface VideoMirrorDeps {
@@ -99,6 +108,8 @@ export interface VideoMirrorDeps {
   startStream: (name: "video", destination: string) => Promise<unknown>;
   stopStream: (name: "video") => Promise<unknown>;
   onChange: (snapshot: VideoMirrorSnapshot) => void;
+  /** The device the user selected — the address the sender filter was aimed at. */
+  expectedSenderHost?: () => string | null;
   /**
    * Frame sink: receives a full 52224-byte VIC frame, the detected frame height
    * (PAL 272 / NTSC 240) and the wire-arrival timestamp (ms) of the frame's FIRST datagram — for
@@ -146,6 +157,7 @@ export class VideoMirrorController {
     maxResidenceMs: 0,
     standard: "PAL",
     error: null,
+    senderMismatch: null,
   };
   private readonly frameStartByNum = new Map<number, number>();
   private renderTimes: number[] = [];
@@ -230,7 +242,7 @@ export class VideoMirrorController {
     // Always keep getSnapshot() current (above); throttle only the React BROADCAST. State/error
     // transitions emit immediately; per-frame health/fps updates coalesce to ~10 Hz. Stats reads
     // live via the session tick, so it does not lose freshness.
-    const important = patch.state !== undefined || patch.error !== undefined;
+    const important = patch.state !== undefined || patch.error !== undefined || patch.senderMismatch !== undefined;
     const now = this.now();
     if (important || now - this.lastEmitMs >= SNAPSHOT_EMIT_INTERVAL_MS) {
       this.lastEmitMs = now;
@@ -341,6 +353,7 @@ export class VideoMirrorController {
     this.update({
       state: "connecting",
       error: null,
+      senderMismatch: null,
       fps: 0,
       droppedPackets: 0,
       framesLost: 0,
@@ -441,6 +454,47 @@ export class VideoMirrorController {
       silentMs: Math.round(silentMs),
     });
     this.update({ state: "error", error: "The video stream stopped arriving." });
+    // Reported first, diagnosed second: the plugin read crosses the bridge, and a call that never
+    // answers must not be able to leave the silence unreported.
+    void this.diagnoseSilence();
+  }
+
+  /**
+   * Ask the receiver whether the silence was the sender filter refusing everything that arrived.
+   *
+   * A filter keyed to the wrong address of a dual-homed Ultimate is silent in the same way as a
+   * dead stream, so the plugin's rejection counters are the only thing that separates the two.
+   */
+  private async diagnoseSilence(): Promise<void> {
+    const receiver = this.receiver;
+    const diagnostics = (await receiver?.readDiagnostics?.()) ?? null;
+    // The mirror was restarted or stopped while the read was in flight; whatever this says is about
+    // a socket nobody is listening to any more.
+    if (this.receiver !== receiver || this.snapshot.state !== "error") return;
+    const mismatch = detectSenderMismatch(diagnostics, this.deps.expectedSenderHost?.() ?? null);
+    if (!mismatch) return;
+    addLog("warn", "Video Mirror: the stream is arriving from an address the sender filter refuses", {
+      source: mismatch.source,
+      expected: mismatch.expected,
+      rejectedPackets: mismatch.rejectedPackets,
+    });
+    this.update({ error: describeSenderMismatch(mismatch, "video"), senderMismatch: mismatch });
+  }
+
+  /**
+   * Accept the machine that is actually sending, on the socket that is already bound.
+   *
+   * The assembler is reset with it: the frames it holds were built from packets the filter was
+   * about to start refusing, so continuing to complete them would mix two frame-number spaces.
+   */
+  async adoptSender(source: string): Promise<void> {
+    const receiver = this.receiver;
+    if (!receiver?.setExpectedSource || this.snapshot.state === "off") return;
+    await receiver.setExpectedSource(source);
+    if (this.receiver !== receiver) return;
+    this.assembler.reset();
+    this.update({ state: "live", error: null, senderMismatch: null });
+    this.arrivalWatchdog.start();
   }
 
   private resetPresentation(): void {
@@ -486,6 +540,7 @@ export class VideoMirrorController {
       renderResidenceMs: 0,
       maxResidenceMs: 0,
       error: null,
+      senderMismatch: null,
     });
   }
 }

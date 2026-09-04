@@ -18,14 +18,39 @@
  *   2. tools/hil/av_sync_hil.py        — reframed end-to-end latency gates (press→see/hear, A/V offset)
  *
  * Exit (machine-readable, §17): 0 all gates passed, 1 a product gate failed, 2 infra/precondition
- * (no device, C64U unreachable, app not installed) — kept DISTINCT so an infra flake is never a pass.
+ * (no device, C64U unreachable, app not installed) or a gate that could not be measured — all kept
+ * DISTINCT from 0 so neither an infra flake nor an unmeasured gate is ever reported as a pass.
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const serial = process.env.HIL_ADB_SERIAL || detectSerial();
-const host = process.env.HIL_C64U_HOST || "c64u";
-const report = process.env.HIL_REPORT || "ci-artifacts/hil/stream-hil-report.json";
+/** `hil_stream_fixture.py` exits 3 when a required gate had too little data to judge. */
+const INCONCLUSIVE = 3;
+
+/**
+ * The gate's own exit code and label for each fixture, from the fixtures' exit codes alone.
+ *
+ * An inconclusive fixture is neither a pass nor a product failure. Reporting it as a product
+ * failure sends someone chasing a regression in a threshold the run never measured, and reporting
+ * it as a pass is worse; it aggregates with an infra failure instead, as exit 2.
+ */
+export const hilVerdict = (streamCode, latencyCode) => {
+  const label = (code) => (code === 0 ? "PASS" : code === INCONCLUSIVE ? "INCONCLUSIVE" : "FAIL");
+  const summary = `Live View HIL: streaming ${label(streamCode)}, latency ${label(latencyCode)}.`;
+  const unusable = [streamCode, latencyCode].some((code) => code === 2 || code === INCONCLUSIVE);
+  if (unusable) {
+    return {
+      exitCode: 2,
+      summary,
+      message:
+        "HIL INCONCLUSIVE — a hardware, precondition or unmeasured gate means the product result is inconclusive.",
+    };
+  }
+  const failed = (streamCode !== 0 ? 1 : 0) + (latencyCode !== 0 ? 1 : 0);
+  return { exitCode: failed === 0 ? 0 : 1, summary, message: "" };
+};
 
 function detectSerial() {
   try {
@@ -42,50 +67,53 @@ function detectSerial() {
   }
 }
 
-if (!serial) {
-  console.error("HIL: no ADB device connected. Connect the Pixel 4 over USB (exit 2).");
-  process.exit(2);
-}
+const main = () => {
+  const serial = process.env.HIL_ADB_SERIAL || detectSerial();
+  const host = process.env.HIL_C64U_HOST || "c64u";
+  const report = process.env.HIL_REPORT || "ci-artifacts/hil/stream-hil-report.json";
 
-const python = process.env.PYTHON || "python3";
-const runFixture = (label, args) => {
-  console.log(`\n=== ${label} ===`);
-  const res = spawnSync(python, args, { stdio: "inherit" });
-  if (res.error) {
-    console.error(`HIL: could not run ${label}: ${res.error.message}`);
-    return 2;
+  if (!serial) {
+    console.error("HIL: no ADB device connected. Connect the Pixel 4 over USB (exit 2).");
+    process.exit(2);
   }
-  return res.status ?? 2;
+
+  const python = process.env.PYTHON || "python3";
+  const runFixture = (label, args) => {
+    console.log(`\n=== ${label} ===`);
+    const res = spawnSync(python, args, { stdio: "inherit" });
+    if (res.error) {
+      console.error(`HIL: could not run ${label}: ${res.error.message}`);
+      return 2;
+    }
+    return res.status ?? 2;
+  };
+
+  console.log(`Live View HIL (local) — device ${serial}, C64U ${host}`);
+
+  const streamCode = runFixture("Streaming gates (fps / CPU / jank / slots)", [
+    "tools/hil/hil_stream_fixture.py",
+    "--serial",
+    serial,
+    "--host",
+    host,
+    "--report",
+    report,
+  ]);
+  const latencyCode = runFixture("End-to-end latency gates (press→see/hear, A/V offset)", [
+    "tools/hil/av_sync_hil.py",
+    "--serial",
+    serial,
+    "--soak-seconds",
+    "30",
+    "--taps",
+    "10",
+  ]);
+
+  const verdict = hilVerdict(streamCode, latencyCode);
+  console.log(`\n${verdict.summary}`);
+  if (verdict.message) console.error(`\n${verdict.message}`);
+  process.exit(verdict.exitCode);
 };
 
-console.log(`Live View HIL (local) — device ${serial}, C64U ${host}`);
-
-const streamCode = runFixture("Streaming gates (fps / CPU / jank / slots)", [
-  "tools/hil/hil_stream_fixture.py",
-  "--serial",
-  serial,
-  "--host",
-  host,
-  "--report",
-  report,
-]);
-const latencyCode = runFixture("End-to-end latency gates (press→see/hear, A/V offset)", [
-  "tools/hil/av_sync_hil.py",
-  "--serial",
-  serial,
-  "--soak-seconds",
-  "30",
-  "--taps",
-  "10",
-]);
-
-// Infra failure (2) on either fixture dominates — never report a product pass on an infra flake.
-if (streamCode === 2 || latencyCode === 2) {
-  console.error("\nHIL INFRA FAILURE — hardware/precondition problem, product result inconclusive.");
-  process.exit(2);
-}
-const failed = (streamCode !== 0 ? 1 : 0) + (latencyCode !== 0 ? 1 : 0);
-console.log(
-  `\nLive View HIL: streaming ${streamCode === 0 ? "PASS" : "FAIL"}, latency ${latencyCode === 0 ? "PASS" : "FAIL"}.`,
-);
-process.exit(failed === 0 ? 0 : 1);
+/** Run only as a command. Importing this module (the verdict test does) must not start a gate. */
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

@@ -29,6 +29,7 @@ import { isUpdateApplied, loadHvscState, updateHvscState } from "@/lib/hvsc/hvsc
 import { fetchLatestHvscVersions } from "@/lib/hvsc/hvscReleaseService";
 import { getHvscDurationByMd5, getHvscSongByVirtualPath, listHvscFolder } from "@/lib/hvsc/hvscFilesystem";
 import { getHvscIngestionRuntimeState } from "@/lib/hvsc/hvscIngestionRuntimeSupport";
+import { beginHvscInstallGuard, endHvscInstallGuard } from "@/lib/hvsc/hvscInstallGuard";
 import {
   deleteLibraryFile,
   resetLibraryRoot,
@@ -60,6 +61,10 @@ const nativeHvscPlugin = vi.hoisted(() => ({
     archiveBytes: 10,
   })),
   cancelIngestion: vi.fn(async () => undefined),
+  getStorageBudget: vi.fn(async () => ({
+    availableBytes: 8 * 1024 * 1024 * 1024,
+    libraryPresent: false,
+  })),
   addListener: vi.fn(async () => ({ remove: nativeProgressListenerRemove })),
 }));
 
@@ -104,6 +109,7 @@ vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
   resetSonglengthsCache: vi.fn(),
   writeCachedArchive: vi.fn(),
   deleteCachedArchive: vi.fn(),
+  deleteCachedArchivePart: vi.fn(async () => undefined),
   readCachedArchiveMarker: vi.fn(async () => ({
     version: 5,
     type: "baseline",
@@ -118,6 +124,11 @@ vi.mock("@/lib/hvsc/hvscFilesystem", () => ({
   resetStilStore: vi.fn(async () => undefined),
   writeStilFile: vi.fn(async () => undefined),
   readStilFile: vi.fn(async () => null),
+}));
+
+vi.mock("@/lib/hvsc/hvscInstallGuard", () => ({
+  beginHvscInstallGuard: vi.fn(async () => undefined),
+  endHvscInstallGuard: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/lib/hvsc/hvscStateStore", () => ({
@@ -735,6 +746,130 @@ describe("hvscIngestionRuntime", () => {
     } else {
       delete (globalThis as { fetch?: typeof fetch }).fetch;
     }
+  });
+
+  it("refuses to start a baseline install when the device lacks room for the extracted library", async () => {
+    const originalFetch = globalThis.fetch;
+    // 90 MB compressed. The measured HVSC baseline expands to roughly 5.5x its
+    // archive on disk, so this install needs several hundred MB more than the
+    // 300 MB the device reports free.
+    const archiveBytes = 90 * 1024 * 1024;
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: { get: () => String(archiveBytes) },
+    });
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    nativeHvscPlugin.getStorageBudget.mockResolvedValueOnce({
+      availableBytes: 300 * 1024 * 1024,
+      libraryPresent: false,
+    });
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(Filesystem.stat).mockRejectedValue(new Error("missing"));
+    vi.mocked(readCachedArchiveMarker).mockResolvedValue(null as any);
+
+    await expect(installOrUpdateHvsc("token-no-space")).rejects.toThrow(/not enough free space/i);
+    // The point of the gate is that the user is told before the transfer, not
+    // after waiting for it.
+    expect(Filesystem.downloadFile).not.toHaveBeenCalled();
+
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
+    } else {
+      delete (globalThis as { fetch?: typeof fetch }).fetch;
+    }
+  });
+
+  it("holds the install guard across a whole install and releases it when the install finishes", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: { get: () => "1024" },
+    });
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: "https://example.com",
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(Filesystem.stat).mockRejectedValue(new Error("missing"));
+    vi.mocked(readCachedArchiveMarker).mockResolvedValue(null as any);
+    // The JS extraction path, so the guard can be observed while the archive is being read.
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(false);
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      expect(beginHvscInstallGuard).toHaveBeenCalledTimes(1);
+      expect(endHvscInstallGuard).not.toHaveBeenCalled();
+      await onEntry?.("HVSC/C64Music/Demo/demo.sid", new Uint8Array([1, 2, 3]));
+    });
+
+    await installOrUpdateHvsc("token-guard");
+
+    expect(extractArchiveEntries).toHaveBeenCalled();
+    expect(beginHvscInstallGuard).toHaveBeenCalledTimes(1);
+    expect(endHvscInstallGuard).toHaveBeenCalledTimes(1);
+
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
+    } else {
+      delete (globalThis as { fetch?: typeof fetch }).fetch;
+    }
+  });
+
+  it("releases the install guard when the install fails", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(fetchLatestHvscVersions).mockRejectedValue(new Error("release feed unreachable"));
+
+    await expect(installOrUpdateHvsc("token-guard-fail")).rejects.toThrow("release feed unreachable");
+
+    expect(beginHvscInstallGuard).toHaveBeenCalledTimes(1);
+    expect(endHvscInstallGuard).toHaveBeenCalledTimes(1);
+  });
+
+  it("holds the install guard across ingestion of an already cached archive", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: "idle",
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(readCachedArchiveMarker).mockResolvedValue({
+      version: 5,
+      type: "baseline",
+    } as any);
+    // The JS extraction path, so the guard can be observed while the archive is being read.
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(false);
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      expect(beginHvscInstallGuard).toHaveBeenCalledTimes(1);
+      expect(endHvscInstallGuard).not.toHaveBeenCalled();
+      await onEntry?.("HVSC/C64Music/Demo/demo.sid", new Uint8Array([1, 2, 3]));
+    });
+
+    await ingestCachedHvsc("token-guard-cached");
+
+    expect(extractArchiveEntries).toHaveBeenCalled();
+    expect(beginHvscInstallGuard).toHaveBeenCalledTimes(1);
+    expect(endHvscInstallGuard).toHaveBeenCalledTimes(1);
   });
 
   it("falls back to non-native extraction when native 7z method is unsupported", async () => {

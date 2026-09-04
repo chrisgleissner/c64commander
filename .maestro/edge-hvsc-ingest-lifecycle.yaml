@@ -9,19 +9,44 @@ env:
   SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
   TIMEOUT: ${TIMEOUT || "15000"}
 ---
-# edge-hvsc-ingest-lifecycle: trigger a full HVSC install/ingest cycle and
-# verify the progress stages transition monotonically to completion.
+# edge-hvsc-ingest-lifecycle: trigger a full HVSC install and verify the card's status label
+# moves forward through the install's phases to the ready state.
 - runFlow: subflows/launch-and-wait.yaml
 
-# Navigate to the HVSC / Music tab
 - tapOn:
-    point: "50%,95%"
+    id: "tab-play"
 - extendedWaitUntil:
-    visible: "Music"
+    visible: "Play files"
     timeout: ${TIMEOUT}
-
-# Open HVSC settings/install
-- tapOn: "Install HVSC"
+- assertVisible:
+    id: "page-play"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: play-section-toggle-hvsc
+    direction: DOWN
+    speed: 80
+    timeout: ${LONG_TIMEOUT}
+    visibilityPercentage: 50
+    centerElement: true
+- tapOn:
+    id: play-section-toggle-hvsc
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: hvsc-download
+    direction: DOWN
+    speed: 80
+    timeout: ${LONG_TIMEOUT}
+    visibilityPercentage: 50
+    centerElement: true
+- tapOn:
+    id: hvsc-download
+# The card shows three status labels across an install, and they come from
+# `resolveHvscPreparationSnapshot`: "Downloading", then "Indexing", then "Ready". There is no
+# "Extracting" label — unpacking is one of the four steps inside the indexing phase, and the step
+# labels ("Download", "Unpack", "Find songs", "Song details") are on screen the whole time, so
+# waiting for one proves nothing about progress. `maestroFlowContracts` pins these three strings.
 - extendedWaitUntil:
     visible: "Downloading"
     timeout: ${LONG_TIMEOUT}
@@ -29,20 +54,15 @@ env:
 - takeScreenshot: hvsc-ingest-downloading
 
 - extendedWaitUntil:
-    visible: "Extracting"
-    timeout: ${LONG_TIMEOUT}
-
-- takeScreenshot: hvsc-ingest-extracting
-
-- extendedWaitUntil:
     visible: "Indexing"
     timeout: ${LONG_TIMEOUT}
 
 - takeScreenshot: hvsc-ingest-indexing
 
-# Verify final ready state
+# The steps row hides itself a few seconds after completion, so the final wait is on the card's
+# ready heading, which stays for as long as the collection is installed.
 - extendedWaitUntil:
-    visible: "Ready"
+    visible: "HVSC ready"
     timeout: ${LONG_TIMEOUT}
 
 - takeScreenshot: hvsc-ingest-complete

@@ -11,6 +11,7 @@ import { useRef, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersistence";
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
+import { readStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
 import { PLAYBACK_SESSION_KEY, buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 
 const repository = {
@@ -129,6 +130,7 @@ const useHarness = (playlistStorageKey: string, options?: { startEmpty?: boolean
     autoAdvanceGuardRef,
     setTrackInstanceId: vi.fn(),
     setAutoAdvanceDueAtMs: vi.fn(),
+    setSessionRestoreSettled: vi.fn(),
   });
 
   return {
@@ -270,7 +272,7 @@ describe("usePlaybackPersistence repository session persistence", () => {
 
     // Hydration is still pending: the freshly mounted (not yet restored)
     // instance must not delete the live session a navigation remount relies on.
-    expect(sessionStorage.getItem(PLAYBACK_SESSION_KEY)).not.toBeNull();
+    expect(readStoredPlaybackSession()).not.toBeNull();
 
     await act(async () => {
       releaseHydration([
@@ -292,7 +294,7 @@ describe("usePlaybackPersistence repository session persistence", () => {
       expect(result.current.isPlaying).toBe(true);
     });
     expect(result.current.elapsedMs).toBe(5000);
-    expect(JSON.parse(sessionStorage.getItem(PLAYBACK_SESSION_KEY)!).isPlaying).toBe(true);
+    expect(readStoredPlaybackSession()?.isPlaying).toBe(true);
   });
 
   it("restores the active playlist query from repository session state", async () => {

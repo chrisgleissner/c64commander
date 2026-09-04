@@ -6,9 +6,25 @@ import { URL } from "node:url";
 import { PassThrough, Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { Client as FtpClient } from "basic-ftp";
-import { normalizePassword, safeCompare, sanitizeHost, isTrustedInsecureHost } from "./hostValidation.js";
-import { applySecurityHeaders, getClientIp } from "./securityHeaders.js";
-import { readBody, readJsonBody, writeJson, writeText } from "./httpIO.js";
+import {
+  normalizePassword,
+  isPasswordEnvelope,
+  safeCompare,
+  sanitizeHost,
+  isConfiguredDeviceHost,
+  getHostnameFromHostValue,
+} from "./hostValidation.js";
+import { createLanHostPolicy } from "./hostPolicy.js";
+import { applySecurityHeaders, getClientIp, isForwardedHttps } from "./securityHeaders.js";
+import {
+  FILE_BODY_LIMIT_BYTES,
+  FILE_BYTES_LIMIT,
+  PayloadTooLargeError,
+  readBody,
+  readJsonBody,
+  writeJson,
+  writeText,
+} from "./httpIO.js";
 import { createStaticAssetServer } from "./staticAssets.js";
 import { createAuthState } from "./authState.js";
 import { variant } from "./variant.generated.js";
@@ -35,7 +51,25 @@ const SESSION_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 const LOGIN_FAILURE_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_FAILURE_BLOCK_MS = 5 * 60 * 1000;
 const LOGIN_FAILURE_MAX_ATTEMPTS = 5;
+// The budget across every key, so a client that varies its forwarded address
+// cannot escape the per-key limiter. Generous enough that several people on the
+// LAN can each mistype their password. Applied only when WEB_TRUST_PROXY is on,
+// which is the only configuration where the key is client-controlled; see
+// `authState.ts` for why running it otherwise would only create a lockout.
+const LOGIN_FAILURE_GLOBAL_MAX_ATTEMPTS = 30;
 const MAX_SERVER_LOGS = 500;
+// HARD27-017: the browser sends no timeout of its own, so the proxy bounds the
+// upstream request itself. The bound has to clear the largest budget the client
+// itself allows, or the proxy aborts a request the app was still waiting on:
+// `DISK_CREATE_REQUEST_TIMEOUT_MS` in `src/lib/c64api.ts` is 30 s, because
+// formatting a blank image on slow USB media takes that long. Forty-five
+// seconds leaves headroom above it and is still well below the minutes an
+// unanswered TCP connection can survive.
+export const DEFAULT_REST_PROXY_TIMEOUT_MS = 45_000;
+const REST_PROXY_TIMEOUT_MS = (() => {
+  const configured = Number((process.env.WEB_REST_PROXY_TIMEOUT_MS ?? "").trim());
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_REST_PROXY_TIMEOUT_MS;
+})();
 const PORT = Number(process.env.PORT ?? "8064");
 const HOST = process.env.HOST ?? "0.0.0.0";
 const configDir = process.env.WEB_CONFIG_DIR ?? "/config";
@@ -57,11 +91,22 @@ const hopByHopHeaders = new Set([
 
 const serverLogs: ServerLogEntry[] = [];
 
+// HARD27-008: one switch governs every behaviour that depends on a reverse proxy
+// being in front — whether X-Forwarded-For keys the login limiter, whether
+// X-Forwarded-Proto can produce HSTS, and whether the session cookie may be
+// marked Secure.
+const trustProxy = (() => {
+  const value = (process.env.WEB_TRUST_PROXY ?? "").trim().toLowerCase();
+  return value === "true" || value === "1";
+})();
+
+// null defers the decision to the forwarded protocol of each request; an
+// explicit WEB_COOKIE_SECURE still wins in either direction.
 const isSecureCookieEnabled = (() => {
   const explicit = (process.env.WEB_COOKIE_SECURE ?? "").trim().toLowerCase();
   if (explicit === "true" || explicit === "1") return true;
   if (explicit === "false" || explicit === "0") return false;
-  return false;
+  return trustProxy ? null : false;
 })();
 
 const allowRemoteFtpHosts = (() => {
@@ -73,6 +118,30 @@ const allowRemoteRestHosts = (() => {
   const value = (process.env.WEB_ALLOW_REMOTE_REST_HOSTS ?? "").trim().toLowerCase();
   return value === "true" || value === "1";
 })();
+
+// HARD27-030: "on my LAN" is decided by resolving the requested name, so a
+// device saved as `u64`, `ultimate64` or `c64u.lan` is proxied like any private
+// IP literal. The two WEB_ALLOW_REMOTE_* switches stay as the explicit opt-in
+// for a target outside that range.
+const lanHostPolicy = createLanHostPolicy({});
+
+// A gate the server closed itself, told apart from the device's own 401/403 so
+// the app redirects to the login page instead of asking for the device password
+// (HARD27-029, HARD27-030).
+const GATE_HEADER = "X-C64Commander-Gate";
+
+const writeGateError = (
+  res: ServerResponse,
+  status: number,
+  gate: "session-expired" | "host-policy",
+  payload: Record<string, unknown>,
+) => {
+  res.setHeader(GATE_HEADER, gate);
+  if (gate === "session-expired") {
+    res.setHeader("WWW-Authenticate", 'c64commander-session realm="C64 Commander"');
+  }
+  writeJson(res, status, payload);
+};
 
 // A/V mirror stream bridge. Disabled unless WEB_STREAM_BRIDGE is truthy, so the default
 // deployment opens no extra UDP ports. When on, the device streams VIC video / audio to
@@ -150,6 +219,8 @@ const {
   loginFailureWindowMs: LOGIN_FAILURE_WINDOW_MS,
   loginFailureBlockMs: LOGIN_FAILURE_BLOCK_MS,
   loginFailureMaxAttempts: LOGIN_FAILURE_MAX_ATTEMPTS,
+  loginFailureGlobalMaxAttempts: LOGIN_FAILURE_GLOBAL_MAX_ATTEMPTS,
+  loginFailureGlobalBudgetEnabled: trustProxy,
 });
 
 const buildDefaultConfig = (): AppConfig => ({
@@ -189,6 +260,7 @@ const loadConfig = async (): Promise<AppConfig> => {
   }
   try {
     const raw = await fs.readFile(configPath, "utf8");
+    await restrictConfigPermissions();
     const parsed = JSON.parse(raw) as Partial<AppConfig>;
     const networkPassword = normalizePassword(parsed.networkPassword);
     const defaultDeviceHost = sanitizeHost(parsed.defaultDeviceHost) ?? defaultConfig.defaultDeviceHost;
@@ -231,11 +303,30 @@ const loadConfig = async (): Promise<AppConfig> => {
   }
 };
 
+// HARD27-015: the config file holds the network password in plaintext and lands
+// on a bind-mounted volume, so it must not be world-readable. The mode argument
+// only applies when the file is created, so an existing file is chmod-ed too.
+const CONFIG_FILE_MODE = 0o600;
+
+const restrictConfigPermissions = async (): Promise<void> => {
+  try {
+    await fs.chmod(configPath, CONFIG_FILE_MODE);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code;
+    if (code === "ENOENT") return;
+    log("warn", "Could not restrict web config file permissions", {
+      configPath,
+      ...errorDetails(error),
+    });
+  }
+};
+
 const saveConfig = async (config: AppConfig): Promise<void> => {
   try {
     await fs.mkdir(configDir, { recursive: true });
     const payload = JSON.stringify(config, null, 2);
-    await fs.writeFile(configPath, payload, "utf8");
+    await fs.writeFile(configPath, payload, { encoding: "utf8", mode: CONFIG_FILE_MODE });
+    await restrictConfigPermissions();
   } catch (error) {
     throw new Error(`Failed to persist web config at ${configPath}: ${(error as Error)?.message || String(error)}`, {
       cause: error as Error,
@@ -247,15 +338,16 @@ const requiresLogin = (config: AppConfig) => Boolean(config.networkPassword);
 
 const handleRestProxy = async (req: IncomingMessage, res: ServerResponse, config: AppConfig, requestUrl: URL) => {
   const targetHost = sanitizeHost(req.headers["x-c64u-host"]) ?? config.defaultDeviceHost;
-  if (!allowRemoteRestHosts && !isTrustedInsecureHost(targetHost)) {
-    writeJson(res, 403, {
+  const isConfiguredDevice = isConfiguredDeviceHost(targetHost, config.defaultDeviceHost);
+  if (!allowRemoteRestHosts && !isConfiguredDevice && !(await lanHostPolicy.isLanHost(targetHost))) {
+    writeGateError(res, 403, "host-policy", {
       error: "REST host override is disabled for non-local targets",
     });
     return;
   }
   const proxiedPath = requestUrl.pathname.replace(/^\/api\/rest/, "") || "/";
   const target = new URL(`http://${targetHost}${proxiedPath}${requestUrl.search}`);
-  const body = await readBody(req);
+  const body = await readBody(req, FILE_BODY_LIMIT_BYTES);
   const outgoingHeaders: Record<string, string> = {};
   for (const [key, value] of Object.entries(req.headers)) {
     if (!value) continue;
@@ -264,23 +356,38 @@ const handleRestProxy = async (req: IncomingMessage, res: ServerResponse, config
     if (lower === "x-c64u-host" || lower === "cookie") continue;
     outgoingHeaders[key] = Array.isArray(value) ? value.join(",") : value;
   }
-  if (config.networkPassword) {
+  // HARD27-016: the configured password authenticates the configured device and
+  // nothing else, so another LAN host must supply its own. The client's header
+  // arrives lower-cased and is dropped before the injected one is added, or
+  // fetch() combines the two into one comma-joined value.
+  if (isConfiguredDevice && config.networkPassword) {
+    delete outgoingHeaders["x-password"];
     outgoingHeaders["X-Password"] = config.networkPassword;
   }
 
   let upstream: Response;
   try {
+    // HARD27-017: without a signal the upstream socket stays open until the
+    // device answers or the OS tears it down. A wedged device plus browser
+    // retries then accumulates sockets and their buffered bodies here.
     upstream = await fetch(target, {
       method: req.method,
       headers: outgoingHeaders,
       body: body.length > 0 ? body : undefined,
+      signal: AbortSignal.timeout(REST_PROXY_TIMEOUT_MS),
     });
   } catch (error) {
-    log("error", "REST proxy upstream error", {
+    const timedOut = (error as Error | undefined)?.name === "TimeoutError";
+    log("error", timedOut ? "REST proxy upstream timed out" : "REST proxy upstream error", {
       targetHost,
       path: requestUrl.pathname,
+      timeoutMs: timedOut ? REST_PROXY_TIMEOUT_MS : undefined,
       ...errorDetails(error),
     });
+    if (timedOut) {
+      writeJson(res, 504, { error: "REST proxy upstream timed out" });
+      return;
+    }
     writeJson(res, 502, { error: "REST proxy upstream request failed" });
     return;
   }
@@ -294,15 +401,48 @@ const handleRestProxy = async (req: IncomingMessage, res: ServerResponse, config
   res.end(responseBody);
 };
 
-const collectStream = async (stream: PassThrough): Promise<Buffer> => {
+// HARD27-009: the whole remote file was collected in memory and then
+// base64-encoded into one response, so a large file on the Ultimate's SD card
+// held roughly three times its size in the heap. The transfer is aborted as soon
+// as it crosses the same 32 MiB the Android FTP plugin enforces.
+const collectStream = async (stream: PassThrough, limitBytes = FILE_BYTES_LIMIT): Promise<Buffer> => {
   const chunks: Buffer[] = [];
+  let total = 0;
   return new Promise((resolve, reject) => {
     stream.on("data", (chunk) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      total += buffer.length;
+      if (total > limitBytes) {
+        chunks.length = 0;
+        stream.destroy(new PayloadTooLargeError(limitBytes));
+        return;
+      }
+      chunks.push(buffer);
     });
     stream.on("error", reject);
     stream.on("end", () => resolve(Buffer.concat(chunks)));
   });
+};
+
+// HARD27-016 on the FTP paths: the configured password authenticates the
+// configured device and nothing else. The LAN host policy admits any
+// private-range host, so a request that names a different one must carry that
+// device's own password instead of being handed the server's.
+//
+// The comparison is by hostname alone, unlike the REST proxy's. An FTP request
+// carries its port in its own field and names the host without one, while
+// `defaultDeviceHost` may carry the device's REST port, so comparing ports here
+// would read the request's absent REST port as the HTTP default and treat the
+// configured device as a foreign host.
+const isConfiguredDeviceFtpHost = (host: string, configuredDeviceHost: string): boolean => {
+  const candidate = getHostnameFromHostValue(host);
+  const configured = getHostnameFromHostValue(configuredDeviceHost);
+  return candidate !== null && configured !== null && candidate === configured;
+};
+
+const ftpPasswordFor = (host: string, config: AppConfig, supplied: string | undefined): string => {
+  const configured = isConfiguredDeviceFtpHost(host, config.defaultDeviceHost) ? config.networkPassword : null;
+  return configured ?? supplied ?? "";
 };
 
 const handleFtpList = async (req: IncomingMessage, res: ServerResponse, config: AppConfig) => {
@@ -314,8 +454,12 @@ const handleFtpList = async (req: IncomingMessage, res: ServerResponse, config: 
     path?: string;
   }>(req);
   const requestedHost = sanitizeHost(payload.host) ?? config.defaultDeviceHost;
-  if (!allowRemoteFtpHosts && requestedHost !== config.defaultDeviceHost) {
-    writeJson(res, 403, { error: "FTP host override is disabled" });
+  if (
+    !allowRemoteFtpHosts &&
+    !isConfiguredDeviceHost(requestedHost, config.defaultDeviceHost) &&
+    !(await lanHostPolicy.isLanHost(requestedHost))
+  ) {
+    writeGateError(res, 403, "host-policy", { error: "FTP host override is disabled for non-local targets" });
     return;
   }
   const host = requestedHost;
@@ -326,7 +470,7 @@ const handleFtpList = async (req: IncomingMessage, res: ServerResponse, config: 
       host,
       port: Number(payload.port ?? 21),
       user: payload.username ?? "anonymous",
-      password: config.networkPassword ?? payload.password ?? "",
+      password: ftpPasswordFor(host, config, payload.password),
       secure: false,
     });
     const entries = await ftp.list(payload.path ?? "/");
@@ -368,8 +512,12 @@ const handleFtpRead = async (req: IncomingMessage, res: ServerResponse, config: 
     return;
   }
   const requestedHost = sanitizeHost(payload.host) ?? config.defaultDeviceHost;
-  if (!allowRemoteFtpHosts && requestedHost !== config.defaultDeviceHost) {
-    writeJson(res, 403, { error: "FTP host override is disabled" });
+  if (
+    !allowRemoteFtpHosts &&
+    !isConfiguredDeviceHost(requestedHost, config.defaultDeviceHost) &&
+    !(await lanHostPolicy.isLanHost(requestedHost))
+  ) {
+    writeGateError(res, 403, "host-policy", { error: "FTP host override is disabled for non-local targets" });
     return;
   }
   const host = requestedHost;
@@ -381,24 +529,43 @@ const handleFtpRead = async (req: IncomingMessage, res: ServerResponse, config: 
       host,
       port: Number(payload.port ?? 21),
       user: payload.username ?? "anonymous",
-      password: config.networkPassword ?? payload.password ?? "",
+      password: ftpPasswordFor(host, config, payload.password),
       secure: false,
     });
-    const collectPromise = collectStream(stream);
-    await ftp.downloadTo(stream, payload.path);
-    stream.end();
+    // The collector aborts the stream once the file crosses the size limit, so
+    // downloadTo rejects too. Settling the collector first makes that abort the
+    // reported cause, and keeps its rejection from going unhandled.
+    let collectError: unknown = null;
+    const collectPromise = collectStream(stream).catch((error: unknown) => {
+      collectError = error;
+      return Buffer.alloc(0);
+    });
+    try {
+      await ftp.downloadTo(stream, payload.path);
+      stream.end();
+    } catch (downloadError) {
+      await collectPromise;
+      throw collectError ?? downloadError;
+    }
     const data = await collectPromise;
+    if (collectError) throw collectError;
     writeJson(res, 200, {
       data: data.toString("base64"),
       sizeBytes: data.byteLength,
     });
   } catch (error) {
-    log("error", "FTP read failed", {
+    const tooLarge = error instanceof PayloadTooLargeError;
+    log(tooLarge ? "warn" : "error", tooLarge ? "FTP read exceeded the size limit" : "FTP read failed", {
       host,
       path: payload.path,
+      limitBytes: tooLarge ? FILE_BYTES_LIMIT : undefined,
       ...errorDetails(error),
     });
-    writeJson(res, 502, { error: "FTP read failed" });
+    if (tooLarge) {
+      writeJson(res, 413, { error: `File exceeds the ${FILE_BYTES_LIMIT}-byte read limit` });
+    } else {
+      writeJson(res, 502, { error: "FTP read failed" });
+    }
   } finally {
     try {
       ftp.close();
@@ -416,8 +583,12 @@ const handleFtpPing = async (req: IncomingMessage, res: ServerResponse, config: 
     password?: string;
   }>(req);
   const requestedHost = sanitizeHost(payload.host) ?? config.defaultDeviceHost;
-  if (!allowRemoteFtpHosts && requestedHost !== config.defaultDeviceHost) {
-    writeJson(res, 403, { error: "FTP host override is disabled" });
+  if (
+    !allowRemoteFtpHosts &&
+    !isConfiguredDeviceHost(requestedHost, config.defaultDeviceHost) &&
+    !(await lanHostPolicy.isLanHost(requestedHost))
+  ) {
+    writeGateError(res, 403, "host-policy", { error: "FTP host override is disabled for non-local targets" });
     return;
   }
   const host = requestedHost;
@@ -428,7 +599,7 @@ const handleFtpPing = async (req: IncomingMessage, res: ServerResponse, config: 
       host,
       port: Number(payload.port ?? 21),
       user: payload.username ?? "anonymous",
-      password: config.networkPassword ?? payload.password ?? "",
+      password: ftpPasswordFor(host, config, payload.password),
       secure: false,
     });
     await ftp.send("NOOP");
@@ -456,7 +627,7 @@ const handleFtpWrite = async (req: IncomingMessage, res: ServerResponse, config:
     password?: string;
     path?: string;
     data?: string;
-  }>(req);
+  }>(req, FILE_BODY_LIMIT_BYTES);
   if (!payload.path) {
     writeJson(res, 400, { error: "Missing FTP path" });
     return;
@@ -466,8 +637,12 @@ const handleFtpWrite = async (req: IncomingMessage, res: ServerResponse, config:
     return;
   }
   const requestedHost = sanitizeHost(payload.host) ?? config.defaultDeviceHost;
-  if (!allowRemoteFtpHosts && requestedHost !== config.defaultDeviceHost) {
-    writeJson(res, 403, { error: "FTP host override is disabled" });
+  if (
+    !allowRemoteFtpHosts &&
+    !isConfiguredDeviceHost(requestedHost, config.defaultDeviceHost) &&
+    !(await lanHostPolicy.isLanHost(requestedHost))
+  ) {
+    writeGateError(res, 403, "host-policy", { error: "FTP host override is disabled for non-local targets" });
     return;
   }
   const host = requestedHost;
@@ -478,7 +653,7 @@ const handleFtpWrite = async (req: IncomingMessage, res: ServerResponse, config:
       host,
       port: Number(payload.port ?? 21),
       user: payload.username ?? "anonymous",
-      password: config.networkPassword ?? payload.password ?? "",
+      password: ftpPasswordFor(host, config, payload.password),
       secure: false,
     });
     const data = Buffer.from(payload.data, "base64");
@@ -509,7 +684,7 @@ export const startWebServer = async () => {
 
   const server = http.createServer(async (req, res) => {
     try {
-      applySecurityHeaders(req, res);
+      applySecurityHeaders(req, res, trustProxy);
       const method = (req.method ?? "GET").toUpperCase();
       const requestUrl = new URL(req.url ?? "/", "http://localhost");
       const pathname = requestUrl.pathname;
@@ -532,7 +707,7 @@ export const startWebServer = async () => {
           writeJson(res, 405, { error: "Method not allowed" });
           return;
         }
-        const clientIp = getClientIp(req);
+        const clientIp = getClientIp(req, trustProxy);
         if (isLoginBlocked(clientIp)) {
           writeJson(res, 429, {
             error: "Too many failed login attempts. Try again later.",
@@ -548,13 +723,13 @@ export const startWebServer = async () => {
           return;
         }
         clearFailedLogins(clientIp);
-        issueSessionCookie(res);
+        issueSessionCookie(res, isForwardedHttps(req, trustProxy));
         writeJson(res, 200, { ok: true });
         return;
       }
 
       if (pathname === "/auth/logout") {
-        clearSessionCookie(req, res);
+        clearSessionCookie(req, res, isForwardedHttps(req, trustProxy));
         writeJson(res, 200, { ok: true });
         return;
       }
@@ -564,11 +739,18 @@ export const startWebServer = async () => {
       const isPublicLoginPage = pathname === "/login";
 
       if (needsAuth && !authenticated) {
-        if (isPublicLoginPage) {
+        // HARD27-029: the documented entry point is the root, and a session
+        // expires after a day or when the container restarts. A browser
+        // navigation is answered with the login page wherever it lands, so the
+        // user sees a password field instead of a JSON error page. Everything
+        // else - the app's own fetches - gets a 401 the client can tell apart
+        // from the device asking for its network password.
+        const acceptsHtml = (req.headers.accept ?? "").toLowerCase().includes("text/html");
+        if (isPublicLoginPage || (method === "GET" && acceptsHtml)) {
           writeText(res, 200, loginHtml(), "text/html; charset=utf-8");
           return;
         }
-        writeJson(res, 401, { error: "Authentication required" });
+        writeGateError(res, 401, "session-expired", { error: "Authentication required" });
         return;
       }
 
@@ -579,11 +761,17 @@ export const startWebServer = async () => {
         }
         if (method === "PUT") {
           const payload = await readJsonBody<{ value?: string }>(req);
+          if (isPasswordEnvelope(payload.value)) {
+            writeJson(res, 400, {
+              error: "Expected the device password as plain text, not the app's per-device password envelope",
+            });
+            return;
+          }
           const password = normalizePassword(payload.value);
           config = { ...config, networkPassword: password };
           await saveConfig(config);
           if (password && !authenticated) {
-            issueSessionCookie(res);
+            issueSessionCookie(res, isForwardedHttps(req, trustProxy));
           }
           writeJson(res, 200, { ok: true, hasPassword: Boolean(password) });
           return;
@@ -591,7 +779,7 @@ export const startWebServer = async () => {
         if (method === "DELETE") {
           config = { ...config, networkPassword: null };
           await saveConfig(config);
-          clearSessionCookie(req, res);
+          clearSessionCookie(req, res, isForwardedHttps(req, trustProxy));
           writeJson(res, 200, { ok: true });
           return;
         }
@@ -657,6 +845,21 @@ export const startWebServer = async () => {
 
       await serveStatic(res, pathname);
     } catch (error) {
+      if (error instanceof PayloadTooLargeError) {
+        log("warn", "Rejected an oversized request body", {
+          path: req.url,
+          limitBytes: error.limitBytes,
+        });
+        if (!res.headersSent) {
+          // The request body is still arriving. Close the connection once the
+          // 413 has been flushed so the client stops sending, rather than
+          // letting the rest of the body drain through the socket.
+          res.setHeader("Connection", "close");
+          res.once("finish", () => req.socket?.destroySoon());
+          writeJson(res, 413, { error: "Request body too large" });
+        }
+        return;
+      }
       log("error", "Unhandled web server error", errorDetails(error));
       writeJson(res, 500, { error: "Internal server error" });
     }

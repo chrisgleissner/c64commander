@@ -17,7 +17,7 @@
  * Home "check" preview and the Remote Input preview) render the one stream.
  */
 
-import { C64API, getC64API } from "@/lib/c64api";
+import { getC64API } from "@/lib/c64api";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
 import { addLog } from "@/lib/logging";
 import { Capacitor } from "@capacitor/core";
@@ -39,7 +39,10 @@ import {
 import { getDeveloperModeEnabled } from "@/lib/config/developerModeStore";
 import { resolveVideoStartAction, shouldReturnAudioToWifi, shouldUseWifiForAudio } from "./audioRoute";
 import { createStreamReceiver, type StreamReceiver, type StreamReceiverOptions } from "./streamReceiver";
+import { stopStreamAtForeignHost } from "./foreignSenderStop";
+import { recordDeviceStreamStarted, recordDeviceStreamStopped } from "./leftoverDeviceStreams";
 import { NativeAudioSink } from "./audioNativeSink";
+import type { SenderMismatch } from "./senderMismatch";
 import { AudioMirrorController, type AudioMirrorSignals, type AudioMirrorState } from "./audioMirrorController";
 import { VideoMirrorController, type VideoMirrorState } from "./videoMirrorController";
 import { readLocalAudioHealth } from "@/lib/streams/localAudioHealthSignal";
@@ -51,7 +54,15 @@ import type { VideoStandard } from "./vicDecode";
 import type { AudioMirrorPlayer } from "./audioPlayer";
 
 export interface AvMirrorSnapshot {
-  audio: { state: AudioMirrorState; droppedPackets: number; error: string | null };
+  audio: {
+    state: AudioMirrorState;
+    droppedPackets: number;
+    error: string | null;
+    /** A second Ultimate is streaming into our group and would not stop when asked. */
+    foreignSenderNotice: string | null;
+    /** The stream is arriving from an address the native sender filter refuses. */
+    senderMismatch: SenderMismatch | null;
+  };
   video: {
     state: VideoMirrorState;
     fps: number;
@@ -59,6 +70,8 @@ export interface AvMirrorSnapshot {
     framesLost: number;
     standard: VideoStandard;
     error: string | null;
+    /** The stream is arriving from an address the native sender filter refuses. */
+    senderMismatch: SenderMismatch | null;
   };
 }
 
@@ -100,6 +113,13 @@ export interface AvStatsSnapshot {
      * stream its packets, so the numbers move in opposite directions.
      */
     audioLostPackets: number;
+    /**
+     * Audio packets the native sender filter refused because they came from another address.
+     *
+     * Reported beside the loss counters because it is the number that separates a stream that is
+     * not arriving from one that is arriving and being thrown away.
+     */
+    audioRejectedPackets: number;
     standard: VideoStandard;
   };
 }
@@ -107,8 +127,16 @@ export interface AvStatsSnapshot {
 export type AvStatsListener = (snapshot: AvStatsSnapshot) => void;
 
 const INITIAL: AvMirrorSnapshot = {
-  audio: { state: "off", droppedPackets: 0, error: null },
-  video: { state: "off", fps: 0, droppedPackets: 0, framesLost: 0, standard: "PAL", error: null },
+  audio: { state: "off", droppedPackets: 0, error: null, foreignSenderNotice: null, senderMismatch: null },
+  video: {
+    state: "off",
+    fps: 0,
+    droppedPackets: 0,
+    framesLost: 0,
+    standard: "PAL",
+    error: null,
+    senderMismatch: null,
+  },
 };
 
 const isLiveState = (state: AudioMirrorState | VideoMirrorState) => state === "connecting" || state === "live";
@@ -231,9 +259,24 @@ export class AvMirrorSession {
   private opChain: Promise<unknown> = Promise.resolve();
 
   constructor(deps: AvMirrorSessionDeps = {}) {
+    // Record which machine is streaming to this phone across the two default transports, so a
+    // process death with Live View on can be cleaned up at the next launch — see
+    // [stopLeftoverDeviceStreams]. Injected transports (tests, the web bridge) keep their own
+    // behaviour and record nothing.
     const startStream =
-      deps.startStream ?? ((name, destination, options) => getC64API().startStream(name, destination, options));
-    const stopStream = deps.stopStream ?? ((name) => getC64API().stopStream(name));
+      deps.startStream ??
+      (async (name, destination, options) => {
+        const result = await getC64API().startStream(name, destination, options);
+        recordDeviceStreamStarted(name, getC64API().getDeviceHost());
+        return result;
+      });
+    const stopStream =
+      deps.stopStream ??
+      (async (name) => {
+        const result = await getC64API().stopStream(name);
+        recordDeviceStreamStopped(name);
+        return result;
+      });
     this.now = deps.now ?? (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
     // The stored frame-rate mode is applied when a session starts (see beginSessionIfIdle), NOT at
     // construction — the app-wide singleton is built at import time, before localStorage-backed
@@ -243,7 +286,16 @@ export class AvMirrorSession {
     this.audio = new AudioMirrorController({
       startStream: (_name, destination, options) => startStream("audio", destination, options),
       stopStream: () => stopStream("audio"),
-      onChange: (s) => this.update({ audio: { state: s.state, droppedPackets: s.droppedPackets, error: s.error } }),
+      onChange: (s) =>
+        this.update({
+          audio: {
+            state: s.state,
+            droppedPackets: s.droppedPackets,
+            error: s.error,
+            foreignSenderNotice: s.foreignSenderNotice,
+            senderMismatch: s.senderMismatch,
+          },
+        }),
       createReceiver:
         deps.createAudioReceiver ??
         ((opts) =>
@@ -265,7 +317,7 @@ export class AvMirrorSession {
       // multicast and every Ultimate defaults to the same ones, so a machine left streaming by an
       // earlier session sends straight into ours.
       expectedSenderHost: () => getC64API().getDeviceHost(),
-      stopStreamAt: (host, name) => new C64API(undefined, undefined, host).stopStream(name),
+      stopStreamAt: (host, name) => stopStreamAtForeignHost(host, name),
     });
 
     this.video = new VideoMirrorController({
@@ -280,8 +332,10 @@ export class AvMirrorSession {
             framesLost: s.framesLost,
             standard: s.standard,
             error: s.error,
+            senderMismatch: s.senderMismatch,
           },
         }),
+      expectedSenderHost: () => getC64API().getDeviceHost(),
       createReceiver:
         deps.createVideoReceiver ??
         ((opts) =>
@@ -394,7 +448,7 @@ export class AvMirrorSession {
     const signals: AudioMirrorSignals =
       typeof this.audio.getSignals === "function"
         ? this.audio.getSignals()
-        : { audioBufferMs: 0, audioUnderruns: 0, audioConcealed: 0, audioLostPackets: 0 };
+        : { audioBufferMs: 0, audioUnderruns: 0, audioConcealed: 0, audioLostPackets: 0, audioRejectedPackets: 0 };
     const video = this.video.getSnapshot();
 
     // On-device playback competes for the same main thread the video path paints on, and the governor
@@ -521,7 +575,7 @@ export class AvMirrorSession {
     const signals: AudioMirrorSignals =
       typeof this.audio.getSignals === "function"
         ? this.audio.getSignals()
-        : { audioBufferMs: 0, audioUnderruns: 0, audioConcealed: 0, audioLostPackets: 0 };
+        : { audioBufferMs: 0, audioUnderruns: 0, audioConcealed: 0, audioLostPackets: 0, audioRejectedPackets: 0 };
     return {
       governor: this.governor.state,
       transitions: this.governor.getTransitions(),
@@ -542,6 +596,7 @@ export class AvMirrorSession {
         framesLost: video.framesLost,
         droppedPackets: video.droppedPackets,
         audioLostPackets: signals.audioLostPackets,
+        audioRejectedPackets: signals.audioRejectedPackets,
         standard: video.standard,
       },
     };
@@ -609,17 +664,27 @@ export class AvMirrorSession {
       // pieces of music at once with no way for the listener to tell which
       // control stops which. Claiming first means the tune is already silenced
       // by the time the first packet arrives.
-      claimPhoneAudio("av-mirror", this, () => {
-        void this.stopAudio().catch((error) => {
-          // Not cosmetic: if the stop fails, the C64's audio keeps playing and
-          // the local tune starts underneath it — the two-sounds-at-once
-          // failure this registry exists to prevent.
-          addLog("warn", "A/V mirror: stopping audio during eviction failed", {
-            service: "streams",
-            error: error instanceof Error ? error.message : String(error),
+      claimPhoneAudio(
+        "av-mirror",
+        this,
+        () => {
+          void this.stopAudio().catch((error) => {
+            // Not cosmetic: if the stop fails, the C64's audio keeps playing and
+            // the local tune starts underneath it — the two-sounds-at-once
+            // failure this registry exists to prevent.
+            addLog("warn", "A/V mirror: stopping audio during eviction failed", {
+              service: "streams",
+              error: error instanceof Error ? error.message : String(error),
+            });
           });
-        });
-      });
+        },
+        {
+          // A focus loss (HARD27-006): the C64 keeps streaming, so there is no position to hold —
+          // stop receiving and start again if the loss turns out to have been transient.
+          pause: () => void this.stopAudio().catch(() => undefined),
+          resume: () => void this.startAudio().catch(() => undefined),
+        },
+      );
       // Prefer Wi‑Fi for audio-only when the policy allows it (firmware wifi=true);
       // the controller falls back to Ethernet if Wi‑Fi isn't available.
       const wifi = shouldUseWifiForAudio({ policy: this.effectiveAudioRoute(), videoActive: this.videoLive });
@@ -690,6 +755,23 @@ export class AvMirrorSession {
 
   toggleVideo(): Promise<void> {
     return this.videoLive ? this.stopVideo() : this.startVideo();
+  }
+
+  /**
+   * Accept the machine that is actually streaming, after a sender-filter mismatch was diagnosed.
+   *
+   * Applied to both streams, not only the one that reported it: the two mirrors are separate
+   * multicast groups from the same machine, so an address that is wrong for one is wrong for the
+   * other, and a user who has been told which address to use should not have to be told twice.
+   */
+  adoptSender(source: string): Promise<void> {
+    return this.serialize(async () => {
+      addLog("info", "Live View: accepting the stream from the address it is actually arriving from", {
+        service: "streams",
+        source,
+      });
+      await Promise.allSettled([this.audio.adoptSender(source), this.video.adoptSender(source)]);
+    });
   }
 
   async stopAll(): Promise<void> {

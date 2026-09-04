@@ -36,8 +36,7 @@ const stripComments = (value: string) =>
     .replace(/^\s*\/\/.*$/gm, "")
     .trim();
 
-const findCatchBlocks = (file: string): CatchBlock[] => {
-  const source = readFileSync(path.resolve(process.cwd(), file), "utf8");
+const extractCatchBlocks = (file: string, source: string): CatchBlock[] => {
   const blocks: CatchBlock[] = [];
   const catchPattern = /(?<!\.)\bcatch\b[^{]*\{/g;
   let match: RegExpExecArray | null;
@@ -60,22 +59,56 @@ const findCatchBlocks = (file: string): CatchBlock[] => {
   return blocks;
 };
 
+const findCatchBlocks = (file: string): CatchBlock[] =>
+  extractCatchBlocks(file, readFileSync(path.resolve(process.cwd(), file), "utf8"));
+
 const allCatchBlocks = () => SCAN_ROOTS.flatMap(walkFiles).flatMap(findCatchBlocks);
 
+const isProductionFile = (file: string) => file.startsWith("src/") || file.startsWith("android/app/src/main/java/");
+
+const emptyCatchBlocks = (blocks: CatchBlock[]) =>
+  blocks.filter((block) => stripComments(block.text.replace(/\bcatch\b[^{]*\{/, "").replace(/\}\s*$/, "")) === "");
+
+const silentFallbackBlocks = (blocks: CatchBlock[]) =>
+  blocks.filter((block) => SILENT_FALLBACK_RETURN.test(block.text) && !DIAGNOSTIC_OR_CONTEXT.test(block.text));
+
 describe("catch block guardrails", () => {
+  // Both guards below assert that a filtered list is empty, so a scan root that has
+  // moved away or an extractor that stopped matching would make them pass having
+  // read nothing. These two check that the scan and the extractor still work.
+  it("scans every root it claims to cover", () => {
+    for (const root of SCAN_ROOTS) {
+      const absoluteRoot = path.resolve(process.cwd(), root);
+      expect(existsSync(absoluteRoot), `${root} is not a directory, so this guard scans nothing`).toBe(true);
+      expect(walkFiles(root).length, `${root} yielded no source file`).toBeGreaterThan(10);
+    }
+    // 971 blocks across the four roots when this bound was written.
+    expect(allCatchBlocks().length, "the catch block extractor found almost nothing").toBeGreaterThan(400);
+  });
+
+  it("flags a planted empty catch and a planted silent fallback", () => {
+    const planted = extractCatchBlocks(
+      "src/planted.ts",
+      [
+        "try { a(); } catch (error) {}",
+        "try { b(); } catch (error) { return null; }",
+        "try { c(); } catch (error) { console.warn(error); return null; }",
+      ].join("\n"),
+    );
+
+    expect(planted).toHaveLength(3);
+    expect(emptyCatchBlocks(planted).map((block) => block.line)).toEqual([1]);
+    expect(silentFallbackBlocks(planted).map((block) => block.line)).toEqual([2]);
+  });
+
   it("does not introduce empty production catch blocks", () => {
-    const emptyCatches = allCatchBlocks()
-      .filter((block) => stripComments(block.text.replace(/\bcatch\b[^{]*\{/, "").replace(/\}\s*$/, "")) === "")
-      .filter((block) => block.file.startsWith("src/") || block.file.startsWith("android/app/src/main/java/"));
+    const emptyCatches = emptyCatchBlocks(allCatchBlocks()).filter((block) => isProductionFile(block.file));
 
     expect(emptyCatches).toEqual([]);
   });
 
   it("requires silent fallback returns to include diagnostic context", () => {
-    const silentFallbacks = allCatchBlocks().filter((block) => {
-      if (!block.file.startsWith("src/") && !block.file.startsWith("android/app/src/main/java/")) return false;
-      return SILENT_FALLBACK_RETURN.test(block.text) && !DIAGNOSTIC_OR_CONTEXT.test(block.text);
-    });
+    const silentFallbacks = silentFallbackBlocks(allCatchBlocks()).filter((block) => isProductionFile(block.file));
 
     expect(silentFallbacks).toEqual([]);
   });

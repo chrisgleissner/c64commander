@@ -6,6 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import type { GuardedNavigate } from "@/lib/navigation/navigationGuards";
+
 /**
  * Authoritative ordered list of primary tab routes.
  * Swipe navigation and TabBar both derive their page order from this constant.
@@ -43,3 +45,14 @@ export const resolveSwipeTarget = (fromIndex: number, direction: 1 | -1): number
   const count = TAB_ROUTES.length;
   return (fromIndex + direction + count) % count;
 };
+
+/**
+ * The keypad's 1-6 tab jump. A factory so the test drives this wiring and not a copy of it, and so
+ * the jump reaches the guards through the caller's `GuardedNavigate` (HARD27-022).
+ */
+export const createTabJumpShortcut =
+  (navigate: GuardedNavigate) =>
+  (index: number): void => {
+    const route = TAB_ROUTES[index];
+    if (route) navigate(route.path);
+  };

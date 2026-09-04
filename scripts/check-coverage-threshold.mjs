@@ -5,7 +5,10 @@ import path from 'node:path';
 const defaultCoverageFile = 'coverage/lcov-merged.info';
 const fallbackCoverageFile = 'coverage/lcov.info';
 const coverageFile = process.env.COVERAGE_FILE ?? defaultCoverageFile;
-const minLineCoverage = Number(process.env.COVERAGE_MIN ?? '91');
+// Defaults match the CI gate, so an invocation that forgets the environment
+// enforces the same bar rather than a weaker one. Branches is lower than lines
+// on purpose; see AGENTS.md, "Coverage gates".
+const minLineCoverage = Number(process.env.COVERAGE_MIN ?? '94');
 const minBranchCoverage = Number(process.env.COVERAGE_MIN_BRANCH ?? '91');
 
 const filePath = path.resolve(process.cwd(), coverageFile);

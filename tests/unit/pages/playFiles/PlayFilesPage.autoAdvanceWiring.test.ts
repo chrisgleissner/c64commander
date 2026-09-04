@@ -80,3 +80,23 @@ describe("PlayFilesPage auto-advance wiring", () => {
     expect(unmountCleanup).toContain("return;");
   });
 });
+
+/*
+ * HARD27-032. The session survives process death now, so the Home "Last" tile can reach a Play
+ * page that has already hydrated its playlist but has not yet applied the stored paused position.
+ * useTransportCommands drains the latched "play" as soon as its `ready` argument turns true, and
+ * runTransportCommand only resumes when `isPaused` is set — so a gate on the playlist alone
+ * restarts the tune from the beginning. Verified on the Pixel 4 against c64u: with the gate on the
+ * playlist alone the tile restarted Nightshift.sid at 0:00 after a force-stop; with both the
+ * playlist and the settled restore it resumed at the stored 0:34.
+ */
+describe("PlayFilesPage transport latch readiness", () => {
+  it("holds latched transport commands until the stored session has been applied", () => {
+    expect(pageSource).toContain("playlist.length > 0 && sessionRestoreSettled,");
+  });
+
+  it("takes the settled flag from persistence rather than deriving a second one", () => {
+    expect(sliceHookCall("usePlaybackPersistence")).toMatch(/\n\s*setSessionRestoreSettled,/);
+    expect(pageSource).toContain("const [sessionRestoreSettled, setSessionRestoreSettled] = useState(false);");
+  });
+});

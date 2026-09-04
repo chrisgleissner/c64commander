@@ -599,6 +599,26 @@ export const readCachedArchiveMarker = async (relativePath: string): Promise<Hvs
   }
 };
 
+/**
+ * Removes the resume sidecar for an archive. Silent when there is none: the sidecar only exists
+ * while a resumable download is interrupted. See HARD27-028.
+ */
+export const deleteCachedArchivePart = async (relativePath: string) => {
+  try {
+    await Filesystem.deleteFile({
+      directory: Directory.Data,
+      path: `${HVSC_CACHE_DIR}/${relativePath}.part`,
+    });
+  } catch (error) {
+    if (!isMissingPathError(error)) {
+      logFilesystemWarning("Failed to delete cached archive part file", {
+        relativePath,
+        error,
+      });
+    }
+  }
+};
+
 export const deleteCachedArchive = async (relativePath: string) => {
   try {
     await Filesystem.deleteFile({

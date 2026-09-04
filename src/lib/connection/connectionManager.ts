@@ -35,6 +35,7 @@ import {
   getActiveMockBaseUrl,
   getActiveMockFtpPort,
   getActiveMockToken,
+  isSimulatedDeviceAvailable,
   startMockServer,
   stopMockServer,
 } from "@/lib/mock/mockServer";
@@ -47,10 +48,11 @@ import { featureFlagManager } from "@/lib/config/featureFlags";
 import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { applyFuzzModeDefaults, getFuzzMockBaseUrl, isFuzzModeEnabled } from "@/lib/fuzz/fuzzMode";
 import { addLog } from "@/lib/logging";
+import { reportFallback } from "@/lib/diagnostics/fallbackReporter";
 import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeStatus } from "@/lib/smoke/smokeMode";
 import { resetInteractionState } from "@/lib/deviceInteraction/deviceInteractionManager";
 import { getHealthCheckStateSnapshot, setHealthCheckStateSnapshot } from "@/lib/diagnostics/healthCheckState";
-import { prepareForDeviceRetarget } from "@/lib/connection/deviceRetarget";
+import { prepareForDeviceRetarget, restartAvMirrorAfterDeviceRetarget } from "@/lib/connection/deviceRetarget";
 import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
 import { isAuthRequiredError, normalizeTransportError } from "@/lib/c64api/transportErrors";
 import { notifyAuthRequired } from "@/lib/auth/authChallenge";
@@ -218,63 +220,90 @@ const loadSwitchConnectionConfig = (options: { deviceHost: string; password?: st
   };
 };
 
-const probeInfoWithConnectionConfig = async (
-  config: ReturnType<typeof loadSwitchConnectionConfig>,
+const PROBE_REQUEST_OPTIONS = {
+  __c64uIntent: "system",
+  __c64uAllowDuringDiscovery: true,
+  __c64uAllowDuringError: true,
+  __c64uBypassCache: true,
+  // Self-healing: recovery/discovery probes must NEVER be suppressed by an
+  // open circuit breaker. Backing off from an unhealthy device is exactly
+  // what would stop us noticing it has recovered, leaving the app wedged
+  // offline. These probes carry their own timeout + rediscovery backoff, so
+  // the gateway bypasses the circuit for them, keeping a recovery path
+  // permanently open (the low-level circuit bypass stays inside the gateway).
+  __c64uRecoveryProbe: true,
+} as const;
+
+type ProbeConnectionConfig = ReturnType<typeof loadSwitchConnectionConfig>;
+
+/**
+ * How a probe ended, so each entry point can attach its own side effects
+ * without re-deriving the classification from the error message. Every probe
+ * shares one classification (HARD27-024); only the side effects differ.
+ */
+type ProbeOutcome = {
+  result: ProbeInfoResult;
+  kind: "ok" | "payload" | "auth" | "http" | "transport";
+};
+
+const classifyProbeFailure = (error: unknown, config: ProbeConnectionConfig): ProbeOutcome => {
+  // getHttpStatusFromError is the app-wide chokepoint for 401/403 and reads the
+  // annotated status, not the message text. A message regex would miss the
+  // throw sites that prefix the status ("getInfo failed: HTTP 401").
+  const authRequired = isAuthRequiredError(error);
+  const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
+  if (authRequired || /^HTTP\s+\d+/.test(message)) {
+    return {
+      kind: authRequired ? "auth" : "http",
+      result: { ok: false, deviceInfo: null, error: message, authRequired },
+    };
+  }
+  // Contextualize raw transport failures (e.g. DNS "Unable to resolve host")
+  // so the connection snapshot, UnifiedHealthBadge, and downstream diagnostics
+  // see a user-friendly message instead of the raw fetch error text.
+  const failure = normalizeTransportError(error, { host: config.deviceHost });
+  addLog(failure.class === "dns" ? "info" : "warn", "Probe request failed", {
+    baseUrl: config.baseUrl,
+    deviceHost: config.deviceHost,
+    class: failure.class,
+    userMessage: failure.userMessage,
+    error: failure.rawMessage,
+  });
+  return {
+    kind: "transport",
+    result: { ok: false, deviceInfo: null, error: failure.userMessage, authRequired: false },
+  };
+};
+
+const runProbeInfo = async (
+  config: ProbeConnectionConfig,
   options: { signal?: AbortSignal; timeoutMs?: number } = {},
-): Promise<ProbeInfoResult> => {
-  const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
-  const outerSignal = options.signal;
+): Promise<ProbeOutcome> => {
   try {
     const api = new C64API(config.baseUrl, config.password, config.deviceHost);
     const response = await api.getInfo({
-      timeoutMs,
-      signal: outerSignal,
-      __c64uIntent: "system",
-      __c64uAllowDuringDiscovery: true,
-      __c64uAllowDuringError: true,
-      __c64uBypassCache: true,
-      // Self-healing: recovery/discovery probes must NEVER be suppressed by an
-      // open circuit breaker. Backing off from an unhealthy device is exactly
-      // what would stop us noticing it has recovered, leaving the app wedged
-      // offline. These probes carry their own timeout + rediscovery backoff, so
-      // the gateway bypasses the circuit for them, keeping a recovery path
-      // permanently open (the low-level circuit bypass stays inside the gateway).
-      __c64uRecoveryProbe: true,
+      timeoutMs: options.timeoutMs ?? loadDiscoveryProbeTimeoutMs(),
+      signal: options.signal,
+      ...PROBE_REQUEST_OPTIONS,
     });
     const healthy = isProbePayloadHealthy(response);
     return {
-      ok: healthy,
-      deviceInfo: response,
-      error: healthy ? null : "Probe payload missing required identity",
+      kind: healthy ? "ok" : "payload",
+      result: {
+        ok: healthy,
+        deviceInfo: response,
+        error: healthy ? null : "Probe payload missing required identity",
+      },
     };
   } catch (error) {
-    const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
-    if (/^HTTP\s+\d+/.test(message)) {
-      return {
-        ok: false,
-        deviceInfo: null,
-        error: message,
-        authRequired: isAuthRequiredError(error),
-      };
-    }
-    // Contextualize raw transport failures (e.g. DNS "Unable to resolve host")
-    // so the connection snapshot, UnifiedHealthBadge, and downstream diagnostics
-    // see a user-friendly message instead of the raw fetch error text.
-    const failure = normalizeTransportError(error, { host: config.deviceHost });
-    addLog(failure.class === "dns" ? "info" : "warn", "Probe request failed", {
-      baseUrl: config.baseUrl,
-      deviceHost: config.deviceHost,
-      class: failure.class,
-      userMessage: failure.userMessage,
-      error: failure.rawMessage,
-    });
-    return {
-      ok: false,
-      deviceInfo: null,
-      error: failure.userMessage,
-    };
+    return classifyProbeFailure(error, config);
   }
 };
+
+const probeInfoWithConnectionConfig = async (
+  config: ProbeConnectionConfig,
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<ProbeInfoResult> => (await runProbeInfo(config, options)).result;
 
 const isProbePayloadHealthy = (payload: unknown) => {
   if (!payload || typeof payload !== "object") return false;
@@ -296,57 +325,13 @@ const isAuthRequiredProbeFailure = (): boolean => snapshot.lastProbeError === AU
 
 export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<boolean> {
   const config = await loadPersistedConnectionConfig();
-  const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
-  const outerSignal = options.signal;
-
-  try {
-    const api = new C64API(config.baseUrl, config.password, config.deviceHost);
-    const response = await api.getInfo({
-      timeoutMs,
-      signal: outerSignal,
-      __c64uIntent: "system",
-      __c64uAllowDuringDiscovery: true,
-      __c64uAllowDuringError: true,
-      __c64uBypassCache: true,
-      // Self-healing: recovery/discovery probes must NEVER be suppressed by an
-      // open circuit breaker. Backing off from an unhealthy device is exactly
-      // what would stop us noticing it has recovered, leaving the app wedged
-      // offline. These probes carry their own timeout + rediscovery backoff, so
-      // the gateway bypasses the circuit for them, keeping a recovery path
-      // permanently open (the low-level circuit bypass stays inside the gateway).
-      __c64uRecoveryProbe: true,
-    });
-    const healthy = isProbePayloadHealthy(response);
-    return healthy;
-  } catch (error) {
-    const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
-    const normalizedMessage = message;
-    if (isAuthRequiredError(error)) {
-      reportAuthRequiredProbe(config);
-    } else if (!/^HTTP\s+\d+/.test(normalizedMessage)) {
-      const host = (() => {
-        try {
-          return new URL(config.baseUrl).hostname;
-        } catch (hostError) {
-          addLog("debug", "Failed to parse discovery probe base URL host", {
-            baseUrl: config.baseUrl,
-            error: (hostError as Error).message,
-            stack: (hostError as Error).stack ?? null,
-          });
-          return undefined;
-        }
-      })();
-      const failure = normalizeTransportError(error, { host });
-      addLog(failure.class === "dns" ? "info" : "debug", "Discovery probe request failed", {
-        baseUrl: config.baseUrl,
-        class: failure.class,
-        userMessage: failure.userMessage,
-        error: failure.rawMessage,
-      });
-      setSnapshot({ lastProbeError: failure.userMessage });
-    }
-    return false;
+  const outcome = await runProbeInfo(config, options);
+  if (outcome.kind === "auth") {
+    reportAuthRequiredProbe(config);
+  } else if (outcome.kind === "transport") {
+    setSnapshot({ lastProbeError: outcome.result.error });
   }
+  return outcome.result.ok;
 }
 
 /**
@@ -369,49 +354,7 @@ export async function probeDeviceReachability(options: {
 export async function probeInfoOnce(
   options: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<ProbeInfoResult> {
-  const config = await loadPersistedConnectionConfig();
-  const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
-  const outerSignal = options.signal;
-
-  try {
-    const api = new C64API(config.baseUrl, config.password, config.deviceHost);
-    const response = await api.getInfo({
-      timeoutMs,
-      signal: outerSignal,
-      __c64uIntent: "system",
-      __c64uAllowDuringDiscovery: true,
-      __c64uAllowDuringError: true,
-      __c64uBypassCache: true,
-      // Self-healing: recovery/discovery probes must NEVER be suppressed by an
-      // open circuit breaker. Backing off from an unhealthy device is exactly
-      // what would stop us noticing it has recovered, leaving the app wedged
-      // offline. These probes carry their own timeout + rediscovery backoff, so
-      // the gateway bypasses the circuit for them, keeping a recovery path
-      // permanently open (the low-level circuit bypass stays inside the gateway).
-      __c64uRecoveryProbe: true,
-    });
-    return {
-      ok: isProbePayloadHealthy(response),
-      deviceInfo: response,
-      error: isProbePayloadHealthy(response) ? null : "Probe payload missing required identity",
-    };
-  } catch (error) {
-    const message = (error as Error | undefined)?.message ?? "Unknown probe failure";
-    if (/^HTTP\s+\d+/.test(message)) {
-      return {
-        ok: false,
-        deviceInfo: null,
-        error: message,
-        authRequired: isAuthRequiredError(error),
-      };
-    }
-    const failure = normalizeTransportError(error, { host: config.deviceHost });
-    return {
-      ok: false,
-      deviceInfo: null,
-      error: failure.userMessage,
-    };
-  }
+  return probeInfoWithConnectionConfig(await loadPersistedConnectionConfig(), options);
 }
 
 export async function verifyCurrentConnectionTarget(options?: {
@@ -592,10 +535,16 @@ export function subscribeConnection(listener: () => void) {
 const normalizeReachabilityHost = (value: string | null | undefined): string | null => {
   const trimmed = value?.trim();
   if (!trimmed) return null;
+  const stripScheme = () => stripPortFromDeviceHost(trimmed.replace(/^https?:\/\//, "")).toLowerCase();
+  // Most callers pass a bare host such as `c64u`, which `new URL` rejects. Only try the URL parse
+  // when the value actually carries a scheme, so the catch below reports a genuinely malformed
+  // value rather than the common case.
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return stripScheme();
   try {
     return stripPortFromDeviceHost(new URL(trimmed).host).toLowerCase();
-  } catch {
-    return stripPortFromDeviceHost(trimmed.replace(/^https?:\/\//, "")).toLowerCase();
+  } catch (error) {
+    reportFallback("connectionManager.normalizeReachabilityHost", error);
+    return stripScheme();
   }
 };
 
@@ -943,8 +892,9 @@ const tryReachableSavedDeviceFallback = async (
   // stop, device-scoped query invalidation) BEFORE re-selecting — while the
   // runtime API still targets the old device, so the remote-input release lands
   // on the right host. Without this, device A's paused state, stale health
-  // verdict, and armed auto-skip watchdog leaked onto device B.
-  await prepareForDeviceRetarget(selectedId, reachable.device.id);
+  // verdict, and armed auto-skip watchdog leaked onto device B. HARD27-010 added
+  // the playback stop and the A/V mirror stop to that shared sequence.
+  const mirrorState = await prepareForDeviceRetarget(selectedId, reachable.device.id);
   // HARD16-001: select and apply the reachable device's identity/ports BEFORE
   // verifying, mirroring executeSavedDeviceSwitch. verifyCurrentConnectionTarget
   // stamps whatever device is currently selected, so verifying while the
@@ -968,6 +918,8 @@ const tryReachableSavedDeviceFallback = async (
   }
   if (verification.ok && verification.deviceInfo) {
     completeSavedDeviceVerification(reachable.device.id, verification.deviceInfo);
+    // HARD27-010: follow Live View to the device that just verified, as the canonical switch does.
+    restartAvMirrorAfterDeviceRetarget(mirrorState, reachable.device.id);
     return true;
   }
   return false;
@@ -1120,6 +1072,14 @@ const transitionToDemoActive = async (
       trigger,
       baseUrl: activeMockUrl,
     });
+  } else if (!isSimulatedDeviceAvailable()) {
+    // HARD27-027: without a simulated device there is nothing to demonstrate.
+    // Entering DEMO_ACTIVE anyway counted as connected, so every card queried
+    // the stored real host - powered off, which is why demo was offered - and
+    // failed, while the badge read Demo. Offline is the honest state.
+    addLog("info", "Demo mode has no simulated device on this platform; staying offline", { trigger });
+    await transitionToOfflineNoDemo(trigger);
+    return;
   } else {
     const fallbackHost = resolveDeviceHostFromStorage();
     const fallbackBaseUrl = buildBaseUrlFromDeviceHost(fallbackHost);

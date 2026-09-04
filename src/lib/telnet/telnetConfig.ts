@@ -7,38 +7,18 @@
  */
 
 import { TELNET_DEFAULT_PORT } from "@/lib/telnet/telnetTypes";
-import { updateSelectedSavedDevicePorts } from "@/lib/savedDevices/store";
+import { getSelectedSavedDevicePorts, updateSelectedSavedDevicePorts } from "@/lib/savedDevices/store";
 
 const TELNET_PORT_KEY = "c64u_telnet_port";
-const SAVED_DEVICES_STORAGE_KEY = "c64u_saved_devices:v1";
 
 const isValidTelnetPort = (port: number) => Number.isInteger(port) && port >= 1 && port <= 65535;
 
-const parseTelnetPort = (raw: string | null) => {
-  const parsed = raw ? Number(raw) : NaN;
-  if (!isValidTelnetPort(parsed)) return TELNET_DEFAULT_PORT;
-  return parsed;
-};
-
+// The port comes from the saved-devices store, for the reason given in ftpConfig.getStoredFtpPort
+// (HARD27-025). The store migrates the legacy `c64u_telnet_port` key into the device it creates.
 export const getStoredTelnetPort = () => {
   if (typeof localStorage === "undefined") return TELNET_DEFAULT_PORT;
-  const savedDevicesRaw = localStorage.getItem(SAVED_DEVICES_STORAGE_KEY);
-  if (savedDevicesRaw) {
-    try {
-      const parsed = JSON.parse(savedDevicesRaw) as {
-        selectedDeviceId?: string;
-        devices?: Array<{ id?: string; telnetPort?: number }>;
-      };
-      const devices = Array.isArray(parsed.devices) ? parsed.devices : [];
-      const selected = devices.find((device) => device.id === parsed.selectedDeviceId) ?? devices[0];
-      if (typeof selected?.telnetPort === "number" && isValidTelnetPort(selected.telnetPort)) {
-        return selected.telnetPort;
-      }
-    } catch (error) {
-      console.warn("Failed to parse saved devices while resolving Telnet port", { error });
-    }
-  }
-  return parseTelnetPort(localStorage.getItem(TELNET_PORT_KEY));
+  const { telnetPort } = getSelectedSavedDevicePorts();
+  return isValidTelnetPort(telnetPort) ? telnetPort : TELNET_DEFAULT_PORT;
 };
 
 export const setStoredTelnetPort = (port: number) => {
@@ -49,24 +29,6 @@ export const setStoredTelnetPort = (port: number) => {
     updateSelectedSavedDevicePorts({ telnetPort: port });
   } catch (error) {
     console.warn("Failed to sync Telnet port to selected saved device", { error });
-    const savedDevicesRaw = localStorage.getItem(SAVED_DEVICES_STORAGE_KEY);
-    if (!savedDevicesRaw) return;
-    try {
-      const parsed = JSON.parse(savedDevicesRaw) as {
-        selectedDeviceId?: string;
-        devices?: Array<{ id?: string; telnetPort?: number }>;
-      };
-      if (!Array.isArray(parsed.devices) || !parsed.selectedDeviceId) return;
-      const next = {
-        ...parsed,
-        devices: parsed.devices.map((device) =>
-          device.id === parsed.selectedDeviceId ? { ...device, telnetPort: port } : device,
-        ),
-      };
-      localStorage.setItem(SAVED_DEVICES_STORAGE_KEY, JSON.stringify(next));
-    } catch (fallbackError) {
-      console.warn("Failed to update saved-device fallback Telnet port", { error: fallbackError });
-    }
   }
 };
 

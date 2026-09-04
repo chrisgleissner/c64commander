@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Filesystem, type FilesystemStatResult } from "@capacitor/filesystem";
 import {
+  deleteCachedArchivePart,
   deleteLibraryFile,
   getHvscDurationByMd5,
   getHvscSongByVirtualPath,
@@ -213,6 +214,39 @@ describe("hvscFilesystem", () => {
 
     await deleteLibraryFile("/DEMOS/0-9/Write.sid");
     expect(files.has("hvsc/library/DEMOS/0-9/Write.sid")).toBe(false);
+  });
+
+  // HARD27-028: the resume sidecar exists only while a download is interrupted, so the ordinary
+  // case is deleting something that is not there. That must stay silent, or every completed
+  // download logs a warning about a file it was right not to find.
+  it("deletes the resume sidecar for a cached archive", async () => {
+    setFile("hvsc/cache/HVSC_85.zip.part", toBase64Bytes(new Uint8Array([1, 2, 3])));
+
+    await deleteCachedArchivePart("HVSC_85.zip");
+
+    expect(files.has("hvsc/cache/HVSC_85.zip.part")).toBe(false);
+  });
+
+  it("says nothing when there is no sidecar to delete", async () => {
+    const warn = vi.spyOn(logging, "addLog");
+    vi.mocked(Filesystem.deleteFile).mockRejectedValueOnce(new Error("File does not exist"));
+
+    await expect(deleteCachedArchivePart("HVSC_85.zip")).resolves.toBeUndefined();
+
+    expect(warn).not.toHaveBeenCalledWith("debug", expect.stringContaining("part file"), expect.anything());
+  });
+
+  it("warns when the sidecar exists but cannot be deleted", async () => {
+    const warn = vi.spyOn(logging, "addLog");
+    vi.mocked(Filesystem.deleteFile).mockRejectedValueOnce(new Error("EACCES: permission denied"));
+
+    await expect(deleteCachedArchivePart("HVSC_85.zip")).resolves.toBeUndefined();
+
+    expect(warn).toHaveBeenCalledWith(
+      "debug",
+      "HVSC filesystem: Failed to delete cached archive part file",
+      expect.objectContaining({ relativePath: "HVSC_85.zip" }),
+    );
   });
 
   it("resets the library root", async () => {

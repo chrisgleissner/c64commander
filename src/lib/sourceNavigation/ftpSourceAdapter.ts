@@ -12,6 +12,7 @@ import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { addLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
+import { isKnownUnavailable, isPluginMethodUnimplemented, recordUnavailable } from "@/lib/native/pluginAvailability";
 import type { SourceEntry, SourceLocation, SourceRecursiveFailure, SourceRecursiveResult } from "./types";
 import { createDeepScanSearch } from "./deepScanSearch";
 import { SOURCE_LABELS } from "./sourceTerms";
@@ -144,6 +145,8 @@ const attachPartialFailures = (entries: SourceEntry[], failures: SourceRecursive
   return entries;
 };
 
+const FTP_LIST_RECURSIVE_METHOD = "FtpClient.listDirectoryRecursive";
+
 const listFilesRecursive = async (
   path: string,
   options?: { signal?: AbortSignal; onProgress?: (delta: number) => void },
@@ -158,18 +161,41 @@ const listFilesRecursive = async (
   };
 
   assertNotAborted();
-  if (isNativePlatform()) {
+  /*
+   * A native platform without this method rejected with Capacitor's raw
+   * `"FtpClient.listDirectoryRecursive()" is not implemented on ios`, which reached the user as an
+   * error toast when they selected a folder in Play or Disks. iOS implements it now, so this is a
+   * safety net rather than the iOS path, and it stays because it is the only thing standing
+   * between a future missing bridge method and a raw Capacitor message on screen. The walker below
+   * is not a native-versus-web distinction - it is a complete implementation web has always used,
+   * with the same depth and entry caps - so falling through to it is a real degradation rather
+   * than a failure. Latched, because a missing method stays missing (HARD27-003).
+   */
+  if (isNativePlatform() && !isKnownUnavailable(FTP_LIST_RECURSIVE_METHOD)) {
     const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
     const host = normalizeFtpHost(rawHost);
     const normalizedPath = path && path !== "" ? path : "/";
-    const result = await listFtpDirectoryRecursive({
-      host,
-      port: getStoredFtpPort(),
-      password,
-      path: normalizedPath,
-      maxDepth: FTP_RECURSIVE_MAX_DEPTH,
-      maxEntries: FTP_RECURSIVE_MAX_ENTRIES,
-    });
+    let result: Awaited<ReturnType<typeof listFtpDirectoryRecursive>>;
+    try {
+      result = await listFtpDirectoryRecursive({
+        host,
+        port: getStoredFtpPort(),
+        password,
+        path: normalizedPath,
+        maxDepth: FTP_RECURSIVE_MAX_DEPTH,
+        maxEntries: FTP_RECURSIVE_MAX_ENTRIES,
+      });
+    } catch (error) {
+      if (!isPluginMethodUnimplemented(error)) throw error;
+      if (recordUnavailable(FTP_LIST_RECURSIVE_METHOD)) {
+        addLog("info", "Recursive FTP listing runs in TypeScript on this platform", {
+          method: FTP_LIST_RECURSIVE_METHOD,
+        });
+      }
+      // Re-entered rather than duplicating the walker: the method is latched above, so the
+      // second entry takes the TypeScript branch.
+      return listFilesRecursive(path, options);
+    }
     assertNotAborted();
     const entries = (result.entries || []).map((entry) => ({
       type: entry.type,

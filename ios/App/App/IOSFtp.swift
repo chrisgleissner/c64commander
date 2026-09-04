@@ -42,6 +42,173 @@ private struct FtpWriteRequestOptions {
     }
 }
 
+/*
+ * Cancellation for an in-flight `readFile`.
+ *
+ * The plugin runs every FTP call on one serial queue, so a `cancelRead` dispatched onto that queue
+ * would sit behind the very read it is meant to stop. Instead the cancelling call sets a flag from
+ * its own thread and the read loop notices it on its next poll, which is at most 50 ms later. The
+ * alternative - closing the streams from another thread - races `disconnect()`, which nils them
+ * while the read loop is using them.
+ */
+final class FtpReadCancellationToken {
+    private let lock = NSLock()
+    private var cancelled = false
+
+    var isCancelled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancelled
+    }
+
+    func cancel() {
+        lock.lock()
+        defer { lock.unlock() }
+        cancelled = true
+    }
+}
+
+final class FtpReadCancellationRegistry {
+    static let shared = FtpReadCancellationRegistry()
+
+    private let lock = NSLock()
+    private var tokens: [String: FtpReadCancellationToken] = [:]
+
+    func register(requestId: String) -> FtpReadCancellationToken {
+        let token = FtpReadCancellationToken()
+        lock.lock()
+        defer { lock.unlock() }
+        tokens[requestId] = token
+        return token
+    }
+
+    func release(requestId: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        tokens.removeValue(forKey: requestId)
+    }
+
+    /* Returns false when the read already finished, which is not an error for any caller. */
+    @discardableResult
+    func cancel(requestId: String) -> Bool {
+        lock.lock()
+        let token = tokens[requestId]
+        lock.unlock()
+        token?.cancel()
+        return token != nil
+    }
+}
+
+/*
+ * The recursive FTP walk, expressed over a "list one directory" closure so the traversal can be
+ * tested without a socket. `FtpRecursiveWalkTests` in `ios/native-tests` exercises the mirror of
+ * this in `FtpRecursiveWalk`, and asserts this file agrees with it.
+ *
+ * The caps and the early-exit rule are Android's, deliberately: the two plugins answer the same
+ * TypeScript contract, and the app reports a truncated walk through `partialFailures` and
+ * `timedOut` rather than presenting it as a complete listing (HARD9-078, HARD9-081).
+ */
+struct FtpRecursiveFailure {
+    let path: String
+    let message: String
+}
+
+struct FtpRecursiveResult {
+    var entries: [FtpEntry] = []
+    var failures: [FtpRecursiveFailure] = []
+    var timedOut = false
+}
+
+enum FtpRecursiveWalkLimits {
+    static let defaultMaxDepth = 8
+    static let defaultMaxEntries = 5_000
+
+    static func clampDepth(_ raw: Int?) -> Int { min(max(raw ?? defaultMaxDepth, 0), 32) }
+    static func clampEntries(_ raw: Int?) -> Int { min(max(raw ?? defaultMaxEntries, 1), 50_000) }
+
+    static func cappedMessage(maxEntries: Int) -> String {
+        "FTP recursive listing stopped after \(maxEntries) entries"
+    }
+
+    static func maxDepthMessage(maxDepth: Int) -> String {
+        "FTP recursive listing max depth \(maxDepth) reached"
+    }
+}
+
+/*
+ * A listing error that means the firmware's single-threaded FTP is already wedging on PASV
+ * cycles. Continuing would pile more data channels onto it, so the whole walk stops and the
+ * caller is told the listing is incomplete rather than being handed a silent truncation.
+ */
+struct FtpListingTimeout: Error {
+    let underlying: Error
+}
+
+func walkFtpDirectory(
+    root: String,
+    maxDepth: Int,
+    maxEntries: Int,
+    list: (String) throws -> [FtpEntry]
+) -> FtpRecursiveResult {
+    var result = FtpRecursiveResult()
+    var queue: [(path: String, depth: Int)] = [(root, 0)]
+    var visited = Set<String>()
+    var examined = 0
+    var capped = false
+
+    while !queue.isEmpty && !capped && !result.timedOut {
+        let current = queue.removeFirst()
+        if !visited.insert(current.path).inserted { continue }
+
+        let files: [FtpEntry]
+        do {
+            files = try list(current.path)
+        } catch let timeout as FtpListingTimeout {
+            result.failures.append(
+                FtpRecursiveFailure(
+                    path: current.path,
+                    message: timeout.underlying.localizedDescription
+                )
+            )
+            result.timedOut = true
+            break
+        } catch {
+            result.failures.append(FtpRecursiveFailure(path: current.path, message: error.localizedDescription))
+            continue
+        }
+
+        for file in files {
+            examined += 1
+            if examined > maxEntries {
+                result.failures.append(
+                    FtpRecursiveFailure(
+                        path: current.path,
+                        message: FtpRecursiveWalkLimits.cappedMessage(maxEntries: maxEntries)
+                    )
+                )
+                capped = true
+                break
+            }
+            if file.type == "directory" {
+                if current.depth < maxDepth {
+                    queue.append((file.path, current.depth + 1))
+                } else {
+                    result.failures.append(
+                        FtpRecursiveFailure(
+                            path: file.path,
+                            message: FtpRecursiveWalkLimits.maxDepthMessage(maxDepth: maxDepth)
+                        )
+                    )
+                }
+            } else {
+                result.entries.append(file)
+            }
+        }
+    }
+
+    return result
+}
+
 @objc(FtpClientPlugin)
 public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "FtpClientPlugin"
@@ -52,6 +219,8 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "writeFile", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "makeDirectory", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pingFtp", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "cancelRead", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "listDirectoryRecursive", returnType: CAPPluginReturnPromise),
     ]
 
     private let queue = DispatchQueue(label: "uk.gleissner.c64commander.ftp")
@@ -90,6 +259,70 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
+    /*
+     * Answers the same contract as Android's `listDirectoryRecursive`: `entries` holds files only,
+     * `partialFailures` names each folder that could not be listed or was cut off by a cap, and
+     * `timedOut` says the walk stopped early. iOS had no implementation at all, so selecting a
+     * folder in Play or Disks rejected with Capacitor's "not implemented on ios" and the user saw
+     * a raw error toast (HARD27-003).
+     *
+     * One connection for the whole walk rather than one per folder: the Ultimate's FTP is
+     * single-threaded and reconnecting per directory is what the PASV-cycle wedge is made of.
+     */
+    @objc public func listDirectoryRecursive(_ call: CAPPluginCall) {
+        queue.async {
+            do {
+                let options = try FtpRequestOptions(call: call)
+                let root = call.getString("path").flatMap { $0.isEmpty ? nil : $0 } ?? "/"
+                let maxDepth = FtpRecursiveWalkLimits.clampDepth(call.getInt("maxDepth"))
+                let maxEntries = FtpRecursiveWalkLimits.clampEntries(call.getInt("maxEntries"))
+
+                let session = FtpSession(
+                    host: options.host,
+                    port: options.port,
+                    timeout: options.timeout,
+                    connectTimeout: options.connectTimeout
+                )
+                defer { session.disconnect() }
+                try session.connect()
+                try session.login(username: options.username, password: options.password)
+
+                let result = walkFtpDirectory(root: root, maxDepth: maxDepth, maxEntries: maxEntries) { path in
+                    do {
+                        return try session.listDirectory(path: path)
+                    } catch {
+                        /*
+                         * A data-channel timeout is the wedge signal; anything else is one bad
+                         * folder and the walk carries on past it.
+                         */
+                        if FtpSession.isDataChannelTimeout(error) {
+                            throw FtpListingTimeout(underlying: error)
+                        }
+                        throw error
+                    }
+                }
+
+                call.resolve([
+                    "entries": result.entries.map { entry in
+                        [
+                            "name": entry.name,
+                            "path": entry.path,
+                            "type": entry.type,
+                            "size": entry.size as Any,
+                            "modifiedAt": entry.modifiedAt as Any,
+                        ] as [String: Any]
+                    },
+                    "partialFailures": result.failures.map { ["path": $0.path, "message": $0.message] },
+                    "timedOut": result.timedOut,
+                ])
+            } catch {
+                let details = FtpRequestOptions.failureDetails(for: call, operation: "listDirectoryRecursive")
+                IOSDiagnostics.log(.error, "FTP listDirectoryRecursive failed", details: details, error: error)
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
+
     @objc public func readFile(_ call: CAPPluginCall) {
         queue.async {
             do {
@@ -115,6 +348,26 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
                     connectTimeout: options.connectTimeout
                 )
                 defer { session.disconnect() }
+                /*
+                 * The control channel keeps the clamped `timeout`; the bulk read gets the idle
+                 * timeout, which honours `timeoutMs: 0` as "no idle timeout". The songlengths
+                 * read from the Ultimate sends exactly that (HARD27-012).
+                 */
+                session.transferTimeout = FtpRequestOptions.resolveTransferTimeout(call.getInt("timeoutMs"))
+                /*
+                 * The TypeScript client only sends a requestId when the read is cancellable
+                 * (it has an abort signal or a progress listener), so an ordinary read
+                 * registers nothing.
+                 */
+                let requestId = call.getString("requestId")
+                if let requestId {
+                    session.cancellationToken = FtpReadCancellationRegistry.shared.register(requestId: requestId)
+                }
+                defer {
+                    if let requestId {
+                        FtpReadCancellationRegistry.shared.release(requestId: requestId)
+                    }
+                }
                 try session.connect()
                 try session.login(username: options.username, password: options.password)
                 let data = try session.readFile(path: options.path)
@@ -128,6 +381,26 @@ public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject(error.localizedDescription)
             }
         }
+    }
+
+    /*
+     * Deliberately not dispatched onto `queue`: that queue is serialised behind the read this is
+     * meant to stop, so a cancel posted to it would run only after the read completed. Resolves
+     * either way - cancelling a read that already finished is not an error for any caller
+     * (HARD27-003).
+     */
+    @objc public func cancelRead(_ call: CAPPluginCall) {
+        guard let requestId = call.getString("requestId"), !requestId.isEmpty else {
+            call.reject("requestId is required")
+            return
+        }
+        let cancelled = FtpReadCancellationRegistry.shared.cancel(requestId: requestId)
+        IOSDiagnostics.log(
+            .debug,
+            cancelled ? "FTP read cancelled" : "FTP read already finished when cancelled",
+            details: ["origin": "native", "requestId": requestId]
+        )
+        call.resolve()
     }
 
     @objc public func writeFile(_ call: CAPPluginCall) {
@@ -238,6 +511,25 @@ private extension FtpRequestOptions {
         self.traceDetails = traceDetails
     }
 
+    /*
+     * The data-transfer timeout, which is not the same thing as `resolveTimeout`.
+     *
+     * `timeoutMs == 0` explicitly means "no idle timeout" - the songlengths read from the
+     * Ultimate sends it, because a truncating timeout can wedge the firmware's FTP data channel.
+     * `resolveTimeout` clamped that to 1 s, so the read returned a truncated buffer and the
+     * songlengths import reported failure. A positive value is an idle timeout bounded the same
+     * way Android bounds it, to 10 minutes rather than the 60 s a whole-transfer deadline needed
+     * (HARD27-012).
+     *
+     * Returns nil for "no idle timeout".
+     */
+    static func resolveTransferTimeout(_ timeoutMs: Int?, defaultMs: Int = 8_000) -> TimeInterval? {
+        guard let timeoutMs else { return TimeInterval(defaultMs) / 1_000 }
+        if timeoutMs == 0 { return nil }
+        let clampedMs = min(max(timeoutMs, 1_000), 600_000)
+        return TimeInterval(clampedMs) / 1_000
+    }
+
     static func resolveTimeout(_ timeoutMs: Int?, defaultMs: Int = 8_000) -> TimeInterval {
         let clampedMs = min(max(timeoutMs ?? defaultMs, 1_000), 60_000)
         return TimeInterval(clampedMs) / 1_000
@@ -299,12 +591,22 @@ final class FtpSession {
 
     private var inputStream: InputStream?
     private var outputStream: OutputStream?
+    /* Set only for a cancellable read; the data session inherits it in `readFile`. */
+    var cancellationToken: FtpReadCancellationToken?
+    /*
+     * The idle timeout for a bulk data transfer, which the control channel's `timeout` is not:
+     * `timeout` bounds one command/response exchange, while this bounds a gap between chunks and
+     * is reset by every chunk that arrives. nil means no idle timeout. The data session inherits
+     * it in `readFile` (HARD27-012).
+     */
+    var transferTimeout: TimeInterval?
 
     init(host: String, port: Int, timeout: TimeInterval = 30, connectTimeout: TimeInterval? = nil) {
         self.host = host
         self.port = port
         self.timeout = timeout
         self.connectTimeout = connectTimeout ?? timeout
+        self.transferTimeout = timeout
     }
 
     func connect() throws {
@@ -377,6 +679,10 @@ final class FtpSession {
     func readFile(path: String) throws -> Data {
         let passiveAddress = try openPassiveDataChannel()
         let dataSession = FtpSession(host: passiveAddress.host, port: passiveAddress.port, timeout: timeout)
+        // The bytes arrive on the data channel, so that is the session the cancel and the idle
+        // timeout both have to reach.
+        dataSession.cancellationToken = cancellationToken
+        dataSession.transferTimeout = transferTimeout
         try dataSession.connectForData()
 
         _ = try sendAndRead("RETR \(path)", expectedPrefix: [125, 150])
@@ -600,9 +906,18 @@ final class FtpSession {
 
         var bytes: [UInt8] = []
         var buffer = [UInt8](repeating: 0, count: 4096)
-        let deadline = Date().addingTimeInterval(timeout)
+        /*
+         * An idle deadline, reset by every chunk, rather than one deadline for the whole
+         * transfer. A whole-transfer deadline capped every read at 60 s of wall time no matter
+         * how well it was progressing, so a large disk image over the c64u's slow FTP failed
+         * where Android succeeded (HARD27-012).
+         */
+        var deadline = FtpSession.idleDeadline(from: Date(), timeout: transferTimeout)
 
         while Date() <= deadline {
+            if cancellationToken?.isCancelled == true {
+                throw NativePluginError.operationFailed("FTP read cancelled")
+            }
             if !inputStream.hasBytesAvailable {
                 if inputStream.streamStatus == .atEnd {
                     break
@@ -619,9 +934,42 @@ final class FtpSession {
                 break
             }
             bytes.append(contentsOf: buffer.prefix(readCount))
+            /*
+             * Base64 encoding the buffered file costs another ~1.33x on top of the raw bytes, so
+             * an uncapped read of a large file (a .dnp disk pack, a firmware image) drives the app
+             * into memory pressure. Same 32 MiB cap and same message as Android (HARD9-044).
+             */
+            if bytes.count > FtpSession.maxReadFileBytes {
+                throw NativePluginError.operationFailed(
+                    "File exceeds the maximum readable size (\(FtpSession.maxReadFileBytes / (1024 * 1024))MB)"
+                )
+            }
+            deadline = FtpSession.idleDeadline(from: Date(), timeout: transferTimeout)
         }
 
         return bytes
+    }
+
+    /*
+     * Android detects the wedge as a `SocketTimeoutException`. iOS raises its timeouts as
+     * `NativePluginError.operationFailed` with a message, and `POSIXError.ETIMEDOUT` comes back
+     * from the socket layer, so both are matched. Message matching is fragile in general; the
+     * messages are all defined in this file and `FtpRecursiveWalkTests` pins them.
+     */
+    static func isDataChannelTimeout(_ error: Error) -> Bool {
+        if let posix = error as? POSIXError, posix.code == .ETIMEDOUT { return true }
+        return error.localizedDescription.range(of: "time.?d? ?out", options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    static let maxReadFileBytes = 32 * 1024 * 1024
+
+    /*
+     * `Date.distantFuture` rather than a very large interval: adding one to a Date overflows on
+     * some inputs, and "no idle timeout" is exactly what distantFuture expresses.
+     */
+    static func idleDeadline(from now: Date, timeout: TimeInterval?) -> Date {
+        guard let timeout else { return Date.distantFuture }
+        return now.addingTimeInterval(timeout)
     }
 
     private func readAllLines() throws -> [String] {

@@ -6,6 +6,13 @@ env:
 tags:
   - subflow
 ---
+# "Connection.*", not "Connection". CollapsibleSection renders the header as one <button>
+# holding the <h2> title and the summary, which stays in the tree as sr-only text when
+# descriptions are off, so the button is a single accessibility leaf named
+# "Connection Saved devices, discovery, passwords, demo mode". Maestro matches a text selector
+# against an element's whole text, so the bare title matched nothing while the section was open
+# on screen. The trailing `.*` also absorbs whatever separator WebKit joins the two with.
+# Bound to production by tests/unit/maestro/iosTextAnchors.test.ts.
 - runFlow: launch-and-wait.yaml
 - retry:
     maxRetries: 3
@@ -21,13 +28,13 @@ tags:
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
-          visible: "Connection"
+          visible: "Connection.*"
           timeout: ${LONG_TIMEOUT}
 - extendedWaitUntil:
     visible: "Settings"
     timeout: ${LONG_TIMEOUT}
 - extendedWaitUntil:
-    visible: "Connection"
+    visible: "Connection.*"
     timeout: ${LONG_TIMEOUT}
 - assertVisible: "Settings"
-- assertVisible: "Connection"
+- assertVisible: "Connection.*"

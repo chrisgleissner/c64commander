@@ -508,6 +508,64 @@ describe("c64api branches", () => {
     expect(maxConcurrent).toBe(1);
   });
 
+  it("serializeNativeDeviceRequest holds the lane until a held native call settles", async () => {
+    // HARD27-014: an aborted request rejects its JS promise while the native HTTP
+    // call it started is still open. The lane must stay held until that native call
+    // settles, otherwise the next request opens a second connection to a device that
+    // tolerates only one (CONSERVATIVE / c64u 1.1.0).
+    const started: number[] = [];
+    let settleNativeCall!: () => void;
+    const nativeCall = new Promise<void>((resolve) => (settleNativeCall = resolve));
+
+    const aborted = serializeNativeDeviceRequest((hold) => {
+      started.push(1);
+      hold(nativeCall, 10_000);
+      return Promise.reject(new Error("aborted"));
+    });
+    const next = serializeNativeDeviceRequest(() => {
+      started.push(2);
+      return Promise.resolve("second");
+    });
+
+    await expect(aborted).rejects.toThrow("aborted");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(started).toEqual([1]); // the second request must not have started yet
+
+    settleNativeCall();
+    await expect(next).resolves.toBe("second");
+    expect(started).toEqual([1, 2]);
+  });
+
+  it("serializeNativeDeviceRequest releases a held lane once the hold deadline passes", async () => {
+    // A native call that never settles (a wedged bridge) must not stall the lane
+    // forever, so the hold is bounded by an explicit deadline.
+    vi.useFakeTimers();
+    try {
+      const started: number[] = [];
+      const neverSettles = new Promise<void>(() => {});
+      const aborted = serializeNativeDeviceRequest((hold) => {
+        started.push(1);
+        hold(neverSettles, 3_000);
+        return Promise.reject(new Error("aborted"));
+      });
+      const next = serializeNativeDeviceRequest(() => {
+        started.push(2);
+        return Promise.resolve("second");
+      });
+
+      await expect(aborted).rejects.toThrow("aborted");
+      await vi.advanceTimersByTimeAsync(2_999);
+      expect(started).toEqual([1]);
+
+      await vi.advanceTimersByTimeAsync(2);
+      await expect(next).resolves.toBe("second");
+      expect(started).toEqual([1, 2]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("serializeNativeDeviceRequest keeps the lane alive after a rejected task", async () => {
     await expect(serializeNativeDeviceRequest(() => Promise.reject(new Error("boom")))).rejects.toThrow("boom");
     // A failed request must not break the lane for the next request.

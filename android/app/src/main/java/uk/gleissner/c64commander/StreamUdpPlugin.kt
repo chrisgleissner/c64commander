@@ -9,6 +9,8 @@
 package uk.gleissner.c64commander
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.net.wifi.WifiManager
@@ -101,6 +103,16 @@ class StreamUdpPlugin : Plugin() {
 
   /** Packets dropped because they came from a machine other than [expectedSource], per stream. */
   private val rejectedPackets = ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
+
+  /**
+   * The machine whose packets were dropped most recently, per stream.
+   *
+   * Without it a filter mismatch is indistinguishable from a dead stream: the socket receives at
+   * full rate, every packet is dropped, and eight seconds later the card says the stream stopped
+   * arriving. Naming the address the packets DID come from is what turns that into a diagnosis the
+   * user can act on, so it is reported to JS rather than only logged.
+   */
+  private val lastRejectedSource = ConcurrentHashMap<String, InetAddress>()
   private val logTag = "StreamUdpPlugin"
   private var multicastLock: WifiManager.MulticastLock? = null
 
@@ -172,6 +184,53 @@ class StreamUdpPlugin : Plugin() {
   }
 
   /**
+   * Test seam: how an audio-focus change is delivered to JS (default: an `audiofocus` event).
+   *
+   * The sink is the only part of the app that knows sound is actually being produced — the A/V
+   * mirror and the on-device SID engine both play through it — so focus is requested and released
+   * here, and what to do about losing it is decided in JS, where the two sources are told apart.
+   */
+  internal var emitAudioFocusChange: (String) -> Unit = { change ->
+    val event = JSObject()
+    event.put("change", change)
+    notifyListeners("audiofocus", event)
+  }
+
+  // Written from the AudioManager callback on the main Looper and read and written from the
+  // Capacitor plugin thread. Without @Volatile the `false` written on AUDIOFOCUS_LOSS need not be
+  // visible to the next requestPlaybackAudioFocus(), which would then return early and leave the
+  // resumed track playing with focus it no longer holds — the exact no-op the loss handler exists
+  // to prevent. The sibling nativeAudioOwnsPlayback and audioPipeline are @Volatile for this.
+  @Volatile private var audioFocusRequest: AudioFocusRequest? = null
+  @Volatile private var audioFocusHeld = false
+
+  private val audioFocusListener =
+    AudioManager.OnAudioFocusChangeListener { focusChange ->
+      when (focusChange) {
+        AudioManager.AUDIOFOCUS_LOSS -> {
+          // The system has taken focus away, so the request this plugin is holding is spent. Not
+          // recording that made requestPlaybackAudioFocus a no-op for the rest of the track's life
+          // (it returns early while audioFocusHeld is true), so a tune resumed after an interruption
+          // played with no focus at all and got no callback for the next one.
+          audioFocusHeld = false
+          emitAudioFocusChange(FOCUS_LOSS)
+        }
+        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> emitAudioFocusChange(FOCUS_LOSS_TRANSIENT)
+        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+          // Android 8+ ducks an app that has not opted out, and then does not call this at all; on
+          // 24/25 nothing ducks unless we do. Attenuating here covers both without a version check.
+          audioPipeline?.setDucked(true)
+          emitAudioFocusChange(FOCUS_DUCK)
+        }
+        AudioManager.AUDIOFOCUS_GAIN -> {
+          audioPipeline?.setDucked(false)
+          emitAudioFocusChange(FOCUS_GAIN)
+        }
+        else -> Log.d(logTag, "unhandled audio focus change ($focusChange)")
+      }
+    }
+
+  /**
    * Per-stream keep-rate in permille (0–1000; default 1000 = present every frame). The governor
    * pushes this so the assembler can DECIMATE natively — skipping the ~52 KB Base64 encode + the
    * bridge hop + the JS decode for frames that will not be presented. HIL showed decimating only in
@@ -211,7 +270,36 @@ class StreamUdpPlugin : Plugin() {
     call.resolve(JSObject())
   }
 
+  /**
+   * What the sender filter has done to a stream: how much it dropped, and whose packets those were.
+   *
+   * Read when a live stream goes silent. A filter keyed to the wrong address of a dual-homed
+   * Ultimate receives at full rate and drops everything, which looks exactly like a stream that
+   * stopped: same silent socket, same watchdog, same message. These two numbers are the only
+   * evidence that separates the two, so they have to leave the plugin.
+   */
+  @PluginMethod
+  fun readStreamDiagnostics(call: PluginCall) {
+    val name = call.getString("name")
+    if (name == null) {
+      call.reject("name is required")
+      return
+    }
+    val result = JSObject()
+    result.put("rejectedPackets", rejectedPackets[name]?.get() ?: 0L)
+    result.put("lastRejectedSource", lastRejectedSource[name]?.hostAddress)
+    result.put("expectedSource", expectedSource[name]?.hostAddress)
+    val senders = JSArray()
+    streamSenders[name]?.forEach { senders.put(it) }
+    result.put("senders", senders)
+    call.resolve(result)
+  }
+
   private fun applyExpectedSource(name: String, host: String?) {
+    // A new filter identity makes the old rejection count a statement about a question nobody is
+    // asking any more, so adopting a sender (or rebinding) starts the diagnosis from zero.
+    rejectedPackets.remove(name)
+    lastRejectedSource.remove(name)
     val trimmed = host?.trim()?.substringBefore(':')?.takeIf { it.isNotEmpty() }
     if (trimmed == null) {
       expectedSource.remove(name)
@@ -239,6 +327,9 @@ class StreamUdpPlugin : Plugin() {
   private fun isForeign(name: String, source: InetAddress?): Boolean {
     val expected = expectedSource[name] ?: return false
     if (source === expected || source == expected) return false
+    // Reference compare first: the socket reuses one address object per peer, so the common case of
+    // a steady foreign stream costs no map write on a path that runs ~3400 times a second.
+    if (source != null && lastRejectedSource[name] !== source) lastRejectedSource[name] = source
     val counter = rejectedPackets.getOrPut(name) { java.util.concurrent.atomic.AtomicLong() }
     val n = counter.incrementAndGet()
     if (n == 1L || n % FOREIGN_LOG_EVERY == 0L) {
@@ -263,7 +354,6 @@ class StreamUdpPlugin : Plugin() {
     val assemble = call.getBoolean("assemble", false) == true
     try {
       closeSocket(name)
-      rejectedPackets.remove(name)
       applyExpectedSource(name, call.getString("source"))
       val socket: DatagramSocket =
         if (group != null) {
@@ -316,6 +406,8 @@ class StreamUdpPlugin : Plugin() {
     }
     closeSocket(name)
     streamSenders.remove(name)
+    rejectedPackets.remove(name)
+    lastRejectedSource.remove(name)
     call.resolve(JSObject())
   }
 
@@ -350,6 +442,7 @@ class StreamUdpPlugin : Plugin() {
             )
         pipeline.start()
         audioPipeline = pipeline
+        requestPlaybackAudioFocus()
         nativeAudioOwnsPlayback = true
         audioArrivals.reset()
         val result = JSObject()
@@ -382,6 +475,25 @@ class StreamUdpPlugin : Plugin() {
     val pipeline = audioPipeline
     pipeline?.offer(pcm, 0, pcm.size)
     call.resolve(audioStatsPayload(pipeline?.stats() ?: AudioPipeline.Stats.ZERO))
+  }
+
+  /**
+   * Hold the speaker where it is, keeping every queued sample, for a listener's pause.
+   *
+   * Distinct from [flushAudioTrack], which exists for a seek: a seek invalidates the queued audio,
+   * a pause does not.
+   */
+  @PluginMethod
+  fun pauseAudioTrack(call: PluginCall) {
+    audioPipeline?.pause()
+    call.resolve(JSObject())
+  }
+
+  /** Continue a [pauseAudioTrack] from the sample it stopped on. */
+  @PluginMethod
+  fun resumeAudioTrack(call: PluginCall) {
+    audioPipeline?.resume()
+    call.resolve(JSObject())
   }
 
   /** Drop queued-but-unplayed audio, so a pause or a seek takes effect at once. */
@@ -442,6 +554,10 @@ class StreamUdpPlugin : Plugin() {
     val senders = JSArray()
     streamSenders["audio"]?.forEach { senders.put(it) }
     result.put("senders", senders)
+    // What the sender filter refused, beside what it let through. A stream can look perfectly dead
+    // here while the socket is busy; these two say which of the two it is.
+    result.put("rejectedPackets", rejectedPackets["audio"]?.get() ?: 0L)
+    result.put("lastRejectedSource", lastRejectedSource["audio"]?.hostAddress)
     return result
   }
 
@@ -555,6 +671,21 @@ class StreamUdpPlugin : Plugin() {
     call.resolve(JSObject())
   }
 
+  /**
+   * Ask for audio focus again for a sink that is already open.
+   *
+   * Focus is normally taken in `openAudioTrack`, but a pause does not close the track: an
+   * interruption suspends the JS side and leaves the native pipeline in place. The resume therefore
+   * has no `openAudioTrack` to ride on, and this is the call that gives it one.
+   */
+  @PluginMethod
+  fun requestAudioFocus(call: PluginCall) {
+    requestPlaybackAudioFocus()
+    val result = JSObject()
+    result.put("granted", audioFocusHeld)
+    call.resolve(result)
+  }
+
   @PluginMethod
   fun closeAudioTrack(call: PluginCall) {
     nativeAudioOwnsPlayback = false
@@ -562,8 +693,77 @@ class StreamUdpPlugin : Plugin() {
       audioPipeline?.close()
       audioPipeline = null
     }
+    abandonPlaybackAudioFocus()
     call.resolve(JSObject())
   }
+
+  /**
+   * Take audio focus for as long as this app is producing sound.
+   *
+   * Focus used to be requested by the background-execution service, which starts for a tune on the
+   * Play page and not for the A/V mirror, and abandons on its own lifecycle rather than the
+   * speaker's. Requesting it where the samples are actually played covers both sources, tells
+   * whatever was playing to stop, and gives the app a loss callback it can act on.
+   */
+  private fun requestPlaybackAudioFocus() {
+    if (audioFocusHeld) return
+    val manager = audioManager() ?: return
+    try {
+      val result =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          val request =
+            audioFocusRequest
+              ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                  AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+                )
+                .setOnAudioFocusChangeListener(audioFocusListener)
+                .build()
+                .also { audioFocusRequest = it }
+          manager.requestAudioFocus(request)
+        } else {
+          @Suppress("DEPRECATION")
+          manager.requestAudioFocus(
+            audioFocusListener,
+            AudioManager.STREAM_MUSIC,
+            AudioManager.AUDIOFOCUS_GAIN,
+          )
+        }
+      audioFocusHeld = result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+      if (!audioFocusHeld) Log.w(logTag, "audio focus not granted (result=$result)")
+    } catch (error: Exception) {
+      Log.w(logTag, "audio focus request failed", error)
+    }
+  }
+
+  /** Give focus back when the sink closes, so another app is free to play. */
+  private fun abandonPlaybackAudioFocus() {
+    val manager = audioManager()
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        audioFocusRequest?.let { manager?.abandonAudioFocusRequest(it) }
+      } else {
+        @Suppress("DEPRECATION")
+        manager?.abandonAudioFocus(audioFocusListener)
+      }
+    } catch (error: Exception) {
+      Log.w(logTag, "abandoning audio focus failed", error)
+    } finally {
+      audioFocusRequest = null
+      audioFocusHeld = false
+    }
+  }
+
+  private fun audioManager(): AudioManager? =
+    try {
+      context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    } catch (error: Exception) {
+      Log.w(logTag, "AudioManager unavailable", error)
+      null
+    }
 
   private fun receiveLoop(name: String, socket: DatagramSocket) {
     raiseThreadPriority(name)
@@ -962,6 +1162,27 @@ class StreamUdpPlugin : Plugin() {
     return null
   }
 
+  /**
+   * Android can freeze the WebView before the JS "stop the streams" reaches the device, and the two
+   * Wi-Fi locks would then stay held for the whole time the app is away. Public so a test can drive
+   * it.
+   */
+  public override fun handleOnPause() {
+    super.handleOnPause()
+    releaseMulticastLock()
+  }
+
+  /**
+   * Required, not an optimisation: a `MulticastLock` released under a live socket makes the driver
+   * filter multicast again, so without this the user returns to a bound, running, permanently
+   * starved receive loop that reports no error at all.
+   */
+  public override fun handleOnResume() {
+    super.handleOnResume()
+    if (sockets.isEmpty()) return
+    acquireMulticastLock()
+  }
+
   override fun handleOnDestroy() {
     super.handleOnDestroy()
     sockets.values.forEach {
@@ -976,6 +1197,9 @@ class StreamUdpPlugin : Plugin() {
       audioPipeline?.close()
       audioPipeline = null
     }
+    // Paired with the close above, as closeAudioTrack pairs them: focus kept past a destroyed
+    // plugin never tells whatever was interrupted that it may resume.
+    abandonPlaybackAudioFocus()
     releaseMulticastLock()
     executor.shutdownNow()
   }
@@ -996,6 +1220,12 @@ class StreamUdpPlugin : Plugin() {
 
     /** Log the first foreign packet, then one line per this many, so a stuck sender cannot spam. */
     private const val FOREIGN_LOG_EVERY = 5000L
+
+    /** Focus-change names as JS sees them (`StreamUdpAudioFocusEvent.change`). */
+    internal const val FOCUS_LOSS = "loss"
+    internal const val FOCUS_LOSS_TRANSIENT = "loss-transient"
+    internal const val FOCUS_DUCK = "duck"
+    internal const val FOCUS_GAIN = "gain"
 
     private const val AUDIO_SEQ_BYTES = 2
     private const val AUDIO_BYTES_PER_FRAME = 4

@@ -4,6 +4,11 @@ env:
 tags:
   - subflow
 ---
+# Play anchor is an alternation, not "Playlist": PlaylistPanel's title sits below the fold on
+# iOS and assertVisible only counts what is on screen, so the flow failed on a correctly
+# rendered page. The first two are what the page draws at the top with nothing playing —
+# SidRadioChip's source caption and PlaybackControlsCard's idle title.
+# Bound to production by tests/unit/maestro/iosTextAnchors.test.ts.
 - runFlow: launch-and-wait.yaml
 - retry:
     maxRetries: 3
@@ -31,6 +36,6 @@ tags:
     optional: true
 - extendedWaitUntil:
     visible:
-      text: "Playlist"
+      text: "(Your playlist|Select a playlist item to start|Playlist)"
     timeout: ${TIMEOUT}
-- assertVisible: "Playlist"
+- assertVisible: "(Your playlist|Select a playlist item to start|Playlist)"

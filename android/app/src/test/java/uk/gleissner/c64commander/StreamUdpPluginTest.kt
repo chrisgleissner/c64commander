@@ -9,6 +9,8 @@
 package uk.gleissner.c64commander
 
 import android.content.Context
+import android.media.AudioManager
+import android.net.wifi.WifiManager
 import android.util.Base64
 import androidx.test.core.app.ApplicationProvider
 import com.getcapacitor.Bridge
@@ -33,6 +35,7 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 
 @RunWith(RobolectricTestRunner::class)
 class StreamUdpPluginTest {
@@ -382,6 +385,58 @@ class StreamUdpPluginTest {
     verify(closeCall).resolve(any())
   }
 
+  /**
+   * HARD27-021. The JavaScript policy stops both streams when the app is hidden, but Android can
+   * freeze the WebView before that stop reaches the device. The plugin must then drop the Wi-Fi
+   * locks itself, and take them back on return: a MulticastLock released under a bound socket makes
+   * the driver filter multicast again, so the stream would come back silent and black.
+   */
+  @Test
+  fun pauseReleasesTheWifiLocksAndResumeReacquiresThemWhileASocketIsStillBound() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("name")).thenReturn("video")
+    `when`(call.getInt("port")).thenReturn(0)
+    `when`(call.getString("group")).thenReturn("239.0.1.64")
+    doAnswer { null }.`when`(call).resolve(any())
+    plugin.bind(call)
+    assertTrue("bind should hold the multicast lock", multicastLockHeld())
+
+    plugin.handleOnPause()
+    assertFalse("a backgrounded app must not hold the multicast lock", multicastLockHeld())
+    assertFalse("a backgrounded app must not hold the low-latency Wi-Fi lock", wifiLockHeld())
+
+    plugin.handleOnResume()
+    assertTrue("returning with a bound socket must re-join multicast", multicastLockHeld())
+
+    val closeCall = mock(PluginCall::class.java)
+    `when`(closeCall.getString("name")).thenReturn("video")
+    plugin.close(closeCall)
+  }
+
+  /** With no stream bound there is nothing to receive, so returning must not take a lock back. */
+  @Test
+  fun resumeDoesNotAcquireLocksWhenNoStreamIsBound() {
+    plugin.handleOnPause()
+    plugin.handleOnResume()
+
+    assertFalse("no bound socket means no multicast lock", multicastLockHeld())
+    assertFalse("no bound socket means no Wi-Fi lock", wifiLockHeld())
+  }
+
+  private fun lockHeld(fieldName: String): Boolean {
+    val field = StreamUdpPlugin::class.java.getDeclaredField(fieldName)
+    field.isAccessible = true
+    return when (val lock = field.get(plugin)) {
+      is WifiManager.MulticastLock -> lock.isHeld
+      is WifiManager.WifiLock -> lock.isHeld
+      else -> false
+    }
+  }
+
+  private fun multicastLockHeld(): Boolean = lockHeld("multicastLock")
+
+  private fun wifiLockHeld(): Boolean = lockHeld("wifiLock")
+
   @Test
   fun closeRejectsMissingName() {
     val call = mock(PluginCall::class.java)
@@ -391,6 +446,73 @@ class StreamUdpPluginTest {
   }
 
   /** Resolve a PluginCall, capturing the resolved JSObject. */
+  @Test
+  fun openAudioTrackTakesAudioFocusAndClosingGivesItBack() {
+    // HARD27-006: neither audio source asked for focus. The A/V mirror never went near the
+    // background service that did ask, so the C64's audio played on top of whatever the user had
+    // started elsewhere. Focus belongs to the sink because the sink is what actually makes sound.
+    val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    val shadow = shadowOf(audio)
+
+    plugin.openAudioTrack(resolvingCall { `when`(it.getInt("sampleRate")).thenReturn(47983) }.first)
+
+    val request = shadow.lastAudioFocusRequest
+    assertNotNull("opening the sink must request audio focus", request)
+    assertEquals(AudioManager.AUDIOFOCUS_GAIN, request.durationHint)
+
+    plugin.closeAudioTrack(resolvingCall {}.first)
+    assertNotNull("closing the sink must abandon audio focus", shadow.lastAbandonedAudioFocusRequest)
+  }
+
+  @Test
+  fun audioFocusChangesReachTheWebLayer() {
+    // The web layer is where the two sources are told apart, so every change is forwarded there
+    // rather than acted on natively. Ducking is the exception: it is an attenuation of the samples
+    // this pipeline is about to play, and it is applied in the pipeline (see AudioPipelineTest).
+    val changes = ArrayList<String>()
+    plugin.emitAudioFocusChange = { changes.add(it) }
+    val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    val shadow = shadowOf(audio)
+    plugin.openAudioTrack(resolvingCall { `when`(it.getInt("sampleRate")).thenReturn(47983) }.first)
+    val listener = shadow.lastAudioFocusRequest.listener
+
+    listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)
+    listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK)
+    listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_GAIN)
+    listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS)
+
+    assertEquals(listOf("loss-transient", "duck", "gain", "loss"), changes)
+    plugin.closeAudioTrack(resolvingCall {}.first)
+  }
+
+  @Test
+  fun aResumeAfterAPermanentLossTakesAudioFocusBackForTheStillOpenTrack() {
+    // HARD27-006, second cause. A pause does not close the sink, so the resume has no
+    // openAudioTrack to take focus on. The plugin also kept audioFocusHeld true after the system
+    // had taken focus away, which made any later request a no-op: the tune played on with no focus
+    // and no callback for the next interruption.
+    val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    val shadow = shadowOf(audio)
+    plugin.openAudioTrack(resolvingCall { `when`(it.getInt("sampleRate")).thenReturn(47983) }.first)
+    val listener = shadow.lastAudioFocusRequest.listener
+    listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS)
+
+    // Whether the plugin really asked the system again is only visible in what the system answers,
+    // so the next answer is made a refusal: a plugin that skipped the request would report the
+    // focus it wrongly believed it still had.
+    shadow.setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_FAILED)
+    val (refused, readRefused) = resolvingCall {}
+    plugin.requestAudioFocus(refused)
+    assertEquals(false, readRefused()?.getBool("granted"))
+
+    shadow.setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+    val (granted, readGranted) = resolvingCall {}
+    plugin.requestAudioFocus(granted)
+    assertEquals(true, readGranted()?.getBool("granted"))
+
+    plugin.closeAudioTrack(resolvingCall {}.first)
+  }
+
   private fun resolvingCall(configure: (PluginCall) -> Unit): Pair<PluginCall, () -> JSObject?> {
     val call = mock(PluginCall::class.java)
     configure(call)
@@ -517,6 +639,84 @@ class StreamUdpPluginTest {
     `when`(closeCall.getString("name")).thenReturn("audio")
     plugin.close(closeCall)
     plugin.closeAudioTrack(resolvingCall {}.first)
+  }
+
+  /**
+   * HARD27-005: a filter aimed at the wrong address receives at full rate and drops everything.
+   *
+   * That is silent in exactly the same way as a stream that stopped, so the only thing that can tell
+   * the two apart is the plugin reporting what it refused and whose packets those were. Before this,
+   * `rejectedPackets` was counted and written to logcat, and nothing reached JS at all.
+   */
+  @Test
+  fun readStreamDiagnosticsNamesTheAddressWhosePacketsTheFilterRefused() {
+    val (bindCall, bindResolved) =
+        resolvingCall {
+          `when`(it.getString("name")).thenReturn("video")
+          `when`(it.getInt("port")).thenReturn(0)
+          // 127.0.0.2 is a loopback address that resolves without DNS and is NOT the address the
+          // test's sender socket will use, so every packet below is foreign.
+          `when`(it.getString("source")).thenReturn("127.0.0.2")
+        }
+    plugin.bind(bindCall)
+    val port = bindResolved()!!.getInteger("port")!!
+
+    // The filter resolves off the caller's thread, so wait for it to be armed before sending.
+    val armed = waitFor { diagnostics("video").getString("expectedSource") != null }
+    assertTrue("the sender filter was never armed", armed)
+
+    val payload = byteArrayOf(0x01, 0x02, 0x03, 0x04)
+    DatagramSocket().use { sender ->
+      repeat(3) { sender.send(DatagramPacket(payload, payload.size, InetAddress.getByName("127.0.0.1"), port)) }
+    }
+
+    val counted = waitFor { diagnostics("video").getInteger("rejectedPackets")!! >= 3 }
+    val stats = diagnostics("video")
+    assertTrue("expected the refused packets to be counted, got $stats", counted)
+    assertEquals("127.0.0.1", stats.getString("lastRejectedSource"))
+    assertEquals("127.0.0.2", stats.getString("expectedSource"))
+    // Nothing was forwarded: the packets were dropped before any accounting, which is why the app
+    // sees silence.
+    assertEquals(0, received.size)
+
+    // Adopting the sender that is actually streaming clears the diagnosis and reopens the filter.
+    val adoptCall = mock(PluginCall::class.java)
+    `when`(adoptCall.getString("name")).thenReturn("video")
+    `when`(adoptCall.getString("host")).thenReturn("127.0.0.1")
+    plugin.setExpectedSource(adoptCall)
+    assertTrue(
+        "adopting the sender must reset the rejection count",
+        waitFor { diagnostics("video").getInteger("rejectedPackets") == 0 },
+    )
+
+    val closeCall = mock(PluginCall::class.java)
+    `when`(closeCall.getString("name")).thenReturn("video")
+    plugin.close(closeCall)
+  }
+
+  @Test
+  fun readStreamDiagnosticsRejectsMissingName() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("name")).thenReturn(null)
+    plugin.readStreamDiagnostics(call)
+    verify(call).reject("name is required")
+  }
+
+  /** Read the plugin's sender-filter counters for one stream. */
+  private fun diagnostics(name: String): JSObject {
+    val (call, resolved) = resolvingCall { `when`(it.getString("name")).thenReturn(name) }
+    plugin.readStreamDiagnostics(call)
+    return resolved()!!
+  }
+
+  /** Poll a condition the plugin's own executor threads satisfy asynchronously. */
+  private fun waitFor(timeoutMs: Long = 3000, condition: () -> Boolean): Boolean {
+    val deadline = System.currentTimeMillis() + timeoutMs
+    while (System.currentTimeMillis() < deadline) {
+      if (condition()) return true
+      Thread.sleep(10)
+    }
+    return false
   }
 
   private fun bindAudio(): Int {

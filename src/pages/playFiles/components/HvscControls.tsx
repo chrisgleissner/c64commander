@@ -18,6 +18,15 @@ import { HvscStageSteps } from "./HvscStageSteps";
 /** How long the finished steps stay on screen, so the completion is actually seen. */
 const COMPLETION_HOLD_MS = 4000;
 
+/**
+ * The card's two terminal headings. Exported because `edge-hvsc-ingest-lifecycle` waits for the
+ * ready heading and `maestroFlowContracts` checks the flow's wait text against these constants,
+ * so a reworded heading fails that test rather than leaving the flow waiting for text that is no
+ * longer rendered.
+ */
+export const HVSC_READY_HEADING = "HVSC ready";
+export const HVSC_FAILED_HEADING = "HVSC preparation failed";
+
 export type HvscControlsProps = {
   hvscInstalledVersion?: number | string | null;
   hvscAvailable: boolean;
@@ -174,7 +183,7 @@ export const HvscControls = ({
             Ingest
           </Button>
           {isRunning ? (
-            <Button variant="outline" size="sm" onClick={onCancel} data-testid="hvsc-stop">
+            <Button id="hvsc-stop" variant="outline" size="sm" onClick={onCancel} data-testid="hvsc-stop">
               Stop
             </Button>
           ) : null}
@@ -185,8 +194,8 @@ export const HvscControls = ({
         className="rounded-lg border border-border bg-muted/30 px-3 py-3 text-xs space-y-2"
         data-testid="hvsc-summary"
       >
-        {isReady ? <p className="text-sm font-medium">HVSC ready</p> : null}
-        {isError ? <p className="text-sm font-medium">HVSC preparation failed</p> : null}
+        {isReady ? <p className="text-sm font-medium">{HVSC_READY_HEADING}</p> : null}
+        {isError ? <p className="text-sm font-medium">{HVSC_FAILED_HEADING}</p> : null}
         {!isReady && !isError ? <p className="text-sm font-medium">HVSC summary</p> : null}
 
         {isReady ? (

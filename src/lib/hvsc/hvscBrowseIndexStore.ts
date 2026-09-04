@@ -1229,7 +1229,9 @@ export const verifyHvscBrowseIndexIntegrity = async (snapshot: HvscBrowseIndexSn
     const filePath = resolveLibraryPath(path);
     try {
       await Filesystem.stat({ directory: Directory.Data, path: filePath });
-    } catch {
+    } catch (error) {
+      // Not silent: a stat failure is the signal this loop looks for, and every miss is reported
+      // together in the integrity warning below.
       missingPaths.push(path);
     }
   }

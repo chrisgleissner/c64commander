@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-const readRepoFile = (...parts: string[]) => readFileSync(path.resolve(process.cwd(), ...parts), "utf8");
+const repoFile = (...parts: string[]) => path.resolve(process.cwd(), ...parts);
+const readRepoFile = (...parts: string[]) => readFileSync(repoFile(...parts), "utf8");
 
 describe("iOS Maestro CI contracts", () => {
   it("runs a single retained iOS suite without probe fanout or simulator artifact handoff", () => {
@@ -41,7 +43,16 @@ describe("iOS Maestro CI contracts", () => {
 
   it("keeps the fallback payload heredoc terminated before later shell functions", () => {
     const runner = readRepoFile("scripts", "ci", "ios-maestro-run-flow.sh");
-    expect(runner).toContain("\nPY\n}\n\ncapture_accessibility_snapshot() {");
+    // The heredoc that ends write_fallback_debug_payload has to close before the next definition.
+    const closed = runner.indexOf("\nPY\n}\n");
+    expect(closed).toBeGreaterThan(-1);
+    expect(closed).toBeLessThan(runner.indexOf("\ncapture_accessibility_snapshot() {"));
+    // An unterminated heredoc swallows every line after it, and the two are no longer adjacent, so
+    // the parse is what actually decides this rather than the text between them.
+    const parsed = spawnSync("bash", ["-n", repoFile("scripts", "ci", "ios-maestro-run-flow.sh")], {
+      encoding: "utf8",
+    });
+    expect(parsed.status, parsed.stderr).toBe(0);
   });
 
   it("treats fallback debug payloads as diagnostic evidence instead of connectivity failures", () => {

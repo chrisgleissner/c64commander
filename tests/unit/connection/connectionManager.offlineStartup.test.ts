@@ -20,17 +20,19 @@ vi.mock("../../../src/lib/deviceDiscovery/discoveryManager", () => ({
   persistDiscoveredDevice: vi.fn(),
 }));
 
+const loadAutomaticDemoModeEnabled = vi.fn(() => false);
 vi.mock("../../../src/lib/config/appSettings", () => ({
-  loadAutomaticDemoModeEnabled: vi.fn(() => false),
+  loadAutomaticDemoModeEnabled: () => loadAutomaticDemoModeEnabled(),
   loadDebugLoggingEnabled: vi.fn(() => false),
   loadDiscoveryProbeTimeoutMs: vi.fn(() => 2500),
   loadStartupDiscoveryWindowMs: vi.fn(() => 600),
 }));
 
+const demoModeFlagEnabled = vi.fn(() => false);
 vi.mock("../../../src/lib/config/featureFlags", () => ({
   featureFlagManager: {
     load: vi.fn(async () => undefined),
-    getSnapshot: vi.fn(() => ({ flags: { demo_mode_enabled: false } })),
+    getSnapshot: () => ({ flags: { demo_mode_enabled: demoModeFlagEnabled() } }),
   },
 }));
 
@@ -68,9 +70,11 @@ const stopMockServer = vi.fn(async () => {
   activeMockBaseUrl = null;
 });
 
+const isSimulatedDeviceAvailable = vi.fn(() => true);
 vi.mock("../../../src/lib/mock/mockServer", () => ({
   startMockServer,
   stopMockServer,
+  isSimulatedDeviceAvailable: () => isSimulatedDeviceAvailable(),
   getActiveMockBaseUrl: vi.fn(() => activeMockBaseUrl),
   getActiveMockFtpPort: vi.fn(() => (activeMockBaseUrl ? 42121 : null)),
   getActiveMockToken: vi.fn(() => (activeMockBaseUrl ? "mock-token" : null)),
@@ -148,6 +152,13 @@ describe("startup with no network on the device", () => {
     stopMockServer.mockClear();
     startDeviceDiscovery.mockClear();
     isNativePlatform.mockReturnValue(true);
+    isSimulatedDeviceAvailable.mockReturnValue(true);
+    loadAutomaticDemoModeEnabled.mockReturnValue(false);
+    demoModeFlagEnabled.mockReturnValue(false);
+    startMockServer.mockImplementation(async () => {
+      activeMockBaseUrl = MOCK_BASE_URL;
+      return { baseUrl: MOCK_BASE_URL, ftpPort: 42121, token: "mock-token" };
+    });
     setNetwork(false);
   });
 
@@ -462,5 +473,45 @@ describe("startup with a network on the device", () => {
 
     expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
     expect(startMockServer).not.toHaveBeenCalled();
+  });
+});
+
+describe("startup on a platform with no simulated device (HARD27-027)", () => {
+  beforeEach(() => {
+    ensureStorage();
+    localStorage.clear();
+    sessionStorage.clear();
+    vi.resetModules();
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    activeMockBaseUrl = null;
+    startMockServer.mockClear();
+    stopMockServer.mockClear();
+    startDeviceDiscovery.mockClear();
+    // The web build has no mock server: MockC64UWeb.startServer throws unless an
+    // E2E override supplied one.
+    isNativePlatform.mockReturnValue(false);
+    isSimulatedDeviceAvailable.mockReturnValue(false);
+    // The user asked for Demo Mode; the web platform simply cannot host one.
+    loadAutomaticDemoModeEnabled.mockReturnValue(true);
+    demoModeFlagEnabled.mockReturnValue(true);
+    startMockServer.mockRejectedValue(new Error("Mock C64U server is only available on native platforms."));
+    setNetwork(false);
+  });
+
+  it("stays offline instead of calling the unreachable real device a demo", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    const discovery = discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(4000);
+    await discovery;
+
+    // DEMO_ACTIVE counts as connected, so every card would query the powered-off
+    // device the app is still pointed at while the badge reads Demo.
+    const snapshot = getConnectionSnapshot();
+    expect(snapshot.state).toBe("OFFLINE_NO_DEMO");
+    expect(snapshot.demoInterstitialVisible).toBe(false);
   });
 });

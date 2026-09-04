@@ -6,11 +6,14 @@ tags:
   - device
 ---
 - runFlow: subflows/launch-and-wait.yaml
-- assertVisible: "Home"
+- assertVisible:
+    id: "page-home"
 - launchApp:
     stopApp: false
 - extendedWaitUntil:
     visible: "Home"
     timeout: ${LONG_TIMEOUT}
+- assertVisible:
+    id: "page-home"
 - assertNotVisible: "C64 Commander"
 - takeScreenshot: smoke-launch-resume-home

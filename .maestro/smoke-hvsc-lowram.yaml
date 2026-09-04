@@ -14,6 +14,8 @@ env:
 - extendedWaitUntil:
     visible: "Settings"
     timeout: ${SHORT_TIMEOUT}
+- assertVisible:
+    id: "page-settings"
 - waitForAnimationToEnd
 - swipe:
     start: 50%, 78%
@@ -47,6 +49,8 @@ env:
 - extendedWaitUntil:
     visible: "Play files"
     timeout: ${SHORT_TIMEOUT}
+- assertVisible:
+    id: "page-play"
 - waitForAnimationToEnd
 - swipe:
     start: 50%, 86%

@@ -15,7 +15,8 @@
  */
 
 import { addLog } from "@/lib/logging";
-import { foreignSenders, stopForeignSenders } from "./foreignSenderGuard";
+import { describeSenderMismatch, detectSenderMismatch, type SenderMismatch } from "./senderMismatch";
+import { describeUnstoppedForeignSenders, foreignSenders, stopForeignSenders } from "./foreignSenderGuard";
 import { AUDIO_SAMPLE_RATE, AudioBatcher, bytesToInt16LE, parseAudioPacket } from "./audioStream";
 import { loadStreamNetworkBufferMs } from "@/lib/config/appSettings";
 import { AudioPlaybackBuffer } from "./audioPlaybackBuffer";
@@ -36,6 +37,19 @@ export interface AudioMirrorSnapshot {
   error: string | null;
   /** The route the current stream actually uses (Wi‑Fi only when requested + available). */
   route: "wifi" | "ethernet";
+  /**
+   * A second Ultimate is streaming into our group and would not stop when asked. Non-fatal — the
+   * native filter keeps the picture right — so it is a hint beside the controls, not an error.
+   */
+  foreignSenderNotice: string | null;
+  /**
+   * The stream is arriving from an address the native filter is not accepting.
+   *
+   * Set only when a live stream went silent AND the plugin was dropping packets at that moment, so
+   * it explains the silence rather than merely reporting a second sender (which
+   * {@link foreignSenderNotice} covers). Carries the address the one-tap recovery adopts.
+   */
+  senderMismatch: SenderMismatch | null;
 }
 
 /** Live audio-pipeline signals for the governor + telemetry (read on the low-rate tick). */
@@ -54,6 +68,14 @@ export interface AudioMirrorSignals {
   audioConcealed: number;
   /** Cumulative audio packets detected lost. */
   audioLostPackets: number;
+  /**
+   * Packets the native sender filter refused because they came from another address.
+   *
+   * Reported beside the loss counters because it is the one number that distinguishes a stream that
+   * is not arriving from a stream that is arriving and being thrown away — see
+   * `streams/senderMismatch`.
+   */
+  audioRejectedPackets: number;
 }
 
 export interface AudioMirrorDeps {
@@ -112,6 +134,8 @@ export class AudioMirrorController {
     chunks: 0,
     error: null,
     route: "ethernet",
+    foreignSenderNotice: null,
+    senderMismatch: null,
   };
 
   constructor(private readonly deps: AudioMirrorDeps) {}
@@ -150,6 +174,7 @@ export class AudioMirrorController {
       audioLostPackets: this.nativeSink
         ? (nativeStats?.arrival?.lostPackets ?? this.nativeLostPackets)
         : (this.playbackBuffer?.stats.packetsLost ?? 0),
+      audioRejectedPackets: nativeStats?.rejectedPackets ?? 0,
     };
   }
 
@@ -159,7 +184,11 @@ export class AudioMirrorController {
     this.snapshot = { ...this.snapshot, ...patch };
     // Throttle the React broadcast like the video path: the chunk/dropped snapshot changes ~31/s but
     // state/error transitions must not be delayed. getSnapshot() stays current for the session tick.
-    const important = patch.state !== undefined || patch.error !== undefined;
+    const important =
+      patch.state !== undefined ||
+      patch.error !== undefined ||
+      patch.foreignSenderNotice !== undefined ||
+      patch.senderMismatch !== undefined;
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
     if (important || now - this.lastEmitMs >= AUDIO_SNAPSHOT_EMIT_INTERVAL_MS) {
       this.lastEmitMs = now;
@@ -182,7 +211,15 @@ export class AudioMirrorController {
     this.batcher.reset();
     this.nativeLostPackets = 0;
     this.nativeLastSeq = null;
-    this.update({ state: "connecting", error: null, droppedPackets: 0, chunks: 0, route: "ethernet" });
+    this.update({
+      state: "connecting",
+      error: null,
+      droppedPackets: 0,
+      chunks: 0,
+      route: "ethernet",
+      foreignSenderNotice: null,
+      senderMismatch: null,
+    });
 
     // Prefer the native low-latency sink when offered: the plugin's receive thread feeds the
     // AudioTrack directly, so JS drives NO playback (no bridge traffic, no jitter buffer). Fall back
@@ -314,11 +351,12 @@ export class AudioMirrorController {
     );
     if (pending.length === 0) return;
     pending.forEach((host) => this.foreignHandled.add(host));
-    await stopForeignSenders({
+    const { failed } = await stopForeignSenders({
       senders: pending,
       expectedHost: null, // already filtered
       stopStreamAt: (host, name) => this.deps.stopStreamAt?.(host, name) ?? Promise.resolve(),
     });
+    if (failed.length > 0) this.update({ foreignSenderNotice: describeUnstoppedForeignSenders(failed) });
   }
 
   /**
@@ -358,6 +396,48 @@ export class AudioMirrorController {
       silentMs: Math.round(silentMs),
     });
     this.update({ state: "error", error: "The audio stream stopped arriving." });
+    // Reported first, diagnosed second: the plugin read crosses the bridge, and a call that never
+    // answers must not be able to leave the silence unreported.
+    void this.diagnoseSilence();
+  }
+
+  /**
+   * Ask the receiver whether the silence was the sender filter refusing everything that arrived.
+   *
+   * A filter keyed to the wrong address of a dual-homed Ultimate is silent in the same way as a
+   * dead stream, so the plugin's rejection counters are the only thing that separates the two.
+   */
+  private async diagnoseSilence(): Promise<void> {
+    const receiver = this.receiver;
+    const diagnostics = (await receiver?.readDiagnostics?.()) ?? null;
+    // The mirror was restarted or stopped while the read was in flight; whatever this says is about
+    // a socket nobody is listening to any more.
+    if (this.receiver !== receiver || this.snapshot.state !== "error") return;
+    const mismatch = detectSenderMismatch(diagnostics, this.deps.expectedSenderHost?.() ?? null);
+    if (!mismatch) return;
+    addLog("warn", "Audio Mirror: the stream is arriving from an address the sender filter refuses", {
+      source: mismatch.source,
+      expected: mismatch.expected,
+      rejectedPackets: mismatch.rejectedPackets,
+    });
+    this.update({ error: describeSenderMismatch(mismatch, "audio"), senderMismatch: mismatch });
+  }
+
+  /**
+   * Accept the machine that is actually sending, on the socket that is already bound.
+   *
+   * Retargeting the filter rather than restarting the stream keeps the socket in the multicast
+   * group, so the next packet from the adopted sender is played; a restart would ask the device to
+   * begin streaming again, which is the one thing already known to be working.
+   */
+  async adoptSender(source: string): Promise<void> {
+    const receiver = this.receiver;
+    if (!receiver?.setExpectedSource || this.snapshot.state === "off") return;
+    await receiver.setExpectedSource(source);
+    if (this.receiver !== receiver) return;
+    this.lastSeenArrivalPackets = -1;
+    this.update({ state: "live", error: null, senderMismatch: null });
+    this.arrivalWatchdog.start();
   }
 
   async stop(): Promise<void> {
@@ -379,6 +459,6 @@ export class AudioMirrorController {
     await this.nativeSink?.close();
     this.nativeSink = null;
     this.batcher.reset();
-    this.update({ state: "off", error: null });
+    this.update({ state: "off", error: null, senderMismatch: null });
   }
 }
