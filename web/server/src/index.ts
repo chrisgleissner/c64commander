@@ -53,13 +53,19 @@ const LOGIN_FAILURE_BLOCK_MS = 5 * 60 * 1000;
 const LOGIN_FAILURE_MAX_ATTEMPTS = 5;
 // The budget across every key, so a client that varies its forwarded address
 // cannot escape the per-key limiter. Generous enough that several people on the
-// LAN can each mistype their password.
+// LAN can each mistype their password. Applied only when WEB_TRUST_PROXY is on,
+// which is the only configuration where the key is client-controlled; see
+// `authState.ts` for why running it otherwise would only create a lockout.
 const LOGIN_FAILURE_GLOBAL_MAX_ATTEMPTS = 30;
 const MAX_SERVER_LOGS = 500;
 // HARD27-017: the browser sends no timeout of its own, so the proxy bounds the
-// upstream request itself. Fifteen seconds is above the app's own REST timeouts
-// and well below the minutes an unanswered TCP connection can survive.
-const DEFAULT_REST_PROXY_TIMEOUT_MS = 15_000;
+// upstream request itself. The bound has to clear the largest budget the client
+// itself allows, or the proxy aborts a request the app was still waiting on:
+// `DISK_CREATE_REQUEST_TIMEOUT_MS` in `src/lib/c64api.ts` is 30 s, because
+// formatting a blank image on slow USB media takes that long. Forty-five
+// seconds leaves headroom above it and is still well below the minutes an
+// unanswered TCP connection can survive.
+export const DEFAULT_REST_PROXY_TIMEOUT_MS = 45_000;
 const REST_PROXY_TIMEOUT_MS = (() => {
   const configured = Number((process.env.WEB_REST_PROXY_TIMEOUT_MS ?? "").trim());
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_REST_PROXY_TIMEOUT_MS;
@@ -214,6 +220,7 @@ const {
   loginFailureBlockMs: LOGIN_FAILURE_BLOCK_MS,
   loginFailureMaxAttempts: LOGIN_FAILURE_MAX_ATTEMPTS,
   loginFailureGlobalMaxAttempts: LOGIN_FAILURE_GLOBAL_MAX_ATTEMPTS,
+  loginFailureGlobalBudgetEnabled: trustProxy,
 });
 
 const buildDefaultConfig = (): AppConfig => ({

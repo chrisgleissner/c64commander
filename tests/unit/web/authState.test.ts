@@ -17,7 +17,7 @@ const createResponse = () =>
     setHeader: vi.fn(),
   }) as unknown as ServerResponse & { setHeader: ReturnType<typeof vi.fn> };
 
-const createSubject = () =>
+const createSubject = (overrides: Partial<Parameters<typeof createAuthState>[0]> = {}) =>
   createAuthState({
     cookieName: "c64u_session",
     sessionTtlMs: 60_000,
@@ -25,6 +25,9 @@ const createSubject = () =>
     loginFailureWindowMs: 10_000,
     loginFailureBlockMs: 5_000,
     loginFailureMaxAttempts: 3,
+    loginFailureGlobalMaxAttempts: 6,
+    loginFailureGlobalBudgetEnabled: false,
+    ...overrides,
   });
 
 const extractCookieValue = (response: ReturnType<typeof createResponse>) => {
@@ -41,6 +44,32 @@ afterEach(() => {
 });
 
 describe("authState", () => {
+  // HARD27-008: the budget across all keys exists for the one configuration
+  // where a client picks its own key. Everywhere else the key is the socket
+  // address, and a budget there would let one LAN client lock every other
+  // client out of the login page for the block period. A blocked request is
+  // answered before the password is compared, so the correct password that is
+  // supposed to release the budget never reaches `clearFailedLogins`.
+  it("does not apply the global attempt budget when no forwarded address is trusted", () => {
+    const authState = createSubject({ loginFailureGlobalBudgetEnabled: false });
+
+    for (let index = 0; index < 20; index += 1) {
+      authState.recordFailedLogin(`198.51.100.${index}`);
+    }
+
+    expect(authState.isLoginBlocked("203.0.113.9")).toBe(false);
+  });
+
+  it("applies the global attempt budget when a forwarded address is trusted", () => {
+    const authState = createSubject({ loginFailureGlobalBudgetEnabled: true });
+
+    for (let index = 0; index < 6; index += 1) {
+      authState.recordFailedLogin(`198.51.100.${index}`);
+    }
+
+    expect(authState.isLoginBlocked("203.0.113.9")).toBe(true);
+  });
+
   it("issues secure session cookies, authenticates requests, and clears sessions", () => {
     const authState = createSubject();
     const response = createResponse();

@@ -23,6 +23,15 @@ export const resolveHostAddresses: HostAddressResolver = async (hostname) => {
 // resolves to is private-range, which is what "on my LAN" actually means.
 // Results are cached for a short TTL so a per-request DNS lookup does not sit
 // in front of every proxied call.
+//
+// The gate resolves the name and the proxied request then resolves it again, so
+// a name whose DNS answers a private address here and a public one there is not
+// caught, and the cache widens that window to its TTL. Pinning the resolved
+// address for the connection would close it, but it would also change the Host
+// header the device sees and the address the FTP handlers dial, so it is not a
+// change to make alongside this one. The exposure is a LAN-only proxy reachable
+// by a host name the user themselves saved, which is a long way from the
+// misconfiguration this policy exists to fix.
 export const createLanHostPolicy = (options: {
   resolve?: HostAddressResolver;
   ttlMs?: number;

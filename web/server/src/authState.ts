@@ -35,6 +35,9 @@ export const createAuthState = (options: {
   loginFailureBlockMs: number;
   loginFailureMaxAttempts: number;
   loginFailureGlobalMaxAttempts: number;
+  // The global budget only applies where the per-key limiter's key is
+  // client-controlled, which is when a forwarded address is trusted.
+  loginFailureGlobalBudgetEnabled: boolean;
 }) => {
   const {
     cookieName,
@@ -44,6 +47,7 @@ export const createAuthState = (options: {
     loginFailureBlockMs,
     loginFailureMaxAttempts,
     loginFailureGlobalMaxAttempts,
+    loginFailureGlobalBudgetEnabled,
   } = options;
 
   const sessions = new Map<string, SessionRecord>();
@@ -51,9 +55,18 @@ export const createAuthState = (options: {
   // HARD27-008: a per-key limiter cannot stop a client that varies its key. When
   // WEB_TRUST_PROXY is on, X-Forwarded-For is one such key, so a budget across
   // all keys backs the per-key one up.
+  //
+  // It is off otherwise, and that is not a shortcut. Without a trusted proxy the
+  // key is the socket's own address, which a client cannot choose, so the
+  // per-key limiter already holds. Running the global budget there would only
+  // add a way for one LAN client to lock every other client — the operator
+  // included — out of the login page for the block period, with no way back:
+  // a blocked request is answered before the password is read, so the correct
+  // password that would release the budget never gets compared.
   let globalAttempts: LoginAttemptRecord = { failures: 0, firstFailureAtMs: 0, blockedUntilMs: 0 };
 
   const isGloballyBlocked = () => {
+    if (!loginFailureGlobalBudgetEnabled) return false;
     const now = Date.now();
     if (globalAttempts.blockedUntilMs > now) return true;
     if (globalAttempts.failures > 0 && now - globalAttempts.firstFailureAtMs > loginFailureWindowMs) {
@@ -73,6 +86,9 @@ export const createAuthState = (options: {
     return false;
   };
 
+  // The tally is kept whether or not the budget is enabled; `isGloballyBlocked`
+  // is the single place that decides whether it counts, so a test of the
+  // behaviour exercises the switch rather than a second copy of it.
   const recordFailedLogin = (clientIp: string) => {
     const now = Date.now();
     if (globalAttempts.failures === 0 || now - globalAttempts.firstFailureAtMs > loginFailureWindowMs) {
