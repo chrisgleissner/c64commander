@@ -9,25 +9,28 @@ describe("appSettings", () => {
   });
 
   describe("fullScreen system bars", () => {
-    it("defaults from the build-variant runtime override (false for the standard variant)", () => {
-      // The default variant (c64commander) ships full-screen OFF; a keypad-first
-      // variant ships it ON via variant.runtime (see appSettings.fullScreen.test.ts).
-      expect(appSettings.loadHideStatusBar()).toBe(appSettings.DEFAULT_HIDE_STATUS_BAR);
-      expect(appSettings.loadHideNavigationBar()).toBe(appSettings.DEFAULT_HIDE_NAVIGATION_BAR);
-      expect(appSettings.DEFAULT_HIDE_STATUS_BAR).toBe(false);
-      expect(appSettings.DEFAULT_HIDE_NAVIGATION_BAR).toBe(false);
+    it("defaults from the build-variant runtime override, gated by display profile (false for the standard variant on every profile)", () => {
+      // The default variant (c64commander) ships full-screen OFF on every profile; a
+      // keypad-first variant ships the navigation bar hidden, but only at compact (see
+      // appSettings.fullScreen.test.ts).
+      expect(appSettings.loadHideStatusBar("medium")).toBe(appSettings.resolveDefaultHideStatusBar("medium"));
+      expect(appSettings.loadHideNavigationBar("medium")).toBe(appSettings.resolveDefaultHideNavigationBar("medium"));
+      expect(appSettings.resolveDefaultHideStatusBar("compact")).toBe(false);
+      expect(appSettings.resolveDefaultHideStatusBar("medium")).toBe(false);
+      expect(appSettings.resolveDefaultHideNavigationBar("compact")).toBe(false);
+      expect(appSettings.resolveDefaultHideNavigationBar("medium")).toBe(false);
     });
 
-    it("persists a user override that wins over the variant default", () => {
+    it("persists a user override that wins over the profile-aware default", () => {
       appSettings.saveHideStatusBar(true);
       appSettings.saveHideNavigationBar(true);
-      expect(appSettings.loadHideStatusBar()).toBe(true);
-      expect(appSettings.loadHideNavigationBar()).toBe(true);
+      expect(appSettings.loadHideStatusBar("medium")).toBe(true);
+      expect(appSettings.loadHideNavigationBar("medium")).toBe(true);
       expect(localStorage.getItem(APP_SETTINGS_KEYS.HIDE_STATUS_BAR_KEY)).toBe("1");
       expect(localStorage.getItem(APP_SETTINGS_KEYS.HIDE_NAVIGATION_BAR_KEY)).toBe("1");
 
       appSettings.saveHideStatusBar(false);
-      expect(appSettings.loadHideStatusBar()).toBe(false);
+      expect(appSettings.loadHideStatusBar("medium")).toBe(false);
       expect(localStorage.getItem(APP_SETTINGS_KEYS.HIDE_STATUS_BAR_KEY)).toBe("0");
     });
   });

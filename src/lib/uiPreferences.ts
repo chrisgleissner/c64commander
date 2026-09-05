@@ -6,8 +6,15 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { type DisplayProfileOverride, isDisplayProfileOverride } from "@/lib/displayProfiles";
+import {
+  type DisplayProfile,
+  type DisplayProfileOverride,
+  isDisplayProfileOverride,
+  resolveAutomaticDisplayProfileWidth,
+  resolveEffectiveDisplayProfile,
+} from "@/lib/displayProfiles";
 import { variant } from "@/generated/variant";
+import { isNativePlatform } from "@/lib/native/platform";
 import {
   DEFAULT_TEXT_SCALE_ID,
   applyTextScaleToDocument,
@@ -65,6 +72,26 @@ export const setDisplayProfileOverride = (value: DisplayProfileOverride) => {
       detail: { displayProfileOverride: value },
     }),
   );
+};
+
+/**
+ * The effective display profile right now, resolved the same way `useDisplayProfile` resolves
+ * `profile` (screen size on native, viewport width on web, then the user's manual override). Code
+ * that needs the profile before React has mounted — native full-screen chrome is applied before
+ * first paint, see `applyFullScreenFromSettings` — cannot wait for the context, and calls this
+ * instead.
+ */
+export const resolveCurrentDisplayProfile = (): DisplayProfile => {
+  const viewportWidth = typeof window === "undefined" ? 0 : Math.max(0, Math.round(window.innerWidth || 0));
+  const readScreenDimension = (dimension: "width" | "height") => {
+    if (typeof window === "undefined") return 0;
+    const value = window.screen?.[dimension];
+    return Math.max(0, Math.round(typeof value === "number" ? value : 0));
+  };
+  const automaticProfileWidth = isNativePlatform()
+    ? resolveAutomaticDisplayProfileWidth(viewportWidth, readScreenDimension("width"), readScreenDimension("height"))
+    : viewportWidth;
+  return resolveEffectiveDisplayProfile(automaticProfileWidth, getDisplayProfileOverride());
 };
 
 /**

@@ -23,6 +23,7 @@ import {
   setDisplayProfileOverride as persistDisplayProfileOverride,
 } from "@/lib/uiPreferences";
 import { APP_SETTINGS_KEYS, loadScreenOrientationMode } from "@/lib/config/appSettings";
+import { applyFullScreenFromSettings } from "@/lib/native/fullScreen";
 import { isNativePlatform } from "@/lib/native/platform";
 
 type DisplayProfileContextValue = {
@@ -260,6 +261,12 @@ export function DisplayProfileProvider({ children }: { children: React.ReactNode
 
   React.useEffect(() => {
     applyProfileTokens(value.profile);
+    // The initial call at start-up (`main.tsx`) runs before this provider exists, so it resolves
+    // the profile itself. Once it does exist, the profile is the source of truth: re-applying here
+    // keeps the native status/navigation bars correct across a manual profile override or a resize
+    // that crosses a breakpoint, without disturbing an explicit user toggle (see
+    // `resolveDefaultHideStatusBar`/`resolveDefaultHideNavigationBar`).
+    applyFullScreenFromSettings();
   }, [value.profile]);
 
   return <DisplayProfileContext.Provider value={value}>{children}</DisplayProfileContext.Provider>;
