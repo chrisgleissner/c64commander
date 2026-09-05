@@ -142,12 +142,19 @@ class DemoHvscArchive(
       dir.mkdirs()
       val file = File(dir, "$title.sid")
       file.writeBytes(psid(title, index))
-      // The real Songlengths.md5 is keyed by the tune's MD5; the app only needs well-formed
-      // entries to show durations, and a stable synthetic key keeps this generator dependency
-      // free.
-      // mm:ss, and the seconds have to stay under sixty: an earlier version wrote `1:119` for
-      // anything past the first ninety, and the app rejected 200 of 480 entries as malformed.
+
+      // Real Songlengths.md5 entries come in pairs: a comment line naming the tune's path, then
+      // the MD5 and its durations. Both matter here. The durations are what the app shows, and
+      // the PATH line is what puts the tune into the browse index at all — on Android the archive
+      // is unpacked natively and the JS side learns which songs exist from this file, so a
+      // songlengths file without path comments produces a library that browses from disk and
+      // cannot be searched. That is exactly what the first version of this generator produced.
+      //
+      // mm:ss, with the seconds under sixty: an earlier version wrote `1:119`, and the app
+      // rejected 200 of 480 entries as malformed.
       val seconds = 45 + (index % 200)
+      val virtualPath = file.absolutePath.substringAfter(root.absolutePath)
+      songlengths.append("; ").append(virtualPath).append('\n')
       songlengths.append(String.format("%032x=%d:%02d\n", index, seconds / 60, seconds % 60))
       written += 1
     }
