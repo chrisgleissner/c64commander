@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { cn } from "@/lib/utils";
 import { reportUserError } from "@/lib/uiErrors";
+import { canPickDocuments } from "@/lib/native/folderPicker";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import type { SourceEntry, SelectedItem, SourceLocation } from "@/lib/sourceNavigation/types";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
@@ -346,6 +347,22 @@ export const ItemSelectionDialog = ({
     return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   };
 
+  /*
+   * Whether this device can put a document picker in front of the user. Asked when the source
+   * list is first shown rather than at startup, because that is the only place the answer is used.
+   */
+  const [localPickerAvailable, setLocalPickerAvailable] = useState(true);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void canPickDocuments().then((support) => {
+      if (!cancelled) setLocalPickerAvailable(support.directories);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   const handleAddLocalSource = async () => {
     if (pendingLocalSource) return;
     setPendingLocalSource(true);
@@ -448,7 +465,7 @@ export const ItemSelectionDialog = ({
                   variant="outline"
                   className={interstitialButtonClassName}
                   onClick={() => void handleAddLocalSource()}
-                  disabled={pendingLocalSource}
+                  disabled={pendingLocalSource || !localPickerAvailable}
                   aria-busy={pendingLocalSource}
                   id="import-option-local"
                   data-testid="import-option-local"
@@ -462,6 +479,13 @@ export const ItemSelectionDialog = ({
                       <span className={cn("truncate font-medium", interstitialTextClassName)}>
                         {SOURCE_LABELS.local}
                       </span>
+                      {/* Said before the user asks, not after. A handset built without Google Mobile
+                          Services has no document picker, and this source can then only ever fail. */}
+                      {localPickerAvailable ? null : (
+                        <span className="text-xs text-muted-foreground" data-testid="import-option-local-unavailable">
+                          No file picker on this device
+                        </span>
+                      )}
                     </span>
                   </span>
                 </Button>
@@ -619,8 +643,16 @@ export const ItemSelectionDialog = ({
                 </>
               }
               titleContent={
-                <AppSheetTitle className="truncate text-base" data-testid="add-items-title">
-                  {selectedSourceLabel ? `From ${selectedSourceLabel}` : title}
+                <AppSheetTitle className="flex min-w-0 items-center gap-2 text-base" data-testid="add-items-title">
+                  <span className="truncate">{selectedSourceLabel ? `From ${selectedSourceLabel}` : title}</span>
+                  {selectedSourceOrigin ? (
+                    <span aria-hidden="true" data-testid="add-items-selection-icon">
+                      <FileOriginIcon
+                        origin={selectedSourceOrigin}
+                        className={resolveSelectionHeadingIconClassName(selectedSourceOrigin)}
+                      />
+                    </span>
+                  ) : null}
                 </AppSheetTitle>
               }
               descriptionContent={<AppSheetDescription>{title}</AppSheetDescription>}

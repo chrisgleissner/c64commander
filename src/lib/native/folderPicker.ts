@@ -76,6 +76,9 @@ type FolderPickerPlugin = {
     path: string;
     traceContext?: NativeTraceContext;
   }) => Promise<{ data: string }>;
+  canPickDocuments: (options?: {
+    traceContext?: NativeTraceContext;
+  }) => Promise<{ directories: boolean; files: boolean }>;
   writeFileToTree: (options: {
     treeUri: string;
     path: string;
@@ -196,10 +199,42 @@ export const FolderPicker: FolderPickerPlugin = {
     if (override) return override(withTrace);
     return plugin.readFileFromTree(withTrace);
   },
+  canPickDocuments: (options) => {
+    const override = resolveOverrideMethod("canPickDocuments");
+    const withTrace = withTraceContext(options);
+    if (override) return override(withTrace);
+    return plugin.canPickDocuments(withTrace);
+  },
   writeFileToTree: (options) => {
     const override = resolveOverrideMethod("writeFileToTree");
     const withTrace = withTraceContext(options);
     if (override) return override(withTrace);
     return plugin.writeFileToTree(withTrace);
   },
+};
+
+/*
+ * Whether this device can put a document picker in front of the user.
+ *
+ * Asked once and remembered: the answer is a property of the installed system apps and cannot
+ * change while the app is running. A platform without the native plugin - the browser build, iOS
+ * before this method existed - answers yes, because there the picker is the file input and the
+ * old behaviour is correct. A plugin that cannot answer also answers yes: offering a source that
+ * turns out to be unavailable is a worse failure than the toast, but hiding one that works is
+ * worse still.
+ */
+let documentPickerSupport: Promise<{ directories: boolean; files: boolean }> | null = null;
+
+export const canPickDocuments = (): Promise<{ directories: boolean; files: boolean }> => {
+  if (!documentPickerSupport) {
+    documentPickerSupport = FolderPicker.canPickDocuments()
+      .then((result) => ({ directories: result?.directories !== false, files: result?.files !== false }))
+      .catch(() => ({ directories: true, files: true }));
+  }
+  return documentPickerSupport;
+};
+
+/** Test seam: the cached answer is per process, and a test needs to change the device under it. */
+export const resetDocumentPickerSupport = () => {
+  documentPickerSupport = null;
 };

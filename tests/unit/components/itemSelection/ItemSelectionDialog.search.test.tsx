@@ -93,9 +93,11 @@ describe("ItemSelectionDialog search scope", () => {
     navigatorState.canSearchSource = true;
     navigatorState.entries = [];
     navigatorState.totalCount = 0;
+    navigatorState.query = "";
   });
 
   it("offers to search the whole source, not just the folder on screen", () => {
+    navigatorState.query = "commando";
     renderSheet();
 
     expect(screen.getByTestId("add-items-scope-folder")).toBeTruthy();
@@ -103,11 +105,27 @@ describe("ItemSelectionDialog search scope", () => {
   });
 
   it("widens the search when the whole source is chosen", () => {
+    navigatorState.query = "commando";
     renderSheet();
 
     fireEvent.click(screen.getByTestId("add-items-scope-source"));
 
     expect(navigatorState.setSearchScope).toHaveBeenCalledWith("source");
+  });
+
+  /*
+   * On the compact profile the scope row costs a row of the file list, and until there is
+   * something typed it answers a question the user has not asked. It appears with the text.
+   */
+  it("holds the scope control back until there is something to scope", () => {
+    navigatorState.query = "";
+    renderSheet();
+
+    expect(screen.queryByTestId("add-items-search-scope")).toBeNull();
+
+    fireEvent.change(screen.getByTestId("add-items-filter"), { target: { value: "commando" } });
+
+    expect(navigatorState.setQuery).toHaveBeenCalledWith("commando");
   });
 
   it("hides the scope control for a source that can only be browsed", () => {
@@ -135,6 +153,7 @@ describe("ItemSelectionDialog search scope", () => {
 
   it("shows how many results a search found", () => {
     navigatorState.searchScope = "source";
+    navigatorState.query = "commando";
     navigatorState.isSearching = true;
     navigatorState.totalCount = 42;
     renderSheet();

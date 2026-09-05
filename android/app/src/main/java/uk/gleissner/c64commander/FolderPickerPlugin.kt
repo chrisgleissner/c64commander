@@ -193,6 +193,26 @@ class FolderPickerPlugin : Plugin() {
     launchPicker(call, intent, "pickFileResult", "file picker")
   }
 
+  /*
+   * Whether this device can pick documents at all, so the web layer can say so before the user
+   * asks rather than after. Both intents are checked because the two entry points are separate:
+   * a device could resolve one and not the other.
+   */
+  @PluginMethod
+  fun canPickDocuments(call: PluginCall) {
+    val packageManager = context.packageManager
+    val tree = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).resolveActivity(packageManager) != null
+    val file =
+            Intent(Intent.ACTION_OPEN_DOCUMENT)
+                    .addCategory(Intent.CATEGORY_OPENABLE)
+                    .setType("*/*")
+                    .resolveActivity(packageManager) != null
+    val result = JSObject()
+    result.put("directories", tree)
+    result.put("files", file)
+    call.resolve(result)
+  }
+
   @ActivityCallback
   private fun pickDirectoryResult(call: PluginCall, result: ActivityResult) {
     if (result.resultCode != Activity.RESULT_OK) {

@@ -39,12 +39,22 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
         CAPPluginMethod(name: "readFile", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "readFileFromTree", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "writeFileToTree", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "canPickDocuments", returnType: CAPPluginReturnPromise),
     ]
 
     private var pendingDirectoryCall: CAPPluginCall?
     private var pendingFileCall: CAPPluginCall?
     private var pendingFileExtensions: [String] = []
     private let operationQueue = DispatchQueue(label: "uk.gleissner.c64commander.folderpicker")
+
+    /*
+     * UIDocumentPickerViewController is part of UIKit, so both pickers are always available on
+     * iOS. Android answers this by resolving the intent, because a device built without Google
+     * Mobile Services can have no document picker installed at all.
+     */
+    @objc func canPickDocuments(_ call: CAPPluginCall) {
+        call.resolve(["directories": true, "files": true])
+    }
 
     private func makeDirectoryPicker() -> UIDocumentPickerViewController {
         if #available(iOS 14.0, *) {
