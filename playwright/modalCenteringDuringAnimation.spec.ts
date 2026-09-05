@@ -123,14 +123,19 @@ test.describe("Centered overlays stay on screen for the whole open and close ani
     for (const surface of MODAL_SURFACES) {
       test(`dialog surface ${surface} on the ${profile} profile`, async ({ page }: { page: Page }) => {
         const viewportWidth = page.viewportSize()?.width ?? 393;
-        const { contentClassName } = resolveModalPresentation(profile, surface);
+        const { contentClassName, mode } = resolveModalPresentation(profile, surface);
 
         for (const dataState of ["open", "closed"] as const) {
           const samples = await measureAnimatedOverlay(page, {
             className: contentClassName,
             dataState,
-            // useCenteredOverlayPosition applies this inline, alongside the class.
-            inlineTransform: "translateX(-50%)",
+            /*
+             * useCenteredOverlayPosition applies this inline, alongside the class - but not to a
+             * full-screen surface, which DialogContent excludes from that hook. Applying it here
+             * anyway would offset a full-width surface by half its own width and fail the probe
+             * for a position the app never puts it in.
+             */
+            inlineTransform: mode === "full-screen" ? null : "translateX(-50%)",
           });
           expectWithinViewport(samples, viewportWidth, `${surface}/${profile} (${dataState})`);
         }

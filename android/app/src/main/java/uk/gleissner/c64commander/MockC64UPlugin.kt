@@ -9,6 +9,7 @@
 package uk.gleissner.c64commander
 
 import android.util.Log
+import java.io.File
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -50,7 +51,7 @@ class MockC64UPlugin : Plugin() {
       val state = MockC64UState.fromPayload(config)
       val timingProfile = loadTimingProfile()
       val token = generateMockToken()
-      val nextServer = MockC64UServer(state, timingProfile, token, streamServer)
+      val nextServer = MockC64UServer(state, timingProfile, token, streamServer, loadDemoArchive(), demoHvsc())
       val port = nextServer.start(preferredPort)
       server = nextServer
       mockToken = token
@@ -150,6 +151,27 @@ class MockC64UPlugin : Plugin() {
       }
     }
   }
+
+  /**
+   * The online archive Demo Mode answers with. Missing or unreadable is not fatal: the archive
+   * routes then behave like an unreachable CommoServe, and the rest of Demo Mode is unaffected.
+   */
+  /**
+   * The demo HVSC release builder, pointed at the same 7-Zip binary the app uses to read a real
+   * release (HvscIngestionPlugin resolves it the same way).
+   */
+  private fun demoHvsc(): DemoHvscArchive {
+    val bundled = context.applicationInfo.nativeLibraryDir?.let { File(it, "lib7zz.so") }
+    return DemoHvscArchive(context.cacheDir, bundled?.takeIf { it.canExecute() })
+  }
+
+  private fun loadDemoArchive(): String? =
+          try {
+            context.assets.open("demo-archive/commoserve.json").bufferedReader().use { it.readText() }
+          } catch (error: Exception) {
+            Log.w(logTag, "Demo archive fixture unavailable", error)
+            null
+          }
 
   /**
    * The Demo Mode stream's pre-built loop, from the assets `scripts/build-demo-stream-assets.ts`

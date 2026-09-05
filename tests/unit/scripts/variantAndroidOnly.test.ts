@@ -413,11 +413,23 @@ describe("real c64u-remote feature-flag overlay", () => {
     expect(byId.background_execution_enabled.developer_only).toBe(false);
   });
 
+  /*
+   * Demo Mode is the opposite of a non-remote-focus feature here. Most people who install the
+   * keypad edition do not own a Commodore 64 Ultimate when they first open it, and Demo Mode is
+   * the mode that gives them a working app anyway: the device REST API, FTP, the A/V stream, the
+   * online archive and an HVSC release are all served by the app over loopback. Compiling it out
+   * left those users with an app that could only show them an error.
+   */
+  it("ships Demo Mode, so the edition is usable before the hardware arrives", () => {
+    const resolved = resolveVariantFeatureRegistry(baseRegistry, overlay) as any;
+    const byId = Object.fromEntries(resolved.features.map((f: any) => [f.id, f]));
+    expect(byId.demo_mode_enabled.enabled).toBe(true);
+    expect(byId.demo_mode_enabled.visible_to_user).toBe(true);
+  });
+
   it("keeps non-remote-focus features hidden", () => {
     const resolved = resolveVariantFeatureRegistry(baseRegistry, overlay) as any;
     const byId = Object.fromEntries(resolved.features.map((f: any) => [f.id, f]));
-    expect(byId.demo_mode_enabled.enabled).toBe(false);
-    expect(byId.demo_mode_enabled.visible_to_user).toBe(false);
     expect(byId.lighting_studio_enabled.enabled).toBe(false);
     expect(byId.lighting_studio_enabled.visible_to_user).toBe(false);
     expect(byId.home_telnet_reu_snapshot_enabled.enabled).toBe(false);

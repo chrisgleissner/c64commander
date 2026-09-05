@@ -69,7 +69,9 @@
     "experimental-features",
     "sid-radio",
     "stable",
-    "experimental"
+    "experimental",
+    "stable-stable-features",
+    "experimental-experimental-features"
   ],
   "docs": [
     "getting-started",

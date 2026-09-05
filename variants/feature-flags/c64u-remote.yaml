@@ -24,9 +24,14 @@ overrides:
   hvsc_enabled:
     enabled: true
     visible_to_user: true
+  # Demo Mode is the mode this variant needs most, not least. It runs the whole app against
+  # mocks that live on the device — REST, FTP and a synthetic A/V stream — so someone who has
+  # the app but no Commodore 64 Ultimate on the network still sees a populated library, disks
+  # that mount, and a picture and sound in Live View. Many people meet this app before they meet
+  # the hardware, and with the flag off they met an empty shell instead.
   demo_mode_enabled:
-    enabled: false
-    visible_to_user: false
+    enabled: true
+    visible_to_user: true
 
   background_execution_enabled:
     enabled: true

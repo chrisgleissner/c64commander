@@ -161,16 +161,38 @@ export const checkForHvscUpdates = async (): Promise<HvscUpdateStatus> => {
   return checkRuntimeUpdates();
 };
 
+/*
+ * Ingestion writes a browse index of its own (createHvscBrowseIndexMutable ... finalize), so
+ * whatever this module had cached before it is stale the moment it finishes. Dropping the cache
+ * here is what makes a freshly installed library searchable.
+ *
+ * Without it the app kept the snapshot it started with — for a device with no library, an EMPTY
+ * one — and that snapshot is both what search reads and what the next save() persists. So a
+ * library could install correctly, report its songs indexed, browse fine through the native
+ * listing, and still answer every search with "Nothing found", while the empty snapshot was
+ * written back over the populated one ingestion had just saved.
+ */
+const forgetCachedBrowseIndex = () => {
+  hvscIndex.clearBrowseSnapshot();
+  verifiedBrowseSnapshot = null;
+};
+
 export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStatus> => {
   const mock = getMockBridge();
-  if (mock?.installOrUpdateHvsc) return mock.installOrUpdateHvsc({ cancelToken });
-  return installRuntime(cancelToken);
+  const status = mock?.installOrUpdateHvsc
+    ? await mock.installOrUpdateHvsc({ cancelToken })
+    : await installRuntime(cancelToken);
+  forgetCachedBrowseIndex();
+  return status;
 };
 
 export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus> => {
   const mock = getMockBridge();
-  if (mock?.ingestCachedHvsc) return mock.ingestCachedHvsc({ cancelToken });
-  return ingestRuntimeCached(cancelToken);
+  const status = mock?.ingestCachedHvsc
+    ? await mock.ingestCachedHvsc({ cancelToken })
+    : await ingestRuntimeCached(cancelToken);
+  forgetCachedBrowseIndex();
+  return status;
 };
 
 export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {

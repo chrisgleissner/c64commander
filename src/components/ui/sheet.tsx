@@ -12,6 +12,7 @@ import { X } from "lucide-react";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { APP_INTERSTITIAL_BACKDROP_CLASSNAME } from "@/components/ui/interstitialStyles";
 
 const Sheet = SheetPrimitive.Root;
@@ -39,7 +40,7 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-  "fixed z-50 gap-4 bg-background px-6 pt-[calc(1.5rem+var(--safe-area-inset-top))] pb-[calc(1.5rem+var(--safe-area-inset-bottom))] shadow-elev-2 transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
+  "fixed z-50 gap-4 bg-background shadow-elev-2 transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
   {
     variants: {
       side: {
@@ -50,29 +51,49 @@ const sheetVariants = cva(
         right:
           "top-[var(--safe-area-inset-top)] bottom-[var(--safe-area-inset-bottom)] right-0 w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
       },
+      /*
+       * Compact takes the whole panel and trims the padding. On a 320x427 screen a bottom sheet
+       * capped at 85% of the height gives up 64px to a backdrop nobody interacts with, and 24px of
+       * side padding takes another 15% of the width. Both matter more here than the visual cue
+       * that something is layered over the page, which the animation already provides.
+       */
+      density: {
+        compact:
+          "max-h-[100dvh] px-3 pt-[calc(0.75rem+var(--safe-area-inset-top))] pb-[calc(0.75rem+var(--safe-area-inset-bottom))]",
+        standard:
+          "max-h-[85dvh] px-6 pt-[calc(1.5rem+var(--safe-area-inset-top))] pb-[calc(1.5rem+var(--safe-area-inset-bottom))]",
+      },
     },
     defaultVariants: {
       side: "right",
+      density: "standard",
     },
   },
 );
 
 interface SheetContentProps
-  extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>, VariantProps<typeof sheetVariants> {}
+  extends
+    React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
+    Omit<VariantProps<typeof sheetVariants>, "density"> {}
 
 const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Content>, SheetContentProps>(
-  ({ side = "right", className, children, ...props }, ref) => (
-    <SheetPortal>
-      <SheetOverlay />
-      <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
-        {children}
-        <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-secondary hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </SheetPrimitive.Close>
-      </SheetPrimitive.Content>
-    </SheetPortal>
-  ),
+  ({ side = "right", className, children, ...props }, ref) => {
+    const { profile } = useDisplayProfile();
+    const density = profile === "compact" ? "compact" : "standard";
+
+    return (
+      <SheetPortal>
+        <SheetOverlay />
+        <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side, density }), className)} {...props}>
+          {children}
+          <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-secondary hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </SheetPrimitive.Close>
+        </SheetPrimitive.Content>
+      </SheetPortal>
+    );
+  },
 );
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 

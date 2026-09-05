@@ -62,6 +62,13 @@ class MockC64UServer(
         // MockC64UPlugin supplies a real one so `streams:start` actually produces packets
         // instead of just acknowledging the request (see MockStreamServer's doc comment).
         private val streamServer: MockStreamServer? = null,
+        // The online archive Demo Mode answers with, as the raw JSON of
+        // assets/demo-archive/commoserve.json. Null in tests and on any build that cannot read
+        // assets: the archive routes then 404 exactly as an unreachable CommoServe would, rather
+        // than the whole demo server failing to start over a browsing extra.
+        private val archiveFixture: String? = null,
+        // The HVSC release Demo Mode offers, built on demand. Null where one cannot be built.
+        private val demoHvsc: DemoHvscArchive? = null,
 ) {
   constructor(state: MockC64UState) : this(state, MockTimingProfile.defaultProfile())
 
@@ -322,7 +329,16 @@ class MockC64UServer(
       return HttpResponse(204, emptyMap(), ByteArray(0))
     }
 
-    if (!authToken.isNullOrEmpty() && request.headers["x-mock-token"] != authToken) {
+    // The demo HVSC release is the one thing here fetched by something that cannot set a header:
+    // the native resumable downloader. It is reached instead at /hvsc/<token>/…, so the same
+    // secret still has to be presented — in the path rather than in X-Mock-Token — and every
+    // other path keeps the header requirement exactly as it was.
+    val presentsTokenInPath =
+            !authToken.isNullOrEmpty() && request.path.startsWith("/hvsc/$authToken/")
+    if (!authToken.isNullOrEmpty() &&
+                    !presentsTokenInPath &&
+                    request.headers["x-mock-token"] != authToken
+    ) {
       return errorResponse(401, "Unauthorized")
     }
 
@@ -565,6 +581,95 @@ class MockC64UServer(
       }
     }
 
+    // --- the HVSC release, on loopback -----------------------------------------------------
+    // hvscReleaseService.ts reads the index as HTML and scans it for HVSC_<n>-all-of-them.7z,
+    // then downloads that name. Both are served here so the whole install path — probe, extract,
+    // hydrate — runs against a real archive with no network. See DemoHvscArchive.
+    //
+    // Reached at /hvsc/<token>/ rather than /hvsc/, and the token check above is not weakened for
+    // it. The archive is fetched by the native resumable downloader, which has no way to attach
+    // the X-Mock-Token header the rest of this server requires, so the secret moves into the path
+    // instead: the URL is unguessable, changes every boot, and only the WebView that started the
+    // server is told it. Exempting the route from authentication would have been the other way to
+    // make the download work, at the cost of the property HARD10-005 established.
+    if (request.method == "GET" && path.startsWith("/hvsc/")) {
+      val token = authToken
+      val rest = path.removePrefix("/hvsc/")
+      val prefix = rest.substringBefore('/')
+      if (token.isNullOrEmpty() || prefix != token) {
+        return errorResponse(404, "No demo HVSC release")
+      }
+      val archive = demoHvsc?.archive()
+      val remainder = rest.removePrefix(prefix).removePrefix("/")
+      if (remainder.isEmpty()) {
+        val body =
+                if (archive == null) "<html><body></body></html>"
+                else
+                        "<html><body><a href=\"${DemoHvscArchive.ARCHIVE_NAME}\">" +
+                                "${DemoHvscArchive.ARCHIVE_NAME}</a></body></html>"
+        return HttpResponse(
+                200,
+                mapOf("Content-Type" to "text/html"),
+                body.toByteArray(StandardCharsets.UTF_8),
+        )
+      }
+      if (remainder == DemoHvscArchive.ARCHIVE_NAME && archive != null) {
+        // Content-Length matters: the app checks free space against it before downloading.
+        return HttpResponse(
+                200,
+                mapOf("Content-Type" to "application/x-7z-compressed"),
+                archive.readBytes(),
+        )
+      }
+      return errorResponse(404, "No demo HVSC release")
+    }
+
+    // --- the online archive, on loopback -------------------------------------------------
+    // CommoServe's four GETs (src/lib/archive/client.ts). Demo Mode points the archive client
+    // here with a runtime override, so the Online Archive browser is populated with no network.
+    // These stay behind the same X-Mock-Token check as everything else above.
+    if (request.method == "GET" && path.startsWith("/leet/search/")) {
+      val archive = archiveFixture ?: return errorResponse(404, "No demo archive")
+      val fixture = JSONObject(archive)
+
+      if (path == "/leet/search/aql/presets") {
+        return jsonResponse(200, fixture.getJSONArray("presets"))
+      }
+
+      if (path == "/leet/search/aql") {
+        // The query is AQL, e.g. `(name:"waltz") & (category:3)`. Matching only `name:` is
+        // enough to make searching feel real; anything else returns the whole library, which is
+        // what an empty search does anyway.
+        val query = request.queryParams["query"].orEmpty()
+        val term = Regex("name:\"([^\"]*)\"").find(query)?.groupValues?.get(1)?.trim()
+        val all = fixture.getJSONArray("results")
+        if (term.isNullOrEmpty()) return jsonResponse(200, all)
+        val matched = JSONArray()
+        for (index in 0 until all.length()) {
+          val row = all.getJSONObject(index)
+          if (row.getString("name").contains(term, ignoreCase = true)) matched.put(row)
+        }
+        return jsonResponse(200, matched)
+      }
+
+      if (Regex("^/leet/search/entries/[^/]+/[^/]+$").matches(path)) {
+        val payload = JSONObject()
+        payload.put("contentEntry", fixture.getJSONArray("entries"))
+        return jsonResponse(200, payload)
+      }
+
+      val binary = Regex("^/leet/search/bin/[^/]+/[^/]+/(\\d+)$").find(path)
+      if (binary != null) {
+        // A PSID header and a few bytes: enough for the app to accept a download and hand it to
+        // the device, without shipping anyone's music in the app's own assets.
+        val body = ByteArray(126) { 0 }
+        "PSID".toByteArray(Charsets.US_ASCII).copyInto(body)
+        return HttpResponse(200, mapOf("Content-Type" to "application/octet-stream"), body)
+      }
+
+      return errorResponse(404, "Unknown archive path")
+    }
+
     if (path == "/v1/drives" && request.method == "GET") {
       return jsonResponse(200, buildDrivesPayload())
     }
@@ -794,6 +899,14 @@ class MockC64UServer(
   }
 
   private fun jsonResponse(status: Int, payload: JSONObject): HttpResponse {
+    val body = payload.toString().toByteArray(StandardCharsets.UTF_8)
+    val headers = mapOf("Content-Type" to "application/json")
+    return HttpResponse(status, headers, body)
+  }
+
+  // The archive's search and presets answer with a bare JSON array, not an envelope
+  // (src/lib/archive/client.ts parses both shapes).
+  private fun jsonResponse(status: Int, payload: JSONArray): HttpResponse {
     val body = payload.toString().toByteArray(StandardCharsets.UTF_8)
     val headers = mapOf("Content-Type" to "application/json")
     return HttpResponse(status, headers, body)

@@ -19,7 +19,7 @@ export type LikedTunesSheetProps = {
 /** The Liked Tunes collection in a bottom sheet (spec §5.5). */
 export const LikedTunesSheet = ({ open, onOpenChange, onPlay }: LikedTunesSheetProps) => (
   <Sheet open={open} onOpenChange={onOpenChange}>
-    <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto" data-testid="liked-tunes-sheet">
+    <SheetContent side="bottom" className="overflow-y-auto" data-testid="liked-tunes-sheet">
       <SheetHeader>
         <SheetTitle>Liked Tunes</SheetTitle>
         <SheetDescription>

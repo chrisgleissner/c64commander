@@ -118,7 +118,41 @@ class FolderPickerPlugin : Plugin() {
     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
     intent.addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
-    startActivityForResult(call, intent, "pickDirectoryResult")
+    launchPicker(call, intent, "pickDirectoryResult", "folder picker")
+  }
+
+  /*
+   * Not every Android device has a document picker. Keypad handsets built without Google Mobile
+   * Services often ship no DocumentsUI at all, and there `startActivityForResult` throws
+   * ActivityNotFoundException on the Capacitor plugin thread, which kills the process. Rejecting
+   * the call instead leaves the web layer to say so and the other sources still reachable.
+   */
+  private fun launchPicker(call: PluginCall, intent: Intent, callbackName: String, what: String) {
+    if (intent.resolveActivity(context.packageManager) == null) {
+      AppLogger.warn(
+              pluginContextOrNull(),
+              logTag,
+              "No $what on this device",
+              "FolderPickerPlugin",
+              null,
+              traceFields(call)
+      )
+      call.reject("NO_PICKER_AVAILABLE")
+      return
+    }
+    try {
+      startActivityForResult(call, intent, callbackName)
+    } catch (error: Exception) {
+      AppLogger.error(
+              pluginContextOrNull(),
+              logTag,
+              "Could not open the $what",
+              "FolderPickerPlugin",
+              error,
+              traceFields(call)
+      )
+      call.reject("NO_PICKER_AVAILABLE", error)
+    }
   }
 
   @PluginMethod
@@ -156,7 +190,27 @@ class FolderPickerPlugin : Plugin() {
     }
     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-    startActivityForResult(call, intent, "pickFileResult")
+    launchPicker(call, intent, "pickFileResult", "file picker")
+  }
+
+  /*
+   * Whether this device can pick documents at all, so the web layer can say so before the user
+   * asks rather than after. Both intents are checked because the two entry points are separate:
+   * a device could resolve one and not the other.
+   */
+  @PluginMethod
+  fun canPickDocuments(call: PluginCall) {
+    val packageManager = context.packageManager
+    val tree = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).resolveActivity(packageManager) != null
+    val file =
+            Intent(Intent.ACTION_OPEN_DOCUMENT)
+                    .addCategory(Intent.CATEGORY_OPENABLE)
+                    .setType("*/*")
+                    .resolveActivity(packageManager) != null
+    val result = JSObject()
+    result.put("directories", tree)
+    result.put("files", file)
+    call.resolve(result)
   }
 
   @ActivityCallback

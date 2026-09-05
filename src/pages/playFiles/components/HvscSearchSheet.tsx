@@ -221,7 +221,7 @@ export const HvscSearchSheet = ({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="flex max-h-[85vh] flex-col" data-testid="hvsc-search-sheet">
+      <SheetContent side="bottom" className="flex flex-col" data-testid="hvsc-search-sheet">
         <SheetHeader className={showIntro ? undefined : "pb-0"}>
           <SheetTitle className={showIntro ? undefined : "text-base"}>Find a tune</SheetTitle>
           {showIntro ? (

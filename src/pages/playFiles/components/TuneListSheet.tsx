@@ -51,7 +51,7 @@ export const TuneListSheet = ({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="flex max-h-[85vh] flex-col" data-testid="tune-list-sheet">
+      <SheetContent side="bottom" className="flex flex-col" data-testid="tune-list-sheet">
         <SheetHeader className="pb-0">
           <SheetTitle className="text-base">Tunes in this file</SheetTitle>
           <SheetDescription className="truncate">{fileLabel}</SheetDescription>

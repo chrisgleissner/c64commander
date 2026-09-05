@@ -125,7 +125,11 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
   ({ className, children, onOpenAutoFocus, showClose = true, closeTestId, surface = "default", ...props }, ref) => {
     const { profile } = useDisplayProfile();
     const presentation = React.useMemo(() => resolveModalPresentation(profile, surface), [profile, surface]);
-    const { composedRef, nodeRef, nodeVersion, style } = useCenteredOverlayPosition(ref, `DialogContent[${surface}]`);
+    const { composedRef, nodeRef, nodeVersion, style } = useCenteredOverlayPosition(
+      ref,
+      `DialogContent[${surface}]`,
+      presentation.mode !== "full-screen",
+    );
     const isOpen = useDialogOpenState(nodeRef, nodeVersion);
     const layer = useRegisterInterstitial("modal", isOpen);
 
