@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyStoredTextScale,
   clampListPreviewLimit,
@@ -16,6 +16,7 @@ import {
   getTextScaleId,
   MAX_LIST_PREVIEW_LIMIT,
   MIN_LIST_PREVIEW_LIMIT,
+  resolveCurrentDisplayProfile,
   setDisplayProfileOverride,
   setListPreviewLimit,
   setTextScaleId,
@@ -194,5 +195,39 @@ describe("uiPreferences", () => {
     if (original) {
       Object.defineProperty(globalThis, "localStorage", original);
     }
+  });
+});
+
+describe("resolveCurrentDisplayProfile", () => {
+  const setViewportWidth = (width: number) => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: width });
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it("resolves from the web viewport width when there is no override", () => {
+    setViewportWidth(320);
+    expect(resolveCurrentDisplayProfile()).toBe("compact");
+
+    setViewportWidth(480);
+    expect(resolveCurrentDisplayProfile()).toBe("medium");
+
+    setViewportWidth(900);
+    expect(resolveCurrentDisplayProfile()).toBe("expanded");
+  });
+
+  it("lets a manual override win regardless of viewport width", () => {
+    setViewportWidth(900);
+    setDisplayProfileOverride("compact");
+    expect(resolveCurrentDisplayProfile()).toBe("compact");
+
+    setDisplayProfileOverride("auto");
+    expect(resolveCurrentDisplayProfile()).toBe("expanded");
   });
 });
