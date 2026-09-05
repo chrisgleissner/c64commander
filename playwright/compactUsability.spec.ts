@@ -12,11 +12,13 @@ import { createMockArchiveServer } from "./mockArchiveServer";
 import { seedUiMocks } from "./uiMocks";
 import { disableTraceAssertions } from "./traceUtils";
 import { clickSourceSelectionButton } from "./sourceSelection";
+import { enableKeypad, ringFocus } from "./focusRing";
 import {
   auditCompactSurface,
   formatDefects,
   type CompactSurfaceMeasurement,
   type SurfaceKind,
+  stepThroughSurface,
 } from "./compactUsabilityAudit";
 
 /**
@@ -827,6 +829,62 @@ test.describe("Every surface is usable on a 320x427 panel", () => {
     await page.getByTestId("tour-skip").click();
 
     audit.assertAllUsable();
+  });
+  /*
+   * Reachability, not layout.
+   *
+   * The hardware this profile exists for leads with a physical keypad and ships with its
+   * touchscreen switched off, so a control the focus ring never selects cannot be operated at
+   * all. `keypadOnlyNavigation.spec.ts` proves this for the primary pages; nothing proved it for
+   * a surface opened on top of one, which is where a ring that cannot get in strands the user
+   * with no way to confirm or cancel.
+   */
+  test("the keypad ring reaches into an open surface", async ({ page }) => {
+    await enableKeypad(page);
+    await openCompact(page, "/");
+
+    // Opened by keys, not by a click. A pointer disarms the ring, so a surface opened with
+    // click() has no ring inside it and every control in it reads as unreachable.
+    const trigger = activeSlot(page).getByTestId("home-power-actions");
+    expect(await ringFocus(page, trigger), "the ring could not reach the Power tile").toBe(true);
+    await page.keyboard.press("Enter");
+    const power = page.getByTestId("home-power-sheet");
+    await expect(power).toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(500);
+
+    const walk = await stepThroughSurface(page, power);
+    expect(
+      walk.unreached,
+      `Down could not reach these controls inside the Power sheet:\n  ${walk.unreached.join("\n  ")}`,
+    ).toEqual([]);
+  });
+
+  /*
+   * The same for the Add items browser, which is the surface with the most controls stacked above
+   * its list: a title bar with a confirm button, a filter, scope buttons, the rows themselves and
+   * a footer. If Down cannot get from the filter to the rows, the browser cannot be used at all
+   * without a touchscreen.
+   */
+  test("the keypad reaches the controls of the Add items browser", async ({ page }) => {
+    await enableKeypad(page);
+    await seedPlaylist(page);
+    await openCompact(page, "/play");
+
+    const addItems = activeSlot(page)
+      .getByRole("button", { name: /Add items|Add more items/i })
+      .first();
+    expect(await ringFocus(page, addItems), "the ring could not reach the Add items button").toBe(true);
+    await page.keyboard.press("Enter");
+
+    const interstitial = openDialog(page);
+    await expect(interstitial).toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(400);
+
+    const interstitialWalk = await stepThroughSurface(page, interstitial);
+    expect(
+      interstitialWalk.unreached,
+      `Down could not reach these controls in the source interstitial:\n  ${interstitialWalk.unreached.join("\n  ")}`,
+    ).toEqual([]);
   });
 });
 

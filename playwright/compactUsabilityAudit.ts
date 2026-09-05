@@ -339,62 +339,59 @@ export const formatDefects = (name: string, measurement: CompactSurfaceMeasureme
   return `${name}: ${measurement.defects.length} defect(s), ${body}\n${lines.join("\n")}`;
 };
 
+const RING_CONTROLS = "button, a[href], [role=button], [role=tab], [role=switch], input, select, textarea";
+
 /**
- * Every control inside the surface that the keypad focus ring can select, and every one it
- * cannot. A control the ring never reaches is inoperable on hardware whose touchscreen is off.
+ * Every enabled control inside an open surface that Down can reach, and every one it cannot.
+ *
+ * Reachability inside an overlay is not the global ring. `useFocusNavigation` deliberately leaves
+ * `data-key-selected` parked on the overlay's container and walks the overlay's own tab order
+ * with `document.activeElement` instead, because Radix gives a dialog a Tab focus trap and a
+ * keypad handset has no Tab. So the ring attribute is the wrong thing to measure here; where the
+ * focus actually is, is the right thing.
+ *
+ * A disabled control is excluded rather than reported: skipping it is correct behaviour, not a
+ * dead end. On the Power sheet that is the two actions behind Telnet feature flags.
  */
-export const walkRingWithin = async (
+export const stepThroughSurface = async (
   page: Page,
   surface: Locator,
-  maxSteps = 200,
+  maxSteps = 60,
 ): Promise<{ reached: string[]; unreached: string[] }> => {
-  const identify = (selectorScope: string) =>
-    page.evaluate((scope) => {
-      const root = document.querySelector<HTMLElement>(scope);
-      if (!root) return [];
-      return Array.from(
-        root.querySelectorAll<HTMLElement>("button, a[href], [role=button], [role=tab], input, select, textarea"),
-      )
+  const expected = new Set(
+    await surface.locator(RING_CONTROLS).evaluateAll((elements) =>
+      elements
         .filter((element) => {
-          const style = getComputedStyle(element);
+          if (element.hasAttribute("disabled") || element.getAttribute("aria-disabled") === "true") return false;
           const rect = element.getBoundingClientRect();
-          return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+          return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== "hidden";
         })
         .map(
           (element) =>
-            element.getAttribute("data-testid") ??
-            element.getAttribute("aria-label") ??
+            element.getAttribute("data-testid") ||
+            element.getAttribute("aria-label") ||
             (element.textContent ?? "").trim().slice(0, 40),
         )
-        .filter((label) => label.length > 0);
-    }, selectorScope);
+        .filter((label) => label.length > 0),
+    ),
+  );
 
-  const scope = await surface.evaluate((element) => {
-    const testId = element.getAttribute("data-testid");
-    if (testId) return `[data-testid="${testId}"]`;
-    element.setAttribute("data-compact-audit-scope", "true");
-    return "[data-compact-audit-scope='true']";
-  });
-
-  const expected = new Set(await identify(scope));
   const reached = new Set<string>();
-
   for (let step = 0; step < maxSteps && reached.size < expected.size; step += 1) {
     const label = await page.evaluate(() => {
-      const selected = document.querySelector('[data-key-selected="true"]');
-      if (!selected) return null;
-      return (
-        selected.getAttribute("data-testid") ??
-        selected.getAttribute("aria-label") ??
-        (selected.textContent ?? "").trim().slice(0, 40)
-      );
+      const active = document.activeElement;
+      const ring = document.querySelector('[data-key-selected="true"]');
+      const of = (element: Element | null) =>
+        element
+          ? element.getAttribute("data-testid") ||
+            element.getAttribute("aria-label") ||
+            (element.textContent ?? "").trim().slice(0, 40)
+          : "";
+      return [of(active), of(ring)].filter(Boolean);
     });
-    if (label && expected.has(label)) reached.add(label);
+    for (const candidate of label) if (expected.has(candidate)) reached.add(candidate);
     await page.keyboard.press("ArrowDown");
   }
 
-  return {
-    reached: [...reached],
-    unreached: [...expected].filter((label) => !reached.has(label)),
-  };
+  return { reached: [...reached], unreached: [...expected].filter((label) => !reached.has(label)) };
 };
