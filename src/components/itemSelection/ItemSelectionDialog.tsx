@@ -397,8 +397,15 @@ export const ItemSelectionDialog = ({
   const interstitialButtonClassName = cn("justify-start min-w-0", profile === "medium" && "w-full min-h-16 px-4 py-3");
   const interstitialLabelClassName = cn("flex min-w-0 flex-col items-start truncate", profile === "medium" && "w-full");
   const interstitialTextClassName = cn(profile === "medium" && "whitespace-normal break-words text-left leading-snug");
-  const footerLayoutClassName = profile === "compact" ? "flex-col" : "flex-row items-center justify-between";
-  const footerActionsClassName = profile === "compact" ? "flex-row flex-wrap" : "flex-row ml-auto";
+  /*
+   * One footer row at compact, not two. The folder options and Cancel each took a row of their
+   * own, and with the confirm button already up in the title bar there is nothing left that needs
+   * the second one. `flex-wrap` still lets the scan progress line or the archive notice take their
+   * own line when either is showing.
+   */
+  const footerLayoutClassName =
+    profile === "compact" ? "flex-row flex-wrap items-center justify-between" : "flex-row items-center justify-between";
+  const footerActionsClassName = profile === "compact" ? "flex-row" : "flex-row ml-auto";
   const footerPaddingClassName =
     profile === "compact"
       ? "px-3 pt-1 pb-[calc(0.25rem+var(--safe-area-inset-bottom))]"
@@ -549,52 +556,99 @@ export const ItemSelectionDialog = ({
     );
   }
 
+  const selectionHeading = (
+    <p className="text-base font-semibold" data-testid="add-items-selection-heading">
+      {selectedSourceLabel ? (
+        <span className="inline-flex items-center gap-2">
+          <span>{`From ${selectedSourceLabel}`}</span>
+          {selectedSourceOrigin ? (
+            <span aria-hidden="true" data-testid="add-items-selection-icon">
+              <FileOriginIcon
+                origin={selectedSourceOrigin}
+                className={resolveSelectionHeadingIconClassName(selectedSourceOrigin)}
+              />
+            </span>
+          ) : null}
+        </span>
+      ) : (
+        "Select items"
+      )}
+    </p>
+  );
+
+  const selectionCount = (
+    <p className="text-xs text-muted-foreground" data-testid="add-items-selection-count">
+      {activeSelectionCount} selected
+    </p>
+  );
+
+  const headerConfirmButton = showCompactHeaderConfirm ? (
+    <Button
+      variant="default"
+      size="sm"
+      onClick={handleConfirm}
+      disabled={isConfirming || autoConfirming || activeSelectionCount === 0}
+      data-testid="add-items-confirm"
+      className="shrink-0"
+    >
+      {resolvedConfirmLabel}
+    </Button>
+  ) : null;
+
+  /*
+   * On the compact profile the sheet's own title bar carries the source and the count, and the
+   * separate heading row above the filter is dropped. Both said much the same thing, and on a
+   * 320x427 panel the header, that row, the filter, the scope buttons and the footer together
+   * left about one row of the list the sheet exists to show.
+   *
+   * The visible title becomes the source rather than "Add items": by this point the user has
+   * already chosen to add items and chosen where from, so the source is the useful half.
+   */
+  const compactHeader = profile === "compact";
+
   return (
     <AppSheet open={open} onOpenChange={onOpenChange}>
       <AppSheetContent className="overflow-hidden p-0">
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
-          <AppSheetHeader>
-            <AppSheetTitle className="text-xl">{title}</AppSheetTitle>
-            <AppSheetDescription>Choose a source.</AppSheetDescription>
-          </AppSheetHeader>
+          {compactHeader ? (
+            <AppSheetHeader
+              actions={
+                <>
+                  {selectionCount}
+                  {headerConfirmButton}
+                </>
+              }
+              titleContent={
+                <AppSheetTitle className="truncate text-base" data-testid="add-items-title">
+                  {selectedSourceLabel ? `From ${selectedSourceLabel}` : title}
+                </AppSheetTitle>
+              }
+              descriptionContent={<AppSheetDescription>{title}</AppSheetDescription>}
+            />
+          ) : (
+            <AppSheetHeader>
+              <AppSheetTitle className="text-xl" data-testid="add-items-title">
+                {title}
+              </AppSheetTitle>
+              <AppSheetDescription>Choose a source.</AppSheetDescription>
+            </AppSheetHeader>
+          )}
 
-          <div className={cn("shrink-0 space-y-3 border-b border-border", bodyPaddingClassName)}>
-            <div className={cn("flex items-center justify-between gap-2", profile === "compact" && "text-sm")}>
-              <div>
-                <p className="text-base font-semibold" data-testid="add-items-selection-heading">
-                  {selectedSourceLabel ? (
-                    <span className="inline-flex items-center gap-2">
-                      <span>{`From ${selectedSourceLabel}`}</span>
-                      {selectedSourceOrigin ? (
-                        <span aria-hidden="true" data-testid="add-items-selection-icon">
-                          <FileOriginIcon
-                            origin={selectedSourceOrigin}
-                            className={resolveSelectionHeadingIconClassName(selectedSourceOrigin)}
-                          />
-                        </span>
-                      ) : null}
-                    </span>
-                  ) : (
-                    "Select items"
-                  )}
-                </p>
-                <p className="text-xs text-muted-foreground" data-testid="add-items-selection-count">
-                  {activeSelectionCount} selected
-                </p>
+          <div
+            className={cn(
+              "shrink-0 border-b border-border",
+              compactHeader ? "space-y-2" : "space-y-3",
+              bodyPaddingClassName,
+            )}
+          >
+            {compactHeader ? null : (
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  {selectionHeading}
+                  {selectionCount}
+                </div>
               </div>
-              {showCompactHeaderConfirm ? (
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={handleConfirm}
-                  disabled={isConfirming || autoConfirming || activeSelectionCount === 0}
-                  data-testid="add-items-confirm"
-                  className="shrink-0"
-                >
-                  {resolvedConfirmLabel}
-                </Button>
-              ) : null}
-            </div>
+            )}
 
             {!isArchiveSource ? (
               <div className="space-y-2">
@@ -620,7 +674,10 @@ export const ItemSelectionDialog = ({
                     find a tune in an archive filed by composer, so the reach is made explicit and
                     switchable rather than assumed. Only shown for a source that can actually search
                     beyond the current folder. */}
-                {browser.canSearchSource ? (
+                {/* At compact the scope buttons appear once there is something to scope. They cost a
+                    whole row of the file list, and until the field has text they answer a question
+                    the user has not asked yet. */}
+                {browser.canSearchSource && (!compactHeader || searchText.trim().length > 0) ? (
                   <div className="flex flex-wrap items-center gap-2" data-testid="add-items-search-scope">
                     <Button
                       type="button"

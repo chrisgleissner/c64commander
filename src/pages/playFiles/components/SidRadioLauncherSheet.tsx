@@ -80,7 +80,7 @@ export const SidRadioLauncherSheet = ({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto" data-testid="sid-radio-launcher-sheet">
+      <SheetContent side="bottom" className="overflow-y-auto" data-testid="sid-radio-launcher-sheet">
         <SheetHeader>
           <SheetTitle>SID Radio</SheetTitle>
           <SheetDescription>Endless stations of similar SIDs — pick a mood, your taste, or both.</SheetDescription>

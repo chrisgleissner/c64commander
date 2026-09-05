@@ -118,7 +118,41 @@ class FolderPickerPlugin : Plugin() {
     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
     intent.addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
-    startActivityForResult(call, intent, "pickDirectoryResult")
+    launchPicker(call, intent, "pickDirectoryResult", "folder picker")
+  }
+
+  /*
+   * Not every Android device has a document picker. Keypad handsets built without Google Mobile
+   * Services often ship no DocumentsUI at all, and there `startActivityForResult` throws
+   * ActivityNotFoundException on the Capacitor plugin thread, which kills the process. Rejecting
+   * the call instead leaves the web layer to say so and the other sources still reachable.
+   */
+  private fun launchPicker(call: PluginCall, intent: Intent, callbackName: String, what: String) {
+    if (intent.resolveActivity(context.packageManager) == null) {
+      AppLogger.warn(
+              pluginContextOrNull(),
+              logTag,
+              "No $what on this device",
+              "FolderPickerPlugin",
+              null,
+              traceFields(call)
+      )
+      call.reject("NO_PICKER_AVAILABLE")
+      return
+    }
+    try {
+      startActivityForResult(call, intent, callbackName)
+    } catch (error: Exception) {
+      AppLogger.error(
+              pluginContextOrNull(),
+              logTag,
+              "Could not open the $what",
+              "FolderPickerPlugin",
+              error,
+              traceFields(call)
+      )
+      call.reject("NO_PICKER_AVAILABLE", error)
+    }
   }
 
   @PluginMethod
@@ -156,7 +190,7 @@ class FolderPickerPlugin : Plugin() {
     }
     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-    startActivityForResult(call, intent, "pickFileResult")
+    launchPicker(call, intent, "pickFileResult", "file picker")
   }
 
   @ActivityCallback

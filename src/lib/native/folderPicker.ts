@@ -126,18 +126,45 @@ const withTraceContext = <T extends Record<string, unknown> | undefined>(
 
 const plugin = registerPlugin<FolderPickerPlugin>("FolderPicker");
 
+/*
+ * A device can have no document picker at all. Keypad handsets built without Google Mobile
+ * Services are the case that matters here: there is no DocumentsUI to open, the native plugin
+ * rejects with NO_PICKER_AVAILABLE, and every caller would otherwise show a raw plugin string.
+ */
+export const NO_DOCUMENT_PICKER_MESSAGE =
+  "This device has no file picker, so files on its own storage cannot be chosen here.";
+
+export class NoDocumentPickerError extends Error {
+  constructor() {
+    super(NO_DOCUMENT_PICKER_MESSAGE);
+    this.name = "NoDocumentPickerError";
+  }
+}
+
+export const isNoDocumentPickerError = (error: unknown): boolean =>
+  error instanceof NoDocumentPickerError || (error instanceof Error && error.message.includes("NO_PICKER_AVAILABLE"));
+
+const withPickerAvailability = async <T>(run: () => Promise<T>): Promise<T> => {
+  try {
+    return await run();
+  } catch (error) {
+    if (isNoDocumentPickerError(error)) throw new NoDocumentPickerError();
+    throw error;
+  }
+};
+
 export const FolderPicker: FolderPickerPlugin = {
   pickDirectory: (options) => {
     const override = resolveOverrideMethod("pickDirectory");
     const withTrace = withTraceContext(options);
     if (override) return override(withTrace);
-    return plugin.pickDirectory(withTrace);
+    return withPickerAvailability(() => plugin.pickDirectory(withTrace));
   },
   pickFile: (options) => {
     const override = resolveOverrideMethod("pickFile");
     const withTrace = withTraceContext(options);
     if (override) return override(withTrace);
-    return plugin.pickFile(withTrace);
+    return withPickerAvailability(() => plugin.pickFile(withTrace));
   },
   listChildren: (options) => {
     const override = resolveOverrideMethod("listChildren");

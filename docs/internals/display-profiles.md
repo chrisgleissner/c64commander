@@ -169,13 +169,19 @@ Expanded is not a different product surface. It is the same UX with better use o
 
 ## 10. Modal And Overlay Rules
 
-Modal presentation is not profile-sensitive.
+The choice between a modal and a bottom sheet is not profile-sensitive. How a modal is presented
+once that choice is made can be, and at Compact it is: §7 requires a wide dialog or panel to be
+presented full-screen there.
 
-| Surface type        | Compact                          | Medium                           | Expanded                         |
-| ------------------- | -------------------------------- | -------------------------------- | -------------------------------- |
-| Confirmation dialog | Centered and viewport-safe modal | Centered and viewport-safe modal | Centered and viewport-safe modal |
-| Workflow surface    | Bottom sheet                     | Bottom sheet                     | Bottom sheet                     |
-| Secondary editor    | Centered modal or embedded editor | Centered modal or embedded editor | Centered modal or embedded editor |
+| Surface type        | Compact                           | Medium                            | Expanded                          |
+| ------------------- | --------------------------------- | --------------------------------- | --------------------------------- |
+| Confirmation dialog | Centered and viewport-safe modal  | Centered and viewport-safe modal  | Centered and viewport-safe modal  |
+| Popover             | Centered and viewport-safe modal  | Centered and viewport-safe modal  | Centered and viewport-safe modal  |
+| Selection browser   | Full-screen                       | Centered modal, bounded width     | Centered modal, bounded width     |
+| List browser        | Full-screen                       | Centered modal, bounded width     | Centered modal, bounded width     |
+| Command palette     | Full-screen                       | Centered modal, bounded width     | Centered modal, bounded width     |
+| Secondary editor    | Full-screen                       | Centered modal or embedded editor | Centered modal or embedded editor |
+| Workflow surface    | Bottom sheet, up to full height   | Bottom sheet                      | Bottom sheet                      |
 
 Rules:
 
@@ -183,6 +189,14 @@ Rules:
 - Keyboard appearance must not hide the title, primary field, or primary confirm action.
 - Do not choose modal vs bottom sheet by screen size.
 - Workflow surfaces must use bottom sheets even on expanded layouts.
+- A surface promoted to full-screen must not also be centred: the centring transform offsets it by
+  half its own width, which puts a full-width surface off screen.
+- Only surfaces whose content is a list, a browser or an editor are promoted. A confirmation or a
+  popover is short by nature, and taking the whole screen for a two-line question reads as a
+  failure rather than as a dialog.
+
+`resolveModalPresentation(profile, surface)` in `src/lib/modalPresentation.ts` is the single place
+this table is implemented.
 
 ## 11. Component Obligations
 

@@ -30,7 +30,7 @@ const setViewportWidth = (width: number) => {
 describe("profile-aware dialog surfaces", () => {
   it("uses the shared large modal presentation for selection browsers and keeps the footer sticky", () => {
     localStorage.clear();
-    setViewportWidth(360);
+    setViewportWidth(393);
 
     render(
       <DisplayProfileProvider>
@@ -52,6 +52,54 @@ describe("profile-aware dialog surfaces", () => {
     expect(dialog.className).toContain("max-w-4xl");
     expect(dialog.className).toContain("rounded-[var(--interstitial-radius)]");
     expect(screen.getByText("Confirm").parentElement).toHaveClass("sticky");
+  });
+
+  /*
+   * On the compact profile a browser gets the whole panel instead of a centred card, which is
+   * what docs/internals/display-profiles.md §7 asks for. The centring transform must go with it:
+   * a full-width surface translated by half its own width sits off screen.
+   */
+  it("gives a selection browser the whole screen on the compact profile", () => {
+    localStorage.clear();
+    setViewportWidth(320);
+
+    render(
+      <DisplayProfileProvider>
+        <Dialog open>
+          <DialogContent surface="selection-browser" showClose={false}>
+            <DialogHeader>
+              <DialogTitle>Add items</DialogTitle>
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>
+      </DisplayProfileProvider>,
+    );
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("data-modal-presentation", "full-screen");
+    expect(dialog.className).toContain("inset-0");
+    expect(dialog.className).toContain("h-[100dvh]");
+    expect(dialog.className).not.toContain("max-w-4xl");
+    expect(dialog.style.transform).toBe("");
+  });
+
+  it("keeps a confirmation centred on the compact profile, rather than taking the screen", () => {
+    localStorage.clear();
+    setViewportWidth(320);
+
+    render(
+      <DisplayProfileProvider>
+        <Dialog open>
+          <DialogContent surface="confirmation" showClose={false}>
+            <DialogHeader>
+              <DialogTitle>Reboot?</DialogTitle>
+            </DialogHeader>
+          </DialogContent>
+        </Dialog>
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-modal-presentation", "centered");
   });
 
   it("keeps alert confirmations centered while still using the shared modal resolver", () => {

@@ -123,6 +123,7 @@ const AlertDialogContent = React.forwardRef<
   const { composedRef, nodeRef, nodeVersion, style } = useCenteredOverlayPosition(
     ref,
     `AlertDialogContent[${surface}]`,
+    presentation.mode !== "full-screen",
   );
   const isOpen = useAlertDialogOpenState(nodeRef, nodeVersion);
   const layer = useRegisterInterstitial("modal", isOpen);

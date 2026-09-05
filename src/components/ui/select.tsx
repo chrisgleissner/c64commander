@@ -11,6 +11,7 @@ import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useDisplayProfile } from "@/hooks/useDisplayProfile";
 import { usePopoverBackDismissRoot } from "@/components/ui/interstitial-state";
 import { wrapValueChange } from "@/lib/tracing/userTrace";
 
@@ -46,23 +47,34 @@ const SelectValue = SelectPrimitive.Value;
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
-  <SelectPrimitive.Trigger
-    ref={ref}
-    className={cn(
-      // min-h-11 is the 44px target size, on the base so a call site that shrinks the
-      // height to fit a dense row cannot take the trigger below it.
-      "flex h-10 min-h-11 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
-      className,
-    )}
-    {...props}
-  >
-    {children}
-    <SelectPrimitive.Icon asChild>
-      <ChevronDown className="h-4 w-4 opacity-50" />
-    </SelectPrimitive.Icon>
-  </SelectPrimitive.Trigger>
-));
+>(({ className, children, ...props }, ref) => {
+  const { profile } = useDisplayProfile();
+
+  return (
+    <SelectPrimitive.Trigger
+      ref={ref}
+      className={cn(
+        // min-h-11 is the 44px target size, on the base so a call site that shrinks the
+        // height to fit a dense row cannot take the trigger below it.
+        "flex h-10 min-h-11 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+        /*
+         * Two lines at compact, and a trigger that grows to hold them. Several config values read
+         * as short sentences - "Auto (Conservative for C64U, Balanced for U64)" is one - and on a
+         * 320px screen a single clamped line shows the first word and an ellipsis, which does not
+         * say which setting is in force.
+         */
+        profile === "compact" && "h-auto items-start py-2.5 text-left [&>span]:line-clamp-2",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+      <SelectPrimitive.Icon asChild>
+        <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+      </SelectPrimitive.Icon>
+    </SelectPrimitive.Trigger>
+  );
+});
 SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
 
 const SelectScrollUpButton = React.forwardRef<

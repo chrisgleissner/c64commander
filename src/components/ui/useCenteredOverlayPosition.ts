@@ -17,11 +17,17 @@ const assignRef = <T>(ref: React.ForwardedRef<T>, value: T | null) => {
   }
 };
 
+/**
+ * `enabled` is false for a surface that covers the whole screen. Such a surface is opaque and
+ * starts at the top, so there is no badge or header underneath it left to keep clear, and the
+ * centring transform this hook applies would push it half its own width off screen.
+ */
 export function useCenteredOverlayPosition<T extends HTMLElement>(
   forwardedRef: React.ForwardedRef<T>,
   overlayName: string,
+  enabled = true,
 ) {
-  return useOverlayPosition(forwardedRef, overlayName, (element) => {
+  return useOverlayPosition(forwardedRef, overlayName, enabled, (element) => {
     const rect = element.getBoundingClientRect();
     const contentHeight = Math.max(1, Math.round(rect.height || element.offsetHeight || 0));
     const { top, maxHeight } = resolveCenteredOverlayLayout(contentHeight);
@@ -40,7 +46,7 @@ export function useWorkflowSheetPosition<T extends HTMLElement>(
   forwardedRef: React.ForwardedRef<T>,
   overlayName: string,
 ) {
-  return useOverlayPosition(forwardedRef, overlayName, () => {
+  return useOverlayPosition(forwardedRef, overlayName, true, () => {
     const { top } = resolveWorkflowSheetLayout();
     return {
       style: {
@@ -56,6 +62,7 @@ export function useWorkflowSheetPosition<T extends HTMLElement>(
 function useOverlayPosition<T extends HTMLElement>(
   forwardedRef: React.ForwardedRef<T>,
   overlayName: string,
+  enabled: boolean,
   resolveStyle: (element: T) => { style: React.CSSProperties },
 ) {
   const localRef = React.useRef<T | null>(null);
@@ -78,6 +85,10 @@ function useOverlayPosition<T extends HTMLElement>(
 
   React.useLayoutEffect(() => {
     if (typeof window === "undefined") return undefined;
+    if (!enabled) {
+      setStyle(undefined);
+      return undefined;
+    }
 
     const updateLayout = () => {
       const element = localRef.current;
@@ -123,7 +134,7 @@ function useOverlayPosition<T extends HTMLElement>(
       observer?.disconnect();
       window.removeEventListener("resize", updateLayout);
     };
-  }, [nodeVersion, overlayName]);
+  }, [enabled, nodeVersion, overlayName]);
 
   return { composedRef, nodeRef: localRef, nodeVersion, style };
 }
