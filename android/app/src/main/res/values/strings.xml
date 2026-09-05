@@ -3,8 +3,8 @@
      Compiler: scripts/generate-variant.mjs
      Run `node scripts/generate-variant.mjs` to regenerate. -->
 <resources>
-    <string name="app_name">C64 Commander</string>
-    <string name="title_activity_main">C64 Commander</string>
-    <string name="package_name">uk.gleissner.c64commander</string>
-    <string name="custom_url_scheme">uk.gleissner.c64commander</string>
+    <string name="app_name">C64U Remote</string>
+    <string name="title_activity_main">C64U Remote</string>
+    <string name="package_name">uk.gleissner.c64uremote</string>
+    <string name="custom_url_scheme">uk.gleissner.c64uremote</string>
 </resources>
