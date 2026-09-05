@@ -231,4 +231,18 @@ describe("recently played", () => {
     await waitFor(() => expect(screen.getByTestId("hvsc-search-row")).toBeTruthy());
     expect(screen.queryByTestId("recently-played-row")).toBeNull();
   });
+
+  it("dims the app page behind it instead of covering it with an opaque backdrop", () => {
+    // This sheet stops short of the top of the screen at every profile but compact (see
+    // `sheetVariants`' `standard` density, capped at 85dvh), so the page behind it must show
+    // through, dimmed, in that gap. `SheetOverlay` used a flat `bg-scrim` class with no opacity,
+    // which painted that gap solid black instead - reported as "Find a tune" and other sheets
+    // looking like a broken bottom sheet/popup rather than a dimmed one.
+    renderSheet();
+
+    const overlay = Array.from(document.body.querySelectorAll<HTMLElement>('[data-state="open"]')).find((element) =>
+      element.className.includes("fixed inset-0"),
+    );
+    expect(overlay?.style.backgroundColor).toBe("hsl(var(--interstitial-scrim) / 0.4)");
+  });
 });

@@ -7,6 +7,7 @@
  */
 
 import { variant } from "@/generated/variant";
+import type { DisplayProfile } from "@/lib/displayProfiles";
 
 const DEBUG_LOGGING_KEY = "c64u_debug_logging_enabled";
 const CONFIG_WRITE_INTERVAL_KEY = "c64u_config_write_min_interval_ms";
@@ -173,19 +174,29 @@ export const loadDebugLoggingEnabled = () => readBoolean(DEBUG_LOGGING_KEY, fals
 export const saveDebugLoggingEnabled = (enabled: boolean) => writeBoolean(DEBUG_LOGGING_KEY, enabled);
 
 /**
- * Full-screen (immersive) defaults come from the active build variant
- * (`variant.runtime.defaultHide*`), so a keypad-first appliance variant can ship
- * full-screen by default while the standard app does not. A user toggle in
- * Settings persists and overrides the variant default.
+ * Full-screen (immersive) defaults depend on the ACTUAL screen the app is running on, not just
+ * the build variant: a keypad-first appliance variant targets a compact handset with no physical
+ * navigation buttons, so hiding Android's on-screen ones there loses nothing. The same APK run on
+ * a phone or tablet — medium or expanded profile — is a real touchscreen device whose status bar
+ * and navigation are expected to stay visible, so the variant's intent only applies at compact.
+ *
+ * The status bar carries the clock and, unlike the navigation buttons, is never redundant on any
+ * profile, so no variant hides it by default.
+ *
+ * A user toggle in Settings persists and overrides these defaults regardless of profile.
  */
-export const DEFAULT_HIDE_STATUS_BAR = Boolean(variant.runtime.defaultHideStatusBar);
-export const DEFAULT_HIDE_NAVIGATION_BAR = Boolean(variant.runtime.defaultHideNavigationBar);
+export const resolveDefaultHideStatusBar = (_profile: DisplayProfile): boolean => false;
 
-export const loadHideStatusBar = () => readBoolean(HIDE_STATUS_BAR_KEY, DEFAULT_HIDE_STATUS_BAR);
+export const resolveDefaultHideNavigationBar = (profile: DisplayProfile): boolean =>
+  profile === "compact" && Boolean(variant.runtime.defaultHideNavigationBar);
+
+export const loadHideStatusBar = (profile: DisplayProfile) =>
+  readBoolean(HIDE_STATUS_BAR_KEY, resolveDefaultHideStatusBar(profile));
 
 export const saveHideStatusBar = (enabled: boolean) => writeBoolean(HIDE_STATUS_BAR_KEY, enabled);
 
-export const loadHideNavigationBar = () => readBoolean(HIDE_NAVIGATION_BAR_KEY, DEFAULT_HIDE_NAVIGATION_BAR);
+export const loadHideNavigationBar = (profile: DisplayProfile) =>
+  readBoolean(HIDE_NAVIGATION_BAR_KEY, resolveDefaultHideNavigationBar(profile));
 
 export const saveHideNavigationBar = (enabled: boolean) => writeBoolean(HIDE_NAVIGATION_BAR_KEY, enabled);
 

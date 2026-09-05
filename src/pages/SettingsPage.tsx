@@ -470,9 +470,9 @@ export default function SettingsPage() {
     useState<NotificationVisibility>(loadNotificationVisibility);
   const [notificationDurationMs, setNotificationDurationMs] = useState(loadNotificationDurationMs);
   const [screenOrientationMode, setScreenOrientationMode] = useState<ScreenOrientationMode>(loadScreenOrientationMode);
-  const [hideStatusBar, setHideStatusBar] = useState(loadHideStatusBar);
+  const [hideStatusBar, setHideStatusBar] = useState(() => loadHideStatusBar(profile));
   const [showSectionDescriptions, setShowSectionDescriptions] = useState(loadShowSectionDescriptions);
-  const [hideNavigationBar, setHideNavigationBar] = useState(loadHideNavigationBar);
+  const [hideNavigationBar, setHideNavigationBar] = useState(() => loadHideNavigationBar(profile));
   const [hvscBaseUrlInput, setHvscBaseUrlInput] = useState(() => getHvscBaseUrlOverride() ?? "");
   const [hvscBaseUrlPreview, setHvscBaseUrlPreview] = useState(() => getHvscBaseUrl());
   const [hvscUpdateCheckIntervalInput, setHvscUpdateCheckIntervalInput] = useState(() =>

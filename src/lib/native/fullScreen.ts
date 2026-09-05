@@ -14,11 +14,13 @@
 
 import { loadHideNavigationBar, loadHideStatusBar } from "@/lib/config/appSettings";
 import { setSystemBarsVisibility } from "@/lib/native/safeArea";
+import { resolveCurrentDisplayProfile } from "@/lib/uiPreferences";
 
 /** Apply the current full-screen settings to the native system bars. */
 export const applyFullScreenFromSettings = (): void => {
+  const profile = resolveCurrentDisplayProfile();
   void setSystemBarsVisibility({
-    statusBar: !loadHideStatusBar(),
-    navigationBar: !loadHideNavigationBar(),
+    statusBar: !loadHideStatusBar(profile),
+    navigationBar: !loadHideNavigationBar(profile),
   });
 };
