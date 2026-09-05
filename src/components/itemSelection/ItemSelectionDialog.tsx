@@ -706,10 +706,7 @@ export const ItemSelectionDialog = ({
                     find a tune in an archive filed by composer, so the reach is made explicit and
                     switchable rather than assumed. Only shown for a source that can actually search
                     beyond the current folder. */}
-                {/* At compact the scope buttons appear once there is something to scope. They cost a
-                    whole row of the file list, and until the field has text they answer a question
-                    the user has not asked yet. */}
-                {browser.canSearchSource && (!compactHeader || searchText.trim().length > 0) ? (
+                {browser.canSearchSource ? (
                   <div className="flex flex-wrap items-center gap-2" data-testid="add-items-search-scope">
                     <Button
                       type="button"
