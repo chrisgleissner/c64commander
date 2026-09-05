@@ -7,6 +7,7 @@
  */
 
 import type { ArchiveClientConfigInput, ArchiveClientResolvedConfig } from "./types";
+import { getRuntimeArchiveOverride } from "./demoOverride";
 import { variant } from "@/generated/variant";
 import { validateDeviceHost } from "@/lib/validation/connectionValidation";
 
@@ -44,13 +45,19 @@ export const buildDefaultArchiveClientConfig = (overrides?: {
   const userAgentOverride = normalizeOverride(overrides?.userAgentOverride);
   const host = hostOverride && !validateArchiveHost(hostOverride) ? hostOverride : defaultUrl.host;
 
+  // Demo Mode wins over both the user's host and the variant default: while it is running there
+  // is no network at all in the case it exists for, so the only archive that can answer is the
+  // one on this device. It is session state and never written to the user's settings.
+  const demo = getRuntimeArchiveOverride();
+
   return {
     id: DEFAULT_ARCHIVE_SOURCE_CONFIG.id,
     name: DEFAULT_ARCHIVE_SOURCE_CONFIG.name,
-    baseUrl: buildBaseUrlFromHost(host),
+    baseUrl: buildBaseUrlFromHost(demo?.host ?? host),
     headers: {
       "Client-Id": clientIdOverride ?? DEFAULT_ARCHIVE_HEADERS["Client-Id"],
       "User-Agent": userAgentOverride ?? DEFAULT_ARCHIVE_HEADERS["User-Agent"],
+      ...(demo?.token ? { "X-Mock-Token": demo.token } : {}),
     },
     enabled: overrides?.enabled ?? DEFAULT_ARCHIVE_SOURCE_CONFIG.enabled,
   };

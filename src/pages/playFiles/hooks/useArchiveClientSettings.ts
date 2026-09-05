@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { buildDefaultArchiveClientConfig } from "@/lib/archive/config";
+import { useConnectionState } from "@/hooks/useConnectionState";
 import type { ArchiveClientConfigInput } from "@/lib/archive/types";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import {
@@ -41,6 +42,11 @@ export function useArchiveClientSettings(): ArchiveClientSettingsState & {
 } {
   const { value: commoserveEnabled } = useFeatureFlag("commoserve_enabled");
   const [settings, setSettings] = useState(loadArchiveClientSettingsState);
+  // Demo Mode redirects the archive to this device's own loopback server, and that is not a
+  // setting, so nothing in `settings` changes when it starts or stops. Without the connection
+  // state in the dependencies below, a config built before Demo Mode was entered keeps pointing
+  // at the internet for the rest of the session — which on an offline phone is no archive at all.
+  const { state: connectionState } = useConnectionState();
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -63,6 +69,7 @@ export function useArchiveClientSettings(): ArchiveClientSettingsState & {
       }),
     [
       commoserveEnabled,
+      connectionState,
       settings.archiveClientIdOverride,
       settings.archiveHostOverride,
       settings.archiveUserAgentOverride,

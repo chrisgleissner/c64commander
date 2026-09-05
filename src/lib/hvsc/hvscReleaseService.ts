@@ -50,13 +50,37 @@ const normalizeUpdateCheckIntervalDays = (value?: string | number | null) => {
   return clampUpdateCheckIntervalDays(numeric);
 };
 
+let runtimeHvscBaseUrl: string | null = null;
+
 const resolveHvscBaseUrl = (override?: string) => {
   if (override) return normalizeBaseUrl(override);
+  // Demo Mode first: while it is running there is no network in the case it exists for, so the
+  // only collection that can answer is the one this device is serving itself. Checked here rather
+  // than in getHvscBaseUrl() because every consumer resolves through this function, and an
+  // override that only covered the public getter left the release check going to the internet
+  // (it failed with "Unable to resolve host hvsc.brona.dk" on an offline phone).
+  if (runtimeHvscBaseUrl) return runtimeHvscBaseUrl;
   if (typeof localStorage !== "undefined") {
     const stored = localStorage.getItem(HVSC_BASE_URL_KEY);
     if (stored) return normalizeBaseUrl(stored);
   }
   return DEFAULT_BASE_URL;
+};
+
+/*
+ * Where HVSC comes from while Demo Mode is running.
+ *
+ * Session state, deliberately not the persisted override below: Demo Mode is entered and left
+ * many times in a session, and a device left permanently pointed at a mock that is no longer
+ * listening is worse than one pointed at the real collection. Mirrors the FTP and archive
+ * overrides, which exist for the same reason.
+ */
+export const setRuntimeHvscBaseUrl = (value: string | null) => {
+  runtimeHvscBaseUrl = value ? normalizeBaseUrl(value) : null;
+};
+
+export const clearRuntimeHvscBaseUrl = () => {
+  runtimeHvscBaseUrl = null;
 };
 
 export const getHvscBaseUrl = () => resolveHvscBaseUrl();

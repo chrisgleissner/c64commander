@@ -30,6 +30,8 @@ import {
   setRuntimeFtpPortOverride,
   setStoredFtpPort,
 } from "@/lib/ftp/ftpConfig";
+import { clearRuntimeArchiveOverride, setRuntimeArchiveOverride } from "@/lib/archive/demoOverride";
+import { clearRuntimeHvscBaseUrl, setRuntimeHvscBaseUrl } from "@/lib/hvsc/hvscReleaseService";
 import { setStoredTelnetPort } from "@/lib/telnet/telnetConfig";
 import {
   getActiveMockBaseUrl,
@@ -709,6 +711,8 @@ const stopDemoServer = async () => {
     demoServerStartedThisSession = false;
     clearRuntimeFtpPortOverride();
     clearRuntimeFtpPasswordOverride();
+    clearRuntimeArchiveOverride();
+    clearRuntimeHvscBaseUrl();
     // applyC64APIConfigFromStorage() re-routes to the real device and clears the
     // mock token via applyC64APIRuntimeConfig.
     await applyC64APIConfigFromStorage();
@@ -988,6 +992,31 @@ const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
 const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
   trigger !== "background" && !demoInterstitialShownThisSession;
 
+/*
+ * Point every service the app can talk to at the mock that is now standing in for the device.
+ *
+ * One function rather than a list repeated at each call site: there are three places that make
+ * the loopback mock the active target — the demo transition, its re-entry path, and the smoke
+ * mock — and they had drifted. FTP was redirected in all three, the online archive and HVSC in
+ * none, so an offline phone in Demo Mode still tried to reach commoserve.files.commodore.net and
+ * hvsc.brona.dk and failed with "Unable to resolve host". Anything that has to follow the mock
+ * belongs here, so adding the next one cannot miss a caller.
+ *
+ * All of it is session state. The user's own archive host and HVSC base URL are settings, and
+ * Demo Mode is entered and left many times in a session; a device left pointed at a mock that has
+ * stopped listening would be worse than one that cannot reach the service at all.
+ */
+const pointServicesAtMock = (baseUrl: string, ftpPort: number | null | undefined, token: string | null) => {
+  if (ftpPort) setRuntimeFtpPortOverride(ftpPort);
+  getC64API().setMockToken(token ?? undefined);
+  setRuntimeFtpPasswordOverride(token);
+  setRuntimeArchiveOverride({ host: getDeviceHostFromBaseUrl(baseUrl), token });
+  // The archive is fetched by the native downloader, which cannot send the mock token, so the
+  // demo release lives behind a per-boot secret path instead of a header. Without a token there
+  // is no reachable release and HVSC keeps its ordinary "nothing installed" state.
+  setRuntimeHvscBaseUrl(token ? `${baseUrl.replace(/\/+$/, "")}/hvsc/${token}/` : null);
+};
+
 const transitionToDemoActive = async (
   trigger: DiscoveryTrigger,
   options: {
@@ -1046,6 +1075,7 @@ const transitionToDemoActive = async (
       const mockHost = getDeviceHostFromBaseUrl(baseUrl);
       applyC64APIRuntimeConfig(baseUrl, undefined, mockHost);
       if (ftpPort) setRuntimeFtpPortOverride(ftpPort);
+      // The token is applied below, once the active server is known.
     } catch (error) {
       // On non-native platforms the internal demo servers may be unavailable.
       // Still enter DEMO_ACTIVE for deterministic UI/state behavior.
@@ -1060,14 +1090,10 @@ const transitionToDemoActive = async (
   if (activeMockUrl) {
     const mockHost = getDeviceHostFromBaseUrl(activeMockUrl);
     applyC64APIRuntimeConfig(activeMockUrl, undefined, mockHost);
-    const activeFtpPort = getActiveMockFtpPort();
-    if (activeFtpPort) setRuntimeFtpPortOverride(activeFtpPort);
-    // Authenticate the WebView to the (now token-gated) loopback mock servers.
-    // applyC64APIRuntimeConfig above cleared any prior mock token, so re-apply it
-    // here for both the HTTP (X-Mock-Token) and FTP (password) surfaces.
-    const activeToken = getActiveMockToken();
-    getC64API().setMockToken(activeToken ?? undefined);
-    setRuntimeFtpPasswordOverride(activeToken);
+    // Authenticate the WebView to the (now token-gated) loopback mock servers and redirect every
+    // service that has to follow the mock. applyC64APIRuntimeConfig above cleared any prior mock
+    // token, so this re-applies it.
+    pointServicesAtMock(activeMockUrl, getActiveMockFtpPort(), getActiveMockToken() ?? null);
     addLog("info", "Demo mode using mock C64U", {
       trigger,
       baseUrl: activeMockUrl,
@@ -1114,9 +1140,7 @@ const transitionToSmokeMockConnected = async (trigger: DiscoveryTrigger) => {
   demoServerStartedThisSession = true;
   const mockHost = getDeviceHostFromBaseUrl(baseUrl);
   applyC64APIRuntimeConfig(baseUrl, undefined, mockHost);
-  if (ftpPort) setRuntimeFtpPortOverride(ftpPort);
-  getC64API().setMockToken(token ?? undefined);
-  setRuntimeFtpPasswordOverride(token ?? null);
+  pointServicesAtMock(baseUrl, ftpPort, token ?? null);
   setSnapshot({
     lastProbeAtMs: Date.now(),
     lastProbeSucceededAtMs: Date.now(),

@@ -1,0 +1,97 @@
+{
+  "_comment": [
+    "The online archive Demo Mode answers with, in the shapes CommoserveClient parses",
+    "(src/lib/archive/types.ts). Served by MockC64UServer from loopback so the Online Archive",
+    "browser is populated with no network at all — which is the situation Demo Mode exists for.",
+    "",
+    "The entries are invented, and deliberately so: this is a demonstration library, not a copy",
+    "of anyone's catalogue. Names describe what the app does with them rather than impersonating",
+    "real releases."
+  ],
+  "presets": [
+    {
+      "type": "category",
+      "description": "Category",
+      "values": [
+        { "aqlKey": "category:1", "name": "Demo" },
+        { "aqlKey": "category:2", "name": "Game" },
+        { "aqlKey": "category:3", "name": "Music" }
+      ]
+    },
+    {
+      "type": "year",
+      "description": "Year",
+      "values": [
+        { "aqlKey": "released:1985", "name": "1985" },
+        { "aqlKey": "released:1988", "name": "1988" },
+        { "aqlKey": "released:1991", "name": "1991" }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "demo-0001",
+      "name": "Raster Bar Rag",
+      "category": "Music",
+      "year": "1988",
+      "rating": "8.4",
+      "group": "Commander Demo Group",
+      "handle": "Simulated",
+      "released": "1988-04-12"
+    },
+    {
+      "id": "demo-0002",
+      "name": "Sprite Collision",
+      "category": "Demo",
+      "year": "1985",
+      "rating": "7.9",
+      "group": "Commander Demo Group",
+      "handle": "Simulated",
+      "released": "1985-11-03"
+    },
+    {
+      "id": "demo-0003",
+      "name": "Kernal Panic",
+      "category": "Demo",
+      "year": "1991",
+      "rating": "9.1",
+      "group": "Loopback Crew",
+      "handle": "Simulated",
+      "released": "1991-07-21"
+    },
+    {
+      "id": "demo-0004",
+      "name": "Datasette Dreams",
+      "category": "Music",
+      "year": "1988",
+      "rating": "8.8",
+      "group": "Loopback Crew",
+      "handle": "Simulated",
+      "released": "1988-09-30"
+    },
+    {
+      "id": "demo-0005",
+      "name": "Blue Screen Waltz",
+      "category": "Music",
+      "year": "1991",
+      "rating": "8.2",
+      "group": "Commander Demo Group",
+      "handle": "Simulated",
+      "released": "1991-02-14"
+    },
+    {
+      "id": "demo-0006",
+      "name": "Sample Quest",
+      "category": "Game",
+      "year": "1985",
+      "rating": "7.5",
+      "group": "Loopback Crew",
+      "handle": "Simulated",
+      "released": "1985-05-08"
+    }
+  ],
+  "entries": [
+    { "path": "Raster Bar Rag.sid", "id": 0, "size": 3072, "date": "1988-04-12" },
+    { "path": "Readme.txt", "id": 1, "size": 412, "date": "1988-04-12" }
+  ]
+}
