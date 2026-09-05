@@ -3411,7 +3411,16 @@ test.describe("App screenshots", () => {
 
         await interstitial.getByTestId("import-option-c64u").click();
         await expect(dialog.getByTestId("c64u-file-picker")).toBeVisible();
-        await expect(dialog.getByTestId("add-items-selection-heading")).toHaveText("From C64U");
+        /*
+         * Which source the browser is showing. The compact profile says it in the sheet's own
+         * title bar rather than in a heading row below it: on a 320x427 panel the two said much
+         * the same thing, and the row cost the file list about a fifth of its height.
+         */
+        const sourceLabel =
+          profileId === "compact" || profileId === "small"
+            ? dialog.getByTestId("add-items-title")
+            : dialog.getByTestId("add-items-selection-heading");
+        await expect(sourceLabel).toHaveText("From C64U");
         await captureScreenshot(
           page,
           testInfo,

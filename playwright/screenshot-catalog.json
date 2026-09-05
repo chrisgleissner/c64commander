@@ -1,5 +1,13 @@
 {
-  "disks": ["drives", "disks", "drive-a", "drive-b", "iec", "soft-iec", "soft-iec-drive"],
+  "disks": [
+    "drives",
+    "disks",
+    "drive-a",
+    "drive-b",
+    "iec",
+    "soft-iec",
+    "soft-iec-drive"
+  ],
   "config": [
     "memory-roms",
     "turbo-boost",
@@ -69,7 +77,9 @@
     "experimental-features",
     "sid-radio",
     "stable",
-    "experimental"
+    "experimental",
+    "stable-stable-features",
+    "experimental-experimental-features"
   ],
   "docs": [
     "getting-started",
