@@ -9,10 +9,28 @@ import {
 } from "@/lib/modalPresentation";
 
 describe("modalPresentation", () => {
-  it("uses large presentation for browser-style modal surfaces on every profile", () => {
-    expect(resolveModalPresentation("compact", "selection-browser").mode).toBe("large");
-    expect(resolveModalPresentation("compact", "list-browser").mode).toBe("large");
+  it("uses large presentation for browser-style modal surfaces above the compact profile", () => {
+    expect(resolveModalPresentation("medium", "selection-browser").mode).toBe("large");
+    expect(resolveModalPresentation("medium", "list-browser").mode).toBe("large");
     expect(resolveModalPresentation("expanded", "selection-browser").mode).toBe("large");
+  });
+
+  /*
+   * Compact promotes a browser, list, palette or editor to the whole panel, which is what
+   * docs/internals/display-profiles.md section 7 requires of a wide dialog there. A centred card
+   * on a 320x427 screen spends its margins and its backdrop gap on nothing, and the hardware is
+   * keypad-driven, so every band of chrome is another stop before the rows.
+   */
+  it("gives a browser, palette or editor the whole panel on the compact profile", () => {
+    for (const surface of ["selection-browser", "list-browser", "command-palette", "secondary-editor"] as const) {
+      expect(resolveModalPresentation("compact", surface).mode).toBe("full-screen");
+    }
+  });
+
+  it("keeps a confirmation and a popover centred on the compact profile", () => {
+    expect(resolveModalPresentation("compact", "confirmation").mode).toBe("centered");
+    expect(resolveModalPresentation("compact", "default").mode).toBe("centered");
+    expect(resolveModalPresentation("compact", "popover").mode).toBe("centered");
   });
 
   it("keeps confirmation dialogs centered while allowing large browser surfaces", () => {
@@ -32,10 +50,10 @@ describe("modalPresentation", () => {
       mode: "centered",
       footerClassName: "",
     });
-    expect(resolveModalPresentation("compact", "secondary-editor")).toMatchObject({
+    expect(resolveModalPresentation("medium", "secondary-editor")).toMatchObject({
       mode: "centered",
     });
-    expect(resolveModalPresentation("compact", "command-palette")).toMatchObject({
+    expect(resolveModalPresentation("medium", "command-palette")).toMatchObject({
       mode: "centered",
     });
     expect(resolveModalPresentation("expanded", "command-palette")).toMatchObject({
