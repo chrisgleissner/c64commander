@@ -126,8 +126,7 @@ const MEASURE = ({ rootSelector, bodyShareFloor, textFloor, targetFloor }: Measu
   };
 
   /** Nothing inside an `aria-hidden` or `inert` subtree is presented to the user. */
-  const isPresented = (element: Element) =>
-    !element.closest('[aria-hidden="true"]') && !element.closest("[inert]");
+  const isPresented = (element: Element) => !element.closest('[aria-hidden="true"]') && !element.closest("[inert]");
 
   /*
    * `sr-only` renders a real 1x1 box with its content clipped away, on purpose. Measuring those
