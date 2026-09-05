@@ -64,7 +64,18 @@ const largeDialogClass = `${centeredBaseClass} max-w-4xl overflow-hidden p-0`;
 const listDialogClass = `${centeredBaseClass} max-w-[42rem] overflow-hidden p-0`;
 const popoverDialogClass = `${centeredBaseClass} w-80 max-w-[calc(100dvw-2rem)] p-0`;
 const commandPaletteClass = `${centeredBaseClass} max-w-xl overflow-hidden p-0`;
-const defaultDialogClass = `${centeredBaseClass} max-w-[var(--display-profile-modal-max-width)]`;
+/*
+ * A centred dialog is bounded by the viewport and scrolls when its content does not fit.
+ *
+ * `centeredBaseClass` sets `overflow-hidden` and no maximum height, so a dialog taller than the
+ * screen was simply cut off with no way to reach the rest of it. On the 480x640 panel C64U Remote
+ * targets that made the Demo Mode offer unusable: the message filled the screen and the
+ * "Continue in Demo Mode" button sat below the fold, unreachable by touch and absent from the
+ * accessibility tree — an offer a user could read and not accept.
+ *
+ * `overflow-y-auto` comes after the base class so tailwind-merge keeps it over `overflow-hidden`.
+ */
+const defaultDialogClass = `${centeredBaseClass} max-w-[var(--display-profile-modal-max-width)] max-h-[calc(100dvh-2rem)] overflow-y-auto`;
 
 export const resolveModalPresentation = (profile: DisplayProfile, surface: ModalSurface): ModalPresentation => {
   switch (surface) {
