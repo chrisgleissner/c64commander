@@ -201,6 +201,11 @@ const MEASURE = ({ rootSelector, bodyShareFloor, textFloor, targetFloor }: Measu
       }
     : null;
 
+  /*
+   * A share below the floor only matters when the body has more than it can show. A dialog that
+   * shrank to fit one text field is spending most of its height on chrome by arithmetic, and
+   * nothing is being kept from the user, so there is nothing to report.
+   */
   if (bodyShareFloor > 0) {
     if (!body) {
       defects.push({
@@ -208,11 +213,11 @@ const MEASURE = ({ rootSelector, bodyShareFloor, textFloor, targetFloor }: Measu
         what: describe(root),
         detail: "no scrollable body: the surface is chrome only, so a list longer than it cannot be read",
       });
-    } else if (body.share < bodyShareFloor) {
+    } else if (body.share < bodyShareFloor && body.content > body.visible + 4) {
       defects.push({
         kind: "starved-body",
         what: body.what,
-        detail: `${body.visible}px of ${round(surfaceRect.height)}px (${Math.round(body.share * 100)}%), below the ${Math.round(bodyShareFloor * 100)}% floor`,
+        detail: `${body.visible}px of ${round(surfaceRect.height)}px (${Math.round(body.share * 100)}%) showing ${body.content}px of content, below the ${Math.round(bodyShareFloor * 100)}% floor`,
       });
     }
   }
