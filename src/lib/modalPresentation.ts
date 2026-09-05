@@ -41,7 +41,13 @@ const centeredAnimationClass =
 const centeredBaseClass = `fixed left-[50dvw] grid w-[min(calc(100dvw-1.5rem),var(--display-profile-modal-max-width))] translate-x-[-50%] gap-4 overflow-hidden rounded-[var(--interstitial-radius)] border bg-background p-6 shadow-[var(--interstitial-shadow)] outline-none ${centeredAnimationClass}`;
 
 /** Class list of `AppDialogContent`; kept here so every centered overlay shares one definition. */
-export const APP_DIALOG_CONTENT_CLASS = `fixed left-[50dvw] flex w-[min(90dvw,32rem)] max-w-[calc(100dvw-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-[var(--interstitial-radius)] border bg-background p-0 shadow-[var(--interstitial-shadow)] ${centeredAnimationClass}`;
+/*
+ * Bounded by the viewport for the same reason as `defaultDialogClass` below: without a maximum
+ * height a tall dialog runs past the screen and takes its footer with it. The body inside is
+ * already `flex-1 min-h-0 overflow-y-auto` (app-surface.tsx), so bounding the container makes the
+ * body shrink and scroll rather than the dialog overflow.
+ */
+export const APP_DIALOG_CONTENT_CLASS = `fixed left-[50dvw] flex max-h-[calc(100dvh-2rem)] w-[min(90dvw,32rem)] max-w-[calc(100dvw-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-[var(--interstitial-radius)] border bg-background p-0 shadow-[var(--interstitial-shadow)] ${centeredAnimationClass}`;
 
 /**
  * Class list of `AppSheetContent`. The sheet is full width and not transform-centred below the `sm`
