@@ -57,6 +57,7 @@ const NOT_FOUND_SUFFIX_COMPACT = ". Demo Mode runs the app against a simulated d
 
 export function DemoModeInterstitial() {
   const { demoInterstitialVisible, demoInterstitialReason } = useConnectionState();
+  const { profile } = useDisplayProfile();
   const [deviceHostInput, setDeviceHostInput] = useState("");
   const [hostError, setHostError] = useState<string | null>(null);
 
@@ -74,7 +75,6 @@ export function DemoModeInterstitial() {
   // hostname field and Save & retry: offering either would invite the user to answer a question
   // that cannot change the outcome until they turn a network back on.
   const noNetwork = demoInterstitialReason === "no-network";
-  const { profile } = useDisplayProfile();
   const compact = profile === "compact";
   const notFoundSuffix = compact ? NOT_FOUND_SUFFIX_COMPACT : NOT_FOUND_SUFFIX;
   const noNetworkMessage = compact ? NO_NETWORK_MESSAGE_COMPACT : NO_NETWORK_MESSAGE;

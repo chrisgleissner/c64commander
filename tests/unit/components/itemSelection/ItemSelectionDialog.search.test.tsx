@@ -116,16 +116,30 @@ describe("ItemSelectionDialog search scope", () => {
   /*
    * On the compact profile the scope row costs a row of the file list, and until there is
    * something typed it answers a question the user has not asked. It appears with the text.
+   * Only there: on a wider screen the row costs nothing worth saving, so it stays put.
    */
-  it("holds the scope control back until there is something to scope", () => {
+  it("holds the scope control back until there is something to scope, on the compact profile", () => {
+    const original = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 320 });
+    try {
+      navigatorState.query = "";
+      renderSheet();
+
+      expect(screen.queryByTestId("add-items-search-scope")).toBeNull();
+
+      fireEvent.change(screen.getByTestId("add-items-filter"), { target: { value: "commando" } });
+
+      expect(navigatorState.setQuery).toHaveBeenCalledWith("commando");
+    } finally {
+      Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: original });
+    }
+  });
+
+  it("keeps the scope control in view on a wider screen, where the row costs nothing", () => {
     navigatorState.query = "";
     renderSheet();
 
-    expect(screen.queryByTestId("add-items-search-scope")).toBeNull();
-
-    fireEvent.change(screen.getByTestId("add-items-filter"), { target: { value: "commando" } });
-
-    expect(navigatorState.setQuery).toHaveBeenCalledWith("commando");
+    expect(screen.getByTestId("add-items-search-scope")).toBeTruthy();
   });
 
   it("hides the scope control for a source that can only be browsed", () => {
