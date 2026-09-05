@@ -21,36 +21,36 @@ export const variantConfig = {
     selectedPublishVariants: ["c64commander"],
   },
   schemaVersion: 1,
-  selectedVariantId: "c64u-remote",
+  selectedVariantId: "c64commander",
   variant: {
-    appId: "c64u-remote",
+    appId: "c64commander",
     assets: {
       public: {
         faviconPng: "/favicon.png",
-        homeLogoPng: "/c64u-remote.png",
-        icon192Png: "/c64u-remote-192.png",
-        icon512Png: "/c64u-remote-512.png",
-        iconMaskable512Png: "/c64u-remote-maskable-512.png",
+        homeLogoPng: "/c64commander.png",
+        icon192Png: "/c64commander-192.png",
+        icon512Png: "/c64commander-512.png",
+        iconMaskable512Png: "/c64commander-maskable-512.png",
       },
       sources: {
         icon: {
           format: "png",
-          path: "variants/assets/c64u-remote/icon.png",
+          path: "variants/assets/c64commander/icon.png",
         },
         logo: {
           format: "png",
-          path: "variants/assets/c64u-remote/logo.png",
+          path: "variants/assets/c64commander/logo.png",
         },
         splash: {
           format: "png",
-          path: "variants/assets/c64u-remote/splash.png",
+          path: "variants/assets/c64commander/splash.png",
         },
       },
     },
     description: "Configure and control your Commodore 64 Ultimate over your local network.",
-    displayName: "C64U Remote",
-    displayNamePascalCase: "C64uRemote",
-    exportedFileBasename: "c64u-remote",
+    displayName: "C64 Commander",
+    displayNamePascalCase: "C64commander",
+    exportedFileBasename: "c64commander",
     featureFlags: {
       app_styles_gallery_enabled: {
         developer_only: true,
@@ -68,9 +68,9 @@ export const variantConfig = {
         visible_to_user: true,
       },
       background_execution_enabled: {
-        developer_only: false,
+        developer_only: true,
         enabled: true,
-        visible_to_user: true,
+        visible_to_user: false,
       },
       commoserve_enabled: {
         developer_only: false,
@@ -89,7 +89,7 @@ export const variantConfig = {
       },
       home_telnet_clear_ram_reboot_enabled: {
         developer_only: false,
-        enabled: true,
+        enabled: false,
         visible_to_user: true,
       },
       home_telnet_config_actions_enabled: {
@@ -104,7 +104,7 @@ export const variantConfig = {
       },
       home_telnet_power_cycle_enabled: {
         developer_only: false,
-        enabled: true,
+        enabled: false,
         visible_to_user: true,
       },
       home_telnet_printer_actions_enabled: {
@@ -168,24 +168,33 @@ export const variantConfig = {
         visible_to_user: true,
       },
     },
-    id: "c64u-remote",
+    id: "c64commander",
     platform: {
       android: {
-        applicationId: "uk.gleissner.c64uremote",
-        customUrlScheme: "uk.gleissner.c64uremote",
-        releaseAbis: ["arm64-v8a"],
+        applicationId: "uk.gleissner.c64commander",
+        customUrlScheme: "uk.gleissner.c64commander",
+      },
+      ios: {
+        bundleId: "uk.gleissner.c64commander",
+      },
+      web: {
+        backgroundColor: "#6C7EB7",
+        loginHeading: "C64 Commander",
+        loginTitle: "C64 Commander Login",
+        shortName: "C64 Commander",
+        themeColor: "#6C7EB7",
       },
     },
-    publishToGooglePlay: false,
+    publishToGooglePlay: true,
     runtime: {
-      defaultDisplayProfile: "compact",
-      defaultGameModeJoystick: "hidden",
-      defaultGameModeOnLaunch: true,
-      defaultHideNavigationBar: true,
-      defaultHideStatusBar: true,
-      defaultJoystickKeyLayout: "diamond8",
+      defaultDisplayProfile: "auto",
+      defaultGameModeJoystick: "auto",
+      defaultGameModeOnLaunch: false,
+      defaultHideNavigationBar: false,
+      defaultHideStatusBar: false,
+      defaultJoystickKeyLayout: "classicT9",
       defaultSidEmulationEngine: "residfp",
-      defaultT9InputEnabled: true,
+      defaultT9InputEnabled: false,
       endpoints: {
         commoserve_base_url: "http://commoserve.files.commodore.net",
         device_host: "c64u",
@@ -193,8 +202,8 @@ export const variantConfig = {
       },
     },
     theme: {
-      backgroundColor: "#2F6B8B",
-      themeColor: "#2F6B8B",
+      backgroundColor: "#6C7EB7",
+      themeColor: "#6C7EB7",
     },
   },
 } as const;

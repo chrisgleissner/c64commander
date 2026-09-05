@@ -3,5 +3,5 @@
      Compiler: scripts/generate-variant.mjs
      Run `node scripts/generate-variant.mjs` to regenerate. -->
 <resources>
-    <color name="ic_launcher_background">#2F6B8B</color>
+    <color name="ic_launcher_background">#6C7EB7</color>
 </resources>
