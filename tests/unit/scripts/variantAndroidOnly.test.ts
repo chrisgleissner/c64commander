@@ -488,13 +488,18 @@ describe("real c64u-remote feature-flag overlay", () => {
     });
   });
 
-  it("defaults C64U Remote to the Small Display profile and keypad T9 mode", () => {
+  it("leaves C64U Remote's display profile on auto and defaults to keypad T9 mode", () => {
+    // The keypad handset this variant targets is 480x640 at hdpi - 320 CSS px - so automatic
+    // resolution lands on the Small Display profile there without pinning it. Pinning it forced
+    // that profile onto every other device running the same APK, which on a 392 CSS px phone
+    // meant full-screen sheets with the app bar hidden instead of the medium presentation its
+    // width asks for.
     const config = parseVariantSource(readFileSync(path.join(REAL_REPO_ROOT, "variants/variants.yaml"), "utf8"), {
       repoRoot: REAL_REPO_ROOT,
     });
     const remote = config.variants["c64u-remote"] as any;
 
-    expect(remote.runtime.defaultDisplayProfile).toBe("compact");
+    expect(remote.runtime.defaultDisplayProfile).toBe("auto");
     expect(remote.runtime.defaultT9InputEnabled).toBe(true);
   });
 });

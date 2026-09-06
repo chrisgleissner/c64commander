@@ -84,7 +84,14 @@ variants:
         device_host: c64u
         hvsc_base_url: https://hvsc.brona.dk/HVSC/
         commoserve_base_url: http://commoserve.files.commodore.net
-      default_display_profile: compact
+      # `auto`, not `compact`. The keypad handset this variant targets has a 480x640 panel at
+      # hdpi, which is 320 CSS px wide, so automatic resolution already lands on compact there -
+      # the showcase recording, made at exactly that geometry, is unaffected. Pinning the profile
+      # instead forced the compact presentation onto every other device running this APK: on a
+      # 392 CSS px phone that meant full-screen sheets with the app bar hidden and the page behind
+      # them gone, where the same phone's own width asks for the medium presentation (85dvh sheet,
+      # full padding, page dimmed behind it). Screen size decides the layout; the variant does not.
+      default_display_profile: auto
       default_t9_input_enabled: true
       # Deliberately NOT overridden to `sidlite`.
       #
