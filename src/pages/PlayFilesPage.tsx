@@ -2733,6 +2733,7 @@ export default function PlayFilesPage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          id="sid-radio-launcher"
                           data-testid="sid-radio-launcher"
                           onClick={() => {
                             void sidRadio.ensureStylePopulations();
@@ -2748,6 +2749,7 @@ export default function PlayFilesPage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          id="hvsc-search-open"
                           data-testid="hvsc-search-open"
                           onClick={() => setHvscSearchOpen(true)}
                         >
@@ -2756,6 +2758,7 @@ export default function PlayFilesPage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          id="sid-radio-liked-tunes-open"
                           data-testid="sid-radio-liked-tunes-open"
                           onClick={() => setLikedTunesSheetOpen(true)}
                         >
