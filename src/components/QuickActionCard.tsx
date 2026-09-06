@@ -71,6 +71,12 @@ export function QuickActionCard({
         handlePointerButtonClick(event);
       }}
       disabled={disabled || loading}
+      // Mirrored onto the DOM `id` as well as `data-testid`, the way the tab bar and the Add-items
+      // button already do it. A WebView exposes the DOM id as the Android accessibility
+      // resource-id, and `data-testid` not at all, so a UI-automation `id:` selector can only
+      // reach a tile that carries both. Without it the showcase walk had to match these tiles by
+      // their visible label, which is one word shared with other controls on the same page.
+      id={dataTestId}
       data-testid={dataTestId}
       className={cn(
         "quick-action",
