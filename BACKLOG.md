@@ -15,6 +15,20 @@ prove it works against three real ones.
 What is wanted is a full HIL pass with the app on the Pixel 4 talking to the actual devices,
 not to Demo Mode.
 
+The bench, read from `/v1/info` on 2026-09-08:
+
+| Host | Product | Firmware | Core | Unique id |
+|---|---|---|---|---|
+| `c64u` | C64 Ultimate | 1.2RC | 1.4F | 5D0464 |
+| `u64` | Ultimate 64 Elite | 3.15 | 1.4F | 38C1BA |
+| `u2` | Ultimate II+L | 3.15 | none | F13E69 |
+
+Three different products on two firmware lines, and the II+L reports no core version
+at all because it is a cartridge rather than a machine. The config pages are built from
+what each device reports, so these three cannot agree, and that disagreement is the
+point of testing against all of them. Addresses are DHCP-volatile: re-read `/etc/hosts`
+before trusting any of them.
+
 Scope, in the order the risk sits:
 
 - **Connection and identity.** Discovery, saved devices, switching between the u2, the u64
