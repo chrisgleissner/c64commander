@@ -68,6 +68,30 @@ Done means: each area exercised against at least one real device, defects record
 evidence that identifies them as app faults rather than firmware or network faults, and a
 written statement of what was covered and what was not.
 
+**First pass run 2026-09-08**, results in `docs/hil/2026-09-08-hil-findings.md`. Covered:
+connection and identity against all three devices, config completeness against all three
+(222, 214 and 148 items, all rendered), Live View from the c64u, and remote input driving the
+real keyboard matrix. Not yet covered: disks and drives, playback, and audio through the
+speaker. The pass found one high-severity defect, recorded below.
+
+## The II+L is reported unhealthy because the app asks it for categories it never advertised
+
+**Found 2026-09-08 on the bench.** Connecting to the Ultimate II+L shows
+"system unhealthy, 4 problems" on a device that is working correctly.
+
+The app requests `/v1/configs/SID Sockets Configuration` and
+`/v1/configs/U64 Specific Settings/Palette Definition`. Both return HTTP 404: the II+L is a
+cartridge with no SID sockets and no U64-specific hardware, and it advertises 13 categories,
+neither of them these. The 404s are then counted as device problems.
+
+The Config page itself is correct — it renders exactly the 13 categories the device reports —
+so whatever issues these two requests is working from a different, hardcoded list. That is the
+rule this project already holds: config comes from the device, never from a fixed list.
+
+Done means: every config request derives from the category list the connected device returned,
+and a 404 for a category the device never advertised never reaches the health count. A II+L on
+the bench makes this testable.
+
 ## Mount disk raises a source chooser the user did not ask for
 
 **Found 2026-09-08, on the Pixel 4 in Demo Mode.** Tapping a drive's Mount disk
