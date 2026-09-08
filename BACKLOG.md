@@ -37,6 +37,20 @@ Scope, in the order the risk sits:
 - **Config against real firmware.** The config pages are built from what each device reports,
   and the three devices do not report the same things. Read every category on each, and check
   that writes take effect and that the app never invents an option the firmware does not have.
+
+  `GET /v1/configs` on 2026-09-08 returned 22 categories from the C64 Ultimate, 20 from the
+  Ultimate 64 Elite and 13 from the II+L, so "the page renders everything the device reports"
+  is a different assertion on each. The differences are not cosmetic:
+
+  - Only the C64 Ultimate has `Speaker Mixer`, `Keyboard Lighting`, and a `SID Socket 1/2:
+    ARMSID` pair named after the hardware actually fitted.
+  - Only the Ultimate 64 Elite has `Machine Monitor Bookmarks`.
+  - The II+L has neither `SID Sockets Configuration` nor `UltiSID Configuration` nor
+    `LED Strip Settings` nor `Data Streams`, and it calls its audio category
+    `Audio Output Settings` where the other two call theirs `Audio Mixer`.
+
+  A page built from a fixed list rather than from the device would look right on one of these
+  and wrong on the other two, which is exactly what this exercise is for.
 - **Live View and audio.** Multicast video and audio from a real device, at each display
   profile. Video competing with audio on Wi-Fi is a measured problem, not a hypothesis.
 - **Disks and drives.** Mount, swap and unmount against real drives, including the soft IEC
