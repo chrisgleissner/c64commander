@@ -39,3 +39,26 @@ first.
 Done means: each area exercised against at least one real device, defects recorded with the
 evidence that identifies them as app faults rather than firmware or network faults, and a
 written statement of what was covered and what was not.
+
+## Mount disk raises a source chooser the user did not ask for
+
+**Found 2026-09-08, on the Pixel 4 in Demo Mode.** Tapping a drive's Mount disk
+button opens the mount sheet and, on top of it, the "Add items / Choose source"
+dialog. One `adb shell input tap` on the button reproduces it with no automation
+involved, so it is what a person gets too.
+
+The sheet's own "Add disks" button renders only while the disk collection is
+empty (`HomeDiskManager`, `sortedDisks.length === 0`) and it sits in the sheet
+header. The sheet animates up to where the finger just was, and the newly mounted
+button receives the click that opened the sheet — a click-through, the same class
+of problem as a tap landing on an element that appeared under it.
+
+Anyone whose collection is empty meets this on their first attempt to mount a
+disk, which is the worst possible audience for it. The release walkthrough now
+cancels the dialog to film the sheet behind it
+(`c64u-remote-dist/.maestro/showcase.yaml`), which is a workaround in the
+recording, not a fix in the app.
+
+Done means: opening the mount sheet leaves the sheet on screen and nothing else,
+with a test that fails if the click reaches a control the sheet mounted under the
+pointer.
