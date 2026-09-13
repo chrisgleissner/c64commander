@@ -19,11 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useConnectionState } from "@/hooks/useConnectionState";
-import {
-  dismissDemoInterstitial,
-  discoverConnection,
-  pinDemoModeByUserChoice,
-} from "@/lib/connection/connectionManager";
+import { declineDemoMode, pinDemoModeByUserChoice } from "@/lib/connection/connectionManager";
 import { resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { saveConfiguredHostAndRetry } from "@/lib/connection/hostEdit";
 import { useDisplayProfile } from "@/hooks/useDisplayProfile";
@@ -95,8 +91,10 @@ export function DemoModeInterstitial() {
   return (
     <Dialog
       open={demoInterstitialVisible}
+      // Closing the offer (×, Back, a tap outside) turns it down: the simulated device is already
+      // standing in behind it, and leaving it there would accept an offer the user refused.
       onOpenChange={(open) => {
-        if (!open) dismissDemoInterstitial();
+        if (!open) void declineDemoMode();
       }}
     >
       <DialogContent>
@@ -140,8 +138,7 @@ export function DemoModeInterstitial() {
               variant="outline"
               data-testid="demo-interstitial-retry"
               onClick={() => {
-                dismissDemoInterstitial();
-                void discoverConnection("manual");
+                void declineDemoMode({ retry: "manual" });
               }}
             >
               {noNetwork ? "Try again" : "Retry connection"}

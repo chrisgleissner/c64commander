@@ -115,8 +115,9 @@ const sheetVariants = cva(
       density: {
         compact:
           "max-h-[100dvh] px-3 pt-[calc(0.75rem+var(--safe-area-inset-top))] pb-[calc(0.75rem+var(--safe-area-inset-bottom))]",
-        standard:
-          "max-h-[85dvh] px-6 pt-[calc(1.5rem+var(--safe-area-inset-top))] pb-[calc(1.5rem+var(--safe-area-inset-bottom))]",
+        // No inset in the padding: every side already offsets the sheet by the status and navigation
+        // bars, and adding them again cost a bottom sheet 78px of list on a Pixel 4 (30 top, 48 bottom).
+        standard: "max-h-[85dvh] px-6 pt-6 pb-6",
       },
     },
     defaultVariants: {

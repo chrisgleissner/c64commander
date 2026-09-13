@@ -14,7 +14,7 @@ import {
   updateC64APIConfig,
 } from "@/lib/c64api";
 import type { DiscoveryTrigger } from "@/lib/connection/connectionManager";
-import { discoverConnection, dismissDemoInterstitial } from "@/lib/connection/connectionManager";
+import { declineDemoMode, discoverConnection } from "@/lib/connection/connectionManager";
 import { addLog } from "@/lib/logging";
 
 export const normalizeConfiguredHost = (input: string, fallbackHost: string) =>
@@ -41,9 +41,11 @@ export const saveConfiguredHostAndRetry = (
   const host = normalizeConfiguredHost(input, fallbackHost);
   const currentPassword = getC64APIConfigSnapshot().password;
   updateC64APIConfig(buildBaseUrlFromDeviceHost(host), currentPassword, host);
+  // From the Demo Mode offer, choosing a host is turning the simulated device down.
   if (options.dismissInterstitial) {
-    dismissDemoInterstitial();
+    void declineDemoMode({ retry: options.trigger ?? "settings" });
+  } else {
+    void discoverConnection(options.trigger ?? "settings");
   }
-  void discoverConnection(options.trigger ?? "settings");
   return host;
 };

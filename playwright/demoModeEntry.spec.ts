@@ -281,6 +281,36 @@ test.describe("Entering Demo Mode", () => {
     await snap(page, testInfo, "no-network-confirmed");
   });
 
+  test("with no network, closing the offer turns Demo Mode down for the session", async ({
+    page,
+  }: { page: Page }, testInfo: TestInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    allowWarnings(testInfo, "Reads in flight when Demo Mode is left are aborted by design.");
+
+    await seedHandset(page, {
+      deviceHost: new URL(device.baseUrl).host,
+      deviceBaseUrl: device.baseUrl,
+      demoBaseUrl: demo.baseUrl,
+      networkStatus: { online: false, supported: true },
+    });
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    const dialog = demoDialog(page);
+    await expect(dialog).toBeVisible({ timeout: 15000 });
+
+    // Closing used to hide the offer and leave the simulated device standing in.
+    await dialog.getByRole("button", { name: "Close" }).click();
+    await expect(dialog).toBeHidden({ timeout: 10000 });
+    await expectConnectionState(page, "OFFLINE_NO_DEMO");
+    await snap(page, testInfo, "no-network-declined");
+
+    // A reload in the same session runs startup discovery again; the decline must still stand.
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expectConnectionState(page, "OFFLINE_NO_DEMO");
+    await expect(dialog).toBeHidden();
+    expect(device.requests.filter((request) => request.url.startsWith("/v1/info"))).toHaveLength(0);
+  });
+
   test("with no network, trying again reaches the device once the network is back", async ({
     page,
   }: { page: Page }, testInfo: TestInfo) => {

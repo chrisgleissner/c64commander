@@ -92,6 +92,27 @@ class FolderPickerPluginTest {
   }
 
   @Test
+  fun listChildrenReportsAMissingFolderAsNotFoundWithoutLoggingAnError() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+    ShadowLog.clear()
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("treeUri"))
+            .thenReturn("content://com.android.externalstorage.documents/tree/primary%3ADownload%2FC64HIL")
+    `when`(call.getString("path")).thenReturn("/HVSC/DOCUMENTS")
+
+    val latch = CountDownLatch(1)
+    doAnswer {
+      latch.countDown()
+      null
+    }.`when`(call).reject(eq("Path segment not found: HVSC"), eq("NOT_FOUND"), any(Exception::class.java))
+
+    plugin.listChildren(call)
+    assertTrue(latch.await(2, TimeUnit.SECONDS))
+    assertTrue(ShadowLog.getLogs().none { it.type == android.util.Log.ERROR })
+  }
+
+  @Test
   fun readFileFromTreeRejectsWhenTreeUriMissing() {
     val call = mock(PluginCall::class.java)
     `when`(call.getString("treeUri")).thenReturn(null)

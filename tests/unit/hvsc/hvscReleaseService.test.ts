@@ -6,19 +6,24 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_HVSC_UPDATE_CHECK_INTERVAL_DAYS,
+  HVSC_NO_NETWORK_MESSAGE,
   MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS,
   buildHvscBaselineUrl,
   buildHvscUpdateUrl,
+  clearRuntimeHvscBaseUrl,
   fetchLatestHvscVersions,
   getHvscBaseUrlOverride,
   getHvscUpdateCheckIntervalDays,
+  isRuntimeHvscBaseUrlActive,
   markHvscUpdateCheckAt,
   setHvscBaseUrlOverride,
   setHvscUpdateCheckIntervalDays,
+  setRuntimeHvscBaseUrl,
   shouldCheckForHvscUpdates,
+  subscribeRuntimeHvscBaseUrl,
 } from "@/lib/hvsc/hvscReleaseService";
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 
@@ -65,6 +70,7 @@ describe("hvscReleaseService", () => {
       baselineVersion: 84,
       updateVersion: 85,
       baseUrl: "https://example.com/hvsc/",
+      simulated: false,
     });
     expect(buildHvscBaselineUrl(84, result.baseUrl)).toBe("https://example.com/hvsc/HVSC_84-all-of-them.7z");
     expect(buildHvscUpdateUrl(85, result.baseUrl)).toBe("https://example.com/hvsc/HVSC_Update_85.7z");
@@ -113,6 +119,24 @@ describe("hvscReleaseService", () => {
         method: "GET",
       }),
     );
+  });
+
+  it("says there is no internet connection rather than repeating the platform's DNS error", async () => {
+    // On the offline Pixel 4 the user was shown: Unable to resolve host "hvsc.brona.dk": No address
+    // associated with hostname.
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(CapacitorHttp.request).mockRejectedValue(
+      new Error('Unable to resolve host "hvsc.brona.dk": No address associated with hostname'),
+    );
+
+    await expect(fetchLatestHvscVersions("https://hvsc.brona.dk/HVSC/")).rejects.toThrow(HVSC_NO_NETWORK_MESSAGE);
+  });
+
+  it("passes other index failures through unchanged", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(CapacitorHttp.request).mockRejectedValue(new Error("TLS handshake failed"));
+
+    await expect(fetchLatestHvscVersions("https://hvsc.brona.dk/HVSC/")).rejects.toThrow("TLS handshake failed");
   });
 
   it("handles native platform check exception", async () => {
@@ -304,6 +328,50 @@ describe("hvscReleaseService", () => {
 
       markHvscUpdateCheckAt("2026-01-02T12:34:56.000Z");
       expect(mockLS.setItem).toHaveBeenCalledWith(HVSC_LAST_UPDATE_CHECK_AT_KEY, "2026-01-02T12:34:56.000Z");
+    });
+  });
+
+  describe("Demo Mode's simulated release", () => {
+    const DEMO_BASE_URL = "http://127.0.0.1:41955/hvsc/per-boot-token/";
+
+    afterEach(() => {
+      clearRuntimeHvscBaseUrl();
+    });
+
+    it("marks a release resolved through the Demo Mode base URL as simulated", async () => {
+      vi.mocked(fetch).mockResolvedValue(new Response('<a href="HVSC_84-all-of-them.7z">x</a>', { status: 200 }));
+      setRuntimeHvscBaseUrl(DEMO_BASE_URL);
+
+      const result = await fetchLatestHvscVersions();
+
+      expect(result).toEqual({ baselineVersion: 84, updateVersion: 84, baseUrl: DEMO_BASE_URL, simulated: true });
+      expect(isRuntimeHvscBaseUrlActive()).toBe(true);
+    });
+
+    it("marks a release as real when no Demo Mode base URL is set, or an explicit URL is given", async () => {
+      vi.mocked(fetch).mockImplementation(async () => new Response("<html></html>", { status: 200 }));
+
+      expect((await fetchLatestHvscVersions()).simulated).toBe(false);
+      setRuntimeHvscBaseUrl(DEMO_BASE_URL);
+      expect((await fetchLatestHvscVersions("https://example.com/hvsc/")).simulated).toBe(false);
+    });
+
+    it("notifies subscribers only when Demo Mode starts or stops serving HVSC", () => {
+      const listener = vi.fn();
+      const unsubscribe = subscribeRuntimeHvscBaseUrl(listener);
+
+      clearRuntimeHvscBaseUrl();
+      expect(listener).not.toHaveBeenCalled();
+      setRuntimeHvscBaseUrl(DEMO_BASE_URL);
+      setRuntimeHvscBaseUrl(DEMO_BASE_URL);
+      expect(listener).toHaveBeenCalledTimes(1);
+      clearRuntimeHvscBaseUrl();
+      expect(listener).toHaveBeenCalledTimes(2);
+      expect(isRuntimeHvscBaseUrlActive()).toBe(false);
+
+      unsubscribe();
+      setRuntimeHvscBaseUrl(DEMO_BASE_URL);
+      expect(listener).toHaveBeenCalledTimes(2);
     });
   });
 });

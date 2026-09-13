@@ -91,13 +91,17 @@ C64 Commander reconnects to saved devices automatically on later launches.
 ### No C64 Ultimate yet? The app still runs
 
 Start the app on a phone or tablet with no network connection at all — airplane mode, or Wi-Fi and
-mobile data both off — and it opens straight onto a built-in simulated Commodore 64 Ultimate. There
-is no setting to turn on, no network scan, and nothing to confirm: Home, configuration, disks,
-playback and Remote Input all work against the simulator, and the header badge reads **Demo mode**
-so the simulated device is never mistaken for a real one.
+mobile data both off — and it offers **Demo Mode**, a built-in simulated C64 Ultimate. There is no
+setting to turn on and no network scan. Choose **Continue in Demo Mode** and Home, configuration,
+disks, playback, the HVSC collection, Remote Input and Live View all work against the simulator; the
+header badge reads **Demo mode** so the simulated device is never mistaken for a real one.
 
-The simulator answers the REST and FTP surfaces. It does not emulate a 6502, so programs and SID
-tunes do not run on it, and it sends no audio or video streams, so Live View has nothing to show.
+The simulator answers the REST and FTP surfaces and streams a picture and sound for Live View. It does
+not emulate a 6502, so a program shows a demonstration screen, and SID tunes play on the phone's own
+SID engine.
+
+Close the offer instead, or choose **Try again** while there is still no network, and the app stays
+offline for the session. Tunes stored on the phone still play on the phone.
 
 Connect real hardware at any time from **Settings > Device > Connection**. Once the app has reached
 a real device in a session, it never falls back to the simulator.

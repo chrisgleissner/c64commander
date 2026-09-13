@@ -177,9 +177,12 @@ export const resolveCenteredOverlayLayout = (
     getBadgeSafeZoneBottomPx() + OVERLAY_SAFE_ZONE_GAP_PX,
     appBarBounds ? Math.round(appBarBounds.bottom) + OVERLAY_SAFE_ZONE_GAP_PX : 0,
   );
-  const centeredTop = Math.round((viewportHeight - contentHeight) / 2);
+  // The viewport runs under the navigation bar; a dialog measured against all of it put New disk's
+  // Cancel and Create buttons under the bar's buttons on a Pixel 4.
+  const usableHeight = viewportHeight - readCssNumber("--safe-area-inset-bottom", 0);
+  const centeredTop = Math.round((usableHeight - contentHeight) / 2);
   const top = Math.max(minTop, centeredTop);
-  const maxHeight = Math.max(MIN_CENTERED_OVERLAY_HEIGHT_PX, viewportHeight - top - 12);
+  const maxHeight = Math.max(MIN_CENTERED_OVERLAY_HEIGHT_PX, usableHeight - top - 12);
 
   return { top, maxHeight };
 };

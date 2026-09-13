@@ -115,7 +115,8 @@ const TuneList = ({
             type="button"
             variant="ghost"
             size="sm"
-            className="min-w-0 flex-1 justify-start gap-2 py-1 text-left"
+            // `h-auto`: the button's fixed 44px height held three lines of 70px, drawn over the row border.
+            className="h-auto min-w-0 flex-1 justify-start gap-2 py-1 text-left"
             data-testid="hvsc-search-play"
             title={stationActive ? `Play ${hit.title} now, then carry on` : `Play ${hit.title}`}
             onClick={() => onPlay(hit)}

@@ -385,7 +385,7 @@ export const HomeDiskManager = () => {
   const localSourcesById = useMemo(() => new Map(localSources.map((source) => [source.id, source])), [localSources]);
 
   const sourceGroups: SourceGroup[] = useMemo(() => {
-    const ultimateSource = createUltimateSourceLocation();
+    const ultimateSource = { ...createUltimateSourceLocation(), isAvailable: status.state !== "OFFLINE_NO_DEMO" };
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
     const groups: SourceGroup[] = [
       { label: SOURCE_LABELS.local, sources: localGroupSources },
@@ -398,7 +398,7 @@ export const HomeDiskManager = () => {
       });
     }
     return groups;
-  }, [archiveConfig, commoserveEnabled, localSources]);
+  }, [archiveConfig, commoserveEnabled, localSources, status.state]);
   const archiveConfigs = useMemo((): Record<string, ArchiveClientConfigInput> => {
     if (!commoserveEnabled) return {};
     return { [archiveConfig.id]: archiveConfig };

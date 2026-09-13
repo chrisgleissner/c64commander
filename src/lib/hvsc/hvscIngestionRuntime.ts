@@ -36,6 +36,8 @@ import {
   deleteCachedArchive,
 } from "./hvscFilesystem";
 import { loadHvscState, updateHvscState, isUpdateApplied, markUpdateApplied } from "./hvscStateStore";
+import { decideHvscReleaseUse, resolveHvscUpdateStatus } from "./hvscLibrarySource";
+import { resetMd548PathIndex } from "@/lib/sidRadio/md5PathIndex";
 import { invalidateHvscHydration } from "./hvscHydrationControl";
 import { getDefaultHvscStatusSummary, saveHvscStatusSummary } from "./hvscStatusStore";
 import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from "./hvscSongLengthService";
@@ -77,6 +79,7 @@ import {
   drainNativeProgressListeners,
   formatPathListPreview,
   getHvscIngestionRuntimeState,
+  markIngestionRuntimeIdle,
   registerNativeProgressListener,
   removeNativeProgressListener,
   reportCacheStatFailure,
@@ -168,7 +171,10 @@ export const resetHvscLibraryData = async (): Promise<void> => {
   if (runtimeState.activeIngestionRunning) {
     throw new Error("Cannot reset HVSC while preparation is running");
   }
+  await clearHvscLibraryData();
+};
 
+const clearHvscLibraryData = async () => {
   // HARD19-019: invalidate any in-flight metadata hydration BEFORE deleting the
   // index, so a long-running hydrator stops instead of re-persisting the browse
   // index this reset is about to clear (zombie resurrection).
@@ -181,6 +187,8 @@ export const resetHvscLibraryData = async (): Promise<void> => {
   // STIL describes the library that is being removed. Leaving it behind would make a fresh install
   // of an older release look like it already had current tune notes.
   await clearStil();
+  // SID Radio resolves tunes through this index, and it never empties itself on a songlengths reload.
+  resetMd548PathIndex();
 
   updateHvscState({
     installedBaselineVersion: null,
@@ -194,6 +202,7 @@ export const resetHvscLibraryData = async (): Promise<void> => {
     // incremental update would be skipped forever on reinstall ("Update N
     // already applied"), permanently stuck at the baseline. See HARD9-014.
     updates: {},
+    librarySource: "real",
   });
   saveHvscStatusSummary(getDefaultHvscStatusSummary());
   resetHvscProgressSummaryStage();
@@ -212,21 +221,8 @@ export const getHvscStatus = async (): Promise<HvscStatus> => loadHvscState();
 export const getHvscCacheStatus = async (): Promise<HvscCacheStatus> => getCacheStatusInternal();
 
 export const checkForHvscUpdates = async (): Promise<HvscUpdateStatus> => {
-  const { baselineVersion, updateVersion } = await fetchLatestHvscVersions();
-  const current = updateHvscState({ lastUpdateCheckUtcMs: Date.now() });
-  const installedVersion = current.installedVersion ?? 0;
-  const requiredUpdates =
-    installedVersion === 0 && updateVersion > baselineVersion
-      ? Array.from({ length: updateVersion - baselineVersion }, (_, i) => baselineVersion + i + 1)
-      : installedVersion > 0 && installedVersion < updateVersion
-        ? Array.from({ length: updateVersion - installedVersion }, (_, i) => installedVersion + i + 1)
-        : [];
-  return {
-    latestVersion: updateVersion,
-    installedVersion,
-    baselineVersion,
-    requiredUpdates,
-  };
+  const release = await fetchLatestHvscVersions();
+  return resolveHvscUpdateStatus(updateHvscState({ lastUpdateCheckUtcMs: Date.now() }), release);
 };
 
 // ── Shared ingestion core ─────────────────────────────────────────
@@ -912,8 +908,18 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
   let currentPipelineState: HvscPipelineState | null = null;
   let baselineInstalled: number | null = null;
   try {
-    const { baselineVersion, updateVersion, baseUrl } = await fetchLatestHvscVersions();
+    const { baselineVersion, updateVersion, baseUrl, simulated } = await fetchLatestHvscVersions();
     updateHvscState({ lastUpdateCheckUtcMs: Date.now() });
+    const releaseUse = decideHvscReleaseUse(loadHvscState(), simulated);
+    if (releaseUse === "keep-real-library") {
+      addLog("info", "HVSC install skipped: Demo Mode never replaces a real library", { baseUrl });
+      emitProgress({ stage: "complete", message: "HVSC already up to date" });
+      return loadHvscState();
+    }
+    if (releaseUse === "discard-demo-library") {
+      addLog("info", "Removing the HVSC library from Demo Mode before installing the real release", { baseUrl });
+      await clearHvscLibraryData();
+    }
     const current = loadHvscState();
     baselineInstalled = current.installedBaselineVersion ?? null;
     const plans: Array<{ type: "baseline" | "update"; version: number }> = [];
@@ -931,6 +937,8 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
       emitProgress({ stage: "complete", message: "HVSC already up to date" });
       return loadHvscState();
     }
+    // Recorded before the first download, so an install from Demo Mode that never finishes is removed too.
+    if (simulated) updateHvscState({ librarySource: "demo" });
 
     emitProgress({
       stage: "archive_discovery",
@@ -1146,8 +1154,8 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
   } finally {
     await drainNativeProgressListeners(cancelToken);
     await endHvscInstallGuard();
-    runtimeState.activeIngestionRunning = false;
     runtimeState.cancelTokens.delete(cancelToken);
+    markIngestionRuntimeIdle();
   }
 };
 
@@ -1362,8 +1370,8 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
   } finally {
     await drainNativeProgressListeners(cancelToken);
     await endHvscInstallGuard();
-    runtimeState.activeIngestionRunning = false;
     runtimeState.cancelTokens.delete(cancelToken);
+    markIngestionRuntimeIdle();
   }
 };
 

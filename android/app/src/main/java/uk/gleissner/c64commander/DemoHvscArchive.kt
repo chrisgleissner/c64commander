@@ -10,32 +10,26 @@ package uk.gleissner.c64commander
 
 import android.util.Log
 import java.io.File
+import java.security.MessageDigest
+
+/** Where [DemoHvscArchive] reads its committed inputs: APK assets, or the source tree in a test. */
+interface DemoHvscAssets {
+  /** The names of the entries directly inside [directory]. */
+  fun list(directory: String): List<String>
+
+  fun read(path: String): ByteArray
+}
 
 /**
- * The HVSC release Demo Mode offers, built on this device the first time it is asked for.
- *
- * Demo Mode exists for someone who has the app and no Commodore 64 Ultimate, and increasingly for
- * someone who has neither that nor a network. Without a music collection the Play page is an empty
- * shell, which is the opposite of what the mode is for. So the demo serves an HVSC release of its
- * own: a few hundred tunes in the directory shape the real collection uses, packed into a genuine
- * `.7z` with the same 7-Zip binary the app ships for reading one.
- *
- * Built rather than shipped. A generated archive costs nothing in the APK and stays out of the
- * source tree; the alternative was carrying an archive as an asset, which grows every install for
- * a feature only the demo path uses.
- *
- * Packed with the app's own `lib7zz.so`, deliberately: the whole point of the demo is that the
- * real download-probe-extract-hydrate path runs, and a ZIP renamed `.7z` would take a different
- * branch of DefaultHvscArchiveExtractor than a real release does. If the binary is missing the
- * caller serves no release at all, and HVSC shows its ordinary "nothing installed" state.
- *
- * The tunes are invented and so are the composers. The FOLDERS mirror HVSC's real layout, because
- * that shape is what the app navigates and what a viewer recognises; the names inside them do not
- * borrow a living composer's catalogue to do it.
+ * The HVSC release Demo Mode offers, generated on the device rather than shipped to keep the APK small.
+ * Invented tunes in HVSC's folder layout, packed with the app's own `lib7zz.so` so the real extraction
+ * path runs; without that binary no release is offered. Each tune reuses the C64 code of a simulated
+ * device tune, and its Songlengths.md5 entry starts with a SID Radio corpus identity so stations play it.
  */
 class DemoHvscArchive(
         private val cacheDir: File,
         private val sevenZipExecutable: File?,
+        private val assets: DemoHvscAssets,
 ) {
   companion object {
     private const val TAG = "DemoHvscArchive"
@@ -44,11 +38,21 @@ class DemoHvscArchive(
     const val RELEASE = 84
     const val ARCHIVE_NAME = "HVSC_$RELEASE-all-of-them.7z"
 
-    // Enough that browsing, filtering and searching all have something to work on, and small
-    // enough that packing and the app's own hydration both stay quick on a phone. Measured on the
-    // emulator, this is a fraction of a second to pack and a couple of seconds to ingest; the real
-    // collection is a hundred times larger and takes minutes.
-    private const val TUNES = 480
+    /** Where stilService.ts looks for STIL next to a release: versioned first, then unversioned. */
+    val STIL_PATHS = setOf("C64Music.$RELEASE/DOCUMENTS/STIL.txt", "C64Music/DOCUMENTS/STIL.txt")
+
+    const val IDENTITIES_ASSET = "demo-hvsc/identities.txt"
+    const val PLAYERS_ASSET_DIRECTORY = "ftp-root/Usb0/Music"
+
+    // PSID v2 header fields, as src/lib/sid/sidUtils.ts reads them.
+    internal const val PSID_DATA_OFFSET = 0x7C
+    internal const val PSID_TITLE = 0x16
+    internal const val PSID_AUTHOR = 0x36
+    internal const val PSID_RELEASED = 0x56
+    internal const val PSID_TEXT_BYTES = 32
+    internal const val RELEASED = "Demo Mode"
+
+    private val MD5_48 = Regex("^[0-9a-f]{12}$")
 
     private val COMPOSERS =
             listOf(
@@ -77,9 +81,47 @@ class DemoHvscArchive(
                     "Floppy Shuffle",
                     "Interrupt Lullaby",
             )
+
+    // Invented originals for the STIL cover credits. None of these pieces or performers exists.
+    private val ORIGINALS =
+            listOf(
+                    "Harbour Lights Overture",
+                    "Midnight Tram",
+                    "Paper Kite Parade",
+                    "Copper Skyline",
+                    "Lantern Festival",
+                    "Glass Orchard",
+                    "Tin Robot Tango",
+            )
+
+    private val ORIGINAL_ARTISTS =
+            listOf(
+                    "The Demo Mode Studio Band",
+                    "Imaginary Arcade Orchestra",
+                    "The Placeholder Quartet",
+                    "Fictional Records House Band",
+            )
+  }
+
+  /** One generated tune: its path inside `C64Music`, as HVSC and the app write it, and its bytes. */
+  internal class Tune(val path: String, val bytes: ByteArray)
+
+  internal class Layout(val tunes: List<Tune>, val songlengths: String, val stil: String) {
+    /** Changes whenever any generated byte changes, so a device never keeps serving an older build. */
+    val fingerprint: String by lazy {
+      val digest = MessageDigest.getInstance("SHA-256")
+      tunes.forEach { tune ->
+        digest.update(tune.path.toByteArray(Charsets.UTF_8))
+        digest.update(tune.bytes)
+      }
+      digest.update(songlengths.toByteArray(Charsets.UTF_8))
+      digest.update(stil.toByteArray(Charsets.ISO_8859_1))
+      digest.digest().take(8).joinToString("") { "%02x".format(it) }
+    }
   }
 
   private var built: File? = null
+  private var generated: Layout? = null
 
   /** The packed release, or null when this device cannot build one. */
   @Synchronized
@@ -91,7 +133,7 @@ class DemoHvscArchive(
       return null
     }
     return try {
-      val packed = build(executable)
+      val packed = build(executable, layout())
       built = packed
       packed
     } catch (error: Exception) {
@@ -100,14 +142,29 @@ class DemoHvscArchive(
     }
   }
 
-  private fun build(executable: File): File {
+  /** The release's STIL document, served beside the archive the way a mirror publishes it. */
+  @Synchronized
+  fun stil(): ByteArray? = archive()?.let { layout().stil.toByteArray(Charsets.ISO_8859_1) }
+
+  @Synchronized
+  internal fun layout(): Layout = generated ?: generate().also { generated = it }
+
+  private fun build(executable: File, layout: Layout): File {
+    // One directory per fingerprint: a cached archive from an earlier generator would otherwise be
+    // served for as long as the app's cache survives, which includes every in-place app update.
     val work = File(cacheDir, "demo-hvsc")
-    val target = File(work, ARCHIVE_NAME)
+    val release = File(work, layout.fingerprint)
+    val target = File(release, ARCHIVE_NAME)
     if (target.isFile && target.length() > 0) return target
 
     work.deleteRecursively()
-    val root = File(work, "C64Music")
-    writeTree(root)
+    val root = File(release, "C64Music")
+    layout.tunes.forEach { tune ->
+      File(root, tune.path).apply { parentFile?.mkdirs() }.writeBytes(tune.bytes)
+    }
+    val documents = File(root, "DOCUMENTS").apply { mkdirs() }
+    File(documents, "Songlengths.md5").writeText(layout.songlengths)
+    File(documents, "STIL.txt").writeBytes(layout.stil.toByteArray(Charsets.ISO_8859_1))
 
     // Store rather than compress: these files are tiny and already unique, so the time is all in
     // the container. `-y` because there is no console to answer a prompt.
@@ -121,7 +178,7 @@ class DemoHvscArchive(
                             target.absolutePath,
                             root.absolutePath,
                     )
-                    .directory(work)
+                    .directory(release)
                     .redirectErrorStream(true)
                     .start()
     val output = process.inputStream.bufferedReader().use { it.readText() }
@@ -129,96 +186,136 @@ class DemoHvscArchive(
     if (status != 0 || !target.isFile) {
       throw IllegalStateException("7-Zip exited $status while packing the demo release: $output")
     }
-    Log.i(TAG, "Packed demo HVSC release: ${target.length()} bytes, $TUNES tunes")
+    Log.i(TAG, "Packed demo HVSC release: ${target.length()} bytes, ${layout.tunes.size} tunes")
     return target
   }
 
-  private fun writeTree(root: File) {
-    val documents = File(root, "DOCUMENTS").apply { mkdirs() }
+  private fun generate(): Layout {
+    val identities = readIdentities()
+    val players = readPlayers()
+    val tunes = mutableListOf<Tune>()
     val songlengths = StringBuilder("[Database]\n")
-    var written = 0
+    val stil =
+            StringBuilder(
+                    """
+                    |#  STIL.txt - The SID Tune Information List, demonstration edition
+                    |#
+                    |#  This collection is generated on the device for Demo Mode. The tunes, the
+                    |#  composers and every note below are invented; only the directory layout and
+                    |#  the format follow the real one.
+                    |#
+                    |
+                    """.trimMargin(),
+            )
 
-    fun tune(dir: File, title: String, index: Int) {
-      dir.mkdirs()
-      val file = File(dir, "$title.sid")
-      file.writeBytes(psid(title, index))
+    fun tune(directory: String, title: String, index: Int) {
+      val composer = COMPOSERS[index % COMPOSERS.size].replace('_', ' ')
+      val path = "$directory/$title.sid"
+      tunes += Tune(path, psid(players[index % players.size], title, composer))
 
       // Real Songlengths.md5 entries come in pairs: a comment line naming the tune's path, then
       // the MD5 and its durations. Both matter here. The durations are what the app shows, and
       // the PATH line is what puts the tune into the browse index at all — on Android the archive
-      // is unpacked natively and the JS side learns which songs exist from this file, so a
-      // songlengths file without path comments produces a library that browses from disk and
-      // cannot be searched. That is exactly what the first version of this generator produced.
-      //
-      // mm:ss, with the seconds under sixty: an earlier version wrote `1:119`, and the app
-      // rejected 200 of 480 entries as malformed.
+      // is unpacked natively and the JS side learns which songs exist from this file.
+      // mm:ss, with the seconds under sixty: `1:119` was rejected as malformed.
       val seconds = 45 + (index % 200)
-      val virtualPath = file.absolutePath.substringAfter(root.absolutePath)
-      songlengths.append("; ").append(virtualPath).append('\n')
-      songlengths.append(String.format("%032x=%d:%02d\n", index, seconds / 60, seconds % 60))
-      written += 1
+      songlengths.append("; ").append(path).append('\n')
+      songlengths.append(identities[index].padEnd(32, '0'))
+      songlengths.append(String.format("=%d:%02d\n", seconds / 60, seconds % 60))
+
+      stilEntry(path, title, composer, index)?.let { stil.append('\n').append(it) }
     }
 
     // MUSICIANS/<initial>/<Composer>/ — the shape the app's browser navigates.
+    val count = identities.size
     var index = 0
-    while (written < TUNES / 2) {
+    while (tunes.size < count / 2) {
       val composer = COMPOSERS[index % COMPOSERS.size]
       val initial = composer.first().uppercase()
       val title = TITLES[(index / COMPOSERS.size) % TITLES.size]
       val suffix = index / (COMPOSERS.size * TITLES.size)
       val name = if (suffix == 0) title else "$title ${suffix + 1}"
-      tune(File(root, "MUSICIANS/$initial/$composer"), name, index)
+      tune("/MUSICIANS/$initial/$composer", name, index)
       index += 1
     }
 
     // DEMOS/<range>/ and GAMES/<range>/ — the other two trees a viewer recognises.
     for (tree in listOf("DEMOS", "GAMES")) {
       var group = 0
-      while (written < if (tree == "DEMOS") (TUNES * 3) / 4 else TUNES) {
+      while (tunes.size < if (tree == "DEMOS") (count * 3) / 4 else count) {
         val range = DEMO_GROUPS[group % DEMO_GROUPS.size]
         val title = TITLES[index % TITLES.size]
         val suffix = index / TITLES.size
-        tune(File(root, "$tree/$range"), if (suffix == 0) title else "$title ${suffix + 1}", index)
+        tune("/$tree/$range", if (suffix == 0) title else "$title ${suffix + 1}", index)
         index += 1
         group += 1
       }
     }
+    return Layout(tunes, songlengths.toString(), stil.toString())
+  }
 
-    File(documents, "Songlengths.md5").writeText(songlengths.toString())
-    File(documents, "STIL.txt")
-            .writeText(
-                    """
-                    #  STIL.txt - The SID Tune Information List, demonstration edition
-                    #
-                    #  This collection is generated on the device for Demo Mode. The tunes and the
-                    #  composers are invented; only the directory layout follows the real one.
-                    #
-                    /MUSICIANS/B/Barlow_Kit/Raster Bar Rag.sid
-                       COMMENT: Written for the Demo Mode walkthrough.
-                    """.trimIndent(),
-            )
+  private fun readIdentities(): List<String> {
+    val identities =
+            String(assets.read(IDENTITIES_ASSET), Charsets.US_ASCII)
+                    .lines()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() && !it.startsWith("#") }
+    val malformed = identities.filterNot { MD5_48.matches(it) }
+    require(identities.isNotEmpty() && malformed.isEmpty()) {
+      "$IDENTITIES_ASSET must list md5_48 identities; malformed: ${malformed.take(3)}"
+    }
+    return identities
+  }
+
+  private fun readPlayers(): List<ByteArray> {
+    val players =
+            assets.list(PLAYERS_ASSET_DIRECTORY)
+                    .filter { it.endsWith(".sid", ignoreCase = true) }
+                    .sorted()
+                    .map { assets.read("$PLAYERS_ASSET_DIRECTORY/$it") }
+    require(players.isNotEmpty() && players.all { it.size > PSID_DATA_OFFSET }) {
+      "$PLAYERS_ASSET_DIRECTORY must hold PSID tunes with a player after the header"
+    }
+    return players
+  }
+
+  /** A playable PSID: [player]'s header and C64 code, with this tune's own title and composer. */
+  private fun psid(player: ByteArray, title: String, author: String): ByteArray {
+    val tune = player.copyOf()
+    fun text(value: String, at: Int) {
+      tune.fill(0, at, at + PSID_TEXT_BYTES)
+      value.take(PSID_TEXT_BYTES - 1).toByteArray(Charsets.ISO_8859_1).copyInto(tune, at)
+    }
+    text(title, PSID_TITLE)
+    text(author, PSID_AUTHOR)
+    text(RELEASED, PSID_RELEASED)
+    return tune
   }
 
   /**
-   * A minimal valid PSID v2 file: the 126-byte header the app's parsers read, then a few bytes
-   * standing in for the player. Enough to be indexed, named and listed; not music.
+   * Tune notes for two tunes in three, in STIL's own syntax: labels right-aligned to the colon and
+   * comment continuation lines indented past it. One kind names an invented original, the other
+   * only comments, and the third tune has no entry, as most tunes in the real list have none.
    */
-  private fun psid(title: String, index: Int): ByteArray {
-    val body = ByteArray(126 + 32)
-    "PSID".toByteArray(Charsets.US_ASCII).copyInto(body)
-    body[4] = 0; body[5] = 2 // version 2
-    body[6] = 0; body[7] = 0x7C // data offset 124
-    // songs and startSong are 16-bit big-endian: the count belongs in the LOW byte. Writing it
-    // into 0x0E declared 256 songs per file, which is what left the tune index unsearchable.
-    body[0x0F] = 1 // songs
-    body[0x10] = 0; body[0x11] = 1 // start song
-    fun text(value: String, at: Int) {
-      val bytes = value.take(31).toByteArray(Charsets.ISO_8859_1)
-      bytes.copyInto(body, at)
-    }
-    text(title, 0x16)
-    text(COMPOSERS[index % COMPOSERS.size].replace('_', ' '), 0x36)
-    text("Demo Mode", 0x56)
-    return body
-  }
+  private fun stilEntry(path: String, title: String, composer: String, index: Int): String? =
+          when (index % 3) {
+            0 ->
+                    """
+                    |$path
+                    |  TITLE: ${ORIGINALS[index % ORIGINALS.size]}
+                    | ARTIST: ${ORIGINAL_ARTISTS[index % ORIGINAL_ARTISTS.size]}
+                    |COMMENT: Demo Mode note: an invented cover credit, so the tune notes have an
+                    |         original to name. Neither the piece nor its performers exist.
+                    |
+                    """.trimMargin()
+            1 ->
+                    """
+                    |$path
+                    |COMMENT: Demo Mode note: "$title" was generated for the simulated collection.
+                    |         $composer is an invented composer, and this note describes no real
+                    |         release.
+                    |
+                    """.trimMargin()
+            else -> null
+          }
 }

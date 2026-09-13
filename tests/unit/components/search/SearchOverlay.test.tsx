@@ -49,7 +49,12 @@ vi.mock("@/pages/playFiles/hooks/useHvscArchiveSearch", () => ({
 }));
 
 const toastSpy = vi.hoisted(() => vi.fn());
-vi.mock("@/hooks/use-toast", () => ({ toast: toastSpy, useToast: () => ({ toast: toastSpy }) }));
+const dismissAllToastsSpy = vi.hoisted(() => vi.fn());
+vi.mock("@/hooks/use-toast", () => ({
+  toast: toastSpy,
+  dismissAllToasts: dismissAllToastsSpy,
+  useToast: () => ({ toast: toastSpy }),
+}));
 
 import { SearchOverlayHost } from "@/components/search/SearchOverlayHost";
 import { SKIP_ATTR } from "@/lib/input";
@@ -92,6 +97,7 @@ describe("SearchOverlay", () => {
     flagsRef.current = {};
     hvscRef.current = { hits: [], isSearching: false, indexUnavailable: false };
     toastSpy.mockClear();
+    dismissAllToastsSpy.mockClear();
     Element.prototype.scrollIntoView = vi.fn();
   });
 
@@ -108,6 +114,15 @@ describe("SearchOverlay", () => {
     renderOverlay();
     await open();
     await waitFor(() => expect(screen.getByTestId("search-overlay")).toBeInTheDocument());
+  });
+
+  it("keeps its field below the status bar and clears toasts left over from the page", async () => {
+    renderOverlay();
+    await open();
+    // The variable it used to read was defined nowhere, so the field sat under the status bar.
+    expect(screen.getByTestId("search-overlay").style.paddingTop).toBe("var(--safe-area-inset-top, 0px)");
+    // A leftover error toast covered the first results and took the tap meant for them.
+    expect(dismissAllToastsSpy).toHaveBeenCalled();
   });
 
   it("is a dialog whose result list the discovery engine skips", async () => {
@@ -181,6 +196,13 @@ describe("SearchOverlay", () => {
       renderOverlay();
       await open();
       fireEvent.keyDown(screen.getByTestId("search-input"), { key: "Escape", code: "Escape" });
+      await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
+    });
+
+    it("closes on Android Back, which arrives as an Escape on the document rather than the field", async () => {
+      renderOverlay();
+      await open();
+      fireEvent.keyDown(document, { key: "Escape" });
       await waitFor(() => expect(screen.queryByTestId("search-overlay")).toBeNull());
     });
 

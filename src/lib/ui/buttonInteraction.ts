@@ -131,6 +131,48 @@ export const handlePointerButtonClick = (event: { detail: number; currentTarget:
   applyPointerButtonInteraction(target);
 };
 
+/** How long, and how far from the lifted finger, a touch's compatibility click may still arrive. */
+export const GHOST_CLICK_WINDOW_MS = 800;
+export const GHOST_CLICK_SLOP_PX = 24;
+
+/**
+ * A touch browser sends compatibility `mousedown` and `click` ~100 ms after `pointerup`, to whatever is
+ * under the finger by then. A control that acts on `pointerup` and opens a dialog there had them press
+ * the dialog's button (Add items chose "C64U" unasked) or focus its field. Swallow both events of this
+ * tap when they land outside `origin`; the origin's own click is left to the origin.
+ */
+export const swallowGhostClickAfterTouch = (
+  origin: HTMLElement,
+  point: { x: number; y: number },
+  onSwallowed: () => void,
+) => {
+  const doc = origin.ownerDocument;
+  const isGhost = (event: MouseEvent) =>
+    !(event.target instanceof Node && origin.contains(event.target)) &&
+    Math.abs(event.clientX - point.x) <= GHOST_CLICK_SLOP_PX &&
+    Math.abs(event.clientY - point.y) <= GHOST_CLICK_SLOP_PX;
+  const disarm = () => {
+    doc.removeEventListener("mousedown", onMouseDown, true);
+    doc.removeEventListener("click", onClick, true);
+    window.clearTimeout(timer);
+  };
+  const onMouseDown = (event: MouseEvent) => {
+    // Cancelling the default action is what keeps a field under the finger from taking focus.
+    if (isGhost(event)) event.preventDefault();
+  };
+  const onClick = (event: MouseEvent) => {
+    if (event.detail === 0) return;
+    disarm();
+    if (!isGhost(event)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    onSwallowed();
+  };
+  doc.addEventListener("mousedown", onMouseDown, true);
+  doc.addEventListener("click", onClick, true);
+  const timer = window.setTimeout(disarm, GHOST_CLICK_WINDOW_MS);
+};
+
 export const sweepStaleHighlights = (nowMs = Date.now()) => {
   const highlighted = document.querySelectorAll<HTMLElement>(`[${CTA_HIGHLIGHT_ATTR}]`);
   highlighted.forEach((el) => {

@@ -66,6 +66,7 @@ describe("hvscStateStore", () => {
         ingestionError: null,
         ingestionSummary: null,
         updates: {},
+        librarySource: "real",
       });
     });
 
@@ -82,6 +83,7 @@ describe("hvscStateStore", () => {
         ingestionError: null,
         ingestionSummary: null,
         updates: {},
+        librarySource: "real",
       });
     });
 
@@ -98,6 +100,7 @@ describe("hvscStateStore", () => {
         ingestionError: null,
         ingestionSummary: null,
         updates: {},
+        librarySource: "real",
       });
       expect(addLog).toHaveBeenCalledWith(
         "warn",
@@ -122,6 +125,7 @@ describe("hvscStateStore", () => {
         ingestionError: null,
         ingestionSummary: null,
         updates: {},
+        librarySource: "real",
       });
     });
 
@@ -134,6 +138,7 @@ describe("hvscStateStore", () => {
         ingestionError: null,
         ingestionSummary: { total: 100 },
         updates: { 1: { version: 1, status: "success" as const } },
+        librarySource: "demo" as const,
       };
       localStorageMock.getItem.mockReturnValue(JSON.stringify(storedState));
 
@@ -157,6 +162,7 @@ describe("hvscStateStore", () => {
       expect(state.ingestionError).toBeNull();
       expect(state.ingestionSummary).toBeNull();
       expect(state.updates).toEqual({});
+      expect(state.librarySource).toBe("real");
     });
 
     it("normalizes invalid ingestion state to idle", () => {

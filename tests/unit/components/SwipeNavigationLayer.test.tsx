@@ -254,6 +254,15 @@ describe("SwipeNavigationLayer", () => {
     expect(await screen.findByTestId("swipe-navigation-container")).toHaveAttribute("data-swipe-enabled", "true");
   });
 
+  it("clips page slots so a scrollIntoView cannot slide the page header under the status bar", async () => {
+    // An overflow-hidden slot is still scrollable by script; on the Pixel 4 it moved the header 40px up.
+    renderLayer("/play");
+    expect(await screen.findByText("Play Page")).toBeInTheDocument();
+    for (const slot of ["home", "play", "disks"]) {
+      expect(screen.getByTestId(`swipe-slot-${slot}`).className, slot).toContain("overflow-clip");
+    }
+  });
+
   it("renders the requested slot and settings sub-routes", async () => {
     renderLayer("/settings/open-source-licenses");
     expect(await screen.findByText("Settings Page")).toBeInTheDocument();

@@ -18,6 +18,7 @@ import { buildSidVolumeSteps } from "@/lib/config/sidVolumeControl";
 import { LOCAL_VOLUME_STEPS } from "@/lib/playback/localPlaybackVolume";
 import {
   resolvePlaybackVolumeBinding,
+  resolveSoundingRoute,
   type DeviceVolumeRouting,
   type LocalVolumeRouting,
 } from "@/pages/playFiles/playbackVolumeBinding";
@@ -129,5 +130,20 @@ describe("which route the Play page's volume control reaches", () => {
     // And none of it touches this device's engine.
     expect(local.onIndexChange).not.toHaveBeenCalled();
     expect(local.onToggleMute).not.toHaveBeenCalled();
+  });
+});
+
+describe("resolveSoundingRoute", () => {
+  it("binds the control to the phone's output whenever a tune can only sound on the phone", () => {
+    // Offline the slider was disabled at "—"; in Demo Mode it moved a simulated mixer nobody hears.
+    expect(resolveSoundingRoute("c64", "OFFLINE_NO_DEMO")).toBe("local");
+    expect(resolveSoundingRoute("c64", "DEMO_ACTIVE")).toBe("local");
+    expect(resolveSoundingRoute("local", "REAL_CONNECTED")).toBe("local");
+  });
+
+  it("keeps the C64 route while a real device is connected or still being looked for", () => {
+    expect(resolveSoundingRoute("c64", "REAL_CONNECTED")).toBe("c64");
+    expect(resolveSoundingRoute("c64", "DISCOVERING")).toBe("c64");
+    expect(resolveSoundingRoute("c64", "UNKNOWN")).toBe("c64");
   });
 });

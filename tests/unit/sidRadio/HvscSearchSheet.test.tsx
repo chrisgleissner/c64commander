@@ -72,6 +72,18 @@ describe("HvscSearchSheet", () => {
     expect(row.textContent).toContain("/MUSICIANS/H/Hubbard_Rob");
   });
 
+  it("lets a result's three lines set the row height instead of spilling over its border", async () => {
+    // The shared button's fixed 44px height held 70px of title, composer and folder on the Pixel 4.
+    answerWith([hit("/MUSICIANS/H/Hubbard_Rob/Commando.sid", "Commando", "Rob Hubbard")]);
+    renderSheet();
+
+    type("commando");
+
+    await waitFor(() => expect(screen.getByTestId("hvsc-search-play")).toBeTruthy());
+    expect(screen.getByTestId("hvsc-search-play").className).toContain("h-auto");
+    expect(screen.getByTestId("hvsc-search-play").className).not.toMatch(/(^|\s)h-11(\s|$)/);
+  });
+
   it("plays the tune that was tapped, and closes", async () => {
     answerWith([hit("/MUSICIANS/H/Hubbard_Rob/Commando.sid", "Commando")]);
     const onPlay = vi.fn();

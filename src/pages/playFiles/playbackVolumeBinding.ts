@@ -26,6 +26,14 @@ import { LOCAL_VOLUME_STEPS, localVolumeLabelForIndex } from "@/lib/playback/loc
 import type { PlaybackRoute } from "@/lib/playback/playbackEngineRouting";
 import type { VolumeControlsProps } from "@/pages/playFiles/components/VolumeControls";
 
+/**
+ * The route a tune is actually sounding on. Against the simulated device or with no device at all a
+ * SID plays on this phone whatever the engine setting says (preRouteEngine), so the control must
+ * attenuate the phone's output rather than a mixer nobody hears.
+ */
+export const resolveSoundingRoute = (engine: "c64" | "local", connectionState: string): PlaybackRoute =>
+  engine === "local" || connectionState === "DEMO_ACTIVE" || connectionState === "OFFLINE_NO_DEMO" ? "local" : "c64";
+
 /** Everything about the control that depends on which route is playing. */
 export type PlaybackVolumeBinding = Pick<
   VolumeControlsProps,

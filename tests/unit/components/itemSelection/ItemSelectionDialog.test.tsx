@@ -538,6 +538,41 @@ describe("ItemSelectionDialog display profiles", () => {
     expect(button.textContent).toContain("U64");
   });
 
+  it("disables the C64U source and says why while no C64 Ultimate is connected", () => {
+    // Offline this opened an empty browser that said only "No matching items in this folder".
+    render(
+      <DisplayProfileProvider>
+        <ItemSelectionDialog
+          open
+          onOpenChange={() => undefined}
+          title="Add items"
+          confirmLabel="Add to playlist"
+          sourceGroups={[
+            {
+              label: "C64U",
+              sources: [
+                {
+                  id: "ultimate",
+                  type: "ultimate",
+                  name: "C64U",
+                  rootPath: "/",
+                  isAvailable: false,
+                  listEntries: async () => [],
+                  listFilesRecursive: async () => [],
+                },
+              ],
+            },
+          ]}
+          onAddLocalSource={async () => null}
+          onConfirm={async () => true}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    expect(screen.getByTestId("import-option-c64u")).toBeDisabled();
+    expect(screen.getByTestId("import-option-c64u-unavailable")).toHaveTextContent("Needs a connected C64 Ultimate");
+  });
+
   it("shows the local source label in the selection heading", async () => {
     localStorage.clear();
 

@@ -58,7 +58,7 @@ const clickWithoutNavigationWait = async (page: Page, locator: Locator, attempts
 const dismissDemoModeDialogIfVisible = async (page: Page) => {
   const dialog = page.getByRole("dialog", { name: "Demo Mode" });
   if (!(await dialog.isVisible().catch(() => false))) return;
-  const continueButton = dialog.getByRole("button", { name: /Continue in Demo Mode|Close|Dismiss|OK/i }).first();
+  const continueButton = dialog.getByRole("button", { name: /Continue in Demo Mode/i }).first();
   if (await continueButton.isVisible().catch(() => false)) {
     await clickWithoutNavigationWait(page, continueButton);
   } else {

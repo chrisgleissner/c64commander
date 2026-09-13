@@ -427,6 +427,13 @@
   opacity: 1;
 }
 
+/* index.html paints the splash colour behind the app for the launch. Left there, it showed as a
+   lavender band wherever the page has a gap, such as where the tab bar slides away under a dialog. */
+html:has(.app-launch-shell[data-launch-phase="app-ready"]),
+html:has(.app-launch-shell[data-launch-phase="app-ready"]) #root {
+  background: hsl(var(--background));
+}
+
 .startup-launch-sequence {
   position: fixed;
   inset: 0;

@@ -56,7 +56,7 @@ const dismissDemoModeDialogIfVisible = async (page: Page) => {
 
   const continueButton = dialog
     .getByRole("button", {
-      name: /Continue in Demo Mode|Close|Dismiss|OK/i,
+      name: /Continue in Demo Mode/i,
     })
     .first();
   if (await continueButton.isVisible().catch(() => false)) {
@@ -524,7 +524,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
       if (await demoDialog.isVisible()) {
         const continueButton = demoDialog
           .getByRole("button", {
-            name: /Continue in Demo Mode|Close|Dismiss|OK/i,
+            name: /Continue in Demo Mode/i,
           })
           .first();
         if (await continueButton.isVisible()) {
@@ -557,7 +557,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     if (await postSaveDialog.isVisible()) {
       const continueButton = postSaveDialog
         .getByRole("button", {
-          name: /Continue in Demo Mode|Close|Dismiss|OK/i,
+          name: /Continue in Demo Mode/i,
         })
         .first();
       if (await continueButton.isVisible()) {
@@ -769,7 +769,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
       if (dialogVisible) {
         const continueButton = dialog
           .getByRole("button", {
-            name: /Continue in Demo Mode|Close|Dismiss|OK/i,
+            name: /Continue in Demo Mode/i,
           })
           .first();
         if (await continueButton.isVisible().catch(() => false)) {
@@ -920,7 +920,7 @@ test.describe("Deterministic Connectivity Simulation", () => {
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
     const demoDialog = page.getByRole("dialog", { name: /demo mode/i });
     const continueInDemoMode = page.getByRole("button", {
-      name: /Continue in Demo Mode|Close|Dismiss|OK/i,
+      name: /Continue in Demo Mode/i,
     });
     if (await continueInDemoMode.isVisible().catch(() => false)) {
       await continueInDemoMode.first().click();

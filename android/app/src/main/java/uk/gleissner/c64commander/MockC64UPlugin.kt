@@ -162,7 +162,13 @@ class MockC64UPlugin : Plugin() {
    */
   private fun demoHvsc(): DemoHvscArchive {
     val bundled = context.applicationInfo.nativeLibraryDir?.let { File(it, "lib7zz.so") }
-    return DemoHvscArchive(context.cacheDir, bundled?.takeIf { it.canExecute() })
+    val assets =
+            object : DemoHvscAssets {
+              override fun list(directory: String) = context.assets.list(directory)?.toList().orEmpty()
+
+              override fun read(path: String) = context.assets.open(path).use { it.readBytes() }
+            }
+    return DemoHvscArchive(context.cacheDir, bundled?.takeIf { it.canExecute() }, assets)
   }
 
   private fun loadDemoArchive(): String? =

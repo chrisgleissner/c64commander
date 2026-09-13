@@ -184,7 +184,7 @@ export const md548ForVirtualPath = (virtualPath: string): string | null =>
 
 export const getMd548PathIndexStats = () => ({ size: currentIndex.size });
 
-/** Test-only reset of the singleton. */
+/** Empties the singleton; used when the HVSC library is removed, and by tests. */
 export const resetMd548PathIndex = (): void => {
   currentIndex = new Map<string, string[]>();
   pathIndex = new Map<string, string>();

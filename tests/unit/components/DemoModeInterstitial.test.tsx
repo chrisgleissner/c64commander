@@ -12,9 +12,8 @@ import { render, screen, fireEvent } from "@testing-library/react";
 let demoInterstitialVisible = true;
 let demoInterstitialReason: "discovery-failed" | "no-network" | null = "discovery-failed";
 
-const dismissDemoInterstitial = vi.fn();
+const declineDemoMode = vi.fn();
 const pinDemoModeByUserChoice = vi.fn();
-const discoverConnection = vi.fn();
 const updateC64APIConfig = vi.fn();
 const buildBaseUrlFromDeviceHost = vi.fn((host: string) => `http://${host}`);
 const resolveDeviceHostFromStorage = vi.fn(() => "mydevice.local");
@@ -29,9 +28,9 @@ vi.mock("@/hooks/useConnectionState", () => ({
 }));
 
 vi.mock("@/lib/connection/connectionManager", () => ({
-  dismissDemoInterstitial: (...args: unknown[]) => dismissDemoInterstitial(...args),
+  declineDemoMode: (...args: unknown[]) => declineDemoMode(...args),
   pinDemoModeByUserChoice: (...args: unknown[]) => pinDemoModeByUserChoice(...args),
-  discoverConnection: (...args: unknown[]) => discoverConnection(...args),
+  discoverConnection: vi.fn(),
 }));
 
 vi.mock("@/lib/c64api", () => ({
@@ -58,9 +57,8 @@ describe("DemoModeInterstitial", () => {
       password: "saved-pass",
       deviceHost: "mydevice.local",
     });
-    dismissDemoInterstitial.mockReset();
+    declineDemoMode.mockReset();
     pinDemoModeByUserChoice.mockReset();
-    discoverConnection.mockReset();
     updateC64APIConfig.mockReset();
     buildBaseUrlFromDeviceHost.mockImplementation((host: string) => `http://${host}`);
   });
@@ -83,31 +81,37 @@ describe("DemoModeInterstitial", () => {
     fireEvent.change(input, { target: { value: "192.168.1.100" } });
     fireEvent.click(screen.getByRole("button", { name: /Save & retry/i }));
     expect(updateC64APIConfig).toHaveBeenCalledWith("http://192.168.1.100", "saved-pass", "192.168.1.100");
-    expect(dismissDemoInterstitial).toHaveBeenCalled();
-    expect(discoverConnection).toHaveBeenCalledWith("settings");
+    // Choosing a host is turning the simulated device down, and retrying with it.
+    expect(declineDemoMode).toHaveBeenCalledWith({ retry: "settings" });
   });
 
   it("Save & retry with unchanged input uses stored hostname and preserves password", () => {
     render(<DemoModeInterstitial />);
     fireEvent.click(screen.getByRole("button", { name: /Save & retry/i }));
     expect(updateC64APIConfig).toHaveBeenCalledWith("http://mydevice.local", "saved-pass", "mydevice.local");
-    expect(discoverConnection).toHaveBeenCalledWith("settings");
+    expect(declineDemoMode).toHaveBeenCalledWith({ retry: "settings" });
   });
 
-  it("Retry connection dismisses and triggers manual discovery without persisting hostname", () => {
+  it("Retry connection declines Demo Mode and retries discovery without persisting hostname", () => {
     render(<DemoModeInterstitial />);
     fireEvent.click(screen.getByRole("button", { name: /Retry connection/i }));
-    expect(dismissDemoInterstitial).toHaveBeenCalled();
-    expect(discoverConnection).toHaveBeenCalledWith("manual");
+    expect(declineDemoMode).toHaveBeenCalledWith({ retry: "manual" });
     expect(updateC64APIConfig).not.toHaveBeenCalled();
+  });
+
+  it("closing the offer declines Demo Mode", () => {
+    // Closing used to hide the offer and leave the simulated device standing in.
+    render(<DemoModeInterstitial />);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(declineDemoMode).toHaveBeenCalledWith();
+    expect(pinDemoModeByUserChoice).not.toHaveBeenCalled();
   });
 
   it("Continue in Demo Mode dismisses without retrying", () => {
     render(<DemoModeInterstitial />);
     fireEvent.click(screen.getByRole("button", { name: /Continue in Demo Mode/i }));
     expect(pinDemoModeByUserChoice).toHaveBeenCalled();
-    expect(dismissDemoInterstitial).not.toHaveBeenCalled();
-    expect(discoverConnection).not.toHaveBeenCalled();
+    expect(declineDemoMode).not.toHaveBeenCalled();
     expect(updateC64APIConfig).not.toHaveBeenCalled();
   });
 
@@ -147,8 +151,8 @@ describe("DemoModeInterstitial", () => {
 
     fireEvent.click(screen.getByTestId("demo-interstitial-retry"));
 
-    expect(dismissDemoInterstitial).toHaveBeenCalledTimes(1);
-    expect(discoverConnection).toHaveBeenCalledWith("manual");
+    expect(declineDemoMode).toHaveBeenCalledTimes(1);
+    expect(declineDemoMode).toHaveBeenCalledWith({ retry: "manual" });
   });
 
   it("renders nothing when interstitial is not visible", () => {

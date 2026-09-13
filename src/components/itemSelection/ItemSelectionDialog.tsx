@@ -482,7 +482,10 @@ export const ItemSelectionDialog = ({
                       {/* Said before the user asks, not after. A handset built without Google Mobile
                           Services has no document picker, and this source can then only ever fail. */}
                       {localPickerAvailable ? null : (
-                        <span className="text-xs text-muted-foreground" data-testid="import-option-local-unavailable">
+                        <span
+                          className="whitespace-normal text-left text-xs text-muted-foreground"
+                          data-testid="import-option-local-unavailable"
+                        >
                           No file picker on this device
                         </span>
                       )}
@@ -508,6 +511,15 @@ export const ItemSelectionDialog = ({
                       <span className={cn("truncate font-medium", interstitialTextClassName)}>
                         {c64UltimateSource?.name?.trim() || SOURCE_LABELS.c64u}
                       </span>
+                      {/* Offline, this opened an empty browser that said only "No matching items". */}
+                      {c64UltimateSource?.isAvailable ? null : (
+                        <span
+                          className="whitespace-normal text-left text-xs text-muted-foreground"
+                          data-testid="import-option-c64u-unavailable"
+                        >
+                          Needs a connected C64 Ultimate
+                        </span>
+                      )}
                     </span>
                   </span>
                 </Button>

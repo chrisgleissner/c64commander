@@ -91,7 +91,7 @@ import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { VolumeControls } from "@/pages/playFiles/components/VolumeControls";
-import { resolvePlaybackVolumeBinding } from "@/pages/playFiles/playbackVolumeBinding";
+import { resolvePlaybackVolumeBinding, resolveSoundingRoute } from "@/pages/playFiles/playbackVolumeBinding";
 import { localVolumeGainForIndex, localVolumeIndexForGain } from "@/lib/playback/localPlaybackVolume";
 import { PlaybackControlsCard } from "@/pages/playFiles/components/PlaybackControlsCard";
 import { PlaybackEngineToggle } from "@/pages/playFiles/components/PlaybackEngineToggle";
@@ -1010,7 +1010,7 @@ export default function PlayFilesPage() {
   }, [addItemsProgress.status, browserOpen]);
 
   const sourceGroups: SourceGroup[] = useMemo(() => {
-    const ultimateSource = createUltimateSourceLocation();
+    const ultimateSource = { ...createUltimateSourceLocation(), isAvailable: status.state !== "OFFLINE_NO_DEMO" };
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
     const groups: SourceGroup[] = [
       { label: SOURCE_LABELS.local, sources: localGroupSources },
@@ -1029,7 +1029,7 @@ export default function PlayFilesPage() {
       });
     }
     return groups;
-  }, [archiveConfig, commoserveEnabled, featureFlags, hvscAvailable, hvscRoot.path, localSources]);
+  }, [archiveConfig, commoserveEnabled, featureFlags, hvscAvailable, hvscRoot.path, localSources, status.state]);
 
   const updatePlaylistItemConfigRef = useCallback(
     (
@@ -2025,7 +2025,7 @@ export default function PlayFilesPage() {
 
   const canControlVolume = enabledSidVolumeItems.length > 0 && volumeSteps.length > 0;
   const volumeBinding = resolvePlaybackVolumeBinding({
-    route: playbackEngine.engine === "local" ? "local" : "c64",
+    route: resolveSoundingRoute(playbackEngine.engine, status.state),
     local: {
       index: localVolumeIndex,
       muted: localMuted,
