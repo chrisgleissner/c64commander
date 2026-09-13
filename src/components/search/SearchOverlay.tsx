@@ -12,7 +12,8 @@ import { Loader2, Search, X } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/hooks/use-toast";
+import { usePopoverBackDismiss } from "@/components/ui/interstitial-state";
+import { dismissAllToasts, toast } from "@/hooks/use-toast";
 import { useSearchResults, useRequirementContext, entrySubtitle, entryTitle } from "@/hooks/useSearchResults";
 import { isHvscInstalled } from "@/lib/hvsc/hvscStateStore";
 import { useSearchTier2 } from "@/hooks/useSearchTier2";
@@ -223,6 +224,21 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
 
   useEffect(() => subscribeSearchClose(close), [close]);
 
+  // Android Back is not a key event on a touch handset: the interstitial layer turns it into an
+  // Escape on the document, which never passes through the field. Without both, Back popped the
+  // route underneath and left the overlay open.
+  usePopoverBackDismiss(true);
+  // A toast left over from the page sits above this overlay and covered its first results, taking
+  // the tap meant for them. Toasts raised from inside the overlay still show.
+  useEffect(() => dismissAllToasts(), []);
+  useEffect(() => {
+    const onDocumentKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) close();
+    };
+    document.addEventListener("keydown", onDocumentKeyDown);
+    return () => document.removeEventListener("keydown", onDocumentKeyDown);
+  }, [close]);
+
   useEffect(() => {
     // After the paint, so the field is in the document and the keyboard opens once.
     const raf = requestAnimationFrame(() => inputRef.current?.focus());
@@ -355,7 +371,7 @@ export const SearchOverlay = ({ request, onClose }: SearchOverlayProps) => {
       data-testid={SEARCH_OVERLAY_TESTID}
       {...{ [SKIP_ATTR]: "true" }}
       className="fixed inset-0 z-[70] flex flex-col bg-background"
-      style={{ paddingTop: "var(--app-safe-area-top, 0px)", paddingBottom: "var(--app-safe-area-bottom, 0px)" }}
+      style={{ paddingTop: "var(--safe-area-inset-top, 0px)", paddingBottom: "var(--safe-area-inset-bottom, 0px)" }}
     >
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <Search className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />

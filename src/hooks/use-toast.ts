@@ -254,4 +254,7 @@ function useToast() {
   };
 }
 
-export { useToast, toast };
+/** Close every open toast, for a surface that covers the page they were raised over. */
+const dismissAllToasts = () => dispatch({ type: "DISMISS_TOAST", toastId: undefined });
+
+export { useToast, toast, dismissAllToasts };
