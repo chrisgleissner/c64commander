@@ -23,8 +23,8 @@ interface DemoHvscAssets {
 /**
  * The HVSC release Demo Mode offers, generated on the device rather than shipped to keep the APK small.
  * Invented tunes in HVSC's folder layout, packed with the app's own `lib7zz.so` so the real extraction
- * path runs; without that binary no release is offered. Each tune's Songlengths.md5 entry starts with
- * a SID Radio corpus identity so stations play it.
+ * path runs; without that binary no release is offered. Each tune reuses the C64 code of a simulated
+ * device tune, and its Songlengths.md5 entry starts with a SID Radio corpus identity so stations play it.
  */
 class DemoHvscArchive(
         private val cacheDir: File,
@@ -39,6 +39,15 @@ class DemoHvscArchive(
     const val ARCHIVE_NAME = "HVSC_$RELEASE-all-of-them.7z"
 
     const val IDENTITIES_ASSET = "demo-hvsc/identities.txt"
+    const val PLAYERS_ASSET_DIRECTORY = "ftp-root/Usb0/Music"
+
+    // PSID v2 header fields, as src/lib/sid/sidUtils.ts reads them.
+    internal const val PSID_DATA_OFFSET = 0x7C
+    internal const val PSID_TITLE = 0x16
+    internal const val PSID_AUTHOR = 0x36
+    internal const val PSID_RELEASED = 0x56
+    internal const val PSID_TEXT_BYTES = 32
+    internal const val RELEASED = "Demo Mode"
 
     private val MD5_48 = Regex("^[0-9a-f]{12}$")
 
@@ -156,12 +165,14 @@ class DemoHvscArchive(
 
   private fun generate(): Layout {
     val identities = readIdentities()
+    val players = readPlayers()
     val tunes = mutableListOf<Tune>()
     val songlengths = StringBuilder("[Database]\n")
 
     fun tune(directory: String, title: String, index: Int) {
+      val composer = COMPOSERS[index % COMPOSERS.size].replace('_', ' ')
       val path = "$directory/$title.sid"
-      tunes += Tune(path, psid(title, index))
+      tunes += Tune(path, psid(players[index % players.size], title, composer))
 
       // Real Songlengths.md5 entries come in pairs: a comment line naming the tune's path, then
       // the MD5 and its durations. Both matter here. The durations are what the app shows, and
@@ -225,26 +236,28 @@ class DemoHvscArchive(
     return identities
   }
 
-  /**
-   * A minimal valid PSID v2 file: the 126-byte header the app's parsers read, then a few bytes
-   * standing in for the player. Enough to be indexed, named and listed; not music.
-   */
-  private fun psid(title: String, index: Int): ByteArray {
-    val body = ByteArray(126 + 32)
-    "PSID".toByteArray(Charsets.US_ASCII).copyInto(body)
-    body[4] = 0; body[5] = 2 // version 2
-    body[6] = 0; body[7] = 0x7C // data offset 124
-    // songs and startSong are 16-bit big-endian: the count belongs in the LOW byte. Writing it
-    // into 0x0E declared 256 songs per file, which is what left the tune index unsearchable.
-    body[0x0F] = 1 // songs
-    body[0x10] = 0; body[0x11] = 1 // start song
-    fun text(value: String, at: Int) {
-      val bytes = value.take(31).toByteArray(Charsets.ISO_8859_1)
-      bytes.copyInto(body, at)
+  private fun readPlayers(): List<ByteArray> {
+    val players =
+            assets.list(PLAYERS_ASSET_DIRECTORY)
+                    .filter { it.endsWith(".sid", ignoreCase = true) }
+                    .sorted()
+                    .map { assets.read("$PLAYERS_ASSET_DIRECTORY/$it") }
+    require(players.isNotEmpty() && players.all { it.size > PSID_DATA_OFFSET }) {
+      "$PLAYERS_ASSET_DIRECTORY must hold PSID tunes with a player after the header"
     }
-    text(title, 0x16)
-    text(COMPOSERS[index % COMPOSERS.size].replace('_', ' '), 0x36)
-    text("Demo Mode", 0x56)
-    return body
+    return players
+  }
+
+  /** A playable PSID: [player]'s header and C64 code, with this tune's own title and composer. */
+  private fun psid(player: ByteArray, title: String, author: String): ByteArray {
+    val tune = player.copyOf()
+    fun text(value: String, at: Int) {
+      tune.fill(0, at, at + PSID_TEXT_BYTES)
+      value.take(PSID_TEXT_BYTES - 1).toByteArray(Charsets.ISO_8859_1).copyInto(tune, at)
+    }
+    text(title, PSID_TITLE)
+    text(author, PSID_AUTHOR)
+    text(RELEASED, PSID_RELEASED)
+    return tune
   }
 }

@@ -41,6 +41,45 @@ class DemoHvscArchiveTest {
             it.isNotBlank() && !it.startsWith("#")
           }
 
+  private fun players(): List<ByteArray> =
+          File(assetRoot, DemoHvscArchive.PLAYERS_ASSET_DIRECTORY)
+                  .listFiles { file -> file.name.endsWith(".sid") }!!
+                  .sortedBy { it.name }
+                  .map { it.readBytes() }
+
+  private fun headerText(bytes: ByteArray, at: Int): String =
+          String(bytes, at, DemoHvscArchive.PSID_TEXT_BYTES, Charsets.ISO_8859_1).trimEnd('\u0000')
+
+  private fun u16(bytes: ByteArray, at: Int) = ((bytes[at].toInt() and 0xff) shl 8) or (bytes[at + 1].toInt() and 0xff)
+
+  @Test
+  fun everyTuneReusesADeviceTunePlayerUnderItsOwnHeaderText() {
+    val layout = DemoHvscArchive(temp.root, null, sourceAssets).layout()
+    val players = players()
+    val offset = DemoHvscArchive.PSID_DATA_OFFSET
+    val usedPlayers = mutableSetOf<Int>()
+
+    assertEquals(identities().size, layout.tunes.size)
+    layout.tunes.forEach { tune ->
+      val bytes = tune.bytes
+      assertEquals("PSID", String(bytes, 0, 4, Charsets.US_ASCII))
+      assertTrue("${tune.path} has no player after its header", bytes.size > offset)
+      val code = bytes.copyOfRange(offset, bytes.size)
+      val player = players.indexOfFirst { it.copyOfRange(offset, it.size).contentEquals(code) }
+      assertTrue("${tune.path} does not carry a device tune's code", player >= 0)
+      usedPlayers += player
+      // Version, data offset, load, init and play addresses, song count and start song.
+      for (field in listOf(0x04, 0x06, 0x08, 0x0A, 0x0C, 0x0E, 0x10)) {
+        assertEquals("${tune.path} header word at $field", u16(players[player], field), u16(bytes, field))
+      }
+      assertTrue("${tune.path} has no init or play address", u16(bytes, 0x0A) != 0 && u16(bytes, 0x0C) != 0)
+      assertEquals(tune.path.substringAfterLast('/').removeSuffix(".sid"), headerText(bytes, DemoHvscArchive.PSID_TITLE))
+      assertTrue(headerText(bytes, DemoHvscArchive.PSID_AUTHOR).isNotEmpty())
+      assertEquals(DemoHvscArchive.RELEASED, headerText(bytes, DemoHvscArchive.PSID_RELEASED))
+    }
+    assertEquals(players.indices.toSet(), usedPlayers)
+  }
+
   @Test
   fun songlengthsListEveryTuneUnderItsCorpusIdentityPaddedToAFullMd5() {
     val layout = DemoHvscArchive(temp.root, null, sourceAssets).layout()
