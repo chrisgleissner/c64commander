@@ -54,6 +54,20 @@ const defaultState = (): HvscState => ({
  */
 export const isHvscInstalled = (): boolean => loadHvscState().installedVersion > 0;
 
+/** Demo Mode's release up to 1.0.3: release 84 with exactly 480 tunes. A real release 84 has tens of thousands. */
+const LEGACY_DEMO_RELEASE = 84;
+const LEGACY_DEMO_SONG_COUNT = 480;
+
+// A state saved before the source was recorded counts as real, since only a simulated library is ever
+// removed automatically, unless it is unmistakably the one Demo Mode installed: left as "real", that
+// library would never be replaced by the real collection.
+const resolveLibrarySource = (parsed: Partial<HvscState>): HvscLibrarySource => {
+  if (parsed.librarySource === "demo" || parsed.librarySource === "real") return parsed.librarySource;
+  const legacyDemo =
+    parsed.installedVersion === LEGACY_DEMO_RELEASE && parsed.ingestionSummary?.totalSongs === LEGACY_DEMO_SONG_COUNT;
+  return legacyDemo ? "demo" : "real";
+};
+
 export const loadHvscState = (): HvscState => {
   if (typeof localStorage === "undefined") return defaultState();
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -69,9 +83,7 @@ export const loadHvscState = (): HvscState => {
       ingestionError: parsed.ingestionError ?? null,
       ingestionSummary: parsed.ingestionSummary ?? null,
       updates: parsed.updates ?? {},
-      // A state stored before the field existed counts as real: only a library known to be
-      // simulated is ever removed automatically, because a real one takes a long time to reinstall.
-      librarySource: parsed.librarySource === "demo" ? "demo" : "real",
+      librarySource: resolveLibrarySource(parsed),
     };
   } catch (error) {
     addLog("warn", "Failed to load HVSC state from storage", {

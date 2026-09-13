@@ -47,6 +47,37 @@ describe("hvscStateStore", () => {
     expect(loadHvscState()).toMatchObject({ installedVersion: 83, librarySource: "real" });
   });
 
+  it("recognises the library Demo Mode installed before the source was recorded", () => {
+    // Release 84 with exactly 480 tunes is the simulated release; left as real it was never replaced.
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        installedBaselineVersion: 84,
+        installedVersion: 84,
+        ingestionState: "ready",
+        ingestionSummary: { totalSongs: 480, ingestedSongs: 480, failedSongs: 0, songlengthSyntaxErrors: 0 },
+        updates: {},
+      }),
+    );
+
+    expect(loadHvscState().librarySource).toBe("demo");
+  });
+
+  it("does not mistake a real release 84 for the legacy Demo Mode library", () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        installedBaselineVersion: 84,
+        installedVersion: 84,
+        ingestionState: "ready",
+        ingestionSummary: { totalSongs: 61157, ingestedSongs: 61157, failedSongs: 0, songlengthSyntaxErrors: 0 },
+        updates: {},
+      }),
+    );
+
+    expect(loadHvscState().librarySource).toBe("real");
+  });
+
   it("keeps a library recorded as installed from Demo Mode, and a new state is real", () => {
     expect(loadHvscState().librarySource).toBe("real");
     updateHvscState({ installedVersion: 84, librarySource: "demo" });
