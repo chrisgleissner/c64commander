@@ -38,6 +38,9 @@ class DemoHvscArchive(
     const val RELEASE = 84
     const val ARCHIVE_NAME = "HVSC_$RELEASE-all-of-them.7z"
 
+    /** Where stilService.ts looks for STIL next to a release: versioned first, then unversioned. */
+    val STIL_PATHS = setOf("C64Music.$RELEASE/DOCUMENTS/STIL.txt", "C64Music/DOCUMENTS/STIL.txt")
+
     const val IDENTITIES_ASSET = "demo-hvsc/identities.txt"
     const val PLAYERS_ASSET_DIRECTORY = "ftp-root/Usb0/Music"
 
@@ -77,6 +80,26 @@ class DemoHvscArchive(
                     "Cassette Rewind",
                     "Floppy Shuffle",
                     "Interrupt Lullaby",
+            )
+
+    // Invented originals for the STIL cover credits. None of these pieces or performers exists.
+    private val ORIGINALS =
+            listOf(
+                    "Harbour Lights Overture",
+                    "Midnight Tram",
+                    "Paper Kite Parade",
+                    "Copper Skyline",
+                    "Lantern Festival",
+                    "Glass Orchard",
+                    "Tin Robot Tango",
+            )
+
+    private val ORIGINAL_ARTISTS =
+            listOf(
+                    "The Demo Mode Studio Band",
+                    "Imaginary Arcade Orchestra",
+                    "The Placeholder Quartet",
+                    "Fictional Records House Band",
             )
   }
 
@@ -118,6 +141,10 @@ class DemoHvscArchive(
       null
     }
   }
+
+  /** The release's STIL document, served beside the archive the way a mirror publishes it. */
+  @Synchronized
+  fun stil(): ByteArray? = archive()?.let { layout().stil.toByteArray(Charsets.ISO_8859_1) }
 
   @Synchronized
   internal fun layout(): Layout = generated ?: generate().also { generated = it }
@@ -168,6 +195,18 @@ class DemoHvscArchive(
     val players = readPlayers()
     val tunes = mutableListOf<Tune>()
     val songlengths = StringBuilder("[Database]\n")
+    val stil =
+            StringBuilder(
+                    """
+                    |#  STIL.txt - The SID Tune Information List, demonstration edition
+                    |#
+                    |#  This collection is generated on the device for Demo Mode. The tunes, the
+                    |#  composers and every note below are invented; only the directory layout and
+                    |#  the format follow the real one.
+                    |#
+                    |
+                    """.trimMargin(),
+            )
 
     fun tune(directory: String, title: String, index: Int) {
       val composer = COMPOSERS[index % COMPOSERS.size].replace('_', ' ')
@@ -183,6 +222,8 @@ class DemoHvscArchive(
       songlengths.append("; ").append(path).append('\n')
       songlengths.append(identities[index].padEnd(32, '0'))
       songlengths.append(String.format("=%d:%02d\n", seconds / 60, seconds % 60))
+
+      stilEntry(path, title, composer, index)?.let { stil.append('\n').append(it) }
     }
 
     // MUSICIANS/<initial>/<Composer>/ — the shape the app's browser navigates.
@@ -210,17 +251,7 @@ class DemoHvscArchive(
         group += 1
       }
     }
-    val stil =
-            """
-            #  STIL.txt - The SID Tune Information List, demonstration edition
-            #
-            #  This collection is generated on the device for Demo Mode. The tunes and the
-            #  composers are invented; only the directory layout follows the real one.
-            #
-            /MUSICIANS/B/Barlow_Kit/Raster Bar Rag.sid
-               COMMENT: Written for the Demo Mode walkthrough.
-            """.trimIndent()
-    return Layout(tunes, songlengths.toString(), stil)
+    return Layout(tunes, songlengths.toString(), stil.toString())
   }
 
   private fun readIdentities(): List<String> {
@@ -260,4 +291,31 @@ class DemoHvscArchive(
     text(RELEASED, PSID_RELEASED)
     return tune
   }
+
+  /**
+   * Tune notes for two tunes in three, in STIL's own syntax: labels right-aligned to the colon and
+   * comment continuation lines indented past it. One kind names an invented original, the other
+   * only comments, and the third tune has no entry, as most tunes in the real list have none.
+   */
+  private fun stilEntry(path: String, title: String, composer: String, index: Int): String? =
+          when (index % 3) {
+            0 ->
+                    """
+                    |$path
+                    |  TITLE: ${ORIGINALS[index % ORIGINALS.size]}
+                    | ARTIST: ${ORIGINAL_ARTISTS[index % ORIGINAL_ARTISTS.size]}
+                    |COMMENT: Demo Mode note: an invented cover credit, so the tune notes have an
+                    |         original to name. Neither the piece nor its performers exist.
+                    |
+                    """.trimMargin()
+            1 ->
+                    """
+                    |$path
+                    |COMMENT: Demo Mode note: "$title" was generated for the simulated collection.
+                    |         $composer is an invented composer, and this note describes no real
+                    |         release.
+                    |
+                    """.trimMargin()
+            else -> null
+          }
 }

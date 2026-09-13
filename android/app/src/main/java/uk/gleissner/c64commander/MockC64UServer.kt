@@ -581,17 +581,9 @@ class MockC64UServer(
       }
     }
 
-    // --- the HVSC release, on loopback -----------------------------------------------------
-    // hvscReleaseService.ts reads the index as HTML and scans it for HVSC_<n>-all-of-them.7z,
-    // then downloads that name. Both are served here so the whole install path — probe, extract,
-    // hydrate — runs against a real archive with no network. See DemoHvscArchive.
-    //
-    // Reached at /hvsc/<token>/ rather than /hvsc/, and the token check above is not weakened for
-    // it. The archive is fetched by the native resumable downloader, which has no way to attach
-    // the X-Mock-Token header the rest of this server requires, so the secret moves into the path
-    // instead: the URL is unguessable, changes every boot, and only the WebView that started the
-    // server is told it. Exempting the route from authentication would have been the other way to
-    // make the download work, at the cost of the property HARD10-005 established.
+    // --- the HVSC release, on loopback: the index hvscReleaseService.ts scans, the archive, STIL ---
+    // Under /hvsc/<token>/ because the native resumable downloader cannot send X-Mock-Token, so the
+    // per-boot secret moves into the path rather than the route being exempted from HARD10-005.
     if (request.method == "GET" && path.startsWith("/hvsc/")) {
       val token = authToken
       val rest = path.removePrefix("/hvsc/")
@@ -620,6 +612,10 @@ class MockC64UServer(
                 mapOf("Content-Type" to "application/x-7z-compressed"),
                 archive.readBytes(),
         )
+      }
+      val stil = if (remainder in DemoHvscArchive.STIL_PATHS) demoHvsc?.stil() else null
+      if (stil != null) {
+        return HttpResponse(200, mapOf("Content-Type" to "text/plain; charset=ISO-8859-1"), stil)
       }
       return errorResponse(404, "No demo HVSC release")
     }

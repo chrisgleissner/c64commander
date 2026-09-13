@@ -9,6 +9,12 @@
 package uk.gleissner.c64commander
 
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.Socket
+import java.net.URL
+import org.json.JSONObject
+import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -28,6 +34,12 @@ class DemoHvscArchiveTest {
 
             override fun read(path: String) = File(assetRoot, path).readBytes()
           }
+  private var server: MockC64UServer? = null
+
+  @After
+  fun stopServer() {
+    server?.stop()
+  }
 
   /** Stands in for `lib7zz.so`: `a -t7z -mx0 -y <target> <root>` writes the packed file list. */
   private fun fakeSevenZip(): File =
@@ -96,6 +108,20 @@ class DemoHvscArchiveTest {
   }
 
   @Test
+  fun stilDescribesTwoTunesInThreeUsingStilFieldSyntax() {
+    val layout = DemoHvscArchive(temp.root, null, sourceAssets).layout()
+    val paths = layout.tunes.map { it.path }.toSet()
+    val headings = layout.stil.lines().filter { it.startsWith("/") }
+
+    assertTrue(headings.all { it in paths })
+    assertEquals((layout.tunes.size + 2) / 3 + (layout.tunes.size + 1) / 3, headings.size)
+    val fields = layout.stil.lines().filter { Regex("^ {0,3}(TITLE|ARTIST|COMMENT): ").containsMatchIn(it) }
+    assertEquals(headings.size, fields.count { it.startsWith("COMMENT: ") })
+    assertEquals((layout.tunes.size + 2) / 3, fields.count { it.startsWith("  TITLE: ") })
+    assertEquals((layout.tunes.size + 2) / 3, fields.count { it.startsWith(" ARTIST: ") })
+  }
+
+  @Test
   fun aCachedArchiveFromEarlierGeneratedContentIsReplaced() {
     val stale = File(temp.root, "demo-hvsc/${DemoHvscArchive.ARCHIVE_NAME}").apply {
       parentFile?.mkdirs()
@@ -109,5 +135,40 @@ class DemoHvscArchiveTest {
     assertTrue(packed.contains("./DOCUMENTS/STIL.txt"))
     assertTrue(packed.contains("./DOCUMENTS/Songlengths.md5"))
     assertEquals(identities().size, packed.count { it.endsWith(".sid") })
+  }
+
+  private fun startServer(token: String): MockC64UServer {
+    val state = MockC64UState.fromPayload(JSONObject())
+    val demo = DemoHvscArchive(temp.newFolder("cache"), fakeSevenZip(), sourceAssets)
+    val started = MockC64UServer(state, MockTimingProfile.defaultProfile(), token, null, null, demo)
+    server = started
+    started.start()
+    repeat(20) {
+      try {
+        Socket("127.0.0.1", started.port).use {}
+        return started
+      } catch (error: Exception) {
+        System.err.println("DemoHvscArchiveTest waiting for the mock server: ${error.message}")
+        Thread.sleep(25)
+      }
+    }
+    return started
+  }
+
+  private fun open(url: String, method: String): HttpURLConnection =
+          (URL(url).openConnection() as HttpURLConnection).apply { requestMethod = method }
+
+  @Test
+  fun stilIsServedAtTheVersionedAndUnversionedPathsStilServiceTries() {
+    val token = "demo-token"
+    val started = startServer(token)
+    val generated = DemoHvscArchive(temp.root, null, sourceAssets).layout().stil.toByteArray(Charsets.ISO_8859_1)
+
+    for (path in listOf("C64Music.${DemoHvscArchive.RELEASE}/DOCUMENTS/STIL.txt", "C64Music/DOCUMENTS/STIL.txt")) {
+      val get = open("${started.baseUrl}/hvsc/$token/$path", "GET")
+      assertEquals(path, 200, get.responseCode)
+      assertArrayEquals(path, generated, get.inputStream.use { it.readBytes() })
+    }
+    assertEquals(401, open("${started.baseUrl}/hvsc/wrong-token/C64Music/DOCUMENTS/STIL.txt", "GET").responseCode)
   }
 }
