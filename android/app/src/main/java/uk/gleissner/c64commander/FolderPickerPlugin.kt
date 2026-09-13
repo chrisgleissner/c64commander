@@ -426,6 +426,17 @@ class FolderPickerPlugin : Plugin() {
         val response = JSObject()
         response.put("entries", toJsArray(entries))
         call.resolve(response)
+      } catch (error: PathSegmentNotFoundException) {
+        // Songlengths discovery probes DOCUMENTS and HVSC folders that usually do not exist. Each
+        // probe was logged as an error and counted as a problem in Diagnostics.
+        AppLogger.debug(
+                pluginContextOrNull(),
+                logTag,
+                "SAF listChildren: ${error.message}",
+                "FolderPickerPlugin",
+                traceFields(call)
+        )
+        call.reject(error.message, "NOT_FOUND", error)
       } catch (error: Exception) {
         AppLogger.error(
                 pluginContextOrNull(),
@@ -687,7 +698,7 @@ class FolderPickerPlugin : Plugin() {
       val isLeaf = index == segments.size - 1
       val childId =
               findChildDocumentId(treeUri, documentId, segment, requireDirectory || !isLeaf)
-                      ?: throw IllegalStateException("Path segment not found: $segment")
+                      ?: throw PathSegmentNotFoundException(segment)
       documentId = childId
     }
     return documentId
@@ -793,3 +804,6 @@ class FolderPickerPlugin : Plugin() {
     return formatter.format(java.util.Date())
   }
 }
+
+/** A folder or file the tree does not contain: the answer to a probe, not a failure of the picker. */
+class PathSegmentNotFoundException(segment: String) : IllegalStateException("Path segment not found: $segment")
