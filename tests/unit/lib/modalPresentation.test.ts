@@ -42,7 +42,8 @@ describe("modalPresentation", () => {
   it("uses sticky-footer treatment for browser and editor surfaces", () => {
     expect(resolveModalPresentation("compact", "secondary-editor").footerClassName).toContain("sticky");
     expect(resolveModalPresentation("medium", "selection-browser").footerClassName).toContain("sticky");
-    expect(resolveModalPresentation("medium", "confirmation").footerClassName).toBe("");
+    // A centred dialog scrolls as a whole; New disk's buttons were cut in half below the fold.
+    expect(resolveModalPresentation("medium", "confirmation").footerClassName).toContain("sticky");
   });
 
   it("keeps popovers and command palettes centered", () => {
@@ -59,10 +60,8 @@ describe("modalPresentation", () => {
     expect(resolveModalPresentation("expanded", "command-palette")).toMatchObject({
       mode: "centered",
     });
-    expect(resolveModalPresentation("medium", "default")).toMatchObject({
-      mode: "centered",
-      footerClassName: "",
-    });
+    expect(resolveModalPresentation("medium", "default")).toMatchObject({ mode: "centered" });
+    expect(resolveModalPresentation("medium", "default").footerClassName).toContain("sticky");
   });
 
   it("uses centered mode for secondary-editor on non-compact profiles", () => {

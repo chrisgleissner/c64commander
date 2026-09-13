@@ -63,6 +63,13 @@ export const APP_SHEET_CONTENT_CLASS = [
   "pb-[var(--app-sheet-bottom-clearance)]",
 ].join(" ");
 
+/*
+ * A centred dialog scrolls as a whole, so a tall one (New disk) put its buttons below the fold, cut
+ * in half. The footer sticks to the bottom instead; the negative offset and margins undo the
+ * dialog's own p-6 so the footer's background meets the dialog edge while content scrolls under it.
+ */
+const centeredStickyFooterClass = "sticky -bottom-6 z-10 -mx-6 -mb-6 bg-background px-6 pb-6 pt-3";
+
 const stickyFooterClass =
   "sticky bottom-0 z-10 mt-auto border-t border-border bg-background pb-[calc(1rem+var(--safe-area-inset-bottom))]";
 
@@ -172,7 +179,7 @@ export const resolveModalPresentation = (profile: DisplayProfile, surface: Modal
         surface,
         mode: "centered",
         contentClassName: defaultDialogClass,
-        footerClassName: "",
+        footerClassName: centeredStickyFooterClass,
       };
   }
 };

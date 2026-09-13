@@ -123,7 +123,9 @@ describe("profile-aware dialog surfaces", () => {
 
     const dialog = screen.getByRole("alertdialog");
     expect(dialog).toHaveAttribute("data-modal-presentation", "centered");
-    expect(screen.getByText("Clear").parentElement?.className).not.toContain("sticky");
+    // Sticky so a tall confirmation keeps its buttons in view, but without the full-screen footer's
+    // navigation-bar padding, which a centred dialog does not touch.
+    expect(screen.getByText("Clear").parentElement?.className).not.toContain("safe-area-inset-bottom");
   });
 
   it("supports dialog header overrides, extras, and hidden close controls", () => {
