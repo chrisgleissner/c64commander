@@ -9,7 +9,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
-import { markHvscUpdateCheckAt, shouldCheckForHvscUpdates } from "@/lib/hvsc/hvscReleaseService";
+import {
+  HVSC_NO_NETWORK_MESSAGE,
+  markHvscUpdateCheckAt,
+  shouldCheckForHvscUpdates,
+} from "@/lib/hvsc/hvscReleaseService";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import { reportUserError } from "@/lib/uiErrors";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
@@ -853,6 +857,8 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
             title: "HVSC update failed",
             description: (error as Error).message,
             error,
+            // Having no network is the phone's state, not a fault in the app.
+            severity: (error as Error).message === HVSC_NO_NETWORK_MESSAGE ? "S2" : undefined,
           });
         } finally {
           setHvscLoading(false);

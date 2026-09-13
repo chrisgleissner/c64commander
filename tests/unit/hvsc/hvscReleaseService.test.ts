@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_HVSC_UPDATE_CHECK_INTERVAL_DAYS,
+  HVSC_NO_NETWORK_MESSAGE,
   MIN_HVSC_UPDATE_CHECK_INTERVAL_DAYS,
   buildHvscBaselineUrl,
   buildHvscUpdateUrl,
@@ -113,6 +114,24 @@ describe("hvscReleaseService", () => {
         method: "GET",
       }),
     );
+  });
+
+  it("says there is no internet connection rather than repeating the platform's DNS error", async () => {
+    // On the offline Pixel 4 the user was shown: Unable to resolve host "hvsc.brona.dk": No address
+    // associated with hostname.
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(CapacitorHttp.request).mockRejectedValue(
+      new Error('Unable to resolve host "hvsc.brona.dk": No address associated with hostname'),
+    );
+
+    await expect(fetchLatestHvscVersions("https://hvsc.brona.dk/HVSC/")).rejects.toThrow(HVSC_NO_NETWORK_MESSAGE);
+  });
+
+  it("passes other index failures through unchanged", async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(CapacitorHttp.request).mockRejectedValue(new Error("TLS handshake failed"));
+
+    await expect(fetchLatestHvscVersions("https://hvsc.brona.dk/HVSC/")).rejects.toThrow("TLS handshake failed");
   });
 
   it("handles native platform check exception", async () => {

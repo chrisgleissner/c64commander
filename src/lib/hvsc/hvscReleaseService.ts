@@ -152,7 +152,24 @@ export const shouldCheckForHvscUpdates = (now = Date.now()) => {
   return now - parsed >= intervalMs;
 };
 
+export const HVSC_NO_NETWORK_MESSAGE =
+  "No internet connection. HVSC downloads from the internet, so connect to a network and try again.";
+
+const isNoNetworkFailure = (message: string) =>
+  /unable to resolve host|unknown host|enotfound|failed to fetch|networkerror|network is unreachable/i.test(message);
+
+// The platform's own words ("Unable to resolve host "hvsc.brona.dk"") told an offline user nothing.
 const fetchHvscIndex = async (baseUrl: string) => {
+  try {
+    return await fetchHvscIndexOnce(baseUrl);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isNoNetworkFailure(message)) throw new Error(HVSC_NO_NETWORK_MESSAGE, { cause: error });
+    throw error;
+  }
+};
+
+const fetchHvscIndexOnce = async (baseUrl: string) => {
   if (isNativePlatform()) {
     const response = await CapacitorHttp.request({
       url: baseUrl,
