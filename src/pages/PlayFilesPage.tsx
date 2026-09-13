@@ -1010,7 +1010,7 @@ export default function PlayFilesPage() {
   }, [addItemsProgress.status, browserOpen]);
 
   const sourceGroups: SourceGroup[] = useMemo(() => {
-    const ultimateSource = createUltimateSourceLocation();
+    const ultimateSource = { ...createUltimateSourceLocation(), isAvailable: status.state !== "OFFLINE_NO_DEMO" };
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
     const groups: SourceGroup[] = [
       { label: SOURCE_LABELS.local, sources: localGroupSources },
@@ -1029,7 +1029,7 @@ export default function PlayFilesPage() {
       });
     }
     return groups;
-  }, [archiveConfig, commoserveEnabled, featureFlags, hvscAvailable, hvscRoot.path, localSources]);
+  }, [archiveConfig, commoserveEnabled, featureFlags, hvscAvailable, hvscRoot.path, localSources, status.state]);
 
   const updatePlaylistItemConfigRef = useCallback(
     (
