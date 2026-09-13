@@ -241,6 +241,11 @@ jobs:
           end=$(date +%s)
           echo "- typecheck: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
+      # tests/unit/sidRadio/demoHvscStations.test.ts runs SID Radio over the git-ignored similarity
+      # bundle, and fails rather than skips in CI when the bundle is missing.
+      - name: Fetch SID Radio similarity bundle
+        run: npm run sidcorr:fetch -- --required
+
       - name: Run unit tests with coverage
         run: |
           start=$(date +%s)
