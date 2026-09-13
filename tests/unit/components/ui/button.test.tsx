@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import * as React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { StatefulButton, StatelessButton } from "@/components/ui/button";
@@ -46,6 +47,59 @@ describe("StatelessButton", () => {
     fireEvent.click(button);
 
     expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let the tap that opened a dialog press the dialog's button under the finger", () => {
+    const onChoose = vi.fn();
+    const Opener = () => {
+      const [open, setOpen] = React.useState(false);
+      return open ? (
+        <StatelessButton key="option" onClick={onChoose}>
+          C64U
+        </StatelessButton>
+      ) : (
+        <StatelessButton key="opener" onClick={() => setOpen(true)}>
+          Add items
+        </StatelessButton>
+      );
+    };
+    render(<Opener />);
+
+    fireEvent.pointerUp(screen.getByRole("button", { name: "Add items" }), {
+      pointerType: "touch",
+      clientX: 300,
+      clientY: 376,
+    });
+    // The same tap's compatibility click arrives after the dialog has replaced the opener.
+    fireEvent.click(screen.getByRole("button", { name: "C64U" }), { detail: 1, clientX: 300, clientY: 376 });
+
+    expect(onChoose).not.toHaveBeenCalled();
+  });
+
+  it("still lets a separate tap elsewhere press the dialog's button", () => {
+    const onChoose = vi.fn();
+    const Opener = () => {
+      const [open, setOpen] = React.useState(false);
+      return open ? (
+        <StatelessButton key="option" onClick={onChoose}>
+          C64U
+        </StatelessButton>
+      ) : (
+        <StatelessButton key="opener" onClick={() => setOpen(true)}>
+          Add items
+        </StatelessButton>
+      );
+    };
+    render(<Opener />);
+
+    fireEvent.pointerUp(screen.getByRole("button", { name: "Add items" }), {
+      pointerType: "touch",
+      clientX: 300,
+      clientY: 376,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "C64U" }), { detail: 1, clientX: 200, clientY: 290 });
+
+    expect(onChoose).toHaveBeenCalledTimes(1);
   });
 
   it("keeps mouse clicks single-fired", () => {

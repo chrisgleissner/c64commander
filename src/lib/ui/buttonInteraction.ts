@@ -131,6 +131,41 @@ export const handlePointerButtonClick = (event: { detail: number; currentTarget:
   applyPointerButtonInteraction(target);
 };
 
+/** How long, and how far from the lifted finger, a touch's compatibility click may still arrive. */
+export const GHOST_CLICK_WINDOW_MS = 800;
+export const GHOST_CLICK_SLOP_PX = 24;
+
+/**
+ * A touch browser sends a compatibility `click` ~100 ms after `pointerup`, to whatever is under the
+ * finger by then. A control that acts on `pointerup` and opens a dialog there had that click press the
+ * dialog's own button (Add items chose "C64U" unasked). Swallow the one click of this tap that lands
+ * outside `origin`; the origin's own click is left to the origin.
+ */
+export const swallowGhostClickAfterTouch = (
+  origin: HTMLElement,
+  point: { x: number; y: number },
+  onSwallowed: () => void,
+) => {
+  const doc = origin.ownerDocument;
+  let timer: number | undefined;
+  const disarm = () => {
+    doc.removeEventListener("click", onClick, true);
+    window.clearTimeout(timer);
+  };
+  const onClick = (event: MouseEvent) => {
+    if (event.detail === 0) return;
+    disarm();
+    if (event.target instanceof Node && origin.contains(event.target)) return;
+    if (Math.abs(event.clientX - point.x) > GHOST_CLICK_SLOP_PX) return;
+    if (Math.abs(event.clientY - point.y) > GHOST_CLICK_SLOP_PX) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    onSwallowed();
+  };
+  doc.addEventListener("click", onClick, true);
+  timer = window.setTimeout(disarm, GHOST_CLICK_WINDOW_MS);
+};
+
 export const sweepStaleHighlights = (nowMs = Date.now()) => {
   const highlighted = document.querySelectorAll<HTMLElement>(`[${CTA_HIGHLIGHT_ATTR}]`);
   highlighted.forEach((el) => {

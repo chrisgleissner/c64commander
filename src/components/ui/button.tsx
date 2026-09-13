@@ -11,7 +11,7 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
-import { handlePointerButtonClick } from "@/lib/ui/buttonInteraction";
+import { handlePointerButtonClick, swallowGhostClickAfterTouch } from "@/lib/ui/buttonInteraction";
 
 const buttonVariants = cva(
   // `min-h-11 min-w-11` is the 44px WCAG 2.5.5 target size, applied on the base rather
@@ -74,6 +74,9 @@ const StatelessButton = React.forwardRef<HTMLButtonElement, ButtonProps>(
           if (event.pointerType === "mouse") return;
           if (event.currentTarget.matches(":disabled")) return;
           suppressNextClickRef.current = true;
+          swallowGhostClickAfterTouch(event.currentTarget, { x: event.clientX, y: event.clientY }, () => {
+            suppressNextClickRef.current = false;
+          });
           invokeClick(event);
         }}
         onClick={(event: React.MouseEvent<HTMLElement>) => {
