@@ -35,9 +35,9 @@ describe("playbackEngineRouting", () => {
 
     it("plays a SID here when no C64 Ultimate is connected at all, whatever the engine setting says", () => {
       // Offline, with Demo Mode declined, a SID sent to "the C64" failed with "Device not connected".
-      expect(
-        preRouteEngine({ category: "sid", engine: "c64", localSupported: true, noDeviceConnected: true }),
-      ).toEqual({ route: "local", notice: "no-device-local-sid" });
+      expect(preRouteEngine({ category: "sid", engine: "c64", localSupported: true, noDeviceConnected: true })).toEqual(
+        { route: "local", notice: "no-device-local-sid" },
+      );
     });
 
     it("leaves programs, cartridges and disks on the C64 route when no device is connected", () => {

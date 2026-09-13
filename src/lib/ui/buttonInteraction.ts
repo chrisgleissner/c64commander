@@ -147,7 +147,6 @@ export const swallowGhostClickAfterTouch = (
   onSwallowed: () => void,
 ) => {
   const doc = origin.ownerDocument;
-  let timer: number | undefined;
   const isGhost = (event: MouseEvent) =>
     !(event.target instanceof Node && origin.contains(event.target)) &&
     Math.abs(event.clientX - point.x) <= GHOST_CLICK_SLOP_PX &&
@@ -171,7 +170,7 @@ export const swallowGhostClickAfterTouch = (
   };
   doc.addEventListener("mousedown", onMouseDown, true);
   doc.addEventListener("click", onClick, true);
-  timer = window.setTimeout(disarm, GHOST_CLICK_WINDOW_MS);
+  const timer = window.setTimeout(disarm, GHOST_CLICK_WINDOW_MS);
 };
 
 export const sweepStaleHighlights = (nowMs = Date.now()) => {
