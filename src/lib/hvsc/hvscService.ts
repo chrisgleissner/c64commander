@@ -179,11 +179,14 @@ const forgetCachedBrowseIndex = () => {
 
 export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStatus> => {
   const mock = getMockBridge();
-  const status = mock?.installOrUpdateHvsc
-    ? await mock.installOrUpdateHvsc({ cancelToken })
-    : await installRuntime(cancelToken);
-  forgetCachedBrowseIndex();
-  return status;
+  try {
+    return mock?.installOrUpdateHvsc
+      ? await mock.installOrUpdateHvsc({ cancelToken })
+      : await installRuntime(cancelToken);
+  } finally {
+    // Also after a failure: an install from a real release removes Demo Mode's library before it downloads.
+    forgetCachedBrowseIndex();
+  }
 };
 
 export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus> => {
@@ -204,9 +207,12 @@ export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
 export const resetHvscLibraryData = async (): Promise<void> => {
   const mock = getMockBridge();
   if (mock?.resetHvscLibraryData) {
-    return mock.resetHvscLibraryData();
+    await mock.resetHvscLibraryData();
+  } else {
+    await resetRuntimeLibraryData();
   }
-  return resetRuntimeLibraryData();
+  // The deleted index stays in memory otherwise, and search keeps answering from it until a restart.
+  forgetCachedBrowseIndex();
 };
 
 export const addHvscProgressListener = async (listener: HvscProgressListener) => {

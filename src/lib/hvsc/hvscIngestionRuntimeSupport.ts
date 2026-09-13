@@ -170,6 +170,21 @@ export const applyCancelledIngestionState = (
 
 export const isIngestionRuntimeActive = () => runtimeState.activeIngestionRunning;
 
+const ingestionIdleListeners = new Set<() => void>();
+
+/** Ends the running install or ingest and tells everyone who waited for it to finish. */
+export const markIngestionRuntimeIdle = () => {
+  runtimeState.activeIngestionRunning = false;
+  ingestionIdleListeners.forEach((listener) => listener());
+};
+
+export const subscribeIngestionRuntimeIdle = (listener: () => void) => {
+  ingestionIdleListeners.add(listener);
+  return () => {
+    ingestionIdleListeners.delete(listener);
+  };
+};
+
 export const recoverStaleIngestionState = (): boolean => {
   if (runtimeState.activeIngestionRunning) return false;
   const state = loadHvscState();

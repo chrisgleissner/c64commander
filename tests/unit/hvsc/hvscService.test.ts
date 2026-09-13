@@ -195,6 +195,7 @@ import {
   getHvscStatus as getRuntimeStatus,
   getHvscFolderListing as getRuntimeFolderListing,
   getHvscSong as runtimeGetHvscSong,
+  installOrUpdateHvsc as runtimeInstallOrUpdateHvsc,
   resetHvscLibraryData as runtimeResetHvscLibraryData,
 } from "@/lib/hvsc/hvscIngestionRuntime";
 import { resolveHvscSonglengthDuration } from "@/lib/hvsc/hvscSongLengthService";
@@ -761,6 +762,25 @@ describe("hvscService", () => {
     it("calls runtime when no mock bridge has resetHvscLibraryData (L158 FALSE)", async () => {
       await resetHvscLibraryData();
       expect(vi.mocked(runtimeResetHvscLibraryData)).toHaveBeenCalled();
+    });
+  });
+
+  describe("browse index held in memory after the library is removed", () => {
+    it("drops the browse index held in memory, so search stops answering from the removed library", async () => {
+      await resetHvscLibraryData();
+
+      expect(mediaIndexMocks.clearBrowseSnapshot).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(runtimeResetHvscLibraryData).mock.invocationCallOrder[0]).toBeLessThan(
+        mediaIndexMocks.clearBrowseSnapshot.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it("drops the browse index held in memory when an install fails after removing Demo Mode's library", async () => {
+      vi.mocked(runtimeInstallOrUpdateHvsc).mockRejectedValueOnce(new Error("No internet connection"));
+
+      await expect(installOrUpdateHvsc("token-1")).rejects.toThrow("No internet connection");
+
+      expect(mediaIndexMocks.clearBrowseSnapshot).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -8,7 +8,7 @@
 
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loadHvscState } from "@/lib/hvsc/hvscStateStore";
+import { loadHvscState, updateHvscState } from "@/lib/hvsc/hvscStateStore";
 import { addLog } from "@/lib/logging";
 
 const STORAGE_KEY = "c64u_hvsc_state:v1";
@@ -36,6 +36,22 @@ describe("hvscStateStore", () => {
     } else {
       globalThis.localStorage.clear();
     }
+  });
+
+  it("treats a stored state written before the library source was recorded as a real install", () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ installedBaselineVersion: 83, installedVersion: 83, ingestionState: "ready", updates: {} }),
+    );
+
+    expect(loadHvscState()).toMatchObject({ installedVersion: 83, librarySource: "real" });
+  });
+
+  it("keeps a library recorded as installed from Demo Mode, and a new state is real", () => {
+    expect(loadHvscState().librarySource).toBe("real");
+    updateHvscState({ installedVersion: 84, librarySource: "demo" });
+
+    expect(loadHvscState()).toMatchObject({ installedVersion: 84, librarySource: "demo" });
   });
 
   it("logs and returns defaults when storage is corrupted", () => {

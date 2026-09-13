@@ -15,8 +15,15 @@ type HvscUpdateRecord = {
   error?: string | null;
 };
 
+/**
+ * Where the HVSC data on this device came from: the installed library and the archives cached for it.
+ * "demo" is the invented release Demo Mode's simulated device serves; see `hvscLibrarySource.ts`.
+ */
+export type HvscLibrarySource = "real" | "demo";
+
 export type HvscState = HvscStatus & {
   updates: Record<number, HvscUpdateRecord>;
+  librarySource: HvscLibrarySource;
 };
 
 const STORAGE_KEY = "c64u_hvsc_state:v1";
@@ -36,6 +43,7 @@ const defaultState = (): HvscState => ({
   ingestionError: null,
   ingestionSummary: null,
   updates: {},
+  librarySource: "real",
 });
 
 /**
@@ -61,6 +69,9 @@ export const loadHvscState = (): HvscState => {
       ingestionError: parsed.ingestionError ?? null,
       ingestionSummary: parsed.ingestionSummary ?? null,
       updates: parsed.updates ?? {},
+      // A state stored before the field existed counts as real: only a library known to be
+      // simulated is ever removed automatically, because a real one takes a long time to reinstall.
+      librarySource: parsed.librarySource === "demo" ? "demo" : "real",
     };
   } catch (error) {
     addLog("warn", "Failed to load HVSC state from storage", {
