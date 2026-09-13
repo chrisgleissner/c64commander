@@ -463,12 +463,10 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
         // X is gone — the floating restore handle brings it, and everything else, back.
         showClose={!chromeHidden}
         closeTestId="remote-input-close"
-        // The sheet reserves a 5rem bottom clearance (to sit above the app tab
-        // bar), but the tab bar is hidden while any sheet is open. In normal
-        // mode there is no footer, so drop that dead space (pb-0) and let the
-        // scrollable body own its bottom safe-area padding. Game Mode keeps the
-        // default clearance so its edge-anchored controls clear the navigation bar.
-        className={showFooterActions ? "pb-0" : undefined}
+        // The 5rem clearance is for the tab bar, which is hidden under a sheet. Normal mode keeps
+        // only the navigation bar's inset, so the keys at rest end above it rather than under it.
+        // Game Mode keeps the default clearance for its edge-anchored controls.
+        className={showFooterActions ? "pb-[var(--safe-area-inset-bottom)]" : undefined}
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
       >
@@ -608,10 +606,8 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
         <AppSheetBody
           className={cn(
             "flex flex-col gap-4",
-            // The footer is gone; give the body its own bottom safe-area
-            // clearance in normal mode. Game Mode keeps the sheet's default bottom
-            // clearance instead (edge-anchored controls clear the nav bar).
-            showFooterActions && "pb-[calc(0.75rem+var(--safe-area-inset-bottom))]",
+            // The sheet itself clears the navigation bar in normal mode (see its className).
+            showFooterActions && "pb-3",
           )}
         >
           {showMirrorScreen ? (

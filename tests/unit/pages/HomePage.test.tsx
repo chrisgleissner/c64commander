@@ -2374,6 +2374,14 @@ describe("HomePage offline arrangement", () => {
     expect(screen.getByTestId("home-connect-c64-setup")).toBeInTheDocument();
   });
 
+  it("puts the Connect a C64 card after the tiles that work without one, as its copy says", () => {
+    // The card reads "Everything above works without one" and was drawn above those tiles.
+    renderWithRouter(<HomePage />);
+    const tiles = screen.getByTestId("home-promoted-actions");
+    const card = screen.getByTestId("home-connect-c64");
+    expect(tiles.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("shows the app version only, not two rows both saying Not connected", () => {
     renderWithRouter(<HomePage />);
     expect(screen.getByTestId("home-system-version")).toBeInTheDocument();

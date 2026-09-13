@@ -63,8 +63,9 @@ describe("QuickActionCard", () => {
     expect(screen.getByText("Very long compact action label").className).toContain("text-xs");
     expect(screen.getByText("Very long compact action label").className).toContain("whitespace-normal");
     expect(screen.getByText("Very long compact action label").className).toContain("break-normal");
+    // Between words: wrapping anywhere split "connected" across two lines on the Pixel 4.
     expect(screen.getByText("Readable secondary copy should wrap on compact displays").className).toContain(
-      "break-words",
+      "break-normal",
     );
   });
 });

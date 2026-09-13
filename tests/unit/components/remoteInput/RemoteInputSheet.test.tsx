@@ -207,10 +207,11 @@ describe("RemoteInputSheet", () => {
     expect(setHeldJoystickInputsMock).not.toHaveBeenCalled();
   });
 
-  it("drops the tab-bar bottom clearance in normal mode so the scrollable body extends to the bottom", () => {
+  it("drops the tab-bar clearance in normal mode but keeps the keys above the navigation bar", () => {
+    // With pb-0 the cursor-key row rested under the Android navigation bar's buttons on a Pixel 4.
     render(<RemoteInputSheet open onOpenChange={vi.fn()} />);
     const sheet = screen.getByTestId("remote-input-sheet");
-    expect(sheet.className).toContain("pb-0");
+    expect(sheet.className).toContain("pb-[var(--safe-area-inset-bottom)]");
     expect(sheet.className).not.toContain("app-sheet-bottom-clearance");
   });
 

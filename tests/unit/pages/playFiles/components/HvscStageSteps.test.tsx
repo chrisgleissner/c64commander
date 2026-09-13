@@ -22,6 +22,12 @@ describe("HvscStageSteps", () => {
     }
   });
 
+  it("wraps a stage label between words only", () => {
+    // The global overflow-wrap:anywhere rule drew "Downloa" over "d" beneath a failed first stage.
+    render(<HvscStageSteps state="ERROR" stage="download" />);
+    expect(screen.getByText("Download").className).toContain("break-normal");
+  });
+
   it("marks the running stage and credits the finished ones", () => {
     render(<HvscStageSteps state="INGESTING" stage="sid_enumeration" />);
 

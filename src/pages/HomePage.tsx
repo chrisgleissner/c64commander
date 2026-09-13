@@ -1295,8 +1295,6 @@ function HomePageContent() {
 
           <DeviceStepsOffer />
 
-          {offlineArrangement ? <ConnectC64Card /> : null}
-
           {/* The same tiles, and the same grid, standing alone while the machine's own controls are
               put away. No heading: they are the same kind of thing as the actions below, and a
               banner of their own is what over-weighted the standalone player before.
@@ -1327,6 +1325,9 @@ function HomePageContent() {
               ))}
             </ProfileActionGrid>
           ) : null}
+
+          {/* After the tiles, as spec.md 6.1 orders it: its copy says "Everything above works without one". */}
+          {offlineArrangement ? <ConnectC64Card /> : null}
 
           {/* Machine */}
           <MachineControls

@@ -100,7 +100,8 @@ export const HvscStageSteps = ({
             </div>
             <span
               className={cn(
-                "text-center text-xs leading-tight",
+                // Between words only: the global `overflow-wrap: anywhere` drew "Downloa" over "d".
+                "text-center text-xs leading-tight break-normal",
                 step.status === "pending" ? "text-muted-foreground" : "text-foreground",
                 step.status === "active" && "font-medium",
               )}
