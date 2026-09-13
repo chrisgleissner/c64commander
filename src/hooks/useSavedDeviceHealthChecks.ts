@@ -12,6 +12,7 @@ import {
 import { resetHealthCheckProbeStates, type HealthCheckProbeExecutionState } from "@/lib/diagnostics/healthCheckState";
 import { loadDeviceSafetyConfig } from "@/lib/config/deviceSafetySettings";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
+import { isDeviceConfirmedOffline } from "@/lib/connection/offlineStartup";
 import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
 import {
   DIAGNOSTICS_TEST_SAVED_DEVICE_HEALTH_EVENT,
@@ -126,6 +127,9 @@ const isDocumentHidden = () =>
  * touching.
  */
 const shouldPauseForSimulatedDevice = () => getConnectionSnapshot().state === "DEMO_ACTIVE";
+
+// With no network no saved device can answer; probing anyway logged two warnings every 15 s.
+const shouldPauseForNoNetwork = () => isDeviceConfirmedOffline();
 
 const getBackgroundTrafficEvidence = () => {
   const connection = getConnectionSnapshot();
@@ -318,6 +322,9 @@ export function useSavedDeviceHealthChecks(
       if (shouldPauseForDiagnosticsSuppression()) {
         return;
       }
+      if (await shouldPauseForNoNetwork()) {
+        return;
+      }
       if (shouldPauseForPollingPause()) {
         return;
       }
@@ -464,6 +471,9 @@ export function useSavedDeviceHealthChecks(
       }
       if (shouldPauseForDiagnosticsSuppression()) {
         return getBackgroundHealthCadenceMs("healthy");
+      }
+      if (await shouldPauseForNoNetwork()) {
+        return getBackgroundHealthCadenceMs("recovery");
       }
       if (shouldPauseForPollingPause()) {
         return getBackgroundHealthCadenceMs("healthy");

@@ -118,6 +118,14 @@ vi.mock("@/lib/connection/connectionManager", () => ({
   getConnectionSnapshot: () => mockGetConnectionSnapshot(),
 }));
 
+const { mockIsDeviceConfirmedOffline } = vi.hoisted(() => ({
+  mockIsDeviceConfirmedOffline: vi.fn(async () => false),
+}));
+
+vi.mock("@/lib/connection/offlineStartup", () => ({
+  isDeviceConfirmedOffline: () => mockIsDeviceConfirmedOffline(),
+}));
+
 vi.mock("@/lib/deviceInteraction/deviceStateStore", () => ({
   getDeviceStateSnapshot: () => mockGetDeviceStateSnapshot(),
 }));
@@ -242,6 +250,7 @@ describe("useSavedDeviceHealthChecks", () => {
     clearSavedDeviceSwitchMetrics();
     diagnosticsSuppressionMock.reset();
     pollingPauseRegistry.__resetForTest();
+    mockIsDeviceConfirmedOffline.mockResolvedValue(false);
     mockGetConnectionSnapshot.mockReturnValue({
       state: "REAL_CONNECTED",
       lastDiscoveryTrigger: null,
@@ -355,6 +364,22 @@ describe("useSavedDeviceHealthChecks", () => {
     await flushAsyncWork();
 
     expect(mockRunConnectivityProbeForTarget).not.toHaveBeenCalled();
+  });
+
+  it("probes nothing while the phone has no network", async () => {
+    // No saved device can answer without a network; each cycle logged two warnings every 15 s.
+    mockIsDeviceConfirmedOffline.mockResolvedValue(true);
+
+    const savedDevices = buildSavedDevices();
+    renderBackgroundHook(savedDevices);
+    await flushAsyncWork();
+    await act(async () => {
+      vi.advanceTimersByTime(120_000);
+    });
+    await flushAsyncWork();
+
+    expect(mockRunConnectivityProbeForTarget).not.toHaveBeenCalled();
+    expect(mockRunHealthCheckForTarget).not.toHaveBeenCalled();
   });
 
   it("surfaces circuit-open state without issuing a background probe", async () => {
