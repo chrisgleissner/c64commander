@@ -128,8 +128,7 @@ export function QuickActionCard({
         <span
           className={cn(
             "text-muted-foreground max-w-full",
-            // Wrap between words only: the global `overflow-wrap: anywhere` split "connected" mid-word.
-            compact ? "text-xs leading-tight text-center whitespace-normal break-normal" : "text-xs",
+            compact ? "text-xs leading-tight text-center whitespace-normal break-words" : "text-xs",
           )}
         >
           {description}
