@@ -587,7 +587,7 @@ const featureRows = ({ features, variant }) => {
     rows.push([
       "Demo Mode",
       "**Settings → Connection**",
-      `${featureAvailability(features.demo_mode_enabled)} When no C64 Ultimate can be reached — because none answers, or because the phone has no network — the app offers the simulated device and waits for you to accept. **Preview Demo Mode**, in the same section, switches to it at any time, including while a real C64 Ultimate is connected, and **Use the simulated device** appears on the connection card behind the connectivity badge whenever the app is offline. The simulated device holds its own music, programs, cartridges and disks, and Live View shows its screen: the BASIC prompt, a load in progress, or the program you started. It cannot run a real C64 program, and says so on that screen; a tune plays on your phone's own SID engine instead.`,
+      `${featureAvailability(features.demo_mode_enabled)} When no C64 Ultimate can be reached — because none answers, or because the phone has no network — the app offers the simulated device. Close the offer, or choose **Try again**, and the app stays offline for the rest of the session instead: tunes on your phone still play, on the phone. **Preview Demo Mode**, in the same section, switches to it at any time, including while a real C64 Ultimate is connected, and **Use the simulated device** appears on the connection card behind the connectivity badge whenever the app is offline. The simulated device holds its own music, programs, cartridges and disks, and Live View shows its screen: the BASIC prompt, a load in progress, or the program you started. It cannot run a real C64 program, and says so on that screen; a tune plays on your phone's own SID engine instead.`,
     ]);
   }
   if (includeFeature(features, "background_execution_enabled")) {
@@ -864,9 +864,11 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     "### Starting With No Network",
     "",
-    `Start ${appName} on a ${appDeviceName(variant)} that has no network connection at all (airplane mode, or Wi-Fi and mobile data both off) and none of the above happens. There is nothing to scan for, so the app does not scan, does not ask you anything, and opens straight onto a built-in simulation of ${targetDeviceDescription(variant)}. The badge reads **Demo mode**, so you always know which one you are looking at.`,
+    `Start ${appName} on a ${appDeviceName(variant)} that has no network connection at all (airplane mode, or Wi-Fi and mobile data both off) and none of the above happens. There is nothing to scan for, so the app does not scan. It offers **Demo Mode** instead: a built-in simulation of ${targetDeviceDescription(variant)}. Choose **Continue in Demo Mode** and the badge reads **Demo mode**, so you always know which one you are looking at.`,
     "",
-    `Everything the simulator answers for is yours to try: Home, the configuration, disks and drives, the playlist, and Remote Input. It answers the same network services a real machine does, but it runs no 6502 and sends no picture or sound, so programs and tunes do not play on it and Live View has nothing to show.`,
+    `Everything the simulator answers for is yours to try: Home, the configuration, disks and drives, the playlist, Remote Input, the HVSC collection and Live View, which shows the simulated machine's screen and plays its sound. It runs no real 6502, so a program shows a demonstration screen, and a tune plays on your ${appDeviceName(variant)}'s own SID engine.`,
+    "",
+    `Close the offer, or choose **Try again** while there is still no network, and the app stays offline for the rest of the session. Tunes stored on your ${appDeviceName(variant)} still play, on the ${appDeviceName(variant)} itself. **Use the simulated device**, behind the connectivity badge, brings Demo Mode back at any time.`,
     "",
     "When you do have hardware, connect to it from **Settings → Connection**. Once the app has reached a real device, it stays with it for the rest of the session.",
     "",
