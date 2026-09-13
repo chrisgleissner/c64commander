@@ -190,23 +190,27 @@ class MockC64UServer(
         val input = BufferedInputStream(client.getInputStream())
         val output = BufferedOutputStream(client.getOutputStream())
         val request = readRequest(input) ?: return@use
+        // HEAD is answered as GET without the body, so a size probe sees the same status and
+        // Content-Length the download will. Capacitor's fetch proxy fails a HEAD that gets a 404.
+        val isHead = request.method == "HEAD"
+        val routed = if (isHead) request.copy(method = "GET") else request
         val response =
                 requestExecutor
                         .submit<HttpResponse> {
                           val requestId = nextRequestSequence()
                           val delayMs =
                                   timingProfile.resolveDelayMs(
-                                          request.method,
-                                          request.path,
+                                          routed.method,
+                                          routed.path,
                                           requestId
                                   )
                           if (delayMs > 0) {
                             Thread.sleep(delayMs.toLong())
                           }
-                          handleRequest(request)
+                          handleRequest(routed)
                         }
                         .get()
-        writeResponse(output, response)
+        writeResponse(output, response, includeBody = !isHead)
         output.flush()
       } catch (tooLarge: RequestTooLargeException) {
         // Reject an oversized/abusive request cheaply, before its body is ever
@@ -908,7 +912,7 @@ class MockC64UServer(
     return HttpResponse(status, headers, body)
   }
 
-  private fun writeResponse(output: OutputStream, response: HttpResponse) {
+  private fun writeResponse(output: OutputStream, response: HttpResponse, includeBody: Boolean = true) {
     val statusText =
             when (response.status) {
               200 -> "OK"
@@ -923,7 +927,7 @@ class MockC64UServer(
     val headers =
             mutableMapOf(
                     "Access-Control-Allow-Origin" to "*",
-                    "Access-Control-Allow-Methods" to "GET,POST,PUT,OPTIONS",
+                    "Access-Control-Allow-Methods" to "GET,HEAD,POST,PUT,OPTIONS",
                     "Access-Control-Allow-Headers" to "Content-Type, X-Password, X-C64U-Host, X-Mock-Token",
                     "Connection" to "close",
             )
@@ -933,6 +937,6 @@ class MockC64UServer(
       output.write("$name: $value\r\n".toByteArray(StandardCharsets.UTF_8))
     }
     output.write("\r\n".toByteArray(StandardCharsets.UTF_8))
-    output.write(response.body)
+    if (includeBody) output.write(response.body)
   }
 }

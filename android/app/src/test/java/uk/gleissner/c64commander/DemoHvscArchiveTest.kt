@@ -159,6 +159,36 @@ class DemoHvscArchiveTest {
           (URL(url).openConnection() as HttpURLConnection).apply { requestMethod = method }
 
   @Test
+  fun headIsAnsweredWithTheStatusAndLengthOfGetAndNoBody() {
+    val token = "demo-token"
+    val base = "${startServer(token).baseUrl}/hvsc/$token/"
+
+    for (resource in listOf("", DemoHvscArchive.ARCHIVE_NAME, "C64Music/DOCUMENTS/STIL.txt")) {
+      val get = open(base + resource, "GET")
+      assertEquals(resource, 200, get.responseCode)
+      val body = get.inputStream.use { it.readBytes() }
+      val head = open(base + resource, "HEAD")
+      assertEquals(resource, 200, head.responseCode)
+      assertEquals(resource, body.size.toLong(), head.getHeaderField("Content-Length").toLong())
+      assertEquals(resource, get.contentType, head.contentType)
+      assertTrue(head.getHeaderField("Access-Control-Allow-Methods").contains("HEAD"))
+    }
+  }
+
+  @Test
+  fun headOnTheArchiveSendsNoBodyBytes() {
+    val token = "demo-token"
+    val port = startServer(token).port
+
+    Socket("127.0.0.1", port).use { socket ->
+      socket.getOutputStream().write("HEAD /hvsc/$token/${DemoHvscArchive.ARCHIVE_NAME} HTTP/1.1\r\n\r\n".toByteArray())
+      val response = socket.getInputStream().readBytes().toString(Charsets.ISO_8859_1)
+      assertTrue(response, response.startsWith("HTTP/1.1 200 OK\r\n"))
+      assertTrue(response, response.endsWith("\r\n\r\n"))
+    }
+  }
+
+  @Test
   fun stilIsServedAtTheVersionedAndUnversionedPathsStilServiceTries() {
     val token = "demo-token"
     val started = startServer(token)
