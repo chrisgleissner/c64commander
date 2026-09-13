@@ -13,7 +13,7 @@ const getC64APIConfigSnapshot = vi.fn(() => ({ password: "pw" }));
 const resolveDeviceHostFromStorage = vi.fn(() => "c64u");
 const updateC64APIConfig = vi.fn();
 const discoverConnection = vi.fn();
-const dismissDemoInterstitial = vi.fn();
+const declineDemoMode = vi.fn();
 const addLog = vi.fn();
 
 vi.mock("@/lib/c64api", () => ({
@@ -26,7 +26,7 @@ vi.mock("@/lib/c64api", () => ({
 
 vi.mock("@/lib/connection/connectionManager", () => ({
   discoverConnection: (...args: unknown[]) => discoverConnection(...args),
-  dismissDemoInterstitial: (...args: unknown[]) => dismissDemoInterstitial(...args),
+  declineDemoMode: (...args: unknown[]) => declineDemoMode(...args),
 }));
 
 vi.mock("@/lib/logging", () => ({
@@ -43,7 +43,7 @@ describe("hostEdit", () => {
     resolveDeviceHostFromStorage.mockReturnValue("c64u");
     updateC64APIConfig.mockClear();
     discoverConnection.mockClear();
-    dismissDemoInterstitial.mockClear();
+    declineDemoMode.mockClear();
     addLog.mockClear();
     localStorage.clear();
   });
@@ -82,17 +82,17 @@ describe("hostEdit", () => {
     expect(host).toBe("10.0.0.7");
     expect(updateC64APIConfig).toHaveBeenCalledWith("http://10.0.0.7", "pw", "10.0.0.7");
     expect(discoverConnection).toHaveBeenCalledWith("settings");
-    expect(dismissDemoInterstitial).not.toHaveBeenCalled();
+    expect(declineDemoMode).not.toHaveBeenCalled();
   });
 
-  it("can dismiss interstitial and use explicit trigger", () => {
+  it("from the Demo Mode offer, declines Demo Mode and retries with the explicit trigger", () => {
     saveConfiguredHostAndRetry("", "c64u", {
       dismissInterstitial: true,
       trigger: "manual",
     });
     expect(updateC64APIConfig).toHaveBeenCalledWith("http://c64u", "pw", "c64u");
-    expect(dismissDemoInterstitial).toHaveBeenCalled();
-    expect(discoverConnection).toHaveBeenCalledWith("manual");
+    expect(declineDemoMode).toHaveBeenCalledWith({ retry: "manual" });
+    expect(discoverConnection).not.toHaveBeenCalled();
   });
 
   it("allows any normalized host and retries", () => {
