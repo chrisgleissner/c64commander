@@ -71,6 +71,16 @@ describe("interstitialStyles", () => {
     expect(layout.maxHeight).toBeGreaterThan(220);
   });
 
+  it("keeps a tall centred dialog above the navigation bar", () => {
+    document.documentElement.style.setProperty("--safe-area-inset-bottom", "48px");
+    try {
+      const layout = resolveCenteredOverlayLayout(900, 829);
+      expect(layout.top + layout.maxHeight).toBeLessThanOrEqual(829 - 48);
+    } finally {
+      document.documentElement.style.removeProperty("--safe-area-inset-bottom");
+    }
+  });
+
   it("assigns deterministic stacked dimming and z-index values by overlay depth", () => {
     expect(resolveInterstitialBackdropOpacity(1)).toBe(0.4);
     expect(resolveInterstitialBackdropOpacity(2)).toBe(0.25);
