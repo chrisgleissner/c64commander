@@ -339,7 +339,9 @@ test.describe("launch sequence", () => {
       };
     });
     expect(resolvedCanvasColors.swipeContainer).toBe(resolvedCanvasColors.body);
-    expect(resolvedCanvasColors.swipeContainer).not.toBe(resolvedCanvasColors.html);
+    // Once the launch hands over, the splash colour must not remain behind the app: on a phone it
+    // showed as a lavender band under every dialog, where the tab bar slides away.
+    expect(resolvedCanvasColors.html).toBe(resolvedCanvasColors.body);
 
     await page.getByTestId("tab-settings").click();
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
