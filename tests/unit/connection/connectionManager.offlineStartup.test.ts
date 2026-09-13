@@ -229,6 +229,113 @@ describe("startup with no network on the device", () => {
     expect(snapshot.demoInterstitialReason).toBeNull();
   });
 
+  it("leaves Demo Mode when the user closes the offline offer", async () => {
+    const { declineDemoMode, discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+    await declineDemoMode();
+
+    const snapshot = getConnectionSnapshot();
+    expect(snapshot.state).toBe("OFFLINE_NO_DEMO");
+    expect(snapshot.demoInterstitialVisible).toBe(false);
+    expect(stopMockServer).toHaveBeenCalled();
+    expect(offDeviceRequests()).toEqual([]);
+  });
+
+  it("stays offline when the user asks to try again with still no network", async () => {
+    const { declineDemoMode, discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+    await declineDemoMode({ retry: "manual" });
+
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+    expect(offDeviceRequests()).toEqual([]);
+  });
+
+  it("does not bring the declined simulated device back on a later trigger in the same session", async () => {
+    const { declineDemoMode, discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+    await declineDemoMode();
+    startMockServer.mockClear();
+    await discoverConnection("resume");
+    await discoverConnection("settings");
+
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    expect(startMockServer).not.toHaveBeenCalled();
+  });
+
+  it("remembers the decline across a reload of the same session", async () => {
+    const first = await import("../../../src/lib/connection/connectionManager");
+    await first.initializeConnectionManager();
+    await first.discoverConnection("startup");
+    await first.declineDemoMode();
+
+    vi.resetModules();
+    const second = await import("../../../src/lib/connection/connectionManager");
+    await second.initializeConnectionManager();
+    await second.discoverConnection("startup");
+
+    expect(second.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+  });
+
+  it("enters Demo Mode when the user chooses it after declining", async () => {
+    const {
+      declineDemoMode,
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+      pinDemoModeByUserChoice,
+    } = await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+    await declineDemoMode();
+    await pinDemoModeByUserChoice();
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+
+    await discoverConnection("resume");
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+  });
+
+  it("does not write the simulated device's identity onto the user's saved device", async () => {
+    localStorage.setItem(
+      "c64u_saved_devices:v1",
+      JSON.stringify({
+        version: 1,
+        selectedDeviceId: "home-u64",
+        devices: [{ id: "home-u64", host: "192.168.1.13", name: "u64", nameSource: "USER", httpPort: 80 }],
+        summaries: {},
+        summaryLru: [],
+      }),
+    );
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const url = String(typeof input === "string" ? input : ((input as Request).url ?? input));
+      if (!url.startsWith(MOCK_BASE_URL)) throw new TypeError("Failed to fetch");
+      return new Response(
+        JSON.stringify({ product: "C64 Ultimate", hostname: "c64u", unique_id: "MOCK-C64U", errors: [] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+    const { getSelectedSavedDevice } = await import("../../../src/lib/savedDevices/store");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+    await vi.waitFor(() => expect(getConnectionSnapshot().deviceInfo).not.toBeNull());
+
+    expect(getSelectedSavedDevice()).toMatchObject({ id: "home-u64", lastKnownUniqueId: null, lastKnownProduct: null });
+  });
+
   it("reads the simulated device's identity, so capability-gated features are offered in Demo Mode", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");

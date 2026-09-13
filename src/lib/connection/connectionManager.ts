@@ -153,14 +153,14 @@ const isDemoModeAvailable = () => featureFlagManager.getSnapshot().flags.demo_mo
 
 const isDemoModeRequested = () => isDemoModeAvailable() && loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
 
+const isSimulatedDeviceTarget = () => Boolean(getActiveMockBaseUrl()) && !isSmokeModeEnabled();
+
 type DemoFallbackReason = "setting" | "no-network";
 
 /**
- * No network leaves nothing but the simulated device to fall back to, so a failed probe
- * offers Demo Mode rather than an empty offline app. With a network only the Demo Mode
- * setting produces an offer, so an unreachable device still reads as a failure.
- * "no-network" outranks "setting" because the two ask the user a different question: one
- * offers a different hostname to try, the other cannot.
+ * No network leaves only the simulated device to offer; with a network only the Demo Mode setting
+ * produces an offer, so an unreachable device still reads as a failure. "no-network" outranks
+ * "setting": one offer has a hostname to try, the other does not.
  */
 const resolveDemoFallbackReason = async (): Promise<DemoFallbackReason | null> => {
   if (isSmokeModeEnabled()) return null;
@@ -434,9 +434,11 @@ let demoInterstitialShownThisSession = false;
 let demoServerStartedThisSession = false;
 const DEMO_INTERSTITIAL_SESSION_KEY = "c64u_demo_interstitial_shown";
 const DEMO_MODE_PINNED_SESSION_KEY = "c64u_demo_mode_pinned";
+const DEMO_MODE_DECLINED_SESSION_KEY = "c64u_demo_mode_declined";
 let stickyRealDeviceLock = false;
 let discoveryRunToken = 0;
 let demoModePinnedByUser = false;
+let demoModeDeclinedByUser = false;
 let activeManualDiscovery: { trigger: DiscoveryTrigger; promise: Promise<void> } | null = null;
 // HARD18-007: rate-limits the manual-trigger sweep+LAN-scan escalation
 // (activeManualDiscovery only coalesces taps that overlap an in-flight run,
@@ -510,7 +512,9 @@ export const setSavedDeviceSwitchProbeWindow = (open: boolean) => {
 
 const setSnapshot = (patch: Partial<ConnectionSnapshot>) => {
   snapshot = Object.freeze({ ...snapshot, ...patch });
-  if (patch.deviceInfo) {
+  // The simulated device's identity is not the saved device's: stamping it there made the user's
+  // real device read as a mismatch the next time it answered.
+  if (patch.deviceInfo && snapshot.state !== "DEMO_ACTIVE" && !isSimulatedDeviceTarget()) {
     rememberSelectedSavedDeviceIdentity(patch.deviceInfo);
   }
   emit();
@@ -655,40 +659,53 @@ export function dismissDemoInterstitial() {
   setSnapshot({ demoInterstitialVisible: false, demoInterstitialReason: null });
 }
 
-const persistDemoModePinnedState = (pinned: boolean) => {
+const persistDemoModeSessionFlag = (key: string, on: boolean) => {
   if (typeof sessionStorage === "undefined") return;
   try {
-    if (pinned) {
-      sessionStorage.setItem(DEMO_MODE_PINNED_SESSION_KEY, "1");
+    if (on) {
+      sessionStorage.setItem(key, "1");
     } else {
-      sessionStorage.removeItem(DEMO_MODE_PINNED_SESSION_KEY);
+      sessionStorage.removeItem(key);
     }
   } catch (error) {
-    addLog("warn", "Failed to persist demo mode pin state", {
-      error: (error as Error).message,
-      pinned,
-    });
+    addLog("warn", "Failed to persist demo mode session flag", { error: (error as Error).message, key, on });
   }
 };
 
 const clearPinnedDemoMode = () => {
   demoModePinnedByUser = false;
-  persistDemoModePinnedState(false);
+  persistDemoModeSessionFlag(DEMO_MODE_PINNED_SESSION_KEY, false);
 };
 
 /**
- * Explicit, user-initiated entry into Demo Mode — reachable from the discovery-failure
- * interstitial and from a direct "Preview Demo Mode" action in Settings. Unlike the automatic
- * fallback, this bypasses the sticky real-device lock: that lock exists to stop a transient
- * probe blip from yanking a user away from hardware they are actively using, but a deliberate
- * choice to preview Demo Mode is not a blip, and a device that is merely reachable must not be
- * able to trap the user out of Demo Mode.
+ * Explicit, user-initiated entry into Demo Mode (the offer, Settings, the offline connection card).
+ * It bypasses the sticky real-device lock, which guards against probe blips, not deliberate choices,
+ * and it lifts an earlier decline.
  */
 export async function pinDemoModeByUserChoice() {
   demoModePinnedByUser = true;
-  persistDemoModePinnedState(true);
+  persistDemoModeSessionFlag(DEMO_MODE_PINNED_SESSION_KEY, true);
+  demoModeDeclinedByUser = false;
+  persistDemoModeSessionFlag(DEMO_MODE_DECLINED_SESSION_KEY, false);
   dismissDemoInterstitial();
   await transitionToDemoActive("manual", { bypassStickyRealDeviceLock: true });
+}
+
+/**
+ * The user turned the offer down. The simulated device is already standing in when it is shown, so
+ * closing it must leave Demo Mode, and no later discovery this session may bring it back unasked.
+ * `retry` runs that discovery instead of going offline first, so a device that answers still wins.
+ */
+export async function declineDemoMode(options: { retry?: DiscoveryTrigger } = {}) {
+  demoModeDeclinedByUser = true;
+  persistDemoModeSessionFlag(DEMO_MODE_DECLINED_SESSION_KEY, true);
+  dismissDemoInterstitial();
+  addLog("info", "Demo Mode declined by the user", { retry: options.retry ?? null, state: snapshot.state });
+  if (options.retry) {
+    await discoverConnection(options.retry);
+  } else if (snapshot.state === "DEMO_ACTIVE" && !demoModePinnedByUser) {
+    await transitionToOfflineNoDemo("manual");
+  }
 }
 
 const cancelActiveDiscovery = () => {
@@ -748,15 +765,8 @@ let identityHealInFlight = false;
 
 /**
  * Fetch the connected device's identity once, if the transition that connected did not carry one.
- *
- * REAL_CONNECTED: a promotion driven by passive traffic (`noteReachable`) or by a cancelled
- * startup probe arrives with no identity, and without one the health gate reports Degraded
- * indefinitely.
- *
- * DEMO_ACTIVE: the simulated device answers `/v1/info` like a real one, but nothing was asking.
- * With no identity, `deriveDeviceCapabilities` had only the Data Streams config read to go on, so
- * Live View — the one feature Demo Mode exists to show — was missing from Home until that read
- * happened to land, and stayed missing if it did not.
+ * REAL_CONNECTED via passive traffic or a cancelled probe has none, and the health gate stays
+ * Degraded. DEMO_ACTIVE needs it too, or capability-gated features such as Live View stay hidden.
  */
 const ensureDeviceIdentityAfterConnect = async (options: { useRuntimeTarget?: boolean } = {}) => {
   if (identityHealInFlight || snapshot.deviceInfo) return;
@@ -842,12 +852,9 @@ const transitionToRealConnected = async (
 const SAVED_DEVICE_SWEEP_TIMEOUT_MS = 1200;
 
 /**
- * Startup/resume policy: when the selected device is unreachable, probe the OTHER
- * configured (saved) devices' `/v1/info` in parallel (bounded, read-only). If any is
- * reachable, switch to it and connect WITHOUT presenting an auto-discovery flow. This
- * implements "if at least one configured device is reachable, do not start discovery
- * merely because other configured devices are unreachable". A stale U2 entry is a valid
- * input here and is simply skipped if it does not answer the probe.
+ * Startup/resume policy: when the selected device is unreachable, probe the OTHER saved devices'
+ * `/v1/info` in parallel (bounded, read-only) and switch to the first that answers, without an
+ * auto-discovery flow. An entry that does not answer is simply skipped.
  */
 const tryReachableSavedDeviceFallback = async (
   trigger: DiscoveryTrigger,
@@ -890,23 +897,13 @@ const tryReachableSavedDeviceFallback = async (
     trigger,
     deviceId: reachable.device.id,
   });
-  // HARD19-012: this fallback is a second device-switch path. Run the same
-  // cross-device hygiene the canonical switch does (remote-input release, toast
-  // clear, health clear, machine-execution reset, orphaned background-execution
-  // stop, device-scoped query invalidation) BEFORE re-selecting — while the
-  // runtime API still targets the old device, so the remote-input release lands
-  // on the right host. Without this, device A's paused state, stale health
-  // verdict, and armed auto-skip watchdog leaked onto device B. HARD27-010 added
-  // the playback stop and the A/V mirror stop to that shared sequence.
+  // HARD19-012/HARD27-010: this fallback is a second device-switch path, so it runs the canonical
+  // switch's cross-device hygiene BEFORE re-selecting, while the runtime API still targets the old
+  // device; otherwise device A's paused state, health verdict and watchdogs leaked onto device B.
   const mirrorState = await prepareForDeviceRetarget(selectedId, reachable.device.id);
-  // HARD16-001: select and apply the reachable device's identity/ports BEFORE
-  // verifying, mirroring executeSavedDeviceSwitch. verifyCurrentConnectionTarget
-  // stamps whatever device is currently selected, so verifying while the
-  // powered-off original is still selected wrote the reachable device's
-  // product/firmware/unique_id onto the wrong saved record. Opening the
-  // HARD12-011 probe window guards the selection against a late /v1/info from
-  // the previous host. On verification failure the selection stays on the
-  // candidate unverified — matching the switch path's failure semantics.
+  // HARD16-001: select the reachable device BEFORE verifying (as executeSavedDeviceSwitch does):
+  // verification stamps whichever device is selected, and verifying first wrote this identity onto
+  // the powered-off original. The HARD12-011 window guards against a late /v1/info from that host.
   setSavedDeviceSwitchProbeWindow(true);
   let verification: Awaited<ReturnType<typeof verifyCurrentConnectionTarget>>;
   try {
@@ -993,18 +990,9 @@ const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
   trigger !== "background" && !demoInterstitialShownThisSession;
 
 /*
- * Point every service the app can talk to at the mock that is now standing in for the device.
- *
- * One function rather than a list repeated at each call site: there are three places that make
- * the loopback mock the active target — the demo transition, its re-entry path, and the smoke
- * mock — and they had drifted. FTP was redirected in all three, the online archive and HVSC in
- * none, so an offline phone in Demo Mode still tried to reach commoserve.files.commodore.net and
- * hvsc.brona.dk and failed with "Unable to resolve host". Anything that has to follow the mock
- * belongs here, so adding the next one cannot miss a caller.
- *
- * All of it is session state. The user's own archive host and HVSC base URL are settings, and
- * Demo Mode is entered and left many times in a session; a device left pointed at a mock that has
- * stopped listening would be worse than one that cannot reach the service at all.
+ * Point every service that has to follow the mock (FTP, the online archive, HVSC) at it, in one
+ * place so no caller that makes the mock the active target can miss one. All of it is session
+ * state: the user's own archive host and HVSC base URL stay untouched as settings.
  */
 const pointServicesAtMock = (baseUrl: string, ftpPort: number | null | undefined, token: string | null) => {
   if (ftpPort) setRuntimeFtpPortOverride(ftpPort);
@@ -1026,6 +1014,11 @@ const transitionToDemoActive = async (
 ) => {
   if (stickyRealDeviceLock && !options.bypassStickyRealDeviceLock) {
     addLog("warn", "Sticky real-device lock active; skipping demo mode transition", { trigger });
+    await transitionToOfflineNoDemo(trigger);
+    return;
+  }
+  if (demoModeDeclinedByUser) {
+    addLog("info", "Demo Mode was declined this session; staying offline", { trigger });
     await transitionToOfflineNoDemo(trigger);
     return;
   }
@@ -1194,13 +1187,7 @@ const noteBackgroundProbeSuppressedWhileOffline = (suppressed: boolean) => {
   addLog("info", suppressed ? "Background probing paused: no network" : "Background probing resumed: network back");
 };
 
-/**
- * Centralized discovery entry point used for:
- * - App startup
- * - Manual icon-triggered switching
- * - Background rediscovery
- * - Settings-triggered rediscovery
- */
+/** Centralized discovery entry point: startup, manual (badge), background and settings triggers. */
 async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
   if (trigger !== "background") {
     clearPinnedDemoMode();
@@ -1475,6 +1462,7 @@ export async function initializeConnectionManager() {
   await featureFlagManager.load();
   demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === "1";
   demoModePinnedByUser = sessionStorage.getItem(DEMO_MODE_PINNED_SESSION_KEY) === "1";
+  demoModeDeclinedByUser = sessionStorage.getItem(DEMO_MODE_DECLINED_SESSION_KEY) === "1";
   stickyRealDeviceLock = false;
   setSnapshot({
     state: "UNKNOWN",
