@@ -51,6 +51,7 @@ import {
   type HvscStatus,
 } from "@/lib/hvsc";
 import { stepForStage, type HvscStageId } from "@/lib/hvsc/hvscStageModel";
+import { subscribeHvscDemoLibraryRemoved } from "@/lib/hvsc/hvscDemoLibraryCleanup";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 
 export type HvscSong = {
@@ -277,6 +278,19 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     if (!hvscEnabled) return;
     refreshHvscStatus();
   }, [hvscEnabled, refreshHvscStatus]);
+
+  // Leaving Demo Mode removes the library installed from it, possibly while this page is open.
+  useEffect(
+    () =>
+      subscribeHvscDemoLibraryRemoved(() => {
+        setHvscStatusSummary(loadHvscStatusSummary());
+        setHvscFolders([]);
+        setHvscSongs([]);
+        setSelectedHvscFolder("/");
+        refreshHvscStatus();
+      }),
+    [refreshHvscStatus],
+  );
 
   useEffect(() => {
     if (!hvscEnabled) return;

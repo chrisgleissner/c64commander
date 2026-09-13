@@ -1,6 +1,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useHvscLibrary } from "@/pages/playFiles/hooks/useHvscLibrary";
+import { createHvscDemoLibraryCleanup } from "@/lib/hvsc/hvscDemoLibraryCleanup";
+import type { HvscState } from "@/lib/hvsc/hvscStateStore";
 
 const mocks = vi.hoisted(() => ({
   toastMock: vi.fn(),
@@ -714,5 +716,32 @@ describe("useHvscLibrary", () => {
     });
 
     expect(result.current.hvscVisibleFolders).toEqual(["/Games"]);
+  });
+
+  it("drops the installed version and folders when leaving Demo Mode removes its library while the page is open", async () => {
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus({ installedVersion: 84, ingestionState: "ready" }));
+    mocks.getHvscFolderListingMock.mockResolvedValue({ path: "/", folders: ["/MUSICIANS"], songs: [] });
+    const { result } = renderHook(() => useHvscLibrary(true));
+    await waitFor(() => expect(result.current.hvscFolders).toEqual(["/MUSICIANS"]));
+    expect(result.current.hvscStatus?.installedVersion).toBe(84);
+
+    mocks.getHvscStatusMock.mockResolvedValue(createStatus());
+    const demoLibrary = { installedVersion: 84, librarySource: "demo" } as HvscState;
+    const cleanup = createHvscDemoLibraryCleanup({
+      getConnectionState: () => "OFFLINE_NO_DEMO",
+      isSimulatedReleaseActive: () => false,
+      isIngestionActive: () => false,
+      loadState: () => demoLibrary,
+      removeLibrary: async () => undefined,
+      triggers: [],
+    });
+    await act(async () => {
+      await cleanup.evaluate();
+    });
+
+    await waitFor(() => expect(result.current.hvscStatus?.installedVersion).toBe(0));
+    expect(result.current.hvscInstalled).toBe(false);
+    expect(result.current.hvscFolders).toEqual([]);
+    expect(mocks.loadHvscStatusSummaryMock).toHaveBeenCalledTimes(2);
   });
 });
