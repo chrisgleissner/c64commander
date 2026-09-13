@@ -13,6 +13,8 @@ export type HvscReleaseStatus = {
   baselineVersion: number;
   updateVersion: number;
   baseUrl: string;
+  /** True when `baseUrl` is the release Demo Mode's simulated device serves. */
+  simulated: boolean;
 };
 
 const DEFAULT_BASE_URL = variant.runtime.endpoints.hvsc_base_url ?? "https://hvsc.brona.dk/HVSC/";
@@ -51,6 +53,7 @@ const normalizeUpdateCheckIntervalDays = (value?: string | number | null) => {
 };
 
 let runtimeHvscBaseUrl: string | null = null;
+const runtimeHvscBaseUrlListeners = new Set<() => void>();
 
 const resolveHvscBaseUrl = (override?: string) => {
   if (override) return normalizeBaseUrl(override);
@@ -76,11 +79,23 @@ const resolveHvscBaseUrl = (override?: string) => {
  * overrides, which exist for the same reason.
  */
 export const setRuntimeHvscBaseUrl = (value: string | null) => {
-  runtimeHvscBaseUrl = value ? normalizeBaseUrl(value) : null;
+  const next = value ? normalizeBaseUrl(value) : null;
+  if (next === runtimeHvscBaseUrl) return;
+  runtimeHvscBaseUrl = next;
+  runtimeHvscBaseUrlListeners.forEach((listener) => listener());
 };
 
-export const clearRuntimeHvscBaseUrl = () => {
-  runtimeHvscBaseUrl = null;
+export const clearRuntimeHvscBaseUrl = () => setRuntimeHvscBaseUrl(null);
+
+/** Whether HVSC currently resolves to Demo Mode's simulated release. */
+export const isRuntimeHvscBaseUrlActive = () => runtimeHvscBaseUrl !== null;
+
+/** Called whenever Demo Mode starts or stops serving HVSC. */
+export const subscribeRuntimeHvscBaseUrl = (listener: () => void) => {
+  runtimeHvscBaseUrlListeners.add(listener);
+  return () => {
+    runtimeHvscBaseUrlListeners.delete(listener);
+  };
 };
 
 export const getHvscBaseUrl = () => resolveHvscBaseUrl();
@@ -190,6 +205,8 @@ const fetchHvscIndexOnce = async (baseUrl: string) => {
 };
 
 export const fetchLatestHvscVersions = async (baseUrl?: string): Promise<HvscReleaseStatus> => {
+  // Decided with the URL, before the fetch: Demo Mode may start or stop while it is in flight.
+  const simulated = !baseUrl && runtimeHvscBaseUrl !== null;
   const resolvedBaseUrl = resolveHvscBaseUrl(baseUrl);
   const html = await fetchHvscIndex(resolvedBaseUrl);
   const baselineRegex = /HVSC_(\d+)-all-of-them\.7z/gi;
@@ -203,7 +220,7 @@ export const fetchLatestHvscVersions = async (baseUrl?: string): Promise<HvscRel
 
   const baselineVersion = baselineVersions.length ? Math.max(...baselineVersions) : 0;
   const updateVersion = updateVersions.length ? Math.max(...updateVersions) : baselineVersion;
-  return { baselineVersion, updateVersion, baseUrl: resolvedBaseUrl };
+  return { baselineVersion, updateVersion, baseUrl: resolvedBaseUrl, simulated };
 };
 
 export const buildHvscBaselineUrl = (version: number, baseUrl?: string) =>
