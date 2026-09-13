@@ -76,6 +76,29 @@ describe("StatelessButton", () => {
     expect(onChoose).not.toHaveBeenCalled();
   });
 
+  it("does not let the tap that opened a form focus the field under the finger", () => {
+    const Opener = () => {
+      const [open, setOpen] = React.useState(false);
+      return open ? (
+        <input key="field" aria-label="Handle" />
+      ) : (
+        <StatelessButton key="opener" onClick={() => setOpen(true)}>
+          CommoServe
+        </StatelessButton>
+      );
+    };
+    render(<Opener />);
+
+    fireEvent.pointerUp(screen.getByRole("button", { name: "CommoServe" }), {
+      pointerType: "touch",
+      clientX: 200,
+      clientY: 535,
+    });
+    const field = screen.getByRole("textbox", { name: "Handle" });
+    // `fireEvent` returns false when a listener cancelled the default action, focus included.
+    expect(fireEvent.mouseDown(field, { detail: 1, clientX: 200, clientY: 535 })).toBe(false);
+  });
+
   it("still lets a separate tap elsewhere press the dialog's button", () => {
     const onChoose = vi.fn();
     const Opener = () => {
