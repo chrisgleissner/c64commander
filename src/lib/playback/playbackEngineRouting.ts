@@ -14,9 +14,9 @@
  * are unit-tested without the controller. The rules:
  *
  * - Engine `c64` → the Ultimate (`executePlayPlan`), the app's identity — except against the
- *   SIMULATED device, which has no SID chip. There a tune routed to "the C64" is played by this
- *   phone's own engine instead, so Demo Mode makes a sound rather than acknowledging a play command
- *   and staying silent. The device is still told, so its screen shows what is playing.
+ *   SIMULATED device, which has no SID chip, and with NO device at all (offline). There a tune routed
+ *   to "the C64" is played by this phone's own engine instead, so it makes a sound rather than
+ *   staying silent or failing. The simulated device is still told, so its screen shows the tune.
  * - Engine `local`:
  *   - only **SID** can play on-device (libsidplayfp is SID-only) → non-SID
  *     (prg/crt/disk/mod) falls back to the C64 with a one-time notice.
@@ -37,7 +37,12 @@ export type PlaybackRoute = "c64" | "local";
 
 /** The distinct one-time notices shown when a Local selection falls back to the C64. */
 export type EngineFallbackNotice =
-  "non-sid-on-c64" | "rom-on-c64" | "local-unavailable" | "rom-lite-engine" | "simulated-device-local-sid";
+  | "non-sid-on-c64"
+  | "rom-on-c64"
+  | "local-unavailable"
+  | "rom-lite-engine"
+  | "simulated-device-local-sid"
+  | "no-device-local-sid";
 
 export interface EngineRouteInput {
   category: PlayFileCategory;
@@ -46,6 +51,8 @@ export interface EngineRouteInput {
   localSupported: boolean;
   /** Demo Mode: the device answering is the built-in simulation, which has no SID chip. */
   simulatedDevice?: boolean;
+  /** Offline: no C64 Ultimate is connected, simulated or real. */
+  noDeviceConnected?: boolean;
 }
 
 export interface PreRouteDecision {
@@ -64,12 +71,13 @@ export function preRouteEngine({
   engine,
   localSupported,
   simulatedDevice = false,
+  noDeviceConnected = false,
 }: EngineRouteInput): PreRouteDecision {
   if (engine !== "local") {
-    // The simulated device answers a play command and cannot make a sound, so a SID sent to it
-    // would be silence with a success toast. Play it here instead and say so once.
-    if (simulatedDevice && category === "sid" && localSupported) {
-      return { route: "local", notice: "simulated-device-local-sid" };
+    // A SID sent to the simulated device is silence with a success toast, and with no device at all
+    // it is a connection error. Play it here instead and say so once.
+    if ((simulatedDevice || noDeviceConnected) && category === "sid" && localSupported) {
+      return { route: "local", notice: simulatedDevice ? "simulated-device-local-sid" : "no-device-local-sid" };
     }
     return { route: "c64", notice: null };
   }
@@ -134,4 +142,7 @@ export const ENGINE_FALLBACK_MESSAGES: Record<EngineFallbackNotice, string> = {
   "simulated-device-local-sid":
     "The simulated device has no SID chip, so this tune is playing on your phone. Everything else " +
     "behaves as it does against a real C64 Ultimate.",
+  "no-device-local-sid":
+    "No C64 Ultimate is connected, so this tune is playing on your phone. Programs, cartridges and " +
+    "disks need a connected C64 Ultimate.",
 };

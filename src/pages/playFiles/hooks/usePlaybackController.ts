@@ -1024,16 +1024,20 @@ export function usePlaybackController({
         // `c64u_local_engine_enabled` — off by default, so the whole block is a
         // no-op and playback is byte-for-byte the C64 path.
         let routeToLocal = false;
-        // Against the simulated device the on-device engine is not an optional extra: it is the
-        // only thing that can make a sound, so this block runs whether or not the local-engine flag
-        // is on. The flag still governs the choice against real hardware.
-        const simulatedDevice = getConnectionSnapshot().state === "DEMO_ACTIVE";
-        if (loadLocalEngineEnabled() || simulatedDevice) {
+        // Against the simulated device, or with no device at all, the on-device engine is the only
+        // thing that can make a sound, so this block runs whatever the local-engine flag says. The
+        // flag still governs the choice against real hardware.
+        const connectionState = getConnectionSnapshot().state;
+        const simulatedDevice = connectionState === "DEMO_ACTIVE";
+        const noDeviceConnected = connectionState === "OFFLINE_NO_DEMO";
+        const noMachineForRoms = simulatedDevice || noDeviceConnected;
+        if (loadLocalEngineEnabled() || noMachineForRoms) {
           const selection = preRouteEngine({
             category: item.category,
             engine: loadPlaybackEngine(),
             localSupported: LocalSidPlaybackController.isSupported(),
             simulatedDevice,
+            noDeviceConnected,
           });
           // A tune that lives on the Ultimate has no local blob — `file` is resolved for the
           // commoserve, HVSC and local sources and for no other. The on-device engine needs the
@@ -1063,7 +1067,8 @@ export function usePlaybackController({
               const decision = romFallbackDecision(detectRomRequired(sidBytes), romsReady);
               if (decision.route === "local") {
                 routeToLocal = true;
-                if (!romsReady) {
+                // Neither the simulated device nor an absent one can supply the images.
+                if (!romsReady && !noMachineForRoms) {
                   if (loadLocalEngineAutoRoms()) {
                     // Read the images from the connected machine, but do not wait: the tune plays now
                     // on the kernal-free emulation and the next worker picks them up. Waiting would
@@ -1076,14 +1081,16 @@ export function usePlaybackController({
                   }
                 }
               }
-              if (decision.notice) emitEngineNotice(decision.notice);
+              // Where the engine choice was overridden, that is what the listener needs explained.
+              const notice = decision.route === "local" && selection.notice ? selection.notice : decision.notice;
+              if (notice) emitEngineNotice(notice);
             } catch (error) {
               addErrorLog("Local engine could not read the SID; using the C64", {
                 error: (error as Error).message,
                 item: item.label,
               });
             }
-          } else if (selection.notice) {
+          } else if (selection.notice && selection.route !== "local") {
             emitEngineNotice(selection.notice);
           }
         }

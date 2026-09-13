@@ -23,6 +23,18 @@ import {
   buildEnabledSidVolumeSnapshot,
 } from "@/lib/config/sidVolumeControl";
 
+const connectionStateOverride = vi.hoisted(() => ({ current: null as string | null }));
+vi.mock("@/lib/connection/connectionManager", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/connection/connectionManager")>();
+  return {
+    ...actual,
+    getConnectionSnapshot: () =>
+      connectionStateOverride.current
+        ? { ...actual.getConnectionSnapshot(), state: connectionStateOverride.current }
+        : actual.getConnectionSnapshot(),
+  };
+});
+
 const mockArchiveClient = {
   downloadBinary: vi.fn(),
 };
@@ -2762,6 +2774,36 @@ describe("usePlaybackController", () => {
 
       expect(controller.play).toHaveBeenCalledTimes(1);
       expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+    });
+
+    it("plays a SID on this device, without trying to connect, when no C64 Ultimate is connected", async () => {
+      // Engine left on "C64" (the default). Offline with Demo Mode declined, this failed with two
+      // "Device not connected" errors instead of playing a tune the phone can play itself.
+      localStorage.setItem("c64u_local_engine_enabled", "0");
+      vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
+      connectionStateOverride.current = "OFFLINE_NO_DEMO";
+      const controller = fakeController();
+      const ensurePlaybackConnection = vi.fn(async () => {
+        throw new Error("Device not connected. Check connection settings.");
+      });
+      const playlist = [sidItem(psid)];
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        ensurePlaybackConnection,
+      });
+
+      try {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      } finally {
+        connectionStateOverride.current = null;
+      }
+
+      expect(controller.play).toHaveBeenCalledTimes(1);
+      expect(ensurePlaybackConnection).not.toHaveBeenCalled();
+      expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+      expect(vi.mocked(toast)).toHaveBeenCalledWith(
+        expect.objectContaining({ description: expect.stringContaining("No C64 Ultimate is connected") }),
+      );
     });
 
     it("falls a ROM-dependent RSID back to the C64", async () => {
