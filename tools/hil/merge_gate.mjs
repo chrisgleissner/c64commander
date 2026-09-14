@@ -56,7 +56,7 @@
  * USAGE
  *
  *   node tools/hil/merge_gate.mjs [--host c64u] [--iface <host ip>] [--only input,wire]
- *                                [--quiet-check] [--volume 5] [--json artifacts/hil-gate.json]
+ *                                [--quiet-check] [--volume 3] [--json artifacts/hil-gate.json]
  *
  * Requires: the branch's APK installed and foregrounded on the attached Pixel, `adb forward`
  * pointed at its WebView (see the `hil-attach` skill), the Ultimate reachable, and a microphone
@@ -99,7 +99,7 @@ const ONLY = arg("only", "")
  * raised the volume to improve a measurement and had to be stopped. If a grader cannot read a
  * signal at this level, the answer is a better grader or a closer microphone.
  */
-const GATE_VOLUME = Number(arg("volume", "5"));
+const GATE_VOLUME = Number(arg("volume", "3"));
 const MAX_VOLUME = 10;
 
 /** The Ultimate answers 401 to every call when it has a password and the header is absent. */
@@ -353,14 +353,11 @@ const TONE_TUNES = [
 const TONE_SECONDS = 10;
 
 /**
- * The playback stages run louder than the clarity stage, and still under the ceiling.
- *
- * A generated SID holding one tone is far quieter at the microphone than the barcode stimulus —
- * measured at -73 dBFS against the barcode's comfortable margin at the same volume — and at that
- * level the presence test drifts in and out and reports a healthy pipeline as full of dropouts.
- * `MAX_VOLUME` is still an absolute refusal; this only spends the headroom below it.
+ * The playback stages' volume. They ran at 10, which the person beside the phone called most annoying and
+ * loud. At 2 the 550 Hz tone still measured 33 dB above its noise floor at the grille and `sid-local`
+ * graded 100% present, so 3 keeps a margin. `MAX_VOLUME` is still an absolute refusal.
  */
-const TONE_VOLUME = Math.min(MAX_VOLUME, Number(arg("tone-volume", "10")));
+const TONE_VOLUME = Math.min(MAX_VOLUME, Number(arg("tone-volume", "3")));
 const CROSSFADE_SECONDS = 12;
 
 const results = [];
