@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const hoisted = vi.hoisted(() => ({
   getConfigItemMock: vi.fn(),
+  getCategoriesMock: vi.fn(),
   cachedItemMock: vi.fn<(category: string, item: string) => unknown>(() => undefined),
   absent: new Set<string>(),
   routing: { epoch: 0 },
@@ -28,6 +29,7 @@ vi.mock("@/lib/c64api", async (importActual) => ({
     isConfigItemDomainKnownAbsent: (category: string, item: string) => hoisted.absent.has(`${category}::${item}`),
     markConfigItemDomainAbsent: (category: string, item: string) => hoisted.absent.add(`${category}::${item}`),
     getConfigItem: (...args: unknown[]) => hoisted.getConfigItemMock(...args),
+    getCategories: (...args: unknown[]) => hoisted.getCategoriesMock(...args),
   }),
 }));
 
@@ -59,6 +61,8 @@ const bumpEpochAndRerender = async (rerender: () => void) => {
 describe("useDeviceConfigOptionDomains", () => {
   beforeEach(() => {
     hoisted.getConfigItemMock.mockReset();
+    hoisted.getCategoriesMock.mockReset();
+    hoisted.getCategoriesMock.mockResolvedValue({ categories: ["Cat"], errors: [] });
     hoisted.cachedItemMock.mockReset();
     hoisted.cachedItemMock.mockReturnValue(undefined);
     hoisted.absent.clear();
@@ -67,6 +71,16 @@ describe("useDeviceConfigOptionDomains", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("does not ask for the items of a category the device does not list", async () => {
+    hoisted.getCategoriesMock.mockResolvedValue({ categories: ["Audio Output Settings"], errors: [] });
+    renderHook(() => useDeviceConfigOptionDomains("test", REFS, true));
+    await flush();
+
+    expect(hoisted.getCategoriesMock).toHaveBeenCalledTimes(1);
+    expect(hoisted.getConfigItemMock).not.toHaveBeenCalled();
+    expect(hoisted.absent.has("Cat::Item")).toBe(true);
   });
 
   it("does not re-fetch a definitively-absent (404) ref on the next effect run (HARD16-005)", async () => {
