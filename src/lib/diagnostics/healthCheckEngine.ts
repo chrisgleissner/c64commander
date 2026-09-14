@@ -264,9 +264,10 @@ const parseTimestampMs = (value: string | null) => {
 };
 
 const isAbortLike = (error: unknown) => {
-  const name = (error as { name?: string } | undefined)?.name;
+  const { name, isCancellation } = (error ?? {}) as { name?: string; isCancellation?: boolean };
   const message = error instanceof Error ? error.message : String(error ?? "");
-  return name === "AbortError" || /aborted/i.test(message);
+  // A queued request dropped on purpose, as a device switch does, is cancelled rather than failed.
+  return name === "AbortError" || isCancellation === true || /aborted/i.test(message);
 };
 
 const isTimeoutLike = (error: unknown) => {

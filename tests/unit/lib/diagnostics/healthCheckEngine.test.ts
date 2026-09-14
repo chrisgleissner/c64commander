@@ -586,6 +586,21 @@ describe("runHealthCheck — REST probe failure", () => {
     expect(addLog).not.toHaveBeenCalledWith("warn", "Health check REST probe failed", expect.anything());
   });
 
+  // Switching devices drops the requests still queued for the old one; the switcher's checks logged each as a warning.
+  it("does not report a REST probe cancelled by a device switch as a failure", async () => {
+    const cancelled = Object.assign(new Error("rest queued task cancelled: saved-device-switch"), {
+      name: "InteractionCancelledError",
+      isCancellation: true,
+    });
+    mockGetInfo.mockRejectedValue(cancelled);
+    mockPingFtp.mockResolvedValue({ ok: true });
+
+    const result = await runHealthCheck();
+
+    expect(addLog).not.toHaveBeenCalledWith("warn", "Health check REST probe failed", expect.anything());
+    expect(result!.probes.REST.outcome).toBe("Skipped");
+  });
+
   it("skips JIFFY, RASTER, CONFIG when REST fails", async () => {
     mockGetInfo.mockRejectedValue(new Error("Network error"));
     mockPingFtp.mockResolvedValue({ ok: true });
