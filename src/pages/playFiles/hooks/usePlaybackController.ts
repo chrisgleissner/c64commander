@@ -37,7 +37,6 @@ import {
   type LocalPlayFile,
   type PlayRequest,
 } from "@/lib/playback/playbackRouter";
-import { getHvscDurationsByMd5Seconds } from "@/lib/hvsc";
 import {
   getLocalFilePath,
   isSongCategory,
@@ -84,6 +83,11 @@ import {
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
 import {
+  resolveHvscDurationSecondsForSongNr,
+  resolveUltimateSidDurationByMd5,
+  warmNeighbouringLeadIns,
+} from "@/pages/playFiles/sidBytesAhead";
+import {
   applyConfigFileReference,
   ensureConfigFileReferenceAccessible,
   isConfigReferenceUnavailableError,
@@ -99,19 +103,6 @@ import type { SidEnablement } from "@/lib/config/sidVolumeControl";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { featureFlagManager } from "@/lib/config/featureFlags";
 
-/**
- * How much of an upcoming track to render ahead.
- *
- * Matched to the native buffer's depth, and that is the trick. The cached opening is poured into the
- * ring as fast as the ring will take it, so when it runs out and live rendering takes over, the ring
- * is holding roughly this much — exactly the margin the renderer needs to get ahead. Measured with a
- * six-second lead-in the ring fell to 0.44 s at the seam; matched to the ring it does not dip.
- *
- * Not more: output is 192 KB per second, so two warmed neighbours at this depth already cost a few
- * megabytes.
- */
-const LEAD_IN_SECONDS = 15;
-
 type HandledUiError = Error & { c64uHandled?: boolean };
 
 const markHandledUiError = (error: unknown) => {
@@ -122,20 +113,6 @@ const markHandledUiError = (error: unknown) => {
 
 const isHandledUiError = (error: unknown): error is HandledUiError =>
   error instanceof Error && Boolean((error as HandledUiError).c64uHandled);
-
-/**
- * The md5-fallback duration lookup is per-subsong (HVSC durations are indexed
- * songNr - 1, mirroring the local songlengths backend), so a bare
- * `getHvscDurationByMd5Seconds` call silently returns subsong 1's length for
- * any other songNr. See HARD11-004 (related facet).
- */
-const resolveHvscDurationSecondsForSongNr = async (md5: string, songNr?: number | null): Promise<number | null> => {
-  const durations = await getHvscDurationsByMd5Seconds(md5);
-  if (!durations?.length) return null;
-  const index = songNr && songNr > 0 ? songNr - 1 : 0;
-  if (index < 0 || index >= durations.length) return null;
-  return durations[index] ?? null;
-};
 
 type SidMuteSnapshot = {
   volumes: Record<string, string | number>;
@@ -701,29 +678,6 @@ export function usePlaybackController({
     [durationFallbackMs, resolveSonglengthDurationMsForPath],
   );
 
-  const resolveUltimateSidDurationByMd5 = useCallback(
-    async (path: string, songNr?: number | null): Promise<number | null> => {
-      try {
-        const blob = await tryFetchUltimateSidBlob(path);
-        if (!blob) return null;
-        const buffer = await blob.arrayBuffer();
-        const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
-        const md5 = await computeSidMd5(buffer);
-        const seconds = await resolveHvscDurationSecondsForSongNr(md5, songNr);
-        if (seconds === undefined || seconds === null) return null;
-        return seconds * 1000;
-      } catch (error) {
-        addLog("debug", "Ultimate SID MD5 duration lookup failed", { path });
-        addErrorLog("Ultimate SID MD5 duration lookup failed", {
-          path,
-          error: (error as Error).message,
-        });
-        return null;
-      }
-    },
-    [],
-  );
-
   const resolveCommoServeRuntimeRequest = useCallback(
     async (item: PlaylistItem): Promise<RuntimePlaybackRequest | null> => {
       if (item.request.source !== "commoserve" || item.request.file) return null;
@@ -832,59 +786,16 @@ export function usePlaybackController({
     ],
   );
 
-  /**
-   * Render the opening of the next and previous tracks, so skipping to either starts instantly.
-   *
-   * Only the opening — a few seconds is all that is needed to cover the gap before the buffer is
-   * ahead of the speaker, and caching whole tunes costs 192 KB per second.
-   *
-   * Skipped for tracks whose bytes are not already to hand. Resolving those means going to the
-   * network or the Ultimate, and doing that speculatively for tracks nobody has asked for would
-   * spend the listener's bandwidth and the device's attention on a guess.
-   */
-  const warmNeighbouringTracks = useCallback(async () => {
-    const playlist = playlistRef.current;
-    const index = currentIndexRef.current;
-    for (const offset of [1, -1]) {
-      const neighbour = playlist[index + offset];
-      if (!neighbour) continue;
-      // HVSC entries carry no bytes until they are played — resolving one reads from the on-device
-      // library, which is local and cheap. Anything still without a file after that is coming over
-      // the network, and is left alone rather than fetched on a guess.
-      const resolved = neighbour.request.file
-        ? neighbour.request
-        : ((
-            await resolveHvscRuntimeRequest(neighbour).catch((error: unknown) => {
-              // Falling back to the unresolved request is right — this is speculative warming and
-              // must never disturb what is playing — but a resolution that always fails means every
-              // skip starts cold, which is a silent, permanent loss of the feature.
-              addLog("debug", "Playback: could not resolve a neighbouring track for lead-in warming", {
-                error: (error as Error)?.message ?? String(error),
-              });
-              return null;
-            })
-          )?.request ?? neighbour.request);
-      const file = resolved.file;
-      if (!file) continue;
-      try {
-        const bytes = await file.arrayBuffer();
-        const tuneIndex = toEngineTuneIndex(resolved.songNr);
-        getLocalSidPlayback().warmLeadIn(
-          buildRenderedTuneKey(neighbour.id, tuneIndex),
-          bytes,
-          tuneIndex,
-          LEAD_IN_SECONDS,
-        );
-      } catch (error) {
-        // A track that cannot be read now is simply not warmed; it will be read when it is played.
-        addLog("debug", "Lead-in warm skipped", {
-          service: "local-sid",
-          item: neighbour.label,
-          error: (error as Error)?.message ?? String(error),
-        });
-      }
-    }
-  }, []);
+  const warmNeighbouringTracks = useCallback(
+    () =>
+      warmNeighbouringLeadIns(
+        playlistRef.current,
+        currentIndexRef.current,
+        resolveHvscRuntimeRequest,
+        getLocalSidPlayback(),
+      ),
+    [],
+  );
 
   const playItem = useCallback(
     async (
