@@ -323,7 +323,7 @@ Summary: 818 dependencies across NPM (801), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | @vitest/snapshot | 3.2.7 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/@vitest/snapshot/-/snapshot-3.2.7.tgz](https://registry.npmjs.org/@vitest/snapshot/-/snapshot-3.2.7.tgz) |
 | NPM | @vitest/spy | 3.2.7 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/@vitest/spy/-/spy-3.2.7.tgz](https://registry.npmjs.org/@vitest/spy/-/spy-3.2.7.tgz) |
 | NPM | @vitest/utils | 3.2.7 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/@vitest/utils/-/utils-3.2.7.tgz](https://registry.npmjs.org/@vitest/utils/-/utils-3.2.7.tgz) |
-| NPM | @xmldom/xmldom | 0.8.13 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/@xmldom/xmldom/-/xmldom-0.8.13.tgz](https://registry.npmjs.org/@xmldom/xmldom/-/xmldom-0.8.13.tgz) |
+| NPM | @xmldom/xmldom | 0.8.15 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/@xmldom/xmldom/-/xmldom-0.8.15.tgz](https://registry.npmjs.org/@xmldom/xmldom/-/xmldom-0.8.15.tgz) |
 | NPM | @yarnpkg/lockfile | 1.1.0 | [BSD-2-Clause](https://spdx.org/licenses/BSD-2-Clause.html) | [https://registry.npmjs.org/@yarnpkg/lockfile/-/lockfile-1.1.0.tgz](https://registry.npmjs.org/@yarnpkg/lockfile/-/lockfile-1.1.0.tgz) |
 | NPM | 7z-wasm | 1.2.0 | [LGPL-2.1-or-later WITH unRAR-restriction](#licence-notes) | [https://registry.npmjs.org/7z-wasm/-/7z-wasm-1.2.0.tgz](https://registry.npmjs.org/7z-wasm/-/7z-wasm-1.2.0.tgz) |
 | NPM | acorn | 8.16.0 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/acorn/-/acorn-8.16.0.tgz](https://registry.npmjs.org/acorn/-/acorn-8.16.0.tgz) |
