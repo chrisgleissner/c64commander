@@ -91,6 +91,8 @@ describe("useCenteredOverlayPosition", () => {
   });
 
   afterEach(() => {
+    // Vitest 4's restoreAllMocks no longer resets vi.fn() mocks, so the module mocks are reset explicitly.
+    vi.resetAllMocks();
     vi.restoreAllMocks();
     document.body.innerHTML = "";
 

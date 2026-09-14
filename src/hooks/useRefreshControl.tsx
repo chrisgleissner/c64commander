@@ -20,6 +20,10 @@ export function RefreshControlProvider({ children }: { children: React.ReactNode
 
   const setConfigExpanded = useCallback((id: string, isOpen: boolean) => {
     setConfigExpandedState((prev) => {
+      // Returning `prev` lets React skip the update. Config sections report their open state from an
+      // effect keyed on a callback the page recreates on every render, so a new Set here re-rendered
+      // the page, which re-ran the effect, in a loop that starved route transitions on the Config page.
+      if (prev.has(id) === isOpen) return prev;
       const next = new Set(prev);
       if (isOpen) {
         next.add(id);

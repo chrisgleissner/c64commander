@@ -715,14 +715,15 @@ jobs:
           EXPECT_WEB_COVERAGE: "1"
         run: node scripts/verify-coverage-artifacts.mjs
 
-      # Lines is raised to 94 with real headroom: the merged report is 95.25% on
-      # main and 95.41% here. Branches stays at 91 deliberately — it is 94.01% on
-      # main, so a 94 gate would pass by a hundredth of a point and turn main red
-      # on the first small regression. Raise it once branch coverage has room.
+      # Vitest 4 maps V8 coverage through the source AST, so the unit report counts
+      # the same executable lines and branches as istanbul. Vitest 3 counted every
+      # source line and only the branches of code that had run. The merged report
+      # went from 95.41% lines and 94.17% branches to 94.28% and 86.57% with no
+      # change in tests. Each gate is one point below the whole percentage measured.
       - name: Enforce coverage threshold
         env:
-          COVERAGE_MIN: "94"
-          COVERAGE_MIN_BRANCH: "91"
+          COVERAGE_MIN: "93"
+          COVERAGE_MIN_BRANCH: "85"
           COVERAGE_FILE: "coverage/lcov-merged.info"
         run: node scripts/check-coverage-threshold.mjs
 

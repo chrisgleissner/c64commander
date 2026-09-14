@@ -253,6 +253,10 @@ test.describe("Keypad / T9 input", () => {
     // Escape closes (Radix); the trigger collapses.
     await page.keyboard.press("Escape");
     await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    // The list stays mounted, holding focus, until its exit animation ends; a key pressed before
+    // then goes to the closing list, not the trigger. Wait until it is gone, as a user would.
+    await expect(page.getByRole("listbox")).toHaveCount(0);
+    await expect(trigger).toBeFocused();
     await snap(page, testInfo, "dropdown-closed");
 
     // Keypad back (Android keyCode 4) also closes the dropdown via the layer.
