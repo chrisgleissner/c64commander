@@ -127,6 +127,7 @@ import { HvscManager } from "@/pages/playFiles/components/HvscManager";
 import { HvscPreparationSheet } from "@/pages/playFiles/components/HvscPreparationSheet";
 import { PageContainer, PageStack, ProfileSplitSection } from "@/components/layout/PageContainer";
 import { useHvscLibrary } from "@/pages/playFiles/hooks/useHvscLibrary";
+import { useDemoPlaylistCleanup } from "@/pages/playFiles/hooks/useDemoPlaylistCleanup";
 import {
   shouldCancelHvscLifecycleOnDisable,
   shouldIncludeHvscSource,
@@ -2299,6 +2300,8 @@ export default function PlayFilesPage() {
     },
     [currentIndex, handleStop, isPaused, isPlaying, playlist],
   );
+
+  useDemoPlaylistCleanup(playlist, removePlaylistItemsById);
 
   const handleRemoveSelectedPlaylist = useCallback(() => {
     if (!selectedPlaylistIds.size) return;

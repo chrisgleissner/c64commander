@@ -113,6 +113,8 @@ const removeLibraryLikeResetButton = async () => {
   const { resetHvscLibraryData } = await import("./hvscService");
   await resetHvscLibraryData();
   clearHvscStatusSummary();
+  const { removeDemoTunesFromPlaylist } = await import("./hvscDemoPlaylistCleanup");
+  await removeDemoTunesFromPlaylist();
 };
 
 export const installHvscDemoLibraryCleanup = () =>
