@@ -6,8 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
+import { recordNetworkStatus, resetNetworkStatusWatchForTests } from "@/lib/connection/networkStatusWatch";
 import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
 
 describe("failureTaxonomy", () => {
@@ -113,5 +114,36 @@ describe("failureTaxonomy", () => {
     // This hits the else-if(isStorageError) block → io-read-failure
     const result = classifyError(new Error("filesystem error reading config"));
     expect(result.failureClass).toBe("io-read-failure");
+  });
+
+  // A Live View stop sent as the phone left its network was traced as an unexpected "Host unreachable"
+  // error, and the badge came home reading "degraded, 1 problem". Unreachable is expected only then.
+  describe("while the phone has no network", () => {
+    afterEach(() => resetNetworkStatusWatchForTests());
+
+    const unreachable = [
+      new Error("Host unreachable"),
+      new TypeError("Failed to fetch"),
+      new Error("Request timed out"),
+    ];
+
+    it("marks a request that cannot reach the device as expected", () => {
+      recordNetworkStatus({ online: true, supported: true });
+      recordNetworkStatus({ online: false, supported: true });
+
+      for (const error of unreachable) expect(classifyError(error).isExpected).toBe(true);
+    });
+
+    it("does not excuse the same failures while the network is up", () => {
+      recordNetworkStatus({ online: true, supported: true });
+
+      for (const error of unreachable) expect(classifyError(error).isExpected).toBe(false);
+    });
+
+    it("does not excuse a failure that has nothing to do with reaching the device", () => {
+      recordNetworkStatus({ online: false, supported: true });
+
+      expect(classifyError(new Error("Unexpected token < in JSON")).isExpected).toBe(false);
+    });
   });
 });

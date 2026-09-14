@@ -1758,6 +1758,24 @@ describe("c64api", () => {
       await expect(pending).rejects.toThrow();
       expect(unreachable).not.toHaveBeenCalled();
     });
+
+    it("treats a request that fails while the phone has no network as expected", async () => {
+      const { recordNetworkStatus } = await import("@/lib/connection/networkStatusWatch");
+      const traces = await import("@/lib/tracing/traceSession");
+      recordNetworkStatus({ online: true, supported: true });
+      recordNetworkStatus({ online: false, supported: true });
+      traces.clearTraceEvents();
+      getFetchMock().mockRejectedValue(new TypeError("Failed to fetch"));
+
+      await expect(
+        new C64API("http://c64u").getInfo({ __c64uIntent: "user", __c64uBypassCache: true }),
+      ).rejects.toThrow();
+
+      expect(addLogMock).not.toHaveBeenCalledWith("warn", "C64 API request failed", expect.anything());
+      expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
+      const unexpected = traces.getTraceEvents().filter((event) => event.type === "error" && !event.data.isExpected);
+      expect(unexpected).toEqual([]);
+    });
   });
 
   it("covers runner and drive request helpers", async () => {

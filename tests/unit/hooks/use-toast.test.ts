@@ -33,6 +33,13 @@ describe("toast() visibility filtering", () => {
     expect(id).toBe("");
   });
 
+  // The one notice that explains why a tap did nothing while the device is offline must still reach a
+  // user who only wants errors, without being dressed as one.
+  it("dispatches a neutral toast marked always visible when visibility is errors-only", () => {
+    const { id } = toast({ title: "Offline", description: "Connect to mount disks.", alwaysVisible: true });
+    expect(id).not.toBe("");
+  });
+
   it("dispatches default toast when visibility is all", () => {
     saveNotificationVisibility("all");
     const { id } = toast({ title: "Success" });

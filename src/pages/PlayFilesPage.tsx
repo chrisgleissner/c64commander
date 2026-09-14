@@ -37,11 +37,12 @@ import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useActionTrace } from "@/hooks/useActionTrace";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
-import { reportUserError } from "@/lib/uiErrors";
+import { DEVICE_NOT_CONNECTED_MESSAGE, reportUserError } from "@/lib/uiErrors";
 import { createLatestIntentWriteLane, type LatestIntentWriteLane } from "@/lib/deviceInteraction/latestIntentWriteLane";
 import type { TraceSourceKind } from "@/lib/tracing/types";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
 import { discoverConnection, getConnectionSnapshot } from "@/lib/connection/connectionManager";
+import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
 import { type PlayRequest } from "@/lib/playback/playbackRouter";
 import {
@@ -492,10 +493,11 @@ export default function PlayFilesPage() {
 
   const ensurePlaybackConnection = useCallback(async () => {
     if (status.isConnected) return;
+    if (isNetworkKnownOffline()) throw new Error(DEVICE_NOT_CONNECTED_MESSAGE);
     await discoverConnection("manual");
     const snapshot = getConnectionSnapshot();
     if (snapshot.state !== "REAL_CONNECTED" && snapshot.state !== "DEMO_ACTIVE") {
-      throw new Error("Device not connected. Check connection settings.");
+      throw new Error(DEVICE_NOT_CONNECTED_MESSAGE);
     }
   }, [status.isConnected]);
 

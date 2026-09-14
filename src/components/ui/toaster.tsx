@@ -31,17 +31,27 @@ export function Toaster() {
 
   return (
     <ToastProvider duration={duration}>
-      {toasts.map(({ id, title, description, action, onToastDismiss: _onToastDismiss, ...props }) => (
-        <ToastItem
-          key={id}
-          id={id}
-          title={title}
-          description={description}
-          action={action}
-          dismiss={dismiss}
-          {...props}
-        />
-      ))}
+      {toasts.map(
+        ({
+          id,
+          title,
+          description,
+          action,
+          onToastDismiss: _onToastDismiss,
+          alwaysVisible: _alwaysVisible,
+          ...props
+        }) => (
+          <ToastItem
+            key={id}
+            id={id}
+            title={title}
+            description={description}
+            action={action}
+            dismiss={dismiss}
+            {...props}
+          />
+        ),
+      )}
       <ToastViewport />
     </ToastProvider>
   );

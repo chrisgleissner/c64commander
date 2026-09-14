@@ -28,7 +28,7 @@ import {
 } from "@/lib/deviceInteraction/machineTransitionCoordinator";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { isAbortLikeError } from "@/lib/c64api/requestRuntime";
-import { reportUserError } from "@/lib/uiErrors";
+import { DEVICE_NOT_CONNECTED_MESSAGE, reportUserError } from "@/lib/uiErrors";
 import { toast } from "@/hooks/use-toast";
 import {
   buildPlayPlan,
@@ -74,6 +74,7 @@ import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
+import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import {
   ENGINE_FALLBACK_MESSAGES,
   preRouteEngine,
@@ -979,6 +980,12 @@ export function usePlaybackController({
             throw new Error("Local file unavailable. Re-add it to the playlist.");
           }
         }
+        // A tune kept on the Ultimate is out of reach without a network, or when a playlist moves on while
+        // the device is shown offline: end here rather than through failed FTP and REST calls.
+        const deviceOutOfReach =
+          isNetworkKnownOffline() ||
+          (options?.origin === "auto" && getConnectionSnapshot().state === "OFFLINE_NO_DEMO");
+        if (effectiveRequest.source === "ultimate" && deviceOutOfReach) throw new Error(DEVICE_NOT_CONNECTED_MESSAGE);
         let durationOverride: number | undefined = item.durationMs;
         let subsongCount: number | undefined = item.subsongCount ?? undefined;
         if (item.category === "sid" && effectiveRequest.source !== "ultimate") {

@@ -463,3 +463,45 @@ describe("logging", () => {
     vi.unstubAllGlobals();
   });
 });
+
+// Leaving home fails in-flight device requests at dozens of call sites (mount, playback, config reads),
+// each of which logged its own error. With the phone known to have no network that is the expected
+// state: the entries stay, at info, so the log shows no errors for it.
+describe("device failures while the phone has no network", () => {
+  beforeEach(async () => {
+    localStorage.clear();
+    resetLoggingCacheForTests();
+    (await import("@/lib/connection/networkStatusWatch")).resetNetworkStatusWatchForTests();
+  });
+
+  it("logs a failure to reach the device at info once the network is known to be down", async () => {
+    const { recordNetworkStatus } = await import("@/lib/connection/networkStatusWatch");
+    recordNetworkStatus({ online: false, supported: true });
+
+    addErrorLog("Disk mount failed", { drive: "a", error: "Host unreachable" });
+    addLog("warn", "C64 API request failed", { error: { message: "Failed to fetch" } });
+    addErrorLog("PLAYBACK_NEXT: Playback next failed", {
+      description: "Device not connected. Check connection settings.",
+    });
+
+    expect(getLogs().map((entry) => entry.level)).toEqual(["info", "info", "info"]);
+  });
+
+  it("keeps the level of the same failure while the network is up", async () => {
+    const { recordNetworkStatus } = await import("@/lib/connection/networkStatusWatch");
+    recordNetworkStatus({ online: true, supported: true });
+
+    addErrorLog("Disk mount failed", { drive: "a", error: "Host unreachable" });
+
+    expect(getLogs()[0].level).toBe("error");
+  });
+
+  it("keeps the level of an unrelated error while the network is down", async () => {
+    const { recordNetworkStatus } = await import("@/lib/connection/networkStatusWatch");
+    recordNetworkStatus({ online: false, supported: true });
+
+    addErrorLog("HVSC extraction failed", { error: "Invalid 7z header" });
+
+    expect(getLogs()[0].level).toBe("error");
+  });
+});

@@ -17,6 +17,7 @@ import { getHvscDurationsByMd5Seconds } from "@/lib/hvsc";
 import { applyConfigFileReference, ensureConfigFileReferenceAccessible } from "@/lib/config/applyConfigFileReference";
 import { markRemotePlaybackStopped } from "@/lib/playback/activePlaybackSession";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
+import { recordNetworkStatus, resetNetworkStatusWatchForTests } from "@/lib/connection/networkStatusWatch";
 import {
   buildEnabledSidMuteUpdates,
   buildEnabledSidUnmuteUpdates,
@@ -79,6 +80,7 @@ vi.mock("@/lib/logging", () => ({
 }));
 
 vi.mock("@/lib/uiErrors", () => ({
+  DEVICE_NOT_CONNECTED_MESSAGE: "Device not connected. Check connection settings.",
   reportUserError: vi.fn(),
 }));
 
@@ -2804,6 +2806,55 @@ describe("usePlaybackController", () => {
       expect(vi.mocked(toast)).toHaveBeenCalledWith(
         expect.objectContaining({ description: expect.stringContaining("No C64 Ultimate is connected") }),
       );
+    });
+
+    // Leaving home with a playlist of tunes kept on the Ultimate: the next tune cannot be reached, and
+    // trying to meant failed FTP and REST calls, error logs and a red "Playback next failed" toast.
+    describe("when the phone has no network", () => {
+      const ultimateSid = (id: string) =>
+        createPlaylistItem({
+          id,
+          category: "sid",
+          label: `${id}.sid`,
+          path: `/USB2/MUSICIANS/${id}.sid`,
+          durationMs: 120_000,
+          request: { source: "ultimate", path: `/USB2/MUSICIANS/${id}.sid` },
+        });
+      const armedGuard = (trackInstanceId: number) => ({
+        current: { trackInstanceId, dueAtMs: 0, autoFired: false, userCancelled: false },
+      });
+
+      afterEach(() => resetNetworkStatusWatchForTests());
+
+      it("ends an auto-advance onto a tune kept on the Ultimate without asking the device", async () => {
+        const ensurePlaybackConnection = vi.fn().mockResolvedValue(undefined);
+        const setIsPlaying = vi.fn();
+        const playlist = [ultimateSid("one"), ultimateSid("two")];
+        const { result } = renderPlaybackController(playlist, {
+          isPlaying: true,
+          setIsPlaying,
+          ensurePlaybackConnection,
+          trackInstanceIdRef: { current: 1 },
+          autoAdvanceGuardRef: armedGuard(1),
+        });
+        recordNetworkStatus({ online: true, supported: true });
+        recordNetworkStatus({ online: false, supported: true });
+
+        await act(async () => {
+          await result.current.handleNext("auto", 1);
+        });
+
+        expect(ensurePlaybackConnection).not.toHaveBeenCalled();
+        expect(vi.mocked(tryFetchUltimateSidBlob)).not.toHaveBeenCalled();
+        expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+        expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+          expect.objectContaining({
+            operation: "PLAYBACK_NEXT",
+            description: "Device not connected. Check connection settings.",
+          }),
+        );
+        expect(setIsPlaying).toHaveBeenCalledWith(false);
+      });
     });
 
     it("falls a ROM-dependent RSID back to the C64", async () => {

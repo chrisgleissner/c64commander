@@ -23,6 +23,8 @@ type ToasterToast = ToastProps & {
   description?: React.ReactNode;
   action?: ToastActionElement;
   onToastDismiss?: () => void;
+  /** Shown even when notifications are set to errors only: the one answer to an action that could not run. */
+  alwaysVisible?: boolean;
 };
 
 let count = 0;
@@ -206,7 +208,7 @@ export const __clearToastStateForTests = () => {
 
 function toast({ ...props }: Toast) {
   // Suppress non-error notifications when visibility is set to errors-only.
-  if (loadNotificationVisibility() === "errors-only" && props.variant !== "destructive") {
+  if (loadNotificationVisibility() === "errors-only" && props.variant !== "destructive" && !props.alwaysVisible) {
     return noopToastHandle();
   }
 

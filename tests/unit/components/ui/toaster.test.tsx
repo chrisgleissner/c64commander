@@ -113,6 +113,15 @@ describe("Toaster", () => {
     capturedToastProps.value = [];
   });
 
+  // `alwaysVisible` only steers the errors-only filter; spread onto the Radix root it would reach the DOM.
+  it("does not hand the always-visible marker to the toast element", async () => {
+    mockToasts.value = [{ id: "offline", title: "Offline", alwaysVisible: true } as (typeof mockToasts.value)[number]];
+    render(<Toaster />);
+
+    const { Toast } = await import("@/components/ui/toast");
+    expect(vi.mocked(Toast).mock.calls[0][0]).not.toHaveProperty("alwaysVisible");
+  });
+
   it("renders provider and viewport when there are no toasts", () => {
     render(<Toaster />);
     expect(screen.getByTestId("toast-provider")).toBeInTheDocument();
