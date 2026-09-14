@@ -1314,11 +1314,15 @@ describe("connectionManager", () => {
       }),
     );
 
+    await vi.advanceTimersByTimeAsync(50);
+    const probedAtBefore = getConnectionSnapshot().lastProbeAtMs;
     await discoverConnection("background");
     await vi.advanceTimersByTimeAsync(50);
 
     expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+    // The pinned session probed the real device every five seconds, although it would never switch.
+    expect(getConnectionSnapshot().lastProbeAtMs).toBe(probedAtBefore);
   });
 
   it("pinDemoModeByUserChoice immediately activates demo mode from the offline interstitial", async () => {

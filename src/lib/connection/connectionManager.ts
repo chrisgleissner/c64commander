@@ -1291,6 +1291,8 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
 
   if (trigger === "background") {
     if (snapshot.state !== "DEMO_ACTIVE" && snapshot.state !== "OFFLINE_NO_DEMO") return;
+    // Demo Mode the user chose stays until they leave it, so probing the real device every tick only loads it.
+    if (snapshot.state === "DEMO_ACTIVE" && demoModePinnedByUser) return;
     // The slot is claimed before the first await so an overlapping background call
     // still returns at the `activeDiscovery` guard above instead of racing this one.
     const abort = new AbortController();
@@ -1313,10 +1315,6 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
         addLog("info", "Discovery probe succeeded", { trigger });
         if (isSmokeModeEnabled()) {
           console.info("C64U_PROBE_OK", JSON.stringify({ trigger }));
-        }
-        if (snapshot.state === "DEMO_ACTIVE" && demoModePinnedByUser) {
-          addLog("info", "Real device detected during pinned demo mode", { trigger });
-          return;
         }
         if (snapshot.state === "DEMO_ACTIVE") {
           addLog("info", "Real device detected during demo mode", { trigger });
