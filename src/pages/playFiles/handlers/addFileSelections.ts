@@ -34,7 +34,7 @@ import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import type { SonglengthsFileEntry } from "@/pages/playFiles/hooks/useSonglengths";
 import type { SonglengthResolutionOptions } from "@/pages/playFiles/songlengthsResolution";
-import { isSonglengthsFileName } from "@/lib/sid/songlengthsDiscovery";
+import { isSonglengthsFileName, mayHoldSonglengthsFile } from "@/lib/sid/songlengthsDiscovery";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
@@ -935,10 +935,14 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                 return normalizeSourcePath(trimmed || "/");
               }),
             );
-            for (const folder of foldersToScan) {
+            // Shallowest first, so a folder whose parent was listed without it is skipped rather than asked for.
+            const listed = new Map<string, SourceEntry[]>();
+            for (const folder of [...foldersToScan].sort((a, b) => a.length - b.length)) {
+              if (!mayHoldSonglengthsFile(folder, listed)) continue;
               try {
                 throwIfAborted();
                 const entries = await source.listEntries(folder);
+                listed.set(normalizeSourcePath(folder).replace(/(.)\/+$/, "$1"), entries);
                 throwIfAborted();
                 const songEntry = entries.find((entry) => entry.type === "file" && isSonglengthsFileName(entry.name));
                 if (!songEntry) continue;
@@ -997,10 +1001,14 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                 return normalizeSourcePath(trimmed || "/");
               }),
             );
-            for (const folder of foldersToScan) {
+            // Shallowest first, so a folder whose parent was listed without it is skipped rather than asked for.
+            const listed = new Map<string, SourceEntry[]>();
+            for (const folder of [...foldersToScan].sort((a, b) => a.length - b.length)) {
+              if (!mayHoldSonglengthsFile(folder, listed)) continue;
               try {
                 throwIfAborted();
                 const entries = await source.listEntries(folder);
+                listed.set(normalizeSourcePath(folder).replace(/(.)\/+$/, "$1"), entries);
                 throwIfAborted();
                 const songEntry = entries.find((entry) => entry.type === "file" && isSonglengthsFileName(entry.name));
                 if (!songEntry) continue;

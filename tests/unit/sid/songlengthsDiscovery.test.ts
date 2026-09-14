@@ -14,6 +14,7 @@ import {
   DOCUMENTS_FOLDER,
   HVSC_FOLDER,
   isSonglengthsFileName,
+  mayHoldSonglengthsFile,
   SONGLENGTHS_FILE_NAMES,
 } from "@/lib/sid/songlengthsDiscovery";
 
@@ -115,6 +116,36 @@ describe("songlengthsDiscovery", () => {
 
     it("returns empty array for empty input", () => {
       expect(collectSonglengthsSearchPaths([])).toEqual([]);
+    });
+  });
+
+  describe("mayHoldSonglengthsFile", () => {
+    const listed = new Map([
+      ["/", [{ type: "dir", name: "USB2" }]],
+      [
+        "/USB2",
+        [
+          { type: "dir", name: "Musicians" },
+          { type: "file", name: "HVSC" },
+        ],
+      ],
+    ]);
+
+    it("skips a folder that the nearest listed ancestor does not contain", () => {
+      expect(mayHoldSonglengthsFile("/DOCUMENTS/", listed)).toBe(false);
+      expect(mayHoldSonglengthsFile("/HVSC/C64Music/DOCUMENTS/", listed)).toBe(false);
+      // A file with the folder's name is not the folder.
+      expect(mayHoldSonglengthsFile("/USB2/HVSC/DOCUMENTS/", listed)).toBe(false);
+    });
+
+    it("keeps a folder that its listed ancestor contains, ignoring case", () => {
+      expect(mayHoldSonglengthsFile("/USB2/", listed)).toBe(true);
+      expect(mayHoldSonglengthsFile("/USB2/MUSICIANS/T/DOCUMENTS/", listed)).toBe(true);
+    });
+
+    it("keeps every folder while nothing above it has been listed", () => {
+      expect(mayHoldSonglengthsFile("/", new Map())).toBe(true);
+      expect(mayHoldSonglengthsFile("/USB2/DOCUMENTS/", new Map())).toBe(true);
     });
   });
 });
