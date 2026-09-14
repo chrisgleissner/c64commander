@@ -98,6 +98,27 @@ describe("ssh discovery", () => {
     });
   });
 
+  it("leaves out a neighbour that does not answer SSH, such as a phone sharing its connection over USB", async () => {
+    const system = new FakeSshSystem().addUsbInterface("enxtether", {
+      cidr: "10.42.0.37/24",
+      arp: [{ address: "10.42.0.1", mac: "0a:11:22:33:44:55" }],
+    });
+    const quiet = new FakePhone({ host: "10.42.0.1", sshPort: { kind: "refused" } }, system);
+    expect(await quiet.transport().listTargets()).toEqual([]);
+    expect(quiet.system.tcpCalls).toEqual(["10.42.0.1:22"]);
+
+    const answering = new FakePhone(
+      { host: "10.42.0.1", login: { exitCode: 255, stderr: "Permission denied (publickey).\n" } },
+      system,
+    );
+    const [target] = await answering.transport().listTargets();
+    expect(target).toMatchObject({ targetId: "ssh:defaultuser@10.42.0.1", state: "unauthorized" });
+
+    system.env = { DROIDCTL_SSH_HOSTS: "10.42.0.1" };
+    const configured = new FakePhone({ host: "10.42.0.1", sshPort: { kind: "refused" } }, system);
+    expect((await configured.transport().listTargets()).map((entry) => ids(entry))).toEqual([["developer-mode"]]);
+  });
+
   it("fails the listing with the configuration problem when the configuration is invalid", async () => {
     const system = new FakeSshSystem();
     system.env = { DROIDCTL_SSH_PORT: "nope" };

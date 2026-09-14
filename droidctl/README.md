@@ -113,7 +113,9 @@ the next; `droidctl://reference/ssh-transport` serves the same list.
 2. For each USB network interface bound to a USB gadget driver (`rndis_host`, `cdc_ether`, `cdc_ncm`,
    `cdc_eem`, `cdc_subset`), take `192.168.2.15` when it is inside the interface's subnet, plus any
    neighbour with a locally administered MAC address. Configured hosts are always added. A USB
-   Ethernet adapter binds a chipset driver and is never probed.
+   Ethernet adapter binds a chipset driver and is never probed. A neighbour that does not answer on
+   the SSH port, such as a phone sharing its connection over USB, is left out of the listing; the
+   conventional address and configured hosts are listed with the prerequisite instead.
 3. Connect to the SSH port.
 4. Log in with a key (`BatchMode=yes`, so a missing key fails instead of prompting) and run one probe
    script that reports uid, passwordless sudo, whether `system_server` is running, listening TCP

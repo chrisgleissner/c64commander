@@ -64,7 +64,8 @@ export const PULL_MAX_BYTES = 512 * 1024 * 1024;
 export const SSH_DETECTION_ORDER: readonly string[] = [
   "Configuration: DROIDCTL_SSH_* variables and the optional ssh.json file are read and validated.",
   "Discovery: each USB network interface bound to a USB-gadget driver contributes 192.168.2.15 when that address " +
-    "is in its subnet, and neighbours with a locally administered MAC. Configured hosts are always included.",
+    "is in its subnet, and neighbours with a locally administered MAC. Configured hosts are always included. A " +
+    "neighbour that does not answer on the SSH port is left out of the listing.",
   "SSH port: a TCP connection to the host's SSH port succeeds.",
   "SSH login: a non-interactive key login runs the host probe, which reports uid, passwordless sudo, whether " +
     "system_server is running, listening TCP sockets and candidate container attach helpers.",
@@ -202,7 +203,11 @@ export interface SshTransportOptions {
 interface WantedHost {
   readonly settings: SshHostSettings;
   readonly via: string;
+  readonly neighbourOnly: boolean;
 }
+
+/** Nothing answering SSH on a neighbour is most likely another USB network device, not a phone to report. */
+const NOT_A_PHONE = new Set(["developer-mode", "host-unreachable"]);
 
 interface HostState {
   readonly serial: string;
@@ -323,12 +328,20 @@ export class SshTransport implements Transport {
 
     const wanted = new Map<string, WantedHost>();
     for (const configured of config.hosts) {
-      wanted.set(sshSerial(configured.settings), { settings: configured.settings, via: configured.source });
+      wanted.set(sshSerial(configured.settings), {
+        settings: configured.settings,
+        via: configured.source,
+        neighbourOnly: false,
+      });
     }
     for (const found of discovered.hosts) {
       const configured = config.hosts.find((entry) => entry.settings.host === found.host);
       const settings = configured?.settings ?? { ...config.defaults, host: found.host };
-      wanted.set(sshSerial(settings), { settings, via: `usb-network ${found.interfaceName} (${found.driver})` });
+      wanted.set(sshSerial(settings), {
+        settings,
+        via: `usb-network ${found.interfaceName} (${found.driver})`,
+        neighbourOnly: found.neighbourOnly && configured === undefined,
+      });
     }
 
     for (const [serial, state] of [...this.hosts]) {
@@ -350,10 +363,13 @@ export class SshTransport implements Transport {
     }
 
     const tunnelTargets = await this.listTunnelTargets();
-    const states = await Promise.all(
-      [...wanted.values()].map((host) => this.refresh(host, tunnelTargets, discovered.problems)),
-    );
-    return states.map((state) => this.toTargetInfo(state));
+    const hosts = [...wanted.values()];
+    const states = await Promise.all(hosts.map((host) => this.refresh(host, tunnelTargets, discovered.problems)));
+    return states
+      .filter(
+        (state, index) => !(hosts[index]!.neighbourOnly && NOT_A_PHONE.has(state.diagnosis.blockers[0]?.id ?? "")),
+      )
+      .map((state) => this.toTargetInfo(state));
   }
 
   async exec(target: ResolvedTarget, argv: readonly string[], opts: ExecOptions = {}): Promise<ExecResult> {

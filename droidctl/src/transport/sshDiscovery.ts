@@ -218,6 +218,8 @@ export interface DiscoveredHost {
   readonly host: string;
   readonly interfaceName: string;
   readonly driver: string;
+  /** Only a neighbour: also what a phone sharing its connection over USB looks like. */
+  readonly neighbourOnly: boolean;
 }
 
 /**
@@ -256,7 +258,14 @@ export function discoverUsbHosts(interfaces: readonly UsbNetworkInterface[]): {
       );
       continue;
     }
-    hosts.push(...peers.map((host) => ({ host, interfaceName: iface.name, driver: iface.driver })));
+    hosts.push(
+      ...peers.map((host) => ({
+        host,
+        interfaceName: iface.name,
+        driver: iface.driver,
+        neighbourOnly: host !== DEFAULT_USB_HOST,
+      })),
+    );
   }
   return { hosts, problems };
 }

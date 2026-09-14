@@ -101,8 +101,8 @@ describe("USB network interface discovery", () => {
     ]);
 
     expect(hosts).toEqual([
-      { host: "192.168.2.15", interfaceName: "usb0", driver: "cdc_ether" },
-      { host: "192.168.2.20", interfaceName: "usb0", driver: "cdc_ether" },
+      { host: "192.168.2.15", interfaceName: "usb0", driver: "cdc_ether", neighbourOnly: false },
+      { host: "192.168.2.20", interfaceName: "usb0", driver: "cdc_ether", neighbourOnly: true },
     ]);
     expect(problems.map((problem) => problem.id)).toEqual([
       "usb-network-peer",
