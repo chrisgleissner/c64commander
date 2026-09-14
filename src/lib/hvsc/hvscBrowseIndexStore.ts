@@ -572,10 +572,13 @@ export const clearHvscBrowseIndexSnapshot = async () => {
         path: STORAGE_PATH,
       });
     } catch (error) {
-      addLog("warn", "Failed to delete HVSC browse snapshot", {
-        path: STORAGE_PATH,
-        error: (error as Error).message,
-      });
+      // Clearing a snapshot that was never written, as a reset before the first index does, is not a failure.
+      if (!isFileNotFoundError(error)) {
+        addLog("warn", "Failed to delete HVSC browse snapshot", {
+          path: STORAGE_PATH,
+          error: (error as Error).message,
+        });
+      }
     }
     try {
       await Filesystem.deleteFile({
@@ -583,10 +586,12 @@ export const clearHvscBrowseIndexSnapshot = async () => {
         path: MEDIA_INDEX_STORAGE_PATH,
       });
     } catch (error) {
-      addLog("warn", "Failed to delete HVSC media snapshot", {
-        path: MEDIA_INDEX_STORAGE_PATH,
-        error: (error as Error).message,
-      });
+      if (!isFileNotFoundError(error)) {
+        addLog("warn", "Failed to delete HVSC media snapshot", {
+          path: MEDIA_INDEX_STORAGE_PATH,
+          error: (error as Error).message,
+        });
+      }
     }
   }
   if (typeof localStorage !== "undefined") {

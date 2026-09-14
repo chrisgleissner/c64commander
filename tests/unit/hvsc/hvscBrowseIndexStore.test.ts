@@ -195,6 +195,25 @@ describe("hvscBrowseIndexStore", () => {
     await clearHvscBrowseIndexSnapshot();
   });
 
+  // A reset before the first index has no snapshot files to delete; that absence is not a failure.
+  it("does not warn when the snapshots being cleared were never written", async () => {
+    vi.mocked(Filesystem.deleteFile).mockRejectedValue(new Error("File does not exist"));
+
+    await clearHvscBrowseIndexSnapshot();
+
+    expect(Filesystem.deleteFile).toHaveBeenCalledTimes(2);
+    expect(addLog).not.toHaveBeenCalledWith("warn", expect.anything(), expect.anything());
+  });
+
+  it("still warns when a snapshot exists but cannot be deleted", async () => {
+    vi.mocked(Filesystem.deleteFile).mockRejectedValue(new Error("Permission denied"));
+
+    await clearHvscBrowseIndexSnapshot();
+
+    expect(addLog).toHaveBeenCalledWith("warn", "Failed to delete HVSC browse snapshot", expect.anything());
+    expect(addLog).toHaveBeenCalledWith("warn", "Failed to delete HVSC media snapshot", expect.anything());
+  });
+
   it("creates empty snapshot with correct schema", async () => {
     const { createEmptyHvscBrowseIndexSnapshot } = await import("@/lib/hvsc/hvscBrowseIndexStore");
     const empty = createEmptyHvscBrowseIndexSnapshot();
