@@ -208,7 +208,12 @@ import { getStoredFtpPort, setStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { FolderPicker, type SafPersistedUri } from "@/lib/native/folderPicker";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
-import { discoverConnection, getConnectionSnapshot, pinDemoModeByUserChoice } from "@/lib/connection/connectionManager";
+import {
+  discoverConnection,
+  getConnectionSnapshot,
+  isDemoModePinnedByUser,
+  pinDemoModeByUserChoice,
+} from "@/lib/connection/connectionManager";
 import { evaluateNewDeviceReachability } from "@/lib/connection/addDeviceReachability";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
@@ -1699,11 +1704,13 @@ export default function SettingsPage() {
                   </HelperText>
                   {isDemoActive ? (
                     <HelperText>
-                      {lastProbeSucceededAtMs
-                        ? "Real device detected during probe."
-                        : lastProbeFailedAtMs
-                          ? "No real device detected in recent probe."
-                          : (connectionSnapshot.lastProbeError ?? "Waiting for initial probe.")}
+                      {isDemoModePinnedByUser()
+                        ? "Demo Mode stays on until you connect to a real device."
+                        : lastProbeSucceededAtMs
+                          ? "Real device detected during probe."
+                          : lastProbeFailedAtMs
+                            ? "No real device detected in recent probe."
+                            : (connectionSnapshot.lastProbeError ?? "Waiting for initial probe.")}
                     </HelperText>
                   ) : null}
                 </div>

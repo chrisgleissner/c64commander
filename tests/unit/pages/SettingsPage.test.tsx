@@ -112,7 +112,9 @@ const {
   developerModeEnabledRef,
   featureFlagsRef,
   savedDevicesRef,
+  demoModePinnedRef,
 } = vi.hoisted(() => ({
+  demoModePinnedRef: { current: false },
   mockUpdateConfig: vi.fn(),
   mockRefetch: vi.fn(),
   mockEnableDeveloperMode: vi.fn(),
@@ -480,6 +482,7 @@ vi.mock("@/lib/connection/connectionManager", () => ({
   discoverConnection: vi.fn(),
   dismissDemoInterstitial: vi.fn(),
   getConnectionSnapshot: mockGetConnectionSnapshot,
+  isDemoModePinnedByUser: () => demoModePinnedRef.current,
 }));
 
 vi.mock("@/lib/connection/addDeviceReachability", () => ({
@@ -731,6 +734,7 @@ beforeEach(() => {
     lastProbeSucceededAtMs: null,
     lastProbeFailedAtMs: null,
   };
+  demoModePinnedRef.current = false;
   appStyleStateRef.current = {
     storedStyleId: "cool-grey",
     isMatchMyDevice: false,
@@ -2184,6 +2188,21 @@ describe("SettingsPage", () => {
     expect(line).toHaveTextContent("HTTP 43499");
     expect(line).not.toHaveTextContent("192.168.1.146");
     expect(line).not.toHaveTextContent("Telnet");
+  });
+
+  // Demo Mode the user chose no longer probes for a real device, so a probe result would only be stale.
+  it("says Demo Mode stays on when the user chose it, instead of a stale probe result", () => {
+    connectionPayloadRef.current = {
+      ...connectionPayloadRef.current,
+      status: { state: "DEMO_ACTIVE", isConnected: true, isConnecting: false, error: null, deviceInfo: null },
+    };
+    connectionStateRef.current = { lastProbeSucceededAtMs: null, lastProbeFailedAtMs: Date.now() };
+    demoModePinnedRef.current = true;
+
+    renderSettingsPage();
+
+    expect(screen.getByText("Demo Mode stays on until you connect to a real device.")).toBeInTheDocument();
+    expect(screen.queryByText(/no real device detected/i)).not.toBeInTheDocument();
   });
 
   it("shows the connected status message when a real device is connected", () => {

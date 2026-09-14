@@ -442,6 +442,8 @@ const DEMO_MODE_DECLINED_SESSION_KEY = "c64u_demo_mode_declined";
 let stickyRealDeviceLock = false;
 let discoveryRunToken = 0;
 let demoModePinnedByUser = false;
+/** Demo Mode the user chose stays until they leave it; nothing probes for a real device meanwhile. */
+export const isDemoModePinnedByUser = () => demoModePinnedByUser;
 let demoModeDeclinedByUser = false;
 let activeManualDiscovery: { trigger: DiscoveryTrigger; promise: Promise<void> } | null = null;
 // HARD18-007: rate-limits the manual-trigger sweep+LAN-scan escalation
@@ -608,9 +610,7 @@ export const noteReachable = (host: string, source: ReachabilitySource, deviceIn
     clearConnectivityErrorToastsForHost(activeHost);
   }
 
-  if (snapshot.state !== "OFFLINE_NO_DEMO" && snapshot.state !== "DISCOVERING") {
-    return;
-  }
+  if (snapshot.state !== "OFFLINE_NO_DEMO" && snapshot.state !== "DISCOVERING") return;
   // A switch connects with its target's routing when its probe answers; promoting here too ran it twice.
   if (snapshot.state === "DISCOVERING" && snapshot.lastDiscoveryTrigger === "switch") return;
 
