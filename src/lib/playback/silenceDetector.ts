@@ -124,4 +124,12 @@ export class SilenceDetector {
   get isFaulty(): boolean {
     return this.flatSeconds >= this.toleranceSeconds;
   }
+
+  /**
+   * The same judgement for a pipeline that is still holding `unheardSeconds` of what was handed over.
+   * A tune that ends flat with a full buffer behind it has not yet been silent for the listener at all.
+   */
+  isFaultyAfterQueue(unheardSeconds: number): boolean {
+    return this.flatSeconds - Math.max(0, unheardSeconds) >= this.toleranceSeconds;
+  }
 }

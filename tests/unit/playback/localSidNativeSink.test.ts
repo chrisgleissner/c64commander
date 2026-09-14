@@ -107,6 +107,29 @@ describe("on-device playback through the native track", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
+  // Chess II ends flat at 3:28 with about 12 s still queued. Counting written silence called that a
+  // fault just before the playlist moved on, logged "Local SID playback is silent" and re-opened it.
+  it("judges silence by what has reached the speaker, not by what is still queued", async () => {
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend);
+    const flat = (seconds: number, when: number) => {
+      const buffer = sink!.sink.createBuffer(2, Math.round(seconds * RATE), RATE);
+      sink!.sink.createSource(buffer).start(when);
+    };
+    backend.bufferedMs = 11_900;
+    for (let second = 0; second < 13; second += 1) flat(1, second);
+    await settle();
+    await vi.advanceTimersByTimeAsync(2000);
+    await settle();
+
+    expect(sink!.isSilentFault!()).toBe(false);
+
+    backend.bufferedMs = 0;
+    await vi.advanceTimersByTimeAsync(2000);
+    await settle();
+    expect(sink!.isSilentFault!()).toBe(true);
+  });
+
   it("is unavailable off a native platform, so the caller can fall back to Web Audio", () => {
     expect(createNativeLocalSidSink(RATE, null)).toBeNull();
   });

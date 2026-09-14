@@ -349,9 +349,13 @@ class NativeLocalSidSink implements AudioScheduleSink {
     return this.silence.silentSeconds;
   }
 
-  /** True once the flat stretch has gone on long enough to be a fault rather than a rest. */
+  /**
+   * True once the listener has heard a flat stretch long enough to be a fault rather than a rest.
+   * Judged at the playhead: counting what was merely written raised a fault at the end of every tune
+   * that ends flat, because the buffer runs about as far ahead as the tolerance.
+   */
   isSilentFault(): boolean {
-    return this.silence.isFaulty;
+    return this.silence.isFaultyAfterQueue(this.queuedSec);
   }
 
   /** Called when a new tune starts or playback resumes, so a fresh attempt is judged afresh. */
