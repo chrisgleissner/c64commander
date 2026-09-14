@@ -11,9 +11,10 @@ import { render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getCategory = vi.fn();
+const getCategories = vi.fn();
 let connectionState = "REAL_CONNECTED";
 
-vi.mock("@/lib/c64api", () => ({ getC64API: () => ({ getCategory }) }));
+vi.mock("@/lib/c64api", () => ({ getC64API: () => ({ getCategory, getCategories }) }));
 vi.mock("@/hooks/useConnectionState", () => ({ useConnectionState: () => ({ state: connectionState }) }));
 vi.mock("@/hooks/useC64Connection", () => ({ useConnectionRoutingEpoch: () => 0 }));
 
@@ -33,6 +34,8 @@ const SOCKET_1_IS_6581 = {
 beforeEach(() => {
   localStorage.clear();
   getCategory.mockReset();
+  getCategories.mockReset();
+  getCategories.mockResolvedValue({ categories: ["SID Sockets Configuration"], errors: [] });
   connectionState = "REAL_CONNECTED";
 });
 
@@ -72,9 +75,9 @@ describe("LocalSidModelDriver", () => {
   });
 
   it("never lets an unreachable machine surface as a failure", async () => {
-    getCategory.mockRejectedValue(new Error("Host unreachable"));
+    getCategories.mockRejectedValue(new Error("Host unreachable"));
     render(<LocalSidModelDriver />);
-    await waitFor(() => expect(getCategory).toHaveBeenCalled());
+    await waitFor(() => expect(getCategories).toHaveBeenCalled());
     expect(loadLearnedDeviceSidModel()).toBeNull();
     expect(resolveLocalSidModel()).toBe("8580");
   });

@@ -129,6 +129,10 @@ const isMissingCategory = (error: unknown): boolean =>
  * {@link resolveSocketSidModel}).
  */
 export const readDeviceSidModel = async (api: C64API): Promise<DeviceSidModelReading | null> => {
+  // Only a machine that lists SID sockets has them: an Ultimate II+L answered the request with a 404,
+  // logged as an error and counted on the badge.
+  const { categories } = await api.getCategories({ __c64uIntent: "background" });
+  if (!categories?.includes(SID_SOCKETS_CATEGORY)) return null;
   const socketsPayload = await api.getCategory(SID_SOCKETS_CATEGORY, { __c64uIntent: "background" });
   const details = new Map<1 | 2, unknown>();
   for (const socket of [1, 2] as const) {
@@ -138,6 +142,7 @@ export const readDeviceSidModel = async (api: C64API): Promise<DeviceSidModelRea
     // A socket that already names a revision needs nothing more, and a socket that reports nothing
     // at all has no category to read.
     if (asModel(detected) || !String(detected ?? "").trim()) continue;
+    if (!categories.includes(socketDetailCategory(socket, detected))) continue;
     try {
       details.set(
         socket,
