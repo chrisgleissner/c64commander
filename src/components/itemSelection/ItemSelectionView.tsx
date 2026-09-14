@@ -120,7 +120,15 @@ export const ItemSelectionView = ({
                   : undefined
               }
             >
-              <div className="shrink-0">
+              {/* A 44 px box around the 18 px checkbox, centred on it: a tap just beside the box opened the folder. */}
+              <div
+                className="-mx-[13px] -my-2 flex h-11 w-11 shrink-0 items-center justify-center"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if ((event.target as HTMLElement).closest('[role="checkbox"]')) return;
+                  if (canSelect) onToggleSelect(entry);
+                }}
+              >
                 <Checkbox
                   id={`select-${entry.name}`}
                   checked={isSelected}
