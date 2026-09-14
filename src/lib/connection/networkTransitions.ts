@@ -11,6 +11,7 @@ import {
   getConnectionSnapshot,
   noteDeviceUnreachable,
   probeOnce,
+  releaseDemoModeChosenWithoutNetwork,
   subscribeConnection,
   type ConnectionState,
 } from "@/lib/connection/connectionManager";
@@ -46,6 +47,9 @@ let reconnectRun = 0;
 
 export const reconnectWhenNetworkReturns = async () => {
   const run = ++reconnectRun;
+  if (!isNetworkKnownOffline() && releaseDemoModeChosenWithoutNetwork()) {
+    addLog("info", "Network is back; looking for the real device again after Demo Mode chosen without one");
+  }
   for (const delayMs of RECONNECT_ATTEMPT_DELAYS_MS) {
     if (delayMs > 0) await wait(delayMs);
     if (run !== reconnectRun || isNetworkKnownOffline()) return;
