@@ -223,6 +223,8 @@ const loadSwitchConnectionConfig = (options: { deviceHost: string; password?: st
 };
 
 const PROBE_REQUEST_OPTIONS = {
+  // A probe exists to find out whether the device answers; "no" is a result, not a fault to count.
+  __c64uExpectedFailure: true,
   __c64uIntent: "system",
   __c64uAllowDuringDiscovery: true,
   __c64uAllowDuringError: true,
@@ -264,7 +266,7 @@ const classifyProbeFailure = (error: unknown, config: ProbeConnectionConfig): Pr
   // so the connection snapshot, UnifiedHealthBadge, and downstream diagnostics
   // see a user-friendly message instead of the raw fetch error text.
   const failure = normalizeTransportError(error, { host: config.deviceHost });
-  addLog(failure.class === "dns" ? "info" : "warn", "Probe request failed", {
+  addLog("info", "Probe request failed", {
     baseUrl: config.baseUrl,
     deviceHost: config.deviceHost,
     class: failure.class,

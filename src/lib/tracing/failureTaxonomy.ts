@@ -108,7 +108,9 @@ export const classifyError = (error: unknown, categoryHint?: FailureCategory): F
     }
   }
 
-  const isExpected = category === "cancelled" || category === "user";
+  // A request made to find out whether the device answers (a probe) marks "no" as expected.
+  const markedExpected = (error as { c64uExpectedFailure?: unknown } | null)?.c64uExpectedFailure === true;
+  const isExpected = category === "cancelled" || category === "user" || markedExpected;
 
   let failureClass: FailureClass = "unknown";
   if (isStructuredCancellation || isAbortError(err, message)) {

@@ -200,12 +200,14 @@ type RestFailureKind = "timeout" | "abort" | "network" | "http-status";
 const annotateRestFailure = <T extends Error>(
   error: T,
   kind: RestFailureKind,
-  details: { httpStatus?: number; callerCancelled?: boolean } = {},
+  details: { httpStatus?: number; callerCancelled?: boolean; expected?: boolean } = {},
 ): T => {
   Object.assign(error, {
     c64uRestFailureKind: kind,
     ...(details.httpStatus !== undefined ? { c64uHttpStatus: details.httpStatus } : {}),
     ...(details.callerCancelled ? { c64uCallerCancelled: true } : {}),
+    // Carried to the action trace, which classifies the thrown error without seeing the request options.
+    ...(details.expected ? { c64uExpectedFailure: true } : {}),
   });
   return error;
 };
@@ -1814,7 +1816,7 @@ export class C64API {
                     const err = annotateRestFailure(
                       new Error(buildHttpErrorMessage(response.status, response.statusText)),
                       "http-status",
-                      { httpStatus: response.status },
+                      { httpStatus: response.status, expected: expectedFailureOption },
                     );
                     const failure = classifyError(err, "integration");
                     const expectedFailure =
@@ -2029,6 +2031,7 @@ export class C64API {
                     throw annotateRestFailure(
                       new Error(resolveHostErrorMessage(rawMessage)),
                       timedSignal.didTimeout() || /timed out/i.test(rawMessage) ? "timeout" : "network",
+                      { expected: expectedFailureOption },
                     );
                   }
                   throw error;

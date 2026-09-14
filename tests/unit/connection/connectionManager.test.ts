@@ -2110,6 +2110,51 @@ describe("connectionManager", () => {
     addLogSpy.mockRestore();
   });
 
+  // A probe exists to learn whether the device answers. Counting "no" as a failure put a problem count
+  // on the badge after every return home whose first probe beat the Wi-Fi route.
+  it("records a failed discovery probe's REST response as an expected failure", async () => {
+    const manager = await reachOffline();
+    const traces = await import("../../../src/lib/tracing/traceSession");
+    traces.clearTraceEvents();
+
+    await manager.probeOnce();
+
+    const responses = traces.getTraceEvents().filter((event) => event.type === "rest-response");
+    expect(responses.length).toBeGreaterThan(0);
+    expect(responses.every((event) => event.data.expectedFailure === true)).toBe(true);
+  });
+
+  it("logs an unanswered probe at info while the device is already shown absent", async () => {
+    const manager = await reachOffline();
+    const addLogSpy = vi.spyOn(logging, "addLog");
+
+    await manager.probeOnce();
+
+    const levels = addLogSpy.mock.calls.filter((call) => call[1] === "Probe request failed").map((call) => call[0]);
+    expect(levels).toContain("info");
+    expect(levels).not.toContain("warn");
+    addLogSpy.mockRestore();
+  });
+
+  it("logs an unanswered probe at info while the device is shown connected too", async () => {
+    const manager = await import("../../../src/lib/connection/connectionManager");
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+    vi.mocked(fetch).mockResolvedValueOnce(deviceAnswer());
+    await manager.initializeConnectionManager();
+    void manager.discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(50);
+    expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+    const addLogSpy = vi.spyOn(logging, "addLog");
+
+    await manager.probeOnce();
+
+    expect(addLogSpy).toHaveBeenCalledWith("info", "Probe request failed", expect.anything());
+    expect(addLogSpy).not.toHaveBeenCalledWith("warn", "Probe request failed", expect.anything());
+    addLogSpy.mockRestore();
+  });
+
   it("shows a connected device offline when it becomes unreachable, and ignores that in other states", async () => {
     const manager = await reachOffline();
 

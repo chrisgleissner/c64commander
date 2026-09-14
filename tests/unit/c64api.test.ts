@@ -1716,6 +1716,20 @@ describe("c64api", () => {
       expect(unreachable).toHaveBeenCalledWith("c64u", "rest");
     });
 
+    // A discovery probe asks whether the device answers. Its "no" was still thrown as an unmarked
+    // "Host unreachable", which the action trace counted as an app problem on the badge.
+    it("marks the failure of a request that expects to fail, so the action trace does not count it", async () => {
+      getFetchMock().mockRejectedValue(new TypeError("Failed to fetch"));
+      const { classifyError } = await import("@/lib/tracing/failureTaxonomy");
+
+      const error = await new C64API("http://c64u")
+        .getInfo({ __c64uBypassCache: true, __c64uExpectedFailure: true })
+        .catch((failure: unknown) => failure);
+
+      expect((error as { c64uExpectedFailure?: boolean }).c64uExpectedFailure).toBe(true);
+      expect(classifyError(error).isExpected).toBe(true);
+    });
+
     it("does not report a device that answered with an error", async () => {
       getFetchMock().mockResolvedValue(
         new Response(JSON.stringify({ errors: ["boom"] }), {
