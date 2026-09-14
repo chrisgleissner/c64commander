@@ -994,7 +994,7 @@ export default function PlayFilesPage() {
     setHvscPreparationOpen(false);
   }, [hvsc.handleHvscCancel, hvsc.hvscPreparationState]);
 
-  const resolvedDeviceId = useResolvedPlaybackDeviceId(deviceInfoId);
+  const resolvedDeviceId = useResolvedPlaybackDeviceId(deviceInfoId, status.state === "DEMO_ACTIVE");
   const playlistStorageKey = SHARED_PLAYLIST_STORAGE_KEY;
 
   useEffect(() => {
