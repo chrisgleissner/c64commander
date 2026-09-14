@@ -87,6 +87,7 @@ import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidati
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
 import { notifyReachable, notifyUnreachable } from "@/lib/connection/reachabilityEvents";
 import { readNativeNetworkStatus } from "@/lib/connection/offlineStartup";
+import { isNetworkSettling } from "@/lib/connection/networkStatusWatch";
 import { getLifecycleState } from "@/lib/appLifecycle";
 import { CapacitorHttp } from "@capacitor/core";
 import { buildCreateDiskPlan, type CreateDiskArgs, type CreateDiskPlan } from "@/lib/disks/createDisk";
@@ -136,6 +137,7 @@ const RAM_BLOCK_WRITE_TIMEOUT_MS = 15_000;
 // Formatting a blank image on slow USB media can exceed the normal control budget.
 const DISK_CREATE_REQUEST_TIMEOUT_MS = 30_000;
 const NETWORK_RETRY_DELAY_MS = 180;
+const SETTLING_NETWORK_RETRY_DELAY_MS = 500;
 const SID_UPLOAD_MAX_ATTEMPTS = 3;
 const SID_UPLOAD_RETRYABLE_HTTP_STATUS = new Set([502, 503, 504]);
 const DEDUPEABLE_READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -1711,7 +1713,7 @@ export class C64API {
               const idleContext = getIdleContext();
               const scheduledRequest = intent === "background";
               const requestTimeoutMs = timeoutMs ?? resolveDefaultRestRequestTimeoutMs(intent);
-              const maxAttempts = 1;
+              const maxAttempts = DEDUPEABLE_READ_METHODS.has(method) && !expectedFailureOption ? 2 : 1;
               const requestTrace = await inspectRequestPayload(requestOptions.body);
               let lastError: unknown = null;
               const isSuperseded = () => this.requestGeneration !== requestGeneration;
@@ -1903,6 +1905,11 @@ export class C64API {
                   // everything below see the real cause.
                   const transportFailure = (isNetworkFailure || timedSignal.didTimeout()) && !callerAborted;
                   if (transportFailure) await readNativeNetworkStatus();
+                  // A read dropped by Wi-Fi that has only just come back is repeated once rather than reported.
+                  if (attempt < maxAttempts && isNetworkFailure && !isAbort && !superseded && isNetworkSettling()) {
+                    await wait(SETTLING_NETWORK_RETRY_DELAY_MS);
+                    continue;
+                  }
                   const failure = classifyError(error);
                   const normalizedError =
                     !callerAborted && !superseded && (isAbort || isNetworkFailure)

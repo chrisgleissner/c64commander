@@ -19,13 +19,21 @@ export type NetworkEdge = "online" | "offline";
 type EdgeListener = (edge: NetworkEdge) => void;
 
 let lastStatus: NativeNetworkStatus | null = null;
+let onlineSinceMs: number | null = null;
 const listeners = new Set<EdgeListener>();
+
+/** How long a returning network is given to reach the device before a failed request counts. */
+export const NETWORK_SETTLE_MS = 10_000;
 
 const isOffline = (status: NativeNetworkStatus | null) => status?.supported === true && status.online === false;
 
 export const isNetworkKnownOffline = () => isOffline(lastStatus);
 
 export const getLastNetworkStatus = () => lastStatus;
+
+/** Wi-Fi that has just come back can still drop a request or two while the phone finds the device. */
+export const isNetworkSettling = (now = Date.now()) =>
+  onlineSinceMs !== null && now - onlineSinceMs < NETWORK_SETTLE_MS;
 
 /** Records a status and reports an edge when the phone moves between "no network" and anything else. */
 export const recordNetworkStatus = (status: NativeNetworkStatus) => {
@@ -35,6 +43,7 @@ export const recordNetworkStatus = (status: NativeNetworkStatus) => {
   const nowOffline = isOffline(lastStatus);
   if (!known || wasOffline === nowOffline) return;
   const edge: NetworkEdge = nowOffline ? "offline" : "online";
+  onlineSinceMs = nowOffline ? null : Date.now();
   listeners.forEach((listener) => listener(edge));
 };
 
@@ -47,5 +56,6 @@ export const subscribeNetworkEdges = (listener: EdgeListener) => {
 
 export const resetNetworkStatusWatchForTests = () => {
   lastStatus = null;
+  onlineSinceMs = null;
   listeners.clear();
 };

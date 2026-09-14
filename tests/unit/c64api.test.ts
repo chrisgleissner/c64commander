@@ -1730,6 +1730,61 @@ describe("c64api", () => {
       expect(classifyError(error).isExpected).toBe(true);
     });
 
+    // Coming home, the first read after reconnecting failed with "Host unreachable" while the phone was
+    // still reaching the device. The next request answered, but the badge counted the failed one.
+    describe("while the network that just came back is settling", () => {
+      const infoResponse = () =>
+        new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+
+      beforeEach(async () => {
+        const { recordNetworkStatus } = await import("@/lib/connection/networkStatusWatch");
+        recordNetworkStatus({ online: false, supported: true });
+        recordNetworkStatus({ online: true, supported: true });
+      });
+
+      it("repeats a dropped read once and reports nothing", async () => {
+        getFetchMock().mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValueOnce(infoResponse());
+
+        await expect(new C64API("http://c64u").getInfo({ __c64uBypassCache: true })).resolves.toMatchObject({
+          product: "C64 Ultimate",
+        });
+
+        expect(getFetchMock()).toHaveBeenCalledTimes(2);
+        expect(unreachable).not.toHaveBeenCalled();
+      });
+
+      it("does not repeat a write, which may already have reached the device", async () => {
+        getFetchMock().mockRejectedValue(new TypeError("Failed to fetch"));
+
+        await expect(new C64API("http://c64u").machineReset()).rejects.toThrow();
+
+        expect(getFetchMock()).toHaveBeenCalledTimes(1);
+      });
+
+      it("does not count a read that still fails as an app problem", async () => {
+        getFetchMock().mockRejectedValue(new TypeError("Failed to fetch"));
+        const { classifyError } = await import("@/lib/tracing/failureTaxonomy");
+
+        const error = await new C64API("http://c64u")
+          .getInfo({ __c64uBypassCache: true })
+          .catch((failure: unknown) => failure);
+
+        expect(getFetchMock()).toHaveBeenCalledTimes(2);
+        expect(classifyError(error).isExpected).toBe(true);
+      });
+    });
+
+    it("does not repeat a read when the network has not just come back", async () => {
+      getFetchMock().mockRejectedValue(new TypeError("Failed to fetch"));
+
+      await expect(new C64API("http://c64u").getInfo({ __c64uBypassCache: true })).rejects.toThrow();
+
+      expect(getFetchMock()).toHaveBeenCalledTimes(1);
+    });
+
     it("does not report a device that answered with an error", async () => {
       getFetchMock().mockResolvedValue(
         new Response(JSON.stringify({ errors: ["boom"] }), {
