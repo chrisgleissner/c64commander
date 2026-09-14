@@ -582,7 +582,9 @@ export function useSavedDeviceHealthChecks(
         }
 
         const message = error instanceof Error ? error.message : String(error ?? "Saved-device health check failed");
-        addLog("warn", "Saved-device background health check failed", {
+        // A background probe that runs out of time behind the page's own requests is not the device failing;
+        // an Ultimate II+L limited to one request at a time timed out here while it answered everything else.
+        addLog(/timed out/i.test(message) ? "info" : "warn", "Saved-device background health check failed", {
           deviceId: selectedDevice.id,
           host: selectedDevice.host,
           error: message,

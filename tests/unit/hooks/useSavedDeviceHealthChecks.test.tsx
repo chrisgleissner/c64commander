@@ -335,6 +335,17 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(2);
   });
 
+  it("does not warn when the background probe times out behind other requests", async () => {
+    const { addLog } = await import("@/lib/logging");
+    mockRunConnectivityProbeForTarget.mockRejectedValue(new Error("REST timed out after 3000ms"));
+    renderBackgroundHook(buildSavedDevices());
+
+    await flushAsyncWork();
+
+    expect(addLog).toHaveBeenCalledWith("info", "Saved-device background health check failed", expect.anything());
+    expect(addLog).not.toHaveBeenCalledWith("warn", "Saved-device background health check failed", expect.anything());
+  });
+
   it("probes nothing while Demo Mode is active", async () => {
     // These probes go to the SAVED devices. Left running in Demo Mode they filled Diagnostics with
     // failures against hardware the user had deliberately stepped away from, and on a live network
