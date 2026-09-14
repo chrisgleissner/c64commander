@@ -951,9 +951,9 @@ export class LocalSidEngine {
       this.discardWorker("a new tune superseded an unfinished seek", "info");
     }
     await this.load();
-    // A switchover ALWAYS starts from silence unless the listener has asked for
-    // a crossfade. Zero (the default) is a hard cut.
-    const crossfadeMs = loadPlaybackCrossfadeMs();
+    // A switchover ALWAYS starts from silence unless the listener has asked for a crossfade. Zero (the default) is a
+    // hard cut, and so is leaving a paused tune: faded out, it came back and held the next tune in a paused track.
+    const crossfadeMs = this.paused ? 0 : loadPlaybackCrossfadeMs();
     this.pendingCrossfadeMs = crossfadeMs;
     this.stopPlayback({ crossfadeMs });
     this.callbacks = callbacks;
