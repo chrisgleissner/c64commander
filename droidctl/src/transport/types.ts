@@ -10,6 +10,13 @@ export type TransportKind = "adb" | "ssh";
 
 export type TargetState = "device" | "offline" | "unauthorized" | "booting" | "unknown";
 
+export interface MissingPrerequisite {
+  /** Stable identifier a caller can branch on, such as `ssh-key`. */
+  readonly id: string;
+  /** What is missing, and the step that supplies it. */
+  readonly message: string;
+}
+
 export interface TargetInfo {
   /** Opaque id issued by list_targets. Encodes the transport (spec §6.3 rule 2). */
   readonly targetId: string;
@@ -19,6 +26,10 @@ export interface TargetInfo {
   readonly apiLevel: number | null;
   readonly state: TargetState;
   readonly isEmulator: boolean;
+  /** ssh targets only: the route into the Android container, or null when no route works. */
+  readonly route?: string | null;
+  /** ssh targets only: what stops a route from working, in detection order. */
+  readonly missingPrerequisites?: readonly MissingPrerequisite[];
 }
 
 export interface ResolvedTarget {
@@ -91,6 +102,8 @@ export interface TransportCapabilities {
   readonly tools: Readonly<Record<string, CapabilitySupport>>;
   /** Free text naming the check that would settle an "unknown" entry. */
   readonly notes: Readonly<Record<string, string>>;
+  /** Set when the target cannot be driven at all, so every tool is refused with this message. */
+  readonly unavailable?: { readonly message: string; readonly details: Readonly<Record<string, unknown>> };
 }
 
 export interface CommandRecord {
@@ -116,5 +129,10 @@ export interface Transport {
   installPackage(target: ResolvedTarget, apkPath: string, opts: InstallOptions): Promise<InstallResult>;
   forwardPort(target: ResolvedTarget, localPort: number, remote: RemoteEndpoint): Promise<void>;
   removeForward(target: ResolvedTarget, localPort: number): Promise<void>;
-  capabilities(): TransportCapabilities;
+  /** Without a target, what the transport can do in general; with one, what that target can do now. */
+  capabilities(target?: ResolvedTarget): TransportCapabilities;
+  /** Transport-specific connection facts that describe_target adds to its result. */
+  describeConnection?(target: ResolvedTarget): Record<string, unknown>;
+  /** Releases tunnels and connections the transport opened. */
+  dispose?(): Promise<void>;
 }

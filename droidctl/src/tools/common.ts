@@ -9,7 +9,7 @@
 import { z } from "zod";
 import type { ResolvedTargetHandle } from "../transport/registry.js";
 import { errorResult, okResult } from "../types.js";
-import { ToolError, ToolExecutionError, UnsupportedOnTransportError } from "./errors.js";
+import { ToolError, ToolExecutionError, TransportUnavailableError, UnsupportedOnTransportError } from "./errors.js";
 import { jsonResult } from "./responses.js";
 import type { ToolExecutionContext, ToolRunResult } from "./types.js";
 import { parseZodArgs } from "./types.js";
@@ -71,7 +71,14 @@ export async function resolveTarget(ctx: ToolExecutionContext, targetId: string)
 
 /** An unsupported capability is a structured refusal, never a silent no-op. */
 export function requireCapability(handle: ResolvedTargetHandle, toolName: string): void {
-  const capabilities = handle.transport.capabilities();
+  const capabilities = handle.transport.capabilities(handle.target);
+  if (capabilities.unavailable) {
+    throw new TransportUnavailableError(
+      handle.transport.kind,
+      `${toolName} cannot run on ${handle.target.targetId}. ${capabilities.unavailable.message}`,
+      { capability: toolName, ...capabilities.unavailable.details },
+    );
+  }
   const support = capabilities.tools[toolName];
   if (support === "supported") {
     return;

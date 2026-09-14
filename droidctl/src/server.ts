@@ -25,7 +25,7 @@ import type { ToolDescriptor } from "./tools/types.js";
 import { AdbTransport } from "./transport/adb.js";
 import { TransportRegistry } from "./transport/registry.js";
 import { SshTransport } from "./transport/ssh.js";
-import type { Transport } from "./transport/types.js";
+import type { CommandRecord, Transport } from "./transport/types.js";
 
 export function toCallToolResult(result: {
   content: readonly { type: "text"; text: string }[];
@@ -47,9 +47,16 @@ export interface DroidctlRuntimeOptions {
   transports?: readonly Transport[];
 }
 
-/** Every adb invocation is journalled into the run's commands.jsonl. */
+/**
+ * Every adb and ssh invocation is journalled into the run's commands.jsonl. The
+ * ssh transport's container tunnels are adb serials too; the adb transport leaves
+ * them out, so one phone is listed under one target id.
+ */
 export function createDefaultTransports(artifacts: ArtifactStore): Transport[] {
-  return [new AdbTransport({ onCommand: (record) => artifacts.recordCommand(record) }), new SshTransport()];
+  const onCommand = (record: CommandRecord) => artifacts.recordCommand(record);
+  const ssh = new SshTransport({ onCommand, adb: new AdbTransport({ onCommand }) });
+  const adb = new AdbTransport({ onCommand, ignoreSerial: (serial) => ssh.ownsAdbSerial(serial) });
+  return [adb, ssh];
 }
 
 export function createDroidctlServerRuntime(options: DroidctlRuntimeOptions = {}) {
@@ -59,7 +66,8 @@ export function createDroidctlServerRuntime(options: DroidctlRuntimeOptions = {}
     ...(options.runId === undefined ? {} : { runId: options.runId }),
   });
   const recordings = new RecordingStore();
-  const transports = new TransportRegistry(options.transports ?? createDefaultTransports(artifacts));
+  const transportList = options.transports ?? createDefaultTransports(artifacts);
+  const transports = new TransportRegistry(transportList);
   const toolRegistry = createToolRegistry({ transports, artifacts, recordings, logger });
 
   const server = new Server(
@@ -74,6 +82,11 @@ export function createDroidctlServerRuntime(options: DroidctlRuntimeOptions = {}
       },
     },
   );
+
+  // Tunnels opened into a container end with the client connection instead of outliving it.
+  server.onclose = () => {
+    void Promise.all(transportList.map((transport) => transport.dispose?.()));
+  };
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: toolRegistry.list().map(({ name, description, inputSchema }: ToolDescriptor) => ({

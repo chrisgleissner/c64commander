@@ -21,8 +21,8 @@ import { modules } from "../src/tools/registry.js";
 import { AdbTransport, nodeExecRunner, nodeSpawnRunner } from "../src/transport/adb.js";
 import { FakeTransport, defaultTarget } from "../src/transport/fake.js";
 import { TransportRegistry } from "../src/transport/registry.js";
-import type { TransportCapabilities } from "../src/transport/types.js";
-import { createTestContext, invoke } from "./support/harness.js";
+import type { ResolvedTarget, TransportCapabilities } from "../src/transport/types.js";
+import { createTestContext, invoke, withDeviceDefaults } from "./support/harness.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -173,6 +173,43 @@ describe("transport capability gate", () => {
     expect(result.error.message).toMatch(/is unsupported on the adb transport\. Compositor capture/);
     expect(result.error.details).toMatchObject({ transport: "adb", capability: "droid_capture.start_recording" });
     expect(transport.spawned).toEqual([]);
+  });
+
+  it("refuses every tool on a target the transport reports as unavailable, carrying its details", async () => {
+    class UnavailableTransport extends FakeTransport {
+      override capabilities(): TransportCapabilities {
+        return {
+          transport: "adb",
+          tools: {},
+          notes: {},
+          unavailable: { message: "No route works.", details: { prerequisites: [{ id: "ssh-key", message: "m" }] } },
+        };
+      }
+    }
+    const transport = new UnavailableTransport();
+    const { ctx } = await createTestContext({ transport });
+
+    const result = await invoke("droid_app.stop_app", { targetId: "adb:TESTSERIAL01", package: "p" }, ctx);
+
+    expect(result.error).toMatchObject({
+      code: "transport_unavailable",
+      message: "droid_app.stop_app cannot run on adb:TESTSERIAL01. No route works.",
+      details: { transport: "adb", capability: "droid_app.stop_app", prerequisites: [{ id: "ssh-key", message: "m" }] },
+    });
+    expect(transport.calls.filter((call) => call.kind !== "listTargets")).toEqual([]);
+  });
+
+  it("asks the transport about the resolved target, not about the transport in general", async () => {
+    const seen: unknown[] = [];
+    class Recording extends FakeTransport {
+      override capabilities(target?: ResolvedTarget): TransportCapabilities {
+        seen.push(target);
+        return super.capabilities();
+      }
+    }
+    const { ctx } = await createTestContext({ transport: withDeviceDefaults(new Recording()) });
+    await invoke("droid_target.describe_target", { targetId: "adb:TESTSERIAL01" }, ctx);
+    expect(seen).toEqual([{ targetId: "adb:TESTSERIAL01", transport: "adb", serial: "TESTSERIAL01" }]);
   });
 
   it("passes a tool the transport does support", () => {

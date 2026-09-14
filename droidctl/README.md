@@ -78,12 +78,222 @@ One interface, two backends, so a caller does not branch on which is in use.
 
 - **`adb`** — the physical handset on USB, Android emulators, and containers reached with
   `adb connect`. Every invocation carries `-s <serial>`; only enumeration runs without one.
-- **`ssh`** — a stub for a host that runs the same Android build inside a compatibility container,
-  reached over SSH rather than over adb. No such device exists on this bench, so it returns
-  `transport_unavailable` with the probe procedure that would settle each open question, and points at
-  `docs/plans/droidctl/spec.md` §14 for the literal commands. Nothing is gated on that hardware.
+- **`ssh`** — a Linux phone whose Android apps run inside an Android compatibility container, reached
+  over SSH on the phone's USB network link. It is listed as `ssh:<user>@<host>` beside the adb targets
+  and uses one of two routes into the container, chosen at runtime.
 
-`droidctl://reference/transport-support` serves the per-tool support matrix.
+`droidctl://reference/transport-support` serves the per-tool support matrix, with one column for adb
+and one for each ssh route.
+
+## Linux phone with an Android compatibility container
+
+### Routes
+
+- **`container-adb`** (preferred). droidctl opens an SSH port forward from `127.0.0.1:<free port>` on
+  this computer (never in 5554-5585, which the adb server scans for emulators) to the container's adb
+  daemon, runs `adb connect` on it, and hands every operation to
+  the adb backend with that serial. Every tool is supported and its results match an ordinary adb
+  target; `tests/sshParity.test.ts` runs the same tool calls through both and compares them. The adb
+  transport leaves the tunnel's `127.0.0.1:<port>` serial out of its own listing, so the phone appears
+  under one target id.
+- **`container-attach`** (fallback). droidctl runs commands inside the container as root through a
+  container attach command over SSH. App lifecycle, install (`pm install` with the APK on stdin),
+  app files, input (`input tap`, `swipe`, `text`, `keyevent`), logcat, screenshot, `run_shell`,
+  `prepare_device` and file transfer work. The UI hierarchy and assertions, screen recording and
+  `forward_webview` are refused with `unsupported_on_transport`: `uiautomator dump` run through an
+  attach command has been reported to exit 0 without writing a file, recording needs a detached adb
+  shell, and the DevTools socket is only reachable through `adb forward`. The message names what is
+  missing for the `container-adb` route. Android's boot environment (`ANDROID_DATA`, `BOOTCLASSPATH`
+  and the rest) is filled in from `init.environ.rc` for any variable the attach session lacks, so `am`,
+  `pm`, `wm` and `input` also run through a plain `lxc-attach`. The probe checks that the attach command
+  passes stdin into the container; where it does not, `install_app`, `write_app_file` and `push_file`
+  are refused too.
+
+### Detection order
+
+Nothing needs to be passed to droidctl. Every listing runs these steps per host, and each step gates
+the next; `droidctl://reference/ssh-transport` serves the same list.
+
+1. Read `DROIDCTL_SSH_*` and the optional `ssh.json` (see [Configuration](#configuration)).
+2. For each USB network interface bound to a USB gadget driver (`rndis_host`, `cdc_ether`, `cdc_ncm`,
+   `cdc_eem`, `cdc_subset`), take `192.168.2.15` when it is inside the interface's subnet, plus any
+   neighbour with a locally administered MAC address. Configured hosts are always added. A USB
+   Ethernet adapter binds a chipset driver and is never probed. A neighbour that does not answer on
+   the SSH port, such as a phone sharing its connection over USB, is left out of the listing; the
+   conventional address and configured hosts are listed with the prerequisite instead.
+3. Connect to the SSH port.
+4. Log in with a key (`BatchMode=yes`, so a missing key fails instead of prompting) and run one probe
+   script that reports uid, passwordless sudo, whether `system_server` is running, listening TCP
+   sockets and candidate attach helpers.
+5. Require a running Android container (`system_server` process on the host). If `/proc` hides other
+   users' processes, the state is unknown and detection continues.
+6. `container-adb`, first pass: check the adb client, then forward the configured endpoint or a port
+   5555 listening on the phone, `adb connect`, and wait until adb lists it as `device` or
+   `unauthorized`.
+7. Root for the attach route: login user is uid 0, or `sudo -n` works, or `root@<host>` accepts the
+   same key.
+8. Attach command: the configured one, otherwise each `*-attach` helper in the phone's `bin`
+   directories, each LXC container found through its `[lxc monitor]` process (attached with that
+   container's lxcpath), and each container `lxc-ls --running` lists. Each is verified by running
+   `getprop` inside the container and reading an integer SDK level.
+9. `container-adb`, second pass: adb ports the container announces in `service.adb.tcp.port` or
+   `persist.adb.tcp.port`.
+10. Route: `container-adb` if adb lists the tunnel as `device`, otherwise `container-attach`,
+    otherwise none.
+
+`droid_target.list_targets` reports `route` and `missingPrerequisites` for each ssh target, and
+`droid_target.describe_target` adds a `connection` block with the host, how it was found, the route,
+the tunnel serial or attach command, and per route `usable`, `unavailable` or `not-checked` with its
+missing prerequisites. A target with no route is still listed; every tool on it fails with
+`transport_unavailable`, the prerequisites in detection order in the message, and the same list under
+`details.prerequisites`.
+
+A host with a working tunnel is not probed again while adb lists the tunnel. A host on the attach route
+is re-checked after 60 s or when its SSH connection ends, and a blocked host after 10 s, so a fixed
+prerequisite is picked up by a later call without restarting droidctl. Tunnels are closed when the MCP
+client disconnects.
+
+### Missing prerequisites
+
+| id                           | Reported when                                                              |
+| ---------------------------- | -------------------------------------------------------------------------- |
+| `ssh-config`                 | `ssh.json` or a `DROIDCTL_SSH_*` variable is invalid.                      |
+| `usb-network-address`        | A USB gadget network interface has no IPv4 address.                        |
+| `usb-network-peer`           | No phone address can be derived from that interface.                       |
+| `ssh-client`                 | `ssh` cannot be started on this computer.                                  |
+| `developer-mode`             | The SSH port refuses connections: developer mode or remote login is off.   |
+| `host-unreachable`           | The SSH port does not answer, or ssh times out.                            |
+| `ssh-host-key`               | The phone's host key differs from `~/.ssh/known_hosts`, typically after a reset. |
+| `ssh-key`                    | The phone refuses key authentication for the login user.                   |
+| `ssh-failed`                 | ssh fails in a way not listed here; its output is quoted.                  |
+| `android-container`          | SSH works but the Android container is not running.                        |
+| `adb-client`                 | `adb` cannot be run on this computer.                                      |
+| `container-adb-disabled`     | No adb daemon accepts a connection inside the container.                   |
+| `container-adb-unauthorized` | adb reached the container but this computer's key is not authorised yet.   |
+| `container-adb-connect`      | adb could not complete a connection through the tunnel.                    |
+| `ssh-forwarding`             | The phone's SSH server refused the port forward.                           |
+| `root-access`                | No root without a password for the attach route.                           |
+| `attach-command`             | No command that runs a program inside the container was found or worked.  |
+
+Each message states the step that supplies the prerequisite, for example the exact `ssh-copy-id` or
+`nmcli` command.
+
+### Setup on Kubuntu 24.04
+
+1. **Packages on this computer.**
+
+   ```bash
+   sudo apt install openssh-client adb
+   ```
+
+2. **On the phone.** Enable developer mode, turn on remote (SSH) login, and set the developer
+   password. Connect the phone with a USB-C data cable, select the developer USB mode that provides
+   networking, and keep the phone unlocked: a locked phone refuses SSH. If the phone's USB IP address
+   setting is not `192.168.2.15`, set `DROIDCTL_SSH_HOSTS` to the address it shows.
+
+3. **USB networking.** No udev rule is needed: the Ubuntu kernel binds `cdc_ncm`, `cdc_ether` or
+   `rndis_host` to the phone's network gadget, and droidctl finds the interface by that driver. In
+   developer USB mode the phone runs a DHCP server for this link, so NetworkManager normally gives the
+   interface an address in `192.168.2.0/24`. Check that the interface exists and has one:
+
+   ```bash
+   ip -br addr                                            # a new usb0 or enx... interface
+   readlink /sys/class/net/<interface>/device/driver      # ends in cdc_ncm, cdc_ether or rndis_host
+   nc -vz 192.168.2.15 22                                 # succeeded = SSH is listening
+   ```
+
+   If the interface has no IPv4 address after a few seconds, check the USB mode on the phone. Some
+   kernels name an RNDIS gadget `ww…` as a mobile broadband device, and NetworkManager then leaves it
+   unconfigured; give it a static address outside the phone's DHCP range and keep it for later
+   connections:
+
+   ```bash
+   nmcli connection add type ethernet ifname <interface> con-name phone-usb \
+     ipv4.method manual ipv4.addresses 192.168.2.100/24 ipv6.method disabled
+   nmcli connection up phone-usb
+   ```
+
+4. **SSH key.** droidctl never types a password. Install a key once, entering the developer password
+   when `ssh-copy-id` asks, and confirm a non-interactive login works:
+
+   ```bash
+   ls ~/.ssh/id_ed25519.pub || ssh-keygen -t ed25519
+   ssh-copy-id defaultuser@192.168.2.15
+   ssh -o BatchMode=yes defaultuser@192.168.2.15 true && echo key-ok
+   ```
+
+   The first connection records the phone's host key with `StrictHostKeyChecking=accept-new`. After a
+   phone reset, remove the old key with `ssh-keygen -R 192.168.2.15`.
+
+5. **Container adb route (recommended).** Start any Android app so the container is running, then open
+   the container's Android Settings, tap About phone > Build number seven times, and enable Developer
+   options > USB debugging and Wireless debugging. Check that adbd listens on port 5555 and connect by
+   hand, using local port 15555 so an emulator on 5555 is not disturbed:
+
+   ```bash
+   ssh defaultuser@192.168.2.15 "grep -i ':15B3 ' /proc/net/tcp /proc/net/tcp6"   # a line = adbd listens on 5555
+   ssh -N -L 127.0.0.1:15555:127.0.0.1:5555 defaultuser@192.168.2.15 &
+   adb connect 127.0.0.1:15555           # accept the Allow debugging prompt on the phone, Always allow
+   adb -s 127.0.0.1:15555 shell getprop ro.build.version.sdk
+   adb disconnect 127.0.0.1:15555; kill %1
+   ```
+
+   With adb debugging on, adbd may also accept connections on the phone's other networks, such as
+   Wi-Fi; turn debugging off inside the container when the phone leaves a trusted network. droidctl
+   itself only connects through the SSH tunnel.
+
+   If no authorization prompt appears, add this computer's key through the attach route instead:
+   append `~/.android/adbkey.pub` to `/data/misc/adb/adb_keys` inside the container. If the container
+   only offers wireless debugging with a pairing code, forward the pairing port the dialog shows, pair
+   once with `adb pair 127.0.0.1:<local port> <code>`, and set
+   `DROIDCTL_SSH_CONTAINER_ADB=127.0.0.1:<connect port>`.
+
+6. **Container attach route (fallback, needs root).** droidctl uses the login user when it is root or
+   has passwordless sudo; otherwise it logs in as root with the same key. Install the key for root once
+   from a root shell:
+
+   ```bash
+   ssh -t defaultuser@192.168.2.15 devel-su
+   # in the root shell:
+   mkdir -p /root/.ssh && cat /home/defaultuser/.ssh/authorized_keys >> /root/.ssh/authorized_keys
+   chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys
+   ```
+
+   Check with `ssh -o BatchMode=yes root@192.168.2.15 true`. If the attach command is not found
+   automatically, set `DROIDCTL_SSH_ATTACH_COMMAND`, for example `lxc-attach -n <container> --`.
+
+7. **Verify in droidctl.** Call `droid_target.list_targets`: the phone appears as
+   `ssh:defaultuser@192.168.2.15` with `state: "device"` and a `route`. If it does not, its
+   `missingPrerequisites` names the step to repeat. `droid_target.describe_target` shows which route is
+   in use and why the other is unavailable.
+
+### Configuration
+
+Optional. Environment variables override the file's `defaults`; a host listed in the file keeps its own
+fields.
+
+| Variable                      | Effect                                                                              |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| `DROIDCTL_SSH_CONFIG`         | JSON file to read. Default `$XDG_CONFIG_HOME/droidctl/ssh.json`, else `~/.config/droidctl/ssh.json`. |
+| `DROIDCTL_SSH_DISCOVERY`      | `off` stops discovery over USB network interfaces; configured hosts are still probed. |
+| `DROIDCTL_SSH_HOSTS`          | Comma-separated `[user@]host[:port]` entries to probe as well.                      |
+| `DROIDCTL_SSH_USER`           | Login user. Default `defaultuser`.                                                  |
+| `DROIDCTL_SSH_PORT`           | SSH port. Default 22.                                                               |
+| `DROIDCTL_SSH_IDENTITY`       | Private key file, passed with `IdentitiesOnly=yes`.                                 |
+| `DROIDCTL_SSH_ATTACH_COMMAND` | Command that runs a program inside the container. Replaces detection.              |
+| `DROIDCTL_SSH_CONTAINER_ADB`  | `address:port` of the container's adbd as seen from the phone. Tried first.        |
+
+```json
+{
+  "discovery": true,
+  "defaults": { "user": "defaultuser", "identityFile": "~/.ssh/id_ed25519" },
+  "hosts": [{ "host": "192.168.2.15", "containerAdb": "127.0.0.1:5555" }]
+}
+```
+
+SSH connections are multiplexed through sockets in `$TMPDIR/droidctl-ssh`, which must be private to
+this user; otherwise each call opens a new connection. Every ssh and adb invocation, including the
+tunnel process, is journalled in `commands.jsonl`.
 
 ## Assertions
 
@@ -119,8 +329,11 @@ rather than at evidence validation later.
 
 ## Hardware check
 
-Unit tests run against a faked transport and need no device. The operations that genuinely need
-hardware are covered by one manual script, which is not wired into any gate:
+Unit tests run against a faked transport and need no device. The ssh transport is tested against a
+scripted phone (`tests/support/sshFakes.ts`) that answers the ssh, adb and tunnel traffic; the shell
+scripts it sends are also run through a local `sh` with stand-in commands, so their quoting is checked
+by a shell. The operations that genuinely need hardware are covered by one manual script, which is not
+wired into any gate:
 
 ```bash
 node droidctl/scripts/smoke-device.mjs --target <targetId> --package <applicationId>

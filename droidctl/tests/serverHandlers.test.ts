@@ -85,6 +85,25 @@ describe("server MCP handlers", () => {
     expect(runtime.transports.kinds()).toEqual(["adb", "ssh"]);
   });
 
+  it("releases every transport that holds connections when the client connection closes", async () => {
+    let disposed = 0;
+    const holding = Object.assign(new FakeTransport(), {
+      dispose: async () => {
+        disposed += 1;
+      },
+    });
+    const runtime = createDroidctlServerRuntime({
+      artifactRoot: os.tmpdir(),
+      runId: "dc-CLOSE",
+      transports: [holding, new FakeTransport()],
+    });
+
+    runtime.server.onclose?.();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(disposed).toBe(1);
+  });
+
   it("connects the server over stdio in runDroidctlServer", async () => {
     const artifactRoot = await mkdtemp(path.join(os.tmpdir(), "droidctl-connect-"));
     const connectSpy = vi.spyOn(Server.prototype, "connect").mockResolvedValue(undefined as never);

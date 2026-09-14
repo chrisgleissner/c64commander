@@ -31,17 +31,18 @@ const TARGET = "adb:TESTSERIAL01";
 const PACKAGE = "uk.gleissner.c64commander";
 
 describe("transport support matrix", () => {
-  it("reports unknown for a tool one transport does not list, and omits an absent note", () => {
+  it("reports unknown for a tool one column does not list, keeps the first note, and omits an absent one", () => {
     const adb: TransportCapabilities = { transport: "adb", tools: { "a.only": "supported" }, notes: {} };
     const ssh: TransportCapabilities = {
       transport: "ssh",
       tools: { "b.only": "unsupported" },
-      notes: { "b.only": "probe Q7" },
+      notes: { "b.only": "needs the container adb route" },
     };
+    const later: TransportCapabilities = { transport: "ssh", tools: {}, notes: { "b.only": "a second note" } };
 
-    expect(buildTransportMatrix(adb, ssh)).toEqual({
-      "a.only": { adb: "supported", ssh: "unknown" },
-      "b.only": { adb: "unknown", ssh: "unsupported", note: "probe Q7" },
+    expect(buildTransportMatrix({ adb, ssh, later })).toEqual({
+      "a.only": { adb: "supported", ssh: "unknown", later: "unknown" },
+      "b.only": { adb: "unknown", ssh: "unsupported", note: "needs the container adb route", later: "unknown" },
     });
   });
 });
@@ -55,6 +56,9 @@ describe("default transport wiring", () => {
     expect(adb!.kind).toBe("adb");
     expect(ssh!.kind).toBe("ssh");
     expect(artifacts.commandsRecorded()).toBe(0);
+    // The adb transport asks the ssh transport which serials are its tunnels.
+    const ignoreSerial = (adb as unknown as { ignoreSerial: (serial: string) => boolean }).ignoreSerial;
+    expect(ignoreSerial("127.0.0.1:40000")).toBe(false);
 
     // The onCommand hook is what makes commands.jsonl non-empty; drive it directly
     // rather than running adb.

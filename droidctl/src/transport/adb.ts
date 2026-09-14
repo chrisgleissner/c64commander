@@ -74,7 +74,7 @@ export interface RawExecRequest {
   readonly args: readonly string[];
   readonly timeoutMs: number;
   readonly maxBytes: number;
-  readonly stdin?: string;
+  readonly stdin?: string | Buffer;
 }
 
 export type RawExecRunner = (request: RawExecRequest) => Promise<RawExecOutcome>;
@@ -176,6 +176,8 @@ export interface AdbTransportOptions {
   readonly spawn?: RawSpawnRunner;
   readonly onCommand?: CommandSink;
   readonly defaultTimeoutMs?: number;
+  /** Leaves these serials out of the listing: a tunnel another transport lists under its own target id. */
+  readonly ignoreSerial?: (serial: string) => boolean;
 }
 
 const ADB_TOOL_SUPPORT: Readonly<Record<string, CapabilitySupport>> = Object.fromEntries(
@@ -247,6 +249,16 @@ function normalizeState(raw: string): TargetState {
   }
 }
 
+/** Shared with the ssh transport, whose pm install must accept the same flags. */
+export function installFlags(opts: InstallOptions): string[] {
+  const flags: string[] = [];
+  if (opts.reinstall !== false) flags.push("-r");
+  if (opts.allowDowngrade) flags.push("-d");
+  if (opts.grantPermissions) flags.push("-g");
+  if (opts.allowTestPackages) flags.push("-t");
+  return flags;
+}
+
 export class AdbTransport implements Transport {
   readonly kind = "adb" as const;
   private readonly adbPath: string;
@@ -254,6 +266,7 @@ export class AdbTransport implements Transport {
   private readonly spawnRunner: RawSpawnRunner;
   private readonly onCommand?: CommandSink;
   private readonly defaultTimeoutMs: number;
+  private readonly ignoreSerial: (serial: string) => boolean;
   private apiLevels = new Map<string, number>();
 
   constructor(options: AdbTransportOptions = {}) {
@@ -262,6 +275,7 @@ export class AdbTransport implements Transport {
     this.spawnRunner = options.spawn ?? nodeSpawnRunner;
     this.onCommand = options.onCommand;
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? DEFAULT_EXEC_TIMEOUT_MS;
+    this.ignoreSerial = options.ignoreSerial ?? (() => false);
   }
 
   capabilities(): TransportCapabilities {
@@ -275,13 +289,29 @@ export class AdbTransport implements Transport {
         details: { exitCode: outcome.exitCode, stderr: outcome.stderr },
       });
     }
-    const entries = parseAdbDeviceLines(outcome.stdout.toString("utf8"));
+    const entries = parseAdbDeviceLines(outcome.stdout.toString("utf8")).filter(
+      (entry) => !this.ignoreSerial(entry.target.serial),
+    );
     const fresh = new Map<string, number>();
     const targets = await Promise.all(entries.map((entry) => this.withApiLevel(entry, fresh)));
     // Rebuilt from what this listing saw, so a device that has gone takes its
     // entry with it and is probed again if it comes back.
     this.apiLevels = fresh;
     return targets;
+  }
+
+  /**
+   * `adb connect` and `adb disconnect` address a TCP endpoint rather than a
+   * listed device, so like enumeration they carry no -s. Only the ssh transport
+   * calls them, for the tunnel it opens into a container.
+   */
+  async connectTcp(serial: string, timeoutMs = 15_000): Promise<{ exitCode: number; output: string }> {
+    const outcome = await this.run(null, ["connect", serial], { timeoutMs });
+    return { exitCode: outcome.exitCode, output: `${outcome.stdout.toString("utf8")}${outcome.stderr}`.trim() };
+  }
+
+  async disconnectTcp(serial: string): Promise<void> {
+    await this.run(null, ["disconnect", serial], { timeoutMs: 15_000 });
   }
 
   private async withApiLevel(entry: AdbDeviceLine, fresh: Map<string, number>): Promise<TargetInfo> {
@@ -401,12 +431,7 @@ export class AdbTransport implements Transport {
   }
 
   async installPackage(target: ResolvedTarget, apkPath: string, opts: InstallOptions): Promise<InstallResult> {
-    const flags: string[] = [];
-    if (opts.reinstall !== false) flags.push("-r");
-    if (opts.allowDowngrade) flags.push("-d");
-    if (opts.grantPermissions) flags.push("-g");
-    if (opts.allowTestPackages) flags.push("-t");
-    const result = await this.invoke(target, ["install", ...flags, apkPath], {
+    const result = await this.invoke(target, ["install", ...installFlags(opts), apkPath], {
       timeoutMs: opts.timeoutMs ?? 300_000,
     });
     const output = `${result.stdout}\n${result.stderr}`;

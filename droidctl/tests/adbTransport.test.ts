@@ -15,6 +15,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   AdbTransport,
+  installFlags,
   quoteForRemoteShell,
   type RawExecOutcome,
   type RawExecRequest,
@@ -155,6 +156,53 @@ describe("list_targets api level", () => {
       throw new Error("device offline");
     });
     expect((await failing.transport.listTargets()).map((target) => target.apiLevel)).toEqual([null]);
+  });
+});
+
+describe("tunnel serials owned by another transport", () => {
+  it("lists every device by default, and leaves out a serial it is told another transport owns", async () => {
+    const devices = "List of devices attached\n9B0EXAMPLE device\n127.0.0.1:40000 device\n";
+    const plain = recordingTransport((request) => ok(request.args.includes("devices") ? devices : "33\n"));
+    expect((await plain.transport.listTargets()).map((target) => target.serial)).toEqual([
+      "9B0EXAMPLE",
+      "127.0.0.1:40000",
+    ]);
+
+    const requests: RawExecRequest[] = [];
+    const filtered = new AdbTransport({
+      exec: async (request) => {
+        requests.push(request);
+        return ok(request.args.includes("devices") ? devices : "33\n");
+      },
+      ignoreSerial: (serial) => serial === "127.0.0.1:40000",
+    });
+    expect((await filtered.listTargets()).map((target) => target.serial)).toEqual(["9B0EXAMPLE"]);
+    expect(requests.some((request) => request.args.includes("127.0.0.1:40000"))).toBe(false);
+  });
+
+  it("connects and disconnects a TCP endpoint without -s, returning adb's own output", async () => {
+    const recorder = recordingTransport((request) =>
+      request.args[0] === "connect"
+        ? { stdout: Buffer.from("connected to 127.0.0.1:40000\n"), stderr: "", exitCode: 0 }
+        : ok("disconnected\n"),
+    );
+    expect(await recorder.transport.connectTcp("127.0.0.1:40000")).toEqual({
+      exitCode: 0,
+      output: "connected to 127.0.0.1:40000",
+    });
+    await recorder.transport.disconnectTcp("127.0.0.1:40000");
+    expect(recorder.requests.map((request) => request.args)).toEqual([
+      ["connect", "127.0.0.1:40000"],
+      ["disconnect", "127.0.0.1:40000"],
+    ]);
+    expect(recorder.requests[0]!.timeoutMs).toBe(15_000);
+  });
+
+  it("builds install flags once, for both transports", () => {
+    expect(installFlags({})).toEqual(["-r"]);
+    expect(
+      installFlags({ reinstall: false, allowDowngrade: true, grantPermissions: true, allowTestPackages: true }),
+    ).toEqual(["-d", "-g", "-t"]);
   });
 });
 
