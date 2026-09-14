@@ -346,6 +346,18 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(addLog).not.toHaveBeenCalledWith("warn", "Saved-device background health check failed", expect.anything());
   });
 
+  // The device switcher read "Offline · Latest check failed" for the connected, healthy c64u after one such timeout.
+  it("does not record a background probe timeout as the device being offline", async () => {
+    mockRunConnectivityProbeForTarget.mockRejectedValue(new Error("REST timed out after 3000ms"));
+    const { result } = renderBackgroundHook(buildSavedDevices());
+
+    await flushAsyncWork();
+
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalled();
+    expect(result.current.byDeviceId[selectedDeviceId]?.running).toBe(false);
+    expect(result.current.byDeviceId[selectedDeviceId]?.error).toBeNull();
+  });
+
   it("probes nothing while Demo Mode is active", async () => {
     // These probes go to the SAVED devices. Left running in Demo Mode they filled Diagnostics with
     // failures against hardware the user had deliberately stepped away from, and on a live network
