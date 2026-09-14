@@ -71,9 +71,14 @@ const backendMock = vi.hoisted(() => ({
   })),
 }));
 
+// Vitest 4 only lets a mock be called with `new` when its implementation is a `function` or `class`.
 vi.mock("@/lib/songlengths", () => ({
-  InMemoryTextBackend: vi.fn(() => backendMock),
-  SongLengthServiceFacade: vi.fn(() => mockFacade),
+  InMemoryTextBackend: vi.fn(function () {
+    return backendMock;
+  }),
+  SongLengthServiceFacade: vi.fn(function () {
+    return mockFacade;
+  }),
 }));
 
 vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => browseIndexMocks);
@@ -145,6 +150,8 @@ describe("hvscSongLengthService", () => {
   });
 
   afterEach(() => {
+    // Vitest 4's restoreAllMocks no longer resets vi.fn() mocks, so the module mocks are reset explicitly.
+    vi.resetAllMocks();
     vi.restoreAllMocks();
   });
 

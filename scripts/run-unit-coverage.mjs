@@ -136,7 +136,6 @@ export function getVitestCoverageArgs(rootDir, runConfig, reportsDirectory) {
     "--coverage.thresholds.functions=0",
     "--coverage.thresholds.lines=0",
     "--maxWorkers=1",
-    "--minWorkers=1",
     "--no-file-parallelism",
     "--reporter=dot",
     // High-visibility flaky-test reporter (stop-gap): surfaces any unit test that

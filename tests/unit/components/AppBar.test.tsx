@@ -32,6 +32,8 @@ describe("AppBar", () => {
   });
 
   afterEach(() => {
+    // Vitest 4's spyOn reuses an existing spy with its call history, so spies must not outlive a test.
+    vi.restoreAllMocks();
     if (originalResizeObserver) {
       Object.defineProperty(globalThis, "ResizeObserver", {
         value: originalResizeObserver,

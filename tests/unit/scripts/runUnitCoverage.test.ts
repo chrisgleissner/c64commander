@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -117,7 +118,6 @@ describe("run-unit-coverage", () => {
     expect(jsdomArgs).toContain("--coverage.provider=v8");
     expect(jsdomArgs).toContain("--coverage.reporter=json");
     expect(jsdomArgs).toContain("--maxWorkers=1");
-    expect(jsdomArgs).toContain("--minWorkers=1");
     expect(jsdomArgs).toContain("--no-file-parallelism");
     expect(dedicatedArgs).toContain(firstDedicatedRun.files[0]);
     expect(jsdomFiles.length).toBeGreaterThan(0);
@@ -128,6 +128,29 @@ describe("run-unit-coverage", () => {
     expect(nodeArgs).toContain("unit-node");
     expect(nodeArgs).toContain(`--coverage.reportsDirectory=${plan.projectReports.node}`);
     expect(nodeArgs.some((arg) => arg.endsWith(".test.ts") || arg.endsWith(".test.tsx"))).toBe(false);
+  });
+
+  it("passes only options the installed vitest CLI accepts", () => {
+    // Vitest rejects an unknown option before running anything, so one stale flag fails every shard.
+    const rootDir = process.cwd();
+    const reportsDirectory = mkdtempSync(path.join(os.tmpdir(), "run-unit-coverage-cli-"));
+    const env = { ...process.env };
+    delete env.GITHUB_ACTIONS;
+    delete env.GITHUB_STEP_SUMMARY;
+
+    try {
+      const args = [
+        ...getVitestCoverageArgs(rootDir, unitCoverageRuns.at(-1), reportsDirectory),
+        "--passWithNoTests",
+        "tests/unit/__no_test_file_matches_this_filter__",
+      ];
+      const result = spawnSync(process.execPath, args, { cwd: rootDir, env, encoding: "utf8", timeout: 60_000 });
+
+      expect(result.stderr).not.toContain("Unknown option");
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    } finally {
+      rmSync(reportsDirectory, { recursive: true, force: true });
+    }
   });
 
   it("builds nyc merge and report commands for the expected artifacts", () => {

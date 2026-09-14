@@ -8,6 +8,7 @@
 
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import type { Reporter, TestModule } from "vitest/node";
 
 /**
  * HIGH-VISIBILITY FLAKY-TEST REPORTER for vitest (stop-gap).
@@ -29,37 +30,29 @@ type FlakyEntry = {
   retries: number;
 };
 
-type AnyTask = {
-  type?: string;
-  name?: string;
-  mode?: string;
-  result?: { state?: string; retryCount?: number };
-  tasks?: AnyTask[];
-};
-
-type AnyFile = AnyTask & { filepath?: string; name?: string };
-
-function collectFlaky(task: AnyTask, file: string, out: FlakyEntry[]): void {
-  if (task.type === "test" || (!task.tasks && task.result)) {
-    const retries = task.result?.retryCount ?? 0;
-    if (task.result?.state === "pass" && retries > 0) {
-      out.push({ name: task.name ?? "(unnamed test)", file, retries });
+/**
+ * Lists the tests that passed only after a retry. Vitest 4 reports finished runs through
+ * `onTestRunEnd` with `TestModule` objects; the `onFinished` hook this reporter used before is no
+ * longer called, so a reporter still implementing only that hook reports nothing.
+ */
+export function collectFlakyTests(testModules: ReadonlyArray<TestModule>, cwd = process.cwd()): FlakyEntry[] {
+  const flaky: FlakyEntry[] = [];
+  for (const testModule of testModules) {
+    const file = path.relative(cwd, testModule.moduleId);
+    for (const testCase of testModule.children.allTests("passed")) {
+      const retries = testCase.diagnostic()?.retryCount ?? 0;
+      if (retries > 0) {
+        flaky.push({ name: testCase.name, file, retries });
+      }
     }
-    return;
   }
-  for (const child of task.tasks ?? []) {
-    collectFlaky(child, file, out);
-  }
+  return flaky;
 }
 
-export default class VitestFlakyReporter {
-  onFinished(files: AnyFile[] = []): void {
+export default class VitestFlakyReporter implements Reporter {
+  onTestRunEnd(testModules: ReadonlyArray<TestModule>): void {
     try {
-      const flaky: FlakyEntry[] = [];
-      for (const file of files) {
-        const filePath = file.filepath ? path.relative(process.cwd(), file.filepath) : (file.name ?? "unknown");
-        collectFlaky(file, filePath, flaky);
-      }
+      const flaky = collectFlakyTests(testModules);
 
       this.writeJson(flaky);
       if (flaky.length === 0) return;

@@ -61,13 +61,16 @@ vi.mock("@/lib/diagnostics/healthModel", async (importOriginal) => {
 });
 
 vi.mock("@/lib/c64api", () => ({
-  C64API: vi.fn().mockImplementation(() => ({
-    getInfo: mockGetInfo,
-    readMemory: mockReadMemory,
-    getConfigItem: mockGetConfigItem,
-    setConfigValue: mockSetConfigValue,
-    loadConfig: mockLoadConfig,
-  })),
+  // Vitest 4 only lets a mock be called with `new` when its implementation is a `function` or `class`.
+  C64API: vi.fn().mockImplementation(function () {
+    return {
+      getInfo: mockGetInfo,
+      readMemory: mockReadMemory,
+      getConfigItem: mockGetConfigItem,
+      setConfigValue: mockSetConfigValue,
+      loadConfig: mockLoadConfig,
+    };
+  }),
   getC64API: vi.fn(() => ({
     getInfo: mockGetInfo,
     readMemory: mockReadMemory,

@@ -10,7 +10,7 @@ import "@testing-library/jest-dom";
 import { cleanup } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { afterEach, beforeEach, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, vi } from "vitest";
 import {
   FEATURE_FLAG_IDS as REGISTERED_FEATURE_FLAG_IDS,
   type FeatureFlagId,
@@ -316,6 +316,46 @@ if (typeof window !== "undefined") {
   Object.defineProperty(window, "scrollTo", {
     writable: true,
     value: () => {},
+  });
+
+  // Vitest 4 removes the jsdom globals before it stops the worker, so a real timer still pending when
+  // a file's tests end can fire without `window` and fail the run with an unhandled ReferenceError
+  // (the 800 ms ghost-click disarm in buttonInteraction.ts did). No test can observe such a timer,
+  // so the ones still pending are cancelled once the file's tests are done.
+  const pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
+  const pendingIntervals = new Set<ReturnType<typeof setInterval>>();
+  const realSetTimeout = globalThis.setTimeout;
+  const realSetInterval = globalThis.setInterval;
+  const realClearTimeout = globalThis.clearTimeout;
+  const realClearInterval = globalThis.clearInterval;
+  const trackedSetTimeout = function (this: unknown, callback: unknown, ...rest: unknown[]) {
+    if (typeof callback !== "function") return Reflect.apply(realSetTimeout, this, [callback, ...rest]);
+    const handle = Reflect.apply(realSetTimeout, this, [
+      (...args: unknown[]) => {
+        pendingTimeouts.delete(handle);
+        return callback(...args);
+      },
+      ...rest,
+    ]) as ReturnType<typeof setTimeout>;
+    pendingTimeouts.add(handle);
+    return handle;
+  };
+  const trackedSetInterval = function (this: unknown, ...args: unknown[]) {
+    const handle = Reflect.apply(realSetInterval, this, args) as ReturnType<typeof setInterval>;
+    pendingIntervals.add(handle);
+    return handle;
+  };
+  // Keeps Node's own properties, such as the util.promisify.custom implementation.
+  Object.defineProperties(trackedSetTimeout, Object.getOwnPropertyDescriptors(realSetTimeout));
+  Object.defineProperties(trackedSetInterval, Object.getOwnPropertyDescriptors(realSetInterval));
+  globalThis.setTimeout = trackedSetTimeout as unknown as typeof setTimeout;
+  globalThis.setInterval = trackedSetInterval as unknown as typeof setInterval;
+
+  afterAll(() => {
+    pendingTimeouts.forEach((handle) => realClearTimeout(handle));
+    pendingIntervals.forEach((handle) => realClearInterval(handle));
+    pendingTimeouts.clear();
+    pendingIntervals.clear();
   });
 
   // Radix Slider uses ResizeObserver in JSDOM.
