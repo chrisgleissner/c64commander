@@ -778,7 +778,7 @@ Summary: 818 dependencies across NPM (801), Gradle (13), CocoaPods (4), SwiftPM 
 | NPM | use-callback-ref | 1.3.3 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/use-callback-ref/-/use-callback-ref-1.3.3.tgz](https://registry.npmjs.org/use-callback-ref/-/use-callback-ref-1.3.3.tgz) |
 | NPM | use-sidecar | 1.1.3 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/use-sidecar/-/use-sidecar-1.1.3.tgz](https://registry.npmjs.org/use-sidecar/-/use-sidecar-1.1.3.tgz) |
 | NPM | util-deprecate | 1.0.2 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/util-deprecate/-/util-deprecate-1.0.2.tgz](https://registry.npmjs.org/util-deprecate/-/util-deprecate-1.0.2.tgz) |
-| NPM | uuid | 7.0.3 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/uuid/-/uuid-7.0.3.tgz](https://registry.npmjs.org/uuid/-/uuid-7.0.3.tgz) |
+| NPM | uuid | 11.1.1 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/uuid/-/uuid-11.1.1.tgz](https://registry.npmjs.org/uuid/-/uuid-11.1.1.tgz) |
 | NPM | vaul | 0.9.9 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/vaul/-/vaul-0.9.9.tgz](https://registry.npmjs.org/vaul/-/vaul-0.9.9.tgz) |
 | NPM | victory-vendor | 36.9.2 | MIT AND ISC | [https://registry.npmjs.org/victory-vendor/-/victory-vendor-36.9.2.tgz](https://registry.npmjs.org/victory-vendor/-/victory-vendor-36.9.2.tgz) |
 | NPM | vite | 6.4.3 | [MIT](https://spdx.org/licenses/MIT.html) | [https://registry.npmjs.org/vite/-/vite-6.4.3.tgz](https://registry.npmjs.org/vite/-/vite-6.4.3.tgz) |
