@@ -705,7 +705,10 @@ class NativeLocalSidSink implements AudioScheduleSink {
           await new Promise((resolve) => setTimeout(resolve, PUMP_IDLE_MS));
           continue;
         }
-        if (this.queuedSec * 1000 >= (this.transitioning ? TRANSITION_HIGH_WATER_MS : HIGH_WATER_MS)) {
+        // The incoming sink carrying a tail it has nothing to mix with yet is inside the transition too. Held to
+        // the normal depth it wrote the whole tail at once, so the new tune queued behind seconds of the old one.
+        const inTransition = this.transitioning || (this.tail !== null && this.queue.length === 0);
+        if (this.queuedSec * 1000 >= (inTransition ? TRANSITION_HIGH_WATER_MS : HIGH_WATER_MS)) {
           await new Promise((resolve) => setTimeout(resolve, PUMP_IDLE_MS));
           this.announceEndings();
           // Ask, do not guess.

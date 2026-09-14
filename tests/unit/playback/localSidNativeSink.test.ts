@@ -1222,6 +1222,26 @@ describe("a crossfade is one continuous stream of samples", () => {
     expect(later).toBeGreaterThan(0);
   });
 
+  // Skipping to a tune with no rendered opening: the incoming sink wrote the whole three-second tail at once,
+  // so on a Pixel 4 the old tune played on at full level and the new one then started abruptly behind it.
+  it("keeps the outgoing tail in hand until the incoming tune has audio to mix it with", async () => {
+    const backend = createBackend();
+    // A ring that fills as it is written and does not drain, like a pipeline far ahead of the speaker.
+    const write = backend.writeAudioTrack;
+    backend.writeAudioTrack = async (options) => {
+      const stats = await write(options);
+      backend.bufferedMs += (decodePcm(options.data).length / 2 / RATE) * 1000;
+      return stats;
+    };
+    const incoming = createNativeLocalSidSink(RATE, backend)!;
+    incoming.adoptCrossfadeTail!([new Int16Array(RATE * 3 * 2).fill(8000)], 2);
+    await settle(400);
+
+    const tailOnlyFrames = backend.pcm.reduce((frames, chunk) => frames + chunk.length / 2, 0);
+    expect(tailOnlyFrames).toBeGreaterThan(0);
+    expect(tailOnlyFrames).toBeLessThanOrEqual(RATE / 2);
+  });
+
   it("fades the outgoing tune only once the incoming one is playing", async () => {
     const backend = createBackend();
     const incoming = createNativeLocalSidSink(RATE, backend)!;
