@@ -381,7 +381,9 @@ export const resolveCachedArchive = async (prefix: string, version: number) => {
         await deleteCachedArchive(name);
       }
     } catch (error) {
-      addLog("warn", "HVSC cache stat failed", {
+      // A candidate that is not there is the ordinary answer before the first download.
+      const missing = /does not exist|not found|enoent/i.test((error as Error)?.message ?? "");
+      addLog(missing ? "debug" : "warn", "HVSC cache stat failed", {
         name,
         error: (error as Error).message,
       });
