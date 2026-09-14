@@ -147,16 +147,27 @@ const SelectLabel = React.forwardRef<
 ));
 SelectLabel.displayName = SelectPrimitive.Label.displayName;
 
+const isSelectionKey = (key: string) => key === "Enter" || key === " ";
+
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, onKeyDown, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
       "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-accent focus:text-accent-foreground",
       className,
     )}
+    onKeyDown={(event) => {
+      onKeyDown?.(event);
+      // A closed list stays mounted, and keeps focus on its highlighted option, until its exit
+      // animation ends. Enter or Space in that window used to pick the option and write it to the
+      // device. preventDefault stops Radix's own handler from selecting.
+      if (isSelectionKey(event.key) && event.currentTarget.closest('[role="listbox"][data-state="closed"]')) {
+        event.preventDefault();
+      }
+    }}
     {...props}
   >
     <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
