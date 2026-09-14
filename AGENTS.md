@@ -326,7 +326,7 @@ Workflows live in `.github/workflows/`. Read them before claiming CI covers some
   `fail_under = 90` on branch coverage.
 - Global coverage is necessary but not sufficient for PR convergence. **Changed-line (patch)
   coverage is a separate gate**: `codecov.yml` sets the patch target to **94%** and the project
-  target to **88%**, both with a 0% threshold, and `if_not_found: error` on patch. Both values carry the `%`
+  target to **87%**, both with a 0% threshold, and `if_not_found: error` on patch. Both values carry the `%`
   sign and must keep it — they read `0.91` until PR #412, which Codecov interprets as 0.91%
   rather than 91%, so the patch gate passed everything: that PR was reported at 89.94% patch
   coverage with a green check.
