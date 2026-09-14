@@ -359,7 +359,11 @@ export class HostProber {
       await system.delay(ADB_STATE_POLL_MS);
     }
     await this.closeTunnel(tunnel);
-    if (/open failed|connect failed|Connection refused/i.test(tunnel.stderr)) {
+    // A server that forbids forwarding still lets the local listener open, then refuses each channel.
+    if (/administratively prohibited/i.test(tunnel.stderr)) {
+      return { kind: "failed", missing: sshForwarding(endpoint, containerEndpoint, tunnel.stderr) };
+    }
+    if (/connect failed|Connection refused/i.test(tunnel.stderr)) {
       return { kind: "refused" };
     }
     return { kind: "failed", missing: containerAdbConnect(endpoint, containerEndpoint, `${output} ${tunnel.stderr}`) };

@@ -124,9 +124,14 @@ hold (§14).
   build. `logcat` and `pm` work that way.
 - **An attach command is not equivalent to `adb shell`.** A first-hand report has `uiautomator dump`
   run through it returning exit code 0 while writing no file, both as root and as uid 2000, while the
-  same command over adb worked. The failure is specific to UI-session tools, and **an exit code of 0 is
-  not evidence of success there**. Anything done through that route is verified by its artifact or
-  refused.
+  same command over adb worked. **An exit code of 0 is not evidence of success there**, so the UI
+  hierarchy is refused on that route. `input tap`, `input text` and `input keyevent` run through an
+  attach command are used by maintained tools on such phones, so input is allowed there.
+- **A plain `lxc-attach` session may lack Android's boot environment** (`ANDROID_DATA`,
+  `BOOTCLASSPATH`), which `am`, `pm`, `wm` and `input` need; one such tool sets those variables
+  explicitly. droidctl fills in each missing variable from `init.environ.rc`.
+- **In developer USB mode the phone runs a DHCP server** on the USB link. Some desktop kernels name the
+  RNDIS gadget as a mobile broadband device (`ww…`), and NetworkManager then leaves it unconfigured.
 - **adb over TCP into the container has been reported to work** after enabling Developer options and
   debugging inside the container. When it works the whole `adb` backend applies unchanged, which is
   why droidctl prefers it (§7.4).
@@ -339,8 +344,9 @@ Two routes into the container, preferred in this order:
 2. **`container-attach`.** Commands run as root through the verified attach command:
    `ssh -T -- <user>@<host> "[sudo -n] <attach command> /system/bin/sh -c '<android argv>'"`. The Android
    argv is quoted exactly as `adb shell` quotes it, and the whole line is quoted again for the phone's
-   login shell. Tools whose success cannot be verified by an artifact there (input, UI hierarchy,
-   assertions, recording) and `forward_webview` are refused; file pushes are verified by the byte count
+   login shell, and it starts by filling in any Android boot environment variable the session lacks
+   from `init.environ.rc`. The UI hierarchy and assertions (observed to exit 0 without a dump),
+   recording and `forward_webview` are refused; file pushes are verified by the byte count
    the container reports back. The probe sends a known line on stdin through the attach command and
    reads it back; where it does not arrive, tools that send data on stdin are refused on that phone.
 
@@ -680,7 +686,7 @@ the missing setup step they all document in a comment.
 | `droid_app.uninstall_app` / `clear_app_data`       | yes   | yes                    | yes                                                               |
 | `droid_app.start_app` / `stop_app`                 | yes   | yes                    | yes                                                               |
 | `droid_app.write_app_file` / `read_app_file`       | yes   | yes                    | yes; `write_app_file` refused if stdin is not passed through      |
-| `droid_input.*`                                    | yes   | yes                    | refused: exit 0 is not evidence of an injected event (§5.3)       |
+| `droid_input.*`                                    | yes   | yes                    | yes; coordinates checked against `wm size` inside the container   |
 | `droid_capture.screenshot`                         | yes   | yes                    | yes, PNG signature checked; a blank frame is not detected         |
 | `droid_capture.ui_hierarchy`                       | yes   | yes                    | refused: observed to exit 0 without writing a dump (§5.3)         |
 | `droid_capture.start_recording` / `stop_recording` | yes   | yes                    | refused: needs a detached adb shell that stops gracefully         |
@@ -1034,7 +1040,10 @@ sends a known line on stdin and reads it back; when it does not come back, `inst
 `write_app_file` and `push_file` are refused on that route and say why. Installing through `pm` skips
 any launcher integration the platform's own installer adds; `start_app` does not depend on it.
 
-**Q4. Can an adb connection be made into the container?** This is the preferred route. The login probe
+**Q4. Can an adb connection be made into the container?** This is the preferred route. The recipe it
+relies on (Developer options, USB debugging and Wireless debugging inside the container, then
+`adb connect` to port 5555) comes from a single first-hand report over Wi-Fi; the SSH tunnel over USB
+applies the same connection through a forwarded port. The login probe
 reads the phone's `/proc/net/tcp` and `/proc/net/tcp6` without root; a listener on port 5555 is forwarded
 over SSH to `127.0.0.1:<free port>` and connected with `adb connect`. A configured
 `DROIDCTL_SSH_CONTAINER_ADB` endpoint is tried first, and adb ports the container announces in its own
@@ -1042,17 +1051,21 @@ properties are tried after the attach route finds them. The outcomes are `adb-cl
 desktop), `container-adb-disabled` (nothing listening or the connection refused: enable Developer
 options, USB debugging and Wireless debugging inside the container), `container-adb-unauthorized`
 (accept the prompt; if none appears, add the desktop's adb public key to `/data/misc/adb/adb_keys`),
-`ssh-forwarding` and `container-adb-connect`. Wireless debugging that insists on a pairing code is
+`ssh-forwarding` (including a server that accepts the local listener but refuses each forwarded
+channel as administratively prohibited) and `container-adb-connect`. Wireless debugging that insists on a pairing code is
 paired once by hand (README) and then used through the configured endpoint.
 
 **Q5. Does `input` work inside the container?** Over the `container-adb` route it is `adb shell input`,
-the same as on a phone. Over the attach route it is refused, together with `ui_hierarchy` and the
-assertions: `uiautomator dump` run through an attach command has been reported to exit 0 without writing
-a file, and an injected event has no artifact that would prove it landed. The refusal names what the
-`container-adb` route is missing on that phone.
+the same as on a phone. Over the attach route it is `input` run through the attach command, which
+maintained tools on such phones use for taps, text and key events; the coordinates are checked against
+`wm size` inside the container, which can be smaller than the physical panel. `ui_hierarchy` and the
+assertions are refused on the attach route, because `uiautomator dump` run through an attach command has
+been reported to exit 0 without writing a file; the refusal names what the `container-adb` route is
+missing on that phone.
 
 **Q6. Does a screenshot capture Android window content?** `screencap -p` runs inside the container on
-both routes, so it captures the Android surface. The PNG signature is checked; a blank frame is not
+both routes, so it reads the Android surface rather than the host compositor; no report either confirms
+or rules out that it returns window content there. The PNG signature is checked; a blank frame is not
 detected, and the attach route's capability note says so.
 
 **Q7. How is a screen recording made?** Only on the `container-adb` route, where `screenrecord` runs in a

@@ -18,6 +18,7 @@ import {
   type RawSpawnHandle,
 } from "../../src/transport/adb.js";
 import {
+  CONTAINER_ENVIRONMENT,
   CONTAINER_FACTS_ARGV,
   CONTAINER_SHELL,
   LOGIN_PROBE_SCRIPT,
@@ -162,7 +163,8 @@ export class FakeSshSystem implements SshSystem {
   }
 }
 
-export type EndpointBehaviour = "device" | "unauthorized" | "refused" | "silent" | "forward-denied" | "never-listens";
+export type EndpointBehaviour =
+  "device" | "unauthorized" | "refused" | "silent" | "forward-denied" | "forward-prohibited" | "never-listens";
 
 export interface ShellReply {
   readonly stdout?: string | Buffer;
@@ -394,7 +396,11 @@ export class FakePhone {
 
     const shellIndex = words.indexOf(CONTAINER_SHELL);
     if (shellIndex >= 0) {
-      const argv = parseShellWords(words[shellIndex + 2]!);
+      const line = words[shellIndex + 2]!;
+      if (!line.startsWith(`${CONTAINER_ENVIRONMENT} `)) {
+        return reply("", "container command without the Android environment prefix", 127);
+      }
+      const argv = parseShellWords(line.slice(CONTAINER_ENVIRONMENT.length + 1));
       this.containerCalls.push({ prefix: words.slice(0, shellIndex), argv, stdin, destination });
       if (JSON.stringify(argv) === JSON.stringify(CONTAINER_FACTS_ARGV)) {
         const echoed = s.attachStdin && stdin !== undefined ? `stdin=${stdin.toString().trim()}\n` : "stdin=\n";
@@ -430,6 +436,9 @@ export class FakePhone {
         this.connected.set(second!, "offline");
         if (behaviour === "refused") {
           tunnel?.handle.emitStderr("channel 2: open failed: connect failed: Connection refused\n");
+        }
+        if (behaviour === "forward-prohibited") {
+          tunnel?.handle.emitStderr("channel 2: open failed: administratively prohibited: open failed\n");
         }
       }
       return reply(`connected to ${second}\n`);

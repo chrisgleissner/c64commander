@@ -104,7 +104,7 @@ function toolCalls(
   targetId: string,
   apk: string,
   runRoot: string,
-  withInput: boolean,
+  withWebviewForward: boolean,
 ): [string, Record<string, unknown>][] {
   return [
     ["droid_target.describe_target", { targetId }],
@@ -115,14 +115,15 @@ function toolCalls(
     ["droid_app.clear_app_data", { targetId, package: PACKAGE, confirm: true }],
     ["droid_app.write_app_file", { targetId, package: PACKAGE, relativePath: "c64u-config.json", content: "{}" }],
     ["droid_app.read_app_file", { targetId, package: PACKAGE, relativePath: "c64u-config.json" }],
-    ...(withInput
-      ? ([
-          ["droid_input.tap", { targetId, x: 10, y: 20 }],
-          ["droid_input.swipe", { targetId, x1: 1, y1: 2, x2: 30, y2: 40, durationMs: 300 }],
-          ["droid_input.input_text", { targetId, text: "hello world" }],
-          ["droid_input.press_key", { targetId, keycode: "KEYCODE_DPAD_DOWN", repeat: 2 }],
-          ["droid_device.forward_webview", { targetId, package: PACKAGE, localPort: 9222 }],
-        ] as [string, Record<string, unknown>][])
+    ["droid_input.tap", { targetId, x: 10, y: 20 }],
+    ["droid_input.swipe", { targetId, x1: 1, y1: 2, x2: 30, y2: 40, durationMs: 300 }],
+    ["droid_input.input_text", { targetId, text: "hello world" }],
+    ["droid_input.press_key", { targetId, keycode: "KEYCODE_DPAD_DOWN", repeat: 2 }],
+    ...(withWebviewForward
+      ? ([["droid_device.forward_webview", { targetId, package: PACKAGE, localPort: 9222 }]] as [
+          string,
+          Record<string, unknown>,
+        ][])
       : []),
     ["droid_capture.screenshot", { targetId, name: "home", runRoot }],
     ["droid_capture.logcat", { targetId, mode: "dump", filters: ["FATAL"], runRoot }],
@@ -140,10 +141,10 @@ function comparable(data: Record<string, unknown>): Record<string, unknown> {
   );
 }
 
-async function runWorkload(route: Route, withInput: boolean) {
+async function runWorkload(route: Route, withWebviewForward: boolean) {
   const { apk, runRoot } = await workload();
   const results: Record<string, unknown> = {};
-  for (const [name, args] of toolCalls(route.targetId, apk, runRoot, withInput)) {
+  for (const [name, args] of toolCalls(route.targetId, apk, runRoot, withWebviewForward)) {
     const envelope = await invoke(name, args, route.ctx);
     expect(envelope.ok, `${route.targetId} ${name}: ${JSON.stringify(envelope.error)}`).toBe(true);
     results[name] = comparable(envelope.data);
@@ -227,6 +228,8 @@ describe("parity: container attach route against an ordinary adb target", () => 
 
     expect(actual).toEqual(expected);
     expect(expected["droid_app.read_app_file"]).toMatchObject({ content: '{"host":"c64u"}' });
+    expect(actual["droid_input.press_key"]).toEqual({ pressed: true, keycode: 20, repeat: 2, longPress: false });
+    expect(attached.phone.deviceShellCalls.map((call) => call.argv.join(" "))).toContain("input tap 10 20");
     expect(expected["droid_device.run_shell"]).toEqual({
       stdout: "two words\n",
       stderr: "",
@@ -245,10 +248,6 @@ describe("parity: container attach route against an ordinary adb target", () => 
     const attached = await containerAttach();
     const targetId = SSH_TARGET;
     const refusals: Record<string, Record<string, unknown>> = {
-      "droid_input.tap": { targetId, x: 1, y: 1 },
-      "droid_input.swipe": { targetId, x1: 1, y1: 1, x2: 2, y2: 2 },
-      "droid_input.input_text": { targetId, text: "x" },
-      "droid_input.press_key": { targetId, keycode: 20 },
       "droid_capture.ui_hierarchy": { targetId },
       "droid_assert.assert_visible": { targetId, name: "a", match: { text: "x" } },
       "droid_assert.assert_not_visible": { targetId, name: "a", match: { text: "x" } },

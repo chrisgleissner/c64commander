@@ -78,9 +78,11 @@ export function usbNetworkAddress(iface: { name: string; driver: string; opersta
     id: "usb-network-address",
     message:
       `USB network interface ${iface.name} (driver ${iface.driver}, link ${iface.operstate}) has no IPv4 address, so the ` +
-      "phone behind it cannot be reached. If the phone does not hand out an address, assign one in its subnet, for " +
-      `example: nmcli connection add type ethernet ifname ${iface.name} con-name phone-usb ipv4.method manual ` +
-      "ipv4.addresses 192.168.2.14/24 ipv6.method disabled && nmcli connection up phone-usb",
+      "phone behind it cannot be reached. Select the developer USB mode on the phone, which hands out an address " +
+      "over DHCP. If NetworkManager still leaves the interface unconfigured, which happens when the kernel names it " +
+      `ww..., assign a static address in the phone's subnet: nmcli connection add type ethernet ifname ${iface.name} ` +
+      "con-name phone-usb ipv4.method manual ipv4.addresses 192.168.2.100/24 ipv6.method disabled && nmcli " +
+      "connection up phone-usb",
   };
 }
 

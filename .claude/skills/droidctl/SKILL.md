@@ -89,8 +89,8 @@ on `logcat`) before running, not after hitting the limit.
 ## The ssh transport
 
 An `ssh:` target reaches the container either through an adb tunnel (`route: "container-adb"`,
-every tool works) or through a container attach command (`route: "container-attach"`, input, UI
-hierarchy, assertions, recording and `forward_webview` are refused with the reason). A target with
+every tool works) or through a container attach command (`route: "container-attach"`: UI hierarchy,
+assertions, recording and `forward_webview` are refused with the reason). A target with
 `route: null` refuses every tool with `transport_unavailable`; read `details.prerequisites` and
 follow the step each one names.
 

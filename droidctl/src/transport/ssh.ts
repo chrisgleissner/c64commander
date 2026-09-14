@@ -85,14 +85,6 @@ export const SSH_DETECTION_ORDER: readonly string[] = [
 
 /** Tools the attach route refuses, each with the reason it cannot be trusted there. */
 export const CONTAINER_ADB_ONLY: Readonly<Record<string, string>> = {
-  "droid_input.tap":
-    "Input injection run through the container attach command cannot be verified: a UI-session command there can exit 0 with no effect.",
-  "droid_input.swipe":
-    "Input injection run through the container attach command cannot be verified: a UI-session command there can exit 0 with no effect.",
-  "droid_input.input_text":
-    "Input injection run through the container attach command cannot be verified: a UI-session command there can exit 0 with no effect.",
-  "droid_input.press_key":
-    "Input injection run through the container attach command cannot be verified: a UI-session command there can exit 0 with no effect.",
   "droid_capture.ui_hierarchy":
     "uiautomator run through the container attach command has exited 0 without writing a dump.",
   "droid_assert.assert_visible": "Assertions read the uiautomator hierarchy, which the attach route cannot capture.",
@@ -104,7 +96,15 @@ export const CONTAINER_ADB_ONLY: Readonly<Record<string, string>> = {
     "The WebView DevTools socket is an abstract socket inside the container, which only adb forward reaches.",
 };
 
+const INPUT_CAVEAT =
+  "Injected with input inside the container, as tools on such phones do. Coordinates are checked against wm size " +
+  "inside the container, which can be smaller than the physical panel.";
+
 const ATTACH_ROUTE_CAVEATS: Readonly<Record<string, string>> = {
+  "droid_input.tap": INPUT_CAVEAT,
+  "droid_input.swipe": INPUT_CAVEAT,
+  "droid_input.input_text": INPUT_CAVEAT,
+  "droid_input.press_key": INPUT_CAVEAT,
   "droid_app.install_app":
     "Installed with pm install inside the container, which skips any launcher integration the platform's own installer adds.",
   "droid_capture.screenshot":

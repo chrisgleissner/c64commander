@@ -97,12 +97,16 @@ and one for each ssh route.
   under one target id.
 - **`container-attach`** (fallback). droidctl runs commands inside the container as root through a
   container attach command over SSH. App lifecycle, install (`pm install` with the APK on stdin),
-  app files, logcat, screenshot, `run_shell`, `prepare_device` and file transfer work. Input
-  injection, UI hierarchy and assertions, screen recording and `forward_webview` are refused with
-  `unsupported_on_transport`, because a UI-session command run that way can exit 0 without effect, and
-  the message names what is missing for the `container-adb` route. The probe also checks that the
-  attach command passes stdin into the container; where it does not, `install_app`, `write_app_file`
-  and `push_file` are refused there too.
+  app files, input (`input tap`, `swipe`, `text`, `keyevent`), logcat, screenshot, `run_shell`,
+  `prepare_device` and file transfer work. The UI hierarchy and assertions, screen recording and
+  `forward_webview` are refused with `unsupported_on_transport`: `uiautomator dump` run through an
+  attach command has been reported to exit 0 without writing a file, recording needs a detached adb
+  shell, and the DevTools socket is only reachable through `adb forward`. The message names what is
+  missing for the `container-adb` route. Android's boot environment (`ANDROID_DATA`, `BOOTCLASSPATH`
+  and the rest) is filled in from `init.environ.rc` for any variable the attach session lacks, so `am`,
+  `pm`, `wm` and `input` also run through a plain `lxc-attach`. The probe checks that the attach command
+  passes stdin into the container; where it does not, `install_app`, `write_app_file` and `push_file`
+  are refused too.
 
 ### Detection order
 
@@ -187,8 +191,9 @@ Each message states the step that supplies the prerequisite, for example the exa
    setting is not `192.168.2.15`, set `DROIDCTL_SSH_HOSTS` to the address it shows.
 
 3. **USB networking.** No udev rule is needed: the Ubuntu kernel binds `cdc_ncm`, `cdc_ether` or
-   `rndis_host` to the phone's network gadget, and droidctl finds the interface by that driver. Check
-   that the interface exists and has an address in the phone's subnet:
+   `rndis_host` to the phone's network gadget, and droidctl finds the interface by that driver. In
+   developer USB mode the phone runs a DHCP server for this link, so NetworkManager normally gives the
+   interface an address in `192.168.2.0/24`. Check that the interface exists and has one:
 
    ```bash
    ip -br addr                                            # a new usb0 or enx... interface
@@ -196,12 +201,14 @@ Each message states the step that supplies the prerequisite, for example the exa
    nc -vz 192.168.2.15 22                                 # succeeded = SSH is listening
    ```
 
-   If the interface has no IPv4 address after a few seconds, the phone is not handing one out; give
-   it a static address in the phone's subnet and keep it for later connections:
+   If the interface has no IPv4 address after a few seconds, check the USB mode on the phone. Some
+   kernels name an RNDIS gadget `ww…` as a mobile broadband device, and NetworkManager then leaves it
+   unconfigured; give it a static address outside the phone's DHCP range and keep it for later
+   connections:
 
    ```bash
    nmcli connection add type ethernet ifname <interface> con-name phone-usb \
-     ipv4.method manual ipv4.addresses 192.168.2.14/24 ipv6.method disabled
+     ipv4.method manual ipv4.addresses 192.168.2.100/24 ipv6.method disabled
    nmcli connection up phone-usb
    ```
 
@@ -229,6 +236,10 @@ Each message states the step that supplies the prerequisite, for example the exa
    adb -s 127.0.0.1:15555 shell getprop ro.build.version.sdk
    adb disconnect 127.0.0.1:15555; kill %1
    ```
+
+   With adb debugging on, adbd may also accept connections on the phone's other networks, such as
+   Wi-Fi; turn debugging off inside the container when the phone leaves a trusted network. droidctl
+   itself only connects through the SSH tunnel.
 
    If no authorization prompt appears, add this computer's key through the attach route instead:
    append `~/.android/adbkey.pub` to `/data/misc/adb/adb_keys` inside the container. If the container

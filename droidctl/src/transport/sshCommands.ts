@@ -130,6 +130,16 @@ export function hostShellCommand(script: string, rootPrefix: readonly string[] =
   return [...rootPrefix, "sh", "-c", script].map(quoteForRemoteShell).join(" ");
 }
 
+/*
+ * An attach command that does not carry Android's boot environment leaves am, pm,
+ * wm and input without ANDROID_DATA or BOOTCLASSPATH. Each variable the session
+ * lacks is taken from init.environ.rc; one already set is kept as it is.
+ */
+export const CONTAINER_ENVIRONMENT =
+  'for e in /init.environ.rc /system/etc/init/hw/init.environ.rc; do [ -r "$e" ] || continue; ' +
+  'while read -r k n v; do if [ "$k" = export ] && [ -z "$(eval "echo \\${$n:-}")" ]; then export "$n=$v"; fi; ' +
+  'done < "$e"; break; done;';
+
 /**
  * Two shells re-split this line: the phone's login shell, then the container's.
  * The Android argv is quoted for the inner one exactly as `adb shell` quotes it,
@@ -145,7 +155,7 @@ export function containerCommand(
       details: { attachCommand: [...attachCommand] },
     });
   }
-  const androidLine = argv.map(quoteForRemoteShell).join(" ");
+  const androidLine = `${CONTAINER_ENVIRONMENT} ${argv.map(quoteForRemoteShell).join(" ")}`;
   return [...rootPrefix, ...attachCommand, CONTAINER_SHELL, "-c", androidLine].map(quoteForRemoteShell).join(" ");
 }
 

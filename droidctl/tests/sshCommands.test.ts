@@ -17,6 +17,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import {
+  CONTAINER_ENVIRONMENT,
   CONTAINER_FACTS_ARGV,
   LOGIN_PROBE_SCRIPT,
   STDIN_PROBE,
@@ -140,12 +141,48 @@ describe("container command quoting, checked by a real shell", () => {
     const { stdout } = await run("sh", ["-c", line]);
 
     expect(stdout).toBe("two words|it's|$HOME;rm -rf /||");
-    expect(parseShellWords(parseShellWords(line).at(-1)!)).toEqual(argv);
+    const androidLine = parseShellWords(line).at(-1)!;
+    expect(androidLine.startsWith(`${CONTAINER_ENVIRONMENT} `)).toBe(true);
+    expect(parseShellWords(androidLine.slice(CONTAINER_ENVIRONMENT.length + 1))).toEqual(argv);
+  });
+
+  it("fills Android's boot environment from init.environ.rc without overriding what the session has", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "droidctl-environ-"));
+    const environ = path.join(dir, "init.environ.rc");
+    await writeFile(
+      environ,
+      [
+        "on early-init",
+        "    export ANDROID_DATA /data",
+        "    export BOOTCLASSPATH /apex/a.jar:/apex/b.jar",
+        "    export KEPT /from/file",
+        "",
+      ].join("\n"),
+    );
+    const argv = ["sh", "-c", 'echo "$ANDROID_DATA|$BOOTCLASSPATH|$KEPT"'];
+    const line = containerCommand([], ["sh", "-c", 'shift; exec sh "$@"', "attach"], argv).replace(
+      "/init.environ.rc /system/etc/init/hw/init.environ.rc",
+      `${path.join(dir, "missing.rc")} ${environ}`,
+    );
+
+    const { stdout } = await run("sh", ["-c", line], { env: { PATH: "/usr/bin:/bin", KEPT: "from-session" } });
+
+    expect(stdout).toBe("/data|/apex/a.jar:/apex/b.jar|from-session\n");
   });
 
   it("puts the root prefix and attach command ahead of the container shell", () => {
     const words = parseShellWords(containerCommand(["sudo", "-n"], ["lxc-attach", "-n", "android", "--"], ["id"]));
-    expect(words).toEqual(["sudo", "-n", "lxc-attach", "-n", "android", "--", "/system/bin/sh", "-c", "id"]);
+    expect(words).toEqual([
+      "sudo",
+      "-n",
+      "lxc-attach",
+      "-n",
+      "android",
+      "--",
+      "/system/bin/sh",
+      "-c",
+      `${CONTAINER_ENVIRONMENT} id`,
+    ]);
     expect(() => containerCommand([], ["x"], [])).toThrow(/non-empty argument vector/);
   });
 

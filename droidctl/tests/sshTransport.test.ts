@@ -296,6 +296,16 @@ describe("ssh detection order, stage by stage", () => {
     expect(ids(forward!)[0]).toBe("ssh-forwarding");
     expect(forward!.missingPrerequisites![0]!.message).toContain("Could not request local forwarding");
 
+    // The phone's sshd refusing each forwarded channel must not read as adbd being switched off.
+    const prohibited = usbPhone({
+      listeners: ["00000000:15B3"],
+      endpoints: { "127.0.0.1:5555": "forward-prohibited" },
+    });
+    const [channel] = await prohibited.transport().listTargets();
+    expect(ids(channel!)[0]).toBe("ssh-forwarding");
+    expect(channel!.missingPrerequisites![0]!.message).toContain("administratively prohibited");
+    expect(channel!.missingPrerequisites![0]!.message).toContain("AllowTcpForwarding yes");
+
     const quiet = usbPhone({ listeners: ["00000000:15B3"], endpoints: { "127.0.0.1:5555": "never-listens" } });
     const [never] = await quiet.transport().listTargets();
     expect(never!.missingPrerequisites![0]!.message).toContain("nothing listened on 127.0.0.1:40000 within 5000 ms");
@@ -648,7 +658,9 @@ describe("ssh capabilities and connection facts", () => {
   it("describes the attach route's floor when asked without a target", () => {
     const capabilities = new SshTransport({ system: new FakeSshSystem() }).capabilities();
     expect(capabilities.tools["droid_device.run_shell"]).toBe("supported");
-    expect(capabilities.tools["droid_input.tap"]).toBe("unsupported");
+    expect(capabilities.tools["droid_input.tap"]).toBe("supported");
+    expect(capabilities.notes["droid_input.tap"]).toContain("checked against wm size inside the container");
+    expect(capabilities.tools["droid_capture.ui_hierarchy"]).toBe("unsupported");
     expect(capabilities.notes["droid_capture.screenshot"]).toContain("blank frame is not detected");
   });
 
@@ -685,8 +697,9 @@ describe("ssh capabilities and connection facts", () => {
     const attachSsh = attachPhone.transport();
     await attachSsh.listTargets();
     const capabilities = attachSsh.capabilities(TARGET);
-    expect(capabilities.tools["droid_input.press_key"]).toBe("unsupported");
-    expect(capabilities.notes["droid_input.press_key"]).toContain(
+    expect(capabilities.tools["droid_input.press_key"]).toBe("supported");
+    expect(capabilities.tools["droid_capture.ui_hierarchy"]).toBe("unsupported");
+    expect(capabilities.notes["droid_capture.ui_hierarchy"]).toContain(
       "It needs the container adb route, which is unavailable: [container-adb-disabled]",
     );
   });

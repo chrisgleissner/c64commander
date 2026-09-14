@@ -58,10 +58,6 @@ describe("resources", () => {
       "droid_capture.stop_recording",
       "droid_capture.ui_hierarchy",
       "droid_device.forward_webview",
-      "droid_input.input_text",
-      "droid_input.press_key",
-      "droid_input.swipe",
-      "droid_input.tap",
     ]);
   });
 
