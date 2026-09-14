@@ -86,6 +86,7 @@ import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
 import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidationContext } from "@/lib/fileValidation";
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
 import { notifyReachable, notifyUnreachable } from "@/lib/connection/reachabilityEvents";
+import { readNativeNetworkStatus } from "@/lib/connection/offlineStartup";
 import { getLifecycleState } from "@/lib/appLifecycle";
 import { CapacitorHttp } from "@capacitor/core";
 import { buildCreateDiskPlan, type CreateDiskArgs, type CreateDiskPlan } from "@/lib/disks/createDisk";
@@ -1898,7 +1899,10 @@ export class C64API {
                   const cancelledAbort = isAbortLikeError(error) && !timedSignal.didTimeout();
                   const isAbort = isAbortLikeError(error) || timedSignal.didTimeout() || /timed out/i.test(rawMessage);
                   const isNetworkFailure = isNetworkFailureMessage(rawMessage);
+                  // Leaving the network fails requests before the platform's callback says so; asking now lets
+                  // everything below see the real cause.
                   const transportFailure = (isNetworkFailure || timedSignal.didTimeout()) && !callerAborted;
+                  if (transportFailure) await readNativeNetworkStatus();
                   const failure = classifyError(error);
                   const normalizedError =
                     !callerAborted && !superseded && (isAbort || isNetworkFailure)

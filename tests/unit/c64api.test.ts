@@ -1776,6 +1776,35 @@ describe("c64api", () => {
       const unexpected = traces.getTraceEvents().filter((event) => event.type === "error" && !event.data.isExpected);
       expect(unexpected).toEqual([]);
     });
+
+    // A disk mount sent as Wi-Fi went down failed about 250 ms before Android reported the lost network,
+    // so it was logged and counted as an error. The failed request asks the platform itself.
+    it("asks the platform for the network state when a request fails before the change is reported", async () => {
+      const { recordNetworkStatus } = await import("@/lib/connection/networkStatusWatch");
+      const traces = await import("@/lib/tracing/traceSession");
+      const probeWindow = window as Window & {
+        __c64uTestProbeEnabled?: boolean;
+        __c64uMockNetworkStatus?: { online: boolean; supported: boolean };
+      };
+      recordNetworkStatus({ online: true, supported: true });
+      traces.clearTraceEvents();
+      probeWindow.__c64uTestProbeEnabled = true;
+      probeWindow.__c64uMockNetworkStatus = { online: false, supported: true };
+      getFetchMock().mockRejectedValue(new TypeError("Failed to fetch"));
+
+      try {
+        await expect(
+          new C64API("http://c64u").getInfo({ __c64uIntent: "user", __c64uBypassCache: true }),
+        ).rejects.toThrow();
+      } finally {
+        delete probeWindow.__c64uTestProbeEnabled;
+        delete probeWindow.__c64uMockNetworkStatus;
+      }
+
+      expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
+      const unexpected = traces.getTraceEvents().filter((event) => event.type === "error" && !event.data.isExpected);
+      expect(unexpected).toEqual([]);
+    });
   });
 
   it("covers runner and drive request helpers", async () => {
