@@ -1459,6 +1459,26 @@ describe("SettingsPage", () => {
     expect(deviceNameInput).toHaveValue("Office U64");
   });
 
+  // The question was in the DOM twice, hidden for screen readers and visible, so a screen reader read it twice.
+  it("asks once whether to delete a device that nothing refers to", async () => {
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      devices: [
+        ...savedDevicesRef.current.devices,
+        { ...savedDevicesRef.current.devices[0], id: "saved-device-2", name: "Backup U64", host: "backup-u64" },
+      ],
+    };
+    mockGetSavedDeviceDependencySummary.mockResolvedValue({ diskCount: 0, playlistItemCount: 0, totalCount: 0 });
+
+    renderSettingsPage();
+    fireEvent.click(screen.getByTestId("settings-delete-device"));
+
+    const deleteDialog = await screen.findByRole("alertdialog", { name: /delete device/i });
+    await waitFor(() => expect(mockGetSavedDeviceDependencySummary).toHaveBeenCalled());
+    expect(within(deleteDialog).getAllByText(/from your saved devices\? This can.t be undone\./)).toHaveLength(1);
+    expect(deleteDialog).toHaveAccessibleDescription(/from your saved devices\? This can.t be undone\./);
+  });
+
   it("warns before deleting a device that is still referenced by playlists or disks", async () => {
     savedDevicesRef.current = {
       ...savedDevicesRef.current,

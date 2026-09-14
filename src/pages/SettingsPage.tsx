@@ -2013,7 +2013,10 @@ export default function SettingsPage() {
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete device?</AlertDialogTitle>
-                      <AlertDialogDescription>
+                      {/* Shown when it is the whole message: a visible copy beside the hidden one was read out twice. */}
+                      <AlertDialogDescription
+                        className={(deleteDependencySummary?.totalCount ?? 0) > 0 ? undefined : "not-sr-only"}
+                      >
                         {(deleteDependencySummary?.totalCount ?? 0) > 0 ? (
                           <>
                             Removing{" "}
@@ -2046,15 +2049,7 @@ export default function SettingsPage() {
                           remove them.
                         </p>
                       </div>
-                    ) : (
-                      <div className="space-y-1 text-sm text-muted-foreground">
-                        <p>
-                          Remove{" "}
-                          {selectedSavedDevice ? buildSavedDevicePrimaryLabel(selectedSavedDevice) : "this device"} from
-                          your saved devices? This can&apos;t be undone.
-                        </p>
-                      </div>
-                    )}
+                    ) : null}
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction
