@@ -225,6 +225,29 @@ describe("useHvscLibrary progress coverage", () => {
     expect(result.current.hvscPhase).toBe("download");
   });
 
+  // On a Pixel 4 a download cut at 15% left the panel reading "Files extracted: 1" with nothing unpacked.
+  it("does not count archives found for download as extracted files", async () => {
+    mocks.installOrUpdateHvscMock.mockImplementation(() => new Promise<void>(() => undefined));
+    const { result } = renderHook(() => useHvscLibrary(true));
+    await waitFor(() => expect(progressListener).not.toBeNull());
+
+    act(() => {
+      void result.current.handleHvscInstall();
+    });
+    await waitFor(() => expect(result.current.hvscPhase).toBe("download"));
+    act(() => {
+      progressListener?.({ stage: "archive_discovery", processedCount: 0, totalCount: 1 });
+      progressListener?.({ stage: "archive_discovery", processedCount: 1, totalCount: 1, archiveName: "hvsc-85.7z" });
+      progressListener?.({ stage: "download", percent: 15, downloadedBytes: 150, totalBytes: 1000 });
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    });
+
+    expect(result.current.hvscDownloadPercent).toBe(15);
+    expect(result.current.hvscSummaryFilesExtracted).toBeNull();
+  });
+
   it("keeps stale progress non-terminal while native ingestion is still active", async () => {
     mocks.loadHvscStatusSummaryMock.mockReturnValue(
       createSummary({

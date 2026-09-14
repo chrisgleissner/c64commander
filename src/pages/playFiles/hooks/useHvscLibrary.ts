@@ -449,7 +449,9 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
         if (event.currentFile) setHvscCurrentFile(event.currentFile);
       }
       if (event.errorCause) setHvscErrorMessage(event.errorCause);
-      if (typeof event.processedCount === "number" || typeof event.totalCount === "number") {
+      // Archive discovery counts archives, not files: a download that failed showed "Files extracted: 1".
+      const countsFiles = HVSC_EXTRACTION_STAGES.has(event.stage ?? "");
+      if (countsFiles && (typeof event.processedCount === "number" || typeof event.totalCount === "number")) {
         const elapsed = nowMs - hvscExtractionThrottleRef.current;
         if (elapsed >= 120) {
           hvscExtractionThrottleRef.current = nowMs;
