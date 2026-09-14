@@ -32,7 +32,12 @@ import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
 import { C64_DEFAULTS } from "@/lib/c64api";
-import { buildDeviceHostWithHttpPort, getDeviceHostHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
+import {
+  buildDeviceHostWithHttpPort,
+  getDeviceHostFromBaseUrl,
+  getDeviceHostHttpPort,
+  stripPortFromDeviceHost,
+} from "@/lib/c64api/hostConfig";
 import { cn } from "@/lib/utils";
 import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
@@ -372,9 +377,11 @@ export default function SettingsPage() {
   const [discoveryPasswordInput, setDiscoveryPasswordInput] = useState("");
   const [discoveryPasswordError, setDiscoveryPasswordError] = useState<string | null>(null);
   const [demoPreviewBusy, setDemoPreviewBusy] = useState(false);
-  const runtimeDeviceHost = stripPortFromDeviceHost(deviceHost);
-  const runtimeHttpPort = getDeviceHostHttpPort(deviceHost, runtimeBaseUrl);
   const isDemoActive = status.state === "DEMO_ACTIVE";
+  // In Demo Mode requests go to the simulated device, so its address is shown rather than the saved device's.
+  const usedDeviceHost = isDemoActive && runtimeBaseUrl ? getDeviceHostFromBaseUrl(runtimeBaseUrl) : deviceHost;
+  const runtimeDeviceHost = stripPortFromDeviceHost(usedDeviceHost);
+  const runtimeHttpPort = getDeviceHostHttpPort(usedDeviceHost, runtimeBaseUrl);
   const selectedSavedDevice =
     savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
     savedDevices.devices[0] ??
@@ -1687,8 +1694,8 @@ export default function SettingsPage() {
                   />
                   <HelperText>
                     Currently using: <span className="font-sans break-all">{runtimeDeviceHost}</span>
-                    {` · HTTP ${runtimeHttpPort} · FTP ${getStoredFtpPort()} · Telnet ${getStoredTelnetPort()}`}
-                    {isDemoActive ? " (Demo mock)" : ""}
+                    {` · HTTP ${runtimeHttpPort} · FTP ${getStoredFtpPort()}`}
+                    {isDemoActive ? " (simulated device)" : ` · Telnet ${getStoredTelnetPort()}`}
                   </HelperText>
                   {isDemoActive ? (
                     <HelperText>

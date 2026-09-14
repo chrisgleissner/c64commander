@@ -198,8 +198,7 @@ const enterStockDemoMode = async () => {
   // DEMO_ACTIVE alone does not say what the app is talking to: a session that could not start the
   // simulated device reports Demo Mode and stays routed at the stored real host, on port 80.
   // Settings prints the runtime target; the port on it is the discriminator, because the mock
-  // binds an ephemeral one. The hostname is not — it keeps the stored device's name even while
-  // the requests go to loopback.
+  // binds an ephemeral one.
   const target = await js(`(async () => {
     history.pushState({}, "", "/settings");
     dispatchEvent(new PopStateEvent("popstate"));
@@ -214,7 +213,7 @@ const enterStockDemoMode = async () => {
   })()`);
   const httpPort = Number(/HTTP\s+(\d+)/.exec(target)?.[1] ?? NaN);
   expect(
-    target.includes("(Demo mock)") && httpPort > 1024,
+    target.includes("(simulated device)") && httpPort > 1024,
     `the app is not routed at the simulated device: ${JSON.stringify(target.slice(0, 140))}`,
   );
 };

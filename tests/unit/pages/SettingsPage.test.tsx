@@ -2167,6 +2167,25 @@ describe("SettingsPage", () => {
     expect(screen.getByText(/no real device detected in recent probe/i)).toBeInTheDocument();
   });
 
+  // On a Pixel 4 Demo Mode read "Currently using: 192.168.1.146 · HTTP 43499 · FTP 38389 · Telnet 23 (Demo mock)":
+  // the saved device's address beside the simulated device's ports.
+  it("shows the simulated device's address in Demo Mode rather than the saved device's", () => {
+    connectionPayloadRef.current = {
+      ...connectionPayloadRef.current,
+      status: { state: "DEMO_ACTIVE", isConnected: true, isConnecting: false, error: null, deviceInfo: null },
+      deviceHost: "192.168.1.146",
+      runtimeBaseUrl: "http://127.0.0.1:43499",
+    };
+
+    renderSettingsPage();
+
+    const line = screen.getByText(/Currently using:/);
+    expect(line.querySelector("span")).toHaveTextContent("127.0.0.1");
+    expect(line).toHaveTextContent("HTTP 43499");
+    expect(line).not.toHaveTextContent("192.168.1.146");
+    expect(line).not.toHaveTextContent("Telnet");
+  });
+
   it("shows the connected status message when a real device is connected", () => {
     connectionPayloadRef.current = {
       ...connectionPayloadRef.current,
