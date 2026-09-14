@@ -21,9 +21,8 @@ import { hydratePlaybackSnapshot, persistPlaybackSnapshot } from "@/lib/playback
 describe("machineExecutionStore", () => {
   beforeEach(() => {
     resetMachineExecution();
-    if (typeof sessionStorage !== "undefined") {
-      sessionStorage.clear();
-    }
+    sessionStorage.clear();
+    localStorage.clear();
   });
 
   it("tracks paused and running state transitions for Home and Play", () => {
