@@ -452,7 +452,8 @@ export function usePlaybackPersistence({
     const staleActiveRestore =
       pending.isPlaying && !pending.isPaused && isPlaybackSessionRestoreStale(pending.updatedAt, now);
     if (staleActiveRestore) {
-      addLog("warn", "Discarded stale active playback session restore; resuming paused", {
+      // The designed outcome for a session that is too old to trust, so not a warning.
+      addLog("info", "Discarded stale active playback session restore; resuming paused", {
         playlistStorageKey,
         updatedAt: pending.updatedAt,
         ageMs: now - Date.parse(pending.updatedAt),
