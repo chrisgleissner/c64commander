@@ -327,9 +327,11 @@ const reportAuthRequiredProbe = (config: Awaited<ReturnType<typeof loadPersisted
 
 const isAuthRequiredProbeFailure = (): boolean => snapshot.lastProbeError === AUTH_REQUIRED_PROBE_ERROR;
 
+let lastProbedDeviceInfo: DeviceInfo | null = null;
 export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<boolean> {
   const config = await loadPersistedConnectionConfig();
   const outcome = await runProbeInfo(config, options);
+  lastProbedDeviceInfo = outcome.result.deviceInfo;
   if (outcome.kind === "auth") {
     reportAuthRequiredProbe(config);
   } else if (outcome.kind === "transport") {
@@ -811,9 +813,9 @@ const readIdentityFromRuntimeTarget = async (): Promise<ProbeInfoResult> => {
 const transitionToRealConnected = async (
   trigger: DiscoveryTrigger,
   runtimeConfig?: { baseUrl: string; deviceHost: string; password?: string },
+  probedDeviceInfo: DeviceInfo | null = null,
 ) => {
-  // Leaving Demo Mode must not carry the simulated device's identity onto real hardware; the
-  // identity is re-read below from whatever answers now.
+  // Leaving Demo Mode swaps the simulated device's identity for the one the probe just read from real hardware.
   const leavingDemoMode = snapshot.state === "DEMO_ACTIVE";
   clearPinnedDemoMode();
   cancelActiveDiscovery();
@@ -844,7 +846,7 @@ const transitionToRealConnected = async (
     stickyRealDeviceLock = true;
   }
   addLog("info", "Connection switched to real device", { trigger });
-  if (leavingDemoMode) setSnapshot({ deviceInfo: null });
+  if (leavingDemoMode) setSnapshot({ deviceInfo: probedDeviceInfo });
   if (!snapshot.deviceInfo) {
     void ensureDeviceIdentityAfterConnect();
   }
@@ -1174,7 +1176,7 @@ const handleProbeOutcome = async (
     }
     // The probe's own answer may already have promoted the connection (noteReachable).
     if (snapshot.state === "REAL_CONNECTED") return;
-    await transitionToRealConnected(trigger);
+    await transitionToRealConnected(trigger, undefined, lastProbedDeviceInfo);
     return;
   }
 
@@ -1319,7 +1321,7 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
         if (snapshot.state === "DEMO_ACTIVE") {
           addLog("info", "Real device detected during demo mode", { trigger });
         }
-        await transitionToRealConnected(trigger);
+        await transitionToRealConnected(trigger, undefined, lastProbedDeviceInfo);
       } else {
         if (!discoveryRun.isCurrent()) return;
         setSnapshot({ lastProbeFailedAtMs: Date.now() });
@@ -1391,7 +1393,7 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
         cancelled = true;
         globalThis.clearTimeout(windowTimer);
         globalThis.clearInterval(probeTimer);
-        await transitionToRealConnected(trigger);
+        await transitionToRealConnected(trigger, undefined, lastProbedDeviceInfo);
       } else {
         if (!discoveryRun.isCurrent()) return;
         if (windowExpired) {

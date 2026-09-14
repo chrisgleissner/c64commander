@@ -1254,6 +1254,38 @@ describe("connectionManager", () => {
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
   });
 
+  // Leaving Demo Mode dropped the identity and re-read it, and the badge counted "Device identity
+  // unavailable" for the two seconds that took, although the probe had just read the real device.
+  it("keeps the identity the background probe read when it leaves Demo Mode for the real device", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(800);
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ product: "C64 Ultimate", firmware_version: "1.2RC", errors: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockImplementation(() => new Promise<Response>(() => undefined));
+
+    await discoverConnection("background");
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(getConnectionSnapshot().deviceInfo).toMatchObject({ product: "C64 Ultimate", firmware_version: "1.2RC" });
+  });
+
   it("keeps demo active after the user explicitly pins demo mode before background rediscovery succeeds", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, pinDemoModeByUserChoice } =
       await import("../../../src/lib/connection/connectionManager");
