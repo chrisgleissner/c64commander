@@ -68,6 +68,9 @@ vi.mock("@/lib/connection/connectionManager", () => ({
 vi.mock("@/lib/connection/networkTransitions", () => ({
   installNetworkTransitions: () => () => undefined,
 }));
+vi.mock("@/lib/connection/simulatedDeviceContent", () => ({
+  installSimulatedDeviceContentCleanup: () => () => undefined,
+}));
 
 vi.mock("@/lib/c64api", () => ({
   buildBaseUrlFromDeviceHost: (host?: string) => `http://${host ?? "c64u"}`,

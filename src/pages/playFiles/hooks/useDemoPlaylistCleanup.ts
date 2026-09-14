@@ -7,12 +7,16 @@
  */
 
 import { useEffect, useRef } from "react";
+import {
+  isSimulatedDeviceOrigin,
+  subscribeSimulatedDeviceContentRemoved,
+} from "@/lib/connection/simulatedDeviceContent";
 import { subscribeHvscDemoLibraryRemoved } from "@/lib/hvsc/hvscDemoLibraryCleanup";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
 /**
- * Leaving Demo Mode removes its HVSC library from storage. With the Play page open, the playlist in
- * memory drops the library's tunes as well, or its next save would bring them back.
+ * Leaving Demo Mode removes its HVSC library and the simulated device's files from storage. With the
+ * Play page open, the playlist in memory drops them as well, or its next save would bring them back.
  */
 export const useDemoPlaylistCleanup = (
   playlist: PlaylistItem[],
@@ -24,6 +28,13 @@ export const useDemoPlaylistCleanup = (
 
   useEffect(
     () => subscribeHvscDemoLibraryRemoved(() => removeRef.current((item) => item.request.source === "hvsc")),
+    [],
+  );
+  useEffect(
+    () =>
+      subscribeSimulatedDeviceContentRemoved(() =>
+        removeRef.current((item) => isSimulatedDeviceOrigin(item.request.origin)),
+      ),
     [],
   );
 };

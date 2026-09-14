@@ -21,6 +21,7 @@ import { invalidateForConnectionStateTransition } from "@/lib/query/c64QueryInva
 import { getBackgroundRediscoveryDelayMs, getNextBackgroundFailureCount } from "@/lib/query/c64PollingGovernance";
 import { getDeviceDiscoveryState, subscribeDeviceDiscovery } from "@/lib/deviceDiscovery/discoveryManager";
 import { installNetworkTransitions } from "@/lib/connection/networkTransitions";
+import { installSimulatedDeviceContentCleanup } from "@/lib/connection/simulatedDeviceContent";
 import { isNetworkKnownOffline, subscribeNetworkEdges } from "@/lib/connection/networkStatusWatch";
 
 const allowBackgroundRediscovery = () => {
@@ -87,6 +88,7 @@ export function ConnectionController() {
   }, []);
 
   useEffect(() => installNetworkTransitions(), []);
+  useEffect(() => installSimulatedDeviceContentCleanup(), []);
 
   // A returning network starts a fresh schedule: failures counted while away say nothing about now.
   useEffect(
