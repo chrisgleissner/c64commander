@@ -1291,6 +1291,43 @@ describe("a crossfade is one continuous stream of samples", () => {
     expect(backend.opens.length).toBe(1);
   });
 
+  // Skipping to a tune whose opening was already rendered: the outgoing sink flushed the track at once and was
+  // replaced before it could refill it, so the ring sat empty until the next tune's first write, a 50 ms dropout.
+  it("flushes the track for a skip together with the next write, not ahead of it", async () => {
+    const backend = createBackend();
+    const calls: string[] = [];
+    const write = backend.writeAudioTrack;
+    const flush = backend.flushAudioTrack!;
+    backend.writeAudioTrack = async (options) => {
+      calls.push("write");
+      return write(options);
+    };
+    backend.flushAudioTrack = async () => {
+      calls.push("flush");
+      return flush();
+    };
+    const outgoing = createNativeLocalSidSink(RATE, backend)!;
+    scheduleChunk(outgoing, 2);
+    backend.bufferedMs = 1500;
+    await settle();
+    const flushesBefore = backend.flushes;
+
+    outgoing.beginCrossfadeTailPlayout!(4);
+    const tail = outgoing.takeCrossfadeTail!(4);
+    outgoing.releaseForHandover!();
+    await Promise.resolve();
+    expect(backend.flushes).toBe(flushesBefore);
+
+    const incoming = createNativeLocalSidSink(RATE, backend)!;
+    incoming.adoptCrossfadeTail!(tail, 1);
+    scheduleChunk(incoming, 0.5);
+    await settle();
+
+    expect(backend.flushes).toBe(flushesBefore + 1);
+    const flushAt = calls.lastIndexOf("flush");
+    expect(calls[flushAt + 1]).toBe("write");
+  });
+
   it("releases the shared track to its successor without flushing it", async () => {
     const backend = createBackend();
     const outgoing = createNativeLocalSidSink(RATE, backend)!;
