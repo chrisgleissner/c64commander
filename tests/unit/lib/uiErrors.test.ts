@@ -7,7 +7,7 @@
  */
 
 import fs from "node:fs/promises";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   reportUserError,
   clearToastForSuccessfulOperation,
@@ -19,6 +19,8 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
+import { recordNetworkStatus, resetNetworkStatusWatchForTests } from "@/lib/connection/networkStatusWatch";
+import { updateDeviceConnectionState } from "@/lib/deviceInteraction/deviceStateStore";
 
 // Mock dependencies
 vi.mock("@/hooks/use-toast", () => ({
@@ -493,6 +495,87 @@ describe("uiErrors", () => {
         expect.any(String),
         expect.objectContaining({ suppressedReason: "duplicate-toast-deduped", occurrenceCount: 3 }),
       );
+    });
+  });
+
+  // Leaving home with a tune or a mount in flight produced red toasts and error log entries for a
+  // device the badge already showed as offline. Those failures are logged at info, and one neutral
+  // notice per offline spell says why an action had no effect, even with errors-only notifications.
+  describe("a device the app already shows as out of reach", () => {
+    const destructiveToasts = () =>
+      vi.mocked(toast).mock.calls.filter(([props]) => (props as { variant?: string }).variant === "destructive");
+
+    const goOffline = () => {
+      recordNetworkStatus({ online: true, supported: true });
+      recordNetworkStatus({ online: false, supported: true });
+    };
+
+    beforeEach(() => resetNetworkStatusWatchForTests());
+    afterEach(() => {
+      resetNetworkStatusWatchForTests();
+      updateDeviceConnectionState("UNKNOWN");
+    });
+
+    it("logs a connectivity failure at info and shows no error toast while the network is known to be down", () => {
+      goOffline();
+
+      reportUserError({ operation: "PLAYBACK_NEXT", title: "Playback next failed", description: "Host unreachable" });
+
+      expect(addErrorLog).not.toHaveBeenCalled();
+      expect(addLog).toHaveBeenCalledWith(
+        "info",
+        "PLAYBACK_NEXT: Playback next failed",
+        expect.objectContaining({ suppressedReason: "device-offline" }),
+      );
+      expect(destructiveToasts()).toHaveLength(0);
+    });
+
+    it("treats a report titled Offline the same way when the connection is shown offline", () => {
+      updateDeviceConnectionState("OFFLINE_NO_DEMO");
+
+      reportUserError({ operation: "DISK_MOUNT", title: "Offline", description: "Connect to mount disks." });
+
+      expect(addErrorLog).not.toHaveBeenCalled();
+      expect(destructiveToasts()).toHaveLength(0);
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Offline", description: "Connect to mount disks.", alwaysVisible: true }),
+      );
+    });
+
+    it("shows one neutral notice per offline spell, and again after the device has come back", () => {
+      goOffline();
+
+      reportUserError({
+        operation: "PLAYBACK_CONNECT",
+        title: "Connection failed",
+        description: "Device not connected. Check connection settings.",
+      });
+      reportUserError({ operation: "PLAYBACK_NEXT", title: "Playback next failed", description: "Host unreachable" });
+
+      expect(toast).toHaveBeenCalledTimes(1);
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ alwaysVisible: true }));
+      expect(vi.mocked(toast).mock.calls[0][0]).not.toHaveProperty("variant", "destructive");
+
+      clearConnectivityErrorToastsForHost("192.168.1.146");
+      reportUserError({ operation: "PLAYBACK_NEXT", title: "Playback next failed", description: "Host unreachable" });
+
+      expect(toast).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps reporting a failure that is not about reaching the device as an error", () => {
+      goOffline();
+
+      reportUserError({ operation: "FILE_READ", title: "Read failed", description: "The file is corrupt" });
+
+      expect(addErrorLog).toHaveBeenCalled();
+      expect(destructiveToasts()).toHaveLength(1);
+    });
+
+    it("still raises a connectivity failure as an error while the device is connected and the network is up", () => {
+      reportUserError({ operation: "PLAYBACK_NEXT", title: "Playback next failed", description: "Host unreachable" });
+
+      expect(addErrorLog).toHaveBeenCalled();
+      expect(destructiveToasts()).toHaveLength(1);
     });
   });
 });

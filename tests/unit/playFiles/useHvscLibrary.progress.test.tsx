@@ -225,6 +225,47 @@ describe("useHvscLibrary progress coverage", () => {
     expect(result.current.hvscPhase).toBe("download");
   });
 
+  // On a Pixel 4 a download cut at 15% left the panel reading "Files extracted: 1" with nothing unpacked.
+  it("does not count archives found for download as extracted files", async () => {
+    mocks.installOrUpdateHvscMock.mockImplementation(() => new Promise<void>(() => undefined));
+    const { result } = renderHook(() => useHvscLibrary(true));
+    await waitFor(() => expect(progressListener).not.toBeNull());
+
+    act(() => {
+      void result.current.handleHvscInstall();
+    });
+    await waitFor(() => expect(result.current.hvscPhase).toBe("download"));
+    act(() => {
+      progressListener?.({ stage: "archive_discovery", processedCount: 0, totalCount: 1 });
+      progressListener?.({ stage: "archive_discovery", processedCount: 1, totalCount: 1, archiveName: "hvsc-85.7z" });
+      progressListener?.({ stage: "download", percent: 15, downloadedBytes: 150, totalBytes: 1000 });
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    });
+
+    expect(result.current.hvscDownloadPercent).toBe(15);
+    expect(result.current.hvscSummaryFilesExtracted).toBeNull();
+  });
+
+  it("takes the file total from an extraction event that reports only the total", async () => {
+    mocks.installOrUpdateHvscMock.mockImplementation(() => new Promise<void>(() => undefined));
+    const { result } = renderHook(() => useHvscLibrary(true));
+    await waitFor(() => expect(progressListener).not.toBeNull());
+
+    act(() => {
+      void result.current.handleHvscInstall();
+    });
+    await waitFor(() => expect(result.current.hvscPhase).toBe("download"));
+    act(() => {
+      progressListener?.({ processedCount: 5, totalCount: 9 });
+      progressListener?.({ stage: "sid_enumeration", totalCount: 120 });
+    });
+
+    await waitFor(() => expect(result.current.hvscExtractionTotalFiles).toBe(120));
+    expect(result.current.hvscSummaryFilesExtracted).not.toBe(5);
+  });
+
   it("keeps stale progress non-terminal while native ingestion is still active", async () => {
     mocks.loadHvscStatusSummaryMock.mockReturnValue(
       createSummary({
@@ -243,13 +284,44 @@ describe("useHvscLibrary progress coverage", () => {
     expect(result.current.hvscDownloadStatus).toBe("in-progress");
     expect(result.current.hvscSummaryState).not.toBe("failure");
     expect(mocks.addLogMock).toHaveBeenCalledWith(
-      "warn",
+      "info",
       "HVSC progress stale while work is still active",
       expect.objectContaining({
         ingestionState: "installing",
         downloadStatus: "in-progress",
       }),
     );
+  });
+
+  // A real HVSC install on a Pixel 4 logged this 52 times in two seconds: the effect runs on every status
+  // update, and the summary stays quiet for the whole indexing phase.
+  it("notes a quiet but active install once, not on every status update", async () => {
+    mocks.loadHvscStatusSummaryMock.mockReturnValue(
+      createSummary({
+        extraction: { status: "in-progress", startedAt: new Date(Date.now() - 30000).toISOString() },
+        lastUpdatedAt: new Date(Date.now() - 20000).toISOString(),
+      }),
+    );
+    // A fresh status object on every read, as the native side answers during an install.
+    mocks.getHvscStatusMock.mockImplementation(async () => createStatus({ ingestionState: "installing" }));
+
+    const { result, rerender } = renderHook(({ enabled }) => useHvscLibrary(enabled), {
+      initialProps: { enabled: true },
+    });
+    await waitFor(() => expect(result.current.hvscActionLabel).toBe("HVSC operation still running…"));
+    for (let render = 0; render < 5; render += 1) {
+      rerender({ enabled: false });
+      rerender({ enabled: true });
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+    expect(mocks.getHvscStatusMock.mock.calls.length).toBeGreaterThan(3);
+
+    const staleNotes = mocks.addLogMock.mock.calls.filter(
+      (call: unknown[]) => call[1] === "HVSC progress stale while work is still active",
+    );
+    expect(staleNotes).toHaveLength(1);
   });
 
   it("reflects download, extraction, indexing, and ready phases during install", async () => {

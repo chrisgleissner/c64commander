@@ -227,6 +227,23 @@ applyFeatureFlagTestState();
 
 globalThis.__setFeatureFlagTestState = applyFeatureFlagTestState;
 
+// Unit tests talk only to this machine. The app's default host "c64u" resolves on a bench with a real
+// C64 Ultimate, and a Remote Input test started its video stream there. Elsewhere it does not resolve,
+// so an unmocked request fails the same way on every machine, without leaving it.
+const LOOPBACK_HOST = /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])$/i;
+const realFetch = globalThis.fetch;
+if (typeof realFetch === "function") {
+  globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input), "http://localhost");
+    if (!LOOPBACK_HOST.test(url.hostname)) {
+      return Promise.reject(
+        new TypeError("fetch failed", { cause: new Error(`getaddrinfo ENOTFOUND ${url.hostname}`) }),
+      );
+    }
+    return realFetch(input, init);
+  };
+}
+
 beforeEach(() => {
   applyFeatureFlagTestState();
 });

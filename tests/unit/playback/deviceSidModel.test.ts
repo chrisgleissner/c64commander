@@ -65,7 +65,8 @@ const fakeApi = (categories: CategoryMap) => {
     if (!(category in categories)) throw notFound();
     return categories[category] as never;
   });
-  return { api: { getCategory } as unknown as C64API, getCategory };
+  const getCategories = vi.fn(async () => ({ categories: Object.keys(categories), errors: [] }));
+  return { api: { getCategory, getCategories } as unknown as C64API, getCategory };
 };
 
 beforeEach(() => {
@@ -73,6 +74,14 @@ beforeEach(() => {
 });
 
 describe("readDeviceSidModel", () => {
+  // An Ultimate II+L has no SID sockets; asking for the category earned a 404, an error and a badge count.
+  it("does not ask a machine that lists no SID sockets for them", async () => {
+    const { api, getCategory } = fakeApi({ "Audio Output Settings": { errors: [] } });
+
+    await expect(readDeviceSidModel(api)).resolves.toBeNull();
+    expect(getCategory).not.toHaveBeenCalled();
+  });
+
   it("takes socket 1's chip when both sockets hold one", async () => {
     const { api } = fakeApi({
       "SID Sockets Configuration": SOCKETS_ARMSID_PAIR,

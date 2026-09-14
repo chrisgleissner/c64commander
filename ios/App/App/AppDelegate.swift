@@ -388,14 +388,30 @@ public final class DeviceDiscoveryPlugin: CAPPlugin, CAPBridgedPlugin {
     private static var pathMonitorStarted = false
     private static let firstPathUpdate = DispatchSemaphore(value: 0)
     private static let startLock = NSLock()
+    private static weak var eventTarget: DeviceDiscoveryPlugin?
+    private static var lastPublishedOnline: Bool?
+
+    /*
+     * Path changes are pushed as `networkStatusChange`, matching Android, so the app reconnects
+     * when the network returns instead of at its next background probe. Only a change of the
+     * online answer is published; `NWPathMonitor` also reports interface and cost changes.
+     */
+    public override func load() {
+        Self.eventTarget = self
+        Self.startPathMonitorIfNeeded()
+    }
 
     private static func startPathMonitorIfNeeded() {
         startLock.lock()
         defer { startLock.unlock() }
         guard !pathMonitorStarted else { return }
         pathMonitorStarted = true
-        pathMonitor.pathUpdateHandler = { _ in
+        pathMonitor.pathUpdateHandler = { path in
             firstPathUpdate.signal()
+            let online = path.status == .satisfied
+            guard online != lastPublishedOnline else { return }
+            lastPublishedOnline = online
+            eventTarget?.notifyListeners("networkStatusChange", data: ["supported": true, "online": online])
         }
         pathMonitor.start(queue: pathMonitorQueue)
     }

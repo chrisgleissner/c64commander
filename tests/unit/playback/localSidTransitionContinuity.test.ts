@@ -317,8 +317,9 @@ describe("one continuous stream of samples across a track change", () => {
 
       expect(recorder.underrunMs).toBe(0);
       const adopted = readLocalSidTrace().find((entry) => entry.event === "crossfade-tail-adopted");
-      // Enough of the outgoing tune to cover the whole fade, not merely a non-empty handover.
-      expect(adopted?.detail?.frames as number).toBeGreaterThanOrEqual((fadeMs / 1000) * RATE);
+      // Enough of the outgoing tune to cover the whole fade, not merely a non-empty handover. Less the 20 ms
+      // primer, which now reaches the track with the flush instead of being dropped, leaving the ring empty.
+      expect(adopted?.detail?.frames as number).toBeGreaterThanOrEqual((fadeMs / 1000) * RATE - RATE / 50);
     });
   }
 

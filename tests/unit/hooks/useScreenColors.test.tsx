@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/hooks/useC64Connection", () => ({
   useC64ConfigItem: mocks.configItem,
   useConnectionRoutingEpoch: mocks.connectionEpoch,
+  useC64Categories: () => ({ data: { categories: ["U64 Specific Settings"], errors: [] } }),
 }));
 
 // Only the two calls that talk to the machine are replaced; the readers that turn a config-item

@@ -9,11 +9,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
-import {
-  HVSC_NO_NETWORK_MESSAGE,
-  markHvscUpdateCheckAt,
-  shouldCheckForHvscUpdates,
-} from "@/lib/hvsc/hvscReleaseService";
+import { markHvscUpdateCheckAt, shouldCheckForHvscUpdates } from "@/lib/hvsc/hvscReleaseService";
+import { reportHvscDownloadFailure } from "@/lib/hvsc/hvscNetworkLoss";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import { reportUserError } from "@/lib/uiErrors";
 import { base64ToUint8 } from "@/lib/sid/sidUtils";
@@ -139,6 +136,10 @@ const HVSC_EXTRACTION_STAGES = new Set([
 ]);
 
 const HVSC_READY_MESSAGE = "Ready to use: Add items -> HVSC.";
+
+// A failure stored by an earlier attempt, loaded at launch, must not read as the new attempt failing.
+const withoutStoredFailure = (status: HvscStatus | null): HvscStatus | null =>
+  status?.ingestionState === "error" ? { ...status, ingestionState: "installing", ingestionError: null } : status;
 
 /**
  * @param hvscEnabled resolved `hvsc_enabled` flag (`shouldShowHvscControls(featureFlags)`), passed live
@@ -342,6 +343,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     hvscStatusSummary.extraction.status,
   ]);
 
+  const staleProgressNotedForRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     if (!hvscStatus) return;
     const summaryInProgress =
@@ -353,7 +355,11 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     if (!summaryInProgress || !isStale) return;
     if (activeIngestion || activeHookIngestion) {
       setHvscActionLabel((prev) => prev ?? "HVSC operation still running…");
-      addLog("warn", "HVSC progress stale while work is still active", {
+      // Work that is running but quiet is not a fault, and this effect re-runs on every status update: note
+      // it once per quiet spell instead of flooding the log with a warning per render.
+      if (staleProgressNotedForRef.current === hvscStatusSummary.lastUpdatedAt) return;
+      staleProgressNotedForRef.current = hvscStatusSummary.lastUpdatedAt ?? null;
+      addLog("info", "HVSC progress stale while work is still active", {
         ingestionState: hvscStatus.ingestionState,
         activeToken: hvscActiveToken,
         downloadStatus: hvscStatusSummary.download.status,
@@ -443,7 +449,9 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
         if (event.currentFile) setHvscCurrentFile(event.currentFile);
       }
       if (event.errorCause) setHvscErrorMessage(event.errorCause);
-      if (typeof event.processedCount === "number" || typeof event.totalCount === "number") {
+      // Archive discovery counts archives, not files: a download that failed showed "Files extracted: 1".
+      const countsFiles = HVSC_EXTRACTION_STAGES.has(event.stage ?? "");
+      if (countsFiles && (typeof event.processedCount === "number" || typeof event.totalCount === "number")) {
         const elapsed = nowMs - hvscExtractionThrottleRef.current;
         if (elapsed >= 120) {
           hvscExtractionThrottleRef.current = nowMs;
@@ -730,6 +738,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
           setHvscProgress(0);
           setHvscStage(null);
           setHvscErrorMessage(null);
+          setHvscStatus(withoutStoredFailure);
           setHvscActionLabel("Checking for updates…");
           setHvscExtractionFiles(null);
           setHvscExtractionTotal(null);
@@ -866,14 +875,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
             },
             lastUpdatedAt: failedAt,
           }));
-          reportUserError({
-            operation: "HVSC_DOWNLOAD",
-            title: "HVSC update failed",
-            description: (error as Error).message,
-            error,
-            // Having no network is the phone's state, not a fault in the app.
-            severity: (error as Error).message === HVSC_NO_NETWORK_MESSAGE ? "S2" : undefined,
-          });
+          reportHvscDownloadFailure(error as Error);
         } finally {
           setHvscLoading(false);
           setHvscActiveToken(null);
@@ -906,6 +908,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
           setHvscProgress(0);
           setHvscStage(null);
           setHvscErrorMessage(null);
+          setHvscStatus(withoutStoredFailure);
           setHvscActionLabel("Ingesting cached HVSC…");
           setHvscExtractionFiles(null);
           setHvscExtractionTotal(null);

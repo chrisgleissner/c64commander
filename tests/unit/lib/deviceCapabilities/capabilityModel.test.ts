@@ -225,6 +225,28 @@ describe("deviceCapabilities — probeMachineInputCapability", () => {
     expect(api.getMachineInputState).toHaveBeenCalledTimes(2);
   });
 
+  it("logs a probe the device did not answer at info, and a firmware refusal as a warning", async () => {
+    const logging = await import("@/lib/logging");
+    const addLog = vi.spyOn(logging, "addLog");
+    const unanswered = createApi(async () => {
+      throw new Error("Host unreachable");
+    });
+    const refused = createApi(async () => {
+      throw httpError(501);
+    });
+
+    await probeMachineInputCapability({
+      api: unanswered,
+      deviceId: "c64u",
+      firmwareVersion: "1.2RC",
+      coreVersion: "1.4F",
+    });
+    await probeMachineInputCapability({ api: refused, deviceId: "u64", firmwareVersion: "3.15", coreVersion: "1.4F" });
+
+    expect(addLog.mock.calls.map((call) => call[0])).toEqual(["info", "warn"]);
+    addLog.mockRestore();
+  });
+
   it("does not cache auth-required - a later successful probe with the same inputs resolves available (HARD15-002)", async () => {
     let attempt = 0;
     const api = createApi(async () => {

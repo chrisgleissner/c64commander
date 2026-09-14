@@ -107,6 +107,29 @@ describe("on-device playback through the native track", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
+  // Chess II ends flat at 3:28 with about 12 s still queued. Counting written silence called that a
+  // fault just before the playlist moved on, logged "Local SID playback is silent" and re-opened it.
+  it("judges silence by what has reached the speaker, not by what is still queued", async () => {
+    const backend = createBackend();
+    const sink = createNativeLocalSidSink(RATE, backend);
+    const flat = (seconds: number, when: number) => {
+      const buffer = sink!.sink.createBuffer(2, Math.round(seconds * RATE), RATE);
+      sink!.sink.createSource(buffer).start(when);
+    };
+    backend.bufferedMs = 11_900;
+    for (let second = 0; second < 13; second += 1) flat(1, second);
+    await settle();
+    await vi.advanceTimersByTimeAsync(2000);
+    await settle();
+
+    expect(sink!.isSilentFault!()).toBe(false);
+
+    backend.bufferedMs = 0;
+    await vi.advanceTimersByTimeAsync(2000);
+    await settle();
+    expect(sink!.isSilentFault!()).toBe(true);
+  });
+
   it("is unavailable off a native platform, so the caller can fall back to Web Audio", () => {
     expect(createNativeLocalSidSink(RATE, null)).toBeNull();
   });
@@ -1199,6 +1222,55 @@ describe("a crossfade is one continuous stream of samples", () => {
     expect(later).toBeGreaterThan(0);
   });
 
+  // Skipping to a tune with no rendered opening: the incoming sink wrote the whole three-second tail at once,
+  // so on a Pixel 4 the old tune played on at full level and the new one then started abruptly behind it.
+  it("keeps the outgoing tail in hand until the incoming tune has audio to mix it with", async () => {
+    const backend = createBackend();
+    // A ring that fills as it is written and does not drain, like a pipeline far ahead of the speaker.
+    const write = backend.writeAudioTrack;
+    backend.writeAudioTrack = async (options) => {
+      const stats = await write(options);
+      backend.bufferedMs += (decodePcm(options.data).length / 2 / RATE) * 1000;
+      return stats;
+    };
+    const incoming = createNativeLocalSidSink(RATE, backend)!;
+    incoming.adoptCrossfadeTail!([new Int16Array(RATE * 3 * 2).fill(8000)], 2);
+    await settle(400);
+
+    const tailOnlyFrames = backend.pcm.reduce((frames, chunk) => frames + chunk.length / 2, 0);
+    expect(tailOnlyFrames).toBeGreaterThan(0);
+    expect(tailOnlyFrames).toBeLessThanOrEqual(RATE / 2);
+  });
+
+  // Measured on a Pixel 4: when the incoming tune's next chunk was late mid-fade, the sink bridged with a slice of the
+  // outgoing tune at full level, and for 50 ms the old tune was louder than it had been a moment before.
+  it("keeps the fade where it was through a slice the incoming tune has nothing for", async () => {
+    const backend = createBackend();
+    const write = backend.writeAudioTrack;
+    backend.writeAudioTrack = async (options) => {
+      const stats = await write(options);
+      backend.bufferedMs += (decodePcm(options.data).length / 2 / RATE) * 1000;
+      return stats;
+    };
+    const incoming = createNativeLocalSidSink(RATE, backend)!;
+    incoming.adoptCrossfadeTail!([new Int16Array(RATE * 4 * 2).fill(8000)], 2);
+    // One second of the incoming tune, silent so that every written sample is the tail at its fade level.
+    incoming.sink.createSource(incoming.sink.createBuffer(2, RATE, RATE)).start(0);
+    await settle(400);
+    const halfway = backend.pcm.flatMap((chunk) => [...chunk]);
+    const levelHalfway = Math.abs(halfway[halfway.length - 2]!);
+
+    // The incoming tune's next chunk is late and the pipeline has drained, so the sink bridges with tail only.
+    backend.bufferedMs = 0;
+    await settle(400);
+    const bridged = backend.pcm.flatMap((chunk) => [...chunk]).slice(halfway.length);
+
+    expect(levelHalfway).toBeGreaterThan(2000);
+    expect(levelHalfway).toBeLessThan(6000);
+    expect(bridged.length).toBeGreaterThan(0);
+    expect(Math.max(...bridged.map(Math.abs))).toBeLessThanOrEqual(levelHalfway + 1);
+  });
+
   it("fades the outgoing tune only once the incoming one is playing", async () => {
     const backend = createBackend();
     const incoming = createNativeLocalSidSink(RATE, backend)!;
@@ -1266,6 +1338,69 @@ describe("a crossfade is one continuous stream of samples", () => {
     await settle();
     expect(backend.writes.length).toBeGreaterThan(writesBefore);
     expect(backend.opens.length).toBe(1);
+  });
+
+  // Skipping to a tune whose opening was already rendered: the outgoing sink flushed the track at once and was
+  // replaced before it could refill it, so the ring sat empty until the next tune's first write, a 50 ms dropout.
+  it("flushes the track for a skip together with the next write, not ahead of it", async () => {
+    const backend = createBackend();
+    const calls: string[] = [];
+    const write = backend.writeAudioTrack;
+    const flush = backend.flushAudioTrack!;
+    backend.writeAudioTrack = async (options) => {
+      calls.push("write");
+      return write(options);
+    };
+    backend.flushAudioTrack = async () => {
+      calls.push("flush");
+      return flush();
+    };
+    const outgoing = createNativeLocalSidSink(RATE, backend)!;
+    scheduleChunk(outgoing, 2);
+    backend.bufferedMs = 1500;
+    await settle();
+    const flushesBefore = backend.flushes;
+
+    outgoing.beginCrossfadeTailPlayout!(4);
+    const tail = outgoing.takeCrossfadeTail!(4);
+    outgoing.releaseForHandover!();
+    await Promise.resolve();
+    expect(backend.flushes).toBe(flushesBefore);
+
+    const incoming = createNativeLocalSidSink(RATE, backend)!;
+    incoming.adoptCrossfadeTail!(tail, 1);
+    scheduleChunk(incoming, 0.5);
+    await settle();
+
+    expect(backend.flushes).toBe(flushesBefore + 1);
+    const flushAt = calls.lastIndexOf("flush");
+    expect(calls[flushAt + 1]).toBe("write");
+  });
+
+  it("keeps playing through a skip whose flush the track refuses, and says so", async () => {
+    const { addLog } = await import("@/lib/logging");
+    vi.mocked(addLog).mockClear();
+    const backend = createBackend();
+    const outgoing = createNativeLocalSidSink(RATE, backend)!;
+    scheduleChunk(outgoing, 2);
+    backend.bufferedMs = 1500;
+    await settle();
+    backend.flushAudioTrack = async () => {
+      throw new Error("track released");
+    };
+
+    outgoing.beginCrossfadeTailPlayout!(4);
+    const tail = outgoing.takeCrossfadeTail!(4);
+    outgoing.releaseForHandover!();
+    const incoming = createNativeLocalSidSink(RATE, backend)!;
+    incoming.adoptCrossfadeTail!(tail, 1);
+    scheduleChunk(incoming, 0.5);
+    await settle();
+
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith("warn", "Native audio: flush before crossfade tail failed", {
+      error: "track released",
+    });
+    expect(backend.pcm.length).toBeGreaterThan(0);
   });
 
   it("releases the shared track to its successor without flushing it", async () => {

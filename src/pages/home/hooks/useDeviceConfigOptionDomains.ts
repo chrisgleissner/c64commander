@@ -120,12 +120,24 @@ export function useDeviceConfigOptionDomains(
 
     void (async () => {
       const api = getC64API();
+      // Items of a category the device does not list are not asked for: an Ultimate II+L answered twelve
+      // U64 settings with 404s, each logged as an error and counted on the badge.
+      let listed: Promise<Set<string> | null> | null = null;
       for (const { category, item } of refs) {
         if (cancelled) return;
         const key = buildOptionDomainKey(category, item);
         // HARD16-005: skip items already known (a resolved domain) or definitively
         // absent on this firmware — no repeated known-failing REST GET per mount.
         if (seeded[key] || api.isConfigItemDomainKnownAbsent?.(category, item)) continue;
+        listed ??= Promise.resolve(api.getCategories?.({ __c64uIntent: "background" })).then(
+          (response) => (response ? new Set(response.categories) : null),
+          () => null,
+        );
+        const categories = await listed;
+        if (categories && !categories.has(category)) {
+          api.markConfigItemDomainAbsent?.(category, item);
+          continue;
+        }
         try {
           const payload = await api.getConfigItem(category, item, { __c64uIntent: "background" });
           if (cancelled) return;

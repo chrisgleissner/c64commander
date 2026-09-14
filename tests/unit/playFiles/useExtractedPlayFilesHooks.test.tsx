@@ -92,6 +92,25 @@ describe("extracted PlayFiles hooks", () => {
     expect(localStorage.getItem(LAST_DEVICE_ID_KEY)).toBe("device-123");
   });
 
+  // Demo Mode's simulated device used to be remembered, so "MOCK-C64U" outlived Demo Mode.
+  it("does not remember the simulated device's id", () => {
+    localStorage.setItem(LAST_DEVICE_ID_KEY, "real-device");
+
+    const { result } = renderHook(() => useResolvedPlaybackDeviceId("MOCK-C64U", true));
+
+    expect(result.current).toBe("MOCK-C64U");
+    expect(localStorage.getItem(LAST_DEVICE_ID_KEY)).toBe("real-device");
+  });
+
+  it("forgets a simulated device id stored by an earlier build", () => {
+    localStorage.setItem(LAST_DEVICE_ID_KEY, "MOCK-C64U");
+
+    const { result } = renderHook(() => useResolvedPlaybackDeviceId(null));
+
+    expect(result.current).toBe("default");
+    expect(localStorage.getItem(LAST_DEVICE_ID_KEY)).toBeNull();
+  });
+
   it("logs persistence errors when storing the playback device id fails", () => {
     const addErrorLogSpy = vi.spyOn(logging, "addErrorLog").mockImplementation(() => undefined);
     const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {

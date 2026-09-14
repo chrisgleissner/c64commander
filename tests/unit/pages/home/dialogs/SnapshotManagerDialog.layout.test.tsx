@@ -276,4 +276,51 @@ describe("SnapshotManagerDialog", () => {
     expect(onUpdateLabel).not.toHaveBeenCalled();
     expect(screen.queryByLabelText("Snapshot comment")).not.toBeInTheDocument();
   });
+
+  // On a Pixel 4 the type filters were 33 px tall and the delete icon 28 px.
+  it("gives the type filters and the delete icon 44 px tap targets", () => {
+    localStorage.clear();
+    setViewportWidth(393);
+
+    render(
+      <DisplayProfileProvider>
+        <SnapshotManagerDialog
+          open
+          onOpenChange={vi.fn()}
+          snapshots={[unlabeledSnapshot]}
+          onRestore={vi.fn()}
+          onDelete={vi.fn()}
+          onUpdateLabel={vi.fn()}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    for (const filter of screen.getByTestId("snapshot-type-filters").querySelectorAll("button")) {
+      expect(filter).toHaveClass("min-h-11");
+    }
+    expect(screen.getByTestId("snapshot-delete")).toHaveClass("h-11", "w-11");
+  });
+
+  // At 320 px the filters wrap onto a second row, and 44 px rows left the list less than half of the dialog.
+  it("keeps the type filters at their text height on the compact profile", () => {
+    localStorage.clear();
+    setViewportWidth(320);
+
+    render(
+      <DisplayProfileProvider>
+        <SnapshotManagerDialog
+          open
+          onOpenChange={vi.fn()}
+          snapshots={[unlabeledSnapshot]}
+          onRestore={vi.fn()}
+          onDelete={vi.fn()}
+          onUpdateLabel={vi.fn()}
+        />
+      </DisplayProfileProvider>,
+    );
+
+    for (const filter of screen.getByTestId("snapshot-type-filters").querySelectorAll("button")) {
+      expect(filter).not.toHaveClass("min-h-11");
+    }
+  });
 });

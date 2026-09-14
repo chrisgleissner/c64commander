@@ -22,9 +22,30 @@ type StoredSnapshotEnvelope = {
   savedAt: number;
 };
 
+/**
+ * localStorage, like the playback session (HARD27-032): a paused session outlives the app process, and so must
+ * the pause mute its resume undoes. In sessionStorage it ended with the process, and Resume then left the
+ * C64's SID or master volume muted. An envelope an earlier build left in sessionStorage is moved across.
+ */
+const readStoredEnvelope = (): string | null => {
+  if (typeof localStorage === "undefined") return null;
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw || typeof sessionStorage === "undefined") return raw;
+  const legacy = sessionStorage.getItem(STORAGE_KEY);
+  if (legacy) {
+    localStorage.setItem(STORAGE_KEY, legacy);
+    sessionStorage.removeItem(STORAGE_KEY);
+  }
+  return legacy;
+};
+
+const removeStoredEnvelope = () => {
+  localStorage.removeItem(STORAGE_KEY);
+  if (typeof sessionStorage !== "undefined") sessionStorage.removeItem(STORAGE_KEY);
+};
+
 const readEnvelope = (deviceId: string): StoredSnapshotEnvelope | null => {
-  if (typeof sessionStorage === "undefined") return null;
-  const raw = sessionStorage.getItem(STORAGE_KEY);
+  const raw = readStoredEnvelope();
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as Partial<StoredSnapshotEnvelope>;
@@ -51,7 +72,7 @@ export const persistPlaybackSnapshot = (params: {
   pauseMuteSnapshot: Record<string, string | number> | null;
   pauseMuteEnablement: SidEnablement | null;
 }) => {
-  if (typeof sessionStorage === "undefined") return;
+  if (typeof localStorage === "undefined") return;
   try {
     const envelope: StoredSnapshotEnvelope = {
       deviceId: params.deviceId,
@@ -63,7 +84,7 @@ export const persistPlaybackSnapshot = (params: {
       pauseMuteEnablement: params.pauseMuteEnablement,
       savedAt: Date.now(),
     };
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(envelope));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(envelope));
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error(String(error));
     addLog(
@@ -97,14 +118,14 @@ export const hydratePlaybackSnapshot = (
 };
 
 export const discardPlaybackSnapshot = (deviceId?: string) => {
-  if (typeof sessionStorage === "undefined") return;
+  if (typeof localStorage === "undefined") return;
   try {
     if (!deviceId) {
-      sessionStorage.removeItem(STORAGE_KEY);
+      removeStoredEnvelope();
       return;
     }
     const current = readEnvelope(deviceId);
-    if (current) sessionStorage.removeItem(STORAGE_KEY);
+    if (current) removeStoredEnvelope();
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error(String(error));
     addLog(
@@ -133,7 +154,7 @@ export const persistPauseMuteSnapshot = (
 };
 
 export const clearPersistedPauseMute = (deviceId: string) => {
-  if (typeof sessionStorage === "undefined") return;
+  if (typeof localStorage === "undefined") return;
   const envelope = readEnvelope(deviceId);
   if (!envelope) return;
   if (!envelope.pauseMuteSnapshot && !envelope.pauseMuteEnablement) return;

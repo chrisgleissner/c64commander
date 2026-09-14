@@ -145,6 +145,30 @@ describe("App surface primitives", () => {
     expect(screen.getByText("Choose a mode").parentElement).toHaveClass("flex-1", "overflow-y-auto");
   });
 
+  // The centred layout already keeps a dialog above the navigation bar. The footer added the bar's
+  // height again as padding, which left a 64 px empty band under Cancel on a Pixel 4.
+  it("does not pad a centred dialog footer with the navigation bar inset", () => {
+    localStorage.clear();
+    setViewportWidth(360);
+
+    renderWithProviders(
+      <AppDialog open>
+        <AppDialogContent>
+          <AppDialogHeader>
+            <AppDialogTitle>Add items</AppDialogTitle>
+          </AppDialogHeader>
+          <AppDialogFooter>
+            <button type="button">Cancel</button>
+          </AppDialogFooter>
+        </AppDialogContent>
+      </AppDialog>,
+    );
+
+    const footer = screen.getByRole("button", { name: "Cancel" }).parentElement as HTMLElement;
+    expect(footer.className).not.toContain("safe-area-inset-bottom");
+    expect(footer).toHaveClass("pb-4");
+  });
+
   it("keeps sheet header actions and close control on the shared title row", () => {
     localStorage.clear();
     setViewportWidth(480);

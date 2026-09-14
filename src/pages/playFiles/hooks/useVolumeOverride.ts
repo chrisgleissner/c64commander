@@ -64,9 +64,9 @@ interface UseVolumeOverrideProps {
   isPlaying: boolean;
   isPaused: boolean;
   previewIntervalMs?: number;
-  // HARD12-006: the snapshot is persisted to sessionStorage keyed by the
-  // current device id so a remount of Play (tab-away → return) re-owns the
-  // same capture it had at unmount time. Pass `null` to disable persistence
+  // HARD12-006: the snapshot is persisted to localStorage keyed by the
+  // current device id so a remount of Play (tab-away → return, or a restart)
+  // re-owns the same capture it had at unmount time. Pass `null` to disable persistence
   // (e.g. in tests).
   resolvedDeviceId?: string | null;
 }
@@ -242,8 +242,8 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
   const volumeSessionSnapshotRef = useRef<Record<string, string | number> | null>(null);
   const volumeSessionActiveRef = useRef(false);
 
-  // HARD12-006: rehydrate the volume-session snapshot from sessionStorage on
-  // mount so a Play remount after tab-away keeps ownership of the same
+  // HARD12-006: rehydrate the volume-session snapshot from localStorage on
+  // mount so a Play remount after tab-away or a restart keeps ownership of the same
   // captured snapshot. The rehydrate is value-equality bailed (we only assign
   // when the ref is empty) so subsequent re-renders do not loop per the
   // AGENTS React-safety rule.

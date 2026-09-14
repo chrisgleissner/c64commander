@@ -17,6 +17,7 @@ import { getHvscDurationsByMd5Seconds } from "@/lib/hvsc";
 import { applyConfigFileReference, ensureConfigFileReferenceAccessible } from "@/lib/config/applyConfigFileReference";
 import { markRemotePlaybackStopped } from "@/lib/playback/activePlaybackSession";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
+import { recordNetworkStatus, resetNetworkStatusWatchForTests } from "@/lib/connection/networkStatusWatch";
 import {
   buildEnabledSidMuteUpdates,
   buildEnabledSidUnmuteUpdates,
@@ -79,6 +80,7 @@ vi.mock("@/lib/logging", () => ({
 }));
 
 vi.mock("@/lib/uiErrors", () => ({
+  DEVICE_NOT_CONNECTED_MESSAGE: "Device not connected. Check connection settings.",
   reportUserError: vi.fn(),
 }));
 
@@ -1198,6 +1200,42 @@ describe("usePlaybackController", () => {
     expect(callOrder).toEqual(["resume", "unmute"]);
     expect(applyAudioMixerUpdates).toHaveBeenCalledWith({ "SID 1": "0 dB" }, "Resume unmute");
     expect(pauseMuteSnapshotRef.current).toBeNull();
+  });
+
+  // A session paused before the app restarted has no pause-mute snapshot, so resume unmutes through the
+  // volume override, which waits for machine transitions to settle. Resume still held its own transition, so
+  // on a Pixel 4 that wait ran out twice and the unmute reached the C64 Ultimate 20 s after the resume.
+  it("ends the resume's machine transition before unmuting", async () => {
+    vi.useFakeTimers();
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    vi.mocked(getC64API).mockReturnValue({ machineResume: vi.fn().mockResolvedValue(undefined) } as any);
+    const { waitForMachineTransitionsToSettle } = await import("@/lib/deviceInteraction/deviceActivityGate");
+    const ensureUnmuted = vi.fn(async () => {
+      await waitForMachineTransitionsToSettle();
+    });
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      isPaused: true,
+      ensureUnmuted,
+      pauseMuteSnapshotRef: { current: null },
+    });
+
+    let resumed = false;
+    void result.current.handlePauseResume().then(() => {
+      resumed = true;
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(ensureUnmuted).toHaveBeenCalledWith({ force: true, refreshItems: true });
+    expect(resumed).toBe(true);
+    expect(vi.mocked(addLog)).not.toHaveBeenCalledWith(
+      "warn",
+      "Device activity advisory gate wait timed out",
+      expect.anything(),
+    );
+    vi.useRealTimers();
   });
 
   it("mutes enabled SID mixer volume before pausing active playback", async () => {
@@ -2804,6 +2842,118 @@ describe("usePlaybackController", () => {
       expect(vi.mocked(toast)).toHaveBeenCalledWith(
         expect.objectContaining({ description: expect.stringContaining("No C64 Ultimate is connected") }),
       );
+    });
+
+    // Leaving home with a playlist of tunes kept on the Ultimate: the next tune cannot be reached, and
+    // trying to meant failed FTP and REST calls, error logs and a red "Playback next failed" toast.
+    describe("when the phone has no network", () => {
+      const ultimateSid = (id: string) =>
+        createPlaylistItem({
+          id,
+          category: "sid",
+          label: `${id}.sid`,
+          path: `/USB2/MUSICIANS/${id}.sid`,
+          durationMs: 120_000,
+          request: { source: "ultimate", path: `/USB2/MUSICIANS/${id}.sid` },
+        });
+      const armedGuard = (trackInstanceId: number) => ({
+        current: { trackInstanceId, dueAtMs: 0, autoFired: false, userCancelled: false },
+      });
+
+      afterEach(() => resetNetworkStatusWatchForTests());
+
+      it("ends an auto-advance onto a tune kept on the Ultimate without asking the device", async () => {
+        const ensurePlaybackConnection = vi.fn().mockResolvedValue(undefined);
+        const setIsPlaying = vi.fn();
+        const playlist = [ultimateSid("one"), ultimateSid("two")];
+        const { result } = renderPlaybackController(playlist, {
+          isPlaying: true,
+          setIsPlaying,
+          ensurePlaybackConnection,
+          trackInstanceIdRef: { current: 1 },
+          autoAdvanceGuardRef: armedGuard(1),
+        });
+        recordNetworkStatus({ online: true, supported: true });
+        recordNetworkStatus({ online: false, supported: true });
+
+        await act(async () => {
+          await result.current.handleNext("auto", 1);
+        });
+
+        expect(ensurePlaybackConnection).not.toHaveBeenCalled();
+        expect(vi.mocked(tryFetchUltimateSidBlob)).not.toHaveBeenCalled();
+        expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+        expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+          expect.objectContaining({
+            operation: "PLAYBACK_NEXT",
+            description: "Device not connected. Check connection settings.",
+          }),
+        );
+        expect(setIsPlaying).toHaveBeenCalledWith(false);
+      });
+
+      it("closes the finished tune on the phone when the playlist stops on a failed auto-advance", async () => {
+        enableLocal();
+        const controller = fakeController();
+        const trackInstanceIdRef = { current: 0 };
+        const autoAdvanceGuardRef = armedGuard(-1);
+        const playlist = [sidItem(psid), ultimateSid("two")];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          trackInstanceIdRef,
+          autoAdvanceGuardRef,
+        });
+        await act(async () => {
+          await result.current.playItem(playlist[0], { playlistIndex: 0 });
+        });
+        expect(controller.play).toHaveBeenCalledTimes(1);
+        controller.stop.mockClear();
+        autoAdvanceGuardRef.current = armedGuard(trackInstanceIdRef.current).current;
+        recordNetworkStatus({ online: true, supported: true });
+        recordNetworkStatus({ online: false, supported: true });
+
+        await act(async () => {
+          await result.current.handleNext("auto", trackInstanceIdRef.current);
+        });
+
+        // Left open, the finished tune's watchdog re-opened it after the playlist had stopped.
+        expect(controller.stop).toHaveBeenCalled();
+      });
+    });
+
+    // The C64 keeps a tune playing past its songlength; the phone renders only up to it. Left open at the
+    // end of the playlist, the engine went silent, called that a stall and re-opened the tune.
+    it("stops the phone's engine when the playlist ends on a tune it was playing", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const trackInstanceIdRef = { current: 0 };
+      const autoAdvanceGuardRef = { current: null as unknown };
+      const setIsPlaying = vi.fn();
+      const playlist = [sidItem(psid)];
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        trackInstanceIdRef,
+        autoAdvanceGuardRef,
+        setIsPlaying,
+      });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+      controller.stop.mockClear();
+      setIsPlaying.mockClear();
+      autoAdvanceGuardRef.current = {
+        trackInstanceId: trackInstanceIdRef.current,
+        dueAtMs: 0,
+        autoFired: false,
+        userCancelled: false,
+      };
+
+      await act(async () => {
+        await result.current.handleNext("auto", trackInstanceIdRef.current);
+      });
+
+      expect(controller.stop).toHaveBeenCalled();
+      expect(setIsPlaying).toHaveBeenCalledWith(false);
     });
 
     it("falls a ROM-dependent RSID back to the C64", async () => {

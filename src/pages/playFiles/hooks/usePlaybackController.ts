@@ -28,7 +28,7 @@ import {
 } from "@/lib/deviceInteraction/machineTransitionCoordinator";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { isAbortLikeError } from "@/lib/c64api/requestRuntime";
-import { reportUserError } from "@/lib/uiErrors";
+import { DEVICE_NOT_CONNECTED_MESSAGE, reportUserError } from "@/lib/uiErrors";
 import { toast } from "@/hooks/use-toast";
 import {
   buildPlayPlan,
@@ -74,6 +74,7 @@ import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
+import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import {
   ENGINE_FALLBACK_MESSAGES,
   preRouteEngine,
@@ -801,7 +802,10 @@ export function usePlaybackController({
       // affordance - the combined Play/Stop button derives its label from
       // isPlaying. Keep isPlaying true so Stop stays reachable and issues its
       // normal silence/reset through handleStop(). See HARD11-003.
-      const deviceStillPlaying = Boolean(currentItem && isSongCategory(currentItem.category));
+      // A tune on the phone is rendered only up to its songlength, so it ends here rather than playing on.
+      const endedOnPhone = currentPlaybackIsLocalRef.current;
+      if (endedOnPhone) getLocalSidPlayback().stop();
+      const deviceStillPlaying = !endedOnPhone && Boolean(currentItem && isSongCategory(currentItem.category));
       if (!deviceStillPlaying) {
         setIsPlaying(false);
         setIsPaused(false);
@@ -818,6 +822,7 @@ export function usePlaybackController({
     [
       autoAdvanceGuardRef,
       durationMs,
+      getLocalSidPlayback,
       playedClockRef,
       setAutoAdvanceDueAtMs,
       setElapsedMs,
@@ -979,6 +984,12 @@ export function usePlaybackController({
             throw new Error("Local file unavailable. Re-add it to the playlist.");
           }
         }
+        // A tune kept on the Ultimate is out of reach without a network, or when a playlist moves on while
+        // the device is shown offline: end here rather than through failed FTP and REST calls.
+        const deviceOutOfReach =
+          isNetworkKnownOffline() ||
+          (options?.origin === "auto" && getConnectionSnapshot().state === "OFFLINE_NO_DEMO");
+        if (effectiveRequest.source === "ultimate" && deviceOutOfReach) throw new Error(DEVICE_NOT_CONNECTED_MESSAGE);
         let durationOverride: number | undefined = item.durationMs;
         let subsongCount: number | undefined = item.subsongCount ?? undefined;
         if (item.category === "sid" && effectiveRequest.source !== "ultimate") {
@@ -1907,10 +1918,10 @@ export function usePlaybackController({
               pausingFromPauseRef.current = false;
               resumingFromPauseRef.current = false;
               await resumeMachineWithRetry(api);
+              endTransition(); // The unmute waits for transitions to settle: held, this one delayed it 20 s.
               await unmuteAfterMachineResume();
               setIsPaused(false);
-              // HARD12-020: publish the resumed state so Home's pause/resume
-              // control converges with Play instead of assuming "running".
+              // HARD12-020: publish the resumed state so Home's pause/resume converges with Play.
               writeMachineExecutionFromPlay("running");
               const now = Date.now();
               trackStartedAtRef.current = now - elapsedMs;
@@ -2224,6 +2235,11 @@ export function usePlaybackController({
               },
             });
           }
+          // The finished tune must not stay open on the phone once the playlist has stopped here.
+          if (currentPlaybackIsLocalRef.current) {
+            getLocalSidPlayback().stop();
+            setCurrentPlaybackIsLocal(false);
+          }
           setIsPlaying(false);
           setIsPaused(false);
           trackStartedAtRef.current = null;
@@ -2237,6 +2253,8 @@ export function usePlaybackController({
     [
       cancelAutoAdvance,
       finishPlaylistPlayback,
+      getLocalSidPlayback,
+      setCurrentPlaybackIsLocal,
       playItem,
       traversalOrdering,
       shuffleSeed,

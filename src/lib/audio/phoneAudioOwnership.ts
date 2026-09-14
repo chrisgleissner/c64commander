@@ -79,7 +79,8 @@ export const claimPhoneAudio = (
 ): void => {
   const previous = owner;
   if (previous && previous.token !== token) {
-    addLog("warn", "Audio: stopping one source so another can play", {
+    // Starting one source while another plays is an ordinary hand-over; two claimants of one source is the fault.
+    addLog(previous.source === source ? "warn" : "info", "Audio: stopping one source so another can play", {
       service: "audio",
       stopped: previous.source,
       started: source,

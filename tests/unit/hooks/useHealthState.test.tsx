@@ -1,4 +1,4 @@
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useHealthState } from "@/hooks/useHealthState";
 
@@ -363,6 +363,31 @@ describe("useHealthState", () => {
     const { result } = renderHook(() => useHealthState());
 
     expect(result.current.state).toBe("Unhealthy");
+  });
+
+  it("lets a problem age out of its window while no new trace arrives", () => {
+    vi.useFakeTimers();
+    try {
+      const failedAt = Date.now();
+      traceEventsMock.events = [{ type: "rest-response", data: { status: 200 } }];
+      healthModelMocks.rollUpHealth.mockImplementation(() => "Healthy");
+      healthModelMocks.deriveRestContributorHealth.mockImplementation(() => idleContributor());
+      healthModelMocks.deriveAppContributorHealth.mockImplementation(() =>
+        Date.now() - failedAt < 300_000
+          ? { state: "Degraded", problemCount: 1, totalOperations: 1, failedOperations: 1 }
+          : idleContributor(),
+      );
+      const { result } = renderHook(() => useHealthState());
+      expect(result.current.problemCount).toBe(1);
+
+      act(() => {
+        vi.advanceTimersByTime(310_000);
+      });
+
+      expect(result.current.problemCount).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("ignores trace failures from other hosts when deriving the selected device health", () => {

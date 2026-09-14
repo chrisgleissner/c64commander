@@ -8,6 +8,13 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/logging", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/logging")>()),
+  addLog: vi.fn(),
+}));
+
+import { addLog } from "@/lib/logging";
+
 import {
   __resetPhoneAudioOwnership,
   claimPhoneAudio,
@@ -27,6 +34,17 @@ import {
 describe("phone audio ownership", () => {
   beforeEach(() => {
     __resetPhoneAudioOwnership();
+    vi.mocked(addLog).mockClear();
+  });
+
+  // Starting a local tune with Live View sound on is an ordinary hand-over, yet every one was logged as a warning.
+  it("logs a hand-over between two sources at info, and two claimants of one source as a warning", () => {
+    claimPhoneAudio("av-mirror", {}, vi.fn());
+    claimPhoneAudio("local-sid", {}, vi.fn());
+    expect(vi.mocked(addLog).mock.calls.map((call) => call[0])).toEqual(["info"]);
+
+    claimPhoneAudio("local-sid", {}, vi.fn());
+    expect(vi.mocked(addLog).mock.calls.map((call) => call[0])).toEqual(["info", "warn"]);
   });
 
   it("stops the mirror when a local tune starts", () => {

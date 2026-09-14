@@ -198,7 +198,8 @@ export class SongLengthServiceFacade {
     this.backend.reset();
     this.status = "unavailable";
     this.unavailableReason = reason;
-    safeAddLog("warn", "Songlengths reset", {
+    // A reset is part of installing or clearing a library; a failure behind one is logged where it happens.
+    safeAddLog("info", "Songlengths reset", {
       service: this.options.serviceId,
       reason,
       configuredPath: this.configuredPathOrDefault,

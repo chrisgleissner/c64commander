@@ -587,7 +587,7 @@ const featureRows = ({ features, variant }) => {
     rows.push([
       "Demo Mode",
       "**Settings → Connection**",
-      `${featureAvailability(features.demo_mode_enabled)} When no C64 Ultimate can be reached — because none answers, or because the phone has no network — the app offers the simulated device. Close the offer, or choose **Try again**, and the app stays offline for the rest of the session instead: tunes on your phone still play, on the phone. **Preview Demo Mode**, in the same section, switches to it at any time, including while a real C64 Ultimate is connected, and **Use the simulated device** appears on the connection card behind the connectivity badge whenever the app is offline. The simulated device holds its own music, programs, cartridges and disks, and Live View shows its screen: the BASIC prompt, a load in progress, or the program you started. It cannot run a real C64 program, and says so on that screen; a tune plays on your phone's own SID engine instead.`,
+      `${featureAvailability(features.demo_mode_enabled)} When no C64 Ultimate can be reached — because none answers, or because the phone has no network — the app offers the simulated device. Close the offer, or choose **Try again**, and the app stays offline instead and does not offer the simulated device again that session: tunes on your phone still play, on the phone, and the app connects to your C64 Ultimate by itself as soon as it can be reached. **Preview Demo Mode**, in the same section, switches to it at any time, including while a real C64 Ultimate is connected, and **Use the simulated device** appears on the connection card behind the connectivity badge whenever the app is offline. The simulated device holds its own music, programs, cartridges and disks, and Live View shows its screen: the BASIC prompt, a load in progress, or the program you started. It cannot run a real C64 program, and says so on that screen; a tune plays on your phone's own SID engine instead.`,
     ]);
   }
   if (includeFeature(features, "background_execution_enabled")) {
@@ -868,9 +868,9 @@ export const renderManualMarkdown = ({ variant, features }) => {
     "",
     `Everything the simulator answers for is yours to try: Home, the configuration, disks and drives, the playlist, Remote Input, the HVSC collection and Live View, which shows the simulated machine's screen and plays its sound. It runs no real 6502, so a program shows a demonstration screen, and a tune plays on your ${appDeviceName(variant)}'s own SID engine.`,
     "",
-    `Close the offer, or choose **Try again** while there is still no network, and the app stays offline for the rest of the session. Tunes stored on your ${appDeviceName(variant)} still play, on the ${appDeviceName(variant)} itself. **Use the simulated device**, behind the connectivity badge, brings Demo Mode back at any time.`,
+    `Close the offer, or choose **Try again** while there is still no network, and the app stays offline and does not offer Demo Mode again that session. Tunes stored on your ${appDeviceName(variant)} still play, on the ${appDeviceName(variant)} itself. When your ${appDeviceName(variant)} joins a network on which your C64 Ultimate answers, the app connects to it by itself. **Use the simulated device**, behind the connectivity badge, brings Demo Mode back at any time.`,
     "",
-    "When you do have hardware, connect to it from **Settings → Connection**. Once the app has reached a real device, it stays with it for the rest of the session.",
+    "When you do have hardware, connect to it from **Settings → Connection**. Once the app has reached a real device, it does not switch to Demo Mode by itself for the rest of the session. If the network goes away, the device is shown offline, and the app reconnects when the network is back.",
     "",
     "## Your First Tour",
     "",

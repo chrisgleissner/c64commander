@@ -53,7 +53,8 @@ vi.mock("@/lib/native/safUtils", () => ({
   redactTreeUri: vi.fn(() => "[redacted]"),
 }));
 
-vi.mock("@/lib/sid/songlengthsDiscovery", () => ({
+vi.mock("@/lib/sid/songlengthsDiscovery", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/sid/songlengthsDiscovery")>()),
   isSonglengthsFileName: vi.fn(() => false),
 }));
 

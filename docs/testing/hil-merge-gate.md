@@ -6,7 +6,7 @@ least once while CI was green, and because checking them by hand — in a differ
 different stimulus, against a memory of the last run — is not a gate.
 
 ```bash
-# Full run, in someone's room: sets the phone to volume 5, plays only while measuring.
+# Full run, in someone's room: sets the phone to volume 3, plays only while measuring.
 node tools/hil/merge_gate.mjs --host c64u --iface <this host's LAN ip> --json artifacts/hil-gate.json
 
 # A password-protected Ultimate. One flag covers the gate and every harness it starts.
@@ -112,7 +112,8 @@ still called Tone-High will be graded at 900 Hz and read as silence.
 Generate them **loud**: `--waveform sawtooth --volume 15`. The generator defaults to a triangle at
 volume 4 of 15, which is the quietest and most harmonically bare thing a SID can produce, and at
 550 Hz that puts almost all of its energy at the bottom edge of the 300-6000 Hz band the graders
-work in. The stages also run at `--tone-volume` (default 10), which is the phone-volume ceiling.
+work in. The stages run at `--tone-volume` (default 3): at 10 they were too loud to sit beside, and at 2 the
+550 Hz tone still measured 33 dB above its noise floor with the microphone at the grille.
 
 **`steady_tone_grade.py` refuses to grade what it cannot hear**, in two distinct ways, because the
 two have different causes and different fixes:
@@ -134,7 +135,7 @@ investigation after the wrong thing. The margin is now 12 dB and the same record
 
 This runs next to somebody. The rules are enforced by the runner, not left to judgement:
 
-- The phone is set to **volume 5 of 25** for the run and restored afterwards. The runner **refuses**
+- The phone is set to **volume 3 of 25** for the run and restored afterwards. The runner **refuses**
   to run above **10**, which is a hard ceiling from `AGENTS.md` and not a tuning parameter.
 - Every grader is band-limited to **300–6000 Hz**. The room's noise is almost all below 300 Hz,
   which a phone speaker barely reproduces, so a quiet phone still measures — 27 dB median SNR at

@@ -7,7 +7,7 @@
  */
 
 // @vitest-environment node
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CapacitorHttp } from "@capacitor/core";
 import {
   C64API,
@@ -1660,63 +1660,206 @@ describe("c64api", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("http://c64u/v1/configs/Audio%20Mixer");
   });
 
-  it("falls back to item endpoint when category payload misses requested keys", async () => {
+  // A device's category listing names every item it has. Firmware without "Vol Master" answers a
+  // request for it with 404, which was logged as an error on every Play page visit.
+  it("does not request an item that the category listing omits", async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/v1/configs/Audio%20Mixer")) {
         return Promise.resolve(
           new Response(
-            JSON.stringify({
-              "Audio Mixer": {
-                items: {
-                  "Vol UltiSid 1": { selected: "+6 dB" },
-                },
-              },
-              errors: [],
-            }),
-            {
-              status: 200,
-              headers: { "content-type": "application/json" },
-            },
-          ),
-        );
-      }
-      if (url.endsWith("/v1/configs/Audio%20Mixer/Vol%20Socket%201")) {
-        return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              "Audio Mixer": {
-                items: {
-                  "Vol Socket 1": { selected: "-3 dB" },
-                },
-              },
-              errors: [],
-            }),
-            {
-              status: 200,
-              headers: { "content-type": "application/json" },
-            },
+            JSON.stringify({ "Audio Mixer": { items: { "Vol UltiSid 1": { selected: "+6 dB" } } }, errors: [] }),
+            { status: 200, headers: { "content-type": "application/json" } },
           ),
         );
       }
       return Promise.resolve(
-        new Response(JSON.stringify({ errors: ["unexpected"] }), {
-          status: 500,
+        new Response(JSON.stringify({ errors: ["Could not find item"] }), {
+          status: 404,
           headers: { "content-type": "application/json" },
         }),
       );
     });
 
     const api = new C64API("http://c64u");
-    const response = await api.getConfigItems("Audio Mixer", ["Vol UltiSid 1", "Vol Socket 1"]);
+    const response = await api.getConfigItems("Audio Mixer", ["Vol UltiSid 1", "Vol Master"]);
 
     expect(response["Audio Mixer"]?.items?.["Vol UltiSid 1"]).toBeDefined();
-    expect(response["Audio Mixer"]?.items?.["Vol Socket 1"]).toBeDefined();
-    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
-      "http://c64u/v1/configs/Audio%20Mixer",
-      "http://c64u/v1/configs/Audio%20Mixer/Vol%20Socket%201",
-    ]);
+    expect(response["Audio Mixer"]?.items?.["Vol Master"]).toBeUndefined();
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual(["http://c64u/v1/configs/Audio%20Mixer"]);
+  });
+
+  // A request that gets no answer is how the app notices that a connected device has gone. The
+  // connection manager confirms it with probes; an HTTP error or a caller's abort is not that signal.
+  describe("unreachable device signal", () => {
+    let unregister: (() => void) | null = null;
+    const unreachable = vi.fn();
+
+    beforeEach(async () => {
+      unreachable.mockReset();
+      const { registerUnreachableListener } = await import("@/lib/connection/reachabilityEvents");
+      unregister = registerUnreachableListener(unreachable);
+    });
+
+    afterEach(async () => {
+      unregister?.();
+      const { resetNetworkStatusWatchForTests } = await import("@/lib/connection/networkStatusWatch");
+      resetNetworkStatusWatchForTests();
+    });
+
+    it("reports a request that got no answer", async () => {
+      getFetchMock().mockRejectedValue(new TypeError("Failed to fetch"));
+
+      await expect(new C64API("http://c64u").getInfo({ __c64uBypassCache: true })).rejects.toThrow();
+
+      expect(unreachable).toHaveBeenCalledWith("c64u", "rest");
+    });
+
+    // A discovery probe asks whether the device answers. Its "no" was still thrown as an unmarked
+    // "Host unreachable", which the action trace counted as an app problem on the badge.
+    it("marks the failure of a request that expects to fail, so the action trace does not count it", async () => {
+      getFetchMock().mockRejectedValue(new TypeError("Failed to fetch"));
+      const { classifyError } = await import("@/lib/tracing/failureTaxonomy");
+
+      const error = await new C64API("http://c64u")
+        .getInfo({ __c64uBypassCache: true, __c64uExpectedFailure: true })
+        .catch((failure: unknown) => failure);
+
+      expect((error as { c64uExpectedFailure?: boolean }).c64uExpectedFailure).toBe(true);
+      expect(classifyError(error).isExpected).toBe(true);
+    });
+
+    // Coming home, the first read after reconnecting failed with "Host unreachable" while the phone was
+    // still reaching the device. The next request answered, but the badge counted the failed one.
+    describe("while the network that just came back is settling", () => {
+      const infoResponse = () =>
+        new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+
+      beforeEach(async () => {
+        const { recordNetworkStatus } = await import("@/lib/connection/networkStatusWatch");
+        recordNetworkStatus({ online: false, supported: true });
+        recordNetworkStatus({ online: true, supported: true });
+      });
+
+      it("repeats a dropped read once and reports nothing", async () => {
+        getFetchMock().mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValueOnce(infoResponse());
+
+        await expect(new C64API("http://c64u").getInfo({ __c64uBypassCache: true })).resolves.toMatchObject({
+          product: "C64 Ultimate",
+        });
+
+        expect(getFetchMock()).toHaveBeenCalledTimes(2);
+        expect(unreachable).not.toHaveBeenCalled();
+      });
+
+      it("does not repeat a write, which may already have reached the device", async () => {
+        getFetchMock().mockRejectedValue(new TypeError("Failed to fetch"));
+
+        await expect(new C64API("http://c64u").machineReset()).rejects.toThrow();
+
+        expect(getFetchMock()).toHaveBeenCalledTimes(1);
+      });
+
+      it("does not count a read that still fails as an app problem", async () => {
+        getFetchMock().mockRejectedValue(new TypeError("Failed to fetch"));
+        const { classifyError } = await import("@/lib/tracing/failureTaxonomy");
+
+        const error = await new C64API("http://c64u")
+          .getInfo({ __c64uBypassCache: true })
+          .catch((failure: unknown) => failure);
+
+        expect(getFetchMock()).toHaveBeenCalledTimes(2);
+        expect(classifyError(error).isExpected).toBe(true);
+      });
+    });
+
+    it("does not repeat a read when the network has not just come back", async () => {
+      getFetchMock().mockRejectedValue(new TypeError("Failed to fetch"));
+
+      await expect(new C64API("http://c64u").getInfo({ __c64uBypassCache: true })).rejects.toThrow();
+
+      expect(getFetchMock()).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not report a device that answered with an error", async () => {
+      getFetchMock().mockResolvedValue(
+        new Response(JSON.stringify({ errors: ["boom"] }), {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+
+      await expect(new C64API("http://c64u").getInfo({ __c64uBypassCache: true })).rejects.toThrow();
+
+      expect(unreachable).not.toHaveBeenCalled();
+    });
+
+    it("does not report a request its caller aborted", async () => {
+      const controller = new AbortController();
+      getFetchMock().mockImplementation(
+        (_input: unknown, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+          }),
+      );
+
+      const pending = new C64API("http://c64u").getInfo({ __c64uBypassCache: true, signal: controller.signal });
+      controller.abort();
+
+      await expect(pending).rejects.toThrow();
+      expect(unreachable).not.toHaveBeenCalled();
+    });
+
+    it("treats a request that fails while the phone has no network as expected", async () => {
+      const { recordNetworkStatus } = await import("@/lib/connection/networkStatusWatch");
+      const traces = await import("@/lib/tracing/traceSession");
+      recordNetworkStatus({ online: true, supported: true });
+      recordNetworkStatus({ online: false, supported: true });
+      traces.clearTraceEvents();
+      getFetchMock().mockRejectedValue(new TypeError("Failed to fetch"));
+
+      await expect(
+        new C64API("http://c64u").getInfo({ __c64uIntent: "user", __c64uBypassCache: true }),
+      ).rejects.toThrow();
+
+      expect(addLogMock).not.toHaveBeenCalledWith("warn", "C64 API request failed", expect.anything());
+      expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
+      const unexpected = traces.getTraceEvents().filter((event) => event.type === "error" && !event.data.isExpected);
+      expect(unexpected).toEqual([]);
+    });
+
+    // A disk mount sent as Wi-Fi went down failed about 250 ms before Android reported the lost network,
+    // so it was logged and counted as an error. The failed request asks the platform itself.
+    it("asks the platform for the network state when a request fails before the change is reported", async () => {
+      const { recordNetworkStatus } = await import("@/lib/connection/networkStatusWatch");
+      const traces = await import("@/lib/tracing/traceSession");
+      const probeWindow = window as Window & {
+        __c64uTestProbeEnabled?: boolean;
+        __c64uMockNetworkStatus?: { online: boolean; supported: boolean };
+      };
+      recordNetworkStatus({ online: true, supported: true });
+      traces.clearTraceEvents();
+      probeWindow.__c64uTestProbeEnabled = true;
+      probeWindow.__c64uMockNetworkStatus = { online: false, supported: true };
+      getFetchMock().mockRejectedValue(new TypeError("Failed to fetch"));
+
+      try {
+        await expect(
+          new C64API("http://c64u").getInfo({ __c64uIntent: "user", __c64uBypassCache: true }),
+        ).rejects.toThrow();
+      } finally {
+        delete probeWindow.__c64uTestProbeEnabled;
+        delete probeWindow.__c64uMockNetworkStatus;
+      }
+
+      expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
+      const unexpected = traces.getTraceEvents().filter((event) => event.type === "error" && !event.data.isExpected);
+      expect(unexpected).toEqual([]);
+    });
   });
 
   it("covers runner and drive request helpers", async () => {

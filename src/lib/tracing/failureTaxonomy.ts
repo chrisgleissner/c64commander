@@ -7,6 +7,7 @@
  */
 
 import { LocalSourceListingError } from "@/lib/sourceNavigation/localSourceErrors";
+import { isNetworkKnownOffline, isNetworkSettling } from "@/lib/connection/networkStatusWatch";
 
 export type FailureCategory = "network" | "timeout" | "cancelled" | "user" | "integration" | "storage" | "unknown";
 
@@ -108,7 +109,14 @@ export const classifyError = (error: unknown, categoryHint?: FailureCategory): F
     }
   }
 
-  const isExpected = category === "cancelled" || category === "user";
+  // With the phone known to have no network, or its network only just back, a request that cannot reach
+  // the device is the expected outcome: the connection manager decides whether the device is gone.
+  const unreachableWhileOffline =
+    (isNetworkKnownOffline() || isNetworkSettling()) &&
+    (category === "network" || category === "timeout" || /host unreachable|failed to connect/i.test(message));
+  // A request made to find out whether the device answers (a probe) marks "no" as expected.
+  const markedExpected = (error as { c64uExpectedFailure?: unknown } | null)?.c64uExpectedFailure === true;
+  const isExpected = category === "cancelled" || category === "user" || unreachableWhileOffline || markedExpected;
 
   let failureClass: FailureClass = "unknown";
   if (isStructuredCancellation || isAbortError(err, message)) {

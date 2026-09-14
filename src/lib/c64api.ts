@@ -85,7 +85,9 @@ import { notifyConfigEnrichmentNamespaceChange } from "@/lib/c64api/configEnrich
 import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
 import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidationContext } from "@/lib/fileValidation";
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
-import { notifyReachable } from "@/lib/connection/reachabilityEvents";
+import { notifyReachable, notifyUnreachable } from "@/lib/connection/reachabilityEvents";
+import { readNativeNetworkStatus } from "@/lib/connection/offlineStartup";
+import { isNetworkSettling } from "@/lib/connection/networkStatusWatch";
 import { getLifecycleState } from "@/lib/appLifecycle";
 import { CapacitorHttp } from "@capacitor/core";
 import { buildCreateDiskPlan, type CreateDiskArgs, type CreateDiskPlan } from "@/lib/disks/createDisk";
@@ -135,6 +137,7 @@ const RAM_BLOCK_WRITE_TIMEOUT_MS = 15_000;
 // Formatting a blank image on slow USB media can exceed the normal control budget.
 const DISK_CREATE_REQUEST_TIMEOUT_MS = 30_000;
 const NETWORK_RETRY_DELAY_MS = 180;
+const SETTLING_NETWORK_RETRY_DELAY_MS = 500;
 const SID_UPLOAD_MAX_ATTEMPTS = 3;
 const SID_UPLOAD_RETRYABLE_HTTP_STATUS = new Set([502, 503, 504]);
 const DEDUPEABLE_READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -200,12 +203,14 @@ type RestFailureKind = "timeout" | "abort" | "network" | "http-status";
 const annotateRestFailure = <T extends Error>(
   error: T,
   kind: RestFailureKind,
-  details: { httpStatus?: number; callerCancelled?: boolean } = {},
+  details: { httpStatus?: number; callerCancelled?: boolean; expected?: boolean } = {},
 ): T => {
   Object.assign(error, {
     c64uRestFailureKind: kind,
     ...(details.httpStatus !== undefined ? { c64uHttpStatus: details.httpStatus } : {}),
     ...(details.callerCancelled ? { c64uCallerCancelled: true } : {}),
+    // Carried to the action trace, which classifies the thrown error without seeing the request options.
+    ...(details.expected ? { c64uExpectedFailure: true } : {}),
   });
   return error;
 };
@@ -1708,7 +1713,7 @@ export class C64API {
               const idleContext = getIdleContext();
               const scheduledRequest = intent === "background";
               const requestTimeoutMs = timeoutMs ?? resolveDefaultRestRequestTimeoutMs(intent);
-              const maxAttempts = 1;
+              const maxAttempts = DEDUPEABLE_READ_METHODS.has(method) && !expectedFailureOption ? 2 : 1;
               const requestTrace = await inspectRequestPayload(requestOptions.body);
               let lastError: unknown = null;
               const isSuperseded = () => this.requestGeneration !== requestGeneration;
@@ -1814,7 +1819,7 @@ export class C64API {
                     const err = annotateRestFailure(
                       new Error(buildHttpErrorMessage(response.status, response.statusText)),
                       "http-status",
-                      { httpStatus: response.status },
+                      { httpStatus: response.status, expected: expectedFailureOption },
                     );
                     const failure = classifyError(err, "integration");
                     const expectedFailure =
@@ -1896,6 +1901,15 @@ export class C64API {
                   const cancelledAbort = isAbortLikeError(error) && !timedSignal.didTimeout();
                   const isAbort = isAbortLikeError(error) || timedSignal.didTimeout() || /timed out/i.test(rawMessage);
                   const isNetworkFailure = isNetworkFailureMessage(rawMessage);
+                  // Leaving the network fails requests before the platform's callback says so; asking now lets
+                  // everything below see the real cause.
+                  const transportFailure = (isNetworkFailure || timedSignal.didTimeout()) && !callerAborted;
+                  if (transportFailure) await readNativeNetworkStatus();
+                  // A read dropped by Wi-Fi that has only just come back is repeated once rather than reported.
+                  if (attempt < maxAttempts && isNetworkFailure && !isAbort && !superseded && isNetworkSettling()) {
+                    await wait(SETTLING_NETWORK_RETRY_DELAY_MS);
+                    continue;
+                  }
                   const failure = classifyError(error);
                   const normalizedError =
                     !callerAborted && !superseded && (isAbort || isNetworkFailure)
@@ -1936,6 +1950,7 @@ export class C64API {
                       recordTraceError(action, error as Error, failure);
                     }
                   }
+                  if (transportFailure && !superseded && !cancelledAbort) notifyUnreachable(requestDeviceHost, "rest");
                   if (superseded) {
                     addLog("debug", "C64 API request failure ignored after routing change", {
                       method,
@@ -2027,6 +2042,7 @@ export class C64API {
                     throw annotateRestFailure(
                       new Error(resolveHostErrorMessage(rawMessage)),
                       timedSignal.didTimeout() || /timed out/i.test(rawMessage) ? "timeout" : "network",
+                      { expected: expectedFailureOption },
                     );
                   }
                   throw error;
@@ -2328,11 +2344,14 @@ export class C64API {
         mergedItems[item] = cloneBudgetValue(cachedItems[item]);
       }
     });
+    // An item the category listing omits is one the device does not have; asking for it only earns a 404.
+    let categoryListed = false;
     try {
       const categoryPayload = await this.getCategory(category, {
         ...options,
         __c64uExpectedFailure: true,
       });
+      categoryListed = true;
       const payload = categoryPayload as Record<string, any>;
       const categoryBlock = payload?.[category] ?? payload;
       const itemsBlock = categoryBlock?.items ?? categoryBlock;
@@ -2390,7 +2409,9 @@ export class C64API {
     }
 
     const missingItems = uniqueItems.filter(
-      (item) => !Object.prototype.hasOwnProperty.call(mergedItems, item) || itemsNeedingEnrichment.has(item),
+      (item) =>
+        (!categoryListed && !Object.prototype.hasOwnProperty.call(mergedItems, item)) ||
+        itemsNeedingEnrichment.has(item),
     );
     if (!skipItemEnrichment && missingItems.length > 0) {
       const responses = await Promise.allSettled(

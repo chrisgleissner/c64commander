@@ -170,6 +170,7 @@ describe("the privacy policy", () => {
     // were none.
     const described: Record<string, string> = {
       INTERNET: "internet",
+      ACCESS_NETWORK_STATE: "network state",
       CHANGE_WIFI_MULTICAST_STATE: "multicast",
       FOREGROUND_SERVICE: "foreground service",
       FOREGROUND_SERVICE_MEDIA_PLAYBACK: "media playback",
@@ -184,7 +185,7 @@ describe("the privacy policy", () => {
     }
 
     // The count is stated in the prose, so it has to match the manifest.
-    const counted = ["", "one", "two", "three", "four", "five", "six", "seven"][declared.length];
+    const counted = ["", "one", "two", "three", "four", "five", "six", "seven", "eight"][declared.length];
     expect(policy(), `the policy counts the permissions wrong; there are ${declared.length}`).toContain(
       `declares ${counted} Android permissions`,
     );

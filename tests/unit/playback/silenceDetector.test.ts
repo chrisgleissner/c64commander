@@ -94,6 +94,18 @@ describe("SilenceDetector", () => {
     expect(d.silentSeconds).toBe(0);
   });
 
+  // Measured on a Pixel 4: Chess II ends flat at 3:28 while the native buffer holds about 12 s, so
+  // counting written silence raised "Local SID playback is silent" just before every advance.
+  it("does not count flat audio the listener has not heard yet", () => {
+    const d = new SilenceDetector({ toleranceSeconds: 12 });
+    for (let i = 0; i < 12; i += 1) d.observe(constant(0), 1);
+    expect(d.isFaultyAfterQueue(12)).toBe(false);
+    expect(d.isFaultyAfterQueue(0.5)).toBe(false);
+    expect(d.isFaultyAfterQueue(0)).toBe(true);
+    for (let i = 0; i < 12; i += 1) d.observe(constant(0), 1);
+    expect(d.isFaultyAfterQueue(12)).toBe(true);
+  });
+
   it("ignores a buffer of no duration rather than counting it", () => {
     const d = new SilenceDetector({ toleranceSeconds: 1 });
     d.observe(constant(0), 0);

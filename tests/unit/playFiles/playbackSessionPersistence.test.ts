@@ -18,7 +18,69 @@ import {
 
 describe("playbackSessionPersistence", () => {
   beforeEach(() => {
-    if (typeof sessionStorage !== "undefined") sessionStorage.clear();
+    sessionStorage.clear();
+    localStorage.clear();
+  });
+
+  // The paused session is in localStorage and survives the OS ending the app (HARD27-032). Its pause mute was
+  // not: on a Pixel 4, Resume after a restart played the tune on a C64 Ultimate whose master volume stayed OFF.
+  it("keeps the pause-mute snapshot when the app process ends", () => {
+    persistPauseMuteSnapshot("device-a", { "Vol Master": " 0 dB" }, { sid1: true, sid2: true, sid3: true });
+
+    sessionStorage.clear();
+
+    expect(hydratePlaybackSnapshot("device-a")?.pauseMuteSnapshot).toEqual({ "Vol Master": " 0 dB" });
+  });
+
+  it("moves an envelope left in sessionStorage by an earlier build", () => {
+    sessionStorage.setItem(
+      "c64u.playbackSessionSnapshot",
+      JSON.stringify({
+        deviceId: "device-a",
+        volumeSnapshot: {},
+        volumeActive: false,
+        pauseMuteSnapshot: { "SID 1": 3 },
+      }),
+    );
+
+    expect(hydratePlaybackSnapshot("device-a")?.pauseMuteSnapshot).toEqual({ "SID 1": 3 });
+    expect(sessionStorage.getItem("c64u.playbackSessionSnapshot")).toBeNull();
+    expect(localStorage.getItem("c64u.playbackSessionSnapshot")).not.toBeNull();
+  });
+
+  it("does nothing, and does not throw, where the platform has no web storage", () => {
+    vi.stubGlobal("localStorage", undefined);
+    vi.stubGlobal("sessionStorage", undefined);
+    try {
+      expect(() =>
+        persistPlaybackSnapshot({
+          deviceId: "device-a",
+          volumeSnapshot: {},
+          volumeActive: false,
+          manualMuteSnapshot: null,
+          manualMuteEnablement: null,
+          pauseMuteSnapshot: null,
+          pauseMuteEnablement: null,
+        }),
+      ).not.toThrow();
+      expect(hydratePlaybackSnapshot("device-a")).toBeNull();
+      expect(() => discardPlaybackSnapshot("device-a")).not.toThrow();
+      expect(() => clearPersistedPauseMute("device-a")).not.toThrow();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("discards an envelope where only localStorage exists", () => {
+    persistPauseMuteSnapshot("device-a", { "SID 1": 3 }, { sid1: true, sid2: false, sid3: false });
+    vi.stubGlobal("sessionStorage", undefined);
+    try {
+      discardPlaybackSnapshot("device-a");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(hydratePlaybackSnapshot("device-a")).toBeNull();
   });
 
   it("round-trips a snapshot envelope for the matching device id", () => {
@@ -87,6 +149,7 @@ describe("playbackSessionPersistence", () => {
     discardPlaybackSnapshot();
 
     expect(sessionStorage.getItem("c64u.playbackSessionSnapshot")).toBeNull();
+    expect(localStorage.getItem("c64u.playbackSessionSnapshot")).toBeNull();
   });
 
   it("discardPlaybackSnapshot preserves a snapshot that belongs to a different device id", () => {
@@ -112,7 +175,7 @@ describe("playbackSessionPersistence", () => {
     });
   });
 
-  it("returns null when sessionStorage has no envelope", () => {
+  it("returns null when no envelope is stored", () => {
     expect(hydratePlaybackSnapshot("device-x")).toBeNull();
   });
 
@@ -239,7 +302,7 @@ describe("playbackSessionPersistence", () => {
     });
   });
 
-  it("swallows sessionStorage write failures while persisting a playback snapshot", () => {
+  it("swallows storage write failures while persisting a playback snapshot", () => {
     const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("disk full");
     });
@@ -259,7 +322,7 @@ describe("playbackSessionPersistence", () => {
     setItemSpy.mockRestore();
   });
 
-  it("swallows sessionStorage remove failures while discarding a matching snapshot", () => {
+  it("swallows storage remove failures while discarding a matching snapshot", () => {
     sessionStorage.setItem(
       "c64u.playbackSessionSnapshot",
       JSON.stringify({

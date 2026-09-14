@@ -10,6 +10,7 @@ import com.getcapacitor.PluginCall
 import java.io.File
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
+import java.net.SocketException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -29,17 +30,21 @@ import org.junit.runner.RunWith
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.anyString
+import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
+import org.mockito.Mockito.timeout
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows
 import uk.gleissner.c64commander.hvsc.ArchiveProfile
 import uk.gleissner.c64commander.hvsc.ExtractionProgress
 import uk.gleissner.c64commander.hvsc.ExtractionResult
 import uk.gleissner.c64commander.hvsc.HvscArchiveExtractor
 import uk.gleissner.c64commander.hvsc.HvscArchiveMode
+import uk.gleissner.c64commander.hvsc.HvscResumableDownload
 import uk.gleissner.c64commander.hvsc.MemoryBudget
 
 private open class TestableHvscIngestionPlugin : HvscIngestionPlugin() {
@@ -60,6 +65,14 @@ private open class TestableHvscIngestionPlugin : HvscIngestionPlugin() {
   public override fun createArchiveExtractor(): HvscArchiveExtractor = fakeExtractor ?: super.createArchiveExtractor()
 
   public override fun readAvailableBytes(dir: File): Long = fakeAvailableBytes ?: super.readAvailableBytes(dir)
+
+  var fakeResumableDownload: HvscResumableDownload? = null
+  var fakeNetworkRoutable: Boolean? = null
+
+  public override fun createResumableDownload(): HvscResumableDownload =
+    fakeResumableDownload ?: super.createResumableDownload()
+
+  public override fun hasRoutableNetwork(): Boolean = fakeNetworkRoutable ?: super.hasRoutableNetwork()
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -103,6 +116,38 @@ class HvscIngestionPluginTest {
 
     verify(call).reject("mode must be baseline or update")
     verify(call, never()).resolve(any(JSObject::class.java))
+  }
+
+  private fun downloadCallCutBy(error: Exception, networkRoutable: Boolean): PluginCall {
+    plugin.fakeResumableDownload = HvscResumableDownload { throw error }
+    plugin.fakeNetworkRoutable = networkRoutable
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("relativeArchivePath")).thenReturn("hvsc/cache/hvsc-baseline-85.7z")
+    `when`(call.getString("url")).thenReturn("https://hvsc.invalid/HVSC_85.7z")
+    `when`(call.data).thenReturn(JSObject())
+    plugin.downloadArchive(call)
+    return call
+  }
+
+  // Leaving home mid-download is the phone's state, not a download fault, so it must not log an error.
+  @Test
+  fun downloadArchiveCutByLosingTheNetworkRejectsAsNetworkLost() {
+    val call = downloadCallCutBy(SocketException("Software caused connection abort"), networkRoutable = false)
+
+    verify(call, timeout(5000)).reject(eq("Software caused connection abort"), eq("NETWORK_LOST"), any(Exception::class.java))
+    val levels =
+      Shadows.shadowOf(context as android.app.Application).broadcastIntents
+        .filter { it.action == AppLogger.ACTION_DIAGNOSTICS_LOG }
+        .map { it.getStringExtra(AppLogger.EXTRA_LEVEL) }
+    assertFalse(levels.contains("error"))
+  }
+
+  @Test
+  fun downloadArchiveFailingWithTheNetworkStillUpRejectsAsAFailure() {
+    val call = downloadCallCutBy(SocketException("Connection reset"), networkRoutable = true)
+
+    verify(call, timeout(5000)).reject(eq("Connection reset"), any(Exception::class.java))
+    verify(call, never()).reject(anyString(), eq("NETWORK_LOST"), any(Exception::class.java))
   }
 
   @Test

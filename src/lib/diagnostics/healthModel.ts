@@ -739,10 +739,10 @@ export const getBadgeAriaLabel = (
   if (connectivity === "Auth") return "Password required";
   if (connectivity === "Offline") return "Offline, device not reachable";
   if (connectivity === "Not yet connected") return "Not yet connected";
-  const connPhrase =
-    connectivity === "Online" || connectivity === "Checking"
-      ? `Connected to ${connectedDeviceLabel ?? inferConnectedDeviceLabel(product) ?? "C64U"}`
-      : "Demo mode";
+  const deviceLabel = connectedDeviceLabel ?? inferConnectedDeviceLabel(product) ?? "C64U";
+  // While the device is still being probed it is not connected, whether or not it answers in the end.
+  if (connectivity === "Checking") return `Connecting to ${deviceLabel}`;
+  const connPhrase = connectivity === "Online" ? `Connected to ${deviceLabel}` : "Demo mode";
   switch (health) {
     case "Healthy":
       return `${connPhrase}, system healthy`;

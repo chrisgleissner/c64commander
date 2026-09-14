@@ -172,6 +172,8 @@ const applyIdentityHealthGate = (
   };
 };
 
+const PROBLEM_WINDOW_RECHECK_MS = 10_000;
+
 export function useHealthState(): OverallHealthState {
   const connectionSnapshot = useConnectionState();
   const healthCheckState = useHealthCheckState();
@@ -180,6 +182,7 @@ export function useHealthState(): OverallHealthState {
     status: { deviceInfo },
   } = useC64Connection();
   const [traceEvents, setTraceEvents] = useState(getTraceEvents);
+  const [windowCheck, setWindowCheck] = useState(0);
 
   useEffect(() => {
     const handler = () => setTraceEvents(getTraceEvents());
@@ -187,7 +190,7 @@ export function useHealthState(): OverallHealthState {
     return () => window.removeEventListener("c64u-traces-updated", handler);
   }, []);
 
-  return useMemo(() => {
+  const health = useMemo<OverallHealthState>(() => {
     const connectivity = deriveConnectivityState(
       connectionSnapshot.state,
       connectionSnapshot.lastProbeError === AUTH_REQUIRED_PROBE_ERROR,
@@ -361,5 +364,17 @@ export function useHealthState(): OverallHealthState {
     healthCheckState.latestResult,
     savedDevices,
     traceEvents,
+    windowCheck,
   ]);
+
+  // Problems age out of time windows, but nothing re-derived the health while no new trace arrived,
+  // so one failed request kept an idle app's badge at "1 problem" indefinitely.
+  const hasProblems = health.problemCount > 0;
+  useEffect(() => {
+    if (!hasProblems) return;
+    const timer = window.setInterval(() => setWindowCheck((check) => check + 1), PROBLEM_WINDOW_RECHECK_MS);
+    return () => window.clearInterval(timer);
+  }, [hasProblems]);
+
+  return health;
 }

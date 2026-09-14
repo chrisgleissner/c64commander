@@ -53,6 +53,10 @@ DOMINANT = 0.25
 #: less than the margin a tone the listener can actually hear will have.
 SNR_MARGIN = 8.0
 
+#: Pitches that neither tune nor any of its harmonics reaches, read as the room's own level near the two
+#: tones. Needed to tell a tune that never stopped from noise at its pitch: both keep its bin up throughout.
+REFERENCE_HZ = (700.0, 1250.0)
+
 
 def read_mono(path: str) -> tuple[np.ndarray, int]:
     """The recording as floats in -1..1, with its sample rate."""
@@ -98,8 +102,8 @@ def _runs(flags: list[bool], lo: int, hi: int) -> int:
     return runs
 
 
-def measure(path: str, low_hz: float, high_hz: float) -> list[tuple[float, float, float]]:
-    """The recording as one row per window: its time, and the level of each tone in it."""
+def measure(path: str, low_hz: float, high_hz: float) -> list[tuple[float, float, float, float]]:
+    """The recording as one row per window: its time, the level of each tone, and the reference level."""
     samples, rate = read_mono(path)
     frames = int(WINDOW_SECONDS * rate)
     taper = np.hanning(frames)
@@ -108,6 +112,7 @@ def measure(path: str, low_hz: float, high_hz: float) -> list[tuple[float, float
             start / rate,
             tone_level(samples, low_hz, rate, start, frames, taper),
             tone_level(samples, high_hz, rate, start, frames, taper),
+            max(tone_level(samples, hz, rate, start, frames, taper) for hz in REFERENCE_HZ),
         )
         for start in range(0, len(samples) - frames, frames)
     ]
@@ -116,10 +121,14 @@ def measure(path: str, low_hz: float, high_hz: float) -> list[tuple[float, float
     return rows
 
 
-def grade_rows(rows: list[tuple[float, float, float]], path: str = "<rows>", verbose: bool = False) -> dict:
+def grade_rows(rows: list[tuple], path: str = "<rows>", verbose: bool = False) -> dict:
     """Judge one transition from its measured windows. Pure, so it can be fed synthetic patterns."""
-    low_peak = max(row[1] for row in rows) or 1e-12
-    high_peak = max(row[2] for row in rows) or 1e-12
+    # Peaks come from windows where a tone stands above the reference pitches. A click or a tap on the phone is
+    # loud at every pitch at once, and one such window had lifted a peak fourfold: every threshold derived from
+    # it then called a fading tune absent, and a smooth join graded as a gap.
+    tonal = [row for row in rows if len(row) < 4 or max(row[1], row[2]) > row[3] * 4] or rows
+    low_peak = max(row[1] for row in tonal) or 1e-12
+    high_peak = max(row[2] for row in tonal) or 1e-12
 
     # Each tone's noise floor, taken as a low percentile of its OWN bin across the whole recording.
     #
@@ -136,14 +145,27 @@ def grade_rows(rows: list[tuple[float, float, float]], path: str = "<rows>", ver
     # The 10th rather than the minimum, so one unusually quiet window cannot flatter the result.
     low_noise = float(np.percentile([row[1] for row in rows], 10))
     high_noise = float(np.percentile([row[2] for row in rows], 10))
+    # Where the reference pitches were measured they are the better floor for a tone that plays for most of the
+    # recording, as the second tune does in the app's own samples: its 10th percentile is then the tone itself.
+    if len(rows[0]) > 3:
+        room_floor = float(np.median([row[3] for row in rows]))
+        low_noise, high_noise = min(low_noise, room_floor), min(high_noise, room_floor)
 
     # Present means "above its own peak's PRESENT fraction AND clear of its own noise". The second
     # half is what stops narrow-band noise at a target frequency being read as a tone that is
     # playing, which would quietly fill in a real gap.
     low_on_at = max(low_peak * PRESENT, low_noise * SNR_MARGIN)
     high_on_at = max(high_peak * PRESENT, high_noise * SNR_MARGIN)
-    low_on = [row[1] > low_on_at for row in rows]
-    high_on = [row[2] > high_on_at for row in rows]
+    # And above the reference pitches in the same window. A click is loud at every pitch at once; without this a
+    # tap near the microphone read as the second tune sounding for 50 ms and graded a clean join RAGGED.
+    above_room = lambda row, level: len(row) < 4 or level > row[3] * 4  # noqa: E731
+    low_on = [row[1] > low_on_at and above_room(row, row[1]) for row in rows]
+    high_on = [row[2] > high_on_at and above_room(row, row[2]) for row in rows]
+    # A click says nothing about either tune, so its window keeps the state of the one before it.
+    room = float(np.median([row[3] for row in rows])) if len(rows[0]) > 3 else 0.0
+    for i in range(1, len(rows)):
+        if len(rows[i]) > 3 and rows[i][3] > room * 4:
+            low_on[i], high_on[i] = low_on[i - 1], high_on[i - 1]
 
     # The transition runs from the last moment the first tune is clearly alone to the first moment
     # the second one is. Everything outside that is one tune playing normally.
@@ -205,8 +227,27 @@ def grade_rows(rows: list[tuple[float, float, float]], path: str = "<rows>", ver
     # is near-digital silence throughout. The SNR one catches the more dangerous case: a room loud
     # enough at one of the target frequencies that the "peak" every threshold is a fraction of is
     # itself noise.
+    # Whether each tune is still sounding over the last quarter of the recording, judged against the reference
+    # pitches. The skip is fired halfway through, so by then the first tune has to be gone and the second
+    # steady. A first tune that never stopped keeps its own bin up, which the percentile floor above reads
+    # as "only 1x its own noise": a skip that did nothing was reported as a noisy room.
+    tail = rows[len(rows) * 3 // 4 :]
+    reference = float(np.median([row[3] if len(row) > 3 else 0.0 for row in tail])) if tail else 0.0
+    low_tail = float(np.median([row[1] for row in tail])) if tail else 0.0
+    high_tail = float(np.median([row[2] for row in tail])) if tail else 0.0
+    low_kept_playing = low_tail >= low_peak * DOMINANT and low_tail >= reference * SNR_MARGIN
+    high_did_not_stay = high_tail < high_peak * DOMINANT and high_peak >= reference * SNR_MARGIN
+
     if low_peak < 1e-4 or high_peak < 1e-4:
         result["verdict"] = "INCONCLUSIVE — a tone never rose above digital silence; check the volume"
+    elif low_kept_playing:
+        result["verdict"] = (
+            f"OUTGOING KEPT PLAYING — the first tune was at {low_tail / low_peak:.0%} of its level at the end"
+        )
+    elif high_did_not_stay:
+        result["verdict"] = (
+            f"INCOMING DID NOT STAY — the second tune was at {high_tail / high_peak:.0%} of its level at the end"
+        )
     elif low_noise and low_peak < low_noise * SNR_MARGIN:
         result["verdict"] = f"INCONCLUSIVE — the low tone is only {result['snr_low']}x its own noise; quieten the room"
     elif high_noise and high_peak < high_noise * SNR_MARGIN:
@@ -227,7 +268,7 @@ def grade_rows(rows: list[tuple[float, float, float]], path: str = "<rows>", ver
     if verbose:
         # stderr, so `--json --verbose` still emits parseable JSON on stdout.
         print(f"{'t':>6} {'low':>10} {'high':>10}  state", file=sys.stderr)
-        for i, (at, low, high) in enumerate(rows):
+        for i, (at, low, high, *_) in enumerate(rows):
             state = "BOTH" if low_on[i] and high_on[i] else "low" if low_on[i] else "high" if high_on[i] else "-"
             print(f"{at:6.2f} {low:10.6f} {high:10.6f}  {state}", file=sys.stderr)
     return result
@@ -245,7 +286,7 @@ def self_test() -> int:
 
         python3 tools/hil/crossfade_probe.py --self-test
     """
-    rows = lambda levels: [(i * WINDOW_SECONDS, lo, hi) for i, (lo, hi) in enumerate(levels)]  # noqa: E731
+    rows = lambda levels: [(i * WINDOW_SECONDS, *level) for i, level in enumerate(levels)]  # noqa: E731
     cases = [
         (
             "a clean crossfade",
@@ -273,9 +314,22 @@ def self_test() -> int:
         (
             # Noise at the low frequency as loud as the tune ever gets there. Every threshold derived
             # from that peak is a fraction of noise, so the gap in the middle reads as "low present".
+            # The reference pitches carry the same noise, which is what marks it as the room.
             "narrow-band noise standing in for the low tone",
-            [(0.02, 0.001)] * 4 + [(0.02, 0.5)] + [(0.018, 1.0)] * 5,
+            [(0.02, 0.001, 0.02)] * 4 + [(0.02, 0.5, 0.02)] + [(0.018, 1.0, 0.02)] * 5,
             "INCONCLUSIVE",
+        ),
+        (
+            # Recorded on a Pixel 4: after the skip the first tune went on at full level and the second
+            # sounded for half a second. The old grader called that "only 1.0x its own noise".
+            "the outgoing tune keeps playing after the skip",
+            [(0.03, 0.0002, 0.0002)] * 8 + [(0.03, 0.01, 0.0002)] + [(0.03, 0.0003, 0.0002)] * 3,
+            "OUTGOING KEPT PLAYING",
+        ),
+        (
+            "the incoming tune sounds briefly and stops",
+            [(1.0, 0.001, 0.001)] * 4 + [(0.5, 0.5, 0.001), (0.001, 1.0, 0.001)] + [(0.001, 0.05, 0.001)] * 6,
+            "INCOMING DID NOT STAY",
         ),
     ]
     failures = 0

@@ -242,8 +242,10 @@ export const probeMachineInputCapability = async (
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error(String(error));
     const httpStatus = getRestHttpStatus(normalizedError);
+    // No HTTP answer is a transport blip, retried at the next sheet open. On a Pixel 4 the probe met the C64
+    // Ultimate a moment after a reset, answered "Host unreachable", and was logged as a warning.
     addLog(
-      "warn",
+      httpStatus === null ? "info" : "warn",
       "Machine input capability probe failed",
       buildErrorLogDetails(normalizedError, {
         cacheKey,

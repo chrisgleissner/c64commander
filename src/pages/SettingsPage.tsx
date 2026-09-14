@@ -32,7 +32,12 @@ import { useFocusItem } from "@/hooks/useFocusNavigation";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { useSavedDeviceSwitching } from "@/hooks/useSavedDeviceSwitching";
 import { C64_DEFAULTS } from "@/lib/c64api";
-import { buildDeviceHostWithHttpPort, getDeviceHostHttpPort, stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
+import {
+  buildDeviceHostWithHttpPort,
+  getDeviceHostFromBaseUrl,
+  getDeviceHostHttpPort,
+  stripPortFromDeviceHost,
+} from "@/lib/c64api/hostConfig";
 import { cn } from "@/lib/utils";
 import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
@@ -203,7 +208,12 @@ import { getStoredFtpPort, setStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { FolderPicker, type SafPersistedUri } from "@/lib/native/folderPicker";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
-import { discoverConnection, getConnectionSnapshot, pinDemoModeByUserChoice } from "@/lib/connection/connectionManager";
+import {
+  discoverConnection,
+  getConnectionSnapshot,
+  isDemoModePinnedByUser,
+  pinDemoModeByUserChoice,
+} from "@/lib/connection/connectionManager";
 import { evaluateNewDeviceReachability } from "@/lib/connection/addDeviceReachability";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useDeviceDiscovery } from "@/hooks/useDeviceDiscovery";
@@ -372,9 +382,11 @@ export default function SettingsPage() {
   const [discoveryPasswordInput, setDiscoveryPasswordInput] = useState("");
   const [discoveryPasswordError, setDiscoveryPasswordError] = useState<string | null>(null);
   const [demoPreviewBusy, setDemoPreviewBusy] = useState(false);
-  const runtimeDeviceHost = stripPortFromDeviceHost(deviceHost);
-  const runtimeHttpPort = getDeviceHostHttpPort(deviceHost, runtimeBaseUrl);
   const isDemoActive = status.state === "DEMO_ACTIVE";
+  // In Demo Mode requests go to the simulated device, so its address is shown rather than the saved device's.
+  const usedDeviceHost = isDemoActive && runtimeBaseUrl ? getDeviceHostFromBaseUrl(runtimeBaseUrl) : deviceHost;
+  const runtimeDeviceHost = stripPortFromDeviceHost(usedDeviceHost);
+  const runtimeHttpPort = getDeviceHostHttpPort(usedDeviceHost, runtimeBaseUrl);
   const selectedSavedDevice =
     savedDevices.devices.find((device) => device.id === savedDevices.selectedDeviceId) ??
     savedDevices.devices[0] ??
@@ -822,7 +834,7 @@ export default function SettingsPage() {
         } else {
           setReachabilitySuggestion(null);
           setHostnameError(
-            `We couldn’t reach “${nextHost}”. Make sure it’s powered on and on the same Wi‑Fi, or enter its IP address.`,
+            `We couldn’t reach “${nextHost}”. Make sure it’s powered on and on the same Wi‑Fi${/^[\d.]+$/.test(nextHost) ? "" : ", or enter its IP address"}.`,
           );
         }
         return;
@@ -1687,16 +1699,18 @@ export default function SettingsPage() {
                   />
                   <HelperText>
                     Currently using: <span className="font-sans break-all">{runtimeDeviceHost}</span>
-                    {` · HTTP ${runtimeHttpPort} · FTP ${getStoredFtpPort()} · Telnet ${getStoredTelnetPort()}`}
-                    {isDemoActive ? " (Demo mock)" : ""}
+                    {` · HTTP ${runtimeHttpPort} · FTP ${getStoredFtpPort()}`}
+                    {isDemoActive ? " (simulated device)" : ` · Telnet ${getStoredTelnetPort()}`}
                   </HelperText>
                   {isDemoActive ? (
                     <HelperText>
-                      {lastProbeSucceededAtMs
-                        ? "Real device detected during probe."
-                        : lastProbeFailedAtMs
-                          ? "No real device detected in recent probe."
-                          : (connectionSnapshot.lastProbeError ?? "Waiting for initial probe.")}
+                      {isDemoModePinnedByUser()
+                        ? "Demo Mode stays on until you connect to a real device."
+                        : lastProbeSucceededAtMs
+                          ? "Real device detected during probe."
+                          : lastProbeFailedAtMs
+                            ? "No real device detected in recent probe."
+                            : (connectionSnapshot.lastProbeError ?? "Waiting for initial probe.")}
                     </HelperText>
                   ) : null}
                 </div>
@@ -1999,7 +2013,10 @@ export default function SettingsPage() {
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>Delete device?</AlertDialogTitle>
-                      <AlertDialogDescription>
+                      {/* Shown when it is the whole message: a visible copy beside the hidden one was read out twice. */}
+                      <AlertDialogDescription
+                        className={(deleteDependencySummary?.totalCount ?? 0) > 0 ? undefined : "not-sr-only"}
+                      >
                         {(deleteDependencySummary?.totalCount ?? 0) > 0 ? (
                           <>
                             Removing{" "}
@@ -2032,15 +2049,7 @@ export default function SettingsPage() {
                           remove them.
                         </p>
                       </div>
-                    ) : (
-                      <div className="space-y-1 text-sm text-muted-foreground">
-                        <p>
-                          Remove{" "}
-                          {selectedSavedDevice ? buildSavedDevicePrimaryLabel(selectedSavedDevice) : "this device"} from
-                          your saved devices? This can&apos;t be undone.
-                        </p>
-                      </div>
-                    )}
+                    ) : null}
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction

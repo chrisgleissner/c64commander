@@ -10,6 +10,7 @@ import { addLog } from "@/lib/logging";
 import { isNativePlatform } from "@/lib/native/platform";
 import { DeviceDiscovery, type NativeNetworkStatus } from "@/lib/native/deviceDiscovery";
 import { isKnownUnavailable, isPluginMethodUnimplemented, recordUnavailable } from "@/lib/native/pluginAvailability";
+import { recordNetworkStatus } from "@/lib/connection/networkStatusWatch";
 
 const UNKNOWN_NETWORK_STATUS: NativeNetworkStatus = { online: true, supported: false };
 
@@ -80,6 +81,7 @@ export const readNativeNetworkStatus = async (): Promise<NativeNetworkStatus> =>
   const injected = readInjectedNetworkStatus();
   if (injected) {
     addLog("info", "Native network status overridden by a test probe", injected);
+    recordNetworkStatus(injected);
     return injected;
   }
   if (!isNativePlatform()) return UNKNOWN_NETWORK_STATUS;
@@ -92,7 +94,9 @@ export const readNativeNetworkStatus = async (): Promise<NativeNetworkStatus> =>
       });
       return UNKNOWN_NETWORK_STATUS;
     }
-    return { online: status.online !== false, supported: status.supported === true };
+    const answered = { online: status.online !== false, supported: status.supported === true };
+    recordNetworkStatus(answered);
+    return answered;
   } catch (error) {
     /*
      * iOS lists no `getNetworkStatus` in its `pluginMethods`, so this rejected on every

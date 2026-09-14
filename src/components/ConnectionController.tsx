@@ -20,6 +20,9 @@ import { getPassword as loadStoredPassword, hasStoredPasswordFlag } from "@/lib/
 import { invalidateForConnectionStateTransition } from "@/lib/query/c64QueryInvalidation";
 import { getBackgroundRediscoveryDelayMs, getNextBackgroundFailureCount } from "@/lib/query/c64PollingGovernance";
 import { getDeviceDiscoveryState, subscribeDeviceDiscovery } from "@/lib/deviceDiscovery/discoveryManager";
+import { installNetworkTransitions } from "@/lib/connection/networkTransitions";
+import { installSimulatedDeviceContentCleanup } from "@/lib/connection/simulatedDeviceContent";
+import { isNetworkKnownOffline, subscribeNetworkEdges } from "@/lib/connection/networkStatusWatch";
 
 const allowBackgroundRediscovery = () => {
   if (import.meta.env.VITE_ENABLE_TEST_PROBES !== "1") return true;
@@ -83,6 +86,18 @@ export function ConnectionController() {
       void discoverConnection("startup");
     });
   }, []);
+
+  useEffect(() => installNetworkTransitions(), []);
+  useEffect(() => installSimulatedDeviceContentCleanup(), []);
+
+  // A returning network starts a fresh schedule: failures counted while away say nothing about now.
+  useEffect(
+    () =>
+      subscribeNetworkEdges((edge) => {
+        if (edge === "online") setBackgroundScheduleVersion((current) => current + 1);
+      }),
+    [],
+  );
 
   // HARD19-028: the background-scheduling effect below early-returns while
   // discovery results are awaiting selection, and only re-runs on
@@ -186,6 +201,7 @@ export function ConnectionController() {
             // the state change this effect already depends on).
             if (
               snapshot.state === "OFFLINE_NO_DEMO" &&
+              !isNetworkKnownOffline() &&
               nextFailureCount >= BACKGROUND_ESCALATE_AFTER_FAILURES &&
               !hasEscalatedBackgroundFailuresRef.current &&
               allowBackgroundRediscovery() &&
@@ -233,6 +249,7 @@ export function ConnectionController() {
       if (
         hiddenDurationMs >= RESUME_REDISCOVERY_MIN_HIDDEN_MS &&
         state === "OFFLINE_NO_DEMO" &&
+        !isNetworkKnownOffline() &&
         allowBackgroundRediscovery() &&
         !hasAutomaticDiscoveryResultsAwaitingSelection()
       ) {

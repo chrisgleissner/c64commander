@@ -11,7 +11,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { VicPalette } from "@/generated/vicPalettes";
 import { loadPaletteTarget, loadVicPaletteId, savePaletteTarget, type PaletteTarget } from "@/lib/config/appSettings";
-import { useC64ConfigItem, useConnectionRoutingEpoch } from "@/hooks/useC64Connection";
+import { useC64Categories, useC64ConfigItem, useConnectionRoutingEpoch } from "@/hooks/useC64Connection";
 import { addLog } from "@/lib/logging";
 import {
   PALETTE_CATEGORY,
@@ -52,7 +52,11 @@ export const useScreenColors = ({ enabled = true }: { enabled?: boolean } = {}) 
   const queryClient = useQueryClient();
   const [applying, setApplying] = useState<string | null>(null);
 
-  const config = useC64ConfigItem(PALETTE_CATEGORY, PALETTE_ITEM, enabled, {
+  // Only a machine that lists U64 settings has a VIC palette to ask about (not an Ultimate II+L).
+  // The previous device's list stands in while this one's loads, so it is not taken as this device's answer.
+  const { data: categoryList, isPlaceholderData } = useC64Categories();
+  const paletteAdvertised = !isPlaceholderData && Boolean(categoryList?.categories?.includes(PALETTE_CATEGORY));
+  const config = useC64ConfigItem(PALETTE_CATEGORY, PALETTE_ITEM, enabled && paletteAdvertised, {
     intent: "background",
     staleTime: 60_000,
   });

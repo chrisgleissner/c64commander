@@ -15,6 +15,7 @@ import { PLAYBACK_SESSION_KEY, buildPlaylistStorageKey } from "@/pages/playFiles
 import { resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository";
 import { readStoredPlaybackSession, writeStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
 import { getCurrentPlaybackSnapshotLabel } from "@/lib/snapshot/currentPlaybackSnapshotLabel";
+import { getLogs } from "@/lib/logging";
 
 const PLAYLIST_REPOSITORY_STORAGE_KEY = "c64u_playlist_repo:v1";
 
@@ -1639,6 +1640,10 @@ describe("usePlaybackPersistence", () => {
       const nullCalls = calls.filter(([v]: [unknown]) => v === null);
       expect(nullCalls.length).toBeGreaterThanOrEqual(1);
     });
+
+    // The designed outcome for an old session, logged as a warning at every such launch on a Pixel 4.
+    const restoreLogs = getLogs().filter((entry) => entry.message.startsWith("Discarded stale active playback"));
+    expect(restoreLogs.map((entry) => entry.level)).toEqual(["info"]);
   });
 
   it("restores playlist from local source with tree URI fallback", async () => {

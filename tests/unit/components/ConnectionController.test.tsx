@@ -64,6 +64,14 @@ vi.mock("@/lib/connection/connectionManager", () => ({
   }),
 }));
 
+// Following the phone's network runs against the real manager in networkTransitions.test.ts.
+vi.mock("@/lib/connection/networkTransitions", () => ({
+  installNetworkTransitions: () => () => undefined,
+}));
+vi.mock("@/lib/connection/simulatedDeviceContent", () => ({
+  installSimulatedDeviceContentCleanup: () => () => undefined,
+}));
+
 vi.mock("@/lib/c64api", () => ({
   buildBaseUrlFromDeviceHost: (host?: string) => `http://${host ?? "c64u"}`,
   resolveDeviceHostFromStorage: () => "c64u",

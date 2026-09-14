@@ -1084,6 +1084,11 @@ describe("getBadgeAriaLabel", () => {
     expect(getBadgeAriaLabel("Unhealthy", "Online", 1)).toBe("Connected to C64U, system unhealthy, 1 problem");
   });
 
+  // Starting against a saved device that was switched off, a screen reader heard "Connected to c64u" while it was probed.
+  it("Checking → Connecting to the device, not connected to it", () => {
+    expect(getBadgeAriaLabel("Idle", "Checking", 0, null, "c64u")).toBe("Connecting to c64u");
+  });
+
   it("Online + Idle → Connected to C64U, idle", () => {
     expect(getBadgeAriaLabel("Idle", "Online", 0)).toBe("Connected to C64U, idle");
   });

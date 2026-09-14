@@ -10,6 +10,7 @@ import { listFtpDirectory, readFtpFile } from "@/lib/ftp/ftpClient";
 import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { getPasswordForDevice } from "@/lib/secureStorage";
 import { getSavedDeviceById, getSelectedSavedDevice } from "./store";
+import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
 
 export type OriginDeviceUnavailableReason =
   "origin-device-unreachable" | "origin-device-removed" | "origin-device-mismatch" | "origin-file-missing";
@@ -31,6 +32,9 @@ export class OriginContentUnavailableError extends Error {
     this.reason = reason;
   }
 }
+
+/** Matches the MOCK- prefix the simulated device gives itself; see simulatedDeviceContent.ts. */
+export const SIMULATED_DEVICE_UNIQUE_ID = "MOCK-DEMO";
 
 const normalizeOriginPath = (value: string) => {
   const trimmed = value.trim();
@@ -68,10 +72,12 @@ const base64ToUint8 = (base64: string) => {
 export const buildSelectedDeviceBoundOrigin = (originPath: string): DeviceBoundContentOrigin | null => {
   const selectedDevice = getSelectedSavedDevice();
   if (!selectedDevice) return null;
+  // In Demo Mode the file is on the simulated device; its id lets the file be removed when Demo Mode ends.
+  const simulated = getDeviceStateSnapshot().connectionState === "DEMO_ACTIVE";
   return {
     sourceKind: "ultimate",
     originDeviceId: selectedDevice.id,
-    originDeviceLastKnownUniqueId: selectedDevice.lastKnownUniqueId ?? null,
+    originDeviceLastKnownUniqueId: simulated ? SIMULATED_DEVICE_UNIQUE_ID : (selectedDevice.lastKnownUniqueId ?? null),
     originPath: normalizeOriginPath(originPath),
     importedAt: new Date().toISOString(),
   };

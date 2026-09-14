@@ -229,7 +229,7 @@ function SnapshotRow({
       <Button
         variant="ghost"
         size="icon"
-        className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
+        className="-mr-2 -mt-2 h-11 w-11 shrink-0 text-destructive hover:text-destructive"
         data-testid="snapshot-delete"
         onClick={(e) => {
           e.stopPropagation();
@@ -301,8 +301,10 @@ export function SnapshotManagerDialog({
                 <button
                   key={value}
                   data-testid={`snapshot-filter-type-${value}`}
+                  // 44 px tall, except where a second 44 px row of filters would leave too little of the list.
                   className={[
-                    "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
+                    compact ? "px-3 py-1" : "min-h-11 px-3",
+                    "rounded-full text-xs font-medium border transition-colors",
                     effectiveTypeFilter === value
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-transparent text-muted-foreground border-border hover:bg-accent",

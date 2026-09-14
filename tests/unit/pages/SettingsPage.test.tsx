@@ -112,7 +112,9 @@ const {
   developerModeEnabledRef,
   featureFlagsRef,
   savedDevicesRef,
+  demoModePinnedRef,
 } = vi.hoisted(() => ({
+  demoModePinnedRef: { current: false },
   mockUpdateConfig: vi.fn(),
   mockRefetch: vi.fn(),
   mockEnableDeveloperMode: vi.fn(),
@@ -480,6 +482,7 @@ vi.mock("@/lib/connection/connectionManager", () => ({
   discoverConnection: vi.fn(),
   dismissDemoInterstitial: vi.fn(),
   getConnectionSnapshot: mockGetConnectionSnapshot,
+  isDemoModePinnedByUser: () => demoModePinnedRef.current,
 }));
 
 vi.mock("@/lib/connection/addDeviceReachability", () => ({
@@ -731,6 +734,7 @@ beforeEach(() => {
     lastProbeSucceededAtMs: null,
     lastProbeFailedAtMs: null,
   };
+  demoModePinnedRef.current = false;
   appStyleStateRef.current = {
     storedStyleId: "cool-grey",
     isMatchMyDevice: false,
@@ -851,6 +855,24 @@ describe("SettingsPage", () => {
       expect(screen.getByText(/couldn’t reach.*enter its IP address/i)).toBeInTheDocument();
     });
     expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
+  }, 15000);
+
+  // Typing 192.168.1.248 was answered with "or enter its IP address", which the user had just done.
+  it("does not suggest entering an IP address when the unreachable host already is one", async () => {
+    mockEvaluateNewDeviceReachability.mockResolvedValue({
+      status: "unreachable",
+      suggestedAddress: null,
+      suggestedHostname: null,
+    });
+
+    renderSettingsPage();
+    fireEvent.change(screen.getByTestId("settings-device-host"), { target: { value: "192.168.1.248" } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/couldn’t reach “192\.168\.1\.248”/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/enter its IP address/i)).not.toBeInTheDocument();
   }, 15000);
 
   it("clears a previously-set unreachable-host error once manual refresh recovers the device (BUG-075)", async () => {
@@ -1435,6 +1457,26 @@ describe("SettingsPage", () => {
     fireEvent.change(hostInput, { target: { value: "ultimate.local" } });
 
     expect(deviceNameInput).toHaveValue("Office U64");
+  });
+
+  // The question was in the DOM twice, hidden for screen readers and visible, so a screen reader read it twice.
+  it("asks once whether to delete a device that nothing refers to", async () => {
+    savedDevicesRef.current = {
+      ...savedDevicesRef.current,
+      devices: [
+        ...savedDevicesRef.current.devices,
+        { ...savedDevicesRef.current.devices[0], id: "saved-device-2", name: "Backup U64", host: "backup-u64" },
+      ],
+    };
+    mockGetSavedDeviceDependencySummary.mockResolvedValue({ diskCount: 0, playlistItemCount: 0, totalCount: 0 });
+
+    renderSettingsPage();
+    fireEvent.click(screen.getByTestId("settings-delete-device"));
+
+    const deleteDialog = await screen.findByRole("alertdialog", { name: /delete device/i });
+    await waitFor(() => expect(mockGetSavedDeviceDependencySummary).toHaveBeenCalled());
+    expect(within(deleteDialog).getAllByText(/from your saved devices\? This can.t be undone\./)).toHaveLength(1);
+    expect(deleteDialog).toHaveAccessibleDescription(/from your saved devices\? This can.t be undone\./);
   });
 
   it("warns before deleting a device that is still referenced by playlists or disks", async () => {
@@ -2147,6 +2189,40 @@ describe("SettingsPage", () => {
     renderSettingsPage();
 
     expect(screen.getByText(/no real device detected in recent probe/i)).toBeInTheDocument();
+  });
+
+  // On a Pixel 4 Demo Mode read "Currently using: 192.168.1.146 · HTTP 43499 · FTP 38389 · Telnet 23 (Demo mock)":
+  // the saved device's address beside the simulated device's ports.
+  it("shows the simulated device's address in Demo Mode rather than the saved device's", () => {
+    connectionPayloadRef.current = {
+      ...connectionPayloadRef.current,
+      status: { state: "DEMO_ACTIVE", isConnected: true, isConnecting: false, error: null, deviceInfo: null },
+      deviceHost: "192.168.1.146",
+      runtimeBaseUrl: "http://127.0.0.1:43499",
+    };
+
+    renderSettingsPage();
+
+    const line = screen.getByText(/Currently using:/);
+    expect(line.querySelector("span")).toHaveTextContent("127.0.0.1");
+    expect(line).toHaveTextContent("HTTP 43499");
+    expect(line).not.toHaveTextContent("192.168.1.146");
+    expect(line).not.toHaveTextContent("Telnet");
+  });
+
+  // Demo Mode the user chose no longer probes for a real device, so a probe result would only be stale.
+  it("says Demo Mode stays on when the user chose it, instead of a stale probe result", () => {
+    connectionPayloadRef.current = {
+      ...connectionPayloadRef.current,
+      status: { state: "DEMO_ACTIVE", isConnected: true, isConnecting: false, error: null, deviceInfo: null },
+    };
+    connectionStateRef.current = { lastProbeSucceededAtMs: null, lastProbeFailedAtMs: Date.now() };
+    demoModePinnedRef.current = true;
+
+    renderSettingsPage();
+
+    expect(screen.getByText("Demo Mode stays on until you connect to a real device.")).toBeInTheDocument();
+    expect(screen.queryByText(/no real device detected/i)).not.toBeInTheDocument();
   });
 
   it("shows the connected status message when a real device is connected", () => {

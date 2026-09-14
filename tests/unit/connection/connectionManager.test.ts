@@ -1254,6 +1254,38 @@ describe("connectionManager", () => {
     expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
   });
 
+  // Leaving Demo Mode dropped the identity and re-read it, and the badge counted "Device identity
+  // unavailable" for the two seconds that took, although the probe had just read the real device.
+  it("keeps the identity the background probe read when it leaves Demo Mode for the real device", async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(800);
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ product: "C64 Ultimate", firmware_version: "1.2RC", errors: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockImplementation(() => new Promise<Response>(() => undefined));
+
+    await discoverConnection("background");
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(getConnectionSnapshot().deviceInfo).toMatchObject({ product: "C64 Ultimate", firmware_version: "1.2RC" });
+  });
+
   it("keeps demo active after the user explicitly pins demo mode before background rediscovery succeeds", async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, pinDemoModeByUserChoice } =
       await import("../../../src/lib/connection/connectionManager");
@@ -1282,11 +1314,15 @@ describe("connectionManager", () => {
       }),
     );
 
+    await vi.advanceTimersByTimeAsync(50);
+    const probedAtBefore = getConnectionSnapshot().lastProbeAtMs;
     await discoverConnection("background");
     await vi.advanceTimersByTimeAsync(50);
 
     expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+    // The pinned session probed the real device every five seconds, although it would never switch.
+    expect(getConnectionSnapshot().lastProbeAtMs).toBe(probedAtBefore);
   });
 
   it("pinDemoModeByUserChoice immediately activates demo mode from the offline interstitial", async () => {
@@ -2070,5 +2106,165 @@ describe("connectionManager", () => {
     noteReachable("some-other-host", "rest" as never);
 
     expect(vi.mocked(clearConnectivityErrorToastsForHost)).not.toHaveBeenCalled();
+  });
+  const deviceAnswer = () =>
+    new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+
+  const countLogs = (spy: ReturnType<typeof vi.spyOn>, message: string) =>
+    spy.mock.calls.filter((call) => call[1] === message).length;
+
+  const reachOffline = async () => {
+    const manager = await import("../../../src/lib/connection/connectionManager");
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+    vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+    await manager.initializeConnectionManager();
+    void manager.discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(9000);
+    expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    return manager;
+  };
+
+  // A background probe's own /v1/info answer already promotes the connection through noteReachable.
+  // Promoting it a second time reset the interaction state again and cancelled the reads that the
+  // first promotion had just queued.
+  it("runs the connected transition once when a background probe finds the device", async () => {
+    const manager = await reachOffline();
+    // An address another test left on the simulated device would make the probe's answer count as that device.
+    getActiveMockBaseUrl.mockReturnValue(null);
+    const addLogSpy = vi.spyOn(logging, "addLog");
+    vi.mocked(fetch).mockResolvedValue(deviceAnswer());
+
+    await manager.discoverConnection("background");
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(countLogs(addLogSpy, "Connection switched to real device")).toBe(1);
+    addLogSpy.mockRestore();
+  });
+
+  it("connects from a manual probe once, whether or not its answer already promoted the connection", async () => {
+    const manager = await reachOffline();
+    getActiveMockBaseUrl.mockReturnValue(null);
+    const addLogSpy = vi.spyOn(logging, "addLog");
+    vi.mocked(fetch).mockResolvedValue(deviceAnswer());
+
+    await manager.discoverConnection("manual");
+    await vi.advanceTimersByTimeAsync(500);
+    expect(countLogs(addLogSpy, "Connection switched to real device")).toBe(1);
+
+    // The probe's answer counts for the simulated device here, so only the probe result can connect.
+    await manager.noteDeviceUnreachable("not-answering");
+    getActiveMockBaseUrl.mockReturnValue("http://c64u");
+    await manager.discoverConnection("manual");
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(countLogs(addLogSpy, "Connection switched to real device")).toBe(2);
+    getActiveMockBaseUrl.mockReturnValue(null);
+    addLogSpy.mockRestore();
+  });
+
+  // Save & Connect from Settings: the verifying probe's answer also reached noteReachable, and the second
+  // promotion reset the interaction state again and cancelled the three reads the first one had queued.
+  it("runs the connected transition once when a switch verifies its target", async () => {
+    const manager = await reachOffline();
+    getActiveMockBaseUrl.mockReturnValue(null);
+    const addLogSpy = vi.spyOn(logging, "addLog");
+    vi.mocked(fetch).mockResolvedValue(deviceAnswer());
+
+    await manager.verifyCurrentConnectionTarget();
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(countLogs(addLogSpy, "Connection switched to real device")).toBe(1);
+    addLogSpy.mockRestore();
+  });
+
+  // A probe exists to learn whether the device answers. Counting "no" as a failure put a problem count
+  // on the badge after every return home whose first probe beat the Wi-Fi route.
+  it("records a failed discovery probe's REST response as an expected failure", async () => {
+    const manager = await reachOffline();
+    const traces = await import("../../../src/lib/tracing/traceSession");
+    traces.clearTraceEvents();
+
+    await manager.probeOnce();
+
+    const responses = traces.getTraceEvents().filter((event) => event.type === "rest-response");
+    expect(responses.length).toBeGreaterThan(0);
+    expect(responses.every((event) => event.data.expectedFailure === true)).toBe(true);
+  });
+
+  it("logs an unanswered probe at info while the device is already shown absent", async () => {
+    const manager = await reachOffline();
+    const addLogSpy = vi.spyOn(logging, "addLog");
+
+    await manager.probeOnce();
+
+    const levels = addLogSpy.mock.calls.filter((call) => call[1] === "Probe request failed").map((call) => call[0]);
+    expect(levels).toContain("info");
+    expect(levels).not.toContain("warn");
+    addLogSpy.mockRestore();
+  });
+
+  it("logs an unanswered probe at info while the device is shown connected too", async () => {
+    const manager = await import("../../../src/lib/connection/connectionManager");
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+    vi.mocked(fetch).mockResolvedValueOnce(deviceAnswer());
+    await manager.initializeConnectionManager();
+    void manager.discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(50);
+    expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+    const addLogSpy = vi.spyOn(logging, "addLog");
+
+    await manager.probeOnce();
+
+    expect(addLogSpy).toHaveBeenCalledWith("info", "Probe request failed", expect.anything());
+    expect(addLogSpy).not.toHaveBeenCalledWith("warn", "Probe request failed", expect.anything());
+    addLogSpy.mockRestore();
+  });
+
+  it("logs the sticky real-device lock declining Demo Mode at info", async () => {
+    const manager = await import("../../../src/lib/connection/connectionManager");
+    getActiveMockBaseUrl.mockReturnValue(null);
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+    vi.mocked(fetch).mockResolvedValue(deviceAnswer());
+    await manager.initializeConnectionManager();
+    void manager.discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(50);
+    expect(manager.isRealDeviceStickyLockEnabled()).toBe(true);
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+    vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+    const addLogSpy = vi.spyOn(logging, "addLog");
+
+    void manager.discoverConnection("settings");
+    await vi.advanceTimersByTimeAsync(800);
+
+    const message = "Sticky real-device lock active; skipping demo mode transition";
+    expect(addLogSpy).toHaveBeenCalledWith("info", message, expect.anything());
+    expect(addLogSpy).not.toHaveBeenCalledWith("warn", message, expect.anything());
+    addLogSpy.mockRestore();
+  });
+
+  it("shows a connected device offline when it becomes unreachable, and ignores that in other states", async () => {
+    const manager = await reachOffline();
+
+    await manager.noteDeviceUnreachable("network-lost");
+    expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+
+    vi.mocked(fetch).mockResolvedValue(deviceAnswer());
+    await manager.discoverConnection("background");
+    await vi.advanceTimersByTimeAsync(50);
+    expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+
+    await manager.noteDeviceUnreachable("not-answering");
+    expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
   });
 });

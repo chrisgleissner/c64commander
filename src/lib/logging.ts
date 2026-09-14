@@ -11,6 +11,7 @@ import { shouldSuppressDiagnosticsSideEffects } from "@/lib/diagnostics/diagnost
 import { toDiagnosticsDeviceAttribution, type DiagnosticsDeviceAttribution } from "@/lib/diagnostics/deviceAttribution";
 import { getTraceContextSnapshot } from "@/lib/tracing/traceContext";
 import { setFallbackReporter } from "@/lib/diagnostics/fallbackReporter";
+import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -166,8 +167,20 @@ const writeLogs = (logs: LogEntry[]) => {
   persistLogsNow(cachedLogs);
 };
 
+const UNREACHABLE_DEVICE_PATTERN = /host unreachable|failed to fetch|failed to connect|timed out|device not connected/i;
+
+// With the phone known to have no network, failing to reach the device is the expected state rather than
+// a fault, whichever of the many call sites reports it: it is still logged, as info.
+const isDeviceUnreachableWhileOffline = (details: unknown) => {
+  if (!isNetworkKnownOffline() || !details || typeof details !== "object") return false;
+  const { error, description } = details as { error?: unknown; description?: unknown };
+  const errorText = typeof error === "string" ? error : (error as { message?: unknown } | null)?.message;
+  return [errorText, description].some((text) => typeof text === "string" && UNREACHABLE_DEVICE_PATTERN.test(text));
+};
+
 export const addLog = (level: LogLevel, message: string, details?: unknown) => {
   if (typeof window === "undefined" || typeof localStorage === "undefined") return;
+  if ((level === "warn" || level === "error") && isDeviceUnreachableWhileOffline(details)) level = "info";
   if (shouldSuppressDiagnosticsSideEffects() && level !== "error") return;
   if (level === "debug" && !loadDebugLoggingEnabled()) return;
   const entry: LogEntry = {

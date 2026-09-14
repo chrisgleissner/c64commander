@@ -60,3 +60,25 @@ export const collectSonglengthsSearchPaths = (paths: string[]) => {
   });
   return Array.from(set);
 };
+
+const withoutTrailingSlash = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
+
+/**
+ * Whether listing `folder` can find anything, given the listings already made: false when the nearest listed
+ * ancestor has no directory on the way down. Adding one tune from /USB2/MUSICIANS/T/Tone_Test/ listed twenty
+ * folders over FTP, sixteen of which did not exist, and the add took 6 s on a C64 Ultimate.
+ */
+export const mayHoldSonglengthsFile = (folder: string, listed: Map<string, Array<{ type: string; name: string }>>) => {
+  const target = withoutTrailingSlash(normalizeSourcePath(folder));
+  let child = target;
+  while (child !== "/") {
+    const parent = withoutTrailingSlash(getParentPath(child));
+    const entries = listed.get(parent);
+    if (entries) {
+      const next = (parent === "/" ? target.slice(1) : target.slice(parent.length + 1)).split("/")[0].toLowerCase();
+      return entries.some((entry) => entry.type === "dir" && entry.name.toLowerCase() === next);
+    }
+    child = parent;
+  }
+  return true;
+};

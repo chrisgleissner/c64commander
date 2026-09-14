@@ -10,8 +10,10 @@ import React from "react";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
 import { isHandledUiError } from "@/lib/fileValidation";
-import { addErrorLog, buildErrorLogDetails } from "@/lib/logging";
+import { addErrorLog, addLog, buildErrorLogDetails } from "@/lib/logging";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
+import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
+import { getDeviceStateSnapshot } from "@/lib/deviceInteraction/deviceStateStore";
 
 export type UiErrorReport = {
   operation: string;
@@ -41,6 +43,14 @@ type DedupEntry = {
 };
 
 const dedupMap = new Map<string, DedupEntry>();
+
+export const DEVICE_NOT_CONNECTED_MESSAGE = "Device not connected. Check connection settings.";
+const OFFLINE_NOTICE_TITLE = "C64 Ultimate not reachable";
+const OFFLINE_NOTICE_DESCRIPTION = "It reconnects by itself when it is back on the network.";
+let offlineNoticeShown = false;
+
+const isDeviceKnownAbsent = () =>
+  isNetworkKnownOffline() || getDeviceStateSnapshot().connectionState === "OFFLINE_NO_DEMO";
 
 // Same normalization shape as connectionManager's reachability hosts so that
 // recovery/switch clears match attribution recorded at report time.
@@ -77,6 +87,7 @@ const buildDedupKey = (operation: string, deviceHost: string | undefined, errorC
 /** Reset dedup state between tests. Never call in production code. */
 export const __clearDedupStateForTests = (): void => {
   dedupMap.clear();
+  offlineNoticeShown = false;
 };
 
 /** Dismiss the live error toast for an operation that just succeeded (ERROR_POLICY §6). */
@@ -107,6 +118,7 @@ export const clearToastsOnDeviceSwitch = (previousDeviceHost: string): void => {
 export const clearConnectivityErrorToastsForHost = (recoveredHost: string): void => {
   const host = normalizeDeviceHost(recoveredHost);
   if (!host) return;
+  offlineNoticeShown = false;
   dedupMap.forEach((entry, key) => {
     if (entry.deviceHost === host && key.endsWith("|connectivity")) {
       entry.dismiss();
@@ -139,7 +151,7 @@ const buildErrorDetails = (error?: unknown) => {
 // instead of duplicating transient-failure pattern strings.
 export const isTransientConnectivityFailure = (message: string): boolean => {
   const normalized = message.toLowerCase();
-  return /host unreachable|service unavailable|http 503|failed to fetch|net::err|request timed out|networkerror|dns|device circuit open|device circuit probe already in flight|device not ready for (?:requests|ftp|telnet)/.test(
+  return /host unreachable|service unavailable|http 503|failed to fetch|failed to connect|net::err|request timed out|networkerror|dns|device circuit open|device circuit probe already in flight|device not ready for (?:requests|ftp|telnet)|device not connected/.test(
     normalized,
   );
 };
@@ -179,6 +191,22 @@ export const reportUserError = ({
     ...context,
     error: buildErrorDetails(error),
   };
+
+  // The badge already says the device is offline, so a failure caused by that is logged, not raised.
+  // One neutral notice per offline spell still explains why an action had no effect.
+  const statedOffline = /^offline$/i.test(title);
+  if ((statedOffline || isRecoverableConnectivityError(description, error)) && isDeviceKnownAbsent()) {
+    addLog("info", `${operation}: ${title}`, { ...logPayload, suppressedReason: "device-offline" });
+    if (!background && !offlineNoticeShown) {
+      offlineNoticeShown = true;
+      toast({
+        title: statedOffline ? title : OFFLINE_NOTICE_TITLE,
+        description: statedOffline ? description : OFFLINE_NOTICE_DESCRIPTION,
+        alwaysVisible: true,
+      });
+    }
+    return;
+  }
 
   // Always log as error so the entry is captured even when the diagnostics
   // overlay is open (addLog at warn level is suppressed by the overlay).

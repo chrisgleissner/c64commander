@@ -24,6 +24,7 @@
 
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { LocalSidEngine, type LocalSidAudioSink, type LocalSidWorkerLike } from "@/lib/playback/localSidEngine";
+import { clearLogs, getLogs } from "@/lib/logging";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain } from "@/lib/playback/localSidWorkerProtocol";
 import type { AudioScheduleSink, AudioScheduleSource } from "@/lib/playback/localSidChunkScheduler";
 
@@ -171,6 +172,54 @@ describe("LocalSidEngine — the seek gate", () => {
     expect(workers.length).toBe(2);
   });
 
+  // Skipping to the next tune while a seek runs is ordinary use; the replaced worker was logged as a warning.
+  it("logs the worker replaced for a new tune at info", async () => {
+    const { engine, workers } = makeEngine();
+    await startTune(engine, workers);
+    clearLogs();
+
+    void engine.seekTo(200);
+    await vi.advanceTimersByTimeAsync(0);
+    engine.play(new ArrayBuffer(64), 0, {}).catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const discards = getLogs().filter((entry) => entry.message.startsWith("Local SID engine: discarding a worker"));
+    expect(discards.map((entry) => entry.level)).toEqual(["info"]);
+  });
+
+  // A pause stopped the tune while its worker was still seeking; the next tune's open then queued behind
+  // the rest of that seek and started 8.8 s late on a Pixel 4.
+  it("does not queue the next tune behind a seek that a stop left running", async () => {
+    const { engine, workers } = makeEngine();
+    await startTune(engine, workers);
+
+    void engine.seekTo(115);
+    await vi.advanceTimersByTimeAsync(0);
+    engine.stopPlayback();
+    engine.play(new ArrayBuffer(64), 0, {}).catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(workers[0].terminated).toBe(true);
+    expect(workers[0].sentOfType("open")).toHaveLength(1);
+  });
+
+  it("keeps the worker for the next tune once its seek has been answered", async () => {
+    const { engine, workers } = makeEngine();
+    await startTune(engine, workers);
+
+    const seek = engine.seekTo(10);
+    await vi.advanceTimersByTimeAsync(0);
+    const posted = workers[0].sentOfType("seek").at(-1) as { id: number };
+    workers[0].emit({ type: "seeked", id: posted.id });
+    await seek;
+    engine.stopPlayback();
+    engine.play(new ArrayBuffer(64), 0, {}).catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(workers[0].terminated).toBe(false);
+    expect(workers).toHaveLength(1);
+  });
+
   it("does not carry a stuck gate into the next tune", async () => {
     const { engine, workers } = makeEngine();
     await startTune(engine, workers);
@@ -182,7 +231,11 @@ describe("LocalSidEngine — the seek gate", () => {
 
     const play = engine.play(new ArrayBuffer(64), 0, {});
     await vi.advanceTimersByTimeAsync(0);
+    // The old worker is still inside that seek, so the new tune gets a worker of its own.
+    expect(workers[0].terminated).toBe(true);
     const worker = workers[workers.length - 1];
+    worker.emit({ type: "ready", moduleLoadMs: 1 });
+    await vi.advanceTimersByTimeAsync(0);
     const opens = worker.sentOfType("open");
     worker.emit({
       type: "opened",

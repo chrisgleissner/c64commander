@@ -15,6 +15,15 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 
 vi.mock("@/lib/disks/diskStore");
 vi.mock("@/lib/disks/diskTree");
+const simulatedRemoval = vi.hoisted(() => new Set<() => void>());
+vi.mock("@/lib/connection/simulatedDeviceContent", () => ({
+  isSimulatedDeviceOrigin: (origin: { originDeviceLastKnownUniqueId?: string } | null | undefined) =>
+    Boolean(origin?.originDeviceLastKnownUniqueId?.startsWith("MOCK-")),
+  subscribeSimulatedDeviceContentRemoved: (listener: () => void) => {
+    simulatedRemoval.add(listener);
+    return () => simulatedRemoval.delete(listener);
+  },
+}));
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
 }));
@@ -54,6 +63,19 @@ describe("useDiskLibrary", () => {
 
     expect(result.current.disks).toHaveLength(1);
     expect(result.current.disks[0].id).toBe(mockDisk.id);
+  });
+
+  it("drops the simulated device's disks from an open library when Demo Mode ends", () => {
+    const demoDisk = {
+      ...createDiskEntry({ path: "/Usb0/Games/Demo.d64", location: "ultimate" }),
+      origin: { originDeviceLastKnownUniqueId: "MOCK-DEMO" },
+    } as unknown as DiskEntry;
+    vi.mocked(loadDiskLibrary).mockReturnValue({ disks: [demoDisk, mockDisk] });
+    const { result } = renderHook(() => useDiskLibrary(mockUniqueId));
+
+    act(() => simulatedRemoval.forEach((listener) => listener()));
+
+    expect(result.current.disks.map((disk) => disk.id)).toEqual([mockDisk.id]);
   });
 
   it("does not load if uniqueId is null", () => {

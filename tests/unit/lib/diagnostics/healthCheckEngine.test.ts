@@ -572,6 +572,20 @@ describe("runHealthCheck — REST probe failure", () => {
     expect(snapshot.latestResult?.probes.REST.outcome).toBe("Fail");
   });
 
+  // With three saved devices, the switcher's startup checks reached the active device before the app had
+  // connected; the held-back request was logged as a warning.
+  it("does not warn about a REST probe held back because the app has not connected yet", async () => {
+    mockGetInfo.mockRejectedValue(new Error("Device not ready for requests"));
+    mockPingFtp.mockResolvedValue({ ok: true });
+
+    await runHealthCheck();
+
+    expect(addLog).toHaveBeenCalledWith("info", "Health check REST probe failed", {
+      error: "Device not ready for requests",
+    });
+    expect(addLog).not.toHaveBeenCalledWith("warn", "Health check REST probe failed", expect.anything());
+  });
+
   it("skips JIFFY, RASTER, CONFIG when REST fails", async () => {
     mockGetInfo.mockRejectedValue(new Error("Network error"));
     mockPingFtp.mockResolvedValue({ ok: true });

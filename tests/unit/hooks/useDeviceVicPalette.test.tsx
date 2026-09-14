@@ -17,11 +17,17 @@ const mocks = vi.hoisted(() => ({
   readFtpFile: vi.fn(),
   resolveFtpConnectionOptions: vi.fn(),
   addLog: vi.fn(),
+  categories: { current: ["U64 Specific Settings"] as string[] },
+  categoriesPlaceholder: { current: false },
 }));
 
 vi.mock("@/hooks/useC64Connection", () => ({
   useC64ConfigItem: mocks.configItem,
   useConnectionRoutingEpoch: mocks.connectionEpoch,
+  useC64Categories: () => ({
+    data: { categories: mocks.categories.current, errors: [] },
+    isPlaceholderData: mocks.categoriesPlaceholder.current,
+  }),
 }));
 
 vi.mock("@/hooks/useScreenActivity", () => ({
@@ -206,6 +212,38 @@ describe("useDeviceVicPalette", () => {
       await waitFor(() => expect(activeVicPalette().id).toBe("monochrome"));
       expect(mocks.readFtpFile).not.toHaveBeenCalled();
     });
+  });
+
+  // An Ultimate II+L has no VIC and no U64 settings; asking it for the palette earned a 404 and an error.
+  it("does not ask a machine without U64 settings for its palette", async () => {
+    mocks.categories.current = ["Audio Output Settings"];
+    mocks.configItem.mockReturnValue({});
+    try {
+      renderHook(() => useDeviceVicPalette(), { wrapper: createWrapper() });
+
+      expect(mocks.configItem).toHaveBeenCalledWith(
+        "U64 Specific Settings",
+        "Palette Definition",
+        false,
+        expect.anything(),
+      );
+      expect(mocks.configItem).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), true, expect.anything());
+    } finally {
+      mocks.categories.current = ["U64 Specific Settings"];
+    }
+  });
+
+  // Switching from a C64 Ultimate to an Ultimate II+L, the old device's list stood in and the palette was asked for.
+  it("does not take the previous device's category list as the answer for a new device", async () => {
+    mocks.categoriesPlaceholder.current = true;
+    mocks.configItem.mockReturnValue({});
+    try {
+      renderHook(() => useDeviceVicPalette(), { wrapper: createWrapper() });
+
+      expect(mocks.configItem).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), true, expect.anything());
+    } finally {
+      mocks.categoriesPlaceholder.current = false;
+    }
   });
 
   it("uses the firmware fallback and records why the device configuration is unavailable", async () => {

@@ -218,6 +218,10 @@ const STARVED_BUFFER_SECONDS = 0.05;
  */
 const SEEK_ACK_TIMEOUT_MS = 20_000;
 
+/** A worker seek's cost per second of tune replayed, until measured: 115 s took 42 s on a busy Pixel 4. */
+const SEEK_COST_FLOOR_MS_PER_SECOND = 400;
+const HANDOFF_MARGIN_SECONDS = 5;
+
 /**
  * Ownership of this device's speaker now lives in `@/lib/audio/phoneAudioOwnership`,
  * shared with the A/V mirror.
@@ -532,6 +536,9 @@ export class LocalSidEngine {
   /** Bumped per seek so chunks rendered for a superseded position are dropped. */
   private seekEpoch = 0;
   private seekPending: { id: number; resolve: () => void } | null = null;
+  /** Seeks the worker is still inside. A stop reopens the gate but cannot call a seek off. */
+  private seeksInFlight = 0;
+  private deferredHandoffSeconds: number | null = null;
   private channels = 2;
   private nextId = 1;
   private activeId = 0;
@@ -677,13 +684,14 @@ export class LocalSidEngine {
    * it here is the whole recovery: the next play reloads the module and opens the tune normally.
    * A worker that has stopped answering is not worth keeping.
    */
-  private discardWorker(reason: string): void {
-    addLog("warn", "Local SID engine: discarding a worker that cannot be used again", {
+  private discardWorker(reason: string, level: "info" | "warn" = "warn"): void {
+    addLog(level, "Local SID engine: discarding a worker that cannot be used again", {
       service: "local-sid",
       reason,
     });
     this.worker?.terminate();
     this.worker = null;
+    this.seeksInFlight = 0;
     this.moduleReady = false;
     this.loadPending = null;
     this.loadInFlight = null;
@@ -936,21 +944,16 @@ export class LocalSidEngine {
     songIndex: number,
     callbacks: LocalSidPlayCallbacks = {},
   ): Promise<LocalSidPlayResult> {
-    // A seek still running belongs to a tune nobody is listening to any more, and it cannot be
-    // called off: seeking reloads the tune and fast-forwards to the target, so a seek near the end
-    // of a long one re-emulates minutes of C64 in a single call the worker cannot interrupt. The
-    // queue is strictly ordered, so this tune's `open` would wait all of it out — on a Pixel 4,
-    // scrub-then-skip spent longer there than the open's own 15 s timeout allows, and the track
-    // change was lost with the worker written off as unresponsive.
-    //
-    // A new tune inherits nothing from the old one, so start clean rather than queue behind it.
-    // Renders do not get this treatment: there are at most a handful, each a fraction of a second
-    // of audio, and a device that could not clear them faster than that could not play at all.
-    if (this.seekPending) this.discardWorker("a new tune superseded an unfinished seek");
+    // A seek still running cannot be called off, and this `open` would queue behind all of it (8.8 s
+    // after a pause on a Pixel 4; past the 15 s open timeout after scrub-then-skip), so start on a fresh
+    // worker. Renders are too short to matter. Info: skipping during a seek is ordinary use.
+    if (this.seekPending || this.seeksInFlight > 0) {
+      this.discardWorker("a new tune superseded an unfinished seek", "info");
+    }
     await this.load();
-    // A switchover ALWAYS starts from silence unless the listener has asked for
-    // a crossfade. Zero (the default) is a hard cut.
-    const crossfadeMs = loadPlaybackCrossfadeMs();
+    // A switchover ALWAYS starts from silence unless the listener has asked for a crossfade. Zero (the default) is a
+    // hard cut, and so is leaving a paused tune: faded out, it came back and held the next tune in a paused track.
+    const crossfadeMs = this.paused ? 0 : loadPlaybackCrossfadeMs();
     this.pendingCrossfadeMs = crossfadeMs;
     this.stopPlayback({ crossfadeMs });
     this.callbacks = callbacks;
@@ -1158,7 +1161,7 @@ export class LocalSidEngine {
               channels: message.channels,
               durationSeconds: message.seconds,
             };
-            if (partial) this.beginPartialHandoff(message.seconds);
+            if (partial) this.scheduleHandoff(message.seconds);
           } else {
             // Nothing was produced, so the live renderer is the only remaining source of the rest of
             // the tune — expensive, because it cannot rewind, and better than falling silent.
@@ -1234,6 +1237,7 @@ export class LocalSidEngine {
         return;
       }
       case "seeked": {
+        this.seeksInFlight = Math.max(0, this.seeksInFlight - 1);
         if (this.seekPending?.id !== message.id) return;
         const pending = this.seekPending;
         this.seekPending = null;
@@ -1301,7 +1305,7 @@ export class LocalSidEngine {
       // open and the request means anything.
       const seam = this.prerenderedSeamSeconds;
       this.prerenderedSeamSeconds = null;
-      if (seam !== null) this.beginPartialHandoff(seam);
+      if (seam !== null) this.scheduleHandoff(seam);
       this.startWatchdog();
       this.pump();
       pending?.resolve({
@@ -1357,7 +1361,7 @@ export class LocalSidEngine {
       if (warmed.partial) {
         // Position the live renderer at the seam NOW, while the cache is still playing, so the
         // hand-off costs nothing when it arrives.
-        this.beginPartialHandoff(warmed.durationSeconds);
+        this.scheduleHandoff(warmed.durationSeconds);
       }
     }
     this.pump();
@@ -1495,6 +1499,7 @@ export class LocalSidEngine {
     this.endedFired = false;
     this.chunksEnded = 0;
     this.scheduler.resetTo(target);
+    this.deferredHandoffSeconds = null;
     // Stopping the scheduled sources is not enough on a native sink: the audio it has already been
     // given is queued ahead of the speaker and would keep playing the old position.
     this.audio?.flush?.();
@@ -1516,7 +1521,7 @@ export class LocalSidEngine {
       this.cachedCursor = Math.min(rendered.pcm.length, Math.floor(target * rendered.sampleRate) * rendered.channels);
       // Landing inside a lead-in still has to leave the tune able to continue past it, so the live
       // renderer is sent to the seam while the cache plays out — the same hand-off as at open.
-      if (rendered.partial) this.beginPartialHandoff(rendered.durationSeconds);
+      if (rendered.partial) this.scheduleHandoff(rendered.durationSeconds);
       addLog("debug", "Local SID seek served from the pre-render cache", {
         service: "local-sid",
         seconds: target,
@@ -1587,6 +1592,7 @@ export class LocalSidEngine {
           resolve();
         },
       };
+      if (this.worker) this.seeksInFlight += 1;
       this.worker?.postMessage({ type: "seek", id, positionSeconds: target });
     });
 
@@ -1827,6 +1833,7 @@ export class LocalSidEngine {
   /** Request renders until the buffer is full ahead of the clock. */
   private pump(): void {
     if (!this.scheduler || this.endReceived) return;
+    this.scheduleHandoff();
     // Playing from a cached render: slice the next chunk straight out of the
     // buffer. No worker, no rendering, no waiting.
     if (this.cached) {
@@ -2065,6 +2072,7 @@ export class LocalSidEngine {
    * which is precisely why it is started early rather than when the buffer runs out.
    */
   private beginPartialHandoff(seconds: number): void {
+    this.deferredHandoffSeconds = null;
     if (!this.worker || seconds <= 0) return;
     this.seekEpoch += 1;
     const id = this.nextId;
@@ -2092,7 +2100,19 @@ export class LocalSidEngine {
         this.pump();
       },
     };
+    this.seeksInFlight += 1;
     this.worker.postMessage({ type: "seek", id, positionSeconds: seconds });
+  }
+
+  // Sends the live renderer to a lead-in's seam once the lead-in nears its end. Sent at once, the seek (which
+  // cannot be interrupted) kept the worker busy for most of a minute; a skip then replaced the worker and the
+  // next tune reached the speaker seconds late, under the old one at full level.
+  private scheduleHandoff(seam = this.deferredHandoffSeconds): void {
+    this.deferredHandoffSeconds = seam;
+    if (seam === null) return;
+    const scheduledSeconds = this.cached ? this.cachedCursor / (this.cached.sampleRate * this.cached.channels) : seam;
+    const costPerSecond = Math.max(this.renderRateP99(), SEEK_COST_FLOOR_MS_PER_SECOND) / 1000;
+    if (seam - scheduledSeconds <= seam * costPerSecond + HANDOFF_MARGIN_SECONDS) this.beginPartialHandoff(seam);
   }
 
   /**
@@ -2480,6 +2500,7 @@ export class LocalSidEngine {
     this.chunksEnded = 0;
     this.cached = null;
     this.cachedCursor = 0;
+    this.deferredHandoffSeconds = null;
     this.followingPrerender = false;
     this.currentKey = null;
     // Stop, Next, Previous, a station change, a route change and an engine change all come through

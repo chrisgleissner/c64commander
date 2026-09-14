@@ -212,6 +212,47 @@ describe("crossfade is opt-in", () => {
       vi.useRealTimers();
     }
   });
+
+  // A paused tune holds the shared native track paused. Faded under the next tune, it came back for the fade,
+  // and the next tune wrote into the paused track: on a Pixel 4 it stayed silent until the stall watchdog
+  // re-opened the track 5.6 s later, and the skip after that had no tail to fade and cut hard.
+  it("closes a paused tune instead of fading it under the next one", async () => {
+    localStorage.setItem("c64u_playback_crossfade_ms", "1500");
+    const tailPlayouts: number[] = [];
+    let closed = 0;
+    const makeAudioSink = () => ({
+      sink: {
+        currentTime: 0,
+        sampleRate: 48000,
+        createBuffer: (channels: number, frames: number) => {
+          const data = Array.from({ length: channels }, () => new Float32Array(frames));
+          return { getChannelData: (c: number) => data[c]! } as unknown as AudioBuffer;
+        },
+        createSource: () => ({ start() {}, stop() {}, onended: null }) as never,
+      },
+      resume: () => {},
+      suspend: () => {},
+      fadeIn: () => {},
+      beginCrossfadeTailPlayout: (seconds: number) => tailPlayouts.push(seconds),
+      takeCrossfadeTail: () => [],
+      adoptCrossfadeTail: () => {},
+      releaseForHandover: () => {},
+      close: () => {
+        closed += 1;
+      },
+    });
+    const engine = new LocalSidEngine({
+      workerFactory: () => new FakeWorker() as never,
+      audioSinkFactory: makeAudioSink as never,
+    });
+
+    await engine.play(new ArrayBuffer(8), 0);
+    await engine.pause();
+    await engine.play(new ArrayBuffer(8), 1);
+
+    expect(tailPlayouts).toEqual([]);
+    expect(closed).toBe(1);
+  });
 });
 
 /**

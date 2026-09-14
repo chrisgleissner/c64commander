@@ -335,6 +335,40 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(mockRunConnectivityProbeForTarget).toHaveBeenCalledTimes(2);
   });
 
+  it("does not warn when the background probe times out behind other requests", async () => {
+    const { addLog } = await import("@/lib/logging");
+    mockRunConnectivityProbeForTarget.mockRejectedValue(new Error("REST timed out after 3000ms"));
+    renderBackgroundHook(buildSavedDevices());
+
+    await flushAsyncWork();
+
+    expect(addLog).toHaveBeenCalledWith("info", "Saved-device background health check failed", expect.anything());
+    expect(addLog).not.toHaveBeenCalledWith("warn", "Saved-device background health check failed", expect.anything());
+  });
+
+  // The device switcher read "Offline · Latest check failed" for the connected, healthy c64u after one such timeout.
+  it("does not record a background probe timeout as the device being offline", async () => {
+    mockRunConnectivityProbeForTarget.mockRejectedValue(new Error("REST timed out after 3000ms"));
+    const { result } = renderBackgroundHook(buildSavedDevices());
+
+    await flushAsyncWork();
+
+    expect(mockRunConnectivityProbeForTarget).toHaveBeenCalled();
+    expect(result.current.byDeviceId[selectedDeviceId]?.running).toBe(false);
+    expect(result.current.byDeviceId[selectedDeviceId]?.error).toBeNull();
+  });
+
+  it("records any other background probe failure as the device's error, with a warning", async () => {
+    const { addLog } = await import("@/lib/logging");
+    mockRunConnectivityProbeForTarget.mockRejectedValue(new Error("Connection refused"));
+    const { result } = renderBackgroundHook(buildSavedDevices());
+
+    await flushAsyncWork();
+
+    expect(addLog).toHaveBeenCalledWith("warn", "Saved-device background health check failed", expect.anything());
+    expect(result.current.byDeviceId[selectedDeviceId]?.error).toBe("Connection refused");
+  });
+
   it("probes nothing while Demo Mode is active", async () => {
     // These probes go to the SAVED devices. Left running in Demo Mode they filled Diagnostics with
     // failures against hardware the user had deliberately stepped away from, and on a live network

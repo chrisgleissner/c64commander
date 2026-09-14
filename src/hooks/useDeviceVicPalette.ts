@@ -10,7 +10,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { loadVicPaletteId } from "@/lib/config/appSettings";
 import { addLog } from "@/lib/logging";
-import { useC64ConfigItem, useConnectionRoutingEpoch } from "@/hooks/useC64Connection";
+import { useC64Categories, useC64ConfigItem, useConnectionRoutingEpoch } from "@/hooks/useC64Connection";
 import { useAppVisibilityState } from "@/hooks/useScreenActivity";
 import {
   PALETTE_CATEGORY,
@@ -42,7 +42,11 @@ export const useDeviceVicPalette = (): void => {
   const routingEpoch = useConnectionRoutingEpoch();
   const appVisible = useAppVisibilityState();
   const queryClient = useQueryClient();
-  const config = useC64ConfigItem(PALETTE_CATEGORY, PALETTE_ITEM, automatic, {
+  // Only a machine with a VIC palette setting is asked for it; an Ultimate II+L answered with a 404 error.
+  // The previous device's list stands in while this one's loads, so it is not taken as this device's answer.
+  const { data: categoryList, isPlaceholderData } = useC64Categories();
+  const paletteAdvertised = !isPlaceholderData && Boolean(categoryList?.categories?.includes(PALETTE_CATEGORY));
+  const config = useC64ConfigItem(PALETTE_CATEGORY, PALETTE_ITEM, automatic && paletteAdvertised, {
     intent: "background",
     staleTime: 60_000,
   });

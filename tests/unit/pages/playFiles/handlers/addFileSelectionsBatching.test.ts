@@ -4,6 +4,7 @@ import { createAddFileSelectionsHandler } from "@/pages/playFiles/handlers/addFi
 import { buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import type { SourceLocation } from "@/lib/sourceNavigation/types";
 import { addLog } from "@/lib/logging";
+import { collectSonglengthsSearchPaths } from "@/lib/sid/songlengthsDiscovery";
 
 const { beginHvscPerfScope, endHvscPerfScope } = vi.hoisted(() => ({
   beginHvscPerfScope: vi.fn((scope: string, metadata?: Record<string, unknown>) => ({
@@ -60,8 +61,8 @@ vi.mock("@/lib/uiErrors", () => ({
   reportUserError: vi.fn(),
 }));
 
-vi.mock("@/lib/playback/localFileBrowser", () => ({
-  getParentPath: (value: string) => value.slice(0, value.lastIndexOf("/")) || "/",
+vi.mock("@/lib/playback/localFileBrowser", async (importOriginal) => ({
+  getParentPath: (await importOriginal<typeof import("@/lib/playback/localFileBrowser")>()).getParentPath,
 }));
 
 vi.mock("@/lib/playback/fileLibraryUtils", () => ({
@@ -81,7 +82,8 @@ vi.mock("@/lib/native/safUtils", () => ({
   redactTreeUri: vi.fn(() => "[redacted]"),
 }));
 
-vi.mock("@/lib/sid/songlengthsDiscovery", () => ({
+vi.mock("@/lib/sid/songlengthsDiscovery", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/sid/songlengthsDiscovery")>()),
   isSonglengthsFileName: vi.fn((name: string) => /\.ssl$/i.test(name) || /songlengths\.md5$/i.test(name)),
 }));
 
@@ -151,6 +153,26 @@ const createUltimateSource = (
   listEntries,
   listFilesRecursive: listFilesRecursive ?? (async () => []),
 });
+
+// Lists a folder the way an Ultimate's FTP server does: its own files, plus the folders on the way to deeper files.
+const listUltimateTree =
+  (files: Array<{ path: string; sizeBytes?: number }>) =>
+  async (folder: string): Promise<Awaited<ReturnType<SourceLocation["listEntries"]>>> => {
+    const prefix = folder.endsWith("/") ? folder : `${folder}/`;
+    const entries = new Map<string, Awaited<ReturnType<SourceLocation["listEntries"]>>[number]>();
+    files
+      .filter((file) => file.path.startsWith(prefix))
+      .forEach((file) => {
+        const [name, ...below] = file.path.slice(prefix.length).split("/");
+        entries.set(
+          name!,
+          below.length
+            ? { type: "dir", name: name!, path: `${prefix}${name}` }
+            : { type: "file", name: name!, path: file.path, sizeBytes: file.sizeBytes },
+        );
+      });
+    return [...entries.values()];
+  };
 
 const createDeps = () => {
   const playlistItems: unknown[] = [];
@@ -556,21 +578,12 @@ describe("addFileSelections batching", () => {
   it("discovers sibling HVSC Songlengths.md5 for ultimate selections and passes it to resolution", async () => {
     const deps = createDeps();
     deps.collectSonglengthsCandidates.mockReturnValue(["/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5"]);
-    const source = createUltimateSource(async (path: string) => {
-      if (path === "/USB2/test-data/SID") {
-        return [{ type: "file" as const, name: "10_Orbyte.sid", path: "/USB2/test-data/SID/10_Orbyte.sid" }];
-      }
-      if (path.replace(/\/$/, "") === "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS") {
-        return [
-          {
-            type: "file" as const,
-            name: "Songlengths.md5",
-            path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
-          },
-        ];
-      }
-      return [];
-    });
+    const source = createUltimateSource(
+      listUltimateTree([
+        { path: "/USB2/test-data/SID/10_Orbyte.sid" },
+        { path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5" },
+      ]),
+    );
     const handler = createAddFileSelectionsHandler(deps as any);
 
     const result = await handler(source, [{ type: "dir", name: "SID", path: "/USB2/test-data/SID" }]);
@@ -599,24 +612,14 @@ describe("addFileSelections batching", () => {
   it("skips an oversized ultimate songlengths file instead of FTP-reading it", async () => {
     const deps = createDeps();
     deps.collectSonglengthsCandidates.mockReturnValue(["/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5"]);
-    const source = createUltimateSource(async (path: string) => {
-      if (path === "/USB2/test-data/SID") {
-        return [{ type: "file" as const, name: "10_Orbyte.sid", path: "/USB2/test-data/SID/10_Orbyte.sid" }];
-      }
-      if (path.replace(/\/$/, "") === "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS") {
-        return [
-          {
-            type: "file" as const,
-            name: "Songlengths.md5",
-            path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
-            // Above the 6 MiB auto-read cap: skip rather than pull an unreasonably
-            // large file over the c64u's fragile FTP.
-            sizeBytes: 7_000_000,
-          },
-        ];
-      }
-      return [];
-    });
+    // Above the 6 MiB auto-read cap: skip rather than pull an unreasonably
+    // large file over the c64u's fragile FTP.
+    const source = createUltimateSource(
+      listUltimateTree([
+        { path: "/USB2/test-data/SID/10_Orbyte.sid" },
+        { path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5", sizeBytes: 7_000_000 },
+      ]),
+    );
     const handler = createAddFileSelectionsHandler(deps as any);
 
     const result = await handler(source, [{ type: "dir", name: "SID", path: "/USB2/test-data/SID" }]);
@@ -630,22 +633,13 @@ describe("addFileSelections batching", () => {
   it("still auto-reads an ultimate songlengths file at the size limit boundary", async () => {
     const deps = createDeps();
     deps.collectSonglengthsCandidates.mockReturnValue(["/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5"]);
-    const source = createUltimateSource(async (path: string) => {
-      if (path === "/USB2/test-data/SID") {
-        return [{ type: "file" as const, name: "10_Orbyte.sid", path: "/USB2/test-data/SID/10_Orbyte.sid" }];
-      }
-      if (path.replace(/\/$/, "") === "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS") {
-        return [
-          {
-            type: "file" as const,
-            name: "Songlengths.md5",
-            path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
-            sizeBytes: 6_291_456, // exactly at the 6 MiB limit — still allowed (real HVSC DB is ~5 MiB)
-          },
-        ];
-      }
-      return [];
-    });
+    // Exactly at the 6 MiB limit, which is still allowed (the real HVSC DB is ~5 MiB).
+    const source = createUltimateSource(
+      listUltimateTree([
+        { path: "/USB2/test-data/SID/10_Orbyte.sid" },
+        { path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5", sizeBytes: 6_291_456 },
+      ]),
+    );
     const handler = createAddFileSelectionsHandler(deps as any);
 
     const result = await handler(source, [{ type: "dir", name: "SID", path: "/USB2/test-data/SID" }]);
@@ -655,6 +649,33 @@ describe("addFileSelections batching", () => {
       expect.objectContaining({
         path: "/USB2/test-data/SID/HVSC/C64Music/DOCUMENTS/Songlengths.md5",
       }),
+    ]);
+  });
+
+  it("lists only folders that exist while looking for a songlengths file", async () => {
+    const deps = createDeps();
+    deps.collectSonglengthsCandidates.mockImplementation(collectSonglengthsSearchPaths);
+    const listEntries = vi.fn(
+      listUltimateTree([
+        { path: "/USB2/MUSICIANS/T/Tone_Test/Tone-Low.sid" },
+        { path: "/USB2/MUSICIANS/T/Tone_Test/Tone-High.sid" },
+        { path: "/USB2/GAMES/Chess.prg" },
+      ]),
+    );
+    const handler = createAddFileSelectionsHandler(deps as any);
+
+    const result = await handler(createUltimateSource(listEntries), [
+      { type: "file", name: "Tone-Low.sid", path: "/USB2/MUSICIANS/T/Tone_Test/Tone-Low.sid" },
+    ]);
+
+    expect(result).toBe(true);
+    const listedFolders = new Set(listEntries.mock.calls.map(([folder]) => folder.replace(/(.)\/$/, "$1")));
+    expect([...listedFolders].sort()).toEqual([
+      "/",
+      "/USB2",
+      "/USB2/MUSICIANS",
+      "/USB2/MUSICIANS/T",
+      "/USB2/MUSICIANS/T/Tone_Test",
     ]);
   });
 

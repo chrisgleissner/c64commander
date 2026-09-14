@@ -552,6 +552,37 @@ describe("hvscDownload", () => {
       expect(result).toBeNull();
     });
 
+    // Before the first download no candidate exists, and every HVSC install logged three warnings.
+    it("logs a cache candidate that does not exist at debug, not warn", async () => {
+      vi.mocked(addLog).mockClear();
+      vi.mocked(Filesystem.stat).mockRejectedValue(
+        new Error("'stat' failed because file at '/data/hvsc/cache/hvsc-baseline-84.7z' does not exist."),
+      );
+
+      await resolveCachedArchive("hvsc-baseline", 84);
+
+      expect(vi.mocked(addLog)).toHaveBeenCalledWith("debug", "HVSC cache stat failed", expect.anything());
+      expect(vi.mocked(addLog)).not.toHaveBeenCalledWith("warn", "HVSC cache stat failed", expect.anything());
+    });
+
+    it("warns when stat fails without a message", async () => {
+      vi.mocked(addLog).mockClear();
+      vi.mocked(Filesystem.stat).mockRejectedValue({});
+
+      await resolveCachedArchive("hvsc-baseline", 84);
+
+      expect(vi.mocked(addLog)).toHaveBeenCalledWith("warn", "HVSC cache stat failed", expect.anything());
+    });
+
+    it("still warns when stat fails for another reason", async () => {
+      vi.mocked(addLog).mockClear();
+      vi.mocked(Filesystem.stat).mockRejectedValue(new Error("Permission denied"));
+
+      await resolveCachedArchive("hvsc-baseline", 84);
+
+      expect(vi.mocked(addLog)).toHaveBeenCalledWith("warn", "HVSC cache stat failed", expect.anything());
+    });
+
     it("returns name when stat finds directory type and marker is set (BRDA:279)", async () => {
       vi.mocked(Filesystem.stat).mockResolvedValue({
         type: "directory",

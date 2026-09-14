@@ -323,4 +323,38 @@ describe("SelectableActionList", () => {
 
     expect(screen.getByRole("button", { name: "View all" })).toBeVisible();
   });
+  // Seen on the Disks page: one disk read "1 items", and an empty collection said
+  // "No disks in the collection yet." twice, beside Select all and again in the list body.
+  const renderList = (listItems: ActionListItem[]) =>
+    render(
+      <DisplayProfileProvider>
+        <SelectableActionList
+          title="Disk list"
+          items={listItems}
+          emptyLabel="No disks in the collection yet."
+          selectedCount={0}
+          allSelected={false}
+          onToggleSelectAll={vi.fn()}
+        />
+      </DisplayProfileProvider>,
+    );
+
+  it("counts a single entry as one item", () => {
+    localStorage.clear();
+    setViewportWidth(393);
+
+    renderList([items[0]!]);
+
+    expect(screen.getByText("1 item")).toBeVisible();
+    expect(screen.queryByText("1 items")).not.toBeInTheDocument();
+  });
+
+  it("says an empty list is empty once", () => {
+    localStorage.clear();
+    setViewportWidth(393);
+
+    renderList([]);
+
+    expect(screen.getAllByText("No disks in the collection yet.")).toHaveLength(1);
+  });
 });

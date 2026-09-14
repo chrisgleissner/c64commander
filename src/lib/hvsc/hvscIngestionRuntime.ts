@@ -88,6 +88,7 @@ import {
 import { HvscIngestion } from "@/lib/native/hvscIngestion";
 import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
 import { createHvscCancellationError } from "./hvscCancellation";
+import { isHvscNoNetworkError } from "./hvscNetworkLoss";
 const runtimeState = getHvscIngestionRuntimeState();
 
 export { isIngestionRuntimeActive, recoverStaleIngestionState } from "./hvscIngestionRuntimeSupport";
@@ -1126,7 +1127,8 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
     if (currentArchiveType === "update" && currentArchiveVersion) {
       markUpdateApplied(currentArchiveVersion, "failed", (error as Error).message);
     }
-    addErrorLog("HVSC install/update failed", {
+    // Losing the network mid-download is the phone's state; the download resumes on the next try.
+    addLog(isHvscNoNetworkError(error) ? "info" : "error", "HVSC install/update failed", {
       ingestionId,
       archiveName: currentArchive ?? undefined,
       archiveType: currentArchiveType,

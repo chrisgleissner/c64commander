@@ -349,9 +349,13 @@ class NativeLocalSidSink implements AudioScheduleSink {
     return this.silence.silentSeconds;
   }
 
-  /** True once the flat stretch has gone on long enough to be a fault rather than a rest. */
+  /**
+   * True once the listener has heard a flat stretch long enough to be a fault rather than a rest.
+   * Judged at the playhead: counting what was merely written raised a fault at the end of every tune
+   * that ends flat, because the buffer runs about as far ahead as the tolerance.
+   */
   isSilentFault(): boolean {
-    return this.silence.isFaulty;
+    return this.silence.isFaultyAfterQueue(this.queuedSec);
   }
 
   /** Called when a new tune starts or playback resumes, so a fresh attempt is judged afresh. */
@@ -428,7 +432,9 @@ class NativeLocalSidSink implements AudioScheduleSink {
     this.history = [];
     this.historyFrames = 0;
     traceLocalSid("tail-playout-begin", { recovered: kept, unplayed: unplayedFrames, buffered: this.lastBufferedMs });
-    void this.refillAfterFlush();
+    pendingTransitionFlush.add(this.backend);
+    // A turn later, so a next tune that is ready at once takes over first and its own write carries the flush.
+    setTimeout(() => void this.refillAfterFlush(), 0);
   }
 
   /**
@@ -440,14 +446,8 @@ class NativeLocalSidSink implements AudioScheduleSink {
    * slice itself, the instant the flush returns, and only then hands back to the pump.
    */
   private async refillAfterFlush(): Promise<void> {
-    await (this.backend.flushAudioTrack?.() ?? Promise.resolve()).catch((error) => {
-      // A pipeline that cannot be flushed still plays; the transition is merely less tidy.
-      addLog("warn", "Native audio: flush before crossfade tail failed", {
-        error: (error as Error)?.message ?? String(error),
-      });
-    });
-    traceLocalSid("tail-playout-flushed", {});
     // Prime with a short slice so the first write is as small, and therefore as quick, as it can be.
+    // The flush the transition owes goes out with it; see `pendingTransitionFlush`.
     const first = this.queue.shift();
     if (first && !this.closed) {
       await this.send(first);
@@ -510,7 +510,9 @@ class NativeLocalSidSink implements AudioScheduleSink {
       // as a gap between the two — the very thing the crossfade exists to remove. So while these are
       // empty slices the outgoing tune plays on at its own level, and the fade starts on the first
       // slice that carries audio of this tune's own.
-      const gain = sliceIsOwnAudio ? 1 - tail.frame / tail.frames : 1;
+      // Once the fade has begun it holds its place through a slice with nothing of the incoming tune in it.
+      // Back at full level there, the old tune jumped up for 50 ms mid-fade and the two traded places twice.
+      const gain = sliceIsOwnAudio || tail.frame > 0 ? 1 - tail.frame / tail.frames : 1;
       for (let ch = 0; ch < 2; ch += 1) {
         const mixed = slice[i + ch] + from[tail.cursor + ch] * gain;
         slice[i + ch] = mixed > 32767 ? 32767 : mixed < -32768 ? -32768 : mixed;
@@ -705,7 +707,10 @@ class NativeLocalSidSink implements AudioScheduleSink {
           await new Promise((resolve) => setTimeout(resolve, PUMP_IDLE_MS));
           continue;
         }
-        if (this.queuedSec * 1000 >= (this.transitioning ? TRANSITION_HIGH_WATER_MS : HIGH_WATER_MS)) {
+        // The incoming sink carrying a tail it has nothing to mix with yet is inside the transition too. Held to
+        // the normal depth it wrote the whole tail at once, so the new tune queued behind seconds of the old one.
+        const inTransition = this.transitioning || (this.tail !== null && this.queue.length === 0);
+        if (this.queuedSec * 1000 >= (inTransition ? TRANSITION_HIGH_WATER_MS : HIGH_WATER_MS)) {
           await new Promise((resolve) => setTimeout(resolve, PUMP_IDLE_MS));
           this.announceEndings();
           // Ask, do not guess.
@@ -878,6 +883,15 @@ class NativeLocalSidSink implements AudioScheduleSink {
       // exactly one sink is ever writing, so the slices cannot interleave, and the outgoing tail
       // keeps the speaker fed right up to the instant the new tune has something to say.
       claimNativeTrack(this.backend, this, this.serial);
+      if (pendingTransitionFlush.delete(this.backend)) {
+        void this.backend.flushAudioTrack?.().catch((error) => {
+          // A pipeline that cannot be flushed still plays; the transition is merely less tidy.
+          addLog("warn", "Native audio: flush before crossfade tail failed", {
+            error: (error as Error)?.message ?? String(error),
+          });
+        });
+        traceLocalSid("tail-playout-flushed", {});
+      }
       if (this.writtenFrames === 0) {
         traceLocalSid("first-write", { serial: this.serial, tail: this.tail ? this.tail.frames : 0 });
       }
@@ -1215,6 +1229,13 @@ const withOpenDeadline = <T>(attempt: Promise<T>): Promise<T> =>
   });
 
 const openTracks = new WeakMap<object, string>();
+
+/**
+ * Tracks whose queued audio a track change has to discard, flushed by whichever sink writes next and in the
+ * same turn as that write. Flushed at the skip itself, the ring sat empty until the next tune's first write
+ * about 65 ms later, heard on a Pixel 4 as a 50 ms dropout exactly where the crossfade began.
+ */
+const pendingTransitionFlush = new WeakSet<object>();
 
 const trackOwners = new WeakMap<object, { sink: object; serial: number }>();
 let nextSinkSerial = 1;

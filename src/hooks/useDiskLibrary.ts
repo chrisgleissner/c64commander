@@ -10,6 +10,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { addErrorLog } from "@/lib/logging";
 import { buildDiskId, createDiskEntry, getDiskName, normalizeDiskPath, type DiskEntry } from "@/lib/disks/diskTypes";
 import { loadDiskLibrary, saveDiskLibrary } from "@/lib/disks/diskStore";
+import {
+  isSimulatedDeviceOrigin,
+  subscribeSimulatedDeviceContentRemoved,
+} from "@/lib/connection/simulatedDeviceContent";
 import { buildDiskTreeState } from "@/lib/disks/diskTree";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 
@@ -93,6 +97,15 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
     if (libraryState.uniqueId !== uniqueId) return;
     saveDiskLibrary(uniqueId, { disks: libraryState.disks });
   }, [libraryState, uniqueId]);
+
+  // Demo Mode ended with this library open: drop the simulated device's disks here too, or saving would restore them.
+  useEffect(
+    () =>
+      subscribeSimulatedDeviceContentRemoved(() =>
+        setDisks((prev) => prev.filter((d) => !isSimulatedDeviceOrigin(d.origin))),
+      ),
+    [setDisks],
+  );
 
   const addDisks = useCallback(
     (entries: DiskEntry[], runtime: Record<string, File> = {}, options?: AddDisksOptions) => {

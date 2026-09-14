@@ -534,7 +534,10 @@ export const SelectableActionList = ({
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <span className="text-muted-foreground min-w-0 break-words">
-              {effectiveTotalItemCount ? `${effectiveTotalItemCount} items` : emptyLabel}
+              {/* Empty says so once, in the list body; the count reads "1 item", not "1 items". */}
+              {effectiveTotalItemCount
+                ? `${effectiveTotalItemCount} ${effectiveTotalItemCount === 1 ? "item" : "items"}`
+                : null}
             </span>
             <Button
               variant="outline"

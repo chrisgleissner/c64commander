@@ -16,6 +16,11 @@ vi.mock("@/lib/logging", () => ({
   addErrorLog: (...args: unknown[]) => addErrorLogMock(...args),
 }));
 
+vi.mock("@/lib/savedDevices/store", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/savedDevices/store")>()),
+  getSelectedSavedDevice: () => ({ id: "debug-u64" }),
+}));
+
 describe("getCurrentPlaybackSnapshotLabel", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -28,10 +33,70 @@ describe("getCurrentPlaybackSnapshotLabel", () => {
       PLAYBACK_SESSION_KEY,
       JSON.stringify({
         currentItemLabel: "  Wizball.sid  ",
+        currentItemId: "ultimate:debug-u64:/Games/x.sid",
+        isPlaying: true,
       }),
     );
 
     expect(getCurrentPlaybackSnapshotLabel()).toBe("Wizball.sid");
+  });
+
+  it("does not name a snapshot after a tune that is no longer playing", () => {
+    localStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        currentItemLabel: "Chess.sid",
+        currentItemId: "ultimate:debug-u64:/Chess.sid",
+        isPlaying: false,
+      }),
+    );
+
+    expect(getCurrentPlaybackSnapshotLabel()).toBeUndefined();
+  });
+
+  it("does not name a snapshot after a paused tune", () => {
+    localStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        currentItemLabel: "Chess.sid",
+        currentItemId: "hvsc:hvsc-library:/Chess.sid",
+        isPlaying: true,
+        isPaused: true,
+      }),
+    );
+
+    expect(getCurrentPlaybackSnapshotLabel()).toBeUndefined();
+  });
+
+  it("does not name a snapshot after a file that lives on another Ultimate", () => {
+    localStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        currentItemLabel: "Chess.sid",
+        currentItemId: "ultimate:debug-c64u:/USB2/Chess.sid",
+        isPlaying: true,
+      }),
+    );
+
+    expect(getCurrentPlaybackSnapshotLabel()).toBeUndefined();
+  });
+
+  it("names a snapshot after an HVSC tune playing on this machine", () => {
+    localStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({ currentItemLabel: "Chess.sid", currentItemId: "hvsc:hvsc-library:/Chess.sid", isPlaying: true }),
+    );
+
+    expect(getCurrentPlaybackSnapshotLabel()).toBe("Chess.sid");
+  });
+
+  it("names a snapshot after a playing tune whose session has no item id", () => {
+    localStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({ currentItemLabel: "Chess.sid", currentItemId: null, isPlaying: true }),
+    );
+
+    expect(getCurrentPlaybackSnapshotLabel()).toBe("Chess.sid");
   });
 
   it("returns undefined when no session is stored", () => {
@@ -43,6 +108,8 @@ describe("getCurrentPlaybackSnapshotLabel", () => {
       PLAYBACK_SESSION_KEY,
       JSON.stringify({
         currentItemLabel: "   ",
+        currentItemId: "ultimate:debug-u64:/Games/x.sid",
+        isPlaying: true,
       }),
     );
 
@@ -65,14 +132,24 @@ describe("getCurrentPlaybackSnapshotLabel", () => {
   });
 
   it("returns undefined when currentItemLabel is not a string", () => {
-    localStorage.setItem(PLAYBACK_SESSION_KEY, JSON.stringify({ currentItemLabel: 42 }));
+    localStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({ currentItemLabel: 42, isPlaying: true, currentItemId: "ultimate:debug-u64:/x.sid" }),
+    );
     expect(getCurrentPlaybackSnapshotLabel()).toBeUndefined();
   });
 
   // HARD27-032 moved the session to localStorage. A build upgraded in place can
   // still have one in sessionStorage, and that session is not thrown away.
   it("reads a session left in sessionStorage by a build from before the move", () => {
-    sessionStorage.setItem(PLAYBACK_SESSION_KEY, JSON.stringify({ currentItemLabel: "Commando.sid" }));
+    sessionStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        currentItemLabel: "Commando.sid",
+        isPlaying: true,
+        currentItemId: "ultimate:debug-u64:/Commando.sid",
+      }),
+    );
 
     expect(getCurrentPlaybackSnapshotLabel()).toBe("Commando.sid");
     // Migrated, so it survives the next process death instead of dying with it.

@@ -56,6 +56,7 @@ vi.mock("@/lib/sid/sidUtils", () => ({
 import { downloadArchive, __resetNativeDownloadStateForTests } from "@/lib/hvsc/hvscDownload";
 import { resetResumableDownloadSupportForTests } from "@/lib/hvsc/hvscResumableDownload";
 import { deleteCachedArchivePart } from "@/lib/hvsc/hvscFilesystem";
+import { HVSC_NO_NETWORK_MESSAGE } from "@/lib/hvsc/hvscReleaseService";
 import { Filesystem } from "@capacitor/filesystem";
 
 const ARCHIVE_BYTES = 81_000;
@@ -162,6 +163,17 @@ describe("downloadArchive on the native path", () => {
     );
 
     await expect(downloadArchive(makeOptions())).rejects.toThrow("a retry will resume");
+    expect(Filesystem.downloadFile).not.toHaveBeenCalled();
+  });
+
+  // The socket's own words, "Software caused connection abort", told a user leaving home nothing.
+  it("reports a transfer cut off by the phone losing its network as having no network, keeping the sidecar", async () => {
+    nativePlugin.downloadArchive.mockRejectedValue(
+      Object.assign(new Error("Software caused connection abort"), { code: "NETWORK_LOST" }),
+    );
+
+    await expect(downloadArchive(makeOptions())).rejects.toThrow(HVSC_NO_NETWORK_MESSAGE);
+    expect(deleteCachedArchivePart).not.toHaveBeenCalled();
     expect(Filesystem.downloadFile).not.toHaveBeenCalled();
   });
 });

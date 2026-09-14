@@ -24,6 +24,7 @@ import { addLog } from "@/lib/logging";
 import { beginHvscPerfScope, endHvscPerfScope } from "./hvscPerformance";
 import { createHvscCancellationError } from "./hvscCancellation";
 import { downloadArchiveWithResume } from "./hvscResumableDownload";
+import { explainHvscDownloadFailure } from "./hvscNetworkLoss";
 
 const HVSC_NATIVE_ARCHIVE_READ_CHUNK_BYTES = 512 * 1024;
 const nativeArchiveDownloads = new Map<string, Promise<unknown>>();
@@ -381,7 +382,9 @@ export const resolveCachedArchive = async (prefix: string, version: number) => {
         await deleteCachedArchive(name);
       }
     } catch (error) {
-      addLog("warn", "HVSC cache stat failed", {
+      // A candidate that is not there is the ordinary answer before the first download.
+      const missing = /does not exist|not found|enoent/i.test((error as Error)?.message ?? "");
+      addLog(missing ? "debug" : "warn", "HVSC cache stat failed", {
         name,
         error: (error as Error).message,
       });
@@ -910,8 +913,8 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
 
     return inMemoryBuffer;
   } catch (error) {
-    downloadError = error as Error;
-    throw error;
+    downloadError = (await explainHvscDownloadFailure(error)) as Error;
+    throw downloadError;
   } finally {
     endHvscPerfScope(
       downloadPerfScope,

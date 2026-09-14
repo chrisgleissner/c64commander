@@ -41,6 +41,7 @@ describe("AndroidManifest parity (full vs no-background)", () => {
 
   it("the full manifest declares the background-execution service and permissions", () => {
     expect(usesPermissions(full)).toEqual([
+      "android.permission.ACCESS_NETWORK_STATE",
       "android.permission.CHANGE_WIFI_MULTICAST_STATE",
       "android.permission.FOREGROUND_SERVICE",
       "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
@@ -54,8 +55,9 @@ describe("AndroidManifest parity (full vs no-background)", () => {
     expect(serviceNames(full)).toContain(".LibraryInstallService");
   });
 
-  it("the reduced manifest keeps INTERNET + multicast and drops the foreground service", () => {
+  it("the reduced manifest keeps INTERNET, network state and multicast, and drops the foreground service", () => {
     expect(usesPermissions(reduced)).toEqual([
+      "android.permission.ACCESS_NETWORK_STATE",
       "android.permission.CHANGE_WIFI_MULTICAST_STATE",
       "android.permission.INTERNET",
     ]);

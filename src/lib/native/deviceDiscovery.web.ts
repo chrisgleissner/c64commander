@@ -6,6 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import type { PluginListenerHandle } from "@capacitor/core";
 import type {
   DeviceDiscoveryPlugin,
   NativeDeviceDiscoveryOptions,
@@ -26,6 +27,29 @@ export class DeviceDiscoveryWeb implements DeviceDiscoveryPlugin {
       return { online: injected.online !== false, supported: injected.supported === true };
     }
     return { online: true, supported: false };
+  }
+
+  /*
+   * `offline` is trustworthy where `online` is not: a browser that reports no network has none,
+   * while one that reports a network may still have no route to the device. So the offline edge
+   * is reported as known, and the way back as unknown, which callers treat as "try the device".
+   */
+  async addListener(
+    _eventName: "networkStatusChange",
+    listener: (status: NativeNetworkStatus) => void,
+  ): Promise<PluginListenerHandle> {
+    const onOffline = () => listener({ online: false, supported: true });
+    const onOnline = () => listener({ online: true, supported: false });
+    // The current answer first, so the first event after it is recognised as a change.
+    listener(navigator.onLine ? { online: true, supported: false } : { online: false, supported: true });
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
+    return {
+      remove: async () => {
+        window.removeEventListener("offline", onOffline);
+        window.removeEventListener("online", onOnline);
+      },
+    };
   }
 
   async discover(_options: NativeDeviceDiscoveryOptions): Promise<NativeDeviceDiscoveryResult> {
