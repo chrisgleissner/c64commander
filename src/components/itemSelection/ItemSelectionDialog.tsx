@@ -415,13 +415,12 @@ export const ItemSelectionDialog = ({
   const interstitialLabelClassName = cn("flex min-w-0 flex-col items-start truncate", profile === "medium" && "w-full");
   const interstitialTextClassName = cn(profile === "medium" && "whitespace-normal break-words text-left leading-snug");
   /*
-   * One footer row at compact, not two. The folder options and Cancel each took a row of their
-   * own, and with the confirm button already up in the title bar there is nothing left that needs
-   * the second one. `flex-wrap` still lets the scan progress line or the archive notice take their
-   * own line when either is showing.
+   * One wrapping row on every profile. Without `flex` the folder options and the buttons stacked as
+   * blocks with no gap, the checkbox row flush on the buttons. Compact fits both on one row, since its
+   * confirm button is up in the title bar; elsewhere the buttons wrap below, and the scan progress
+   * line or the archive notice still take their own line.
    */
-  const footerLayoutClassName =
-    profile === "compact" ? "flex-row flex-wrap items-center justify-between" : "flex-row items-center justify-between";
+  const footerLayoutClassName = "flex flex-row flex-wrap items-center justify-between";
   const footerActionsClassName = profile === "compact" ? "flex-row" : "flex-row ml-auto";
   const footerPaddingClassName =
     profile === "compact"

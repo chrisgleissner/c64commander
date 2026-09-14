@@ -190,6 +190,20 @@ describe("ItemSelectionDialog folder options", () => {
     expect(screen.getByTestId("playback-recurse")).toBeVisible();
   });
 
+  // The footer carried `flex-row` without `flex`, so the options and the buttons stacked as blocks
+  // and "Include subfolders" sat flush on Cancel. It has to be a wrapping flex row on every profile.
+  it.each([360, 393])("lays the footer out as a wrapping flex row at %ipx", async (width) => {
+    setViewportWidth(width);
+    renderWithOptions();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add file / folder from C64U" }));
+
+    await waitFor(() => expect(screen.getByTestId("add-items-filter")).toBeVisible());
+    const footer = screen.getByTestId("add-items-folder-options").parentElement as HTMLElement;
+    expect(footer.classList.contains("flex")).toBe(true);
+    expect(footer.classList.contains("flex-wrap")).toBe(true);
+  });
+
   it("leaves them out on an archive search, which has no folders", async () => {
     // A CommoServe search returns individual files. "Include subfolders" would be offering to change
     // something the source cannot do, so the slot is withheld even though a source is open.
