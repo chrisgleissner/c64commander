@@ -658,6 +658,60 @@ return JSON.stringify({engine:q("playback-engine-toggle")?.getAttribute("data-en
 };
 
 /**
+ * Records, in the page, every block of PCM the local engine writes to the native track and every flush.
+ * Capacitor calls go through `nativePromise`, so wrapping it sees exactly what the track is given.
+ */
+const PCM_TAP = `(()=>{if(window.__pcmTapInstalled) return 1; window.__pcmTapInstalled=true;
+window.__pcmTap=[]; window.__pcmTapBytes=0; window.__pcmTapOn=false;
+const cap=window.Capacitor; const orig=cap.nativePromise;
+cap.nativePromise=function(plugin,method,options,...rest){
+  if(window.__pcmTapOn&&plugin==="StreamUdp"&&(method==="writeAudioTrack"||method==="flushAudioTrack")&&window.__pcmTapBytes<40000000){
+    const d=method==="writeAudioTrack"?String(options?.data??""):""; window.__pcmTap.push({m:method,d}); window.__pcmTapBytes+=d.length;}
+  return orig.call(this,plugin,method,options,...rest);};
+return 1;})()`;
+
+/**
+ * The tapped PCM from the skip's flush onwards, as a 48 kHz stereo WAV: what the speaker plays from the skip.
+ * Read a piece at a time, because the CDP helper exits straight after printing and a pipe truncates past ~64 KB.
+ */
+const readTransitionPcm = async () => {
+  const meta = await js(`JSON.stringify(window.__pcmTap.map(e=>({m:e.m,n:e.d.length})))`);
+  const lastFlush = meta.map((entry) => entry.m).lastIndexOf("flushAudioTrack");
+  const chunks = [];
+  for (let i = lastFlush + 1; i < meta.length; i += 1) {
+    if (meta[i].m !== "writeAudioTrack") continue;
+    let data = "";
+    for (let at = 0; at < meta[i].n; at += 48000) {
+      data += await execFileAsync(
+        "node",
+        [path.join(REPO, "scripts", "bughunt-cdp.mjs"), "eval", `window.__pcmTap[${i}].d.slice(${at},${at + 48000})`],
+        {
+          env: { ...process.env, CDP_PORT },
+          maxBuffer: 1 << 22,
+        },
+      ).then(({ stdout }) => stdout.replace(/\n$/, ""));
+    }
+    chunks.push(Buffer.from(data, "base64"));
+  }
+  const pcm = Buffer.concat(chunks);
+  if (pcm.length === 0) throw new Error("the app wrote no audio across the skip");
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write("WAVEfmt ", 8);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(2, 22);
+  header.writeUInt32LE(48000, 24);
+  header.writeUInt32LE(48000 * 4, 28);
+  header.writeUInt16LE(4, 32);
+  header.writeUInt16LE(16, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+};
+
+/**
  * Record one track change and grade the join.
  *
  * The recording has to span the change with both tunes audible either side of it, so the skip is
@@ -689,28 +743,21 @@ return JSON.stringify({stale:Number.isFinite(stale)?stale:0});})()`);
     throw new Error("the first tune never started counting, so there is no join to record");
   }
 
-  const wav = path.join(TMP, "crossfade.wav");
-  const recording = run("arecord", [
-    "-D",
-    MIC_DEVICE,
-    "-f",
-    "S16_LE",
-    "-r",
-    "48000",
-    "-c",
-    "1",
-    "-d",
-    String(CROSSFADE_SECONDS),
-    wav,
-  ]);
-  // Far enough in that the outgoing tune is established, far enough from the end that the incoming
-  // one is too — the grader needs both sides of the join.
+  // Graded from the samples the app hands the native track rather than from a microphone. The room once
+  // masked a skip that did nothing at all: the first tune played on at full level, and the grader reported
+  // the unchanging low tone as "only 1.0x its own noise; quieten the room". The samples cannot be masked,
+  // and the stage no longer needs to be loud.
+  await js(PCM_TAP);
+  await sleep(1500);
+  await js(`(()=>{window.__pcmTap.length=0;window.__pcmTapBytes=0;window.__pcmTapOn=true;return 1})()`);
   await sleep((CROSSFADE_SECONDS * 1000) / 2);
   await js(`(()=>{document.querySelector('[data-testid="playlist-next"]')?.click();return 1})()`);
-  const recorded = await recording;
-  if (!recorded.ok) throw new Error(`the microphone would not record: ${recorded.out.trim().slice(-160)}`);
-  await js(`(()=>{document.querySelector('[data-testid="playlist-pause"]')?.click();return 1})()`);
-
+  await sleep((CROSSFADE_SECONDS * 1000) / 2);
+  await js(
+    `(()=>{window.__pcmTapOn=false;document.querySelector('[data-testid="playlist-pause"]')?.click();return 1})()`,
+  );
+  const wav = path.join(TMP, "crossfade.wav");
+  await writeFile(wav, await readTransitionPcm());
   const graded = await run("python3", [
     path.join("tools", "hil", "crossfade_probe.py"),
     wav,
@@ -1098,7 +1145,8 @@ return JSON.stringify({samples});})()`);
   });
 
   await stage("crossfade", true, async () => {
-    await setVolume(TONE_VOLUME);
+    // Graded from the app's own samples, so the speaker only needs to be on, not loud.
+    await setVolume(1);
     await setMirror({ video: false, audio: false });
     audibleSeconds += CROSSFADE_SECONDS;
     const previousCrossfade = await readCrossfadeMs();
