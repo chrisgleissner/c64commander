@@ -158,6 +158,24 @@ describe("ConfigItemRow control selection + REST updates", () => {
     expect(onValueChange).toHaveBeenCalledTimes(2);
   });
 
+  it("ignores a tap in the square around a read-only checkbox", () => {
+    const onValueChange = vi.fn();
+    renderWithQuery(
+      <ConfigItemRow
+        category="Test Category"
+        name="Menu Mouse Navigation"
+        value="Enabled"
+        options={["Disabled", "Enabled"]}
+        onValueChange={onValueChange}
+        readOnly
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Menu Mouse Navigation checkbox").parentElement as HTMLElement);
+
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
   it("renders a checkbox for On/Off and maps checked=On, unchecked=Off", async () => {
     renderWithQuery(
       <ConfigItemRow

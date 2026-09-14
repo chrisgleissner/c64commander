@@ -2146,6 +2146,28 @@ describe("connectionManager", () => {
     addLogSpy.mockRestore();
   });
 
+  it("connects from a manual probe once, whether or not its answer already promoted the connection", async () => {
+    const manager = await reachOffline();
+    getActiveMockBaseUrl.mockReturnValue(null);
+    const addLogSpy = vi.spyOn(logging, "addLog");
+    vi.mocked(fetch).mockResolvedValue(deviceAnswer());
+
+    await manager.discoverConnection("manual");
+    await vi.advanceTimersByTimeAsync(500);
+    expect(countLogs(addLogSpy, "Connection switched to real device")).toBe(1);
+
+    // The probe's answer counts for the simulated device here, so only the probe result can connect.
+    await manager.noteDeviceUnreachable("not-answering");
+    getActiveMockBaseUrl.mockReturnValue("http://c64u");
+    await manager.discoverConnection("manual");
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(countLogs(addLogSpy, "Connection switched to real device")).toBe(2);
+    getActiveMockBaseUrl.mockReturnValue(null);
+    addLogSpy.mockRestore();
+  });
+
   // Save & Connect from Settings: the verifying probe's answer also reached noteReachable, and the second
   // promotion reset the interaction state again and cancelled the three reads the first one had queued.
   it("runs the connected transition once when a switch verifies its target", async () => {

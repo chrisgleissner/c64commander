@@ -48,6 +48,41 @@ describe("playbackSessionPersistence", () => {
     expect(localStorage.getItem("c64u.playbackSessionSnapshot")).not.toBeNull();
   });
 
+  it("does nothing, and does not throw, where the platform has no web storage", () => {
+    vi.stubGlobal("localStorage", undefined);
+    vi.stubGlobal("sessionStorage", undefined);
+    try {
+      expect(() =>
+        persistPlaybackSnapshot({
+          deviceId: "device-a",
+          volumeSnapshot: {},
+          volumeActive: false,
+          manualMuteSnapshot: null,
+          manualMuteEnablement: null,
+          pauseMuteSnapshot: null,
+          pauseMuteEnablement: null,
+        }),
+      ).not.toThrow();
+      expect(hydratePlaybackSnapshot("device-a")).toBeNull();
+      expect(() => discardPlaybackSnapshot("device-a")).not.toThrow();
+      expect(() => clearPersistedPauseMute("device-a")).not.toThrow();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("discards an envelope where only localStorage exists", () => {
+    persistPauseMuteSnapshot("device-a", { "SID 1": 3 }, { sid1: true, sid2: false, sid3: false });
+    vi.stubGlobal("sessionStorage", undefined);
+    try {
+      discardPlaybackSnapshot("device-a");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(hydratePlaybackSnapshot("device-a")).toBeNull();
+  });
+
   it("round-trips a snapshot envelope for the matching device id", () => {
     persistPlaybackSnapshot({
       deviceId: "device-a",

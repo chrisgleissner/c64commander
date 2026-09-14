@@ -44,4 +44,19 @@ describe("reachabilityEvents", () => {
 
     expect(listener).not.toHaveBeenCalled();
   });
+
+  it("leaves a newer unreachable listener in place when an older one unregisters", async () => {
+    const { notifyUnreachable, registerUnreachableListener } =
+      await import("../../../src/lib/connection/reachabilityEvents");
+    const older = vi.fn();
+    const newer = vi.fn();
+
+    const unregisterOlder = registerUnreachableListener(older);
+    registerUnreachableListener(newer);
+    unregisterOlder();
+    notifyUnreachable("u64", "rest");
+
+    expect(older).not.toHaveBeenCalled();
+    expect(newer).toHaveBeenCalledWith("u64", "rest");
+  });
 });

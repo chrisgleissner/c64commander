@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { removeDemoTunesFromPlaylist } from "@/lib/hvsc/hvscDemoPlaylistCleanup";
 import { getLocalStoragePlaylistDataRepository } from "@/lib/playlistRepository/localStorageRepository";
 import type { PlaylistItemRecord, SourceKind, TrackRecord } from "@/lib/playlistRepository/types";
@@ -76,6 +76,15 @@ describe("removing the Demo Mode tunes once their library is gone", () => {
     expect(removed).toBe(1);
     const remaining = await repository.getPlaylistItems(SHARED_PLAYLIST_STORAGE_KEY);
     expect(remaining.map((entry) => entry.playlistItemId)).toEqual([DEVICE_ITEM_ID, "local:tune:1"]);
+  });
+
+  it("leaves the playlist untouched when it holds no HVSC tune", async () => {
+    const repository = await seed();
+    await removeDemoTunesFromPlaylist(repository);
+    const replace = vi.spyOn(repository, "replacePlaylistItems");
+
+    expect(await removeDemoTunesFromPlaylist(repository)).toBe(0);
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it("clears a session whose current entry was one of the removed tunes", async () => {

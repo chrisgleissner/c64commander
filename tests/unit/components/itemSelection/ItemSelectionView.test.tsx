@@ -75,4 +75,29 @@ describe("ItemSelectionView", () => {
     expect(onToggleSelect).toHaveBeenCalledTimes(1);
     expect(onOpen).not.toHaveBeenCalled();
   });
+
+  it("does not select a folder from the square around its checkbox when folders cannot be selected", () => {
+    const onToggleSelect = vi.fn();
+    render(
+      <ItemSelectionView
+        path="/Usb0"
+        rootPath="/"
+        entries={[{ type: "dir", name: "Games", path: "/Usb0/Games" }]}
+        isLoading={false}
+        selection={new Map()}
+        onToggleSelect={onToggleSelect}
+        onOpen={vi.fn()}
+        onNavigateUp={vi.fn()}
+        onNavigateRoot={vi.fn()}
+        onRefresh={vi.fn()}
+        showFolderSelect={false}
+        emptyLabel="No entries"
+      />,
+    );
+
+    const checkbox = screen.queryByRole("checkbox", { name: "Select Games" });
+    if (checkbox) fireEvent.click(checkbox.parentElement as HTMLElement);
+
+    expect(onToggleSelect).not.toHaveBeenCalled();
+  });
 });

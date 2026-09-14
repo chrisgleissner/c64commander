@@ -17,12 +17,28 @@ import { createMockC64Server, type MockC64Server } from "../../mocks/mockC64Serv
 
 let networkOnline = true;
 let networkListener: ((status: { online: boolean; supported: boolean }) => void) | null = null;
+const nativeListener = vi.hoisted(() => ({
+  mode: "ready" as "ready" | "throws" | "pending",
+  removed: 0,
+  release: () => {},
+}));
 vi.mock("../../../src/lib/native/deviceDiscovery", () => ({
   DeviceDiscovery: {
     getNetworkStatus: async () => ({ online: networkOnline, supported: true }),
-    addListener: async (_event: string, listener: (status: { online: boolean; supported: boolean }) => void) => {
+    addListener: (_event: string, listener: (status: { online: boolean; supported: boolean }) => void) => {
+      if (nativeListener.mode === "throws") throw new Error("plugin not implemented");
+      const handle = {
+        remove: async () => {
+          nativeListener.removed += 1;
+        },
+      };
+      if (nativeListener.mode === "pending") {
+        return new Promise((resolve) => {
+          nativeListener.release = () => resolve(handle);
+        });
+      }
       networkListener = listener;
-      return { remove: async () => undefined };
+      return Promise.resolve(handle);
     },
     discover: async () => ({ candidates: [], scannedHosts: 0, elapsedMs: 0 }),
   },
@@ -128,6 +144,8 @@ describe("following the phone on and off its network", () => {
     sessionStorage.clear();
     networkOnline = true;
     networkListener = null;
+    nativeListener.mode = "ready";
+    nativeListener.removed = 0;
     mirror.state.video = "off";
     mirror.state.audio = "off";
     server.setReachable(true);
@@ -246,5 +264,120 @@ describe("following the phone on and off its network", () => {
     await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED"), { timeout: 2000 });
 
     expect(mirror.state.video).toBe("off");
+  });
+
+  it("shows the device offline without probing it when a request fails after the network has gone", async () => {
+    const { manager, transitions } = await connect();
+    // The network status is known before the transitions hear of it: the request failure arrives first.
+    uninstall?.();
+    uninstall = null;
+    const requestsBefore = server.requests.length;
+    setNetwork(false);
+
+    await transitions.confirmDeviceUnreachable();
+
+    expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    expect(server.requests.length).toBe(requestsBefore);
+  });
+
+  it("stops confirming when the device is shown offline for another reason in the meantime", async () => {
+    const { manager, transitions } = await connect();
+    server.setFaultMode("refused");
+
+    const confirming = transitions.confirmDeviceUnreachable();
+    await manager.noteDeviceUnreachable("network-lost");
+    await confirming;
+    const requestsAfter = server.requests.length;
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+
+    expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    expect(server.requests.length).toBe(requestsAfter);
+  });
+
+  it("does nothing on return to the foreground while still connected, or while hidden", async () => {
+    const { manager } = await connect();
+    const requestsBefore = server.requests.length;
+    const visibility = vi.spyOn(document, "visibilityState", "get");
+
+    visibility.mockReturnValue("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+    visibility.mockReturnValue("visible");
+    document.dispatchEvent(new Event("visibilitychange"));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(server.requests.length).toBe(requestsBefore);
+    visibility.mockRestore();
+  });
+
+  it("stops reconnecting once the device is connected again", async () => {
+    const { manager, transitions } = await connect();
+    const requestsBefore = server.requests.length;
+
+    await transitions.reconnectWhenNetworkReturns();
+
+    expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(server.requests.length).toBe(requestsBefore);
+  });
+
+  it("confirms an unanswered request reported by the API before showing the device offline", async () => {
+    const { manager } = await connect();
+    const events = await import("../../../src/lib/connection/reachabilityEvents");
+
+    server.setFaultMode("refused");
+    events.notifyUnreachable(hostOf(server.baseUrl), "rest");
+
+    await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO"), { timeout: 5000 });
+  });
+
+  it("reconnects on return to the foreground when the network came back while the app was hidden", async () => {
+    const { manager } = await connect();
+    setNetwork(false);
+    await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO"));
+
+    // The listener did not run while hidden, so only the foreground read can learn the network is back.
+    networkOnline = true;
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED"), { timeout: 2000 });
+  });
+
+  it("puts Live View sound back on after an outage as well as the picture", async () => {
+    const { manager } = await connect();
+    mirror.state.audio = "live";
+    mirror.emit();
+
+    setNetwork(false);
+    await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO"));
+    await vi.waitFor(() => expect(mirror.state.audio).toBe("off"));
+
+    setNetwork(true);
+    await vi.waitFor(() => expect(mirror.state.audio).toBe("live"), { timeout: 2000 });
+  });
+
+  it("relies on background probes when the platform cannot report network changes", async () => {
+    const logging = await import("../../../src/lib/logging");
+    const addLog = vi.spyOn(logging, "addLog");
+    nativeListener.mode = "throws";
+    const transitions = await import("../../../src/lib/connection/networkTransitions");
+
+    uninstall = transitions.installNetworkTransitions();
+
+    expect(addLog).toHaveBeenCalledWith(
+      "info",
+      "Network change events are unavailable; reconnection relies on background probes",
+      { error: "plugin not implemented" },
+    );
+    addLog.mockRestore();
+  });
+
+  it("removes a network listener that arrives after the transitions were uninstalled", async () => {
+    nativeListener.mode = "pending";
+    const transitions = await import("../../../src/lib/connection/networkTransitions");
+
+    transitions.installNetworkTransitions()();
+    nativeListener.release();
+
+    await vi.waitFor(() => expect(nativeListener.removed).toBe(1));
   });
 });

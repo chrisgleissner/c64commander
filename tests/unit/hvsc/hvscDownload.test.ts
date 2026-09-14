@@ -565,6 +565,15 @@ describe("hvscDownload", () => {
       expect(vi.mocked(addLog)).not.toHaveBeenCalledWith("warn", "HVSC cache stat failed", expect.anything());
     });
 
+    it("warns when stat fails without a message", async () => {
+      vi.mocked(addLog).mockClear();
+      vi.mocked(Filesystem.stat).mockRejectedValue({});
+
+      await resolveCachedArchive("hvsc-baseline", 84);
+
+      expect(vi.mocked(addLog)).toHaveBeenCalledWith("warn", "HVSC cache stat failed", expect.anything());
+    });
+
     it("still warns when stat fails for another reason", async () => {
       vi.mocked(addLog).mockClear();
       vi.mocked(Filesystem.stat).mockRejectedValue(new Error("Permission denied"));

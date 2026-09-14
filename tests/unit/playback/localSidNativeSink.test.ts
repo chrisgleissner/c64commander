@@ -1377,6 +1377,32 @@ describe("a crossfade is one continuous stream of samples", () => {
     expect(calls[flushAt + 1]).toBe("write");
   });
 
+  it("keeps playing through a skip whose flush the track refuses, and says so", async () => {
+    const { addLog } = await import("@/lib/logging");
+    vi.mocked(addLog).mockClear();
+    const backend = createBackend();
+    const outgoing = createNativeLocalSidSink(RATE, backend)!;
+    scheduleChunk(outgoing, 2);
+    backend.bufferedMs = 1500;
+    await settle();
+    backend.flushAudioTrack = async () => {
+      throw new Error("track released");
+    };
+
+    outgoing.beginCrossfadeTailPlayout!(4);
+    const tail = outgoing.takeCrossfadeTail!(4);
+    outgoing.releaseForHandover!();
+    const incoming = createNativeLocalSidSink(RATE, backend)!;
+    incoming.adoptCrossfadeTail!(tail, 1);
+    scheduleChunk(incoming, 0.5);
+    await settle();
+
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith("warn", "Native audio: flush before crossfade tail failed", {
+      error: "track released",
+    });
+    expect(backend.pcm.length).toBeGreaterThan(0);
+  });
+
   it("releases the shared track to its successor without flushing it", async () => {
     const backend = createBackend();
     const outgoing = createNativeLocalSidSink(RATE, backend)!;

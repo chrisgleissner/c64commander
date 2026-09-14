@@ -248,6 +248,24 @@ describe("useHvscLibrary progress coverage", () => {
     expect(result.current.hvscSummaryFilesExtracted).toBeNull();
   });
 
+  it("takes the file total from an extraction event that reports only the total", async () => {
+    mocks.installOrUpdateHvscMock.mockImplementation(() => new Promise<void>(() => undefined));
+    const { result } = renderHook(() => useHvscLibrary(true));
+    await waitFor(() => expect(progressListener).not.toBeNull());
+
+    act(() => {
+      void result.current.handleHvscInstall();
+    });
+    await waitFor(() => expect(result.current.hvscPhase).toBe("download"));
+    act(() => {
+      progressListener?.({ processedCount: 5, totalCount: 9 });
+      progressListener?.({ stage: "sid_enumeration", totalCount: 120 });
+    });
+
+    await waitFor(() => expect(result.current.hvscExtractionTotalFiles).toBe(120));
+    expect(result.current.hvscSummaryFilesExtracted).not.toBe(5);
+  });
+
   it("keeps stale progress non-terminal while native ingestion is still active", async () => {
     mocks.loadHvscStatusSummaryMock.mockReturnValue(
       createSummary({

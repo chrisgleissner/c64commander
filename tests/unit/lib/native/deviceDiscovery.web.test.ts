@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DeviceDiscoveryWeb } from "@/lib/native/deviceDiscovery.web";
 import type { NativeDeviceDiscoveryResult } from "@/lib/native/deviceDiscovery";
 
@@ -77,5 +77,16 @@ describe("DeviceDiscoveryWeb", () => {
       { online: false, supported: true },
       { online: true, supported: false },
     ]);
+  });
+
+  it("reports an offline browser as offline in its first answer", async () => {
+    const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    const statuses: unknown[] = [];
+
+    const handle = await new DeviceDiscoveryWeb().addListener("networkStatusChange", (status) => statuses.push(status));
+    await handle.remove();
+
+    expect(statuses).toEqual([{ online: false, supported: true }]);
+    onLine.mockRestore();
   });
 });

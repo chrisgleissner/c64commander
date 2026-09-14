@@ -90,6 +90,15 @@ describe("getCurrentPlaybackSnapshotLabel", () => {
     expect(getCurrentPlaybackSnapshotLabel()).toBe("Chess.sid");
   });
 
+  it("names a snapshot after a playing tune whose session has no item id", () => {
+    localStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({ currentItemLabel: "Chess.sid", currentItemId: null, isPlaying: true }),
+    );
+
+    expect(getCurrentPlaybackSnapshotLabel()).toBe("Chess.sid");
+  });
+
   it("returns undefined when no session is stored", () => {
     expect(getCurrentPlaybackSnapshotLabel()).toBeUndefined();
   });

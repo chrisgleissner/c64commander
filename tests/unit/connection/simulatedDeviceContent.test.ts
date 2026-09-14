@@ -43,7 +43,9 @@ import {
   installSimulatedDeviceContentCleanup,
   isSimulatedDeviceOrigin,
   removeSimulatedDeviceContent,
+  subscribeSimulatedDeviceContentRemoved,
 } from "@/lib/connection/simulatedDeviceContent";
+import { readStoredPlaybackSession, writeStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
 import { SHARED_DISK_LIBRARY_ID, loadDiskLibrary, saveDiskLibrary } from "@/lib/disks/diskStore";
 import { createDiskEntry } from "@/lib/disks/diskTypes";
 import { getLocalStoragePlaylistDataRepository } from "@/lib/playlistRepository/localStorageRepository";
@@ -147,5 +149,71 @@ describe("the simulated device's files after Demo Mode", () => {
     connection.moveTo("REAL_CONNECTED");
     await vi.waitFor(() => expect(loadDiskLibrary(SHARED_DISK_LIBRARY_ID).disks).toHaveLength(0));
     uninstall();
+  });
+  it("leaves the files alone when the connection changes without Demo Mode ending", async () => {
+    connection.snapshot.state = "REAL_CONNECTED";
+    saveDiskLibrary(SHARED_DISK_LIBRARY_ID, {
+      disks: [createDiskEntry({ location: "ultimate", path: "/Usb0/Games/Demo.d64" })],
+    });
+    const uninstall = installSimulatedDeviceContentCleanup();
+
+    connection.moveTo("OFFLINE_NO_DEMO");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(loadDiskLibrary(SHARED_DISK_LIBRARY_ID).disks).toHaveLength(1);
+    uninstall();
+  });
+
+  it("stops pointing the playlist session at a removed entry, and tells an open page", async () => {
+    const repository = await seed();
+    await repository.saveSession({
+      playlistId: SHARED_PLAYLIST_STORAGE_KEY,
+      currentPlaylistItemId: "demo-waltz:1",
+      isPlaying: true,
+      isPaused: false,
+      elapsedMs: 0,
+      playedMs: 0,
+      shuffleEnabled: false,
+      repeatEnabled: false,
+      updatedAt: now,
+    });
+    writeStoredPlaybackSession({
+      playlistKey: SHARED_PLAYLIST_STORAGE_KEY,
+      currentItemId: "demo-waltz:1",
+      currentIndex: 0,
+      isPlaying: true,
+      isPaused: false,
+      elapsedMs: 0,
+      playedMs: 0,
+      updatedAt: now,
+    });
+    const removed = vi.fn();
+    const unsubscribe = subscribeSimulatedDeviceContentRemoved(removed);
+
+    await removeSimulatedDeviceContent(repository);
+    unsubscribe();
+    await removeSimulatedDeviceContent(repository);
+
+    expect((await repository.getSession(SHARED_PLAYLIST_STORAGE_KEY))?.currentPlaylistItemId).toBeNull();
+    expect(readStoredPlaybackSession()).toBeNull();
+    expect(removed).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the session of a real device's entry", async () => {
+    const repository = await seed();
+    writeStoredPlaybackSession({
+      playlistKey: SHARED_PLAYLIST_STORAGE_KEY,
+      currentItemId: "bangkok:1",
+      currentIndex: 1,
+      isPlaying: false,
+      isPaused: true,
+      elapsedMs: 0,
+      playedMs: 0,
+      updatedAt: now,
+    });
+
+    await removeSimulatedDeviceContent(repository);
+
+    expect(readStoredPlaybackSession()?.currentItemId).toBe("bangkok:1");
   });
 });

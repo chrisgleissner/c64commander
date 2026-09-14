@@ -86,6 +86,28 @@ describe("leftover device streams (HARD27-021)", () => {
     await vi.waitFor(() => expect(getLeftoverDeviceStreamsForTests()).toEqual({}));
   });
 
+  it("keeps waiting through another offline report, and warns about a stop the device refused", async () => {
+    recordDeviceStreamStarted("audio", "192.168.1.146");
+    // The platform answered "no network" just before the watch last heard the network was up.
+    recordNetworkStatus({ online: true, supported: true });
+    networkStatus.current = { online: false, supported: true };
+    await stopLeftoverDeviceStreams();
+
+    recordNetworkStatus({ online: false, supported: true });
+    expect(stopAt).not.toHaveBeenCalled();
+    stopAt.mockRejectedValue("stream is busy");
+    networkStatus.current = { online: true, supported: true };
+    recordNetworkStatus(networkStatus.current);
+
+    await vi.waitFor(() =>
+      expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+        "warn",
+        "Live View: could not stop the audio stream left running on the device",
+        expect.objectContaining({ host: "192.168.1.146", error: "stream is busy" }),
+      ),
+    );
+  });
+
   it("logs a stop that could not reach the device at info, because a device with no power streams nothing", async () => {
     recordDeviceStreamStarted("video", "192.168.1.146");
     stopAt.mockRejectedValue(new Error("Failed to connect to /192.168.1.146:80"));
