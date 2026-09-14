@@ -510,7 +510,9 @@ class NativeLocalSidSink implements AudioScheduleSink {
       // as a gap between the two — the very thing the crossfade exists to remove. So while these are
       // empty slices the outgoing tune plays on at its own level, and the fade starts on the first
       // slice that carries audio of this tune's own.
-      const gain = sliceIsOwnAudio ? 1 - tail.frame / tail.frames : 1;
+      // Once the fade has begun it holds its place through a slice with nothing of the incoming tune in it.
+      // Back at full level there, the old tune jumped up for 50 ms mid-fade and the two traded places twice.
+      const gain = sliceIsOwnAudio || tail.frame > 0 ? 1 - tail.frame / tail.frames : 1;
       for (let ch = 0; ch < 2; ch += 1) {
         const mixed = slice[i + ch] + from[tail.cursor + ch] * gain;
         slice[i + ch] = mixed > 32767 ? 32767 : mixed < -32768 ? -32768 : mixed;

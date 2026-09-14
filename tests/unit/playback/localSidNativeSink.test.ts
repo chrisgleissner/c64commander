@@ -1242,6 +1242,35 @@ describe("a crossfade is one continuous stream of samples", () => {
     expect(tailOnlyFrames).toBeLessThanOrEqual(RATE / 2);
   });
 
+  // Measured on a Pixel 4: when the incoming tune's next chunk was late mid-fade, the sink bridged with a slice of the
+  // outgoing tune at full level, and for 50 ms the old tune was louder than it had been a moment before.
+  it("keeps the fade where it was through a slice the incoming tune has nothing for", async () => {
+    const backend = createBackend();
+    const write = backend.writeAudioTrack;
+    backend.writeAudioTrack = async (options) => {
+      const stats = await write(options);
+      backend.bufferedMs += (decodePcm(options.data).length / 2 / RATE) * 1000;
+      return stats;
+    };
+    const incoming = createNativeLocalSidSink(RATE, backend)!;
+    incoming.adoptCrossfadeTail!([new Int16Array(RATE * 4 * 2).fill(8000)], 2);
+    // One second of the incoming tune, silent so that every written sample is the tail at its fade level.
+    incoming.sink.createSource(incoming.sink.createBuffer(2, RATE, RATE)).start(0);
+    await settle(400);
+    const halfway = backend.pcm.flatMap((chunk) => [...chunk]);
+    const levelHalfway = Math.abs(halfway[halfway.length - 2]!);
+
+    // The incoming tune's next chunk is late and the pipeline has drained, so the sink bridges with tail only.
+    backend.bufferedMs = 0;
+    await settle(400);
+    const bridged = backend.pcm.flatMap((chunk) => [...chunk]).slice(halfway.length);
+
+    expect(levelHalfway).toBeGreaterThan(2000);
+    expect(levelHalfway).toBeLessThan(6000);
+    expect(bridged.length).toBeGreaterThan(0);
+    expect(Math.max(...bridged.map(Math.abs))).toBeLessThanOrEqual(levelHalfway + 1);
+  });
+
   it("fades the outgoing tune only once the incoming one is playing", async () => {
     const backend = createBackend();
     const incoming = createNativeLocalSidSink(RATE, backend)!;
