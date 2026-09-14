@@ -290,6 +290,23 @@ describe("seeking inside a pre-rendered tune", () => {
     expect(worker.ofType("seek").length).toBeGreaterThan(0);
   });
 
+  // The hand-off seek re-renders the tune from its start and the worker cannot be interrupted. Sent the
+  // moment a two-minute lead-in began, it kept the worker busy for most of a minute, so a skip in that
+  // time had to replace the worker and the next tune reached the speaker seconds late.
+  it("sends the live renderer to a long lead-in's seam only when the lead-in is close to running out", async () => {
+    const engine = makeEngine();
+    await openAndWarm(engine, 120);
+    await engine.seekTo(1);
+
+    expect(worker.ofType("seek")).toHaveLength(0);
+
+    const internals = engine as unknown as { cachedCursor: number; pump: () => void };
+    internals.cachedCursor = 70 * SAMPLE_RATE * CHANNELS;
+    internals.pump();
+
+    expect(worker.ofType("seek")).toEqual([expect.objectContaining({ positionSeconds: 120 })]);
+  });
+
   it("does not let warming a neighbour cancel the current tune's pre-render", async () => {
     // `prerender` abandons whatever it finds in flight, so warming the next track used to kill the
     // full pre-render of the one playing — and that pre-render is what makes seeking inside it
