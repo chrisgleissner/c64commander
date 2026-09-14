@@ -1918,10 +1918,10 @@ export function usePlaybackController({
               pausingFromPauseRef.current = false;
               resumingFromPauseRef.current = false;
               await resumeMachineWithRetry(api);
+              endTransition(); // The unmute waits for transitions to settle: held, this one delayed it 20 s.
               await unmuteAfterMachineResume();
               setIsPaused(false);
-              // HARD12-020: publish the resumed state so Home's pause/resume
-              // control converges with Play instead of assuming "running".
+              // HARD12-020: publish the resumed state so Home's pause/resume converges with Play.
               writeMachineExecutionFromPlay("running");
               const now = Date.now();
               trackStartedAtRef.current = now - elapsedMs;

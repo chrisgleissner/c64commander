@@ -1202,6 +1202,42 @@ describe("usePlaybackController", () => {
     expect(pauseMuteSnapshotRef.current).toBeNull();
   });
 
+  // A session paused before the app restarted has no pause-mute snapshot, so resume unmutes through the
+  // volume override, which waits for machine transitions to settle. Resume still held its own transition, so
+  // on a Pixel 4 that wait ran out twice and the unmute reached the C64 Ultimate 20 s after the resume.
+  it("ends the resume's machine transition before unmuting", async () => {
+    vi.useFakeTimers();
+    const playlist = [
+      createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
+    ];
+    vi.mocked(getC64API).mockReturnValue({ machineResume: vi.fn().mockResolvedValue(undefined) } as any);
+    const { waitForMachineTransitionsToSettle } = await import("@/lib/deviceInteraction/deviceActivityGate");
+    const ensureUnmuted = vi.fn(async () => {
+      await waitForMachineTransitionsToSettle();
+    });
+    const { result } = renderPlaybackController(playlist, {
+      isPlaying: true,
+      isPaused: true,
+      ensureUnmuted,
+      pauseMuteSnapshotRef: { current: null },
+    });
+
+    let resumed = false;
+    void result.current.handlePauseResume().then(() => {
+      resumed = true;
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(ensureUnmuted).toHaveBeenCalledWith({ force: true, refreshItems: true });
+    expect(resumed).toBe(true);
+    expect(vi.mocked(addLog)).not.toHaveBeenCalledWith(
+      "warn",
+      "Device activity advisory gate wait timed out",
+      expect.anything(),
+    );
+    vi.useRealTimers();
+  });
+
   it("mutes enabled SID mixer volume before pausing active playback", async () => {
     const playlist = [
       createPlaylistItem({ request: { source: "ultimate", path: "/Usb0/Demos/demo.sid" }, category: "sid" }),
