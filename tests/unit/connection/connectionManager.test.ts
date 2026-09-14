@@ -2155,6 +2155,30 @@ describe("connectionManager", () => {
     addLogSpy.mockRestore();
   });
 
+  it("logs the sticky real-device lock declining Demo Mode at info", async () => {
+    const manager = await import("../../../src/lib/connection/connectionManager");
+    getActiveMockBaseUrl.mockReturnValue(null);
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+    vi.mocked(fetch).mockResolvedValue(deviceAnswer());
+    await manager.initializeConnectionManager();
+    void manager.discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(50);
+    expect(manager.isRealDeviceStickyLockEnabled()).toBe(true);
+    vi.mocked(featureFlagManager.getSnapshot).mockReturnValue({ flags: { demo_mode_enabled: true } } as never);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+    vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+    const addLogSpy = vi.spyOn(logging, "addLog");
+
+    void manager.discoverConnection("settings");
+    await vi.advanceTimersByTimeAsync(800);
+
+    const message = "Sticky real-device lock active; skipping demo mode transition";
+    expect(addLogSpy).toHaveBeenCalledWith("info", message, expect.anything());
+    expect(addLogSpy).not.toHaveBeenCalledWith("warn", message, expect.anything());
+    addLogSpy.mockRestore();
+  });
+
   it("shows a connected device offline when it becomes unreachable, and ignores that in other states", async () => {
     const manager = await reachOffline();
 

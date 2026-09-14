@@ -1022,7 +1022,7 @@ const transitionToDemoActive = async (
   } = {},
 ) => {
   if (stickyRealDeviceLock && !options.bypassStickyRealDeviceLock) {
-    addLog("warn", "Sticky real-device lock active; skipping demo mode transition", { trigger });
+    addLog("info", "Sticky real-device lock active; skipping demo mode transition", { trigger });
     await transitionToOfflineNoDemo(trigger);
     return;
   }
