@@ -69,4 +69,18 @@ describe("SongLengthServiceFacade logging fallback (jsdom)", () => {
     );
     warnSpy.mockRestore();
   });
+  // A reset is part of installing or clearing an HVSC library, and every install logged it as a warning.
+  it("logs a reset at info", async () => {
+    const { SongLengthServiceFacade, InMemoryTextBackend } = await import("@/lib/songlengths");
+    const service = new SongLengthServiceFacade(new InMemoryTextBackend(), { serviceId: "test" });
+
+    service.reset("hvsc-filesystem-reset");
+
+    expect(addLogMock).toHaveBeenCalledWith(
+      "info",
+      "Songlengths reset",
+      expect.objectContaining({ reason: "hvsc-filesystem-reset" }),
+    );
+    expect(addLogMock).not.toHaveBeenCalledWith("warn", "Songlengths reset", expect.anything());
+  });
 });
