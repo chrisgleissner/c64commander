@@ -7,6 +7,9 @@
  */
 
 import { addLog } from "@/lib/logging";
+import { subscribeNetworkEdges } from "@/lib/connection/networkStatusWatch";
+import { readNativeNetworkStatus } from "@/lib/connection/offlineStartup";
+import { isTransientConnectivityFailure } from "@/lib/uiErrors";
 import { stopStreamAtHost } from "./foreignSenderStop";
 
 /**
@@ -69,10 +72,13 @@ const writeRecord = (record: LeftoverRecord): void => {
   }
 };
 
+// The simulated device runs inside the app and ends with it, so nothing it streamed can be left running.
+const isLoopbackHost = (host: string) => /^(127\.\d+\.\d+\.\d+|localhost|\[::1\])(:\d+)?$/i.test(host);
+
 /** Called after `streams:{name}:start` succeeds against `host`. */
 export const recordDeviceStreamStarted = (name: LeftoverStreamName, host: string | null | undefined): void => {
   const trimmed = host?.trim();
-  if (!trimmed) return;
+  if (!trimmed || isLoopbackHost(trimmed)) return;
   writeRecord({ ...readRecord(), [name]: trimmed });
 };
 
@@ -101,8 +107,23 @@ export const getLeftoverDeviceStreamsForTests = (): LeftoverRecord => readRecord
  */
 export const stopLeftoverDeviceStreams = async (): Promise<void> => {
   const record = readRecord();
-  const entries = Object.entries(record) as [LeftoverStreamName, string][];
-  if (entries.length === 0) return;
+  const entries = (Object.entries(record) as [LeftoverStreamName, string][]).filter(
+    ([, host]) => !isLoopbackHost(host),
+  );
+  if (entries.length === 0) {
+    writeRecord({});
+    return;
+  }
+  // With no network there is no route to the device yet, so the sweep waits for one instead of failing now.
+  const network = await readNativeNetworkStatus();
+  if (network.supported && !network.online) {
+    const unsubscribe = subscribeNetworkEdges((edge) => {
+      if (edge !== "online") return;
+      unsubscribe();
+      void stopLeftoverDeviceStreams();
+    });
+    return;
+  }
   writeRecord({});
   await Promise.all(
     entries.map(async ([name, host]) => {
@@ -113,10 +134,13 @@ export const stopLeftoverDeviceStreams = async (): Promise<void> => {
           host,
         });
       } catch (error) {
-        addLog("warn", `Live View: could not stop the ${name} stream left running on the device`, {
+        const message = error instanceof Error ? error.message : String(error);
+        // A device that does not answer is off or elsewhere, and a device without power streams nothing.
+        const level = isTransientConnectivityFailure(message) ? "info" : "warn";
+        addLog(level, `Live View: could not stop the ${name} stream left running on the device`, {
           service: "streams",
           host,
-          error: error instanceof Error ? error.message : String(error),
+          error: message,
         });
       }
     }),

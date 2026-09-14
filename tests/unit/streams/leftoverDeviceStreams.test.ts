@@ -14,7 +14,19 @@ vi.mock("@/lib/streams/foreignSenderStop", () => ({
   resolveForeignSenderPassword: vi.fn(async () => null),
 }));
 
+const networkStatus = vi.hoisted(() => ({ current: { online: true, supported: false } }));
+vi.mock("@/lib/connection/offlineStartup", () => ({
+  readNativeNetworkStatus: vi.fn(async () => networkStatus.current),
+}));
+
+vi.mock("@/lib/logging", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/logging")>();
+  return { ...actual, addLog: vi.fn(actual.addLog) };
+});
+
 import { stopStreamAtHost } from "@/lib/streams/foreignSenderStop";
+import { addLog } from "@/lib/logging";
+import { recordNetworkStatus, resetNetworkStatusWatchForTests } from "@/lib/connection/networkStatusWatch";
 import {
   getLeftoverDeviceStreamsForTests,
   recordDeviceStreamStarted,
@@ -34,6 +46,58 @@ describe("leftover device streams (HARD27-021)", () => {
     localStorage.clear();
     stopAt.mockClear();
     stopAt.mockResolvedValue({ errors: [] });
+    vi.mocked(addLog).mockClear();
+    networkStatus.current = { online: true, supported: false };
+    resetNetworkStatusWatchForTests();
+  });
+
+  // The simulated device runs inside the app and dies with it; a record of its loopback address made
+  // every launch after a Demo Mode Live View log a failed stop against a server that no longer exists.
+  it("does not record a stream started on the in-app simulated device", () => {
+    recordDeviceStreamStarted("video", "127.0.0.1:43439");
+    recordDeviceStreamStarted("audio", "localhost:43439");
+
+    expect(getLeftoverDeviceStreamsForTests()).toEqual({});
+  });
+
+  it("drops a loopback record left by an older build without sending a stop", async () => {
+    localStorage.setItem("c64u_device_streams_running", JSON.stringify({ video: "127.0.0.1:43439" }));
+
+    await stopLeftoverDeviceStreams();
+
+    expect(stopAt).not.toHaveBeenCalled();
+    expect(localStorage.getItem("c64u_device_streams_running")).toBeNull();
+  });
+
+  it("waits for a network before stopping streams left running, instead of failing at an offline launch", async () => {
+    recordDeviceStreamStarted("video", "192.168.1.146");
+    networkStatus.current = { online: false, supported: true };
+    recordNetworkStatus(networkStatus.current);
+
+    await stopLeftoverDeviceStreams();
+
+    expect(stopAt).not.toHaveBeenCalled();
+    expect(getLeftoverDeviceStreamsForTests()).toEqual({ video: "192.168.1.146" });
+
+    networkStatus.current = { online: true, supported: true };
+    recordNetworkStatus(networkStatus.current);
+
+    await vi.waitFor(() => expect(stopAt).toHaveBeenCalledWith("192.168.1.146", "video"));
+    await vi.waitFor(() => expect(getLeftoverDeviceStreamsForTests()).toEqual({}));
+  });
+
+  it("logs a stop that could not reach the device at info, because a device with no power streams nothing", async () => {
+    recordDeviceStreamStarted("video", "192.168.1.146");
+    stopAt.mockRejectedValue(new Error("Failed to connect to /192.168.1.146:80"));
+
+    await stopLeftoverDeviceStreams();
+
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+      "info",
+      "Live View: could not stop the video stream left running on the device",
+      expect.objectContaining({ host: "192.168.1.146" }),
+    );
+    expect(vi.mocked(addLog)).not.toHaveBeenCalledWith("warn", expect.anything(), expect.anything());
   });
 
   it("remembers the host a stream was started on and forgets it when the stop succeeds", () => {
