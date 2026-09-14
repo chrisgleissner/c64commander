@@ -2146,6 +2146,22 @@ describe("connectionManager", () => {
     addLogSpy.mockRestore();
   });
 
+  // Save & Connect from Settings: the verifying probe's answer also reached noteReachable, and the second
+  // promotion reset the interaction state again and cancelled the three reads the first one had queued.
+  it("runs the connected transition once when a switch verifies its target", async () => {
+    const manager = await reachOffline();
+    getActiveMockBaseUrl.mockReturnValue(null);
+    const addLogSpy = vi.spyOn(logging, "addLog");
+    vi.mocked(fetch).mockResolvedValue(deviceAnswer());
+
+    await manager.verifyCurrentConnectionTarget();
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(countLogs(addLogSpy, "Connection switched to real device")).toBe(1);
+    addLogSpy.mockRestore();
+  });
+
   // A probe exists to learn whether the device answers. Counting "no" as a failure put a problem count
   // on the badge after every return home whose first probe beat the Wi-Fi route.
   it("records a failed discovery probe's REST response as an expected failure", async () => {

@@ -611,6 +611,8 @@ export const noteReachable = (host: string, source: ReachabilitySource, deviceIn
   if (snapshot.state !== "OFFLINE_NO_DEMO" && snapshot.state !== "DISCOVERING") {
     return;
   }
+  // A switch connects with its target's routing when its probe answers; promoting here too ran it twice.
+  if (snapshot.state === "DISCOVERING" && snapshot.lastDiscoveryTrigger === "switch") return;
 
   const trigger = snapshot.lastDiscoveryTrigger ?? "background";
   addLog("info", "Reachable active device observed; promoting connection", {
