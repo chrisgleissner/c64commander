@@ -14,11 +14,11 @@ which stopped working when its dependency range admitted a breaking release of t
 It exposes one tool interface over two transports:
 
 - **`adb`** — the Pixel 4 on USB, Android emulators, and Waydroid containers.
-- **`sailfish`** — a device running Sailfish OS with Jolla's Android compatibility layer, reached over
-  SSH rather than over `adb`.
+- **`ssh`** — a Linux phone whose Android apps run inside an Android compatibility container, reached
+  over SSH on the phone's USB network link rather than directly over `adb`.
 
 The name states what is controlled — the Android app — rather than the transport, so it stays accurate
-for the Sailfish target. The `ctl` suffix follows `systemctl` / `journalctl` / `kubectl`.
+for the container target. The `ctl` suffix follows `systemctl` / `journalctl` / `kubectl`.
 
 The tool surface is derived from what this repository already does with `adb`. Thirty-nine files under
 `tools/hil/` and `scripts/` mention `adb`, and about 242 lines across the repository are actual `adb`
@@ -33,8 +33,8 @@ pattern still lives.
 ## 2. Goals
 
 1. Restore the capability `droidmind` provided, on a dependency surface this repository controls.
-2. Give one tool interface that works against `adb` targets and, when such a device exists, a Sailfish
-   target — so a caller does not branch on transport.
+2. Give one tool interface that works against `adb` targets and against an Android container on a
+   Linux phone reached over SSH — so a caller does not branch on transport.
 3. Make wrong-device targeting impossible by construction rather than by convention.
 4. Consolidate the `adb` invocations currently copy-pasted across `scripts/` and `tools/hil/` into one
    implementation with one set of timeouts, retries and error messages.
@@ -54,7 +54,8 @@ pattern still lives.
 - **Replacing c64scope.** `c64scope` owns sessions, evidence timelines and assertion records.
   `droidctl` is the device-driving peer it calls, exactly as `droidmind` was.
 - **Driving the C64 Ultimate.** That is `c64bridge`.
-- **Provisioning.** `droidctl` does not create emulators, install Sailfish, or enable developer mode.
+- **Provisioning.** `droidctl` does not create emulators, flash a phone, enable developer mode, or
+  install SSH keys. It reports which of those is missing (§14).
 
 ---
 
@@ -106,63 +107,39 @@ the `adb` transport and are addressed by serial like any other target.
 Well understood and already in use. `droidctl` shells out to the `adb` binary with an explicit
 `-s <serial>` on every invocation, without exception.
 
-### 5.3 The `sailfish` transport — what is established, and what is not
+### 5.3 The `ssh` transport — what the design rests on
 
-**No Sailfish device exists on this bench.** The handset this transport exists for is unreleased;
-`AGENTS.md:1004-1015` forbids writing any task, gate or acceptance criterion whose venue is that
-handset, and the Pixel 4 stands in for it. This section therefore records researched facts and their
-confidence, and §7.4 keeps the implementation off the critical path.
+The target is a Linux phone whose Android apps run in an Android compatibility container: a modified
+Android sharing the host kernel, each app shown as a window of the phone's own compositor. The facts
+below are what the implementation in §7.4 is built on. None of them can be exercised in CI, so every
+one that the implementation depends on is detected at runtime and reported by name when it does not
+hold (§14).
 
-**Established, from Jolla's own documentation:**
+- **Developer mode enables SSH.** Over USB networking the phone conventionally takes `192.168.2.15`;
+  the login user is typically `defaultuser`, and `devel-su` gives an interactive root shell with the
+  developer password. droidctl never types a password, so it uses key authentication only.
+- **The phone ships no `adb` client.** The adb client runs on the desktop.
+- **A command can be run inside the container as root** through a container attach command: a
+  platform helper whose name ends in `-attach`, or `lxc-attach -n <container> --` on an LXC-based
+  build. `logcat` and `pm` work that way.
+- **An attach command is not equivalent to `adb shell`.** A first-hand report has `uiautomator dump`
+  run through it returning exit code 0 while writing no file, both as root and as uid 2000, while the
+  same command over adb worked. The failure is specific to UI-session tools, and **an exit code of 0 is
+  not evidence of success there**. Anything done through that route is verified by its artifact or
+  refused.
+- **adb over TCP into the container has been reported to work** after enabling Developer options and
+  debugging inside the container. When it works the whole `adb` backend applies unchanged, which is
+  why droidctl prefers it (§7.4).
+- **Installing through `pm install` inside the container skips any host-side integration** the
+  platform's own installer adds, such as a launcher entry. Whether that matters depends on how the app
+  is launched; `droid_app.start_app` uses `am start`, which does not need a launcher entry.
+- **Screen recording has no Android-side route that can be stopped gracefully** except a detached
+  `adb shell`, and the compositor's own capture mechanisms are outside the Android container, so they
+  are out of scope.
 
-- The Android layer is called **AppSupport**; "Aliendalvik" survives as an internal name in service
-  and path names. It is a modified Android running in an **LXC container** sharing the host kernel, with
-  each Android app surfacing as a Wayland surface in the Sailfish compositor. It is proprietary and
-  licence-gated.
-- Sailfish OS **5.0** ships AppSupport based on **Android 13 / API 33**; older devices run API 30. This
-  matches the repository's working assumption of an API-33 ceiling
-  (`docs/agentic/callback8020/handover/*`).
-- **Developer mode** enables SSH. The USB address is `192.168.2.15`, WLAN is also supported, the user is
-  `defaultuser` (`nemo` before Sailfish 3.4.0), and root is `devel-su` with the same password.
-- **A command can be run inside the container**: `appsupport-attach <cmd>` on Sailfish 4.5 and later,
-  `lxc-attach -n aliendalvik -- <cmd>` before that. Both need `devel-su` first. Jolla documents
-  `appsupport-attach /system/bin/pm list packages` and
-  `appsupport-attach /system/bin/logcat` explicitly.
-- **Logcat is fully solved and vendor-documented.** `logcat`, including `-c` to clear, works under
-  `appsupport-attach`.
-- **A screenshot can be taken from the Sailfish side** with a session D-Bus call to lipstick:
-  `org.nemomobile.lipstick.saveScreenshot`. It works over SSH, but it must run in the user's session
-  with `DBUS_SESSION_BUS_ADDRESS` set, not blindly under `devel-su`.
-- **There is no official screen-recording CLI.** The documented mechanism is `lipstick2vnc`, a VNC
-  server that grabs frames from the compositor on port 5900 with no authentication, bound to localhost
-  and the USB network. Community recorders are ffmpeg wrappers around it.
-- **Sailfish ships no `adb` binary.** An adb client must run on the workstation.
-
-**Established as a negative, and it is the most useful single fact here:** `appsupport-attach` is **not**
-equivalent to `adb shell`. A first-hand report has `uiautomator dump` under `appsupport-attach`
-returning **exit code 0 while writing no file**, both as root and as uid 2000, while the same command
-over adb worked. `logcat` works fine under `appsupport-attach`. So the failure is specific to
-UI-session-dependent tools, and **an exit code of 0 is not evidence of success on this platform**. Any
-Sailfish backend must verify by artifact, not by exit status.
-
-**Likely but not vendor-documented:**
-
-- `apkd-install <file.apk>` installs an APK from the command line. Jolla documents only GUI install
-  routes, gated on an "Allow untrusted software" setting. Whether a raw `pm install` inside the
-  container is an acceptable substitute is unknown — `apkd` also does host-side integration (launcher
-  entry, icon, sharing plugins) that `pm install` would skip.
-- **adb over TCP into the container works.** One detailed first-hand report describes enabling Developer
-  Options inside AppSupport, turning on wireless debugging, then `adb connect <ip>:5555` from a
-  workstation and running `uiautomator dump` successfully. If this holds, the `sailfish` backend
-  collapses to a connection helper and the entire `adb` backend applies unchanged. It is the single
-  highest-value question in §14.
-
-**Dead ends, recorded so nobody rediscovers them:** `aliendalvik-control`, a D-Bus daemon whose
-interface (`sendTap`, `sendSwipe`, `sendKeyevent`, `sendInput`, `launchApp`, `forceStop`) is exactly
-what a driver would want, was last released in October 2020 and is explicitly unsupported on Sailfish 4
-and later; its implementation is closed `.so` plugins selected by Android API level, with nothing
-targeting API 33. `qapreload`, the Appium port for Sailfish, injects into Qt/QML applications only and
-has no Android support.
+A third-party D-Bus daemon that exposed tap, swipe, key and launch calls for such a container exists
+but targets old Android API levels and is unmaintained, and an Appium port for the host's native
+toolkit has no Android support. Neither is used.
 
 ### 5.4 The target device's own constraints
 
@@ -305,7 +282,7 @@ the other.
 | `src/artifacts.ts`             | `src/sessionStore.ts`    | Run directory allocation and the artifact index.                      |
 | `src/resources.ts`             | `src/resources.ts`       | Static resources: keycode table, transport support matrix.            |
 | `src/transport/adb.ts`         | —                        | The `adb` backend and its argument builder.                           |
-| `src/transport/sailfish.ts`    | —                        | The `sailfish` backend; a stub until §14 is answered.                 |
+| `src/transport/ssh*.ts`        | —                        | The `ssh` backend: configuration, discovery, probe, routes.           |
 
 ### 7.2 The transport abstraction
 
@@ -313,25 +290,28 @@ One interface, two implementations, and nothing above it knows which is in use:
 
 ```ts
 export interface Transport {
-  readonly kind: "adb" | "sailfish";
+  readonly kind: "adb" | "ssh";
   listTargets(): Promise<TargetInfo[]>;
   exec(target: ResolvedTarget, argv: readonly string[], opts?: ExecOptions): Promise<ExecResult>;
   pullBinary(target: ResolvedTarget, remotePath: string): Promise<Buffer>;
   pushFile(target: ResolvedTarget, localPath: string, remotePath: string): Promise<void>;
   installPackage(target: ResolvedTarget, apkPath: string, opts: InstallOptions): Promise<void>;
   forwardPort(target: ResolvedTarget, localPort: number, remote: string): Promise<void>;
-  capabilities(): TransportCapabilities;
+  capabilities(target?: ResolvedTarget): TransportCapabilities;
+  describeConnection?(target: ResolvedTarget): Record<string, unknown>;
 }
 ```
 
 `exec` runs a command **in the Android context** of the target. For `adb` that is `adb -s S shell …`;
-for Sailfish it is `ssh … devel-su appsupport-attach …` or an adb connection into the container,
-depending on how §14 Q4 is answered. Tool modules compose Android shell commands and never construct
-transport-specific arguments.
+for `ssh` it is either the same adb call through a tunnel into the container, or `ssh … <attach
+command> /system/bin/sh -c '…'`, depending on the route detected for that target (§7.4). Tool modules
+compose Android shell commands and never construct transport-specific arguments.
 
-`capabilities()` returns the support matrix in §8.15. A tool whose capability is unsupported returns a
-structured `unsupported_on_transport` error naming the transport and the capability — never a silent
-no-op and never a partial result.
+`capabilities(target)` returns what that target supports now, which for `ssh` depends on its route
+(§8.15). A tool whose capability is unsupported returns a structured `unsupported_on_transport` error
+naming the transport and the capability — never a silent no-op and never a partial result. A target
+with no working route returns `transport_unavailable` for every tool, with the missing prerequisites in
+the message and in `details.prerequisites`.
 
 ### 7.3 The `adb` backend
 
@@ -342,21 +322,34 @@ no-op and never a partial result.
 - Binary output uses `exec-out` with a buffer encoding, as `scripts/hil-screenshot-evidence.mjs:67-79`
   does, so a PNG is not corrupted by newline translation.
 
-### 7.4 The `sailfish` backend
+### 7.4 The `ssh` backend
 
-Delivered as an interface implementation with the transport-specific pieces isolated behind four
-functions: connect, exec-in-Android-container, capture screen, capture logs. Until a device exists, the
-shipped implementation returns `transport_unavailable` with the §14 probe procedure in its message, and
-a fake stands in for it in the unit tests.
+Split by responsibility: `sshConfig.ts` (settings), `sshDiscovery.ts` (USB network interfaces, and
+everything read from this computer behind one injectable interface), `sshCommands.ts` (pure argument
+and script builders), `sshPrerequisites.ts` (every message the transport can report), `sshRunner.ts`
+(journalled ssh invocations with connection multiplexing), `sshProbe.ts` (the detection order) and
+`ssh.ts` (the `Transport`, per-host state and both routes).
 
-Two design rules come straight from §5.3 and should be written into the stub's comments so they survive
-until somebody has the hardware:
+Two routes into the container, preferred in this order:
 
-1. **Verify by artifact, not by exit code.** `uiautomator dump` under `appsupport-attach` has been
-   observed returning 0 while writing nothing.
-2. **Prefer a container adb connection if one can be established.** If §14 Q4 resolves yes, the backend
-   is a connection helper over the existing `adb` backend rather than a second implementation, and
-   almost every unknown in §8.15 resolves with it.
+1. **`container-adb`.** An ssh process forwards `127.0.0.1:<free port>` on the desktop to the
+   container's adbd, `adb connect` attaches to it, and every operation is delegated to the `adb` backend
+   with that serial. The `adb` transport leaves that serial out of its own listing, so the phone has one
+   target id. Every tool is supported, with results identical to an ordinary adb target.
+2. **`container-attach`.** Commands run as root through the verified attach command:
+   `ssh -T -- <user>@<host> "[sudo -n] <attach command> /system/bin/sh -c '<android argv>'"`. The Android
+   argv is quoted exactly as `adb shell` quotes it, and the whole line is quoted again for the phone's
+   login shell. Tools whose success cannot be verified by an artifact there (input, UI hierarchy,
+   assertions, recording) and `forward_webview` are refused; file pushes are verified by the byte count
+   the container reports back. The probe sends a known line on stdin through the attach command and
+   reads it back; where it does not arrive, tools that send data on stdin are refused on that phone.
+
+The two design rules from §5.3 are implemented rather than left as comments:
+
+1. **Verify by artifact, not by exit code.** An attach candidate counts only when `getprop` run through
+   it prints an integer SDK level; a push counts only when `wc -c` inside the container matches; a
+   screenshot counts only with a PNG signature; UI-session tools are refused on the attach route.
+2. **Prefer a container adb connection.** The attach route is used only when no tunnel reaches `device`.
 
 ---
 
@@ -384,8 +377,8 @@ Inputs are declared as JSON Schema for `tools/list` and validated with the match
 
 | Field      | Value                                                                                                                             |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Input      | `{ transports?: ("adb" \| "sailfish")[] }`                                                                                        |
-| Output     | `{ targets: [{ targetId, transport, serial, model, apiLevel, state, isEmulator }] }`                                              |
+| Input      | `{ transports?: ("adb" \| "ssh")[] }`                                                                                             |
+| Output     | `{ targets: [{ targetId, transport, serial, model, apiLevel, state, isEmulator, route?, missingPrerequisites? }] }`               |
 | Failure    | `adb` binary missing; adb server unreachable. Reported per transport, so one failing transport does not hide the other's targets. |
 | Transports | both                                                                                                                              |
 
@@ -403,7 +396,7 @@ container target is at `scripts/waydroid-smoke.sh:186`.
 | Input      | `{ targetId }`                                                                                                                      |
 | Output     | `{ targetId, transport, serial, model, apiLevel, release, screen: { width, height, density, dpr }, sizeOverride, densityOverride }` |
 | Failure    | Target not found; target offline.                                                                                                   |
-| Transports | both (screen geometry only, on `sailfish`)                                                                                          |
+| Transports | both; an `ssh` target adds `connection` with its route and, per route, the missing prerequisites                                    |
 
 `sizeOverride` and `densityOverride` are non-null when `wm size` or `wm density` reports an override.
 That check exists at `tools/hil/merge_gate.mjs:761-766` because a leftover `wm size 480x640` /
@@ -505,7 +498,7 @@ is a validation error.
 | Input      | `{ targetId, name, reviewWidth?, maxDimension? }`                                          |
 | Output     | `{ rawPath, reviewPath, raw: { width, height }, review: { width, height } }`               |
 | Failure    | Empty or non-PNG payload — checked against the PNG magic bytes before the file is written. |
-| Transports | `adb`; `sailfish` by a different mechanism (§14 Q6)                                        |
+| Transports | both; on the `ssh` attach route a blank frame is not detected (§14 Q6)                     |
 
 Implements what `scripts/hil-screenshot-evidence.mjs` does today: `exec-out screencap -p` captured as a
 buffer, written to `raw/<name>.png`, then a downscaled `review/<name>-review.png` at 480 px wide with a
@@ -524,7 +517,7 @@ nothing, which happens on a busy device.
 | Input      | `{ targetId, name?, settleTimeoutMs?, attempts? }`                   |
 | Output     | `{ xmlPath, nodeCount, screen: { width, height } }`                  |
 | Failure    | No `<hierarchy` root after N attempts; dump wedged past the timeout. |
-| Transports | `adb`; `sailfish` unknown (§14 Q5)                                   |
+| Transports | `adb`; `ssh` on the container adb route only (§14 Q5)               |
 
 The retry and settle logic is not optional. `droidmindClient.ts:213-267` retries three times, polls the
 dump file size until it stops changing, and enforces a hard per-call deadline, all because a wedged
@@ -564,7 +557,7 @@ The MP4 `ftyp` box is checked on pull, mirroring `scripts/validate-android-emula
 | Input      | `{ targetId, name?, mode: "dump" \| "clear", lines?, format?, package?, tags?, filters? }` |
 | Output     | `{ logPath, lineCount, matchedCount, matches }`                                            |
 | Failure    | Buffer larger than the configured cap; adb timeout.                                        |
-| Transports | `adb`; `sailfish` established but by a different command (§5.3)                            |
+| Transports | both                                                                                       |
 
 `mode: "clear"` is `logcat -c`, used before a measured window at `scripts/run-device-switch-soak.mjs:90`
 and `scripts/run-pixel4-c64u-soak.mjs:335`. `mode: "dump"` is `logcat -d` with an optional `-t <lines>`
@@ -594,7 +587,7 @@ See §9 for the semantics. Summarised here for the surface:
 | Input      | `{ targetId, name, match: { resourceId?, text?, textPattern?, contentDesc?, className? }, requireEnabled?, requireOnScreen?, timeoutMs? }`          |
 | Output     | `{ passed, matches: [{ resourceId, text, contentDesc, className, bounds, enabled, onScreen, rejectedBy }], evidence: { xmlPath, screenshotPath } }` |
 | Failure    | Never throws for a false assertion — `passed: false` with evidence is the result. Throws only when the hierarchy cannot be captured.                |
-| Transports | `adb`; `sailfish` follows `ui_hierarchy`                                                                                                            |
+| Transports | `adb`; `ssh` follows `ui_hierarchy`                                                                                                                 |
 
 `assert_not_visible` is the same tool with the sense inverted, and it is not a convenience: the one check
 that catches a whole-app crash is a negative assertion on "Something went wrong", because both `App.tsx`
@@ -606,7 +599,7 @@ and `PageErrorBoundary.tsx` render that exact title.
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | Input      | `{ targetId, waitForBoot?, dismissKeyguard?, stayOn?, disableAnimations?, requireNativeGeometry?, timeoutMs? }`              |
 | Output     | `{ bootCompleted, keyguardShowing, stayOn, sizeOverride, densityOverride, resumedActivity, focusedWindow, animationScales }` |
-| Transports | `adb`; `sailfish` partial                                                                                                    |
+| Transports | both                                                                                                                         |
 
 One tool for the readiness cluster that at least seven callers re-implement:
 
@@ -679,26 +672,27 @@ the missing setup step they all document in a comment.
 
 ### 8.15 Transport support matrix
 
-| Tool                                               | `adb` | `sailfish`                                                             |
-| -------------------------------------------------- | ----- | ---------------------------------------------------------------------- |
-| `droid_target.list_targets`                        | yes   | needs a connection method — §14 Q2, Q4                                 |
-| `droid_target.describe_target`                     | yes   | partial — panel geometry is known, `wm size` availability is not       |
-| `droid_app.install_app`                            | yes   | likely via `apkd-install` — §14 Q3                                     |
-| `droid_app.uninstall_app` / `clear_app_data`       | yes   | unknown — §14 Q3                                                       |
-| `droid_app.launch_app` / `stop_app`                | yes   | likely via `appsupport-attach /system/bin/am` — §14 Q4                 |
-| `droid_app.write_app_file` / `read_app_file`       | yes   | unknown — `run-as` inside the container is untested                    |
-| `droid_input.*`                                    | yes   | unknown, and the biggest gap — §14 Q5                                  |
-| `droid_capture.screenshot`                         | yes   | likely, by the lipstick D-Bus call — §14 Q6                            |
-| `droid_capture.ui_hierarchy`                       | yes   | unknown; known to fail under `appsupport-attach` — §5.3, §14 Q5        |
-| `droid_capture.start_recording` / `stop_recording` | yes   | no direct equivalent; VNC capture is the candidate — §14 Q7            |
-| `droid_capture.logcat`                             | yes   | **established** via `appsupport-attach /system/bin/logcat`             |
-| `droid_assert.*`                                   | yes   | follows `ui_hierarchy`                                                 |
-| `droid_device.prepare_device`                      | yes   | partial                                                                |
-| `droid_device.run_shell`                           | yes   | established via `appsupport-attach`, with the exit-code caveat in §5.3 |
-| `droid_device.forward_webview`                     | yes   | unknown — §14 Q9                                                       |
-| `droid_device.push_file` / `pull_file`             | yes   | likely via `scp` plus a container copy                                 |
+| Tool                                               | `adb` | `ssh`, `container-adb` | `ssh`, `container-attach`                                         |
+| -------------------------------------------------- | ----- | ---------------------- | ----------------------------------------------------------------- |
+| `droid_target.list_targets`                        | yes   | yes                    | yes                                                               |
+| `droid_target.describe_target`                     | yes   | yes                    | yes                                                               |
+| `droid_app.install_app`                            | yes   | yes                    | yes, `pm install -S` with the APK on stdin; refused if stdin is not passed through |
+| `droid_app.uninstall_app` / `clear_app_data`       | yes   | yes                    | yes                                                               |
+| `droid_app.start_app` / `stop_app`                 | yes   | yes                    | yes                                                               |
+| `droid_app.write_app_file` / `read_app_file`       | yes   | yes                    | yes; `write_app_file` refused if stdin is not passed through      |
+| `droid_input.*`                                    | yes   | yes                    | refused: exit 0 is not evidence of an injected event (§5.3)       |
+| `droid_capture.screenshot`                         | yes   | yes                    | yes, PNG signature checked; a blank frame is not detected         |
+| `droid_capture.ui_hierarchy`                       | yes   | yes                    | refused: observed to exit 0 without writing a dump (§5.3)         |
+| `droid_capture.start_recording` / `stop_recording` | yes   | yes                    | refused: needs a detached adb shell that stops gracefully         |
+| `droid_capture.logcat`                             | yes   | yes                    | yes                                                               |
+| `droid_assert.*`                                   | yes   | yes                    | refused, follows `ui_hierarchy`                                   |
+| `droid_device.prepare_device`                      | yes   | yes                    | yes                                                               |
+| `droid_device.run_shell`                           | yes   | yes                    | yes                                                               |
+| `droid_device.forward_webview`                     | yes   | yes                    | refused: the DevTools socket is abstract, inside the container    |
+| `droid_device.push_file` / `pull_file`             | yes   | yes                    | yes; a push needs stdin and is verified by the reported byte count |
 
-"Unknown" is reported at runtime as `unsupported_on_transport`, never approximated.
+A refusal is `unsupported_on_transport`, and its message names what the `container-adb` route is
+missing on that target. `droidctl://reference/transport-support` serves this matrix from the code.
 
 ---
 
@@ -918,9 +912,13 @@ These are covered by one manual script, `droidctl/scripts/smoke-device.mjs`, run
 named target and producing an artifact bundle. It is not a merge gate: `tools/hil/merge_gate.mjs` already
 is one, and a second device gate doubles rig contention for no new signal.
 
-**Nothing on the Sailfish transport can be verified here.** No such device is on the bench, and
-`AGENTS.md:1004-1015` forbids gating on one. The stub is unit-tested to return `transport_unavailable`
-and nothing more is claimed.
+**The `ssh` transport is tested against a scripted phone, not hardware.** `tests/support/sshFakes.ts`
+answers the ssh, adb and tunnel traffic; `tests/sshTransport.test.ts` walks the detection order stage
+by stage and asserts both the reported prerequisite and that later stages did not run;
+`tests/sshParity.test.ts` runs the same tool calls through an adb target and through each route and
+compares the results; `tests/sshCommands.test.ts` runs the generated scripts and the two-layer quoting
+through a real local `sh` with stand-in commands. What these cannot show is how a real container
+answers, which is why every assumption from §5.3 is detected at runtime and reported by name (§14).
 
 ### 11.7 Coverage
 
@@ -999,65 +997,90 @@ updated, chiefly `AGENTS.md:715-725` and `docs/agentic/prompt.md:3`.
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | droidctl becomes a second place where adb behaviour is defined, and the two drift.                | Migrate in the order in §12 and delete the duplicated helper in the same change that replaces it.                                                                         |
 | The MCP hop adds latency that matters to a timing-sensitive harness.                              | §12.5 keeps those harnesses off droidctl. `commands.jsonl` records per-call duration so the overhead is measurable rather than assumed.                                   |
-| The Sailfish backend is specified and never built.                                                | It is explicitly not on the critical path (§7.4, §12), and the stub returns a probe procedure rather than pretending.                                                     |
-| A Sailfish implementation is written against the research in §5.3 and quietly does nothing.       | The exit-code-is-not-evidence rule in §7.4, plus the requirement that every capture verifies its artifact.                                                                |
+| A container build answers differently from what §5.3 describes.                                   | Nothing is assumed: each step of the detection order in §14 checks its prerequisite and reports it by id with the step that supplies it.                                   |
+| The attach route runs a command that quietly does nothing.                                        | The exit-code-is-not-evidence rule in §7.4, plus the requirement that every capture verifies its artifact.                                                                |
 | `@modelcontextprotocol/sdk` publishes a breaking major and droidctl inherits droidmind's failure. | A caret range in `droidctl/package.json` plus a committed `package-lock.json`, as `c64scope/package.json` already has. This is precisely the mitigation droidmind lacked. |
 | The assertion oracle passes on a page that is visibly broken.                                     | The `requireOnScreen` default in §9.2, which the repository does not have today, plus `assert_not_visible` for the error-boundary title.                                  |
 
 ---
 
-## 14. Open questions
+## 14. The `ssh` transport: questions and how the implementation answers them
 
-The Sailfish transport, in order of how much each blocks. Every one names the check that would settle it,
-so a future session with such a device can answer them without repeating the research.
+Q1 to Q9 were open questions about the container target. None of them can be settled in CI, so the
+implementation settles each one at runtime, on the phone it is connected to, and reports the answer:
+as the route in `droid_target.list_targets` and `droid_target.describe_target`, or as a missing
+prerequisite with a stable id and the step that supplies it. The full detection order, prerequisite
+list and configuration are in `droidctl/README.md` and served as `droidctl://reference/ssh-transport`.
 
-**Q1. Does the target device expose Sailfish developer mode at all?** The research could not reach the
-vendor's own pages, and the product is a deliberately locked-down build that blocks whole application
-categories at system level. Developer mode may be absent or modified. If it is absent, every path below
-except compositor-level VNC automation collapses. _Check:_ Settings — is there a "Developer tools" entry?
+**Q1. Does the phone expose a developer mode?** Detected as the SSH port answering. A refused
+connection is `developer-mode` ("enable developer mode, turn on remote (SSH) login and set the developer
+password, keep the phone unlocked"); silence or a routing error is `host-unreachable`, which also lists
+any USB network interface without an address (`usb-network-address`) or without a derivable phone
+address (`usb-network-peer`).
 
-**Q2. What are the connection details?** Sailfish's documented defaults are SSH as `defaultuser`,
-`192.168.2.15` over USB, a password set in the developer-mode settings page, and `devel-su` for root.
-Whether this build keeps them is unknown. _Check:_ `cat /etc/sailfish-release`, `echo $USER`,
-`command -v appsupport-attach apkd-install appsupport-config`.
+**Q2. What are the connection details?** Defaults: user `defaultuser`, port 22, and the address
+`192.168.2.15` when it lies in the subnet of a USB network interface bound to a USB gadget driver, plus
+neighbours with a locally administered MAC. All of them can be overridden with `DROIDCTL_SSH_*` or
+`ssh.json`, including the address when the phone's USB IP address setting was changed. Authentication
+is by key only; a refused key is `ssh-key` with the `ssh-copy-id` command, a changed host key is
+`ssh-host-key`. Root for the attach route comes from a uid-0 login, `sudo -n`, or `root@<host>` with the
+same key, in that order; none of those is `root-access`, with the one-time key copy from a `devel-su`
+shell. `devel-su` itself is never driven, because it needs a password typed at a terminal.
 
-**Q3. How is an APK installed?** `apkd-install <file.apk>` is well attested in community use but is not
-in Jolla's documentation, and the absolute path is unconfirmed. Whether
-`appsupport-attach /system/bin/pm install` is an acceptable substitute is also unknown — `apkd` performs
-host-side integration that a raw `pm install` would skip. _Check:_ run `apkd-install` on a test APK and
-see whether the app appears in the launcher; then try the `pm install` route and compare.
+**Q3. How is an APK installed?** On the `container-adb` route by `adb install`, exactly as on a phone.
+On the `container-attach` route by `pm install -S <bytes>` with the APK on stdin. The attach command
+must pass stdin into the container, which is not documented for every platform helper, so the probe
+sends a known line on stdin and reads it back; when it does not come back, `install_app`,
+`write_app_file` and `push_file` are refused on that route and say why. Installing through `pm` skips
+any launcher integration the platform's own installer adds; `start_app` does not depend on it.
 
-**Q4. Can an adb connection be made into the container?** One first-hand report describes enabling
-Developer Options inside AppSupport, turning on wireless debugging, then `adb connect <ip>:5555` from the
-workstation. **This is the single highest-value question: a yes collapses Q5 through Q9**, because the
-existing `adb` backend then applies unchanged. It is unresolved whether the port is really 5555 or
-whether Android 13's random-port-plus-pairing-code wireless debugging applies. _Check:_ enable wireless
-debugging in the container, read the port from its dialog, then try both `adb connect` and `adb pair`.
+**Q4. Can an adb connection be made into the container?** This is the preferred route. The login probe
+reads the phone's `/proc/net/tcp` and `/proc/net/tcp6` without root; a listener on port 5555 is forwarded
+over SSH to `127.0.0.1:<free port>` and connected with `adb connect`. A configured
+`DROIDCTL_SSH_CONTAINER_ADB` endpoint is tried first, and adb ports the container announces in its own
+properties are tried after the attach route finds them. The outcomes are `adb-client` (no adb on the
+desktop), `container-adb-disabled` (nothing listening or the connection refused: enable Developer
+options, USB debugging and Wireless debugging inside the container), `container-adb-unauthorized`
+(accept the prompt; if none appears, add the desktop's adb public key to `/data/misc/adb/adb_keys`),
+`ssh-forwarding` and `container-adb-connect`. Wireless debugging that insists on a pairing code is
+paired once by hand (README) and then used through the configured endpoint.
 
-**Q5. Does `input` work inside the container?** `uiautomator` is known to fail under `appsupport-attach`
-while returning exit code 0, and `input` has never been tested by any source found. _Check:_ run
-`input tap` both over adb and under `appsupport-attach`, and compare `echo $?` against an observed screen
-change. Exit 0 is not evidence on this platform.
+**Q5. Does `input` work inside the container?** Over the `container-adb` route it is `adb shell input`,
+the same as on a phone. Over the attach route it is refused, together with `ui_hierarchy` and the
+assertions: `uiautomator dump` run through an attach command has been reported to exit 0 without writing
+a file, and an injected event has no artifact that would prove it landed. The refusal names what the
+`container-adb` route is missing on that phone.
 
-**Q6. Does a Sailfish-side screenshot capture Android window content?** Android apps are Wayland surfaces
-in the compositor, which argues for yes, but a hardware overlay or protected path could yield a black
-rectangle. An Android-side `screencap` would capture only the Android surface, which may be what an
-assertion wants. _Check:_ with the app on screen, take both captures and compare each against the panel.
+**Q6. Does a screenshot capture Android window content?** `screencap -p` runs inside the container on
+both routes, so it captures the Android surface. The PNG signature is checked; a blank frame is not
+detected, and the attach route's capability note says so.
 
-**Q7. How is a screen recording made?** There is no official CLI. The documented mechanism is a VNC
-server that grabs compositor frames on port 5900 with no authentication, reachable over the USB network
-or an SSH tunnel; community recorders wrap it with ffmpeg. Whether the stream renders Android windows is
-the same unknown as Q6. _Check:_ tunnel the port, record, and look at the output.
+**Q7. How is a screen recording made?** Only on the `container-adb` route, where `screenrecord` runs in a
+detached `adb shell` that `stop_recording` interrupts gracefully. The attach route refuses it, and
+compositor capture outside the container is out of scope.
 
-**Q8. Does the app's own logging reach the container's logcat?** `logcat` under `appsupport-attach` is
-vendor-documented and works. Whether the WebView console and the app's tags appear there is unconfirmed.
-_Check:_ run `logcat` while the app logs a known string.
+**Q8. Does the app's logging reach the container's logcat?** `logcat` runs inside the container on both
+routes, so the app's own tags are read where Android writes them. Whether the WebView console is among
+them depends on the app, not on the transport.
 
-**Q9. Can a port be forwarded to the WebView DevTools socket?** It is an abstract Unix socket in the
-container's network namespace. Reaching it needs either the container's own `adb forward` or a
-namespace-aware relay. _Check:_ after Q4, try the ordinary `adb forward`.
+**Q9. Can a port be forwarded to the WebView DevTools socket?** On the `container-adb` route by
+`adb forward tcp:N localabstract:webview_devtools_remote_<pid>`, which reaches the abstract socket in
+the container's namespace because adbd runs there. The attach route refuses `forward_webview`.
 
-**Q10 (not Sailfish). Should droidctl own emulator lifecycle?** `scripts/android-emulator.sh` and the CI
+**Which container is attached to.** The configured `DROIDCTL_SSH_ATTACH_COMMAND` replaces detection.
+Otherwise each executable named `*-attach` in `/usr/bin`, `/usr/sbin`, `/bin` and `/sbin` is tried,
+then each LXC container found through its `[lxc monitor] <lxcpath> <name>` process, attached with that
+lxcpath, then each container `lxc-ls --running` lists. A candidate counts only when `getprop
+ro.build.version.sdk` run through it prints an integer; otherwise the result is `attach-command`, listing
+each candidate with its exit code and first line of output.
+
+**Whether the container is running.** The login probe looks for a `system_server` process in the host's
+process table, which needs no root. Absent is `android-container`. When `/proc` is mounted so that other
+users' processes are hidden, the state is recorded as unknown and detection continues, because the
+routes themselves then show whether Android answers. On the attach route a container whose
+`sys.boot_completed` is not `1` is listed as `booting`.
+
+**Q10 (not about the ssh transport). Should droidctl own emulator lifecycle?** `scripts/android-emulator.sh` and the CI
 workflow both start emulators. Bringing that under droidctl would let it refuse to enumerate a
 half-booted emulator as a target. Deferred: it is provisioning, which §3 puts out of scope, and the
 argument for changing that is not yet strong enough.

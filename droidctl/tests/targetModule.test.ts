@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { FakeTransport, defaultTarget } from "../src/transport/fake.js";
 import { SshTransport } from "../src/transport/ssh.js";
 import { createTestContext, invoke, withDeviceDefaults } from "./support/harness.js";
+import { FakeSshSystem, usbPhone } from "./support/sshFakes.js";
 
 describe("droid_target.list_targets", () => {
   it("returns every target with transport, state and emulator flag", async () => {
@@ -27,22 +28,41 @@ describe("droid_target.list_targets", () => {
 
   it("reports a failing transport per transport instead of hiding the working one", async () => {
     const transport = new FakeTransport();
-    const { ctx } = await createTestContext({ transport, extraTransports: [new SshTransport()] });
+    const system = new FakeSshSystem().addUsbInterface("usb0", { cidr: null });
+    const { ctx } = await createTestContext({ transport, extraTransports: [new SshTransport({ system })] });
 
     const result = await invoke("droid_target.list_targets", {}, ctx);
     expect(result.data.targets).toHaveLength(1);
-    expect(result.data.transportErrors).toEqual([
-      { transport: "ssh", message: expect.stringContaining("not implemented") },
-    ]);
+    expect(result.data.transportErrors).toEqual([{ transport: "ssh", message: expect.stringContaining("usb0") }]);
   });
 
   it("restricts enumeration when transports is given", async () => {
     const transport = new FakeTransport();
-    const { ctx } = await createTestContext({ transport, extraTransports: [new SshTransport()] });
+    const system = new FakeSshSystem().addUsbInterface("usb0", { cidr: null });
+    const { ctx } = await createTestContext({ transport, extraTransports: [new SshTransport({ system })] });
 
     const result = await invoke("droid_target.list_targets", { transports: ["ssh"] }, ctx);
     expect(result.data.targets).toEqual([]);
     expect(result.data.transportErrors).toHaveLength(1);
+    expect(transport.calls).toEqual([]);
+  });
+
+  it("lists an ssh target with its route and missing prerequisites beside adb targets", async () => {
+    const phone = usbPhone({ sshPort: { kind: "refused" } });
+    const { ctx } = await createTestContext({ extraTransports: [phone.transport()] });
+
+    const result = await invoke("droid_target.list_targets", {}, ctx);
+
+    expect(result.data.targets.map((target: { targetId: string }) => target.targetId)).toEqual([
+      "adb:TESTSERIAL01",
+      "ssh:defaultuser@192.168.2.15",
+    ]);
+    expect(result.data.targets[0]).not.toHaveProperty("route");
+    expect(result.data.targets[1]).toMatchObject({
+      state: "offline",
+      route: null,
+      missingPrerequisites: [{ id: "developer-mode", message: expect.stringContaining("developer mode") }],
+    });
   });
 });
 

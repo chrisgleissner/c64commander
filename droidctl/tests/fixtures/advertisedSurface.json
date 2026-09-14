@@ -777,7 +777,7 @@
   },
   {
     "name": "droid_target.describe_target",
-    "description": "Describe one target: build properties, screen geometry, and any wm size or wm density override. A leftover override from a small-screen audit fails input and clarity checks with no code fault, so it is reported here.",
+    "description": "Describe one target: build properties, screen geometry, and any wm size or wm density override. A leftover override from a small-screen audit fails input and clarity checks with no code fault, so it is reported here. An ssh target also reports connection: the route in use and, per route, the prerequisites that are missing.",
     "inputSchema": {
       "type": "object",
       "properties": {

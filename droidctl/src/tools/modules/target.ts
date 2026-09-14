@@ -44,12 +44,19 @@ export const targetModule = defineToolModule({
       name: "droid_target.describe_target",
       description:
         "Describe one target: build properties, screen geometry, and any wm size or wm density override. A leftover " +
-        "override from a small-screen audit fails input and clarity checks with no code fault, so it is reported here.",
+        "override from a small-screen audit fails input and clarity checks with no code fault, so it is reported here. " +
+        "An ssh target also reports connection: the route in use and, per route, the prerequisites that are missing.",
       argsSchema: describeTargetSchema,
       execute: defineExecute(describeTargetSchema, async (args, ctx) => {
         const handle = await resolveTarget(ctx, args.targetId);
         const description = await describeTarget(handle.transport, handle.target, handle.info);
-        return { ...description, state: handle.info.state, isEmulator: handle.info.isEmulator };
+        const connection = handle.transport.describeConnection?.(handle.target);
+        return {
+          ...description,
+          state: handle.info.state,
+          isEmulator: handle.info.isEmulator,
+          ...(connection === undefined ? {} : { connection }),
+        };
       }),
     },
   ],

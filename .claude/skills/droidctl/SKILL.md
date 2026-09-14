@@ -33,9 +33,9 @@ not just style:
 droid_target.list_targets           # every call needs a targetId; there is no default/fallback
 ```
 
-Pick the target whose `serial` matches the Pixel 4 in use (prefix `9B0` per AGENTS.md). A
-second transport is designed but not yet implemented and has no hardware to test against —
-see "What droidctl cannot do" below.
+Pick the target whose `serial` matches the Pixel 4 in use (prefix `9B0` per AGENTS.md). An
+`ssh:<user>@<host>` target is a Linux phone with an Android compatibility container on USB
+networking; see "The ssh transport" below.
 
 ## adb → droidctl translation table
 
@@ -86,18 +86,25 @@ command like `dumpsys wifi` unfiltered will get its overflow saved to a file by 
 rather than dumped inline. Narrow with shell filters (`grep`, `-t <lines>`, `filters`/`tags`
 on `logcat`) before running, not after hitting the limit.
 
+## The ssh transport
+
+An `ssh:` target reaches the container either through an adb tunnel (`route: "container-adb"`,
+every tool works) or through a container attach command (`route: "container-attach"`, input, UI
+hierarchy, assertions, recording and `forward_webview` are refused with the reason). A target with
+`route: null` refuses every tool with `transport_unavailable`; read `details.prerequisites` and
+follow the step each one names.
+
 ## What droidctl cannot do (yet) — these are the legitimate exceptions
 
 - **CDP JavaScript evaluation inside the app's WebView.** droidctl forwards the DevTools port
   (`droid_device.forward_webview`); it does not itself speak the CDP `Runtime.evaluate`
   protocol. Use `node scripts/bughunt-cdp.mjs eval '<expr>'` for that — see the `hil-attach`
   skill. This is the one place raw tooling outside droidctl is expected, not a loophole.
-- **A second, non-USB device transport.** droidctl's own design (`docs/plans/droidctl/spec.md`
-  §5.3/7.4) describes a transport reached over SSH rather than `adb`, but it is a
-  designed-but-unimplemented stub and no such device exists on this bench. There is nothing to
-  fall back to raw `ssh` FOR — that work is simply not runnable yet, the same way the keypad
-  handset isn't (AGENTS.md, "The hardware that exists"). Do not hand-write raw `ssh` commands
-  preemptively for it.
+- **Setting up an ssh target.** droidctl reports what is missing for a Linux phone with an
+  Android compatibility container (`missingPrerequisites` in `list_targets`, `connection` in
+  `describe_target`) but does not install SSH keys or enable developer options itself. The one-time
+  setup steps are in `droidctl/README.md`. Once a target lists with a `route`, drive it with the
+  same tools as any adb target, not with hand-written `ssh` commands.
 - **Locally-generated, git-ignored scratch scripts** under `docs/agentic/` (e.g.
   `hil-rc4/taptid.sh`) predate droidctl and still shell out to raw `adb input tap/swipe`
   internally. They're not shipped/versioned guidance — don't treat their existence as

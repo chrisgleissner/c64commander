@@ -8,7 +8,7 @@
 
 import { KEYCODES, KEYCODE_NAMES_BY_NUMBER } from "./keycodes.js";
 import { AdbTransport } from "./transport/adb.js";
-import { SshTransport, SSH_TRANSPORT_PROBES } from "./transport/ssh.js";
+import { ATTACH_ROUTE_SUPPORT, CONTAINER_ADB_ONLY, sshTransportReference } from "./transport/ssh.js";
 import type { TransportCapabilities } from "./transport/types.js";
 
 export interface ResourceDefinition {
@@ -19,24 +19,37 @@ export interface ResourceDefinition {
   readText: () => string;
 }
 
+/**
+ * One column per transport, or per route where a transport has several. A note
+ * comes from the first column that has one, which on this surface is the ssh
+ * attach route explaining a refusal.
+ */
 export function buildTransportMatrix(
-  adb: TransportCapabilities,
-  ssh: TransportCapabilities,
+  columns: Readonly<Record<string, TransportCapabilities>>,
 ): Record<string, Record<string, string>> {
-  const names = new Set([...Object.keys(adb.tools), ...Object.keys(ssh.tools)]);
+  const names = new Set(Object.values(columns).flatMap((capabilities) => Object.keys(capabilities.tools)));
   const matrix: Record<string, Record<string, string>> = {};
   for (const name of [...names].sort()) {
-    matrix[name] = {
-      adb: adb.tools[name] ?? "unknown",
-      ssh: ssh.tools[name] ?? "unknown",
-      ...(ssh.notes[name] ? { note: ssh.notes[name] } : {}),
-    };
+    const entry: Record<string, string> = {};
+    for (const [column, capabilities] of Object.entries(columns)) {
+      entry[column] = capabilities.tools[name] ?? "unknown";
+      const note = capabilities.notes[name];
+      if (note && entry["note"] === undefined) {
+        entry["note"] = note;
+      }
+    }
+    matrix[name] = entry;
   }
   return matrix;
 }
 
 function transportMatrix(): Record<string, Record<string, string>> {
-  return buildTransportMatrix(new AdbTransport().capabilities(), new SshTransport().capabilities());
+  const adb = new AdbTransport().capabilities();
+  return buildTransportMatrix({
+    adb,
+    "ssh/container-adb": { transport: "ssh", tools: adb.tools, notes: {} },
+    "ssh/container-attach": { transport: "ssh", tools: ATTACH_ROUTE_SUPPORT, notes: CONTAINER_ADB_ONLY },
+  });
 }
 
 export const resources: ResourceDefinition[] = [
@@ -50,16 +63,19 @@ export const resources: ResourceDefinition[] = [
   {
     uri: "droidctl://reference/transport-support",
     name: "Transport Support Matrix",
-    description: "Per-tool support for each transport. An unknown entry is reported at runtime, never approximated.",
+    description:
+      "Per-tool support for adb and for each ssh route. A refused tool is reported at runtime with its reason, never approximated.",
     mimeType: "application/json",
     readText: () => JSON.stringify(transportMatrix(), null, 2),
   },
   {
-    uri: "droidctl://reference/ssh-transport-probes",
-    name: "SSH Transport Probes",
-    description: "The open questions about the ssh transport, each with the check that would settle it.",
+    uri: "droidctl://reference/ssh-transport",
+    name: "SSH Transport",
+    description:
+      "How an Android container on a Linux phone is detected over SSH: the detection order, the routes, every " +
+      "prerequisite droidctl can report as missing, and the configuration variables.",
     mimeType: "application/json",
-    readText: () => JSON.stringify(SSH_TRANSPORT_PROBES, null, 2),
+    readText: () => JSON.stringify(sshTransportReference(), null, 2),
   },
   {
     uri: "droidctl://reference/targeting-rules",
