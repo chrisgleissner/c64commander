@@ -2077,6 +2077,9 @@ describe("connectionManager", () => {
       headers: { "content-type": "application/json" },
     });
 
+  const countLogs = (spy: ReturnType<typeof vi.spyOn>, message: string) =>
+    spy.mock.calls.filter((call) => call[1] === message).length;
+
   const reachOffline = async () => {
     const manager = await import("../../../src/lib/connection/connectionManager");
     localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
@@ -2088,6 +2091,24 @@ describe("connectionManager", () => {
     expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
     return manager;
   };
+
+  // A background probe's own /v1/info answer already promotes the connection through noteReachable.
+  // Promoting it a second time reset the interaction state again and cancelled the reads that the
+  // first promotion had just queued.
+  it("runs the connected transition once when a background probe finds the device", async () => {
+    const manager = await reachOffline();
+    // An address another test left on the simulated device would make the probe's answer count as that device.
+    getActiveMockBaseUrl.mockReturnValue(null);
+    const addLogSpy = vi.spyOn(logging, "addLog");
+    vi.mocked(fetch).mockResolvedValue(deviceAnswer());
+
+    await manager.discoverConnection("background");
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+    expect(countLogs(addLogSpy, "Connection switched to real device")).toBe(1);
+    addLogSpy.mockRestore();
+  });
 
   it("shows a connected device offline when it becomes unreachable, and ignores that in other states", async () => {
     const manager = await reachOffline();

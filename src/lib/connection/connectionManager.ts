@@ -1170,6 +1170,8 @@ const handleProbeOutcome = async (
     if (isSmokeModeEnabled()) {
       console.info("C64U_PROBE_OK", JSON.stringify({ trigger }));
     }
+    // The probe's own answer may already have promoted the connection (noteReachable).
+    if (snapshot.state === "REAL_CONNECTED") return;
     await transitionToRealConnected(trigger);
     return;
   }
@@ -1299,7 +1301,7 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
       const ok = await probeOnce({ signal: abort.signal });
       setSnapshot({ lastProbeAtMs: Date.now() });
       if (ok) {
-        if (!discoveryRun.isCurrent()) return;
+        if (!discoveryRun.isCurrent() || getConnectionSnapshot().state === "REAL_CONNECTED") return;
         setSnapshot({
           lastProbeSucceededAtMs: Date.now(),
           lastProbeError: null,
@@ -1378,7 +1380,7 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
       const ok = await probeOnce({ signal: abort.signal });
       if (cancelled) return;
       if (ok) {
-        if (!discoveryRun.isCurrent()) return;
+        if (!discoveryRun.isCurrent() || getConnectionSnapshot().state === "REAL_CONNECTED") return;
         setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
         addLog("info", "Discovery probe succeeded", { trigger });
         if (isSmokeModeEnabled()) {
