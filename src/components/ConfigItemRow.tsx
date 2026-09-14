@@ -433,6 +433,13 @@ export function ConfigItemRow({
 
   if (controlKind === "checkbox" && checkboxMapping) {
     const checked = String(displayValue).trim().toLowerCase() === checkboxMapping.checkedValue.trim().toLowerCase();
+    const commitChecked = (next: boolean) => {
+      if (isReadOnly) return;
+      const nextValue = next ? checkboxMapping.checkedValue : checkboxMapping.uncheckedValue;
+      setInputValue(String(nextValue));
+      lastCommittedRef.current = String(nextValue);
+      onValueChange(nextValue);
+    };
 
     return (
       <div
@@ -450,17 +457,21 @@ export function ConfigItemRow({
             {checked ? checkboxMapping.checkedValue : checkboxMapping.uncheckedValue}
           </span>
         </div>
-        <div className={layout === "horizontal" ? undefined : "self-start"}>
+        {/* The 18 px box alone was the whole touch target; this 44 px square around it takes the tap too. */}
+        <div
+          className={cn(
+            "-m-[13px] flex h-11 w-11 shrink-0 items-center justify-center",
+            layout !== "horizontal" && "self-start",
+          )}
+          onClick={(event) => {
+            if ((event.target as HTMLElement).closest('[role="checkbox"]') || isLoading || isItemLoading) return;
+            commitChecked(!checked);
+          }}
+        >
           <Checkbox
             checked={checked}
             disabled={isLoading || isItemLoading || isReadOnly}
-            onCheckedChange={(next) => {
-              if (isReadOnly) return;
-              const nextValue = next === true ? checkboxMapping.checkedValue : checkboxMapping.uncheckedValue;
-              setInputValue(String(nextValue));
-              lastCommittedRef.current = String(nextValue);
-              onValueChange(nextValue);
-            }}
+            onCheckedChange={(next) => commitChecked(next === true)}
             aria-label={`${displayLabel} checkbox`}
           />
         </div>

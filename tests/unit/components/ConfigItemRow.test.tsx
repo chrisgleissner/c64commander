@@ -135,6 +135,29 @@ describe("ConfigItemRow control selection + REST updates", () => {
     });
   });
 
+  // On the phone the 18 px box was the only touch target; a tap a few pixels beside it did nothing.
+  it("toggles a checkbox item from a tap in the 44 px square around the box, once", async () => {
+    const onValueChange = vi.fn();
+    renderWithQuery(
+      <ConfigItemRow
+        category="Test Category"
+        name="Menu Mouse Navigation"
+        value="Enabled"
+        options={["Disabled", "Enabled"]}
+        onValueChange={onValueChange}
+      />,
+    );
+
+    const target = screen.getByLabelText("Menu Mouse Navigation checkbox").parentElement as HTMLElement;
+    expect(target).toHaveClass("h-11", "w-11");
+    fireEvent.click(target);
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith("Disabled");
+
+    fireEvent.click(screen.getByLabelText("Menu Mouse Navigation checkbox"));
+    expect(onValueChange).toHaveBeenCalledTimes(2);
+  });
+
   it("renders a checkbox for On/Off and maps checked=On, unchecked=Off", async () => {
     renderWithQuery(
       <ConfigItemRow
