@@ -822,7 +822,7 @@ export default function SettingsPage() {
         } else {
           setReachabilitySuggestion(null);
           setHostnameError(
-            `We couldn’t reach “${nextHost}”. Make sure it’s powered on and on the same Wi‑Fi, or enter its IP address.`,
+            `We couldn’t reach “${nextHost}”. Make sure it’s powered on and on the same Wi‑Fi${/^[\d.]+$/.test(nextHost) ? "" : ", or enter its IP address"}.`,
           );
         }
         return;

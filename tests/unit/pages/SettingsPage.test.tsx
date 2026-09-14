@@ -853,6 +853,24 @@ describe("SettingsPage", () => {
     expect(mockSwitchSavedDevice).not.toHaveBeenCalled();
   }, 15000);
 
+  // Typing 192.168.1.248 was answered with "or enter its IP address", which the user had just done.
+  it("does not suggest entering an IP address when the unreachable host already is one", async () => {
+    mockEvaluateNewDeviceReachability.mockResolvedValue({
+      status: "unreachable",
+      suggestedAddress: null,
+      suggestedHostname: null,
+    });
+
+    renderSettingsPage();
+    fireEvent.change(screen.getByTestId("settings-device-host"), { target: { value: "192.168.1.248" } });
+    fireEvent.click(screen.getByRole("button", { name: /save & connect/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/couldn’t reach “192\.168\.1\.248”/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/enter its IP address/i)).not.toBeInTheDocument();
+  }, 15000);
+
   it("clears a previously-set unreachable-host error once manual refresh recovers the device (BUG-075)", async () => {
     mockEvaluateNewDeviceReachability.mockResolvedValueOnce({
       status: "unreachable",
