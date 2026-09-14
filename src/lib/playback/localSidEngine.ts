@@ -679,8 +679,8 @@ export class LocalSidEngine {
    * it here is the whole recovery: the next play reloads the module and opens the tune normally.
    * A worker that has stopped answering is not worth keeping.
    */
-  private discardWorker(reason: string): void {
-    addLog("warn", "Local SID engine: discarding a worker that cannot be used again", {
+  private discardWorker(reason: string, level: "info" | "warn" = "warn"): void {
+    addLog(level, "Local SID engine: discarding a worker that cannot be used again", {
       service: "local-sid",
       reason,
     });
@@ -941,9 +941,9 @@ export class LocalSidEngine {
   ): Promise<LocalSidPlayResult> {
     // A seek still running cannot be called off, and this `open` would queue behind all of it (8.8 s
     // after a pause on a Pixel 4; past the 15 s open timeout after scrub-then-skip), so start on a fresh
-    // worker. Renders are too short to matter.
+    // worker. Renders are too short to matter. Info: skipping during a seek is ordinary use.
     if (this.seekPending || this.seeksInFlight > 0) {
-      this.discardWorker("a new tune superseded an unfinished seek");
+      this.discardWorker("a new tune superseded an unfinished seek", "info");
     }
     await this.load();
     // A switchover ALWAYS starts from silence unless the listener has asked for

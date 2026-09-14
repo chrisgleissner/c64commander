@@ -24,6 +24,7 @@
 
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { LocalSidEngine, type LocalSidAudioSink, type LocalSidWorkerLike } from "@/lib/playback/localSidEngine";
+import { clearLogs, getLogs } from "@/lib/logging";
 import type { LocalSidMainToWorker, LocalSidWorkerToMain } from "@/lib/playback/localSidWorkerProtocol";
 import type { AudioScheduleSink, AudioScheduleSource } from "@/lib/playback/localSidChunkScheduler";
 
@@ -169,6 +170,21 @@ describe("LocalSidEngine — the seek gate", () => {
 
     expect(workers[0].terminated).toBe(true);
     expect(workers.length).toBe(2);
+  });
+
+  // Skipping to the next tune while a seek runs is ordinary use; the replaced worker was logged as a warning.
+  it("logs the worker replaced for a new tune at info", async () => {
+    const { engine, workers } = makeEngine();
+    await startTune(engine, workers);
+    clearLogs();
+
+    void engine.seekTo(200);
+    await vi.advanceTimersByTimeAsync(0);
+    engine.play(new ArrayBuffer(64), 0, {}).catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const discards = getLogs().filter((entry) => entry.message.startsWith("Local SID engine: discarding a worker"));
+    expect(discards.map((entry) => entry.level)).toEqual(["info"]);
   });
 
   // A pause stopped the tune while its worker was still seeking; the next tune's open then queued behind
