@@ -802,7 +802,10 @@ export function usePlaybackController({
       // affordance - the combined Play/Stop button derives its label from
       // isPlaying. Keep isPlaying true so Stop stays reachable and issues its
       // normal silence/reset through handleStop(). See HARD11-003.
-      const deviceStillPlaying = Boolean(currentItem && isSongCategory(currentItem.category));
+      // A tune on the phone is rendered only up to its songlength, so it ends here rather than playing on.
+      const endedOnPhone = currentPlaybackIsLocalRef.current;
+      if (endedOnPhone) getLocalSidPlayback().stop();
+      const deviceStillPlaying = !endedOnPhone && Boolean(currentItem && isSongCategory(currentItem.category));
       if (!deviceStillPlaying) {
         setIsPlaying(false);
         setIsPaused(false);
@@ -819,6 +822,7 @@ export function usePlaybackController({
     [
       autoAdvanceGuardRef,
       durationMs,
+      getLocalSidPlayback,
       playedClockRef,
       setAutoAdvanceDueAtMs,
       setElapsedMs,
@@ -2231,6 +2235,11 @@ export function usePlaybackController({
               },
             });
           }
+          // The finished tune must not stay open on the phone once the playlist has stopped here.
+          if (currentPlaybackIsLocalRef.current) {
+            getLocalSidPlayback().stop();
+            setCurrentPlaybackIsLocal(false);
+          }
           setIsPlaying(false);
           setIsPaused(false);
           trackStartedAtRef.current = null;
@@ -2244,6 +2253,8 @@ export function usePlaybackController({
     [
       cancelAutoAdvance,
       finishPlaylistPlayback,
+      getLocalSidPlayback,
+      setCurrentPlaybackIsLocal,
       playItem,
       traversalOrdering,
       shuffleSeed,

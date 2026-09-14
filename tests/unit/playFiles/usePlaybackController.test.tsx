@@ -2855,6 +2855,69 @@ describe("usePlaybackController", () => {
         );
         expect(setIsPlaying).toHaveBeenCalledWith(false);
       });
+
+      it("closes the finished tune on the phone when the playlist stops on a failed auto-advance", async () => {
+        enableLocal();
+        const controller = fakeController();
+        const trackInstanceIdRef = { current: 0 };
+        const autoAdvanceGuardRef = armedGuard(-1);
+        const playlist = [sidItem(psid), ultimateSid("two")];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          trackInstanceIdRef,
+          autoAdvanceGuardRef,
+        });
+        await act(async () => {
+          await result.current.playItem(playlist[0], { playlistIndex: 0 });
+        });
+        expect(controller.play).toHaveBeenCalledTimes(1);
+        controller.stop.mockClear();
+        autoAdvanceGuardRef.current = armedGuard(trackInstanceIdRef.current).current;
+        recordNetworkStatus({ online: true, supported: true });
+        recordNetworkStatus({ online: false, supported: true });
+
+        await act(async () => {
+          await result.current.handleNext("auto", trackInstanceIdRef.current);
+        });
+
+        // Left open, the finished tune's watchdog re-opened it after the playlist had stopped.
+        expect(controller.stop).toHaveBeenCalled();
+      });
+    });
+
+    // The C64 keeps a tune playing past its songlength; the phone renders only up to it. Left open at the
+    // end of the playlist, the engine went silent, called that a stall and re-opened the tune.
+    it("stops the phone's engine when the playlist ends on a tune it was playing", async () => {
+      enableLocal();
+      const controller = fakeController();
+      const trackInstanceIdRef = { current: 0 };
+      const autoAdvanceGuardRef = { current: null as unknown };
+      const setIsPlaying = vi.fn();
+      const playlist = [sidItem(psid)];
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        trackInstanceIdRef,
+        autoAdvanceGuardRef,
+        setIsPlaying,
+      });
+      await act(async () => {
+        await result.current.playItem(playlist[0], { playlistIndex: 0 });
+      });
+      controller.stop.mockClear();
+      setIsPlaying.mockClear();
+      autoAdvanceGuardRef.current = {
+        trackInstanceId: trackInstanceIdRef.current,
+        dueAtMs: 0,
+        autoFired: false,
+        userCancelled: false,
+      };
+
+      await act(async () => {
+        await result.current.handleNext("auto", trackInstanceIdRef.current);
+      });
+
+      expect(controller.stop).toHaveBeenCalled();
+      expect(setIsPlaying).toHaveBeenCalledWith(false);
     });
 
     it("falls a ROM-dependent RSID back to the C64", async () => {
