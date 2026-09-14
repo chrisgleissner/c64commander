@@ -338,7 +338,8 @@ and script builders), `sshPrerequisites.ts` (every message the transport can rep
 Two routes into the container, preferred in this order:
 
 1. **`container-adb`.** An ssh process forwards `127.0.0.1:<free port>` on the desktop to the
-   container's adbd, `adb connect` attaches to it, and every operation is delegated to the `adb` backend
+   container's adbd (the port is never in 5554-5585, where the adb server looks for emulators and would
+   list the tunnel a second time), `adb connect` attaches to it, and every operation is delegated to the `adb` backend
    with that serial. The `adb` transport leaves that serial out of its own listing, so the phone has one
    target id. Every tool is supported, with results identical to an ordinary adb target.
 2. **`container-attach`.** Commands run as root through the verified attach command:

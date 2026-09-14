@@ -90,7 +90,8 @@ and one for each ssh route.
 ### Routes
 
 - **`container-adb`** (preferred). droidctl opens an SSH port forward from `127.0.0.1:<free port>` on
-  this computer to the container's adb daemon, runs `adb connect` on it, and hands every operation to
+  this computer (never in 5554-5585, which the adb server scans for emulators) to the container's adb
+  daemon, runs `adb connect` on it, and hands every operation to
   the adb backend with that serial. Every tool is supported and its results match an ordinary adb
   target; `tests/sshParity.test.ts` runs the same tool calls through both and compares them. The adb
   transport leaves the tunnel's `127.0.0.1:<port>` serial out of its own listing, so the phone appears

@@ -51,6 +51,19 @@ export const FORWARD_POLL_MS = 100;
 export const ADB_STATE_WAIT_MS = 4_000;
 export const ADB_STATE_POLL_MS = 250;
 export const DEFAULT_CONTAINER_ADB_PORT = 5555;
+/** The adb server probes these localhost ports for emulators, so a tunnel there would be listed twice. */
+export const ADB_EMULATOR_PORTS = { first: 5554, last: 5585 } as const;
+export const PORT_ALLOCATION_ATTEMPTS = 64;
+
+export async function allocateTunnelPort(system: SshSystem): Promise<number | null> {
+  for (let attempt = 0; attempt < PORT_ALLOCATION_ATTEMPTS; attempt += 1) {
+    const port = await system.allocatePort();
+    if (port < ADB_EMULATOR_PORTS.first || port > ADB_EMULATOR_PORTS.last) {
+      return port;
+    }
+  }
+  return null;
+}
 
 export type SshRouteKind = "container-adb" | "container-attach";
 
@@ -302,7 +315,11 @@ export class HostProber {
       host: containerEndpoint.slice(0, separator),
       port: Number(containerEndpoint.slice(separator + 1)),
     };
-    const localPort = await system.allocatePort();
+    const localPort = await allocateTunnelPort(system);
+    if (localPort === null) {
+      const detail = `no free local port outside ${ADB_EMULATOR_PORTS.first}-${ADB_EMULATOR_PORTS.last} was found`;
+      return { kind: "failed", missing: sshForwarding(endpoint, containerEndpoint, detail) };
+    }
     const { handle, argv } = runner.spawnForward(targetId, endpoint, localPort, remote);
     const tunnel: Tunnel = {
       localPort,

@@ -234,6 +234,23 @@ describe("ssh detection order, stage by stage", () => {
     ]);
   });
 
+  it("stage 6: never binds a tunnel where the adb server looks for emulators, and says so when nothing else is free", async () => {
+    const phone = usbPhone({ listeners: ["00000000:15B3"], endpoints: { "127.0.0.1:5555": "device" } });
+    phone.system.nextPort = 5584;
+    const ssh = phone.transport();
+    const [target] = await ssh.listTargets();
+    expect(target!.route).toBe("container-adb");
+    expect([...phone.tunnels.keys()]).toEqual([5586]);
+    expect(ssh.ownsAdbSerial("127.0.0.1:5586")).toBe(true);
+
+    const cornered = usbPhone({ listeners: ["00000000:15B3"], endpoints: { "127.0.0.1:5555": "device" } });
+    cornered.system.allocatePort = async () => 5555;
+    const [blocked] = await cornered.transport().listTargets();
+    expect(ids(blocked!)[0]).toBe("ssh-forwarding");
+    expect(blocked!.missingPrerequisites![0]!.message).toContain("no free local port outside 5554-5585");
+    expect(cornered.tunnels.size).toBe(0);
+  });
+
   it("stage 6: a configured endpoint is tried before a detected one", async () => {
     const phone = usbPhone({ listeners: ["00000000:15B3"], endpoints: { "10.1.0.2:6000": "device" } });
     phone.system.env = { DROIDCTL_SSH_CONTAINER_ADB: "10.1.0.2:6000" };
