@@ -11,8 +11,8 @@ import { createMockC64Server, type MockC64Server } from "../../mocks/mockC64Serv
 
 /*
  * The connection manager and the network transitions run for real against the shared fake Ultimate.
- * Only the platform edge is replaced: the phone's network state, which the tests switch the way
- * Android reports it.
+ * Only the platform edges are replaced: the phone's network state, which the tests switch the way
+ * Android reports it, and the Live View session, which has no receiver in a test process.
  */
 
 let networkOnline = true;
@@ -64,6 +64,45 @@ vi.mock("../../../src/lib/secureStorage", () => ({
   getCachedPassword: vi.fn(() => null),
 }));
 
+const mirror = vi.hoisted(() => {
+  type Listener = (snapshot: { video: { state: string }; audio: { state: string } }) => void;
+  const listeners = new Set<Listener>();
+  const state = { video: "off", audio: "off" };
+  const emit = () =>
+    listeners.forEach((listener) => listener({ video: { state: state.video }, audio: { state: state.audio } }));
+  return {
+    state,
+    emit,
+    session: {
+      subscribe: (listener: Listener) => {
+        listeners.add(listener);
+        listener({ video: { state: state.video }, audio: { state: state.audio } });
+        return () => listeners.delete(listener);
+      },
+      get videoLive() {
+        return state.video === "live";
+      },
+      get audioLive() {
+        return state.audio === "live";
+      },
+      stopAll: async () => {
+        state.video = "off";
+        state.audio = "off";
+        emit();
+      },
+      startVideo: async () => {
+        state.video = "live";
+        emit();
+      },
+      startAudio: async () => {
+        state.audio = "live";
+        emit();
+      },
+    },
+  };
+});
+vi.mock("../../../src/lib/streams/avMirrorSession", () => ({ avMirrorSession: mirror.session }));
+
 const hostOf = (baseUrl: string) => new URL(baseUrl).host;
 
 const setNetwork = (online: boolean) => {
@@ -89,6 +128,8 @@ describe("following the phone on and off its network", () => {
     sessionStorage.clear();
     networkOnline = true;
     networkListener = null;
+    mirror.state.video = "off";
+    mirror.state.audio = "off";
     server.setReachable(true);
     server.setFaultMode("none");
     localStorage.setItem("c64u_device_host", hostOf(server.baseUrl));
@@ -166,5 +207,44 @@ describe("following the phone on and off its network", () => {
     await transitions.confirmDeviceUnreachable();
 
     expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+  });
+
+  it("puts Live View back on after the outage it was switched off for", async () => {
+    const { manager } = await connect();
+    mirror.state.video = "live";
+    mirror.emit();
+
+    setNetwork(false);
+    await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO"));
+    await vi.waitFor(() => expect(mirror.state.video).toBe("off"));
+
+    setNetwork(true);
+    await vi.waitFor(() => expect(mirror.state.video).toBe("live"), { timeout: 2000 });
+  });
+
+  it("counts Live View as on when its stream closed with the network a moment before the event", async () => {
+    const { manager } = await connect();
+    mirror.state.video = "live";
+    mirror.emit();
+    // The receiver socket closes as the interface goes away, ahead of the connectivity callback.
+    mirror.state.video = "off";
+    mirror.emit();
+
+    setNetwork(false);
+    await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO"));
+    setNetwork(true);
+
+    await vi.waitFor(() => expect(mirror.state.video).toBe("live"), { timeout: 2000 });
+  });
+
+  it("leaves Live View off after an outage when the user had turned it off", async () => {
+    const { manager } = await connect();
+
+    setNetwork(false);
+    await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO"));
+    setNetwork(true);
+    await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED"), { timeout: 2000 });
+
+    expect(mirror.state.video).toBe("off");
   });
 });
