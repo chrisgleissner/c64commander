@@ -63,7 +63,10 @@ interface Tile {
 const readSessionLabel = (): string | null => {
   const session = readStoredPlaybackSession();
   if (!session?.currentItemId) return null;
-  return typeof session.currentItemLabel === "string" ? session.currentItemLabel : null;
+  // "Chess", not "Chess.sid": in a 64 px tile the extension broke the name mid-word onto a second line.
+  return typeof session.currentItemLabel === "string"
+    ? session.currentItemLabel.replace(/\.[a-z0-9]{1,4}$/i, "")
+    : null;
 };
 
 export const useListenActions = (): ListenAction[] => {

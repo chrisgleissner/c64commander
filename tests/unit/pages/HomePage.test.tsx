@@ -2434,6 +2434,23 @@ describe("HomePage offline arrangement", () => {
     expect(recent.textContent).toBe("Recent");
   });
 
+  it("names the last tune without its file extension, so the name fits the tile on one line", () => {
+    localStorage.setItem(
+      "c64u_playback_session:v1",
+      JSON.stringify({
+        playlistKey: "c64u_playlist:v2:shared",
+        currentItemId: "ultimate:x:/Chess.sid",
+        currentItemLabel: "Chess.sid",
+      }),
+    );
+    try {
+      renderWithRouter(<HomePage />);
+      expect(screen.getByTestId("home-tile-action.resume-session").textContent).toBe("LastChess");
+    } finally {
+      localStorage.removeItem("c64u_playback_session:v1");
+    }
+  });
+
   it("keeps the Live View tile listed, disabled, rather than hiding it", () => {
     featureFlagsRef.current.live_view_enabled = true;
     renderWithRouter(<HomePage />);
