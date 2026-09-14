@@ -171,6 +171,39 @@ describe("LocalSidEngine — the seek gate", () => {
     expect(workers.length).toBe(2);
   });
 
+  // A pause stopped the tune while its worker was still seeking; the next tune's open then queued behind
+  // the rest of that seek and started 8.8 s late on a Pixel 4.
+  it("does not queue the next tune behind a seek that a stop left running", async () => {
+    const { engine, workers } = makeEngine();
+    await startTune(engine, workers);
+
+    void engine.seekTo(115);
+    await vi.advanceTimersByTimeAsync(0);
+    engine.stopPlayback();
+    engine.play(new ArrayBuffer(64), 0, {}).catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(workers[0].terminated).toBe(true);
+    expect(workers[0].sentOfType("open")).toHaveLength(1);
+  });
+
+  it("keeps the worker for the next tune once its seek has been answered", async () => {
+    const { engine, workers } = makeEngine();
+    await startTune(engine, workers);
+
+    const seek = engine.seekTo(10);
+    await vi.advanceTimersByTimeAsync(0);
+    const posted = workers[0].sentOfType("seek").at(-1) as { id: number };
+    workers[0].emit({ type: "seeked", id: posted.id });
+    await seek;
+    engine.stopPlayback();
+    engine.play(new ArrayBuffer(64), 0, {}).catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(workers[0].terminated).toBe(false);
+    expect(workers).toHaveLength(1);
+  });
+
   it("does not carry a stuck gate into the next tune", async () => {
     const { engine, workers } = makeEngine();
     await startTune(engine, workers);
@@ -182,7 +215,11 @@ describe("LocalSidEngine — the seek gate", () => {
 
     const play = engine.play(new ArrayBuffer(64), 0, {});
     await vi.advanceTimersByTimeAsync(0);
+    // The old worker is still inside that seek, so the new tune gets a worker of its own.
+    expect(workers[0].terminated).toBe(true);
     const worker = workers[workers.length - 1];
+    worker.emit({ type: "ready", moduleLoadMs: 1 });
+    await vi.advanceTimersByTimeAsync(0);
     const opens = worker.sentOfType("open");
     worker.emit({
       type: "opened",

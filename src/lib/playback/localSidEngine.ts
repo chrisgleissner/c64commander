@@ -532,6 +532,8 @@ export class LocalSidEngine {
   /** Bumped per seek so chunks rendered for a superseded position are dropped. */
   private seekEpoch = 0;
   private seekPending: { id: number; resolve: () => void } | null = null;
+  /** Seeks the worker is still inside. A stop reopens the gate but cannot call a seek off. */
+  private seeksInFlight = 0;
   private channels = 2;
   private nextId = 1;
   private activeId = 0;
@@ -684,6 +686,7 @@ export class LocalSidEngine {
     });
     this.worker?.terminate();
     this.worker = null;
+    this.seeksInFlight = 0;
     this.moduleReady = false;
     this.loadPending = null;
     this.loadInFlight = null;
@@ -936,17 +939,12 @@ export class LocalSidEngine {
     songIndex: number,
     callbacks: LocalSidPlayCallbacks = {},
   ): Promise<LocalSidPlayResult> {
-    // A seek still running belongs to a tune nobody is listening to any more, and it cannot be
-    // called off: seeking reloads the tune and fast-forwards to the target, so a seek near the end
-    // of a long one re-emulates minutes of C64 in a single call the worker cannot interrupt. The
-    // queue is strictly ordered, so this tune's `open` would wait all of it out — on a Pixel 4,
-    // scrub-then-skip spent longer there than the open's own 15 s timeout allows, and the track
-    // change was lost with the worker written off as unresponsive.
-    //
-    // A new tune inherits nothing from the old one, so start clean rather than queue behind it.
-    // Renders do not get this treatment: there are at most a handful, each a fraction of a second
-    // of audio, and a device that could not clear them faster than that could not play at all.
-    if (this.seekPending) this.discardWorker("a new tune superseded an unfinished seek");
+    // A seek still running cannot be called off, and this `open` would queue behind all of it (8.8 s
+    // after a pause on a Pixel 4; past the 15 s open timeout after scrub-then-skip), so start on a fresh
+    // worker. Renders are too short to matter.
+    if (this.seekPending || this.seeksInFlight > 0) {
+      this.discardWorker("a new tune superseded an unfinished seek");
+    }
     await this.load();
     // A switchover ALWAYS starts from silence unless the listener has asked for
     // a crossfade. Zero (the default) is a hard cut.
@@ -1234,6 +1232,7 @@ export class LocalSidEngine {
         return;
       }
       case "seeked": {
+        this.seeksInFlight = Math.max(0, this.seeksInFlight - 1);
         if (this.seekPending?.id !== message.id) return;
         const pending = this.seekPending;
         this.seekPending = null;
@@ -1587,6 +1586,7 @@ export class LocalSidEngine {
           resolve();
         },
       };
+      if (this.worker) this.seeksInFlight += 1;
       this.worker?.postMessage({ type: "seek", id, positionSeconds: target });
     });
 
@@ -2092,6 +2092,7 @@ export class LocalSidEngine {
         this.pump();
       },
     };
+    this.seeksInFlight += 1;
     this.worker.postMessage({ type: "seek", id, positionSeconds: seconds });
   }
 
