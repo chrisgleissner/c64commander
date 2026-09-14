@@ -7,11 +7,15 @@ codecov:
 # Codecov reads as 0.91% rather than 91%, so every patch passed however little of
 # it was covered: PR #412 was reported at 89.94% patch coverage with a green
 # check. The intent was 91%; the requirement is now 94%.
+#
+# The project target is 88%: Vitest 4 counts executable lines and branches the way
+# istanbul does, which moved the merged web report from about 94% to about 89% in
+# Codecov's line terms with no change in tests. See AGENTS.md, "Coverage gates".
 coverage:
   status:
     project:
       default:
-        target: 94%
+        target: 88%
         threshold: 0%
         informational: false
         if_not_found: success

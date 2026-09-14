@@ -61,7 +61,7 @@ describe("check-coverage-threshold", () => {
       });
 
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain("Line coverage below minimum threshold: 90.00% < 94%");
+      expect(result.stderr).toContain("Line coverage below minimum threshold: 90.00% < 93%");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
