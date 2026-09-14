@@ -137,6 +137,10 @@ const HVSC_EXTRACTION_STAGES = new Set([
 
 const HVSC_READY_MESSAGE = "Ready to use: Add items -> HVSC.";
 
+// A failure stored by an earlier attempt, loaded at launch, must not read as the new attempt failing.
+const withoutStoredFailure = (status: HvscStatus | null): HvscStatus | null =>
+  status?.ingestionState === "error" ? { ...status, ingestionState: "installing", ingestionError: null } : status;
+
 /**
  * @param hvscEnabled resolved `hvsc_enabled` flag (`shouldShowHvscControls(featureFlags)`), passed live
  *   so re-enabling resumes. HARD19-026: the background lifecycle (status/recover/hydration) must respect
@@ -732,6 +736,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
           setHvscProgress(0);
           setHvscStage(null);
           setHvscErrorMessage(null);
+          setHvscStatus(withoutStoredFailure);
           setHvscActionLabel("Checking for updates…");
           setHvscExtractionFiles(null);
           setHvscExtractionTotal(null);
@@ -901,6 +906,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
           setHvscProgress(0);
           setHvscStage(null);
           setHvscErrorMessage(null);
+          setHvscStatus(withoutStoredFailure);
           setHvscActionLabel("Ingesting cached HVSC…");
           setHvscExtractionFiles(null);
           setHvscExtractionTotal(null);

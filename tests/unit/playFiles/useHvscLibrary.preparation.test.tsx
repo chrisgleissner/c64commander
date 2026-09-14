@@ -223,6 +223,24 @@ describe("useHvscLibrary preparation state coverage", () => {
     await waitFor(() => expect(result.current.hvscPreparationState).toBe("DOWNLOADING"));
   });
 
+  // A download that failed when the phone left home was stored; the retry the next day then read
+  // "HVSC preparation failed" with that old reason for the whole of its run.
+  it("does not report a failure stored by an earlier attempt while a new install runs", async () => {
+    mocks.getHvscStatusMock.mockResolvedValue(
+      createStatus({ ingestionState: "error", ingestionError: "Software caused connection abort" }),
+    );
+    mocks.installOrUpdateHvscMock.mockImplementation(() => new Promise(() => undefined));
+    const { result } = renderHook(() => useHvscLibrary(true));
+    await waitFor(() => expect(result.current.hvscPreparationState).toBe("ERROR"));
+
+    act(() => {
+      void result.current.handleHvscInstall();
+    });
+
+    await waitFor(() => expect(result.current.hvscPreparationState).toBe("DOWNLOADING"));
+    expect(result.current.hvscPreparationErrorReason).toBeNull();
+  });
+
   it("reports NOT_PRESENT with no stage running when the bridge is unavailable", async () => {
     mocks.isHvscBridgeAvailableMock.mockReturnValue(false);
     mocks.isHvscIngestionBridgeAvailableMock.mockReturnValue(false);
