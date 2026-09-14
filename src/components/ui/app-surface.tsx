@@ -335,10 +335,12 @@ const AppDialogBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElem
   <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4", className)} {...props} />
 );
 
+// No navigation-bar inset here: resolveCenteredOverlayLayout already keeps a centred dialog above the
+// bar, and adding it again left a 64 px empty band under the buttons on a Pixel 4.
 const AppDialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex shrink-0 flex-col-reverse gap-2 border-t border-border px-4 pb-[calc(1rem+var(--safe-area-inset-bottom))] pt-3 sm:flex-row sm:justify-end",
+      "flex shrink-0 flex-col-reverse gap-2 border-t border-border px-4 pb-4 pt-3 sm:flex-row sm:justify-end",
       className,
     )}
     {...props}
