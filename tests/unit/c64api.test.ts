@@ -7,7 +7,7 @@
  */
 
 // @vitest-environment node
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CapacitorHttp } from "@capacitor/core";
 import {
   C64API,
@@ -1688,6 +1688,62 @@ describe("c64api", () => {
     expect(response["Audio Mixer"]?.items?.["Vol UltiSid 1"]).toBeDefined();
     expect(response["Audio Mixer"]?.items?.["Vol Master"]).toBeUndefined();
     expect(fetchMock.mock.calls.map((call) => call[0])).toEqual(["http://c64u/v1/configs/Audio%20Mixer"]);
+  });
+
+  // A request that gets no answer is how the app notices that a connected device has gone. The
+  // connection manager confirms it with probes; an HTTP error or a caller's abort is not that signal.
+  describe("unreachable device signal", () => {
+    let unregister: (() => void) | null = null;
+    const unreachable = vi.fn();
+
+    beforeEach(async () => {
+      unreachable.mockReset();
+      const { registerUnreachableListener } = await import("@/lib/connection/reachabilityEvents");
+      unregister = registerUnreachableListener(unreachable);
+    });
+
+    afterEach(async () => {
+      unregister?.();
+      const { resetNetworkStatusWatchForTests } = await import("@/lib/connection/networkStatusWatch");
+      resetNetworkStatusWatchForTests();
+    });
+
+    it("reports a request that got no answer", async () => {
+      getFetchMock().mockRejectedValue(new TypeError("Failed to fetch"));
+
+      await expect(new C64API("http://c64u").getInfo({ __c64uBypassCache: true })).rejects.toThrow();
+
+      expect(unreachable).toHaveBeenCalledWith("c64u", "rest");
+    });
+
+    it("does not report a device that answered with an error", async () => {
+      getFetchMock().mockResolvedValue(
+        new Response(JSON.stringify({ errors: ["boom"] }), {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+
+      await expect(new C64API("http://c64u").getInfo({ __c64uBypassCache: true })).rejects.toThrow();
+
+      expect(unreachable).not.toHaveBeenCalled();
+    });
+
+    it("does not report a request its caller aborted", async () => {
+      const controller = new AbortController();
+      getFetchMock().mockImplementation(
+        (_input: unknown, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+          }),
+      );
+
+      const pending = new C64API("http://c64u").getInfo({ __c64uBypassCache: true, signal: controller.signal });
+      controller.abort();
+
+      await expect(pending).rejects.toThrow();
+      expect(unreachable).not.toHaveBeenCalled();
+    });
   });
 
   it("covers runner and drive request helpers", async () => {

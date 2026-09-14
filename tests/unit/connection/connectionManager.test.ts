@@ -2071,4 +2071,36 @@ describe("connectionManager", () => {
 
     expect(vi.mocked(clearConnectivityErrorToastsForHost)).not.toHaveBeenCalled();
   });
+  const deviceAnswer = () =>
+    new Response(JSON.stringify({ product: "C64 Ultimate", errors: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+
+  const reachOffline = async () => {
+    const manager = await import("../../../src/lib/connection/connectionManager");
+    localStorage.setItem("c64u_device_host", "127.0.0.1:9999");
+    localStorage.removeItem("c64u_has_password");
+    vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+    await manager.initializeConnectionManager();
+    void manager.discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(9000);
+    expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    return manager;
+  };
+
+  it("shows a connected device offline when it becomes unreachable, and ignores that in other states", async () => {
+    const manager = await reachOffline();
+
+    await manager.noteDeviceUnreachable("network-lost");
+    expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+
+    vi.mocked(fetch).mockResolvedValue(deviceAnswer());
+    await manager.discoverConnection("background");
+    await vi.advanceTimersByTimeAsync(50);
+    expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+
+    await manager.noteDeviceUnreachable("not-answering");
+    expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+  });
 });

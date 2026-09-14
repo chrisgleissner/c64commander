@@ -59,4 +59,23 @@ describe("DeviceDiscoveryWeb", () => {
 
     expect(result).toEqual({ candidates: [], scannedHosts: 0, elapsedMs: 0, unsupported: true });
   });
+
+  // A browser reports "offline" reliably and "online" only as "an interface exists", so the way back
+  // is reported as unknown. The current answer comes first, or the first real change would be taken
+  // for a starting value and never counted as leaving the network.
+  it("reports the current network state on attach, then each browser offline and online event", async () => {
+    const statuses: Array<{ online: boolean; supported: boolean }> = [];
+    const handle = await new DeviceDiscoveryWeb().addListener("networkStatusChange", (status) => statuses.push(status));
+
+    window.dispatchEvent(new Event("offline"));
+    window.dispatchEvent(new Event("online"));
+    await handle.remove();
+    window.dispatchEvent(new Event("offline"));
+
+    expect(statuses).toEqual([
+      { online: true, supported: false },
+      { online: false, supported: true },
+      { online: true, supported: false },
+    ]);
+  });
 });

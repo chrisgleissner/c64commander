@@ -85,7 +85,7 @@ import { notifyConfigEnrichmentNamespaceChange } from "@/lib/c64api/configEnrich
 import { buildBinaryFingerprint } from "@/lib/binaryFingerprint";
 import { TransmissionGuard, type SupportedC64FileType, type TransmissionValidationContext } from "@/lib/fileValidation";
 import { collectTraceHeaders } from "@/lib/tracing/payloadPreview";
-import { notifyReachable } from "@/lib/connection/reachabilityEvents";
+import { notifyReachable, notifyUnreachable } from "@/lib/connection/reachabilityEvents";
 import { getLifecycleState } from "@/lib/appLifecycle";
 import { CapacitorHttp } from "@capacitor/core";
 import { buildCreateDiskPlan, type CreateDiskArgs, type CreateDiskPlan } from "@/lib/disks/createDisk";
@@ -1896,6 +1896,7 @@ export class C64API {
                   const cancelledAbort = isAbortLikeError(error) && !timedSignal.didTimeout();
                   const isAbort = isAbortLikeError(error) || timedSignal.didTimeout() || /timed out/i.test(rawMessage);
                   const isNetworkFailure = isNetworkFailureMessage(rawMessage);
+                  const transportFailure = (isNetworkFailure || timedSignal.didTimeout()) && !callerAborted;
                   const failure = classifyError(error);
                   const normalizedError =
                     !callerAborted && !superseded && (isAbort || isNetworkFailure)
@@ -1936,6 +1937,7 @@ export class C64API {
                       recordTraceError(action, error as Error, failure);
                     }
                   }
+                  if (transportFailure && !superseded && !cancelledAbort) notifyUnreachable(requestDeviceHost, "rest");
                   if (superseded) {
                     addLog("debug", "C64 API request failure ignored after routing change", {
                       method,

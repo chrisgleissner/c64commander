@@ -986,6 +986,13 @@ const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
   addLog("info", "Connection switched to offline", { trigger });
 };
 
+/** The network went away or the device stopped answering: show it offline until a probe finds it again. */
+export async function noteDeviceUnreachable(reason: "network-lost" | "not-answering") {
+  if (snapshot.state !== "REAL_CONNECTED") return;
+  addLog("info", "Connected device is out of reach; showing it as offline", { reason });
+  await transitionToOfflineNoDemo("background");
+}
+
 const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
   trigger !== "background" && !demoInterstitialShownThisSession;
 

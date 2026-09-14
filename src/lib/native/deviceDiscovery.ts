@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { registerPlugin } from "@capacitor/core";
+import { registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 
 export type NativeDeviceDiscoverySource = "hostname" | "lan-scan";
 
@@ -56,6 +56,11 @@ export type NativeNetworkStatus = {
 export type DeviceDiscoveryPlugin = {
   discover(options: NativeDeviceDiscoveryOptions): Promise<NativeDeviceDiscoveryResult>;
   getNetworkStatus(): Promise<NativeNetworkStatus>;
+  /** Fires when the platform's answer to `getNetworkStatus` changes, so a reconnect need not wait for a poll. */
+  addListener(
+    eventName: "networkStatusChange",
+    listener: (status: NativeNetworkStatus) => void,
+  ): Promise<PluginListenerHandle>;
 };
 
 export const DeviceDiscovery = registerPlugin<DeviceDiscoveryPlugin>("DeviceDiscovery", {

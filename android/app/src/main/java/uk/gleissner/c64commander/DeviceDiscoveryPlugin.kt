@@ -8,6 +8,13 @@
 
 package uk.gleissner.c64commander
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.LinkProperties
+import android.net.Network
+import android.net.NetworkRequest
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
@@ -94,6 +101,76 @@ class DeviceDiscoveryPlugin : Plugin() {
     }
   }
 
+  // Pushed rather than polled: without it, coming home waited for the next background probe,
+  // which backs off to a minute, and leaving home left the app talking to a device it could
+  // not reach. The status is re-read after a short settle, because Android reports a network
+  // before its addresses are in place and reports several callbacks per change.
+  private var networkCallback: ConnectivityManager.NetworkCallback? = null
+  private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+  private val networkStatusCheck = Runnable { publishNetworkStatusIfChanged() }
+  internal var lastPublishedOnline: Boolean? = null
+    private set
+  internal var onlineReader: () -> Boolean = { hasRoutableNetworkInterface() }
+  internal var networkStatusPublisher: (Boolean) -> Unit = { online ->
+    notifyListeners(NETWORK_STATUS_EVENT, JSObject().put("supported", true).put("online", online))
+  }
+
+  override fun load() {
+    super.load()
+    registerNetworkCallback()
+  }
+
+  override fun handleOnDestroy() {
+    networkCallback?.let { callback ->
+      try {
+        (context?.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager)
+          ?.unregisterNetworkCallback(callback)
+      } catch (error: Exception) {
+        AppLogger.warn(context, logTag, "Failed to unregister network callback", "DeviceDiscoveryPlugin", error)
+      }
+    }
+    networkCallback = null
+    mainHandler.removeCallbacks(networkStatusCheck)
+    super.handleOnDestroy()
+  }
+
+  private fun registerNetworkCallback() {
+    val manager = context?.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+    val callback =
+      object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) = scheduleNetworkStatusCheck()
+
+        override fun onLost(network: Network) = scheduleNetworkStatusCheck()
+
+        override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) =
+          scheduleNetworkStatusCheck()
+      }
+    try {
+      manager.registerNetworkCallback(NetworkRequest.Builder().build(), callback)
+      networkCallback = callback
+    } catch (error: Exception) {
+      AppLogger.warn(
+        context,
+        logTag,
+        "Failed to register for network changes; reconnection falls back to background probes",
+        "DeviceDiscoveryPlugin",
+        error,
+      )
+    }
+  }
+
+  internal fun scheduleNetworkStatusCheck() {
+    mainHandler.removeCallbacks(networkStatusCheck)
+    mainHandler.postDelayed(networkStatusCheck, NETWORK_STATUS_SETTLE_MS)
+  }
+
+  internal fun publishNetworkStatusIfChanged() {
+    val online = onlineReader()
+    if (online == lastPublishedOnline) return
+    lastPublishedOnline = online
+    networkStatusPublisher(online)
+  }
+
   // Answered inline rather than on `executor`: that executor is serialised behind a
   // LAN scan that may run for seconds, and a connectivity answer that late is useless.
   @PluginMethod
@@ -112,20 +189,13 @@ class DeviceDiscoveryPlugin : Plugin() {
 
   // A link-local (fe80::) or loopback address cannot reach an Ultimate, so an
   // interface holding only those is not a network the app can discover on.
-  internal fun hasRoutableAddress(interfaces: List<NetworkInterfaceSnapshot>): Boolean =
-    interfaces.any { snapshot ->
-      snapshot.isUp &&
-        !snapshot.isLoopback &&
-        snapshot.addresses.any { address ->
-          !address.isLoopbackAddress && !address.isLinkLocalAddress && !address.isAnyLocalAddress
-        }
-    }
+  internal fun hasRoutableAddress(interfaces: List<NetworkInterfaceSnapshot>): Boolean = routableAddressIn(interfaces)
 
   // Reported online on failure: a wrong "offline" would divert a user with real
   // hardware into the simulated device, which is worse than an unnecessary probe.
   private fun hasRoutableNetworkInterface(): Boolean =
     try {
-      hasRoutableAddress(readNetworkInterfaceSnapshots())
+      readsRoutableNetwork()
     } catch (error: Exception) {
       AppLogger.warn(
         context,
@@ -135,15 +205,6 @@ class DeviceDiscoveryPlugin : Plugin() {
         error,
       )
       true
-    }
-
-  private fun readNetworkInterfaceSnapshots(): List<NetworkInterfaceSnapshot> =
-    Collections.list(NetworkInterface.getNetworkInterfaces()).map { networkInterface ->
-      NetworkInterfaceSnapshot(
-        isUp = networkInterface.isUp,
-        isLoopback = networkInterface.isLoopback,
-        addresses = Collections.list(networkInterface.inetAddresses),
-      )
     }
 
   internal fun parseKnownHosts(call: PluginCall): List<String> {
@@ -563,5 +624,28 @@ class DeviceDiscoveryPlugin : Plugin() {
     // Leave headroom in the deadline for probes that are slower than the connect timeout
     // and for the completion loop itself.
     internal const val PROBE_BUDGET_PERCENT = 80
+    internal const val NETWORK_STATUS_EVENT = "networkStatusChange"
+    internal const val NETWORK_STATUS_SETTLE_MS = 250L
+
+    internal fun routableAddressIn(interfaces: List<NetworkInterfaceSnapshot>): Boolean =
+      interfaces.any { snapshot ->
+        snapshot.isUp &&
+          !snapshot.isLoopback &&
+          snapshot.addresses.any { address ->
+            !address.isLoopbackAddress && !address.isLinkLocalAddress && !address.isAnyLocalAddress
+          }
+      }
+
+    /** Whether the phone holds an address that can reach its LAN. Throws when the interfaces cannot be read. */
+    internal fun readsRoutableNetwork(): Boolean =
+      routableAddressIn(
+        Collections.list(NetworkInterface.getNetworkInterfaces()).map { networkInterface ->
+          NetworkInterfaceSnapshot(
+            isUp = networkInterface.isUp,
+            isLoopback = networkInterface.isLoopback,
+            addresses = Collections.list(networkInterface.inetAddresses),
+          )
+        },
+      )
   }
 }

@@ -49,3 +49,21 @@ export const registerReachabilityListener = (nextListener: ReachabilityListener)
     }
   };
 };
+
+type UnreachableListener = (host: string, source: ReachabilitySource) => void;
+
+let unreachableListener: UnreachableListener | null = null;
+
+/** A request to the device failed at the transport level: no answer, not an error answer. */
+export const notifyUnreachable = (host: string, source: ReachabilitySource) => {
+  unreachableListener?.(host, source);
+};
+
+export const registerUnreachableListener = (nextListener: UnreachableListener) => {
+  unreachableListener = nextListener;
+  return () => {
+    if (unreachableListener === nextListener) {
+      unreachableListener = null;
+    }
+  };
+};

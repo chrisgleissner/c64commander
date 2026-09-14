@@ -697,4 +697,25 @@ class DeviceDiscoveryPluginTest {
     assertTrue(resolved!!.getBoolean("supported"))
     assertTrue(resolved.has("online"))
   }
+
+  // Connectivity callbacks arrive several per change; the WebView is told only when the answer changes,
+  // so leaving and coming home each reach the app as one event.
+  @Test
+  fun `publishes network status changes and nothing in between`() {
+    var online = true
+    val published = mutableListOf<Boolean>()
+    plugin.onlineReader = { online }
+    plugin.networkStatusPublisher = { published.add(it) }
+
+    plugin.publishNetworkStatusIfChanged()
+    plugin.publishNetworkStatusIfChanged()
+    online = false
+    plugin.publishNetworkStatusIfChanged()
+    plugin.publishNetworkStatusIfChanged()
+    online = true
+    plugin.publishNetworkStatusIfChanged()
+
+    assertEquals(listOf(true, false, true), published)
+    assertEquals(true, plugin.lastPublishedOnline)
+  }
 }
