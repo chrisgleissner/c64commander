@@ -243,13 +243,44 @@ describe("useHvscLibrary progress coverage", () => {
     expect(result.current.hvscDownloadStatus).toBe("in-progress");
     expect(result.current.hvscSummaryState).not.toBe("failure");
     expect(mocks.addLogMock).toHaveBeenCalledWith(
-      "warn",
+      "info",
       "HVSC progress stale while work is still active",
       expect.objectContaining({
         ingestionState: "installing",
         downloadStatus: "in-progress",
       }),
     );
+  });
+
+  // A real HVSC install on a Pixel 4 logged this 52 times in two seconds: the effect runs on every status
+  // update, and the summary stays quiet for the whole indexing phase.
+  it("notes a quiet but active install once, not on every status update", async () => {
+    mocks.loadHvscStatusSummaryMock.mockReturnValue(
+      createSummary({
+        extraction: { status: "in-progress", startedAt: new Date(Date.now() - 30000).toISOString() },
+        lastUpdatedAt: new Date(Date.now() - 20000).toISOString(),
+      }),
+    );
+    // A fresh status object on every read, as the native side answers during an install.
+    mocks.getHvscStatusMock.mockImplementation(async () => createStatus({ ingestionState: "installing" }));
+
+    const { result, rerender } = renderHook(({ enabled }) => useHvscLibrary(enabled), {
+      initialProps: { enabled: true },
+    });
+    await waitFor(() => expect(result.current.hvscActionLabel).toBe("HVSC operation still running…"));
+    for (let render = 0; render < 5; render += 1) {
+      rerender({ enabled: false });
+      rerender({ enabled: true });
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+    expect(mocks.getHvscStatusMock.mock.calls.length).toBeGreaterThan(3);
+
+    const staleNotes = mocks.addLogMock.mock.calls.filter(
+      (call: unknown[]) => call[1] === "HVSC progress stale while work is still active",
+    );
+    expect(staleNotes).toHaveLength(1);
   });
 
   it("reflects download, extraction, indexing, and ready phases during install", async () => {

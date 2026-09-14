@@ -342,6 +342,7 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     hvscStatusSummary.extraction.status,
   ]);
 
+  const staleProgressNotedForRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     if (!hvscStatus) return;
     const summaryInProgress =
@@ -353,7 +354,11 @@ export const useHvscLibrary = (hvscEnabled: boolean): HvscLibraryState => {
     if (!summaryInProgress || !isStale) return;
     if (activeIngestion || activeHookIngestion) {
       setHvscActionLabel((prev) => prev ?? "HVSC operation still running…");
-      addLog("warn", "HVSC progress stale while work is still active", {
+      // Work that is running but quiet is not a fault, and this effect re-runs on every status update: note
+      // it once per quiet spell instead of flooding the log with a warning per render.
+      if (staleProgressNotedForRef.current === hvscStatusSummary.lastUpdatedAt) return;
+      staleProgressNotedForRef.current = hvscStatusSummary.lastUpdatedAt ?? null;
+      addLog("info", "HVSC progress stale while work is still active", {
         ingestionState: hvscStatus.ingestionState,
         activeToken: hvscActiveToken,
         downloadStatus: hvscStatusSummary.download.status,
