@@ -7,9 +7,18 @@
  */
 
 import { readStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
+import { getSelectedSavedDevice } from "@/lib/savedDevices/store";
 
+// Only a tune playing now names the snapshot, and a file on another Ultimate cannot be playing on this one:
+// a session paused on the C64 Ultimate hours earlier named a snapshot of a freshly reset Ultimate 64 "Chess.sid".
 export const getCurrentPlaybackSnapshotLabel = (): string | undefined => {
-  const label = readStoredPlaybackSession()?.currentItemLabel;
+  const session = readStoredPlaybackSession();
+  if (session?.isPlaying !== true || session.isPaused === true) return undefined;
+  const itemId = session.currentItemId ?? "";
+  if (itemId.startsWith("ultimate:") && !itemId.startsWith(`ultimate:${getSelectedSavedDevice()?.id}:`)) {
+    return undefined;
+  }
+  const label = session.currentItemLabel;
   if (typeof label !== "string") return undefined;
   const trimmed = label.trim();
   return trimmed || undefined;
