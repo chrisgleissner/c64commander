@@ -128,7 +128,8 @@ export function QuickActionCard({
         <span
           className={cn(
             "text-muted-foreground max-w-full",
-            compact ? "text-xs leading-tight text-center whitespace-normal break-words" : "text-xs",
+            // A word wider than the tile still has to split, but at a syllable with a hyphen, not as "connecte d".
+            compact ? "text-xs leading-tight text-center whitespace-normal break-words hyphens-auto" : "text-xs",
           )}
         >
           {description}

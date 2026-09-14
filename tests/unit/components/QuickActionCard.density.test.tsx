@@ -66,5 +66,9 @@ describe("QuickActionCard", () => {
     expect(screen.getByText("Readable secondary copy should wrap on compact displays").className).toContain(
       "break-words",
     );
+    // A word wider than the 64 px tile still splits, but at a hyphen: it read "connecte d" on a Pixel 4.
+    expect(screen.getByText("Readable secondary copy should wrap on compact displays").className).toContain(
+      "hyphens-auto",
+    );
   });
 });
