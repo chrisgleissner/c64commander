@@ -23,6 +23,7 @@ import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.io.RandomAccessFile
 import java.util.concurrent.atomic.AtomicBoolean
@@ -33,6 +34,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uk.gleissner.c64commander.hvsc.DefaultHvscArchiveExtractor
@@ -72,6 +74,9 @@ open class HvscIngestionPlugin : Plugin() {
     private const val MAX_DELETION_LIST_SIZE_BYTES = 10L * 1024 * 1024
     private const val MAX_ARCHIVE_CHUNK_SIZE_BYTES = 1024 * 1024
     private const val PART_FILE_SUFFIX = ".part"
+    private const val NETWORK_LOST_CODE = "NETWORK_LOST"
+    private const val NETWORK_LOSS_CHECKS = 20
+    private const val NETWORK_LOSS_CHECK_INTERVAL_MS = 50L
     private val UNSUPPORTED_SEVEN_Z_METHOD_PATTERN =
             Pattern.compile("Unsupported compression method \\[(.*?)\\]", Pattern.CASE_INSENSITIVE)
     /**
@@ -116,6 +121,16 @@ open class HvscIngestionPlugin : Plugin() {
   internal open fun readAvailableBytes(dir: File): Long = StatFs(dir.absolutePath).availableBytes
 
   internal open fun createResumableDownload(): HvscResumableDownload = HvscResumableDownload()
+
+  /** Overridable so a test can take the network away; an unreadable interface list counts as online. */
+  internal open fun hasRoutableNetwork(): Boolean = runCatching { DeviceDiscoveryPlugin.readsRoutableNetwork() }.getOrDefault(true)
+
+  // The socket dies as Wi-Fi goes down, a moment before the phone drops the address, so a
+  // failed transfer waits briefly to tell a lost network from a server fault.
+  private suspend fun awaitNetworkLoss(): Boolean {
+    repeat(NETWORK_LOSS_CHECKS) { if (hasRoutableNetwork()) delay(NETWORK_LOSS_CHECK_INTERVAL_MS) else return true }
+    return false
+  }
 
   internal open fun createArchiveExtractor(): HvscArchiveExtractor {
     return DefaultHvscArchiveExtractor { resolveBundledSevenZipExecutable() }
@@ -1007,6 +1022,12 @@ open class HvscIngestionPlugin : Plugin() {
               } catch (error: HvscDownloadCancelledException) {
                 call.reject("HVSC download cancelled", "CANCELLED")
               } catch (error: Exception) {
+                if (error is IOException && awaitNetworkLoss()) {
+                  val message = "HVSC archive download stopped because the phone lost its network"
+                  AppLogger.info(pluginContextOrNull(), logTag, message, "HvscIngestionPlugin", traceFields(call))
+                  call.reject(error.message ?: message, NETWORK_LOST_CODE, error)
+                  return@launch
+                }
                 AppLogger.error(
                         pluginContextOrNull(),
                         logTag,

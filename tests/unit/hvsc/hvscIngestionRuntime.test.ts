@@ -26,7 +26,7 @@ import {
   resetHvscLibraryData,
 } from "@/lib/hvsc/hvscIngestionRuntime";
 import { isUpdateApplied, loadHvscState, updateHvscState } from "@/lib/hvsc/hvscStateStore";
-import { fetchLatestHvscVersions } from "@/lib/hvsc/hvscReleaseService";
+import { HVSC_NO_NETWORK_MESSAGE, fetchLatestHvscVersions } from "@/lib/hvsc/hvscReleaseService";
 import { getHvscDurationByMd5, getHvscSongByVirtualPath, listHvscFolder } from "@/lib/hvsc/hvscFilesystem";
 import { getHvscIngestionRuntimeState } from "@/lib/hvsc/hvscIngestionRuntimeSupport";
 import { beginHvscInstallGuard, endHvscInstallGuard } from "@/lib/hvsc/hvscInstallGuard";
@@ -166,6 +166,7 @@ vi.mock("@/lib/hvsc/hvscSongLengthService", () => ({
 }));
 
 vi.mock("@/lib/hvsc/hvscReleaseService", () => ({
+  HVSC_NO_NETWORK_MESSAGE: "No internet connection. HVSC downloads from the internet.",
   buildHvscBaselineUrl: vi.fn(),
   buildHvscUpdateUrl: vi.fn(),
   fetchLatestHvscVersions: vi.fn(),
@@ -475,6 +476,17 @@ describe("hvscIngestionRuntime", () => {
       .find((patch) => patch?.ingestionSummary?.songlengthSyntaxErrors === 3);
     expect(summaryPatch?.ingestionState).toBe("ready");
     expect(summaryPatch?.ingestionSummary?.failedSongs).toBe(0);
+  });
+
+  // An install that stopped because the phone has no network is the phone's state, not a fault.
+  it("logs an install stopped by a missing network at info rather than as an error", async () => {
+    vi.mocked(fetchLatestHvscVersions).mockRejectedValueOnce(new Error(HVSC_NO_NETWORK_MESSAGE));
+
+    await expect(installOrUpdateHvsc("token-no-network")).rejects.toThrow(HVSC_NO_NETWORK_MESSAGE);
+
+    expect(vi.mocked(addLog)).toHaveBeenCalledWith("info", "HVSC install/update failed", expect.anything());
+    expect(vi.mocked(addLog)).not.toHaveBeenCalledWith("error", "HVSC install/update failed", expect.anything());
+    expect(vi.mocked(addErrorLog)).not.toHaveBeenCalledWith("HVSC install/update failed", expect.anything());
   });
 
   it("fails ingestion when songlength reload fails", async () => {

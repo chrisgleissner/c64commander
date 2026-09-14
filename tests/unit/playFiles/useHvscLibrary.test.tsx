@@ -439,6 +439,26 @@ describe("useHvscLibrary", () => {
     expect(result.current.hvscSummaryState).toBe("failure");
   });
 
+  // Walking out of Wi-Fi range mid-download is the phone's state: one calm notice, and no error.
+  it("reports a download stopped by a lost network as a neutral notice, not an error", async () => {
+    const { HVSC_NO_NETWORK_MESSAGE } = await import("@/lib/hvsc/hvscReleaseService");
+    mocks.installOrUpdateHvscMock.mockRejectedValueOnce(new Error(HVSC_NO_NETWORK_MESSAGE));
+    const { result } = renderHook(() => useHvscLibrary(true));
+
+    await act(async () => {
+      await result.current.handleHvscInstall();
+    });
+
+    expect(mocks.reportUserErrorMock).not.toHaveBeenCalled();
+    expect(mocks.addErrorLogMock).not.toHaveBeenCalled();
+    expect(mocks.toastMock).toHaveBeenCalledWith({
+      title: "HVSC download stopped",
+      description: HVSC_NO_NETWORK_MESSAGE,
+      alwaysVisible: true,
+    });
+    expect(result.current.hvscInlineError).toBe(HVSC_NO_NETWORK_MESSAGE);
+  });
+
   it("swallows structured cancelled install failures without surfacing a user error", async () => {
     mocks.installOrUpdateHvscMock.mockRejectedValueOnce(
       Object.assign(new Error("native cancellation"), { code: "HVSC_CANCELLED" }),
