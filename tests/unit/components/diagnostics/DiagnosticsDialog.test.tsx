@@ -359,6 +359,19 @@ describe("DiagnosticsDialog", () => {
     expect(screen.queryByTestId("filters-editor-surface")).toBeNull();
   });
 
+  // The chips looked tappable but were plain text; only a 24 px funnel at the end opened the editor.
+  it("opens the filter editor from a tap anywhere on the collapsed filter bar", () => {
+    setViewportWidth(393);
+
+    renderDialog();
+
+    const bar = screen.getByTestId("filters-collapsed-bar");
+    expect(bar.tagName).toBe("BUTTON");
+    expect(bar).toHaveClass("min-h-11");
+    fireEvent.click(within(bar).getByText("Filters"));
+    expect(screen.getByTestId("filters-editor-surface")).toBeVisible();
+  });
+
   it("shows Telnet filters and Telnet action badges in the evidence list", () => {
     setViewportWidth(600);
 

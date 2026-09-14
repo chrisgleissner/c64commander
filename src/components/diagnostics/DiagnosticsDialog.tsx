@@ -1858,9 +1858,13 @@ export function DiagnosticsDialog({
                 filter chips, which is not enough for one of them; `rounded-panel` is
                 indistinguishable from `rounded-full` at the one-line height this has
                 on every other screen, and stays a sane shape when it does wrap. */}
-            <div
-              className="mt-3 flex flex-wrap items-center gap-1.5 rounded-panel border border-border/70 bg-card px-2.5 py-1.5 text-xs"
+            {/* The whole bar opens the editor: its chips look tappable, and the funnel alone was a 24 px target. */}
+            <button
+              type="button"
+              className="mt-3 flex min-h-11 w-full flex-wrap items-center gap-1.5 rounded-panel border border-border/70 bg-card px-2.5 py-1.5 text-left text-xs"
               data-testid="filters-collapsed-bar"
+              aria-label="Edit filters"
+              onClick={() => setFiltersOpen(true)}
             >
               <span className="shrink-0 font-semibold text-foreground">Filters</span>
               <span className="shrink-0 text-muted-foreground">·</span>
@@ -1873,17 +1877,13 @@ export function DiagnosticsDialog({
                 ))}
                 {overflowChipCount > 0 ? <FilterChip label={`+${overflowChipCount}`} /> : null}
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="ml-auto h-6 w-6 shrink-0 p-0"
-                onClick={() => setFiltersOpen(true)}
+              <span
+                className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center"
                 data-testid="open-filters-editor"
               >
                 <Filter className="h-3.5 w-3.5" />
-              </Button>
-            </div>
+              </span>
+            </button>
 
             {/* Phase 2: Evidence list (immediately visible) */}
             <section className="mt-2 min-h-0 flex-1" data-testid="evidence-panel">
