@@ -1660,63 +1660,34 @@ describe("c64api", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("http://c64u/v1/configs/Audio%20Mixer");
   });
 
-  it("falls back to item endpoint when category payload misses requested keys", async () => {
+  // A device's category listing names every item it has. Firmware without "Vol Master" answers a
+  // request for it with 404, which was logged as an error on every Play page visit.
+  it("does not request an item that the category listing omits", async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/v1/configs/Audio%20Mixer")) {
         return Promise.resolve(
           new Response(
-            JSON.stringify({
-              "Audio Mixer": {
-                items: {
-                  "Vol UltiSid 1": { selected: "+6 dB" },
-                },
-              },
-              errors: [],
-            }),
-            {
-              status: 200,
-              headers: { "content-type": "application/json" },
-            },
-          ),
-        );
-      }
-      if (url.endsWith("/v1/configs/Audio%20Mixer/Vol%20Socket%201")) {
-        return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              "Audio Mixer": {
-                items: {
-                  "Vol Socket 1": { selected: "-3 dB" },
-                },
-              },
-              errors: [],
-            }),
-            {
-              status: 200,
-              headers: { "content-type": "application/json" },
-            },
+            JSON.stringify({ "Audio Mixer": { items: { "Vol UltiSid 1": { selected: "+6 dB" } } }, errors: [] }),
+            { status: 200, headers: { "content-type": "application/json" } },
           ),
         );
       }
       return Promise.resolve(
-        new Response(JSON.stringify({ errors: ["unexpected"] }), {
-          status: 500,
+        new Response(JSON.stringify({ errors: ["Could not find item"] }), {
+          status: 404,
           headers: { "content-type": "application/json" },
         }),
       );
     });
 
     const api = new C64API("http://c64u");
-    const response = await api.getConfigItems("Audio Mixer", ["Vol UltiSid 1", "Vol Socket 1"]);
+    const response = await api.getConfigItems("Audio Mixer", ["Vol UltiSid 1", "Vol Master"]);
 
     expect(response["Audio Mixer"]?.items?.["Vol UltiSid 1"]).toBeDefined();
-    expect(response["Audio Mixer"]?.items?.["Vol Socket 1"]).toBeDefined();
-    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
-      "http://c64u/v1/configs/Audio%20Mixer",
-      "http://c64u/v1/configs/Audio%20Mixer/Vol%20Socket%201",
-    ]);
+    expect(response["Audio Mixer"]?.items?.["Vol Master"]).toBeUndefined();
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual(["http://c64u/v1/configs/Audio%20Mixer"]);
   });
 
   it("covers runner and drive request helpers", async () => {

@@ -2328,11 +2328,14 @@ export class C64API {
         mergedItems[item] = cloneBudgetValue(cachedItems[item]);
       }
     });
+    // An item the category listing omits is one the device does not have; asking for it only earns a 404.
+    let categoryListed = false;
     try {
       const categoryPayload = await this.getCategory(category, {
         ...options,
         __c64uExpectedFailure: true,
       });
+      categoryListed = true;
       const payload = categoryPayload as Record<string, any>;
       const categoryBlock = payload?.[category] ?? payload;
       const itemsBlock = categoryBlock?.items ?? categoryBlock;
@@ -2390,7 +2393,9 @@ export class C64API {
     }
 
     const missingItems = uniqueItems.filter(
-      (item) => !Object.prototype.hasOwnProperty.call(mergedItems, item) || itemsNeedingEnrichment.has(item),
+      (item) =>
+        (!categoryListed && !Object.prototype.hasOwnProperty.call(mergedItems, item)) ||
+        itemsNeedingEnrichment.has(item),
     );
     if (!skipItemEnrichment && missingItems.length > 0) {
       const responses = await Promise.allSettled(
