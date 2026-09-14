@@ -612,7 +612,10 @@ const probeRest = async (
       throw error;
     }
     const msg = (error as Error).message;
-    addLog("warn", "Health check REST probe failed", { error: msg });
+    // Before the app has connected, requests are held back on purpose; that is not the device failing.
+    addLog(/device not ready for requests/i.test(msg) ? "info" : "warn", "Health check REST probe failed", {
+      error: msg,
+    });
     return {
       record: makeRecord("REST", "Fail", Date.now() - startMs, msg.slice(0, 80), startMs),
       deviceInfo: undefined,
