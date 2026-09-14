@@ -258,8 +258,11 @@ return JSON.stringify({audio:q("av-audio-toggle")?.getAttribute("aria-pressed"),
  * stages that do not need it — but the reason is on the record.
  */
 const silenceC64 = async () => {
-  // The phone first: it is the source a machine reset cannot reach.
-  await js(`(()=>{document.querySelector('[data-testid="playlist-pause"]')?.click();return 1})()`).catch(() => {});
+  // The phone first: it is the source a machine reset cannot reach. The button toggles, and on a session
+  // restored paused it read "Resume": clicking it started the C64 playing again instead of silencing anything.
+  await js(
+    `(()=>{const b=document.querySelector('[data-testid="playlist-pause"]');if(b?.getAttribute("aria-label")==="Pause")b.click();return 1})()`,
+  ).catch(() => {});
   try {
     const response = await fetch(`http://${HOST}/v1/machine:reset`, { method: "PUT", headers: authHeaders });
     if (!response.ok) throw new Error(`machine:reset -> HTTP ${response.status}`);
