@@ -182,6 +182,74 @@ describe("seeking inside a pre-rendered tune", () => {
     localStorage.clear();
   });
 
+  // A tune playing on the C64 is rendered here in case the network goes and it has to carry on on this phone.
+  describe("rendering a tune that is playing on the C64", () => {
+    const workers: FakeWorker[] = [];
+    const makeTrackedEngine = () => {
+      workers.length = 0;
+      const { sink, written: w } = makeSink();
+      written = w;
+      return new LocalSidEngine({
+        workerFactory: () => {
+          const created = new FakeWorker();
+          workers.push(created);
+          return created;
+        },
+        chunkSeconds: 0.5,
+        targetBufferSeconds: 1.0,
+        audioSinkFactory: (): LocalSidAudioSink => ({ sink, resume: vi.fn(), close: vi.fn() }),
+      });
+    };
+
+    it("starts the render before any tune has opened here, and a later open seeks inside it at once", async () => {
+      const engine = makeTrackedEngine();
+      engine.prerender("tune#0", new ArrayBuffer(8), 0, 30);
+      const renderThread = workers[0]!;
+      expect(renderThread.ofType("prerender")).toHaveLength(1);
+      const prerenderId = (engine as unknown as { prerenderId: number }).prerenderId;
+      renderThread.emit({
+        type: "prerender-chunk",
+        id: prerenderId,
+        pcm: renderedPcm(30),
+        sampleRate: SAMPLE_RATE,
+        channels: CHANNELS,
+        seconds: 30,
+      } as never);
+
+      const play = engine.play(new ArrayBuffer(8), 0, {}, "tune#0");
+      const playback = workers[1]!;
+      playback.emit({ type: "ready", moduleLoadMs: 1 });
+      await Promise.resolve();
+      playback.emit({ type: "opened", id: 1, sampleRate: SAMPLE_RATE, channels: CHANNELS, tuneInfo: {} } as never);
+      await play;
+      await engine.seekTo(20);
+
+      expect(engine.getStats().positionSeconds).toBeCloseTo(20, 1);
+      expect(written.length).toBeGreaterThan(0);
+      // Past the 30 s rendered so far the tune follows the render that is still running. Sending the live
+      // renderer there instead is a seek that re-renders the tune from the start, which the Pixel 4 took
+      // long enough over for its acknowledgement to time out.
+      expect(playback.ofType("seek")).toHaveLength(0);
+      expect((engine as unknown as { followingPrerender: boolean }).followingPrerender).toBe(true);
+    });
+
+    it("keeps a render that is already running for the same tune", async () => {
+      const engine = makeEngine();
+      const play = engine.play(new ArrayBuffer(8), 0, {}, "tune#0");
+      worker.emit({ type: "ready", moduleLoadMs: 1 });
+      await Promise.resolve();
+      worker.emit({ type: "opened", id: 1, sampleRate: SAMPLE_RATE, channels: CHANNELS, tuneInfo: {} } as never);
+      await play;
+      engine.prerender("tune#0", new ArrayBuffer(8), 0, 30);
+      const renderThread = warmWorker;
+
+      engine.prerender("tune#0", new ArrayBuffer(8), 0, 30);
+
+      expect(renderThread.terminated).toBe(false);
+      expect(renderThread.ofType("prerender")).toHaveLength(1);
+    });
+  });
+
   it("serves a seek from the buffer instead of asking the worker to re-render", async () => {
     const engine = makeEngine();
     await openAndCache(engine);
