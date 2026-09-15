@@ -25,6 +25,7 @@ import {
 import { isLocalPlaybackActive } from "@/lib/playback/activePlaybackSession";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 import { avMirrorSession, type AvMirrorSnapshot } from "@/lib/streams/avMirrorSession";
+import { stopLeftoverDeviceStreams } from "@/lib/streams/leftoverDeviceStreams";
 import { isNetworkKnownOffline, recordNetworkStatus, subscribeNetworkEdges } from "@/lib/connection/networkStatusWatch";
 import { readNativeNetworkStatus } from "@/lib/connection/offlineStartup";
 import { registerUnreachableListener } from "@/lib/connection/reachabilityEvents";
@@ -110,16 +111,21 @@ const resumeMirrorAfterOutage = () => {
   const { state } = getConnectionSnapshot();
   const reconnected = state === "REAL_CONNECTED" && lastConnectionState !== "REAL_CONNECTED";
   lastConnectionState = state;
+  if (!reconnected) return;
   const mirror = mirrorBeforeOutage;
-  if (!mirror || !reconnected) return;
   mirrorBeforeOutage = null;
   if (hasLiveAvMirror(readAvMirrorRetargetState())) return;
-  // A tune that carried on on the phone while away keeps the speaker; the C64's audio returns with the next track.
-  const audioWasLive = mirror.audioWasLive && !isLocalPlaybackActive();
-  restartAvMirrorAfterDeviceRetarget(
-    { ...mirror, audioWasLive },
-    getSavedDevicesSnapshot().selectedDeviceId ?? "selected",
-  );
+  void (async () => {
+    // The stop sent as the device went out of reach never arrived, so the device may still be streaming.
+    await stopLeftoverDeviceStreams();
+    if (!mirror || hasLiveAvMirror(readAvMirrorRetargetState())) return;
+    // A tune that carried on on the phone while away keeps the speaker; the C64's audio returns with the next track.
+    const audioWasLive = mirror.audioWasLive && !isLocalPlaybackActive();
+    restartAvMirrorAfterDeviceRetarget(
+      { ...mirror, audioWasLive },
+      getSavedDevicesSnapshot().selectedDeviceId ?? "selected",
+    );
+  })();
 };
 
 let confirmingUnreachable = false;
