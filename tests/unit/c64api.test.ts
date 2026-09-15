@@ -1814,6 +1814,23 @@ describe("c64api", () => {
       expect(unreachable).not.toHaveBeenCalled();
     });
 
+    // Closing the device switcher aborts its memory reads, which were logged as the device being unreachable.
+    it("reports a memory read its caller aborted as aborted rather than the host being unreachable", async () => {
+      const controller = new AbortController();
+      getFetchMock().mockImplementation(
+        (_input: unknown, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+          }),
+      );
+
+      const pending = new C64API("http://c64u").readMemory("00A2", 3, { signal: controller.signal });
+      controller.abort();
+
+      await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+      expect(unreachable).not.toHaveBeenCalled();
+    });
+
     it("treats a request that fails while the phone has no network as expected", async () => {
       const { recordNetworkStatus } = await import("@/lib/connection/networkStatusWatch");
       const traces = await import("@/lib/tracing/traceSession");

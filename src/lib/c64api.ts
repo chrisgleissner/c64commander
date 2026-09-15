@@ -2268,6 +2268,10 @@ export class C64API {
                 error: normalizedError,
               }),
             );
+            // A read the caller dropped, as closing the device switcher does, did not find the host unreachable.
+            if (callerAborted && !timedSignal.didTimeout()) {
+              throw annotateRestFailure(createAbortError(), "abort", { callerCancelled: true });
+            }
             if (isAbort || isNetworkFailure) {
               throw annotateRestFailure(
                 new Error(resolveHostErrorMessage(rawMessage)),
