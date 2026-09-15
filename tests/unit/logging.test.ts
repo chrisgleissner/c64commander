@@ -418,6 +418,20 @@ describe("logging", () => {
     vi.useRealTimers();
   });
 
+  // An error repeating four times a second on a Pixel 4 left nothing saved for minutes.
+  it("saves logs that keep arriving more often than the debounce window", () => {
+    vi.useFakeTimers();
+
+    for (let tick = 0; tick < 10; tick += 1) {
+      addLog("error", `repeating ${tick}`);
+      vi.advanceTimersByTime(250);
+    }
+
+    const written = JSON.parse(localStorage.getItem("c64u_app_logs") ?? "[]");
+    expect(written.length).toBeGreaterThanOrEqual(8);
+    vi.useRealTimers();
+  });
+
   it("recovers from a quota-exceeded write by halving the log count and retrying (HARD9-020)", () => {
     // vi.spyOn(localStorage, ...) does not reliably intercept calls made
     // from another module against jsdom's Storage implementation in this
