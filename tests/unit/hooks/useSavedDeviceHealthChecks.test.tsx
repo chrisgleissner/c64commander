@@ -542,6 +542,44 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(result.current.byDeviceId["device-office"]?.latestResult?.overallHealth).not.toBe("Unavailable");
   });
 
+  // After each switch the switcher showed the connected device as "Unavailable" with one problem.
+  it("keeps the last result of a device when the app held the check's requests back while connecting", async () => {
+    const heldBack = () => ({
+      ...makeResult("office"),
+      overallHealth: "Unavailable",
+      connectivity: "Offline" as const,
+      probes: {
+        ...makeResult("office").probes,
+        REST: {
+          probe: "REST" as const,
+          outcome: "Fail" as const,
+          durationMs: 1,
+          reason: "Device not ready for requests",
+          startMs: 1,
+        },
+      },
+    });
+    const switcher = renderSwitchHook();
+    await flushAsyncWork();
+    const previous = switcher.result.current.byDeviceId["device-office"]?.latestResult;
+    mockRunHealthCheckForTarget.mockImplementation(async () => heldBack());
+
+    await act(async () => {
+      switcher.result.current.refreshAll();
+    });
+    await flushAsyncWork();
+
+    expect(switcher.result.current.byDeviceId["device-office"]?.latestResult).toBe(previous);
+    switcher.unmount();
+
+    mockRunConnectivityProbeForTarget.mockImplementation(async () => heldBack());
+    const background = renderBackgroundHook();
+    await flushAsyncWork();
+
+    expect(background.result.current.byDeviceId["device-office"]?.latestResult).toBeNull();
+    expect(background.result.current.byDeviceId["device-office"]?.error).toBeNull();
+  });
+
   it("manual refresh forces a new all-device cycle before the next interval", async () => {
     const { result } = renderSwitchHook();
 

@@ -35,6 +35,11 @@ import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import type { SavedDevice } from "@/lib/savedDevices/store";
 import { buildSavedDevicePreferredRuntimeHost } from "@/lib/savedDevices/resolvedTarget";
 
+// A check whose requests the app held back while connecting says nothing about the device, so the last result
+// stays: the switcher showed the connected device as "Unavailable" with one problem after each switch.
+const heldBackByApp = (result: HealthCheckRunResult) =>
+  result.probes.REST.outcome === "Fail" && /device not ready for requests/i.test(result.probes.REST.reason ?? "");
+
 // F-DIAG-1 — saved-device probe cycle frequency.
 // Picker open (switchDeviceDialog): every 10 s so health refreshes are visible
 // during interaction.
@@ -395,14 +400,15 @@ export function useSavedDeviceHealthChecks(
               return;
             }
 
+            const heldBack = heldBackByApp(result);
             updateDevice(device.id, (current) => ({
               ...current,
               running: false,
-              latestResult: result,
+              latestResult: heldBack ? current.latestResult : result,
               liveProbes: null,
               probeStates: current.probeStates,
               lastCompletedAt: new Date().toISOString(),
-              lastObservedAt: result.endTimestamp,
+              lastObservedAt: heldBack ? current.lastObservedAt : result.endTimestamp,
               deferredReason: null,
               error: null,
             }));
@@ -563,16 +569,21 @@ export function useSavedDeviceHealthChecks(
           return getBackgroundHealthCadenceMs("healthy");
         }
 
+        const heldBack = heldBackByApp(result);
         updateDevice(selectedDevice.id, (current) => ({
           ...current,
           running: false,
-          latestResult: result,
+          latestResult: heldBack ? current.latestResult : result,
           liveProbes: null,
           probeStates: current.probeStates,
           lastCompletedAt: result.endTimestamp,
-          lastObservedAt: result.endTimestamp,
+          lastObservedAt: heldBack ? current.lastObservedAt : result.endTimestamp,
           deferredReason: null,
-          error: result.connectivity === "Offline" ? (result.probes.REST.reason ?? "Device not reachable") : null,
+          error: heldBack
+            ? current.error
+            : result.connectivity === "Offline"
+              ? (result.probes.REST.reason ?? "Device not reachable")
+              : null,
         }));
 
         return getBackgroundHealthCadenceMs(result.connectivity === "Offline" ? "recovery" : "healthy");
