@@ -58,6 +58,17 @@ describe("LocalSidPlaybackController", () => {
     expect(factory).toHaveBeenCalledTimes(1);
   });
 
+  it("loads the engine ahead of a play, and a failed load does not reject into the caller", async () => {
+    const engine = fakeEngine({ load: vi.fn(async () => Promise.reject(new Error("module load timed out"))) });
+    const controller = new LocalSidPlaybackController(() => engine);
+
+    expect(() => controller.preload()).not.toThrow();
+    await Promise.resolve();
+
+    expect(engine.load).toHaveBeenCalledTimes(1);
+    expect(engine.play).not.toHaveBeenCalled();
+  });
+
   it("reads the SID bytes and forwards them + song index to the engine", async () => {
     const engine = fakeEngine();
     const controller = new LocalSidPlaybackController(() => engine);

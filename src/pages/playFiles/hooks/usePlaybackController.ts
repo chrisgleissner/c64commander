@@ -83,6 +83,7 @@ import {
 } from "@/lib/playback/playbackEngineRouting";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
+import { useRemotePlaybackHandover } from "@/pages/playFiles/hooks/useRemotePlaybackHandover";
 import { firstPlayableWithoutDevice, isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
 import {
   resolveHvscDurationSecondsForSongNr,
@@ -2446,6 +2447,26 @@ export function usePlaybackController({
     },
     [playedClockRef, setPlayedMs, trackStartedAtRef, rescheduleAutoAdvance],
   );
+
+  useRemotePlaybackHandover({
+    playlistRef,
+    currentIndexRef,
+    isPlayingRef,
+    isPausedRef,
+    currentPlaybackIsLocalRef,
+    trackStartedAtRef,
+    durationMsRef,
+    isPlaying,
+    isPaused,
+    currentIndex,
+    localEngineActive,
+    durationMs,
+    getLocalSidPlayback,
+    resolveHvscRuntimeRequest,
+    resolveNextIndex: (from) => resolveReachableNextIndex(playlistRef.current, from).reachableIndex,
+    playItem,
+    seekBy: handleSeekBy,
+  });
 
   return {
     beginScrub,
