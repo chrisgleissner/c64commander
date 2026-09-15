@@ -9,6 +9,7 @@
 export {
   deriveDeviceCapabilities,
   detectStreamingFromConfig,
+  identifiedDeviceStreams,
   clearMachineInputCapabilityCacheForTests,
   probeMachineInputCapability,
   supportsMachineInput,

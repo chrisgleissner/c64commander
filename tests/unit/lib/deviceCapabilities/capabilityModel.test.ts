@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearMachineInputCapabilityCacheForTests,
+  identifiedDeviceStreams,
   deriveDeviceCapabilities,
   detectStreamingFromConfig,
   probeMachineInputCapability,
@@ -302,5 +303,15 @@ describe("deviceCapabilities — detectStreamingFromConfig", () => {
 
   it("accepts a flattened items map (category items keyed directly)", () => {
     expect(detectStreamingFromConfig({ "Stream VIC to": { selected: "239.0.1.64:11000" } })).toBe(true);
+  });
+});
+
+describe("identifiedDeviceStreams", () => {
+  it("rules out streaming only for a device whose identity says it has none", () => {
+    expect(identifiedDeviceStreams({ product: "Ultimate II+L", firmware_version: "3.15" })).toBe(false);
+    expect(identifiedDeviceStreams({ product: "C64 Ultimate", firmware_version: "1.2", core_version: "1.4F" })).toBe(
+      true,
+    );
+    expect(identifiedDeviceStreams(null)).toBe(true);
   });
 });

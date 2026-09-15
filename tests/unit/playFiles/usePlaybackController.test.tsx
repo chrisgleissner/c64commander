@@ -25,14 +25,16 @@ import {
 } from "@/lib/config/sidVolumeControl";
 
 const connectionStateOverride = vi.hoisted(() => ({ current: null as string | null }));
+const deviceInfoOverride = vi.hoisted(() => ({ current: undefined as Record<string, string> | undefined }));
 vi.mock("@/lib/connection/connectionManager", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/connection/connectionManager")>();
   return {
     ...actual,
-    getConnectionSnapshot: () =>
-      connectionStateOverride.current
-        ? { ...actual.getConnectionSnapshot(), state: connectionStateOverride.current }
-        : actual.getConnectionSnapshot(),
+    getConnectionSnapshot: () => ({
+      ...actual.getConnectionSnapshot(),
+      ...(connectionStateOverride.current ? { state: connectionStateOverride.current } : {}),
+      ...(deviceInfoOverride.current ? { deviceInfo: deviceInfoOverride.current } : {}),
+    }),
   };
 });
 
@@ -3373,6 +3375,18 @@ describe("playback and the Listen-on choice", () => {
     const { result } = renderPlaybackController([sidItem()], { currentIndex: 0 });
     await result.current.handlePlay();
     expect(avMirrorSession.startAudio).toHaveBeenCalled();
+  });
+
+  it("does not ask a device that cannot stream to start the mirror", async () => {
+    vi.mocked(avMirrorSession.startAudio).mockClear();
+    deviceInfoOverride.current = { product: "Ultimate II+L", firmware_version: "3.15" };
+    try {
+      const { result } = renderPlaybackController([sidItem()], { currentIndex: 0 });
+      await result.current.handlePlay();
+      expect(avMirrorSession.startAudio).not.toHaveBeenCalled();
+    } finally {
+      deviceInfoOverride.current = undefined;
+    }
   });
 
   it("leaves the mirror alone once the C64's own speakers have been chosen", async () => {

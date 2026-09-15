@@ -149,6 +149,17 @@ export const deriveDeviceCapabilities = (input: DeviceCapabilityInput = {}): Dev
 
 // Predicate accessors. UI feature gates consume these, never raw family literals.
 export const supportsStreaming = (capabilities: DeviceCapabilities): boolean => capabilities.supportsStreaming;
+
+/** Whether a device streams, judged from its `/v1/info` answer; a device not yet identified is not ruled out. */
+export const identifiedDeviceStreams = (
+  info: { product?: string | null; firmware_version?: string | null; core_version?: string | null } | null | undefined,
+): boolean =>
+  !info ||
+  deriveDeviceCapabilities({
+    product: info.product,
+    firmwareVersion: info.firmware_version,
+    coreVersion: info.core_version,
+  }).supportsStreaming;
 export const supportsMenuInput = (capabilities: DeviceCapabilities): boolean => capabilities.supportsMenuInput;
 export const supportsPowerCycle = (capabilities: DeviceCapabilities): boolean => capabilities.supportsPowerCycle;
 export const supportsMachineInput = (capabilities: DeviceCapabilities): boolean => capabilities.supportsMachineInput;

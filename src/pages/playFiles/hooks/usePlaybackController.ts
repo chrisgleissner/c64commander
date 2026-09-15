@@ -74,6 +74,7 @@ import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
+import { identifiedDeviceStreams } from "@/lib/deviceCapabilities";
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import {
   ENGINE_FALLBACK_MESSAGES,
@@ -1253,6 +1254,8 @@ export function usePlaybackController({
           if (
             featureFlagManager.getSnapshot().flags.audio_mirror_enabled &&
             loadMirrorC64Audio() &&
+            // An Ultimate II+L has no /v1/streams: asking it answered 404, logged twice as an error.
+            identifiedDeviceStreams(getConnectionSnapshot().deviceInfo) &&
             !avMirrorSession.audioLive
           ) {
             void avMirrorSession.startAudio().catch((error) => {
