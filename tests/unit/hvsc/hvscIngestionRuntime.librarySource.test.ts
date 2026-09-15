@@ -21,6 +21,8 @@ import {
 import { fetchLatestHvscVersions } from "@/lib/hvsc/hvscReleaseService";
 import { loadHvscState, saveHvscState, type HvscState } from "@/lib/hvsc/hvscStateStore";
 import { addLog } from "@/lib/logging";
+import { notifyHvscDemoLibraryRemoved } from "@/lib/hvsc/hvscDemoLibraryCleanup";
+import { removeDemoTunesFromPlaylist } from "@/lib/hvsc/hvscDemoPlaylistCleanup";
 import { getMd548PathIndexStats, rebuildMd548PathIndex, resetMd548PathIndex } from "@/lib/sidRadio/md5PathIndex";
 
 vi.mock("@capacitor/filesystem", () => ({
@@ -96,6 +98,9 @@ vi.mock("@/lib/hvsc/hvscBrowseIndexStore", () => ({
 }));
 
 vi.mock("@/lib/logging", () => ({ addErrorLog: vi.fn(), addLog: vi.fn() }));
+
+vi.mock("@/lib/hvsc/hvscDemoPlaylistCleanup", () => ({ removeDemoTunesFromPlaylist: vi.fn(async () => 1) }));
+vi.mock("@/lib/hvsc/hvscDemoLibraryCleanup", () => ({ notifyHvscDemoLibraryRemoved: vi.fn() }));
 
 const DEMO_BASE_URL = "http://127.0.0.1:41955/hvsc/per-boot-token/";
 const REAL_BASE_URL = "https://hvsc.example.test/HVSC/";
@@ -184,6 +189,9 @@ describe("hvscIngestionRuntime library source", () => {
 
     expect(resetLibraryRoot).toHaveBeenCalledTimes(1);
     expect(loadHvscState()).toMatchObject({ installedVersion: 83, ingestionState: "ready", librarySource: "real" });
+    // Its tunes went with it: a Demo Mode tune left in recently played answered "Song not found" when tapped.
+    expect(removeDemoTunesFromPlaylist).toHaveBeenCalledTimes(1);
+    expect(notifyHvscDemoLibraryRemoved).toHaveBeenCalledTimes(1);
   });
 
   it("empties the SID Radio md5 index when the library is reset", async () => {

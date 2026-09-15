@@ -175,6 +175,19 @@ export const resetHvscLibraryData = async (): Promise<void> => {
   await clearHvscLibraryData();
 };
 
+// Replaced by a real release, Demo Mode's tunes leave the playlist and recently played as when leaving Demo Mode.
+const forgetDemoLibraryTunes = async () => {
+  try {
+    const { removeDemoTunesFromPlaylist } = await import("./hvscDemoPlaylistCleanup");
+    await removeDemoTunesFromPlaylist();
+    (await import("./hvscDemoLibraryCleanup")).notifyHvscDemoLibraryRemoved();
+  } catch (error) {
+    addLog("warn", "Could not remove Demo Mode's tunes after replacing its HVSC library", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
 const clearHvscLibraryData = async () => {
   // HARD19-019: invalidate any in-flight metadata hydration BEFORE deleting the
   // index, so a long-running hydrator stops instead of re-persisting the browse
@@ -920,6 +933,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
     if (releaseUse === "discard-demo-library") {
       addLog("info", "Removing the HVSC library from Demo Mode before installing the real release", { baseUrl });
       await clearHvscLibraryData();
+      await forgetDemoLibraryTunes();
     }
     const current = loadHvscState();
     baselineInstalled = current.installedBaselineVersion ?? null;
