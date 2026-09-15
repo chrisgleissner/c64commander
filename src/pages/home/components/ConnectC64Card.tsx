@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { Wifi } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { t } from "@/lib/i18n";
 import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
 
@@ -21,6 +22,9 @@ import { requestSectionOpen } from "@/lib/ui/collapsibleSectionStore";
  */
 export const ConnectC64Card = () => {
   const navigate = useNavigate();
+  const { devices, selectedDeviceId } = useSavedDevices();
+  // A device that has connected before is out of reach, not missing; the app connects to it again by itself.
+  const knownDevice = Boolean(devices.find((device) => device.id === selectedDeviceId)?.lastSuccessfulConnectionAt);
 
   return (
     <section
@@ -30,13 +34,20 @@ export const ConnectC64Card = () => {
     >
       <h2 className="flex items-center gap-2 text-base font-semibold">
         <Wifi className="h-5 w-5 shrink-0 text-primary" aria-hidden />
-        {t("home.connect.title", "Connect a C64 Ultimate")}
+        {knownDevice
+          ? t("home.connect.awayTitle", "C64 Ultimate out of reach")
+          : t("home.connect.title", "Connect a C64 Ultimate")}
       </h2>
       <p className="text-sm text-muted-foreground">
-        {t(
-          "home.connect.body",
-          "Keep this device and your C64 Ultimate on the same network, with its network services on. Everything above works without one.",
-        )}
+        {knownDevice
+          ? t(
+              "home.connect.awayBody",
+              "It connects again by itself once this device is back on its network. Everything above works without it.",
+            )
+          : t(
+              "home.connect.body",
+              "Keep this device and your C64 Ultimate on the same network, with its network services on. Everything above works without one.",
+            )}
       </p>
       <div className="flex flex-wrap gap-2">
         <Button
@@ -45,9 +56,10 @@ export const ConnectC64Card = () => {
             requestSectionOpen("settings", "connection");
           }}
           data-testid="home-connect-c64-setup"
+          variant={knownDevice ? "outline" : "default"}
           className="min-h-11"
         >
-          {t("home.connect.setUp", "Set up a device")}
+          {knownDevice ? t("home.connect.settings", "Connection settings") : t("home.connect.setUp", "Set up a device")}
         </Button>
       </div>
     </section>
