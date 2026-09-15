@@ -17,6 +17,12 @@ import { readStoredPlaybackSession, writeStoredPlaybackSession } from "@/lib/pla
 import { getCurrentPlaybackSnapshotLabel } from "@/lib/snapshot/currentPlaybackSnapshotLabel";
 import { getLogs } from "@/lib/logging";
 
+const phone = vi.hoisted(() => ({ playing: false }));
+vi.mock("@/lib/playback/activePlaybackSession", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/playback/activePlaybackSession")>()),
+  isLocalPlaybackActive: () => phone.playing,
+}));
+
 const PLAYLIST_REPOSITORY_STORAGE_KEY = "c64u_playlist_repo:v1";
 
 /*
@@ -1625,6 +1631,63 @@ describe("usePlaybackPersistence", () => {
     expect(positionMs).toBeGreaterThanOrEqual(30_000);
     expect(positionMs).toBeLessThan(32_000);
     expect(result.current.elapsedMs).toBeGreaterThanOrEqual(30_000);
+  });
+
+  // A Chess II session playing on the phone came back after the app was restarted and launched the next tune on the C64.
+  it.each([
+    {
+      stillPlaying: false,
+      title: "restores a tune that was playing on the phone as paused after the app was restarted",
+    },
+    { stillPlaying: true, title: "keeps a tune still playing on the phone playing when the page only remounted" },
+  ])("$title", async ({ stillPlaying }) => {
+    phone.playing = stillPlaying;
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "hvsc",
+            path: "/MUSICIANS/Test/phone.sid",
+            name: "phone.sid",
+            sourceId: "hvsc-library",
+            addedAt: new Date().toISOString(),
+            durationMs: 120000,
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+    sessionStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: "hvsc:hvsc-library:/MUSICIANS/Test/phone.sid",
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 20000,
+        playedMs: 20000,
+        durationMs: 120000,
+        autoAdvanceDueAtMs: Date.now() + 100_000,
+        playingOnPhone: true,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => expect(result.current.isPlaying).toBe(true));
+    await waitFor(() => expect(result.current.isPaused).toBe(!stillPlaying));
+    expect(result.current.trackStartedAtRef.current === null).toBe(!stillPlaying);
+    phone.playing = false;
   });
 
   it("downgrades a stale playing session restore to paused instead of auto-advancing (HARD9-064)", async () => {

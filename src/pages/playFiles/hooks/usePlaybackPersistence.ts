@@ -26,6 +26,7 @@ import {
 } from "@/lib/playback/playbackSessionStore";
 import type { LocalPlayFile } from "@/lib/playback/playbackRouter";
 import { addErrorLog, addLog } from "@/lib/logging";
+import { isLocalPlaybackActive } from "@/lib/playback/activePlaybackSession";
 import { getPlaylistDataRepository } from "@/lib/playlistRepository";
 import type { PlaylistSessionRecord, TrackRecord } from "@/lib/playlistRepository";
 import { resolveStoredConfigOrigin } from "@/lib/config/playbackConfig";
@@ -451,6 +452,15 @@ export function usePlaybackPersistence({
     // user did not leave running. See HARD9-064.
     const staleActiveRestore =
       pending.isPlaying && !pending.isPaused && isPlaybackSessionRestoreStale(pending.updatedAt, now);
+    // A tune rendering on the phone ends with the app's process; restored as playing, its clock ran over silence and
+    // the next track launched by itself. A page that only remounted finds the phone still playing it.
+    const endedWithTheApp = pending.isPlaying && !pending.isPaused && pending.playingOnPhone === true;
+    const phoneStoppedRestore = !staleActiveRestore && endedWithTheApp && !isLocalPlaybackActive();
+    if (phoneStoppedRestore) {
+      addLog("info", "Restored a tune that was playing on this phone as paused; the app was restarted", {
+        playlistStorageKey,
+      });
+    }
     if (staleActiveRestore) {
       // The designed outcome for a session that is too old to trust, so not a warning.
       addLog("info", "Discarded stale active playback session restore; resuming paused", {
@@ -466,7 +476,7 @@ export function usePlaybackPersistence({
     });
     setCurrentIndex(matchedIndex);
     // A session that was playing kept playing while the page was away: the stored clock is from the moment it was written.
-    const activeRestore = pending.isPlaying && !pending.isPaused && !staleActiveRestore;
+    const activeRestore = pending.isPlaying && !pending.isPaused && !staleActiveRestore && !phoneStoppedRestore;
     const savedAtMs = Date.parse(pending.updatedAt ?? "");
     const sinceSavedMs = activeRestore && Number.isFinite(savedAtMs) ? Math.max(0, now - savedAtMs) : 0;
     const restoredElapsedMs = Math.max(0, pending.elapsedMs) + sinceSavedMs;
@@ -474,8 +484,8 @@ export function usePlaybackPersistence({
     setElapsedMs(restoredElapsedMs);
     setPlayedMs(restoredPlayedMs);
     setDurationMs(pending.durationMs);
-    setIsPlaying(staleActiveRestore ? true : pending.isPlaying);
-    setIsPaused(staleActiveRestore ? true : pending.isPaused);
+    setIsPlaying(staleActiveRestore || phoneStoppedRestore ? true : pending.isPlaying);
+    setIsPaused(staleActiveRestore || phoneStoppedRestore ? true : pending.isPaused);
     const restoredItem = playlist[matchedIndex];
     if (restoredItem && isSongCategory(restoredItem.category)) {
       setCurrentSubsongCount(restoredItem.subsongCount ?? null);
@@ -620,6 +630,7 @@ export function usePlaybackPersistence({
       shuffleEnabled,
       repeatEnabled,
       randomSeed: shuffleSeed,
+      playingOnPhone: isLocalPlaybackActive(),
       updatedAt: new Date().toISOString(),
     };
     writeStoredPlaybackSession(payload);
