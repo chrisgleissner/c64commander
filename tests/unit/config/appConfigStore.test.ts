@@ -45,6 +45,24 @@ describe("appConfigStore", () => {
     expect(loadInitialSnapshot("http://device")).toEqual(snapshot);
   });
 
+  // One configuration snapshot of about 26 KB was left behind per Demo Mode session, each under a new port.
+  it("keeps only the simulated device's current port in the snapshot and has-changes entries", () => {
+    const snapshot = { savedAt: "now", data: {} };
+    saveInitialSnapshot("http://127.0.0.1:38005", snapshot);
+    updateHasChanges("http://127.0.0.1:38005", true);
+    saveInitialSnapshot("http://192.168.1.13", snapshot);
+    updateHasChanges("http://192.168.1.13", true);
+
+    saveInitialSnapshot("http://127.0.0.1:43079", snapshot);
+    updateHasChanges("http://127.0.0.1:43079", false);
+
+    expect(loadInitialSnapshot("http://127.0.0.1:38005")).toBeNull();
+    expect(localStorage.getItem("c64u_has_changes:http://127.0.0.1:38005")).toBeNull();
+    expect(loadInitialSnapshot("http://127.0.0.1:43079")).toEqual(snapshot);
+    expect(loadInitialSnapshot("http://192.168.1.13")).toEqual(snapshot);
+    expect(loadHasChanges("http://192.168.1.13")).toBe(true);
+  });
+
   it("stores and updates has-changes flag with event dispatch", () => {
     const handler = vi.fn();
     window.addEventListener("c64u-has-changes", handler as EventListener);

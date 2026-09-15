@@ -44,6 +44,18 @@ describe("configEnrichmentCache", () => {
     });
   });
 
+  // The simulated device listens on a new loopback port each Demo Mode session; 34 dead bindings were found on a phone.
+  it("keeps only the binding for the simulated device's current port", () => {
+    rememberConfigEnrichmentNamespaceForHost("127.0.0.1:38005", "MOCK-C64U", "1.1.0");
+    rememberConfigEnrichmentNamespaceForHost("u64", "u64-id", "3.14e");
+
+    const namespaceKey = rememberConfigEnrichmentNamespaceForHost("127.0.0.1:43079", "MOCK-C64U", "1.1.0");
+
+    expect(loadConfigEnrichmentNamespaceForHost("127.0.0.1:38005")).toBeNull();
+    expect(loadConfigEnrichmentNamespaceForHost("127.0.0.1:43079")).toBe(namespaceKey);
+    expect(loadConfigEnrichmentNamespaceForHost("u64")).not.toBeNull();
+  });
+
   it("keeps device namespaces isolated per host binding", () => {
     const u64Namespace = rememberConfigEnrichmentNamespaceForHost("u64", "u64-id", "3.14e");
     const c64uNamespace = rememberConfigEnrichmentNamespaceForHost("c64u", "c64u-id", "1.1.0");

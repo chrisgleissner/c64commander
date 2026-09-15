@@ -7,6 +7,7 @@
  */
 
 import { addErrorLog, addLog } from "@/lib/logging";
+import { isLoopbackAddress, removeOtherLoopbackEntries } from "@/lib/storage/loopbackEntries";
 
 const CATEGORY_KEY_PREFIX = "c64u:configEnrichment:";
 const HOST_NAMESPACE_KEY_PREFIX = "c64u:configEnrichmentHost:";
@@ -140,6 +141,7 @@ const clearNamespacesForUniqueId = (uniqueId: string, keepNamespaceKey: string) 
 export const rememberConfigEnrichmentNamespaceForHost = (host: string, uniqueId: string, firmwareVersion: string) => {
   const namespaceKey = buildConfigEnrichmentNamespaceKey(uniqueId, firmwareVersion);
   clearNamespacesForUniqueId(uniqueId, namespaceKey);
+  if (isLoopbackAddress(host)) removeOtherLoopbackEntries(HOST_NAMESPACE_KEY_PREFIX, buildHostBindingKey(host));
   writeJson(buildHostBindingKey(host), {
     host,
     namespaceKey,

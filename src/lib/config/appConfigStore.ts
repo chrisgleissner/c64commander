@@ -7,6 +7,7 @@
  */
 
 import { ConfigResponse, buildBaseUrlFromDeviceHost, resolveDeviceHostFromStorage } from "@/lib/c64api";
+import { isLoopbackAddress, removeOtherLoopbackEntries } from "@/lib/storage/loopbackEntries";
 
 export type ConfigSnapshot = {
   savedAt: string;
@@ -54,13 +55,18 @@ export const loadInitialSnapshot = (baseUrl: string): ConfigSnapshot | null => {
 };
 
 export const saveInitialSnapshot = (baseUrl: string, snapshot: ConfigSnapshot) => {
-  localStorage.setItem(buildInitialSnapshotKey(baseUrl), JSON.stringify(snapshot));
+  const key = buildInitialSnapshotKey(baseUrl);
+  // One snapshot of the simulated device's configuration, about 26 KB, was left behind per Demo Mode session.
+  if (isLoopbackAddress(baseUrl)) removeOtherLoopbackEntries(INITIAL_SNAPSHOT_PREFIX, key);
+  localStorage.setItem(key, JSON.stringify(snapshot));
 };
 
 export const loadHasChanges = (baseUrl: string): boolean => localStorage.getItem(buildHasChangesKey(baseUrl)) === "1";
 
 export const updateHasChanges = (baseUrl: string, value: boolean) => {
-  localStorage.setItem(buildHasChangesKey(baseUrl), value ? "1" : "0");
+  const key = buildHasChangesKey(baseUrl);
+  if (isLoopbackAddress(baseUrl)) removeOtherLoopbackEntries(HAS_CHANGES_PREFIX, key);
+  localStorage.setItem(key, value ? "1" : "0");
   window.dispatchEvent(new CustomEvent("c64u-has-changes", { detail: { baseUrl, value } }));
 };
 
