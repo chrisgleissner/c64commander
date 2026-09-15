@@ -233,6 +233,27 @@ describe("seeking inside a pre-rendered tune", () => {
       expect((engine as unknown as { followingPrerender: boolean }).followingPrerender).toBe(true);
     });
 
+    // Chess II rendered 75 s before a tune on another device replaced its render; played again and carried on to
+    // the phone, it handed off to the live renderer at 75 s: "lead-in hand-off was not acknowledged".
+    it("renders a tune again whose earlier render was given up for another tune", () => {
+      const engine = makeTrackedEngine();
+      engine.prerender("tune#0", new ArrayBuffer(8), 0, 30);
+      workers[0]!.emit({
+        type: "prerender-chunk",
+        id: (engine as unknown as { prerenderId: number }).prerenderId,
+        pcm: renderedPcm(10),
+        sampleRate: SAMPLE_RATE,
+        channels: CHANNELS,
+        seconds: 10,
+      } as never);
+      engine.prerender("other#0", new ArrayBuffer(8), 0, 30);
+
+      engine.prerender("tune#0", new ArrayBuffer(8), 0, 30);
+
+      expect(workers.flatMap((thread) => thread.ofType("prerender"))).toHaveLength(3);
+      expect((engine as unknown as { prerenderKey: string | null }).prerenderKey).toBe("tune#0");
+    });
+
     it("keeps a render that is already running for the same tune", async () => {
       const engine = makeEngine();
       const play = engine.play(new ArrayBuffer(8), 0, {}, "tune#0");

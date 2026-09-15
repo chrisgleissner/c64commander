@@ -2378,9 +2378,9 @@ export class LocalSidEngine {
     // Remember which tune is open even when it is already cached, so a later
     // seek can find it.
     this.currentKey = key;
-    // Needs no playback worker, so a tune playing on the C64 can be rendered in case it moves here. A render
-    // already running for this key is kept: starting it again threw away what it had done.
-    if (this.renderCache.has(key) || this.isPrerendering(key) || seconds <= 0) return;
+    // Needs no playback worker, so a tune playing on the C64 can be rendered in case it moves here. A running
+    // render is kept, and a part left by a render given up for another tune is rendered again.
+    if (this.renderCache.get(key)?.partial === false || this.isPrerendering(key) || seconds <= 0) return;
     // No ROM guard. The worker renders a PSID with null images, so refusing here only emptied the
     // cache for anyone whose ROM capture had not succeeded — every seek re-rendered from the start.
     const roms = loadStoredRoms();
