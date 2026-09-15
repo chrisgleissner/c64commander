@@ -358,6 +358,20 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(result.current.byDeviceId[selectedDeviceId]?.error).toBeNull();
   });
 
+  // Coming home: the reconnect resets the request queue, which drops the probe waiting in it.
+  it("does not warn about, or record as offline, a background probe the app cancelled while reconnecting", async () => {
+    const { addLog } = await import("@/lib/logging");
+    mockRunConnectivityProbeForTarget.mockRejectedValue(
+      Object.assign(new Error("rest queued task cancelled: transition-real-connected"), { isCancellation: true }),
+    );
+    const { result } = renderBackgroundHook(buildSavedDevices());
+
+    await flushAsyncWork();
+
+    expect(addLog).not.toHaveBeenCalledWith("warn", "Saved-device background health check failed", expect.anything());
+    expect(result.current.byDeviceId[selectedDeviceId]?.error).toBeNull();
+  });
+
   it("records any other background probe failure as the device's error, with a warning", async () => {
     const { addLog } = await import("@/lib/logging");
     mockRunConnectivityProbeForTarget.mockRejectedValue(new Error("Connection refused"));

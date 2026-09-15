@@ -584,8 +584,10 @@ export function useSavedDeviceHealthChecks(
         const message = error instanceof Error ? error.message : String(error ?? "Saved-device health check failed");
         // A background probe that runs out of time behind the page's own requests is not the device failing;
         // an Ultimate II+L limited to one request at a time timed out here while it answered everything else.
-        const timedOut = /timed out/i.test(message);
-        addLog(timedOut ? "info" : "warn", "Saved-device background health check failed", {
+        // Nor is a queued probe the app dropped on purpose, as reconnecting does.
+        const cancelled = (error as { isCancellation?: boolean } | null)?.isCancellation === true;
+        const notTheDevice = /timed out/i.test(message) || cancelled;
+        addLog(notTheDevice ? "info" : "warn", "Saved-device background health check failed", {
           deviceId: selectedDevice.id,
           host: selectedDevice.host,
           error: message,
@@ -599,7 +601,7 @@ export function useSavedDeviceHealthChecks(
           lastObservedAt: current.lastObservedAt,
           deferredReason: null,
           // So a timeout keeps the last result: the switcher showed a connected, healthy device as Offline.
-          error: timedOut ? current.error : message,
+          error: notTheDevice ? current.error : message,
         }));
         return getBackgroundHealthCadenceMs("recovery");
       } finally {
