@@ -68,6 +68,10 @@ vi.mock("@/lib/connection/connectionManager", () => ({
 vi.mock("@/lib/connection/networkTransitions", () => ({
   installNetworkTransitions: () => () => undefined,
 }));
+// Carrying a tune on to the phone is covered in remoteTuneHandover.test.ts.
+vi.mock("@/lib/playback/remoteTuneHandover", () => ({
+  installRemoteTuneHandover: () => () => undefined,
+}));
 vi.mock("@/lib/connection/simulatedDeviceContent", () => ({
   installSimulatedDeviceContentCleanup: () => () => undefined,
 }));

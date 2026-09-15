@@ -2465,6 +2465,7 @@ export function usePlaybackController({
     localEngineActive,
     durationMs,
     getLocalSidPlayback,
+    setCurrentPlaybackIsLocal,
     resolveHvscRuntimeRequest,
     resolveNextIndex: (from) => resolveReachableNextIndex(playlistRef.current, from).reachableIndex,
     playItem,

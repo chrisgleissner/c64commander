@@ -7,11 +7,11 @@
  */
 
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
 const connection = vi.hoisted(() => ({ state: "REAL_CONNECTED", listeners: new Set<() => void>() }));
-const device = vi.hoisted(() => ({ host: "c64u", remotePlaying: true, machineReset: vi.fn(async () => undefined) }));
+const device = vi.hoisted(() => ({ remotePlaying: true }));
 
 vi.mock("@/lib/connection/connectionManager", () => ({
   getConnectionSnapshot: () => ({ state: connection.state }),
@@ -22,19 +22,18 @@ vi.mock("@/lib/connection/connectionManager", () => ({
 }));
 
 vi.mock("@/lib/c64api", () => ({
-  getC64API: () => ({ machineReset: device.machineReset }),
-  getC64APIConfigSnapshot: () => ({ deviceHost: device.host }),
+  getC64API: () => ({ machineReset: vi.fn(async () => undefined) }),
+  getC64APIConfigSnapshot: () => ({ deviceHost: "c64u" }),
 }));
 
 vi.mock("@/lib/playback/activePlaybackSession", () => ({
   isRemotePlaybackActive: () => device.remotePlaying,
-  markRemotePlaybackStopped: vi.fn(() => {
-    device.remotePlaying = false;
-  }),
+  markRemotePlaybackStopped: vi.fn(),
 }));
 
 vi.mock("@/lib/playback/localSidPlaybackController", () => ({
   LocalSidPlaybackController: { isSupported: () => true },
+  getSharedLocalSidPlaybackController: vi.fn(),
 }));
 
 vi.mock("@/lib/playback/playbackRouter", () => ({
@@ -44,9 +43,28 @@ vi.mock("@/lib/playback/playbackRouter", () => ({
 
 vi.mock("@/lib/logging", () => ({ addLog: vi.fn() }));
 
+const handedOverWithoutPage = vi.hoisted(() => ({ itemId: null as string | null }));
+vi.mock("@/lib/playback/remoteTuneHandover", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/playback/remoteTuneHandover")>();
+  return {
+    ...actual,
+    rememberRemoteTune: vi.fn(actual.rememberRemoteTune),
+    takeTuneHandedOverWithoutPage: () => {
+      const itemId = handedOverWithoutPage.itemId;
+      handedOverWithoutPage.itemId = null;
+      return itemId;
+    },
+  };
+});
+
 import { getRememberedUltimateSidBlob, tryFetchUltimateSidBlob } from "@/lib/playback/playbackRouter";
-import { markRemotePlaybackStopped } from "@/lib/playback/activePlaybackSession";
 import { addLog } from "@/lib/logging";
+import {
+  installRemoteTuneHandover,
+  rememberRemoteTune,
+  resetRemoteTuneHandoverForTests,
+  wasTuneHandedOver,
+} from "@/lib/playback/remoteTuneHandover";
 import { useRemotePlaybackHandover } from "@/pages/playFiles/hooks/useRemotePlaybackHandover";
 
 const ultimateSid = (id: string) =>
@@ -63,15 +81,19 @@ const setConnection = (state: string) => {
   act(() => connection.listeners.forEach((listener) => listener()));
 };
 
-const renderHandover = (playlist: PlaylistItem[], startedAt: number) => {
+const renderHandover = (playlist: PlaylistItem[], startedAt: number, engineActive = false) => {
   const engine = {
     muted: vi.fn(() => false),
     setMuted: vi.fn(),
     positionSeconds: vi.fn(() => 0.2),
     preload: vi.fn(),
     prerender: vi.fn(),
+    isActive: vi.fn(() => engineActive),
   };
   const currentPlaybackIsLocalRef = { current: false };
+  const setCurrentPlaybackIsLocal = vi.fn((isLocal: boolean) => {
+    currentPlaybackIsLocalRef.current = isLocal;
+  });
   const playItem = vi.fn(async () => {
     currentPlaybackIsLocalRef.current = true;
   });
@@ -90,40 +112,92 @@ const renderHandover = (playlist: PlaylistItem[], startedAt: number) => {
     localEngineActive: false,
     durationMs: 180_000,
     getLocalSidPlayback: () => engine as never,
+    setCurrentPlaybackIsLocal,
     resolveHvscRuntimeRequest: vi.fn(async () => null),
     resolveNextIndex: (from: number) => (from + 1 < playlist.length ? from + 1 : null),
     playItem,
     seekBy,
   };
   renderHook(() => useRemotePlaybackHandover(options));
-  return { engine, playItem, seekBy, currentPlaybackIsLocalRef };
+  return { engine, playItem, seekBy, setCurrentPlaybackIsLocal };
 };
 
 describe("useRemotePlaybackHandover", () => {
+  let uninstall: () => void;
+
   beforeEach(() => {
     connection.state = "REAL_CONNECTED";
     connection.listeners.clear();
-    device.host = "c64u";
     device.remotePlaying = true;
-    device.machineReset.mockClear();
+    handedOverWithoutPage.itemId = null;
+    resetRemoteTuneHandoverForTests();
+    uninstall = installRemoteTuneHandover();
     vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(null);
     vi.mocked(tryFetchUltimateSidBlob).mockClear();
-    vi.mocked(markRemotePlaybackStopped).mockClear();
+    vi.mocked(rememberRemoteTune).mockClear();
     vi.mocked(addLog).mockClear();
   });
 
-  it("reads the tune playing on the C64 and the ones after it, and renders the one playing", async () => {
-    const { engine } = renderHandover([ultimateSid("one"), ultimateSid("two"), ultimateSid("three")], Date.now());
+  afterEach(() => uninstall());
+
+  it("reads the tune playing on the C64 and the ones after it, renders the one playing, and describes it", async () => {
+    const startedAt = Date.now();
+    const { engine } = renderHandover([ultimateSid("one"), ultimateSid("two"), ultimateSid("three")], startedAt);
 
     await waitFor(() => expect(vi.mocked(tryFetchUltimateSidBlob)).toHaveBeenCalledTimes(3));
     expect(engine.prerender).toHaveBeenCalledWith(expect.stringMatching(/^one#0@/), expect.anything(), 0, 180);
     expect(engine.preload).toHaveBeenCalled();
     expect(vi.mocked(tryFetchUltimateSidBlob)).toHaveBeenCalledWith("/USB2/MUSICIANS/three.sid");
+    // Described for the case where the page is closed when the device goes.
+    expect(rememberRemoteTune).toHaveBeenCalledWith(
+      expect.objectContaining({ itemId: "one", startedAt, durationMs: 180_000 }),
+    );
+  });
+
+  // A tap on the track already current left the index, duration and playing state as they were, so it was never read.
+  it("reads the tune again when the same track is started again", async () => {
+    const playlist = [ultimateSid("one")];
+    const trackStartedAtRef = { current: null as number | null };
+    const hookOptions = (startedAt: number | null) => {
+      trackStartedAtRef.current = startedAt;
+      return startedAt;
+    };
+    const engine = { preload: vi.fn(), prerender: vi.fn(), isActive: vi.fn(() => false) };
+    const { rerender } = renderHook(
+      ({ startedAt }: { startedAt: number | null }) =>
+        useRemotePlaybackHandover({
+          playlistRef: { current: playlist },
+          currentIndexRef: { current: 0 },
+          isPlayingRef: { current: true },
+          isPausedRef: { current: false },
+          currentPlaybackIsLocalRef: { current: false },
+          trackStartedAtRef: { current: hookOptions(startedAt) },
+          durationMsRef: { current: 180_000 },
+          isPlaying: true,
+          isPaused: false,
+          currentIndex: 0,
+          localEngineActive: false,
+          durationMs: 180_000,
+          getLocalSidPlayback: () => engine as never,
+          setCurrentPlaybackIsLocal: vi.fn(),
+          resolveHvscRuntimeRequest: vi.fn(async () => null),
+          resolveNextIndex: () => null,
+          playItem: vi.fn(),
+          seekBy: vi.fn(),
+        }),
+      { initialProps: { startedAt: null as number | null } },
+    );
+    expect(engine.prerender).not.toHaveBeenCalled();
+
+    rerender({ startedAt: Date.now() });
+
+    await waitFor(() => expect(engine.prerender).toHaveBeenCalledTimes(1));
   });
 
   it("carries the tune on on the phone from where the C64 was when the device goes", async () => {
     vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
-    const { engine, playItem, seekBy } = renderHandover([ultimateSid("one"), ultimateSid("two")], Date.now() - 42_000);
+    const startedAt = Date.now() - 42_000;
+    const { engine, playItem, seekBy } = renderHandover([ultimateSid("one"), ultimateSid("two")], startedAt);
 
     setConnection("OFFLINE_NO_DEMO");
 
@@ -134,6 +208,8 @@ describe("useRemotePlaybackHandover", () => {
     expect(delta).toBeLessThan(43);
     // Silent while the phone opens the tune and seeks, then back to what the listener had.
     expect(engine.setMuted.mock.calls).toEqual([[true], [false]]);
+    // Recorded, so the C64 is reset when it is back.
+    expect(wasTuneHandedOver(startedAt)).toBe(true);
   });
 
   it("leaves a tune it could not read before the device went, and says why", async () => {
@@ -151,42 +227,14 @@ describe("useRemotePlaybackHandover", () => {
     expect(playItem).not.toHaveBeenCalled();
   });
 
-  it("stops the tune left looping on the C64 once the device is back", async () => {
-    vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
-    const { seekBy } = renderHandover([ultimateSid("one")], Date.now() - 5_000);
-    setConnection("OFFLINE_NO_DEMO");
-    await waitFor(() => expect(seekBy).toHaveBeenCalled());
+  it("makes a tune the phone took over while the page was closed its own", async () => {
+    handedOverWithoutPage.itemId = "one";
+    connection.state = "OFFLINE_NO_DEMO";
 
-    setConnection("REAL_CONNECTED");
+    const { playItem, setCurrentPlaybackIsLocal } = renderHandover([ultimateSid("one")], Date.now() - 20_000, true);
 
-    await waitFor(() => expect(vi.mocked(markRemotePlaybackStopped)).toHaveBeenCalled(), { timeout: 3000 });
-    expect(device.machineReset).toHaveBeenCalledTimes(1);
-  });
-
-  it("tries the reset again when reconnecting aborted it", async () => {
-    vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
-    const { seekBy } = renderHandover([ultimateSid("one")], Date.now() - 5_000);
-    setConnection("OFFLINE_NO_DEMO");
-    await waitFor(() => expect(seekBy).toHaveBeenCalled());
-    device.machineReset.mockRejectedValueOnce(new Error("The operation was aborted"));
-
-    setConnection("REAL_CONNECTED");
-
-    await waitFor(() => expect(vi.mocked(markRemotePlaybackStopped)).toHaveBeenCalled(), { timeout: 4000 });
-    expect(device.machineReset).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(addLog)).not.toHaveBeenCalledWith("warn", expect.anything(), expect.anything());
-  });
-
-  it("does not reset a different device the app reconnected to", async () => {
-    vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
-    const { seekBy } = renderHandover([ultimateSid("one")], Date.now() - 5_000);
-    setConnection("OFFLINE_NO_DEMO");
-    await waitFor(() => expect(seekBy).toHaveBeenCalled());
-
-    device.host = "u64";
-    setConnection("REAL_CONNECTED");
-    await act(() => new Promise((resolve) => setTimeout(resolve, 1500)));
-
-    expect(device.machineReset).not.toHaveBeenCalled();
+    expect(setCurrentPlaybackIsLocal).toHaveBeenCalledWith(true);
+    await act(async () => undefined);
+    expect(playItem).not.toHaveBeenCalled();
   });
 });
