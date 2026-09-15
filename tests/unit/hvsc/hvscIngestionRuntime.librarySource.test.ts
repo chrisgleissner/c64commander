@@ -198,7 +198,7 @@ describe("hvscIngestionRuntime library source", () => {
     storeState({ installedVersion: 84, installedBaselineVersion: 84, ingestionState: "ready", librarySource: "demo" });
     serveCachedBaseline(83);
     vi.mocked(fetchLatestHvscVersions).mockResolvedValue(release(83, false));
-    vi.mocked(removeDemoTunesFromPlaylist).mockRejectedValueOnce(new Error("playlist store unavailable"));
+    vi.mocked(removeDemoTunesFromPlaylist).mockRejectedValueOnce("playlist store unavailable");
 
     await installOrUpdateHvsc("token-real");
 

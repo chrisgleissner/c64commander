@@ -69,13 +69,11 @@ describe("reading SID bytes ahead", () => {
     const controller = { warmLeadIn } as unknown as LocalSidPlaybackController;
     const bytes = new ArrayBuffer(4);
     const playlist = [
-      item("previous", { arrayBuffer: async () => Promise.reject(new Error("gone")) }),
+      item("previous", { arrayBuffer: async () => Promise.reject("gone") }),
       item("current"),
       item("next"),
     ];
-    const resolve = vi.fn(async () => {
-      throw new Error("library not ready");
-    });
+    const resolve = vi.fn(() => Promise.reject("library not ready"));
 
     await warmNeighbouringLeadIns(playlist, 1, resolve, controller);
 

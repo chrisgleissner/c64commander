@@ -263,6 +263,46 @@ describe("useRemotePlaybackHandover", () => {
     );
   });
 
+  it("does not seek when the tune did not start on the phone, and reports failures that are not Errors", async () => {
+    vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
+    const { playItem, seekBy } = renderHandover([ultimateSid("one")], Date.now() - 20_000);
+    playItem.mockImplementationOnce(async () => undefined);
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await waitFor(() => expect(playItem).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(seekBy).not.toHaveBeenCalled();
+
+    setConnection("REAL_CONNECTED");
+    vi.mocked(tryFetchUltimateSidBlob).mockRejectedValueOnce("read refused");
+    renderHandover([ultimateSid("two")], Date.now() - 5_000);
+    await waitFor(() =>
+      expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+        "debug",
+        "Playback: could not read ahead for carrying on without the C64",
+        { item: "two.sid", error: "read refused" },
+      ),
+    );
+
+    resetRemoteTuneHandoverForTests();
+    const third = renderHandover([ultimateSid("three")], Date.now() - 30_000);
+    third.playItem.mockRejectedValueOnce("open refused");
+    setConnection("OFFLINE_NO_DEMO");
+    await waitFor(() =>
+      expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+        "warn",
+        "Playback: could not carry on with the tune on this phone",
+        {
+          item: "three.sid",
+          error: "open refused",
+        },
+      ),
+    );
+  });
+
   it("leaves a tune it could not read before the device went, and says why", async () => {
     const { playItem } = renderHandover([ultimateSid("one")], Date.now() - 10_000);
 

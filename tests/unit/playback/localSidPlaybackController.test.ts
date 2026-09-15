@@ -69,6 +69,24 @@ describe("LocalSidPlaybackController", () => {
     expect(engine.play).not.toHaveBeenCalled();
   });
 
+  it("logs a failed load that is not an Error by its text", async () => {
+    const { getLogs } = await import("@/lib/logging");
+    localStorage.setItem("c64u_debug_logging_enabled", "1");
+    try {
+      const engine = fakeEngine({ load: vi.fn(() => Promise.reject("worker refused")) });
+      new LocalSidPlaybackController(() => engine).preload();
+
+      await vi.waitFor(() =>
+        expect(getLogs().find((entry) => entry.message === "Local SID engine preload failed")?.details).toEqual({
+          service: "local-sid",
+          error: "worker refused",
+        }),
+      );
+    } finally {
+      localStorage.removeItem("c64u_debug_logging_enabled");
+    }
+  });
+
   it("reads the SID bytes and forwards them + song index to the engine", async () => {
     const engine = fakeEngine();
     const controller = new LocalSidPlaybackController(() => engine);

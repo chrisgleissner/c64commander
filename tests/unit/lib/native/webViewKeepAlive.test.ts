@@ -142,6 +142,35 @@ describe("keeping the page awake during background playback", () => {
     );
   });
 
+  it("reports a failure that is not an Error by its text", async () => {
+    const { addLog } = await import("@/lib/logging");
+    class RefusingContext extends FakeAudioContext {
+      resume = vi.fn(() => Promise.reject("resume refused"));
+    }
+    vi.stubGlobal("AudioContext", RefusingContext);
+    startWebViewKeepAlive();
+    await vi.waitFor(() =>
+      expect(addLog).toHaveBeenCalledWith("warn", expect.any(String), { error: "resume refused" }),
+    );
+    audio.sources[0].stop.mockImplementation(() => {
+      throw "stop refused";
+    });
+    stopWebViewKeepAlive();
+    expect(addLog).toHaveBeenCalledWith("debug", expect.any(String), { error: "stop refused" });
+
+    resetWebViewKeepAliveForTests();
+    vi.stubGlobal(
+      "AudioContext",
+      class {
+        constructor() {
+          throw "no output";
+        }
+      },
+    );
+    startWebViewKeepAlive();
+    expect(addLog).toHaveBeenCalledWith("warn", expect.any(String), { error: "no output" });
+  });
+
   it("does nothing outside Android, where no page is frozen this way", () => {
     platform.name = "ios";
     startWebViewKeepAlive();

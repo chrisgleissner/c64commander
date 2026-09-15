@@ -385,6 +385,22 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(result.current.byDeviceId[selectedDeviceId]?.error).toBeNull();
   });
 
+  it("names a device that answered no REST probe as not reachable when the probe gave no reason", async () => {
+    mockRunConnectivityProbeForTarget.mockImplementation(async () => ({
+      ...makeResult("office"),
+      connectivity: "Offline" as const,
+      probes: {
+        ...makeResult("office").probes,
+        REST: { probe: "REST" as const, outcome: "Fail" as const, durationMs: 3000, reason: null, startMs: 1 },
+      },
+    }));
+    const { result } = renderBackgroundHook(buildSavedDevices());
+
+    await flushAsyncWork();
+
+    expect(result.current.byDeviceId[selectedDeviceId]?.error).toBe("Device not reachable");
+  });
+
   it("records any other background probe failure as the device's error, with a warning", async () => {
     const { addLog } = await import("@/lib/logging");
     mockRunConnectivityProbeForTarget.mockRejectedValue(new Error("Connection refused"));

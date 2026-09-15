@@ -218,6 +218,29 @@ describe("carrying a tune from the C64 on to the phone", () => {
     expect(markRemotePlaybackStopped).not.toHaveBeenCalled();
   });
 
+  it("reports a failure that is not an Error by its text", async () => {
+    engine.play.mockRejectedValueOnce("no engine");
+    rememberRemoteTune(tune());
+    setConnection("OFFLINE_NO_DEMO");
+    await vi.waitFor(() =>
+      expect(addLog).toHaveBeenCalledWith("warn", "Playback: could not carry on with the tune on this phone", {
+        item: "Waltz.sid",
+        error: "no engine",
+      }),
+    );
+
+    noteTuneHandedOver(Date.now() - 10_000);
+    device.machineReset.mockRejectedValueOnce("refused");
+    setConnection("REAL_CONNECTED");
+    await vi.waitFor(
+      () =>
+        expect(addLog).toHaveBeenCalledWith("warn", "Playback: could not stop the tune left playing on the C64", {
+          error: "refused",
+        }),
+      { timeout: 3000 },
+    );
+  });
+
   it("resets the C64, still looping the tune, once the same device answers again", async () => {
     noteTuneHandedOver(Date.now() - 10_000);
     setConnection("OFFLINE_NO_DEMO");

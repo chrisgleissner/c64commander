@@ -72,7 +72,7 @@ describe("stopping the tune on the device a switch leaves", () => {
 
   it("warns only when the device left behind answers none of the resets", async () => {
     device.activeReset.mockRejectedValueOnce(new Error("Host unreachable"));
-    device.leftBehindReset.mockRejectedValue(new Error("Host unreachable"));
+    device.leftBehindReset.mockRejectedValue("Host unreachable");
 
     await stopActivePlaybackBeforeDeviceSwitch();
     await vi.advanceTimersByTimeAsync(4000);
