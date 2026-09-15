@@ -26,6 +26,12 @@ vi.mock("@/lib/logging", () => ({
   addLog: mocks.addLog,
 }));
 
+const keepAlive = vi.hoisted(() => ({ start: vi.fn(), stop: vi.fn() }));
+vi.mock("@/lib/native/webViewKeepAlive", () => ({
+  startWebViewKeepAlive: keepAlive.start,
+  stopWebViewKeepAlive: keepAlive.stop,
+}));
+
 vi.mock("@/lib/appLifecycle", () => ({
   getLifecycleState: mocks.getLifecycleState,
 }));
@@ -51,6 +57,8 @@ describe("backgroundExecutionManager", () => {
     mocks.setPlaybackState.mockReset();
     mocks.setNowPlaying.mockReset();
     mocks.addLog.mockReset();
+    keepAlive.start.mockReset();
+    keepAlive.stop.mockReset();
     mocks.getLifecycleState.mockReturnValue("active");
     mocks.classifyError.mockReturnValue({
       failureClass: "plugin-failure",
@@ -195,6 +203,24 @@ describe("backgroundExecutionManager", () => {
     expect(mocks.setPlaybackState).toHaveBeenLastCalledWith({ paused: false });
     // A pause must never unbalance the reference count; only stop() does.
     expect(isBackgroundExecutionActive()).toBe(true);
+  });
+
+  // The page froze a minute after the screen went off, so a tune playing on the phone fell silent.
+  it("keeps the page awake while a session plays, and lets it sleep while paused or stopped", async () => {
+    mocks.start.mockRejectedValueOnce(new Error("plugin-failed"));
+    await expect(startBackgroundExecution({ source: "test" })).rejects.toThrow();
+    expect(keepAlive.start).not.toHaveBeenCalled();
+
+    await startBackgroundExecution({ source: "test" });
+    expect(keepAlive.start).toHaveBeenCalledTimes(1);
+
+    await setBackgroundExecutionPaused(true, { source: "test" });
+    expect(keepAlive.stop).toHaveBeenCalledTimes(1);
+    await setBackgroundExecutionPaused(false, { source: "test" });
+    expect(keepAlive.start).toHaveBeenCalledTimes(2);
+
+    await stopBackgroundExecution({ source: "test" });
+    expect(keepAlive.stop).toHaveBeenCalledTimes(2);
   });
 
   it("HARD27-007: logs and throws when the paused-state update fails", async () => {

@@ -11,6 +11,7 @@ import { BackgroundExecution, type NowPlayingInfo } from "@/lib/native/backgroun
 import { ensureNotificationPermission } from "@/lib/native/notificationPermission";
 import { getLifecycleState } from "@/lib/appLifecycle";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
+import { startWebViewKeepAlive, stopWebViewKeepAlive } from "@/lib/native/webViewKeepAlive";
 
 type BackgroundExecutionLogContext = {
   source: string;
@@ -83,6 +84,7 @@ export const startBackgroundExecution = async (logContext: BackgroundExecutionLo
     addLog("error", "Background execution start failed", buildFailureDetails(error, logContext));
     throw buildOperationError("start", error);
   }
+  startWebViewKeepAlive();
   // The service is new and carries no metadata, and an update the page issued while this start was
   // in flight was dropped by the native side (metadata must never start a service on its own). So
   // this publish is not deduped against that dropped attempt.
@@ -99,6 +101,7 @@ export const stopBackgroundExecution = async (logContext: BackgroundExecutionLog
   publishedPaused = false;
   currentNowPlaying = null;
   publishedNowPlaying = null;
+  stopWebViewKeepAlive();
   try {
     await BackgroundExecution.stop();
   } catch (error) {
@@ -119,6 +122,9 @@ export const setBackgroundExecutionPaused = async (paused: boolean, logContext: 
   if (paused === publishedPaused) return;
   const previouslyPublished = publishedPaused;
   publishedPaused = paused;
+  // Nothing has to run while paused, so the page may freeze as the native service may sleep.
+  if (paused) stopWebViewKeepAlive();
+  else startWebViewKeepAlive();
   try {
     await BackgroundExecution.setPlaybackState({ paused });
   } catch (error) {
@@ -144,6 +150,7 @@ export const setBackgroundExecutionNowPlaying = async (
 };
 
 export const resetBackgroundExecutionState = () => {
+  stopWebViewKeepAlive();
   activeCount = 0;
   publishedPaused = false;
   currentNowPlaying = null;
