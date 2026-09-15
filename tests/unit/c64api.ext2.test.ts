@@ -432,6 +432,26 @@ describe("c64api utility functions - targeted branch coverage", () => {
       await expect(api.getInfo()).rejects.toThrow("HTTP 404");
     });
 
+    // Switching to an Ultimate II+L, which has no Audio Mixer, logged ten errors for the Play page's volume items.
+    it("does not log a 404 for a config item the caller expects may be missing", async () => {
+      const fm = getFetchMock();
+      fm.mockResolvedValue(
+        new Response(JSON.stringify({ errors: ["No configuration category matches 'Audio Mixer'."] }), {
+          status: 404,
+          statusText: "Not Found",
+          headers: { "content-type": "application/json" },
+        }),
+      );
+      addErrorLogMock.mockClear();
+
+      const api = new C64API("http://c64u");
+      await expect(api.getConfigItem("Audio Mixer", "Vol Master", { __c64uExpectedMissing: true })).rejects.toThrow(
+        "HTTP 404",
+      );
+
+      expect(addErrorLogMock).not.toHaveBeenCalledWith("C64 API request failed", expect.anything());
+    });
+
     it("logs errorDetail for DNS failure (line 905)", async () => {
       const fm = getFetchMock();
       fm.mockRejectedValue(new TypeError("getaddrinfo ENOTFOUND c64u"));
