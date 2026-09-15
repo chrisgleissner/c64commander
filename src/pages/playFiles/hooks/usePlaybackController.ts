@@ -1457,6 +1457,9 @@ export function usePlaybackController({
       const nextEngine = loadPlaybackEngine();
       if (nextEngine === selectedEngineRef.current) return;
       selectedEngineRef.current = nextEngine;
+      // A tune playing here would only start again here, or not at all with the C64 out of reach; the next tune moves.
+      const playsHere = currentPlaybackIsLocalRef.current || isLocalPlaybackActive();
+      if (playsHere && (nextEngine === "local" || isDeviceOutOfReach())) return;
       const index = currentIndexRef.current;
       const item = playlistRef.current[index];
       // Only a playing SID can move between engines; everything else is a

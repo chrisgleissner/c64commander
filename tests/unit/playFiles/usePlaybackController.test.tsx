@@ -3285,6 +3285,64 @@ describe("usePlaybackController", () => {
         expect(machineReset).toHaveBeenCalled();
       });
 
+      // The Listen-on chip reads "Here" while a tune carried on from the C64 plays on the phone, inviting this pick.
+      it("keeps a tune that already plays on the device playing when the user picks 'This device'", async () => {
+        localStorage.setItem("c64u_local_engine_enabled", "1");
+        localStorage.setItem("c64u_playback_engine", "c64");
+        vi.spyOn(LocalSidPlaybackController, "isSupported").mockReturnValue(true);
+        connectionStateOverride.current = "OFFLINE_NO_DEMO";
+        const controller = fakeController();
+        const machineReset = vi.fn().mockResolvedValue(undefined);
+        vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+        const playlist = [sidItem(psid)];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          isPlaying: true,
+        });
+
+        try {
+          await result.current.playItem(playlist[0], { playlistIndex: 0 });
+          expect(controller.play).toHaveBeenCalledTimes(1);
+          await act(async () => {
+            savePlaybackEngine("local");
+          });
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        } finally {
+          connectionStateOverride.current = null;
+        }
+
+        expect(controller.play).toHaveBeenCalledTimes(1);
+        expect(controller.stop).not.toHaveBeenCalled();
+        expect(machineReset).not.toHaveBeenCalled();
+      });
+
+      it("keeps a tune playing on the device when the user picks the C64 while it is out of reach", async () => {
+        enableLocal();
+        connectionStateOverride.current = "OFFLINE_NO_DEMO";
+        const controller = fakeController();
+        const machineReset = vi.fn().mockResolvedValue(undefined);
+        vi.mocked(getC64API).mockReturnValue({ machineReset } as any);
+        const playlist = [sidItem(psid)];
+        const { result } = renderPlaybackController(playlist, {
+          localSidPlaybackController: controller,
+          isPlaying: true,
+        });
+
+        try {
+          await result.current.playItem(playlist[0], { playlistIndex: 0 });
+          await act(async () => {
+            savePlaybackEngine("c64");
+          });
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        } finally {
+          connectionStateOverride.current = null;
+        }
+
+        expect(controller.play).toHaveBeenCalledTimes(1);
+        expect(controller.stop).not.toHaveBeenCalled();
+        expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+      });
+
       it("records engineSwitchMs for the §12.6 budget", async () => {
         resetSidRadioStats();
         enableLocal();
