@@ -75,6 +75,7 @@ import {
   shouldStartDemoModeForOfflineDevice,
 } from "@/lib/connection/offlineStartup";
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
+import { isAwayFromKnownDevice, noteDemoOfferShown } from "@/lib/connection/demoOfferMemory";
 import { isNativePlatform } from "@/lib/native/platform";
 
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
@@ -440,6 +441,7 @@ let demoServerStartedThisSession = false;
 const DEMO_INTERSTITIAL_SESSION_KEY = "c64u_demo_interstitial_shown";
 const DEMO_MODE_PINNED_SESSION_KEY = "c64u_demo_mode_pinned";
 const DEMO_MODE_DECLINED_SESSION_KEY = "c64u_demo_mode_declined";
+const DEMO_MODE_CHOSEN_SESSION_KEY = "c64u_demo_mode_chosen";
 let stickyRealDeviceLock = false;
 let discoveryRunToken = 0;
 let demoModePinnedByUser = false;
@@ -654,15 +656,7 @@ installConnectionTestProbe();
 
 export function dismissDemoInterstitial() {
   demoInterstitialShownThisSession = true;
-  if (typeof sessionStorage !== "undefined") {
-    try {
-      sessionStorage.setItem(DEMO_INTERSTITIAL_SESSION_KEY, "1");
-    } catch (error) {
-      addLog("warn", "Failed to persist demo interstitial session marker", {
-        error: (error as Error).message,
-      });
-    }
-  }
+  persistDemoModeSessionFlag(DEMO_INTERSTITIAL_SESSION_KEY, true);
   setSnapshot({ demoInterstitialVisible: false, demoInterstitialReason: null });
 }
 
@@ -695,6 +689,7 @@ export async function pinDemoModeByUserChoice() {
   persistDemoModeSessionFlag(DEMO_MODE_PINNED_SESSION_KEY, true);
   demoModeDeclinedByUser = false;
   persistDemoModeSessionFlag(DEMO_MODE_DECLINED_SESSION_KEY, false);
+  persistDemoModeSessionFlag(DEMO_MODE_CHOSEN_SESSION_KEY, true);
   dismissDemoInterstitial();
   await transitionToDemoActive("manual", { bypassStickyRealDeviceLock: true });
 }
@@ -713,6 +708,7 @@ export const releaseDemoModeChosenWithoutNetwork = (): boolean => {
 export async function declineDemoMode(options: { retry?: DiscoveryTrigger } = {}) {
   demoModeDeclinedByUser = true;
   persistDemoModeSessionFlag(DEMO_MODE_DECLINED_SESSION_KEY, true);
+  persistDemoModeSessionFlag(DEMO_MODE_CHOSEN_SESSION_KEY, false);
   dismissDemoInterstitial();
   addLog("info", "Demo Mode declined by the user", { retry: options.retry ?? null, state: snapshot.state });
   if (options.retry) {
@@ -1036,7 +1032,7 @@ const transitionToDemoActive = async (
     return;
   }
   if (demoModeDeclinedByUser) {
-    addLog("info", "Demo Mode was declined this session; staying offline", { trigger });
+    addLog("info", "Demo Mode was declined, or is known to a user of a real device; staying offline", { trigger });
     await transitionToOfflineNoDemo(trigger);
     return;
   }
@@ -1049,6 +1045,7 @@ const transitionToDemoActive = async (
   if (shouldShowDemoInterstitial(trigger)) {
     demoInterstitialShownThisSession = true;
     sessionStorage.setItem(DEMO_INTERSTITIAL_SESSION_KEY, "1");
+    noteDemoOfferShown();
     setSnapshot({
       demoInterstitialVisible: true,
       demoInterstitialReason: options.interstitialReason ?? "discovery-failed",
@@ -1258,7 +1255,7 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
     // excluded, so its device becoming unreachable is still reported as a failure.
     if (await shouldAutoStartOfflineDemoMode()) {
       if (!discoveryRun.isCurrent()) return;
-      addLog("info", "No network on this device; offering the simulated device without discovery", { trigger });
+      addLog("info", "No network on this device; skipping discovery", { trigger });
       setSnapshot({ lastProbeError: NO_NETWORK_PROBE_ERROR });
       await transitionToDemoActive(trigger, { interstitialReason: "no-network" });
       return;
@@ -1475,7 +1472,10 @@ export async function initializeConnectionManager() {
   await featureFlagManager.load();
   demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === "1";
   demoModePinnedByUser = sessionStorage.getItem(DEMO_MODE_PINNED_SESSION_KEY) === "1";
-  demoModeDeclinedByUser = sessionStorage.getItem(DEMO_MODE_DECLINED_SESSION_KEY) === "1";
+  // Somebody who has seen the offer and has used a real device is most likely just away from it: no offer unasked.
+  const chosenThisSession = sessionStorage.getItem(DEMO_MODE_CHOSEN_SESSION_KEY) === "1";
+  demoModeDeclinedByUser =
+    sessionStorage.getItem(DEMO_MODE_DECLINED_SESSION_KEY) === "1" || (!chosenThisSession && isAwayFromKnownDevice());
   stickyRealDeviceLock = false;
   setSnapshot({
     state: "UNKNOWN",

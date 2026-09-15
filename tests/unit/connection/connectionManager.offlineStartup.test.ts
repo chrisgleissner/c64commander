@@ -657,3 +657,144 @@ describe("startup on a platform with no simulated device (HARD27-027)", () => {
     expect(snapshot.demoInterstitialVisible).toBe(false);
   });
 });
+
+// Somebody who has seen the offer and has used a real device is most likely just out and about.
+describe("startup away from a device that has connected before", () => {
+  const seedSavedDevice = (lastSuccessfulConnectionAt: string | null) =>
+    localStorage.setItem(
+      "c64u_saved_devices:v1",
+      JSON.stringify({
+        version: 1,
+        selectedDeviceId: "home-c64u",
+        devices: [{ id: "home-c64u", host: "192.168.1.146", httpPort: 80, lastSuccessfulConnectionAt }],
+        summaries: {},
+        summaryLru: [],
+      }),
+    );
+
+  beforeEach(() => {
+    ensureStorage();
+    localStorage.clear();
+    sessionStorage.clear();
+    vi.resetModules();
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    activeMockBaseUrl = null;
+    startMockServer.mockClear();
+    stopMockServer.mockClear();
+    startDeviceDiscovery.mockClear();
+    isNativePlatform.mockReturnValue(true);
+    isSimulatedDeviceAvailable.mockReturnValue(true);
+    loadAutomaticDemoModeEnabled.mockReturnValue(true);
+    demoModeFlagEnabled.mockReturnValue(true);
+    setNetwork(false);
+  });
+
+  it("shows the device as offline without the offer or the simulated device", async () => {
+    seedSavedDevice("2026-09-15T10:00:00.000Z");
+    localStorage.setItem("c64u_demo_offer_seen", "1");
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+
+    const snapshot = getConnectionSnapshot();
+    expect(snapshot.state).toBe("OFFLINE_NO_DEMO");
+    expect(snapshot.demoInterstitialVisible).toBe(false);
+    expect(startMockServer).not.toHaveBeenCalled();
+    expect(startDeviceDiscovery).not.toHaveBeenCalled();
+    expect(offDeviceRequests()).toEqual([]);
+  });
+
+  it("stays quiet when the network is up but the device does not answer", async () => {
+    seedSavedDevice("2026-09-15T10:00:00.000Z");
+    localStorage.setItem("c64u_demo_offer_seen", "1");
+    localStorage.setItem("c64u_device_host", "192.168.1.146");
+    setNetwork(true);
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    void discoverConnection("startup");
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO");
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+    expect(startMockServer).not.toHaveBeenCalled();
+  });
+
+  it("reconnects to the device once the network comes back", async () => {
+    seedSavedDevice("2026-09-15T10:00:00.000Z");
+    localStorage.setItem("c64u_demo_offer_seen", "1");
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+
+    setNetwork(true);
+    vi.mocked(fetch).mockResolvedValue(respondWithDevice());
+    await discoverConnection("background");
+
+    expect(getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+  });
+
+  it("still makes the offer the first time, and remembers that it did", async () => {
+    seedSavedDevice("2026-09-15T10:00:00.000Z");
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(true);
+    expect(localStorage.getItem("c64u_demo_offer_seen")).toBe("1");
+  });
+
+  it("still makes the offer to somebody whose device has never connected", async () => {
+    seedSavedDevice(null);
+    localStorage.setItem("c64u_demo_offer_seen", "1");
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(true);
+  });
+
+  it("keeps Demo Mode chosen in this session when the page reloads", async () => {
+    seedSavedDevice("2026-09-15T10:00:00.000Z");
+    localStorage.setItem("c64u_demo_offer_seen", "1");
+    const first = await import("../../../src/lib/connection/connectionManager");
+    await first.initializeConnectionManager();
+    await first.discoverConnection("startup");
+    await first.pinDemoModeByUserChoice();
+
+    // Each reload's first discovery clears the pin, so the choice has to outlast more than one reload.
+    for (let reload = 0; reload < 2; reload += 1) {
+      vi.resetModules();
+      const next = await import("../../../src/lib/connection/connectionManager");
+      await next.initializeConnectionManager();
+      await next.discoverConnection("startup");
+      expect(next.getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+    }
+  });
+
+  it("still enters Demo Mode when the user chooses it", async () => {
+    seedSavedDevice("2026-09-15T10:00:00.000Z");
+    localStorage.setItem("c64u_demo_offer_seen", "1");
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, pinDemoModeByUserChoice } =
+      await import("../../../src/lib/connection/connectionManager");
+
+    await initializeConnectionManager();
+    await discoverConnection("startup");
+    await pinDemoModeByUserChoice();
+
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+    await discoverConnection("resume");
+    expect(getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+  });
+});
