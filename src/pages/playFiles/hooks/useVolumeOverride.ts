@@ -17,6 +17,7 @@ import { useC64ConfigItems, useC64Connection, useC64UpdateConfigBatch } from "@/
 import { toast } from "@/hooks/use-toast";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { getC64API } from "@/lib/c64api";
+import { isAbortLikeError as isCancelledRequest } from "@/lib/c64api/requestRuntime";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import { isSidVolumeName } from "@/lib/config/audioMixerSolo";
 import {
@@ -151,6 +152,13 @@ export const resolveUnmuteFallbackIndexForSteps = ({
     return defaultVolumeIndex !== muteIndex ? defaultVolumeIndex : candidate;
   };
   return safeFallback(preferredIndex ?? currentIndex);
+};
+
+// A read dropped by a device switch is not a failed lookup; the reads for the new device follow.
+const logLookupFailure = (message: string, error: unknown) => {
+  const details = { error: (error as Error).message };
+  if (isCancelledRequest(error)) addLog("debug", message, details);
+  else addErrorLog(message, details);
 };
 
 export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: UseVolumeOverrideProps) {
@@ -673,9 +681,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
         const data = await getC64API().getConfigItems("Audio Mixer", AUDIO_MIXER_VOLUME_ITEMS, readOptions);
         return extractAudioMixerItems(data as Record<string, unknown>).filter((item) => isSidVolumeName(item.name));
       } catch (error) {
-        addErrorLog("Audio mixer lookup failed", {
-          error: (error as Error).message,
-        });
+        logLookupFailure("Audio mixer lookup failed", error);
         return [];
       }
     },
@@ -692,9 +698,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
         const data = await getC64API().getConfigItems("Audio Mixer", [AUDIO_MIXER_MASTER_VOLUME_ITEM], readOptions);
         return extractAudioMixerItems(data as Record<string, unknown>).find(isExposedMasterVolumeItem) ?? null;
       } catch (error) {
-        addErrorLog("Master volume lookup failed", {
-          error: (error as Error).message,
-        });
+        logLookupFailure("Master volume lookup failed", error);
         return null;
       }
     },
@@ -717,9 +721,7 @@ export function useVolumeOverride({ isPlaying, isPaused, resolvedDeviceId }: Use
         ]);
         return buildSidEnablement(sockets, addressing);
       } catch (error) {
-        addErrorLog("SID enablement lookup failed", {
-          error: (error as Error).message,
-        });
+        logLookupFailure("SID enablement lookup failed", error);
         return sidEnablement;
       }
     },

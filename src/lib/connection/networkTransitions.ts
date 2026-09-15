@@ -11,6 +11,7 @@ import {
   getConnectionSnapshot,
   noteDeviceUnreachable,
   probeOnce,
+  releaseDemoModeChosenWithoutNetwork,
   subscribeConnection,
   type ConnectionState,
 } from "@/lib/connection/connectionManager";
@@ -21,8 +22,10 @@ import {
   stopAvMirrorForDeviceRetarget,
   type AvMirrorRetargetState,
 } from "@/lib/connection/deviceRetarget";
+import { isLocalPlaybackActive } from "@/lib/playback/activePlaybackSession";
 import { getSavedDevicesSnapshot } from "@/lib/savedDevices/store";
 import { avMirrorSession, type AvMirrorSnapshot } from "@/lib/streams/avMirrorSession";
+import { stopLeftoverDeviceStreams } from "@/lib/streams/leftoverDeviceStreams";
 import { isNetworkKnownOffline, recordNetworkStatus, subscribeNetworkEdges } from "@/lib/connection/networkStatusWatch";
 import { readNativeNetworkStatus } from "@/lib/connection/offlineStartup";
 import { registerUnreachableListener } from "@/lib/connection/reachabilityEvents";
@@ -46,6 +49,9 @@ let reconnectRun = 0;
 
 export const reconnectWhenNetworkReturns = async () => {
   const run = ++reconnectRun;
+  if (!isNetworkKnownOffline() && releaseDemoModeChosenWithoutNetwork()) {
+    addLog("info", "Network is back; looking for the real device again after Demo Mode chosen without one");
+  }
   for (const delayMs of RECONNECT_ATTEMPT_DELAYS_MS) {
     if (delayMs > 0) await wait(delayMs);
     if (run !== reconnectRun || isNetworkKnownOffline()) return;
@@ -90,6 +96,14 @@ const showDeviceOffline = async (reason: "network-lost" | "not-answering") => {
   await noteDeviceUnreachable(reason);
 };
 
+/** Live View the app kept off while the device was out of reach comes back with the device. */
+export const restoreMirrorWhenDeviceReturns = (state: AvMirrorRetargetState) => {
+  mirrorBeforeOutage = {
+    videoWasLive: state.videoWasLive || Boolean(mirrorBeforeOutage?.videoWasLive),
+    audioWasLive: state.audioWasLive || Boolean(mirrorBeforeOutage?.audioWasLive),
+  };
+};
+
 // Only on the way back in: the transition out also emits snapshots while the state still reads connected.
 let lastConnectionState: ConnectionState = "UNKNOWN";
 
@@ -97,11 +111,22 @@ const resumeMirrorAfterOutage = () => {
   const { state } = getConnectionSnapshot();
   const reconnected = state === "REAL_CONNECTED" && lastConnectionState !== "REAL_CONNECTED";
   lastConnectionState = state;
+  if (!reconnected) return;
   const mirror = mirrorBeforeOutage;
-  if (!mirror || !reconnected) return;
   mirrorBeforeOutage = null;
   if (hasLiveAvMirror(readAvMirrorRetargetState())) return;
-  restartAvMirrorAfterDeviceRetarget(mirror, getSavedDevicesSnapshot().selectedDeviceId ?? "selected");
+  void (async () => {
+    // The stop sent as the device went out of reach never arrived, so the device may still be streaming.
+    await stopLeftoverDeviceStreams();
+    if (!mirror || hasLiveAvMirror(readAvMirrorRetargetState())) return;
+    // A tune that carried on on the phone while away keeps the speaker; the C64's audio returns with the next track.
+    const audioWasLive = mirror.audioWasLive && !isLocalPlaybackActive();
+    restartAvMirrorAfterDeviceRetarget(
+      { ...mirror, audioWasLive },
+      getSavedDevicesSnapshot().selectedDeviceId ?? "selected",
+      getConnectionSnapshot().deviceInfo,
+    );
+  })();
 };
 
 let confirmingUnreachable = false;

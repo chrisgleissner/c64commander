@@ -17,6 +17,12 @@ import { readStoredPlaybackSession, writeStoredPlaybackSession } from "@/lib/pla
 import { getCurrentPlaybackSnapshotLabel } from "@/lib/snapshot/currentPlaybackSnapshotLabel";
 import { getLogs } from "@/lib/logging";
 
+const phone = vi.hoisted(() => ({ playing: false }));
+vi.mock("@/lib/playback/activePlaybackSession", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/playback/activePlaybackSession")>()),
+  isLocalPlaybackActive: () => phone.playing,
+}));
+
 const PLAYLIST_REPOSITORY_STORAGE_KEY = "c64u_playlist_repo:v1";
 
 /*
@@ -138,6 +144,7 @@ const usePlaybackPersistenceHarness = ({
     isPlaying,
     isPaused,
     elapsedMs,
+    trackStartedAtRef,
     setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
   };
 };
@@ -238,7 +245,9 @@ describe("usePlaybackPersistence", () => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.isPlaying).toBe(true);
     });
-    expect(result.current.elapsedMs).toBe(5000);
+    // Written moments before the remount; the clock carries on by the time since then.
+    expect(result.current.elapsedMs).toBeGreaterThanOrEqual(5000);
+    expect(result.current.elapsedMs).toBeLessThan(6000);
     expect(readStoredPlaybackSession()?.isPlaying).toBe(true);
   });
 
@@ -1574,6 +1583,113 @@ describe("usePlaybackPersistence", () => {
     });
   });
 
+  // Play page left for the Home tab for 15 s while a tune played on: coming back, the clock read 15 s behind the tune.
+  it("carries the clock of a playing session on by the time since it was written", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "hvsc",
+            path: "/MUSICIANS/Test/away.sid",
+            name: "away.sid",
+            sourceId: "hvsc-library",
+            addedAt: new Date().toISOString(),
+            durationMs: 120000,
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+    sessionStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: "hvsc:hvsc-library:/MUSICIANS/Test/away.sid",
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 15000,
+        playedMs: 15000,
+        durationMs: 120000,
+        autoAdvanceDueAtMs: Date.now() + 90_000,
+        updatedAt: new Date(Date.now() - 15_000).toISOString(),
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => expect(result.current.trackStartedAtRef.current).not.toBeNull());
+    const positionMs = Date.now() - (result.current.trackStartedAtRef.current as number);
+    expect(positionMs).toBeGreaterThanOrEqual(30_000);
+    expect(positionMs).toBeLessThan(32_000);
+    expect(result.current.elapsedMs).toBeGreaterThanOrEqual(30_000);
+  });
+
+  // A Chess II session playing on the phone came back after the app was restarted and launched the next tune on the C64.
+  it.each([
+    {
+      stillPlaying: false,
+      title: "restores a tune that was playing on the phone as paused after the app was restarted",
+    },
+    { stillPlaying: true, title: "keeps a tune still playing on the phone playing when the page only remounted" },
+  ])("$title", async ({ stillPlaying }) => {
+    phone.playing = stillPlaying;
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "hvsc",
+            path: "/MUSICIANS/Test/phone.sid",
+            name: "phone.sid",
+            sourceId: "hvsc-library",
+            addedAt: new Date().toISOString(),
+            durationMs: 120000,
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+    sessionStorage.setItem(
+      PLAYBACK_SESSION_KEY,
+      JSON.stringify({
+        playlistKey: playlistStorageKey,
+        currentItemId: "hvsc:hvsc-library:/MUSICIANS/Test/phone.sid",
+        currentIndex: 0,
+        isPlaying: true,
+        isPaused: false,
+        elapsedMs: 20000,
+        playedMs: 20000,
+        durationMs: 120000,
+        autoAdvanceDueAtMs: Date.now() + 100_000,
+        playingOnPhone: true,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => expect(result.current.isPlaying).toBe(true));
+    await waitFor(() => expect(result.current.isPaused).toBe(!stillPlaying));
+    expect(result.current.trackStartedAtRef.current === null).toBe(!stillPlaying);
+    phone.playing = false;
+  });
+
   it("downgrades a stale playing session restore to paused instead of auto-advancing (HARD9-064)", async () => {
     const playlistStorageKey = buildPlaylistStorageKey("device-1");
     const durationMs = 60000;
@@ -1776,7 +1892,8 @@ describe("usePlaybackPersistence", () => {
     const survived = readStoredPlaybackSession();
     expect(survived?.currentItemLabel).toBe("demo.sid");
     expect(survived?.currentIndex).toBe(0);
-    expect(survived?.elapsedMs).toBe(5000);
+    expect(survived?.elapsedMs).toBeGreaterThanOrEqual(5000);
+    expect(survived?.elapsedMs).toBeLessThan(6000);
     // The same store is what the Home tile reads, so the tile names the tune.
     expect(getCurrentPlaybackSnapshotLabel()).toBe("demo.sid");
   });

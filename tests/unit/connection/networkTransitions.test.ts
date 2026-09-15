@@ -119,6 +119,30 @@ const mirror = vi.hoisted(() => {
 });
 vi.mock("../../../src/lib/streams/avMirrorSession", () => ({ avMirrorSession: mirror.session }));
 
+const leftoverStreams = vi.hoisted(() => ({ stop: vi.fn(async () => undefined) }));
+vi.mock("../../../src/lib/streams/leftoverDeviceStreams", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/lib/streams/leftoverDeviceStreams")>()),
+  stopLeftoverDeviceStreams: () => leftoverStreams.stop(),
+}));
+
+const retarget = vi.hoisted(() => ({ restart: vi.fn() }));
+vi.mock("../../../src/lib/connection/deviceRetarget", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/lib/connection/deviceRetarget")>();
+  return {
+    ...actual,
+    restartAvMirrorAfterDeviceRetarget: (...args: Parameters<typeof actual.restartAvMirrorAfterDeviceRetarget>) => {
+      retarget.restart(...args);
+      actual.restartAvMirrorAfterDeviceRetarget(...args);
+    },
+  };
+});
+
+const phonePlayback = vi.hoisted(() => ({ active: false }));
+vi.mock("../../../src/lib/playback/activePlaybackSession", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/lib/playback/activePlaybackSession")>()),
+  isLocalPlaybackActive: () => phonePlayback.active,
+}));
+
 const hostOf = (baseUrl: string) => new URL(baseUrl).host;
 
 const setNetwork = (online: boolean) => {
@@ -148,6 +172,7 @@ describe("following the phone on and off its network", () => {
     nativeListener.removed = 0;
     mirror.state.video = "off";
     mirror.state.audio = "off";
+    phonePlayback.active = false;
     server.setReachable(true);
     server.setFaultMode("none");
     localStorage.setItem("c64u_device_host", hostOf(server.baseUrl));
@@ -238,6 +263,12 @@ describe("following the phone on and off its network", () => {
 
     setNetwork(true);
     await vi.waitFor(() => expect(mirror.state.video).toBe("live"), { timeout: 2000 });
+    // With the identity of the device that answered, so Live View is not started on one that cannot stream.
+    expect(retarget.restart).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ product: "C64 Ultimate", core_version: "1.0.0" }),
+    );
   });
 
   it("counts Live View as on when its stream closed with the network a moment before the event", async () => {
@@ -353,6 +384,55 @@ describe("following the phone on and off its network", () => {
 
     setNetwork(true);
     await vi.waitFor(() => expect(mirror.state.audio).toBe("live"), { timeout: 2000 });
+  });
+
+  it("brings the picture back but not the sound while a tune that carried on on the phone is playing", async () => {
+    const { manager } = await connect();
+    mirror.state.video = "live";
+    mirror.state.audio = "live";
+    mirror.emit();
+    setNetwork(false);
+    await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO"));
+    await vi.waitFor(() => expect(mirror.state.audio).toBe("off"));
+    phonePlayback.active = true;
+
+    setNetwork(true);
+
+    await vi.waitFor(() => expect(mirror.state.video).toBe("live"), { timeout: 2000 });
+    expect(mirror.state.audio).toBe("off");
+  });
+
+  it("brings back Live View that was kept off while the device was out of reach once the device answers", async () => {
+    const { manager, transitions } = await connect();
+    setNetwork(false);
+    await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO"));
+    transitions.restoreMirrorWhenDeviceReturns({ videoWasLive: true, audioWasLive: false });
+
+    setNetwork(true);
+
+    await vi.waitFor(() => expect(mirror.state.video).toBe("live"), { timeout: 2000 });
+  });
+
+  // Leaving home with Live View's sound on: the stop could not reach the c64u, which then streamed into the
+  // multicast group until another device's Live View found it there.
+  it("stops the streams the device was left sending once it answers again, before Live View restarts", async () => {
+    const { manager } = await connect();
+    mirror.state.audio = "live";
+    mirror.emit();
+    setNetwork(false);
+    await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO"));
+    await vi.waitFor(() => expect(mirror.state.audio).toBe("off"));
+    leftoverStreams.stop.mockClear();
+    let audioAtSweep = "";
+    leftoverStreams.stop.mockImplementation(async () => {
+      audioAtSweep = mirror.state.audio;
+    });
+
+    setNetwork(true);
+
+    await vi.waitFor(() => expect(mirror.state.audio).toBe("live"), { timeout: 2000 });
+    expect(leftoverStreams.stop).toHaveBeenCalledTimes(1);
+    expect(audioAtSweep).toBe("off");
   });
 
   it("relies on background probes when the platform cannot report network changes", async () => {

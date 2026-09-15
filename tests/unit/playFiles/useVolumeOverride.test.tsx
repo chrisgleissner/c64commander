@@ -1509,6 +1509,19 @@ describe("useVolumeOverride", () => {
     expect(result.current.volumeSessionSnapshotRef.current).toBeNull();
   });
 
+  it("does not log a lookup that a device switch cancelled as a failure", async () => {
+    const { result } = renderHook(() =>
+      useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),
+    );
+    getConfigItemsMock.mockImplementationOnce(() =>
+      Promise.reject(new Error("rest queued task cancelled: saved-device-switch")),
+    );
+
+    await expect(result.current.resolveEnabledSidVolumeItems(true)).resolves.toEqual([]);
+
+    expect(addErrorLog).not.toHaveBeenCalledWith("Audio mixer lookup failed", expect.anything());
+  });
+
   it("logs forced refresh failures for audio mixer and SID enablement lookups", async () => {
     const { result } = renderHook(() =>
       useVolumeOverride({ isPlaying: true, isPaused: false, previewIntervalMs: 200 }),

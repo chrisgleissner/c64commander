@@ -586,6 +586,57 @@ describe("runHealthCheck — REST probe failure", () => {
     expect(addLog).not.toHaveBeenCalledWith("warn", "Health check REST probe failed", expect.anything());
   });
 
+  // Tapping a device in the switcher sends the app back to discovering while the other devices' checks are running.
+  it("does not warn about the probes after REST held back because the app is reconnecting", async () => {
+    setupAllProbesSuccess();
+    const notReady = new Error("Device not ready for requests");
+    mockReadMemory.mockRejectedValue(notReady);
+    mockGetConfigItem.mockReset();
+    mockGetConfigItem.mockRejectedValue(notReady);
+    mockPingFtp.mockReset();
+    mockPingFtp.mockRejectedValue(new Error("Device not ready for FTP"));
+    mockTelnetConnect.mockRejectedValue(new Error("Device not ready for Telnet"));
+
+    const result = await runHealthCheck();
+
+    for (const probe of ["JIFFY", "CONFIG", "FTP", "TELNET"] as const) {
+      expect(addLog).toHaveBeenCalledWith("info", `Health check ${probe} probe failed`, expect.anything());
+      expect(result!.probes[probe].outcome).toBe("Skipped");
+    }
+    expect(addLog).not.toHaveBeenCalledWith("warn", expect.stringMatching(/probe failed/), expect.anything());
+  });
+
+  // Switching devices drops the requests still queued for the old one; the switcher's checks logged each as a warning.
+  it("does not report a REST probe cancelled by a device switch as a failure", async () => {
+    const cancelled = Object.assign(new Error("rest queued task cancelled: saved-device-switch"), {
+      name: "InteractionCancelledError",
+      isCancellation: true,
+    });
+    mockGetInfo.mockRejectedValue(cancelled);
+    mockPingFtp.mockResolvedValue({ ok: true });
+
+    const result = await runHealthCheck();
+
+    expect(addLog).not.toHaveBeenCalledWith("warn", "Health check REST probe failed", expect.anything());
+    expect(result!.probes.REST.outcome).toBe("Skipped");
+  });
+
+  it("does not report an FTP probe cancelled by a device switch as a failure", async () => {
+    setupAllProbesSuccess();
+    mockPingFtp.mockReset();
+    mockPingFtp.mockRejectedValue(
+      Object.assign(new Error("ftp queued task cancelled: saved-device-switch"), {
+        name: "InteractionCancelledError",
+        isCancellation: true,
+      }),
+    );
+
+    const result = await runHealthCheck();
+
+    expect(addLog).not.toHaveBeenCalledWith("warn", "Health check FTP probe failed", expect.anything());
+    expect(result!.probes.FTP.outcome).not.toBe("Fail");
+  });
+
   it("skips JIFFY, RASTER, CONFIG when REST fails", async () => {
     mockGetInfo.mockRejectedValue(new Error("Network error"));
     mockPingFtp.mockResolvedValue({ ok: true });

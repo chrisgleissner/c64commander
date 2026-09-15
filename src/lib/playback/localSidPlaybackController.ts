@@ -133,6 +133,21 @@ export class LocalSidPlaybackController {
   }
 
   /**
+   * Load the engine without playing anything, so a later `play` opens in tens of milliseconds rather than
+   * the second and a half a first load takes on a Pixel 4. A failed load is retried by that `play`.
+   */
+  preload(): void {
+    this.ensureEngine()
+      .load()
+      .catch((error: unknown) =>
+        addLog("debug", "Local SID engine preload failed", {
+          service: "local-sid",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+  }
+
+  /**
    * Render the opening of a track the listener has not asked for yet.
    *
    * Skipping to a warmed track starts from memory rather than from a cold renderer, which is what

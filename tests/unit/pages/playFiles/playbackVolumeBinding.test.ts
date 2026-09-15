@@ -18,6 +18,7 @@ import { buildSidVolumeSteps } from "@/lib/config/sidVolumeControl";
 import { LOCAL_VOLUME_STEPS } from "@/lib/playback/localPlaybackVolume";
 import {
   resolvePlaybackVolumeBinding,
+  rendersOnPhone,
   resolveSoundingRoute,
   type DeviceVolumeRouting,
   type LocalVolumeRouting,
@@ -145,5 +146,18 @@ describe("resolveSoundingRoute", () => {
     expect(resolveSoundingRoute("c64", "REAL_CONNECTED")).toBe("c64");
     expect(resolveSoundingRoute("c64", "DISCOVERING")).toBe("c64");
     expect(resolveSoundingRoute("c64", "UNKNOWN")).toBe("c64");
+  });
+
+  // Back home, the tune that carried on on the phone is still playing there until it ends.
+  it("keeps the phone's output while a tune is rendering there, even with the device connected again", () => {
+    expect(resolveSoundingRoute("c64", "REAL_CONNECTED", true)).toBe("local");
+  });
+});
+
+describe("rendersOnPhone", () => {
+  it("counts a tune that moved to the phone because the device went, whatever route the listener chose", () => {
+    expect(rendersOnPhone("c64", true)).toBe(true);
+    expect(rendersOnPhone("local", false)).toBe(true);
+    expect(rendersOnPhone("c64", false)).toBe(false);
   });
 });

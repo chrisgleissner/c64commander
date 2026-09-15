@@ -7,7 +7,14 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { buildPlayPlan, executePlayPlan, tryFetchUltimateSidBlob } from "@/lib/playback/playbackRouter";
+import {
+  buildPlayPlan,
+  clearRememberedUltimateSidBlobsForTests,
+  executePlayPlan,
+  getRememberedUltimateSidBlob,
+  tryFetchUltimateSidBlob,
+} from "@/lib/playback/playbackRouter";
+import { recordNetworkStatus, resetNetworkStatusWatchForTests } from "@/lib/connection/networkStatusWatch";
 import { readFtpFile } from "@/lib/ftp/ftpClient";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { addErrorLog } from "@/lib/logging";
@@ -140,6 +147,8 @@ vi.mock("@/lib/query/queryClientRegistry", () => ({
 }));
 
 beforeEach(() => {
+  clearRememberedUltimateSidBlobsForTests();
+  resetNetworkStatusWatchForTests();
   mockInvalidateQueries.mockClear();
   vi.mocked(enqueueKeyboardBufferInjection).mockClear();
   vi.mocked(loadFirstDiskPrgViaDma).mockClear();
@@ -940,6 +949,39 @@ describe("playbackRouter", () => {
     vi.mocked(readFtpFile).mockRejectedValue(new Error("connection refused"));
     const result = await tryFetchUltimateSidBlob("MUSIC/DEMO.SID");
     expect(result).toBeNull();
+  });
+
+  it("keeps a SID it read from the Ultimate, so the tune can still be read once the network is gone", async () => {
+    vi.mocked(readFtpFile).mockResolvedValue({ data: btoa("PSID"), sizeBytes: 4 } as any);
+    await tryFetchUltimateSidBlob("/MUSIC/DEMO.SID");
+    vi.mocked(readFtpFile).mockClear();
+
+    recordNetworkStatus({ online: true, supported: true });
+    recordNetworkStatus({ online: false, supported: true });
+    const offline = await tryFetchUltimateSidBlob("/music/demo.sid");
+
+    expect(vi.mocked(readFtpFile)).not.toHaveBeenCalled();
+    expect(await offline?.text()).toBe("PSID");
+  });
+
+  it("answers with the kept SID when the device stops answering on a working network", async () => {
+    vi.mocked(readFtpFile).mockResolvedValueOnce({ data: btoa("PSID"), sizeBytes: 4 } as any);
+    await tryFetchUltimateSidBlob("/MUSIC/DEMO.SID");
+    vi.mocked(readFtpFile).mockRejectedValue(new Error("connection timed out"));
+
+    const result = await tryFetchUltimateSidBlob("/MUSIC/DEMO.SID");
+
+    expect(await result?.text()).toBe("PSID");
+  });
+
+  it("keeps only the most recent SIDs, and keeps them per device", async () => {
+    vi.mocked(readFtpFile).mockResolvedValue({ data: btoa("PSID"), sizeBytes: 4 } as any);
+    for (let index = 0; index <= 16; index += 1) await tryFetchUltimateSidBlob(`/MUSIC/TUNE${index}.SID`);
+
+    expect(getRememberedUltimateSidBlob("/MUSIC/TUNE0.SID")).toBeNull();
+    expect(getRememberedUltimateSidBlob("/MUSIC/TUNE16.SID")).not.toBeNull();
+    vi.mocked(getC64APIConfigSnapshot).mockReturnValue({ deviceHost: "u64", password: "" } as any);
+    expect(getRememberedUltimateSidBlob("/MUSIC/TUNE16.SID")).toBeNull();
   });
 
   it("tryFetchUltimateSidBlob returns null and warns on size mismatch", async () => {

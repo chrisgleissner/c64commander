@@ -139,5 +139,7 @@ export type StoredPlaybackSession = {
   shuffleEnabled?: boolean;
   repeatEnabled?: boolean;
   randomSeed?: number | null;
+  /** The tune was rendering on this phone, which a restart of the app stops. */
+  playingOnPhone?: boolean;
   updatedAt: string;
 };

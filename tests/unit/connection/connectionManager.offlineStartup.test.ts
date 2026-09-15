@@ -229,6 +229,41 @@ describe("startup with no network on the device", () => {
     expect(snapshot.demoInterstitialReason).toBeNull();
   });
 
+  it("reconnects to the real device on coming home after Demo Mode was chosen without a network", async () => {
+    const manager = await import("../../../src/lib/connection/connectionManager");
+    const { recordNetworkStatus } = await import("../../../src/lib/connection/networkStatusWatch");
+    const { reconnectWhenNetworkReturns } = await import("../../../src/lib/connection/networkTransitions");
+    await manager.initializeConnectionManager();
+    await manager.discoverConnection("startup");
+    await manager.pinDemoModeByUserChoice();
+    expect(manager.getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+
+    setNetwork(true);
+    recordNetworkStatus({ online: true, supported: true });
+    vi.mocked(fetch).mockImplementation(async () => respondWithDevice());
+    void reconnectWhenNetworkReturns();
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(manager.getConnectionSnapshot().state).toBe("REAL_CONNECTED");
+  });
+
+  it("keeps Demo Mode chosen while the network was up when the network comes back", async () => {
+    const manager = await import("../../../src/lib/connection/connectionManager");
+    const { recordNetworkStatus } = await import("../../../src/lib/connection/networkStatusWatch");
+    const { reconnectWhenNetworkReturns } = await import("../../../src/lib/connection/networkTransitions");
+    setNetwork(true);
+    recordNetworkStatus({ online: true, supported: true });
+    await manager.initializeConnectionManager();
+    await manager.pinDemoModeByUserChoice();
+    expect(manager.getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+
+    vi.mocked(fetch).mockImplementation(async () => respondWithDevice());
+    void reconnectWhenNetworkReturns();
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(manager.getConnectionSnapshot().state).toBe("DEMO_ACTIVE");
+  });
+
   it("leaves Demo Mode when the user closes the offline offer", async () => {
     const { declineDemoMode, discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import("../../../src/lib/connection/connectionManager");

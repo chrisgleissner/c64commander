@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { seededShuffleIds } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
-import { executePlayPlan, tryFetchUltimateSidBlob } from "@/lib/playback/playbackRouter";
+import { executePlayPlan, getRememberedUltimateSidBlob, tryFetchUltimateSidBlob } from "@/lib/playback/playbackRouter";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { saveMirrorC64Audio, savePlaybackEngine } from "@/lib/config/appSettings";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
@@ -25,14 +25,16 @@ import {
 } from "@/lib/config/sidVolumeControl";
 
 const connectionStateOverride = vi.hoisted(() => ({ current: null as string | null }));
+const deviceInfoOverride = vi.hoisted(() => ({ current: undefined as Record<string, string> | undefined }));
 vi.mock("@/lib/connection/connectionManager", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/connection/connectionManager")>();
   return {
     ...actual,
-    getConnectionSnapshot: () =>
-      connectionStateOverride.current
-        ? { ...actual.getConnectionSnapshot(), state: connectionStateOverride.current }
-        : actual.getConnectionSnapshot(),
+    getConnectionSnapshot: () => ({
+      ...actual.getConnectionSnapshot(),
+      ...(connectionStateOverride.current ? { state: connectionStateOverride.current } : {}),
+      ...(deviceInfoOverride.current ? { deviceInfo: deviceInfoOverride.current } : {}),
+    }),
   };
 });
 
@@ -61,6 +63,7 @@ vi.mock("@/lib/playback/playbackRouter", () => ({
       await options.beforeLaunch();
     }
   }),
+  getRememberedUltimateSidBlob: vi.fn(() => null),
   tryFetchUltimateSidBlob: vi.fn(async () => null),
 }));
 
@@ -2862,7 +2865,7 @@ describe("usePlaybackController", () => {
 
       afterEach(() => resetNetworkStatusWatchForTests());
 
-      it("ends an auto-advance onto a tune kept on the Ultimate without asking the device", async () => {
+      it("stops an auto-advance onto a tune kept on the Ultimate without asking the device or reporting an error", async () => {
         const ensurePlaybackConnection = vi.fn().mockResolvedValue(undefined);
         const setIsPlaying = vi.fn();
         const playlist = [ultimateSid("one"), ultimateSid("two")];
@@ -2883,13 +2886,61 @@ describe("usePlaybackController", () => {
         expect(ensurePlaybackConnection).not.toHaveBeenCalled();
         expect(vi.mocked(tryFetchUltimateSidBlob)).not.toHaveBeenCalled();
         expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
-        expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
-          expect.objectContaining({
-            operation: "PLAYBACK_NEXT",
-            description: "Device not connected. Check connection settings.",
-          }),
-        );
+        // Nothing after it can play without the device: the playlist stops, and leaving home is not an error.
+        expect(vi.mocked(reportUserError)).not.toHaveBeenCalled();
         expect(setIsPlaying).toHaveBeenCalledWith(false);
+      });
+
+      it("moves an auto-advance past tunes kept on the Ultimate to the next one that plays on the phone", async () => {
+        enableLocal();
+        const controller = fakeController();
+        const playlist = [ultimateSid("one"), ultimateSid("two"), sidItem(psid, 1, "three")];
+        const { result } = renderPlaybackController(playlist, {
+          isPlaying: true,
+          localSidPlaybackController: controller,
+          trackInstanceIdRef: { current: 1 },
+          autoAdvanceGuardRef: armedGuard(1),
+        });
+        recordNetworkStatus({ online: true, supported: true });
+        recordNetworkStatus({ online: false, supported: true });
+
+        await act(async () => {
+          await result.current.handleNext("auto", 1);
+        });
+
+        expect(controller.play).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(reportUserError)).not.toHaveBeenCalled();
+        expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+          "info",
+          "Playback request started",
+          expect.objectContaining({ itemId: "three" }),
+        );
+      });
+
+      it("plays a tune kept on the Ultimate on the phone when it was read before the network went", async () => {
+        enableLocal();
+        const controller = fakeController();
+        const playlist = [ultimateSid("one"), ultimateSid("two")];
+        vi.mocked(getRememberedUltimateSidBlob).mockImplementation((path: string) =>
+          path.endsWith("two.sid") ? new Blob([psid()]) : null,
+        );
+        const { result } = renderPlaybackController(playlist, {
+          isPlaying: true,
+          localSidPlaybackController: controller,
+          trackInstanceIdRef: { current: 1 },
+          autoAdvanceGuardRef: armedGuard(1),
+        });
+        recordNetworkStatus({ online: true, supported: true });
+        recordNetworkStatus({ online: false, supported: true });
+
+        await act(async () => {
+          await result.current.handleNext("auto", 1);
+        });
+
+        expect(controller.play).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(tryFetchUltimateSidBlob)).not.toHaveBeenCalled();
+        expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+        vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(null);
       });
 
       it("closes the finished tune on the phone when the playlist stops on a failed auto-advance", async () => {
@@ -3324,6 +3375,18 @@ describe("playback and the Listen-on choice", () => {
     const { result } = renderPlaybackController([sidItem()], { currentIndex: 0 });
     await result.current.handlePlay();
     expect(avMirrorSession.startAudio).toHaveBeenCalled();
+  });
+
+  it("does not ask a device that cannot stream to start the mirror", async () => {
+    vi.mocked(avMirrorSession.startAudio).mockClear();
+    deviceInfoOverride.current = { product: "Ultimate II+L", firmware_version: "3.15" };
+    try {
+      const { result } = renderPlaybackController([sidItem()], { currentIndex: 0 });
+      await result.current.handlePlay();
+      expect(avMirrorSession.startAudio).not.toHaveBeenCalled();
+    } finally {
+      deviceInfoOverride.current = undefined;
+    }
   });
 
   it("leaves the mirror alone once the C64's own speakers have been chosen", async () => {

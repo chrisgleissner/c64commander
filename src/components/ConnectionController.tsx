@@ -88,6 +88,18 @@ export function ConnectionController() {
   }, []);
 
   useEffect(() => installNetworkTransitions(), []);
+  // Loaded after startup: it is only needed once a tune plays on the C64, and it kept the startup bundle over budget.
+  useEffect(() => {
+    let uninstall: (() => void) | null = null;
+    let unmounted = false;
+    void import("@/lib/playback/remoteTuneHandover").then(({ installRemoteTuneHandover }) => {
+      if (!unmounted) uninstall = installRemoteTuneHandover();
+    });
+    return () => {
+      unmounted = true;
+      uninstall?.();
+    };
+  }, []);
   useEffect(() => installSimulatedDeviceContentCleanup(), []);
 
   // A returning network starts a fresh schedule: failures counted while away say nothing about now.

@@ -788,12 +788,12 @@ describe("DiagnosticsDialog", () => {
 
     fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-latency-screen"));
-    expect(screen.getByTestId("latency-analysis-popup")).toBeVisible();
+    expect(await screen.findByTestId("latency-analysis-popup")).toBeVisible();
 
     fireEvent.click(screen.getByTestId("analytic-popup-close"));
     fireEvent.click(screen.getByTestId("diagnostics-overflow-menu"));
     fireEvent.click(screen.getByTestId("open-timeline-screen"));
-    expect(screen.getByTestId("health-history-popup")).toBeVisible();
+    expect(await screen.findByTestId("health-history-popup")).toBeVisible();
 
     rerender(
       <MemoryRouter>

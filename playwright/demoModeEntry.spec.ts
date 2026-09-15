@@ -43,6 +43,12 @@ type SeedOptions = {
   deviceBaseUrl: string;
   demoBaseUrl: string;
   networkStatus: NetworkStatus;
+  /**
+   * How long startup discovery waits before it gives up on the configured device. The short default keeps the
+   * tests that want discovery to fail quick. A test that needs the device reached passes a window longer than
+   * the 2500 ms probe timeout: on a loaded runner the first probe took 1535 ms and was aborted at 1200 ms.
+   */
+  startupDiscoveryWindowMs?: number;
 };
 
 /** Every route reachable from the tab bar. `/docs` is excluded: it renders the manual, not CTAs. */
@@ -59,39 +65,42 @@ const snap = attachStepScreenshotTolerant;
  */
 const seedHandset = async (page: Page, options: SeedOptions) => {
   await markTourTaken(page);
-  await page.addInitScript(({ deviceHost, deviceBaseUrl, demoBaseUrl, networkStatus }: SeedOptions) => {
-    const win = window as Window & {
-      __c64uTestProbeEnabled?: boolean;
-      __c64uPlatformOverride?: string;
-      __c64uMockNetworkStatus?: NetworkStatus;
-      __c64uMockDeviceDiscovery?: { candidates: unknown[] };
-      __c64uMockServerBaseUrl?: string;
-      __c64uExpectedBaseUrl?: string;
-      __c64uAllowedBaseUrls?: string[];
-    };
-    win.__c64uTestProbeEnabled = true;
-    // The strict UI monitor rejects any request to a backend the test did not declare, so both
-    // the configured device and the simulated one have to be named up front.
-    win.__c64uExpectedBaseUrl = deviceBaseUrl;
-    win.__c64uAllowedBaseUrls = [deviceBaseUrl, demoBaseUrl];
-    win.__c64uPlatformOverride = "android";
-    win.__c64uMockNetworkStatus = networkStatus;
-    // An empty LAN scan, so the discovery fallback finds nothing and the run ends in the offer
-    // rather than in a device picker. Without this the injected result is absent and the web
-    // facade answers `unsupported`, which reads the same but says less about what was intended.
-    win.__c64uMockDeviceDiscovery = { candidates: [] };
-    win.__c64uMockServerBaseUrl = demoBaseUrl;
+  await page.addInitScript(
+    ({ deviceHost, deviceBaseUrl, demoBaseUrl, networkStatus, startupDiscoveryWindowMs = 1200 }: SeedOptions) => {
+      const win = window as Window & {
+        __c64uTestProbeEnabled?: boolean;
+        __c64uPlatformOverride?: string;
+        __c64uMockNetworkStatus?: NetworkStatus;
+        __c64uMockDeviceDiscovery?: { candidates: unknown[] };
+        __c64uMockServerBaseUrl?: string;
+        __c64uExpectedBaseUrl?: string;
+        __c64uAllowedBaseUrls?: string[];
+      };
+      win.__c64uTestProbeEnabled = true;
+      // The strict UI monitor rejects any request to a backend the test did not declare, so both
+      // the configured device and the simulated one have to be named up front.
+      win.__c64uExpectedBaseUrl = deviceBaseUrl;
+      win.__c64uAllowedBaseUrls = [deviceBaseUrl, demoBaseUrl];
+      win.__c64uPlatformOverride = "android";
+      win.__c64uMockNetworkStatus = networkStatus;
+      // An empty LAN scan, so the discovery fallback finds nothing and the run ends in the offer
+      // rather than in a device picker. Without this the injected result is absent and the web
+      // facade answers `unsupported`, which reads the same but says less about what was intended.
+      win.__c64uMockDeviceDiscovery = { candidates: [] };
+      win.__c64uMockServerBaseUrl = demoBaseUrl;
 
-    localStorage.setItem("c64u_device_host", deviceHost);
-    localStorage.setItem("c64u_startup_discovery_window_ms", "1200");
-    localStorage.setItem("c64u_background_rediscovery_interval_ms", "60000");
-    localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
-    localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
-    localStorage.removeItem("c64u_password");
-    localStorage.removeItem("c64u_has_password");
-    sessionStorage.removeItem("c64u_demo_interstitial_shown");
-    sessionStorage.removeItem("c64u_demo_mode_pinned");
-  }, options);
+      localStorage.setItem("c64u_device_host", deviceHost);
+      localStorage.setItem("c64u_startup_discovery_window_ms", String(startupDiscoveryWindowMs));
+      localStorage.setItem("c64u_background_rediscovery_interval_ms", "60000");
+      localStorage.setItem("c64u_automatic_demo_mode_enabled", "1");
+      localStorage.setItem("c64u_feature_flag:demo_mode_enabled", "1");
+      localStorage.removeItem("c64u_password");
+      localStorage.removeItem("c64u_has_password");
+      sessionStorage.removeItem("c64u_demo_interstitial_shown");
+      sessionStorage.removeItem("c64u_demo_mode_pinned");
+    },
+    options,
+  );
 };
 
 const setNetworkStatus = async (page: Page, status: NetworkStatus) => {
@@ -404,6 +413,7 @@ test.describe("Entering Demo Mode", () => {
       deviceBaseUrl: device.baseUrl,
       demoBaseUrl: demo.baseUrl,
       networkStatus: { online: true, supported: true },
+      startupDiscoveryWindowMs: 5000,
     });
 
     await page.goto("/settings", { waitUntil: "domcontentloaded" });
@@ -589,6 +599,7 @@ test.describe("Demo Mode CTA parity", () => {
       deviceBaseUrl: device.baseUrl,
       demoBaseUrl: demo.baseUrl,
       networkStatus: { online: true, supported: true },
+      startupDiscoveryWindowMs: 5000,
     });
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expectConnectionState(page, "REAL_CONNECTED");

@@ -95,6 +95,8 @@ export function DeviceDiscoveryInterstitial() {
   );
   const candidates = deviceDiscovery.candidates;
   const hasCandidates = candidates.length > 0;
+  // Away from home an empty scan is expected, so the host prompt is for setting up, not for a device that has worked.
+  const hasWorkingDevice = savedDevices.devices.some((device) => Boolean(device.lastSuccessfulConnectionAt));
   const shouldOffer =
     deviceDiscovery.phase === "complete" &&
     isAutomaticDiscoveryTrigger(deviceDiscovery.trigger) &&
@@ -103,7 +105,7 @@ export function DeviceDiscoveryInterstitial() {
     // untrue once a probe has reached the device, and the modal scrim blocks the page
     // the user is on. The candidate picker stays exempt so a background reconnect
     // cannot yank away a choice the user is in the middle of making.
-    (hasCandidates || connection.state !== "REAL_CONNECTED");
+    (hasCandidates || (connection.state !== "REAL_CONNECTED" && !hasWorkingDevice));
   const open = shouldOffer && dismissedKey !== discoveryKey;
 
   const dismissCurrentDiscovery = () => {

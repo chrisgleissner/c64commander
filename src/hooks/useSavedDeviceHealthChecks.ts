@@ -35,6 +35,11 @@ import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import type { SavedDevice } from "@/lib/savedDevices/store";
 import { buildSavedDevicePreferredRuntimeHost } from "@/lib/savedDevices/resolvedTarget";
 
+// A check whose requests the app held back while connecting says nothing about the device, so the last result
+// stays: the switcher showed the connected device as "Unavailable" with one problem after each switch.
+const heldBackByApp = (result: HealthCheckRunResult) =>
+  result.probes.REST.outcome === "Fail" && /device not ready for requests/i.test(result.probes.REST.reason ?? "");
+
 // F-DIAG-1 — saved-device probe cycle frequency.
 // Picker open (switchDeviceDialog): every 10 s so health refreshes are visible
 // during interaction.
@@ -395,14 +400,15 @@ export function useSavedDeviceHealthChecks(
               return;
             }
 
+            const heldBack = heldBackByApp(result);
             updateDevice(device.id, (current) => ({
               ...current,
               running: false,
-              latestResult: result,
+              latestResult: heldBack ? current.latestResult : result,
               liveProbes: null,
               probeStates: current.probeStates,
               lastCompletedAt: new Date().toISOString(),
-              lastObservedAt: result.endTimestamp,
+              lastObservedAt: heldBack ? current.lastObservedAt : result.endTimestamp,
               deferredReason: null,
               error: null,
             }));
@@ -412,7 +418,9 @@ export function useSavedDeviceHealthChecks(
             }
             const message =
               error instanceof Error ? error.message : String(error ?? "Saved-device health check failed");
-            addLog("warn", "Saved-device health check failed", {
+            // A probe the app dropped on purpose, as a device switch does, is not the device failing.
+            const cancelled = (error as { isCancellation?: boolean } | null)?.isCancellation === true;
+            addLog(cancelled ? "info" : "warn", "Saved-device health check failed", {
               deviceId: device.id,
               host: device.host,
               error: message,
@@ -424,7 +432,7 @@ export function useSavedDeviceHealthChecks(
               probeStates: current.probeStates,
               lastCompletedAt: new Date().toISOString(),
               deferredReason: null,
-              error: message,
+              error: cancelled ? current.error : message,
             }));
           } finally {
             const active = controllersRef.current.get(device.id);
@@ -563,16 +571,21 @@ export function useSavedDeviceHealthChecks(
           return getBackgroundHealthCadenceMs("healthy");
         }
 
+        const heldBack = heldBackByApp(result);
         updateDevice(selectedDevice.id, (current) => ({
           ...current,
           running: false,
-          latestResult: result,
+          latestResult: heldBack ? current.latestResult : result,
           liveProbes: null,
           probeStates: current.probeStates,
           lastCompletedAt: result.endTimestamp,
-          lastObservedAt: result.endTimestamp,
+          lastObservedAt: heldBack ? current.lastObservedAt : result.endTimestamp,
           deferredReason: null,
-          error: result.connectivity === "Offline" ? (result.probes.REST.reason ?? "Device not reachable") : null,
+          error: heldBack
+            ? current.error
+            : result.connectivity === "Offline"
+              ? (result.probes.REST.reason ?? "Device not reachable")
+              : null,
         }));
 
         return getBackgroundHealthCadenceMs(result.connectivity === "Offline" ? "recovery" : "healthy");
@@ -584,8 +597,10 @@ export function useSavedDeviceHealthChecks(
         const message = error instanceof Error ? error.message : String(error ?? "Saved-device health check failed");
         // A background probe that runs out of time behind the page's own requests is not the device failing;
         // an Ultimate II+L limited to one request at a time timed out here while it answered everything else.
-        const timedOut = /timed out/i.test(message);
-        addLog(timedOut ? "info" : "warn", "Saved-device background health check failed", {
+        // Nor is a queued probe the app dropped on purpose, as reconnecting does.
+        const cancelled = (error as { isCancellation?: boolean } | null)?.isCancellation === true;
+        const notTheDevice = /timed out/i.test(message) || cancelled;
+        addLog(notTheDevice ? "info" : "warn", "Saved-device background health check failed", {
           deviceId: selectedDevice.id,
           host: selectedDevice.host,
           error: message,
@@ -599,7 +614,7 @@ export function useSavedDeviceHealthChecks(
           lastObservedAt: current.lastObservedAt,
           deferredReason: null,
           // So a timeout keeps the last result: the switcher showed a connected, healthy device as Offline.
-          error: timedOut ? current.error : message,
+          error: notTheDevice ? current.error : message,
         }));
         return getBackgroundHealthCadenceMs("recovery");
       } finally {

@@ -358,6 +358,49 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(result.current.byDeviceId[selectedDeviceId]?.error).toBeNull();
   });
 
+  // Coming home: the reconnect resets the request queue, which drops the probe waiting in it.
+  it("does not warn about, or record as offline, a background probe the app cancelled while reconnecting", async () => {
+    const { addLog } = await import("@/lib/logging");
+    mockRunConnectivityProbeForTarget.mockRejectedValue(
+      Object.assign(new Error("rest queued task cancelled: transition-real-connected"), { isCancellation: true }),
+    );
+    const { result } = renderBackgroundHook(buildSavedDevices());
+
+    await flushAsyncWork();
+
+    expect(addLog).not.toHaveBeenCalledWith("warn", "Saved-device background health check failed", expect.anything());
+    expect(result.current.byDeviceId[selectedDeviceId]?.error).toBeNull();
+  });
+
+  it("does not warn about, or record as the device's error, a switcher check the app cancelled", async () => {
+    const { addLog } = await import("@/lib/logging");
+    mockRunHealthCheckForTarget.mockRejectedValue(
+      Object.assign(new Error("ftp queued task cancelled: saved-device-switch"), { isCancellation: true }),
+    );
+    const { result } = renderSwitchHook(buildSavedDevices());
+
+    await flushAsyncWork();
+
+    expect(addLog).not.toHaveBeenCalledWith("warn", "Saved-device health check failed", expect.anything());
+    expect(result.current.byDeviceId[selectedDeviceId]?.error).toBeNull();
+  });
+
+  it("names a device that answered no REST probe as not reachable when the probe gave no reason", async () => {
+    mockRunConnectivityProbeForTarget.mockImplementation(async () => ({
+      ...makeResult("office"),
+      connectivity: "Offline" as const,
+      probes: {
+        ...makeResult("office").probes,
+        REST: { probe: "REST" as const, outcome: "Fail" as const, durationMs: 3000, reason: null, startMs: 1 },
+      },
+    }));
+    const { result } = renderBackgroundHook(buildSavedDevices());
+
+    await flushAsyncWork();
+
+    expect(result.current.byDeviceId[selectedDeviceId]?.error).toBe("Device not reachable");
+  });
+
   it("records any other background probe failure as the device's error, with a warning", async () => {
     const { addLog } = await import("@/lib/logging");
     mockRunConnectivityProbeForTarget.mockRejectedValue(new Error("Connection refused"));
@@ -526,6 +569,44 @@ describe("useSavedDeviceHealthChecks", () => {
       previousOfficeResult?.overallHealth ?? "Healthy",
     );
     expect(result.current.byDeviceId["device-office"]?.latestResult?.overallHealth).not.toBe("Unavailable");
+  });
+
+  // After each switch the switcher showed the connected device as "Unavailable" with one problem.
+  it("keeps the last result of a device when the app held the check's requests back while connecting", async () => {
+    const heldBack = () => ({
+      ...makeResult("office"),
+      overallHealth: "Unavailable",
+      connectivity: "Offline" as const,
+      probes: {
+        ...makeResult("office").probes,
+        REST: {
+          probe: "REST" as const,
+          outcome: "Fail" as const,
+          durationMs: 1,
+          reason: "Device not ready for requests",
+          startMs: 1,
+        },
+      },
+    });
+    const switcher = renderSwitchHook();
+    await flushAsyncWork();
+    const previous = switcher.result.current.byDeviceId["device-office"]?.latestResult;
+    mockRunHealthCheckForTarget.mockImplementation(async () => heldBack());
+
+    await act(async () => {
+      switcher.result.current.refreshAll();
+    });
+    await flushAsyncWork();
+
+    expect(switcher.result.current.byDeviceId["device-office"]?.latestResult).toBe(previous);
+    switcher.unmount();
+
+    mockRunConnectivityProbeForTarget.mockImplementation(async () => heldBack());
+    const background = renderBackgroundHook();
+    await flushAsyncWork();
+
+    expect(background.result.current.byDeviceId["device-office"]?.latestResult).toBeNull();
+    expect(background.result.current.byDeviceId["device-office"]?.error).toBeNull();
   });
 
   it("manual refresh forces a new all-device cycle before the next interval", async () => {

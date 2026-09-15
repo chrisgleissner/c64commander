@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
+import { claimNativeTrack, nextSerial, releaseNativeTrack } from "@/lib/audio/nativeTrackOwnership";
 import { NativeAudioSink, type NativeAudioBackend } from "@/lib/streams/audioNativeSink";
 
 /** Flush the microtask queue. */
@@ -57,6 +58,21 @@ describe("NativeAudioSink", () => {
     expect(backend.readAudioStats).toHaveBeenCalled();
     expect(sink.getStats().bufferedMs).toBeGreaterThan(0);
     await sink.close();
+  });
+
+  // Leaving home with Live View's sound on: the stop that closed the mirror's track reached the native side after
+  // the tune carried on on the phone had opened it, so the tune played into a closed track and was never heard.
+  it("leaves the native track alone on close once the on-device SID engine has taken it", async () => {
+    const { backend } = fakeBackend();
+    const sink = new NativeAudioSink(47983, backend, 60, 5);
+    await sink.open();
+    const localSid = {};
+    claimNativeTrack(backend, localSid, nextSerial());
+
+    await sink.close();
+
+    expect(backend.closeAudioTrack).not.toHaveBeenCalled();
+    releaseNativeTrack(backend, localSid);
   });
 
   it("stops polling and releases the track on close", async () => {

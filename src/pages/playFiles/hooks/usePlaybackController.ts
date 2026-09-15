@@ -33,11 +33,11 @@ import { toast } from "@/hooks/use-toast";
 import {
   buildPlayPlan,
   executePlayPlan,
+  getRememberedUltimateSidBlob,
   tryFetchUltimateSidBlob,
   type LocalPlayFile,
   type PlayRequest,
 } from "@/lib/playback/playbackRouter";
-import { getHvscDurationsByMd5Seconds } from "@/lib/hvsc";
 import {
   getLocalFilePath,
   isSongCategory,
@@ -74,6 +74,7 @@ import { toEngineTuneIndex } from "@/lib/playback/sidTuneIndex";
 import { resolveTraversalOrdering } from "@/pages/playFiles/stationOrdering";
 import { updateSidRadioStats } from "@/lib/sidRadio/sidRadioStats";
 import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
+import { identifiedDeviceStreams } from "@/lib/deviceCapabilities";
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import {
   ENGINE_FALLBACK_MESSAGES,
@@ -83,6 +84,13 @@ import {
 } from "@/lib/playback/playbackEngineRouting";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
+import { useRemotePlaybackHandover } from "@/pages/playFiles/hooks/useRemotePlaybackHandover";
+import { firstPlayableWithoutDevice, isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
+import {
+  resolveHvscDurationSecondsForSongNr,
+  resolveUltimateSidDurationByMd5,
+  warmNeighbouringLeadIns,
+} from "@/pages/playFiles/sidBytesAhead";
 import {
   applyConfigFileReference,
   ensureConfigFileReferenceAccessible,
@@ -99,19 +107,6 @@ import type { SidEnablement } from "@/lib/config/sidVolumeControl";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
 import { featureFlagManager } from "@/lib/config/featureFlags";
 
-/**
- * How much of an upcoming track to render ahead.
- *
- * Matched to the native buffer's depth, and that is the trick. The cached opening is poured into the
- * ring as fast as the ring will take it, so when it runs out and live rendering takes over, the ring
- * is holding roughly this much — exactly the margin the renderer needs to get ahead. Measured with a
- * six-second lead-in the ring fell to 0.44 s at the seam; matched to the ring it does not dip.
- *
- * Not more: output is 192 KB per second, so two warmed neighbours at this depth already cost a few
- * megabytes.
- */
-const LEAD_IN_SECONDS = 15;
-
 type HandledUiError = Error & { c64uHandled?: boolean };
 
 const markHandledUiError = (error: unknown) => {
@@ -122,20 +117,6 @@ const markHandledUiError = (error: unknown) => {
 
 const isHandledUiError = (error: unknown): error is HandledUiError =>
   error instanceof Error && Boolean((error as HandledUiError).c64uHandled);
-
-/**
- * The md5-fallback duration lookup is per-subsong (HVSC durations are indexed
- * songNr - 1, mirroring the local songlengths backend), so a bare
- * `getHvscDurationByMd5Seconds` call silently returns subsong 1's length for
- * any other songNr. See HARD11-004 (related facet).
- */
-const resolveHvscDurationSecondsForSongNr = async (md5: string, songNr?: number | null): Promise<number | null> => {
-  const durations = await getHvscDurationsByMd5Seconds(md5);
-  if (!durations?.length) return null;
-  const index = songNr && songNr > 0 ? songNr - 1 : 0;
-  if (index < 0 || index >= durations.length) return null;
-  return durations[index] ?? null;
-};
 
 type SidMuteSnapshot = {
   volumes: Record<string, string | number>;
@@ -701,29 +682,6 @@ export function usePlaybackController({
     [durationFallbackMs, resolveSonglengthDurationMsForPath],
   );
 
-  const resolveUltimateSidDurationByMd5 = useCallback(
-    async (path: string, songNr?: number | null): Promise<number | null> => {
-      try {
-        const blob = await tryFetchUltimateSidBlob(path);
-        if (!blob) return null;
-        const buffer = await blob.arrayBuffer();
-        const { computeSidMd5 } = await import("@/lib/sid/sidUtils");
-        const md5 = await computeSidMd5(buffer);
-        const seconds = await resolveHvscDurationSecondsForSongNr(md5, songNr);
-        if (seconds === undefined || seconds === null) return null;
-        return seconds * 1000;
-      } catch (error) {
-        addLog("debug", "Ultimate SID MD5 duration lookup failed", { path });
-        addErrorLog("Ultimate SID MD5 duration lookup failed", {
-          path,
-          error: (error as Error).message,
-        });
-        return null;
-      }
-    },
-    [],
-  );
-
   const resolveCommoServeRuntimeRequest = useCallback(
     async (item: PlaylistItem): Promise<RuntimePlaybackRequest | null> => {
       if (item.request.source !== "commoserve" || item.request.file) return null;
@@ -832,59 +790,16 @@ export function usePlaybackController({
     ],
   );
 
-  /**
-   * Render the opening of the next and previous tracks, so skipping to either starts instantly.
-   *
-   * Only the opening — a few seconds is all that is needed to cover the gap before the buffer is
-   * ahead of the speaker, and caching whole tunes costs 192 KB per second.
-   *
-   * Skipped for tracks whose bytes are not already to hand. Resolving those means going to the
-   * network or the Ultimate, and doing that speculatively for tracks nobody has asked for would
-   * spend the listener's bandwidth and the device's attention on a guess.
-   */
-  const warmNeighbouringTracks = useCallback(async () => {
-    const playlist = playlistRef.current;
-    const index = currentIndexRef.current;
-    for (const offset of [1, -1]) {
-      const neighbour = playlist[index + offset];
-      if (!neighbour) continue;
-      // HVSC entries carry no bytes until they are played — resolving one reads from the on-device
-      // library, which is local and cheap. Anything still without a file after that is coming over
-      // the network, and is left alone rather than fetched on a guess.
-      const resolved = neighbour.request.file
-        ? neighbour.request
-        : ((
-            await resolveHvscRuntimeRequest(neighbour).catch((error: unknown) => {
-              // Falling back to the unresolved request is right — this is speculative warming and
-              // must never disturb what is playing — but a resolution that always fails means every
-              // skip starts cold, which is a silent, permanent loss of the feature.
-              addLog("debug", "Playback: could not resolve a neighbouring track for lead-in warming", {
-                error: (error as Error)?.message ?? String(error),
-              });
-              return null;
-            })
-          )?.request ?? neighbour.request);
-      const file = resolved.file;
-      if (!file) continue;
-      try {
-        const bytes = await file.arrayBuffer();
-        const tuneIndex = toEngineTuneIndex(resolved.songNr);
-        getLocalSidPlayback().warmLeadIn(
-          buildRenderedTuneKey(neighbour.id, tuneIndex),
-          bytes,
-          tuneIndex,
-          LEAD_IN_SECONDS,
-        );
-      } catch (error) {
-        // A track that cannot be read now is simply not warmed; it will be read when it is played.
-        addLog("debug", "Lead-in warm skipped", {
-          service: "local-sid",
-          item: neighbour.label,
-          error: (error as Error)?.message ?? String(error),
-        });
-      }
-    }
-  }, []);
+  const warmNeighbouringTracks = useCallback(
+    () =>
+      warmNeighbouringLeadIns(
+        playlistRef.current,
+        currentIndexRef.current,
+        resolveHvscRuntimeRequest,
+        getLocalSidPlayback(),
+      ),
+    [],
+  );
 
   const playItem = useCallback(
     async (
@@ -989,7 +904,14 @@ export function usePlaybackController({
         const deviceOutOfReach =
           isNetworkKnownOffline() ||
           (options?.origin === "auto" && getConnectionSnapshot().state === "OFFLINE_NO_DEMO");
-        if (effectiveRequest.source === "ultimate" && deviceOutOfReach) throw new Error(DEVICE_NOT_CONNECTED_MESSAGE);
+        // Unless it was read before the device went, which is what lets a tune playing there carry on here.
+        if (
+          effectiveRequest.source === "ultimate" &&
+          deviceOutOfReach &&
+          !getRememberedUltimateSidBlob(effectivePath)
+        ) {
+          throw new Error(DEVICE_NOT_CONNECTED_MESSAGE);
+        }
         let durationOverride: number | undefined = item.durationMs;
         let subsongCount: number | undefined = item.subsongCount ?? undefined;
         if (item.category === "sid" && effectiveRequest.source !== "ultimate") {
@@ -1059,7 +981,9 @@ export function usePlaybackController({
             // No try/catch: the fetch reports its own failures and answers with null, so a wrapper here
             // could only ever catch something it does not throw — and the log inside it read as though
             // it were the place a failed fetch is reported, which it was not.
-            const blob = await tryFetchUltimateSidBlob(effectivePath);
+            const remembered =
+              noDeviceConnected || deviceOutOfReach ? getRememberedUltimateSidBlob(effectivePath) : null;
+            const blob = remembered ?? (await tryFetchUltimateSidBlob(effectivePath));
             if (blob) {
               effectiveRequest = {
                 ...effectiveRequest,
@@ -1330,6 +1254,8 @@ export function usePlaybackController({
           if (
             featureFlagManager.getSnapshot().flags.audio_mirror_enabled &&
             loadMirrorC64Audio() &&
+            // An Ultimate II+L has no /v1/streams: asking it answered 404, logged twice as an error.
+            identifiedDeviceStreams(getConnectionSnapshot().deviceInfo) &&
             !avMirrorSession.audioLive
           ) {
             void avMirrorSession.startAudio().catch((error) => {
@@ -2153,6 +2079,22 @@ export function usePlaybackController({
     [],
   );
 
+  /** The next track in playing order and, with the device out of reach, the first from there that can play without it. */
+  const resolveReachableNextIndex = useCallback(
+    (activePlaylist: PlaylistItem[], fromIndex: number) => {
+      const ordering = traversalOrdering();
+      const following = (index: number) =>
+        resolveNextPlaylistIndex(activePlaylist, index, ordering.repeatEnabled, ordering.shuffleEnabled, shuffleSeed);
+      const nextIndex = following(fromIndex);
+      const reachableIndex =
+        nextIndex === null || !isDeviceOutOfReach()
+          ? nextIndex
+          : firstPlayableWithoutDevice(activePlaylist, nextIndex, following);
+      return { nextIndex, reachableIndex };
+    },
+    [traversalOrdering, shuffleSeed],
+  );
+
   const handleNext = useCallback(
     async (source: "auto" | "user" = "user", expectedTrackInstanceId?: number) => {
       if (source === "user") {
@@ -2160,14 +2102,8 @@ export function usePlaybackController({
         if (!activePlaylist.length) return;
         cancelAutoAdvance();
         const activeIndex = currentIndexRef.current;
-        const ordering = traversalOrdering();
-        const nextIndex = resolveNextPlaylistIndex(
-          activePlaylist,
-          activeIndex,
-          ordering.repeatEnabled,
-          ordering.shuffleEnabled,
-          shuffleSeed,
-        );
+        const next = resolveReachableNextIndex(activePlaylist, activeIndex);
+        const nextIndex = next.reachableIndex ?? next.nextIndex;
         const now = Date.now();
         playedClockRef.current.pause(now);
         setPlayedMs(playedClockRef.current.current(now));
@@ -2195,14 +2131,7 @@ export function usePlaybackController({
         guard.autoFired = true;
 
         const activeIndex = currentIndexRef.current;
-        const ordering = traversalOrdering();
-        const nextIndex = resolveNextPlaylistIndex(
-          activePlaylist,
-          activeIndex,
-          ordering.repeatEnabled,
-          ordering.shuffleEnabled,
-          shuffleSeed,
-        );
+        const { nextIndex, reachableIndex } = resolveReachableNextIndex(activePlaylist, activeIndex);
         const now = Date.now();
         playedClockRef.current.pause(now);
         setPlayedMs(playedClockRef.current.current(now));
@@ -2212,12 +2141,19 @@ export function usePlaybackController({
           return;
         }
 
-        const nextItem = activePlaylist[nextIndex];
+        const nextItem = activePlaylist[reachableIndex ?? nextIndex];
         const shouldReboot = currentItem?.category === "disk" || nextItem?.category === "disk";
         try {
+          if (reachableIndex === null) {
+            // Away from the device, with nothing left that plays without it: stop here, without an error.
+            addLog("info", "Playback stopped: the tracks that follow need the C64", { currentIndex: activeIndex });
+            const unreachable = new Error(DEVICE_NOT_CONNECTED_MESSAGE);
+            markHandledUiError(unreachable);
+            throw unreachable;
+          }
           await playItem(nextItem, {
             rebootBeforePlay: shouldReboot,
-            playlistIndex: nextIndex,
+            playlistIndex: reachableIndex,
             origin: "auto",
           });
           setIsPaused(false);
@@ -2256,8 +2192,7 @@ export function usePlaybackController({
       getLocalSidPlayback,
       setCurrentPlaybackIsLocal,
       playItem,
-      traversalOrdering,
-      shuffleSeed,
+      resolveReachableNextIndex,
       playedClockRef,
       scheduleUserSkip,
       setVisibleCurrentIndex,
@@ -2275,13 +2210,13 @@ export function usePlaybackController({
     if (!activePlaylist.length) return;
     const activeIndex = currentIndexRef.current;
     const ordering = traversalOrdering();
-    const prevIndex = resolvePreviousPlaylistIndex(
-      activePlaylist,
-      activeIndex,
-      ordering.repeatEnabled,
-      ordering.shuffleEnabled,
-      shuffleSeed,
-    );
+    const preceding = (index: number) =>
+      resolvePreviousPlaylistIndex(activePlaylist, index, ordering.repeatEnabled, ordering.shuffleEnabled, shuffleSeed);
+    const previousIndex = preceding(activeIndex);
+    const prevIndex =
+      previousIndex !== null && isDeviceOutOfReach()
+        ? (firstPlayableWithoutDevice(activePlaylist, previousIndex, preceding) ?? previousIndex)
+        : previousIndex;
     cancelAutoAdvance();
     const now = Date.now();
     playedClockRef.current.pause(now);
@@ -2515,6 +2450,27 @@ export function usePlaybackController({
     },
     [playedClockRef, setPlayedMs, trackStartedAtRef, rescheduleAutoAdvance],
   );
+
+  useRemotePlaybackHandover({
+    playlistRef,
+    currentIndexRef,
+    isPlayingRef,
+    isPausedRef,
+    currentPlaybackIsLocalRef,
+    trackStartedAtRef,
+    durationMsRef,
+    isPlaying,
+    isPaused,
+    currentIndex,
+    localEngineActive,
+    durationMs,
+    getLocalSidPlayback,
+    setCurrentPlaybackIsLocal,
+    resolveHvscRuntimeRequest,
+    resolveNextIndex: (from) => resolveReachableNextIndex(playlistRef.current, from).reachableIndex,
+    playItem,
+    seekBy: handleSeekBy,
+  });
 
   return {
     beginScrub,

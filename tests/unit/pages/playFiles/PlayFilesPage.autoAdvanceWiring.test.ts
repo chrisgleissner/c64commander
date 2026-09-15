@@ -100,3 +100,17 @@ describe("PlayFilesPage transport latch readiness", () => {
     expect(pageSource).toContain("const [sessionRestoreSettled, setSessionRestoreSettled] = useState(false);");
   });
 });
+
+// A tune that moved to the phone when the C64 went out of reach could not be scrubbed, and its volume
+// control stayed on the C64 once the device was back: both followed the engine setting, not the route.
+describe("PlayFilesPage on-device controls", () => {
+  it("offers scrubbing and the phone's volume for a tune rendering on the phone, whatever the engine setting", () => {
+    expect(pageSource).toContain(
+      "const localEngineActive = rendersOnPhone(playbackEngine.engine, activePlayback.local);",
+    );
+    expect(pageSource).not.toMatch(/playbackEngine\.engine === "local" && currentItem\?\.category === "sid"/);
+    expect(pageSource).toContain(
+      "route: resolveSoundingRoute(playbackEngine.engine, status.state, activePlayback.local),",
+    );
+  });
+});

@@ -293,7 +293,9 @@ describe("usePlaybackPersistence repository session persistence", () => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.isPlaying).toBe(true);
     });
-    expect(result.current.elapsedMs).toBe(5000);
+    // Written moments before the remount; the clock carries on by the time since then.
+    expect(result.current.elapsedMs).toBeGreaterThanOrEqual(5000);
+    expect(result.current.elapsedMs).toBeLessThan(6000);
     expect(readStoredPlaybackSession()?.isPlaying).toBe(true);
   });
 

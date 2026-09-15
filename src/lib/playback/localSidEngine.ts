@@ -1454,10 +1454,10 @@ export class LocalSidEngine {
     this.takeOverFromOutgoingTune();
     this.cached = warmed;
     this.cachedCursor = 0;
-    // Where the live renderer has to take over when the cached opening runs out. Held rather than
-    // acted on: positioning the renderer means asking the worker, and the worker has not opened
-    // this tune yet. `onOpened` does it, which is the first moment the request means anything.
-    this.prerenderedSeamSeconds = warmed.partial ? warmed.durationSeconds : null;
+    // Where the live renderer takes over when the cached opening runs out, held until `onOpened`, when the
+    // worker has the tune. Not when this tune's pre-render is still growing the cache: playback follows it.
+    this.followingPrerender = Boolean(warmed.partial) && this.isPrerendering(key);
+    this.prerenderedSeamSeconds = warmed.partial && !this.followingPrerender ? warmed.durationSeconds : null;
     traceLocalSid("started-from-prerendered-intro", {
       key,
       seconds: +warmed.durationSeconds.toFixed(2),
@@ -1521,7 +1521,8 @@ export class LocalSidEngine {
       this.cachedCursor = Math.min(rendered.pcm.length, Math.floor(target * rendered.sampleRate) * rendered.channels);
       // Landing inside a lead-in still has to leave the tune able to continue past it, so the live
       // renderer is sent to the seam while the cache plays out — the same hand-off as at open.
-      if (rendered.partial) this.scheduleHandoff(rendered.durationSeconds);
+      this.followingPrerender = Boolean(rendered.partial) && this.isPrerendering(this.currentKey);
+      if (rendered.partial && !this.followingPrerender) this.scheduleHandoff(rendered.durationSeconds);
       addLog("debug", "Local SID seek served from the pre-render cache", {
         service: "local-sid",
         seconds: target,
@@ -2365,18 +2366,21 @@ export class LocalSidEngine {
     return this.prerenderFraction;
   }
 
+  private isPrerendering(key: string | null): boolean {
+    return key !== null && this.prerenderKey === key && this.prerenderFraction !== null;
+  }
+
   /**
-   * Render the whole tune in the background so seeking inside it is instant.
-   *
-   * Rendering costs roughly 150 ms of CPU per second of audio on a Pixel 4, so
-   * a three-minute tune is ~27 s of work — worth paying once, off to the side,
-   * rather than paying part of it again on every backward seek.
+   * Render the whole tune in the background so seeking inside it is instant. About 150 ms of CPU per second
+   * of audio on a Pixel 4: a three-minute tune is ~27 s of work, paid once rather than on every backward seek.
    */
   prerender(key: string, sidBytes: ArrayBuffer, songIndex: number, seconds: number): void {
     // Remember which tune is open even when it is already cached, so a later
     // seek can find it.
     this.currentKey = key;
-    if (this.renderCache.has(key) || !this.worker || seconds <= 0) return;
+    // Needs no playback worker, so a tune playing on the C64 can be rendered in case it moves here. A running
+    // render is kept, and a part left by a render given up for another tune is rendered again.
+    if (this.renderCache.get(key)?.partial === false || this.isPrerendering(key) || seconds <= 0) return;
     // No ROM guard. The worker renders a PSID with null images, so refusing here only emptied the
     // cache for anyone whose ROM capture had not succeeded — every seek re-rendered from the start.
     const roms = loadStoredRoms();

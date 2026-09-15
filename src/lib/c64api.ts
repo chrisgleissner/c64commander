@@ -1816,14 +1816,15 @@ export class C64API {
                   const responseTrace = await inspectResponsePayload(response);
                   throwIfSuperseded();
                   if (!response.ok) {
+                    const expectedFailure =
+                      (expectedMissing && method === "GET" && response.status === 404) || expectedFailureOption;
+                    // Marked on the error as well, or the catch below logged an item the caller expected to be missing.
                     const err = annotateRestFailure(
                       new Error(buildHttpErrorMessage(response.status, response.statusText)),
                       "http-status",
-                      { httpStatus: response.status, expected: expectedFailureOption },
+                      { httpStatus: response.status, expected: expectedFailure },
                     );
                     const failure = classifyError(err, "integration");
-                    const expectedFailure =
-                      (expectedMissing && method === "GET" && response.status === 404) || expectedFailureOption;
                     recordRestResponse(action, {
                       method,
                       path,
@@ -1971,6 +1972,7 @@ export class C64API {
                     !scheduledTimeoutFailure &&
                     !expectedFailureOption &&
                     !failure.isExpected &&
+                    (error as { c64uExpectedFailure?: boolean }).c64uExpectedFailure !== true &&
                     !isExpectedBackgroundNetworkFailure(
                       error as Error,
                       isAbort,
@@ -1999,16 +2001,10 @@ export class C64API {
                       rawError: rawMessage,
                       errorDetail: isDnsFailure(rawMessage) ? "DNS lookup failed" : undefined,
                     });
-                    // BUG-078: transient failures (idle/device-switch blips, classic
-                    // c64u firmware TCP wedge signatures) are real and recovered from by
-                    // the caller/engine. Logging them at error severity produces a confusing
-                    // "Healthy + red error entries" state because the badge already recovered
-                    // via the same retry path. Demote transient failures to warn so the
-                    // Activity feed shows a recoverable amber entry instead of a red one.
-                    // Non-transient failures (HTTP 4xx/5xx, JSON parse, etc.) still log at
-                    // error severity because they indicate a real defect, not a blip. The
-                    // `transient` flag is preserved on the details so the Problems tab and
-                    // exported diagnostics ZIP keep the full diagnostic record.
+                    // BUG-078: transient failures (idle/device-switch blips, c64u TCP wedge signatures) are
+                    // recovered by the caller or engine, so an error entry beside a recovered "Healthy" badge
+                    // confused; they log at warn. HTTP 4xx/5xx and parse failures are real defects and log at
+                    // error. The `transient` flag stays on the details for the Problems tab and diagnostics ZIP.
                     if (isTransientFailure) {
                       addLog("warn", "C64 API request failed", { ...failureDetails, transient: true });
                     } else {
@@ -2272,6 +2268,10 @@ export class C64API {
                 error: normalizedError,
               }),
             );
+            // A read the caller dropped, as closing the device switcher does, did not find the host unreachable.
+            if (callerAborted && !timedSignal.didTimeout()) {
+              throw annotateRestFailure(createAbortError(), "abort", { callerCancelled: true });
+            }
             if (isAbort || isNetworkFailure) {
               throw annotateRestFailure(
                 new Error(resolveHostErrorMessage(rawMessage)),
@@ -2392,6 +2392,9 @@ export class C64API {
           errors: [],
         };
       }
+
+      // Dropped by a device switch: one request per item would go to the new device, which may not have them.
+      if (isAbortLikeError(error)) throw error;
 
       if (isDeviceNotReadyRequestGate(categoryErrorMessage)) {
         addLog("warn", "Category config fetch skipped item fallback because device is not ready", {

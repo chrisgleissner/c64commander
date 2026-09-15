@@ -74,6 +74,7 @@ import {
   readNativeNetworkStatus,
   shouldStartDemoModeForOfflineDevice,
 } from "@/lib/connection/offlineStartup";
+import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { isNativePlatform } from "@/lib/native/platform";
 
 export type ConnectionState = "UNKNOWN" | "DISCOVERING" | "REAL_CONNECTED" | "DEMO_ACTIVE" | "OFFLINE_NO_DEMO";
@@ -442,13 +443,13 @@ const DEMO_MODE_DECLINED_SESSION_KEY = "c64u_demo_mode_declined";
 let stickyRealDeviceLock = false;
 let discoveryRunToken = 0;
 let demoModePinnedByUser = false;
+let demoModePinnedWithoutNetwork = false;
 /** Demo Mode the user chose stays until they leave it; nothing probes for a real device meanwhile. */
 export const isDemoModePinnedByUser = () => demoModePinnedByUser;
 let demoModeDeclinedByUser = false;
 let activeManualDiscovery: { trigger: DiscoveryTrigger; promise: Promise<void> } | null = null;
-// HARD18-007: rate-limits the manual-trigger sweep+LAN-scan escalation
-// (activeManualDiscovery only coalesces taps that overlap an in-flight run,
-// not repeated taps once each one has finished failing).
+// HARD18-007: rate-limits the manual sweep+LAN-scan escalation (activeManualDiscovery only
+// coalesces overlapping taps, not repeated taps once each has finished failing).
 let lastManualDiscoveryFallbackAtMs = 0;
 const MANUAL_DISCOVERY_FALLBACK_COOLDOWN_MS = 15_000;
 
@@ -690,6 +691,7 @@ const clearPinnedDemoMode = () => {
  */
 export async function pinDemoModeByUserChoice() {
   demoModePinnedByUser = true;
+  demoModePinnedWithoutNetwork = isNetworkKnownOffline();
   persistDemoModeSessionFlag(DEMO_MODE_PINNED_SESSION_KEY, true);
   demoModeDeclinedByUser = false;
   persistDemoModeSessionFlag(DEMO_MODE_DECLINED_SESSION_KEY, false);
@@ -697,10 +699,16 @@ export async function pinDemoModeByUserChoice() {
   await transitionToDemoActive("manual", { bypassStickyRealDeviceLock: true });
 }
 
+/** Demo Mode taken because there was no network was the only choice there was; coming home ends it. */
+export const releaseDemoModeChosenWithoutNetwork = (): boolean => {
+  if (!demoModePinnedByUser || !demoModePinnedWithoutNetwork) return false;
+  clearPinnedDemoMode();
+  return true;
+};
+
 /**
- * The user turned the offer down. The simulated device is already standing in when it is shown, so
- * closing it must leave Demo Mode, and no later discovery this session may bring it back unasked.
- * `retry` runs that discovery instead of going offline first, so a device that answers still wins.
+ * The user turned the offer down. The simulated device already stands in when it is shown, so closing it leaves
+ * Demo Mode and no later discovery this session brings it back unasked. `retry` discovers instead of going offline.
  */
 export async function declineDemoMode(options: { retry?: DiscoveryTrigger } = {}) {
   demoModeDeclinedByUser = true;
@@ -823,13 +831,10 @@ const transitionToRealConnected = async (
   cancelActiveDiscovery();
   dismissDemoInterstitial();
   resetInteractionState("transition-real-connected");
-  // HARD19-004 (D1): reaching REAL_CONNECTED means the REST control plane just
-  // answered, which contradicts a pinned Unhealthy/Unavailable manual health-check
-  // verdict. The pinned `latestResult` otherwise drives the global badge with no
-  // staleness bound, so a device that hiccupped and recovered would show red
-  // forever. Clear it on recovery so the badge falls back to live trace-derived
-  // health. (A pinned Degraded/Healthy result is left to the trace-evidence
-  // override in useHealthState.)
+  // HARD19-004 (D1): REST just answered, contradicting a pinned Unhealthy/Unavailable health-check verdict
+  // that otherwise drives the badge with no staleness bound, so a device that recovered would show red
+  // forever. Clear it so the badge falls back to live trace-derived health. (A pinned Degraded/Healthy
+  // result is left to the trace-evidence override in useHealthState.)
   const pinnedHealth = getHealthCheckStateSnapshot().latestResult;
   if (pinnedHealth && (pinnedHealth.overallHealth === "Unhealthy" || pinnedHealth.overallHealth === "Unavailable")) {
     setHealthCheckStateSnapshot({ latestResult: null });
@@ -926,7 +931,7 @@ const tryReachableSavedDeviceFallback = async (
   if (verification.ok && verification.deviceInfo) {
     completeSavedDeviceVerification(reachable.device.id, verification.deviceInfo);
     // HARD27-010: follow Live View to the device that just verified, as the canonical switch does.
-    restartAvMirrorAfterDeviceRetarget(mirrorState, reachable.device.id);
+    restartAvMirrorAfterDeviceRetarget(mirrorState, reachable.device.id, verification.deviceInfo);
     return true;
   }
   return false;
@@ -1129,11 +1134,9 @@ const transitionToDemoActive = async (
   setSnapshot({ deviceInfo: null });
   transitionTo("DEMO_ACTIVE", trigger);
   logDiscoveryDecision("DEMO_ACTIVE", trigger, { mode: "demo" });
-  // The simulated device has an identity of its own; read it, so capability-gated features are
-  // offered in Demo Mode exactly as they are against real hardware. Only when the mock server is
-  // what the API is actually pointed at: without one there is nothing simulated to ask, and the
-  // request would go to the stored real host — which is the one thing the no-network path must
-  // never do.
+  // The simulated device has an identity of its own; read it, so capability-gated features are offered
+  // in Demo Mode exactly as against real hardware. Only when the API points at the mock server: without
+  // one the request would go to the stored real host, which the no-network path must never do.
   if (activeMockUrl) {
     void ensureDeviceIdentityAfterConnect({ useRuntimeTarget: true });
   }
@@ -1273,12 +1276,9 @@ async function runDiscoverConnection(trigger: DiscoveryTrigger): Promise<void> {
       }),
     ]);
     if (!ok && discoveryRun.isCurrent()) {
-      // HARD18-007: the stored host may simply be stale (DHCP re-assigned
-      // the device a new address after a power-cycle) - before surfacing
-      // Offline, sweep other saved devices and fall back to a LAN scan,
-      // exactly like startup/resume/settings. Rate-limited (not on every
-      // single tap) so a user repeatedly tapping the badge while genuinely
-      // offline can't trigger a LAN-scan burst.
+      // HARD18-007: the stored host may be stale (DHCP after a power-cycle), so sweep saved devices and scan
+      // the LAN before surfacing Offline, like startup/resume/settings. Rate-limited so repeated taps while
+      // genuinely offline cannot trigger a LAN-scan burst.
       const now = Date.now();
       if (now - lastManualDiscoveryFallbackAtMs >= MANUAL_DISCOVERY_FALLBACK_COOLDOWN_MS) {
         lastManualDiscoveryFallbackAtMs = now;

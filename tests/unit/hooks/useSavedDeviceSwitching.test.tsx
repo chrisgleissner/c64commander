@@ -1273,7 +1273,7 @@ describe("useSavedDeviceSwitching", () => {
     });
     mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
       ok: true,
-      deviceInfo: { product: "U64E", hostname: "backup-lab", unique_id: "UID-BACKUP" },
+      deviceInfo: { product: "U64E", core_version: "1.4A", hostname: "backup-lab", unique_id: "UID-BACKUP" },
     });
     // Live View is running when the user switches devices.
     mockAvMirror.videoLive = true;
@@ -1289,8 +1289,42 @@ describe("useSavedDeviceSwitching", () => {
     // Stopped on the OLD device (before the API retarget), restarted on the NEW verified device —
     // so both devices never stream to the shared multicast group at once (clean transition).
     expect(mockAvMirror.stopAll).toHaveBeenCalledTimes(1);
-    expect(mockAvMirror.startVideo).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(mockAvMirror.startVideo).toHaveBeenCalledTimes(1));
     expect(mockAvMirror.startAudio).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not follow Live View to a device that does not stream", async () => {
+    const store = await import("@/lib/savedDevices/store");
+    store.addSavedDevice({
+      id: "device-cartridge",
+      name: "Cartridge",
+      host: "u2-lab",
+      httpPort: 80,
+      ftpPort: 21,
+      telnetPort: 23,
+      hasPassword: false,
+    });
+    mockVerifyCurrentConnectionTarget.mockResolvedValueOnce({
+      ok: true,
+      deviceInfo: { product: "Ultimate II+L", firmware_version: "3.15", hostname: "u2-lab", unique_id: "UID-U2" },
+    });
+    mockAvMirror.videoLive = true;
+    mockAvMirror.audioLive = true;
+
+    const { useSavedDeviceSwitching } = await import("@/hooks/useSavedDeviceSwitching");
+    const { result } = renderHook(() => useSavedDeviceSwitching(), { wrapper: createWrapper("/play") });
+
+    await act(async () => {
+      await result.current("device-cartridge");
+    });
+    await import("@/lib/deviceCapabilities");
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockAvMirror.stopAll).toHaveBeenCalledTimes(1);
+    expect(mockAvMirror.startVideo).not.toHaveBeenCalled();
+    expect(mockAvMirror.startAudio).not.toHaveBeenCalled();
   });
 
   it("does not restart the mirror when the new device fails to verify", async () => {

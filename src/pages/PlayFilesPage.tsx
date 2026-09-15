@@ -92,7 +92,11 @@ import { AppBar } from "@/components/AppBar";
 import { usePrimaryPageShellClassName } from "@/components/layout/AppChromeContext";
 import { SOURCE_LABELS } from "@/lib/sourceNavigation/sourceTerms";
 import { VolumeControls } from "@/pages/playFiles/components/VolumeControls";
-import { resolvePlaybackVolumeBinding, resolveSoundingRoute } from "@/pages/playFiles/playbackVolumeBinding";
+import {
+  rendersOnPhone,
+  resolvePlaybackVolumeBinding,
+  resolveSoundingRoute,
+} from "@/pages/playFiles/playbackVolumeBinding";
 import { localVolumeGainForIndex, localVolumeIndexForGain } from "@/lib/playback/localPlaybackVolume";
 import { PlaybackControlsCard } from "@/pages/playFiles/components/PlaybackControlsCard";
 import { PlaybackEngineToggle } from "@/pages/playFiles/components/PlaybackEngineToggle";
@@ -1934,7 +1938,8 @@ export default function PlayFilesPage() {
    * percentage, because each field answers a different question on screen.
    */
   const [pendingSeekState, setPendingSeekState] = useState<PendingSeekState | null>(null);
-  const localEngineActive = playbackEngine.engine === "local";
+  const activePlayback = useActivePlayback();
+  const localEngineActive = rendersOnPhone(playbackEngine.engine, activePlayback.local);
   currentDurationMsRef.current = currentDurationMs;
   /*
    * The auto-advance deadline used to be held still here, from the pending seek's target, on every
@@ -2028,7 +2033,7 @@ export default function PlayFilesPage() {
 
   const canControlVolume = enabledSidVolumeItems.length > 0 && volumeSteps.length > 0;
   const volumeBinding = resolvePlaybackVolumeBinding({
-    route: resolveSoundingRoute(playbackEngine.engine, status.state),
+    route: resolveSoundingRoute(playbackEngine.engine, status.state, activePlayback.local),
     local: {
       index: localVolumeIndex,
       muted: localMuted,
@@ -2204,7 +2209,6 @@ export default function PlayFilesPage() {
   // the user could hear. It corrects itself when the async session restore
   // lands, which is too late to be a transport. The union is deliberate:
   // whichever source knows first wins, and neither can turn the other off.
-  const activePlayback = useActivePlayback();
   const playbackRunning = isPlaying || activePlayback.any;
   const localPlaybackRunning = isPlaying || activePlayback.local;
   const canPause = playbackRunning;
@@ -2619,18 +2623,18 @@ export default function PlayFilesPage() {
                 // plays the SID itself and cannot be scrubbed, so on that route
                 // Previous/Next stay plain track controls.
                 onSeek={
-                  playbackEngine.engine === "local" && currentItem?.category === "sid" && localPlaybackRunning
+                  localEngineActive && currentItem?.category === "sid" && localPlaybackRunning
                     ? (deltaSeconds) => void handleSeekBy(deltaSeconds)
                     : undefined
                 }
                 onScrubStart={
-                  playbackEngine.engine === "local" && currentItem?.category === "sid" && localPlaybackRunning
+                  localEngineActive && currentItem?.category === "sid" && localPlaybackRunning
                     ? () => beginScrub(currentDurationMs)
                     : undefined
                 }
                 onScrubStep={scrubBy}
                 onSeekToFraction={
-                  playbackEngine.engine === "local" && currentItem?.category === "sid" && currentDurationMs
+                  localEngineActive && currentItem?.category === "sid" && currentDurationMs
                     ? (fraction) => seekToFraction(fraction, currentDurationMs)
                     : undefined
                 }

@@ -149,9 +149,9 @@ const persistLogsNow = (logs: LogEntry[]) => {
 // available in every environment this module runs in (browser, WebView,
 // Node-based tests).
 const scheduleLogPersist = () => {
-  if (pendingPersistTimer !== null) {
-    clearTimeout(pendingPersistTimer);
-  }
+  // A write already scheduled saves the newest entries too. Restarting it on every entry meant logs
+  // arriving more often than the window, an error repeating four times a second, were never saved.
+  if (pendingPersistTimer !== null) return;
   pendingPersistTimer = setTimeout(() => {
     pendingPersistTimer = null;
     persistLogsNow(cachedLogs ?? []);

@@ -314,6 +314,17 @@ describe("C64API getConfigItems", () => {
     });
     expect(getConfigItem).not.toHaveBeenCalled();
   });
+
+  // A device switch drops the queued category read; each item was then asked of an Ultimate II+L that has none.
+  it("does not fall back to one request per item when the category read was cancelled", async () => {
+    const api = new C64API("http://127.0.0.1");
+
+    vi.spyOn(api, "getCategory").mockRejectedValue(new Error("rest queued task cancelled: saved-device-switch"));
+    const getConfigItem = vi.spyOn(api, "getConfigItem");
+
+    await expect(api.getConfigItems("Audio Mixer", ["Vol Master", "Vol Socket 1"])).rejects.toThrow("cancelled");
+    expect(getConfigItem).not.toHaveBeenCalled();
+  });
 });
 
 describe("C64API request identity", () => {

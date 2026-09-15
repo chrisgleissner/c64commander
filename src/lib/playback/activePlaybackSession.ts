@@ -7,7 +7,8 @@
  */
 
 import { addLog } from "@/lib/logging";
-import { getC64API } from "@/lib/c64api";
+import { C64API, getC64API, getC64APIConfigSnapshot } from "@/lib/c64api";
+import { buildBaseUrlFromDeviceHost } from "@/lib/c64api/hostConfig";
 import { getSharedLocalSidPlaybackController } from "./localSidPlaybackController";
 import { notifyPlaybackActivityChanged, subscribePlaybackActivity } from "./playbackActivitySignal";
 
@@ -125,6 +126,7 @@ export const stopActivePlaybackBeforeDeviceSwitch = async (timeoutMs = 2000): Pr
     remotePlaybackActive,
   });
   if (!remotePlaybackActive) return;
+  const { deviceHost, password } = getC64APIConfigSnapshot();
   try {
     // A reset is what the app's own stop does, and it verifiably silences the
     // Ultimate's SID player.
@@ -132,9 +134,34 @@ export const stopActivePlaybackBeforeDeviceSwitch = async (timeoutMs = 2000): Pr
     markRemotePlaybackStopped();
     addLog("info", "Playback: old device reset before switch", { service: "playback" });
   } catch (error) {
-    addLog("warn", "Playback: failed to stop the old device before a device switch", {
+    // The tune is no longer the app's to follow once the switch goes ahead; the reset is sent again to that device.
+    markRemotePlaybackStopped();
+    addLog("info", "Playback: the old device did not confirm its reset; trying again after the switch", {
       service: "playback",
       error: error instanceof Error ? error.message : String(error),
     });
+    void resetDeviceLeftBehind(deviceHost, password);
+  }
+};
+
+const RESET_RETRY_DELAYS_MS = [1000, 3000];
+
+// On a Pixel 4 the c64u once took over 1.5 s to answer the reset, and the C64 left behind kept playing.
+const resetDeviceLeftBehind = async (deviceHost: string, password?: string) => {
+  const api = new C64API(buildBaseUrlFromDeviceHost(deviceHost), password, deviceHost);
+  for (const [attempt, delayMs] of RESET_RETRY_DELAYS_MS.entries()) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    try {
+      await api.machineReset();
+      addLog("info", "Playback: reset the device left behind by the switch", { service: "playback", deviceHost });
+      return;
+    } catch (error) {
+      if (attempt < RESET_RETRY_DELAYS_MS.length - 1) continue;
+      addLog("warn", "Playback: could not stop the tune on the device left behind by the switch", {
+        service: "playback",
+        deviceHost,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 };

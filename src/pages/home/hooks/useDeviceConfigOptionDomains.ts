@@ -134,6 +134,8 @@ export function useDeviceConfigOptionDomains(
           () => null,
         );
         const categories = await listed;
+        // Disconnecting while the list was asked for aborts it; the items were then read with no network.
+        if (cancelled) return;
         if (categories && !categories.has(category)) {
           api.markConfigItemDomainAbsent?.(category, item);
           continue;

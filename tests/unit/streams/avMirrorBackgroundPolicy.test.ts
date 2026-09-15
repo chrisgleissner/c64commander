@@ -85,6 +85,39 @@ describe("AvMirrorBackgroundPolicy (HARD27-021)", () => {
     expect(session.calls).toEqual(["stopAll", "startVideo", "startAudio"]);
   });
 
+  // Away from home with the phone in a pocket: the tune had moved to the phone, and taking the phone out
+  // restarted the C64's audio, which stopped the tune and then failed to bind with no network.
+  it("keeps the mirror off while the device is out of reach, and leaves it to come back with the device", async () => {
+    const session = createSession({ audioLive: true, videoLive: true });
+    const restoreWhenDeviceReturns = vi.fn();
+    const policy = new AvMirrorBackgroundPolicy(session, {
+      deviceOutOfReach: () => true,
+      phoneIsPlaying: () => false,
+      restoreWhenDeviceReturns,
+    });
+
+    await policy.handleHidden();
+    await policy.handleVisible();
+
+    expect(session.startAudio).not.toHaveBeenCalled();
+    expect(session.startVideo).not.toHaveBeenCalled();
+    expect(restoreWhenDeviceReturns).toHaveBeenCalledWith({ audioWasLive: true, videoWasLive: true });
+  });
+
+  it("brings the picture back but not the C64's audio over a tune playing on the phone", async () => {
+    const session = createSession({ audioLive: true, videoLive: true });
+    const policy = new AvMirrorBackgroundPolicy(session, {
+      deviceOutOfReach: () => false,
+      phoneIsPlaying: () => true,
+      restoreWhenDeviceReturns: vi.fn(),
+    });
+
+    await policy.handleHidden();
+    await policy.handleVisible();
+
+    expect(session.calls).toEqual(["stopAll", "startVideo"]);
+  });
+
   it("does not restart a stream that something else already restarted", async () => {
     const session = createSession({ audioLive: true, videoLive: true });
     const policy = new AvMirrorBackgroundPolicy(session);

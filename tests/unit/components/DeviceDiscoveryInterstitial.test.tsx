@@ -33,7 +33,10 @@ const acknowledgeDeviceDiscoveryResults = vi.fn();
 
 let discoveryState: DeviceDiscoveryState;
 let connectionState: { state: string };
-let savedDevices: { selectedDeviceId: string; devices: Array<{ id: string; host?: string; hasPassword: boolean }> };
+let savedDevices: {
+  selectedDeviceId: string;
+  devices: Array<{ id: string; host?: string; hasPassword: boolean; lastSuccessfulConnectionAt?: string | null }>;
+};
 
 vi.mock("@/hooks/useDeviceDiscovery", () => ({
   useDeviceDiscovery: () => discoveryState,
@@ -188,6 +191,22 @@ describe("DeviceDiscoveryInterstitial", () => {
 
     expect(screen.queryByText("No C64 found")).not.toBeInTheDocument();
     expect(screen.queryByTestId("startup-manual-device-panel")).not.toBeInTheDocument();
+  });
+
+  it("does not prompt for a host when the device that has worked before is out of reach", () => {
+    // Leaving home: the saved device stops answering, and a later automatic scan finds nothing.
+    discoveryState = { ...discoveryState, trigger: "resume", candidates: [] };
+    savedDevices = {
+      selectedDeviceId: "device-1",
+      devices: [
+        { id: "device-1", host: "c64u", hasPassword: false, lastSuccessfulConnectionAt: "2026-06-20T21:00:00.000Z" },
+      ],
+    };
+
+    renderDialog();
+
+    expect(screen.queryByText("No C64 found")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("startup-manual-device-host-input")).not.toBeInTheDocument();
   });
 
   it("saves and selects a reachable manual host from the no-device startup dialog", async () => {

@@ -36,6 +36,9 @@ export const subscribeHvscDemoLibraryRemoved: Subscribe = (listener) => {
   };
 };
 
+/** Tells the subscribers that Demo Mode's library is gone, for a removal made outside this cleanup. */
+export const notifyHvscDemoLibraryRemoved = () => removedListeners.forEach((listener) => listener());
+
 /**
  * Removes the HVSC data Demo Mode installed once the app has settled outside Demo Mode.
  * Evaluated when started as well as on every trigger, so a launch that settles straight into
@@ -61,7 +64,7 @@ export const createHvscDemoLibraryCleanup = (deps: HvscDemoLibraryCleanupDeps) =
       reason: "The app has settled outside Demo Mode, so the simulated device's tunes must not stay installed",
     });
     await deps.removeLibrary();
-    removedListeners.forEach((listener) => listener());
+    notifyHvscDemoLibraryRemoved();
   };
 
   const evaluate = (): Promise<void> => {

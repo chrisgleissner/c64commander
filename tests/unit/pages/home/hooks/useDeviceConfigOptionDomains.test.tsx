@@ -83,6 +83,25 @@ describe("useDeviceConfigOptionDomains", () => {
     expect(hoisted.absent.has("Cat::Item")).toBe(true);
   });
 
+  // Going offline while the category list was being read aborted it, and the items were then asked for with no
+  // network: the network-transitions E2E saw the drive and printer Bus ID reads fail while offline.
+  it("asks for no items once the page stops wanting them while the category list is still being read", async () => {
+    let answerList: (value: unknown) => void = () => undefined;
+    hoisted.getCategoriesMock.mockReturnValue(new Promise((resolve) => (answerList = resolve)));
+    const { rerender } = renderHook(({ enabled }) => useDeviceConfigOptionDomains("test", REFS, enabled), {
+      initialProps: { enabled: true },
+    });
+    await flush();
+
+    rerender({ enabled: false });
+    await act(async () => {
+      answerList(Promise.reject(new Error("The operation was aborted")));
+    });
+    await flush();
+
+    expect(hoisted.getConfigItemMock).not.toHaveBeenCalled();
+  });
+
   it("does not re-fetch a definitively-absent (404) ref on the next effect run (HARD16-005)", async () => {
     hoisted.getConfigItemMock.mockRejectedValue(http404());
     const { rerender } = renderHook(() => useDeviceConfigOptionDomains("test", REFS, true));
