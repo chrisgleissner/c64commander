@@ -567,6 +567,32 @@ describe("usePlaybackController", () => {
     );
   });
 
+  // After the playlist ended, Previous showed the previous title with the last tune's length and a full bar.
+  it.each(["handlePrevious", "handleNext"] as const)(
+    "shows the chosen track's length with nothing playing after %s",
+    async (skip) => {
+      const playlist = [
+        createPlaylistItem({ id: "a", label: "Chess II", durationMs: 208_000 }),
+        createPlaylistItem({ id: "b", label: "Chess", durationMs: 38_000 }),
+        createPlaylistItem({ id: "c", label: "Bangkok", durationMs: 226_000 }),
+      ];
+      const setDurationMs = vi.fn();
+      const setElapsedMs = vi.fn();
+      const { result } = renderPlaybackController(playlist, {
+        currentIndex: 1,
+        durationMs: 38_000,
+        setDurationMs,
+        setElapsedMs,
+      });
+
+      await result.current[skip]();
+
+      expect(setDurationMs).toHaveBeenLastCalledWith(skip === "handlePrevious" ? 208_000 : 226_000);
+      expect(setElapsedMs).toHaveBeenLastCalledWith(0);
+      expect(vi.mocked(executePlayPlan)).not.toHaveBeenCalled();
+    },
+  );
+
   it("propagates songlength via SSL upload for ultimate SID playback instead of skipping it", async () => {
     const playlist = [
       createPlaylistItem({

@@ -2123,6 +2123,16 @@ export function usePlaybackController({
     [traversalOrdering, shuffleSeed],
   );
 
+  // With nothing playing a skip only chooses the track, which showed the last tune's length and a full bar.
+  const showChosenTrackWhileStopped = useCallback(
+    (index: number) => {
+      if (isPlayingRef.current || isPausedRef.current) return;
+      setElapsedMs(0);
+      setDurationMs(playlistRef.current[index]?.durationMs);
+    },
+    [setDurationMs, setElapsedMs],
+  );
+
   const handleNext = useCallback(
     async (source: "auto" | "user" = "user", expectedTrackInstanceId?: number) => {
       if (source === "user") {
@@ -2140,6 +2150,7 @@ export function usePlaybackController({
           return;
         }
         setVisibleCurrentIndex(nextIndex);
+        showChosenTrackWhileStopped(nextIndex);
         await scheduleUserSkip(nextIndex, false, activeIndex, "PLAYBACK_NEXT", "Playback next failed");
         return;
       }
@@ -2224,6 +2235,7 @@ export function usePlaybackController({
       playedClockRef,
       scheduleUserSkip,
       setVisibleCurrentIndex,
+      showChosenTrackWhileStopped,
       setAutoAdvanceDueAtMs,
       setPlayedMs,
       setIsPlaying,
@@ -2250,6 +2262,7 @@ export function usePlaybackController({
     playedClockRef.current.pause(now);
     setPlayedMs(playedClockRef.current.current(now));
     setVisibleCurrentIndex(prevIndex);
+    showChosenTrackWhileStopped(prevIndex);
     await scheduleUserSkip(prevIndex, false, activeIndex, "PLAYBACK_PREVIOUS", "Playback previous failed");
   }, [
     cancelAutoAdvance,
@@ -2259,6 +2272,7 @@ export function usePlaybackController({
     setPlayedMs,
     scheduleUserSkip,
     setVisibleCurrentIndex,
+    showChosenTrackWhileStopped,
   ]);
 
   const playlistItemDuration = useCallback(
