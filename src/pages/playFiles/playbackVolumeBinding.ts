@@ -31,8 +31,23 @@ import type { VolumeControlsProps } from "@/pages/playFiles/components/VolumeCon
  * SID plays on this phone whatever the engine setting says (preRouteEngine), so the control must
  * attenuate the phone's output rather than a mixer nobody hears.
  */
-export const resolveSoundingRoute = (engine: "c64" | "local", connectionState: string): PlaybackRoute =>
-  engine === "local" || connectionState === "DEMO_ACTIVE" || connectionState === "OFFLINE_NO_DEMO" ? "local" : "c64";
+/**
+ * Whether the tune renders on this phone, so it can be scrubbed and its rendered span shown: the listener chose
+ * the phone, or the tune moved here because no device can be reached.
+ */
+export const rendersOnPhone = (engine: "c64" | "local", localPlaybackActive: boolean): boolean =>
+  engine === "local" || localPlaybackActive;
+
+export const resolveSoundingRoute = (
+  engine: "c64" | "local",
+  connectionState: string,
+  localPlaybackActive = false,
+): PlaybackRoute =>
+  rendersOnPhone(engine, localPlaybackActive) ||
+  connectionState === "DEMO_ACTIVE" ||
+  connectionState === "OFFLINE_NO_DEMO"
+    ? "local"
+    : "c64";
 
 /** Everything about the control that depends on which route is playing. */
 export type PlaybackVolumeBinding = Pick<
