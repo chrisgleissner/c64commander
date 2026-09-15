@@ -93,6 +93,55 @@ describe("keeping the page awake during background playback", () => {
     expect(audio.sources).toHaveLength(2);
   });
 
+  it("warns when the page cannot be kept awake, and stops quietly when the source had already stopped", async () => {
+    const { addLog } = await import("@/lib/logging");
+    class RefusingContext extends FakeAudioContext {
+      resume = vi.fn(async () => {
+        throw new Error("not allowed to start");
+      });
+    }
+    vi.stubGlobal("AudioContext", RefusingContext);
+
+    startWebViewKeepAlive();
+
+    await vi.waitFor(() =>
+      expect(addLog).toHaveBeenCalledWith(
+        "warn",
+        "Background playback: could not keep the page awake with the screen off",
+        {
+          error: "not allowed to start",
+        },
+      ),
+    );
+    audio.sources[0].stop.mockImplementation(() => {
+      throw new Error("already stopped");
+    });
+    stopWebViewKeepAlive();
+    expect(addLog).toHaveBeenCalledWith("debug", "Background playback: the keep-awake source was already stopped", {
+      error: "already stopped",
+    });
+
+    resetWebViewKeepAliveForTests();
+    vi.stubGlobal(
+      "AudioContext",
+      class {
+        constructor() {
+          throw new Error("no audio output");
+        }
+      },
+    );
+    startWebViewKeepAlive();
+
+    expect(isWebViewKeepAliveRunning()).toBe(false);
+    expect(addLog).toHaveBeenCalledWith(
+      "warn",
+      "Background playback: could not keep the page awake with the screen off",
+      {
+        error: "no audio output",
+      },
+    );
+  });
+
   it("does nothing outside Android, where no page is frozen this way", () => {
     platform.name = "ios";
     startWebViewKeepAlive();

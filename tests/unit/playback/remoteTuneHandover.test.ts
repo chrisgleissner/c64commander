@@ -184,6 +184,40 @@ describe("carrying a tune from the C64 on to the phone", () => {
     expect(engine.play).not.toHaveBeenCalled();
   });
 
+  it("warns when the phone cannot start the tune, and gives the listener their level back", async () => {
+    engine.play.mockRejectedValueOnce(new Error("engine failed to open"));
+    rememberRemoteTune(tune());
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await vi.waitFor(() =>
+      expect(addLog).toHaveBeenCalledWith("warn", "Playback: could not carry on with the tune on this phone", {
+        item: "Waltz.sid",
+        error: "engine failed to open",
+      }),
+    );
+    expect(engine.seekTo).not.toHaveBeenCalled();
+    expect(engine.setMuted.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("warns when the C64 refuses the reset for a reason other than the reconnect", async () => {
+    noteTuneHandedOver(Date.now() - 10_000);
+    device.machineReset.mockRejectedValueOnce(new Error("HTTP 500"));
+    setConnection("OFFLINE_NO_DEMO");
+
+    setConnection("REAL_CONNECTED");
+
+    await vi.waitFor(
+      () =>
+        expect(addLog).toHaveBeenCalledWith("warn", "Playback: could not stop the tune left playing on the C64", {
+          error: "HTTP 500",
+        }),
+      { timeout: 3000 },
+    );
+    expect(device.machineReset).toHaveBeenCalledTimes(1);
+    expect(markRemotePlaybackStopped).not.toHaveBeenCalled();
+  });
+
   it("resets the C64, still looping the tune, once the same device answers again", async () => {
     noteTuneHandedOver(Date.now() - 10_000);
     setConnection("OFFLINE_NO_DEMO");

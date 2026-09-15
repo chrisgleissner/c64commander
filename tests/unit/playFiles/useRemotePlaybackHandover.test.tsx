@@ -119,7 +119,7 @@ const renderHandover = (playlist: PlaylistItem[], startedAt: number, engineActiv
     seekBy,
   };
   renderHook(() => useRemotePlaybackHandover(options));
-  return { engine, playItem, seekBy, setCurrentPlaybackIsLocal };
+  return { engine, playItem, seekBy, setCurrentPlaybackIsLocal, options };
 };
 
 describe("useRemotePlaybackHandover", () => {
@@ -210,6 +210,57 @@ describe("useRemotePlaybackHandover", () => {
     expect(engine.setMuted.mock.calls).toEqual([[true], [false]]);
     // Recorded, so the C64 is reset when it is back.
     expect(wasTuneHandedOver(startedAt)).toBe(true);
+  });
+
+  it("warns and gives the listener their level back when the phone cannot start the tune", async () => {
+    vi.mocked(getRememberedUltimateSidBlob).mockReturnValue(new Blob([new Uint8Array(4)]));
+    const { engine, playItem, seekBy } = renderHandover([ultimateSid("one")], Date.now() - 20_000);
+    playItem.mockRejectedValueOnce(new Error("engine failed to open"));
+
+    setConnection("OFFLINE_NO_DEMO");
+
+    await waitFor(() =>
+      expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+        "warn",
+        "Playback: could not carry on with the tune on this phone",
+        {
+          item: "one.sid",
+          error: "engine failed to open",
+        },
+      ),
+    );
+    expect(seekBy).not.toHaveBeenCalled();
+    expect(engine.setMuted.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("reads a tune from the phone's library ahead, and logs a read that fails without stopping the tune", async () => {
+    const hvscSid = {
+      id: "hvsc-one",
+      category: "sid",
+      label: "hvsc-one.sid",
+      path: "/MUSICIANS/one.sid",
+      request: { source: "hvsc", path: "/MUSICIANS/one.sid", songNr: 1 },
+    } as unknown as PlaylistItem;
+    const bytes = new ArrayBuffer(8);
+    const { engine, options } = renderHandover([hvscSid], Date.now() - 5_000);
+    vi.mocked(options.resolveHvscRuntimeRequest).mockResolvedValue({
+      request: { file: { arrayBuffer: async () => bytes } },
+    } as never);
+    const rerendered = renderHook(() => useRemotePlaybackHandover({ ...options, durationMs: 170_000 }));
+
+    await waitFor(() => expect(engine.prerender).toHaveBeenCalledWith(expect.any(String), bytes, 0, 170));
+    rerendered.unmount();
+
+    vi.mocked(tryFetchUltimateSidBlob).mockRejectedValueOnce(new Error("Host unreachable"));
+    renderHandover([ultimateSid("two")], Date.now() - 5_000);
+
+    await waitFor(() =>
+      expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+        "debug",
+        "Playback: could not read ahead for carrying on without the C64",
+        { item: "two.sid", error: "Host unreachable" },
+      ),
+    );
   });
 
   it("leaves a tune it could not read before the device went, and says why", async () => {

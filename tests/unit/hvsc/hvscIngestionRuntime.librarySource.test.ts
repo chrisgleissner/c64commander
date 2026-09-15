@@ -194,6 +194,20 @@ describe("hvscIngestionRuntime library source", () => {
     expect(notifyHvscDemoLibraryRemoved).toHaveBeenCalledTimes(1);
   });
 
+  it("installs the real release even when Demo Mode's tunes cannot be removed from the playlist", async () => {
+    storeState({ installedVersion: 84, installedBaselineVersion: 84, ingestionState: "ready", librarySource: "demo" });
+    serveCachedBaseline(83);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue(release(83, false));
+    vi.mocked(removeDemoTunesFromPlaylist).mockRejectedValueOnce(new Error("playlist store unavailable"));
+
+    await installOrUpdateHvsc("token-real");
+
+    expect(loadHvscState()).toMatchObject({ installedVersion: 83, ingestionState: "ready", librarySource: "real" });
+    expect(addLog).toHaveBeenCalledWith("warn", "Could not remove Demo Mode's tunes after replacing its HVSC library", {
+      error: "playlist store unavailable",
+    });
+  });
+
   it("empties the SID Radio md5 index when the library is reset", async () => {
     rebuildMd548PathIndex(["; /MUSICIANS/Demo/tune.sid", "0123456789abcdef0123456789abcdef=0:30"].join("\n"));
     expect(getMd548PathIndexStats().size).toBe(1);
