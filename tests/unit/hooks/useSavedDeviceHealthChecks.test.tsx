@@ -372,6 +372,19 @@ describe("useSavedDeviceHealthChecks", () => {
     expect(result.current.byDeviceId[selectedDeviceId]?.error).toBeNull();
   });
 
+  it("does not warn about, or record as the device's error, a switcher check the app cancelled", async () => {
+    const { addLog } = await import("@/lib/logging");
+    mockRunHealthCheckForTarget.mockRejectedValue(
+      Object.assign(new Error("ftp queued task cancelled: saved-device-switch"), { isCancellation: true }),
+    );
+    const { result } = renderSwitchHook(buildSavedDevices());
+
+    await flushAsyncWork();
+
+    expect(addLog).not.toHaveBeenCalledWith("warn", "Saved-device health check failed", expect.anything());
+    expect(result.current.byDeviceId[selectedDeviceId]?.error).toBeNull();
+  });
+
   it("records any other background probe failure as the device's error, with a warning", async () => {
     const { addLog } = await import("@/lib/logging");
     mockRunConnectivityProbeForTarget.mockRejectedValue(new Error("Connection refused"));

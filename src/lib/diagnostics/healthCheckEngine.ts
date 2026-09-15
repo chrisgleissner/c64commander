@@ -952,7 +952,7 @@ const probeFtp = async (runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> 
     );
     return makeRecord("FTP", "Success", durationMs, null, startMs);
   } catch (error) {
-    if (isTimeoutLike(error)) {
+    if (isAbortLike(error) || isTimeoutLike(error)) {
       throw error;
     }
     const msg = (error as Error).message;

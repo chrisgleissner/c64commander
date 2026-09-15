@@ -418,7 +418,9 @@ export function useSavedDeviceHealthChecks(
             }
             const message =
               error instanceof Error ? error.message : String(error ?? "Saved-device health check failed");
-            addLog("warn", "Saved-device health check failed", {
+            // A probe the app dropped on purpose, as a device switch does, is not the device failing.
+            const cancelled = (error as { isCancellation?: boolean } | null)?.isCancellation === true;
+            addLog(cancelled ? "info" : "warn", "Saved-device health check failed", {
               deviceId: device.id,
               host: device.host,
               error: message,
@@ -430,7 +432,7 @@ export function useSavedDeviceHealthChecks(
               probeStates: current.probeStates,
               lastCompletedAt: new Date().toISOString(),
               deferredReason: null,
-              error: message,
+              error: cancelled ? current.error : message,
             }));
           } finally {
             const active = controllersRef.current.get(device.id);
