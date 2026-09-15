@@ -33,6 +33,7 @@ import { toast } from "@/hooks/use-toast";
 import {
   buildPlayPlan,
   executePlayPlan,
+  getRememberedUltimateSidBlob,
   tryFetchUltimateSidBlob,
   type LocalPlayFile,
   type PlayRequest,
@@ -82,6 +83,7 @@ import {
 } from "@/lib/playback/playbackEngineRouting";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
+import { firstPlayableWithoutDevice, isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
 import {
   resolveHvscDurationSecondsForSongNr,
   resolveUltimateSidDurationByMd5,
@@ -900,7 +902,14 @@ export function usePlaybackController({
         const deviceOutOfReach =
           isNetworkKnownOffline() ||
           (options?.origin === "auto" && getConnectionSnapshot().state === "OFFLINE_NO_DEMO");
-        if (effectiveRequest.source === "ultimate" && deviceOutOfReach) throw new Error(DEVICE_NOT_CONNECTED_MESSAGE);
+        // Unless it was read before the device went, which is what lets a tune playing there carry on here.
+        if (
+          effectiveRequest.source === "ultimate" &&
+          deviceOutOfReach &&
+          !getRememberedUltimateSidBlob(effectivePath)
+        ) {
+          throw new Error(DEVICE_NOT_CONNECTED_MESSAGE);
+        }
         let durationOverride: number | undefined = item.durationMs;
         let subsongCount: number | undefined = item.subsongCount ?? undefined;
         if (item.category === "sid" && effectiveRequest.source !== "ultimate") {
@@ -970,7 +979,9 @@ export function usePlaybackController({
             // No try/catch: the fetch reports its own failures and answers with null, so a wrapper here
             // could only ever catch something it does not throw — and the log inside it read as though
             // it were the place a failed fetch is reported, which it was not.
-            const blob = await tryFetchUltimateSidBlob(effectivePath);
+            const remembered =
+              noDeviceConnected || deviceOutOfReach ? getRememberedUltimateSidBlob(effectivePath) : null;
+            const blob = remembered ?? (await tryFetchUltimateSidBlob(effectivePath));
             if (blob) {
               effectiveRequest = {
                 ...effectiveRequest,
@@ -2064,6 +2075,22 @@ export function usePlaybackController({
     [],
   );
 
+  /** The next track in playing order and, with the device out of reach, the first from there that can play without it. */
+  const resolveReachableNextIndex = useCallback(
+    (activePlaylist: PlaylistItem[], fromIndex: number) => {
+      const ordering = traversalOrdering();
+      const following = (index: number) =>
+        resolveNextPlaylistIndex(activePlaylist, index, ordering.repeatEnabled, ordering.shuffleEnabled, shuffleSeed);
+      const nextIndex = following(fromIndex);
+      const reachableIndex =
+        nextIndex === null || !isDeviceOutOfReach()
+          ? nextIndex
+          : firstPlayableWithoutDevice(activePlaylist, nextIndex, following);
+      return { nextIndex, reachableIndex };
+    },
+    [traversalOrdering, shuffleSeed],
+  );
+
   const handleNext = useCallback(
     async (source: "auto" | "user" = "user", expectedTrackInstanceId?: number) => {
       if (source === "user") {
@@ -2071,14 +2098,8 @@ export function usePlaybackController({
         if (!activePlaylist.length) return;
         cancelAutoAdvance();
         const activeIndex = currentIndexRef.current;
-        const ordering = traversalOrdering();
-        const nextIndex = resolveNextPlaylistIndex(
-          activePlaylist,
-          activeIndex,
-          ordering.repeatEnabled,
-          ordering.shuffleEnabled,
-          shuffleSeed,
-        );
+        const next = resolveReachableNextIndex(activePlaylist, activeIndex);
+        const nextIndex = next.reachableIndex ?? next.nextIndex;
         const now = Date.now();
         playedClockRef.current.pause(now);
         setPlayedMs(playedClockRef.current.current(now));
@@ -2106,14 +2127,7 @@ export function usePlaybackController({
         guard.autoFired = true;
 
         const activeIndex = currentIndexRef.current;
-        const ordering = traversalOrdering();
-        const nextIndex = resolveNextPlaylistIndex(
-          activePlaylist,
-          activeIndex,
-          ordering.repeatEnabled,
-          ordering.shuffleEnabled,
-          shuffleSeed,
-        );
+        const { nextIndex, reachableIndex } = resolveReachableNextIndex(activePlaylist, activeIndex);
         const now = Date.now();
         playedClockRef.current.pause(now);
         setPlayedMs(playedClockRef.current.current(now));
@@ -2123,12 +2137,19 @@ export function usePlaybackController({
           return;
         }
 
-        const nextItem = activePlaylist[nextIndex];
+        const nextItem = activePlaylist[reachableIndex ?? nextIndex];
         const shouldReboot = currentItem?.category === "disk" || nextItem?.category === "disk";
         try {
+          if (reachableIndex === null) {
+            // Away from the device, with nothing left that plays without it: stop here, without an error.
+            addLog("info", "Playback stopped: the tracks that follow need the C64", { currentIndex: activeIndex });
+            const unreachable = new Error(DEVICE_NOT_CONNECTED_MESSAGE);
+            markHandledUiError(unreachable);
+            throw unreachable;
+          }
           await playItem(nextItem, {
             rebootBeforePlay: shouldReboot,
-            playlistIndex: nextIndex,
+            playlistIndex: reachableIndex,
             origin: "auto",
           });
           setIsPaused(false);
@@ -2167,8 +2188,7 @@ export function usePlaybackController({
       getLocalSidPlayback,
       setCurrentPlaybackIsLocal,
       playItem,
-      traversalOrdering,
-      shuffleSeed,
+      resolveReachableNextIndex,
       playedClockRef,
       scheduleUserSkip,
       setVisibleCurrentIndex,
@@ -2186,13 +2206,13 @@ export function usePlaybackController({
     if (!activePlaylist.length) return;
     const activeIndex = currentIndexRef.current;
     const ordering = traversalOrdering();
-    const prevIndex = resolvePreviousPlaylistIndex(
-      activePlaylist,
-      activeIndex,
-      ordering.repeatEnabled,
-      ordering.shuffleEnabled,
-      shuffleSeed,
-    );
+    const preceding = (index: number) =>
+      resolvePreviousPlaylistIndex(activePlaylist, index, ordering.repeatEnabled, ordering.shuffleEnabled, shuffleSeed);
+    const previousIndex = preceding(activeIndex);
+    const prevIndex =
+      previousIndex !== null && isDeviceOutOfReach()
+        ? (firstPlayableWithoutDevice(activePlaylist, previousIndex, preceding) ?? previousIndex)
+        : previousIndex;
     cancelAutoAdvance();
     const now = Date.now();
     playedClockRef.current.pause(now);

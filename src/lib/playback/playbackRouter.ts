@@ -12,6 +12,7 @@ import type { C64API } from "@/lib/c64api";
 import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { readFtpFile } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
+import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordDeviceGuard, recordTraceError } from "@/lib/tracing/traceSession";
@@ -322,10 +323,25 @@ const withSidPropagationPreflightDeadline = async <T>(promise: Promise<T>, path:
   }
 };
 
+/**
+ * The SIDs most recently read from an Ultimate, so a tune playing on the device can carry on here when the
+ * network goes: without a network there is no FTP read, and the bytes are what the on-device engine needs.
+ */
+const rememberedSidBlobs = new Map<string, Blob>();
+const REMEMBERED_SID_BLOBS = 16;
+const sidBlobKey = (path: string) =>
+  `${normalizeFtpHost(getC64APIConfigSnapshot().deviceHost)}:${normalizeUltimatePath(path).toLowerCase()}`;
+
+export const getRememberedUltimateSidBlob = (path: string): Blob | null =>
+  rememberedSidBlobs.get(sidBlobKey(path)) ?? null;
+
+export const clearRememberedUltimateSidBlobsForTests = () => rememberedSidBlobs.clear();
+
 export const tryFetchUltimateSidBlob = async (path: string) => {
   const normalizedPath = normalizeUltimatePath(path);
   const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
   const host = normalizeFtpHost(rawHost);
+  if (isNetworkKnownOffline()) return getRememberedUltimateSidBlob(path);
   try {
     const response = await readFtpFile({
       host,
@@ -342,13 +358,20 @@ export const tryFetchUltimateSidBlob = async (path: string) => {
       });
       return null;
     }
-    return new Blob([bytes], { type: "application/octet-stream" });
+    const blob = new Blob([bytes], { type: "application/octet-stream" });
+    const key = sidBlobKey(path);
+    rememberedSidBlobs.delete(key);
+    rememberedSidBlobs.set(key, blob);
+    if (rememberedSidBlobs.size > REMEMBERED_SID_BLOBS) {
+      rememberedSidBlobs.delete(rememberedSidBlobs.keys().next().value as string);
+    }
+    return blob;
   } catch (error) {
     addLog("debug", "FTP SID fetch failed", {
       path: normalizedPath,
       error: (error as Error).message,
     });
-    return null;
+    return getRememberedUltimateSidBlob(path);
   }
 };
 

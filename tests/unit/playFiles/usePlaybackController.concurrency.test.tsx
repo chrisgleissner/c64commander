@@ -28,6 +28,7 @@ vi.mock("@/lib/c64api", () => ({
 vi.mock("@/lib/playback/playbackRouter", () => ({
   buildPlayPlan: vi.fn((request) => request),
   executePlayPlan: vi.fn(async () => undefined),
+  getRememberedUltimateSidBlob: vi.fn(() => null),
   tryFetchUltimateSidBlob: vi.fn(async () => null),
 }));
 
