@@ -119,6 +119,12 @@ const mirror = vi.hoisted(() => {
 });
 vi.mock("../../../src/lib/streams/avMirrorSession", () => ({ avMirrorSession: mirror.session }));
 
+const phonePlayback = vi.hoisted(() => ({ active: false }));
+vi.mock("../../../src/lib/playback/activePlaybackSession", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/lib/playback/activePlaybackSession")>()),
+  isLocalPlaybackActive: () => phonePlayback.active,
+}));
+
 const hostOf = (baseUrl: string) => new URL(baseUrl).host;
 
 const setNetwork = (online: boolean) => {
@@ -148,6 +154,7 @@ describe("following the phone on and off its network", () => {
     nativeListener.removed = 0;
     mirror.state.video = "off";
     mirror.state.audio = "off";
+    phonePlayback.active = false;
     server.setReachable(true);
     server.setFaultMode("none");
     localStorage.setItem("c64u_device_host", hostOf(server.baseUrl));
@@ -353,6 +360,33 @@ describe("following the phone on and off its network", () => {
 
     setNetwork(true);
     await vi.waitFor(() => expect(mirror.state.audio).toBe("live"), { timeout: 2000 });
+  });
+
+  it("brings the picture back but not the sound while a tune that carried on on the phone is playing", async () => {
+    const { manager } = await connect();
+    mirror.state.video = "live";
+    mirror.state.audio = "live";
+    mirror.emit();
+    setNetwork(false);
+    await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO"));
+    await vi.waitFor(() => expect(mirror.state.audio).toBe("off"));
+    phonePlayback.active = true;
+
+    setNetwork(true);
+
+    await vi.waitFor(() => expect(mirror.state.video).toBe("live"), { timeout: 2000 });
+    expect(mirror.state.audio).toBe("off");
+  });
+
+  it("brings back Live View that was kept off while the device was out of reach once the device answers", async () => {
+    const { manager, transitions } = await connect();
+    setNetwork(false);
+    await vi.waitFor(() => expect(manager.getConnectionSnapshot().state).toBe("OFFLINE_NO_DEMO"));
+    transitions.restoreMirrorWhenDeviceReturns({ videoWasLive: true, audioWasLive: false });
+
+    setNetwork(true);
+
+    await vi.waitFor(() => expect(mirror.state.video).toBe("live"), { timeout: 2000 });
   });
 
   it("relies on background probes when the platform cannot report network changes", async () => {

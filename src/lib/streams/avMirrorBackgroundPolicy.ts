@@ -6,7 +6,11 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
+import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
+import { restoreMirrorWhenDeviceReturns } from "@/lib/connection/networkTransitions";
 import { addLog } from "@/lib/logging";
+import { isLocalPlaybackActive } from "@/lib/playback/activePlaybackSession";
 import { avMirrorSession, type AvMirrorSession } from "@/lib/streams/avMirrorSession";
 
 /** What the mirror was doing when the app was hidden, so becoming visible can put it back. */
@@ -14,6 +18,21 @@ export interface AvMirrorSuspendedState {
   audioWasLive: boolean;
   videoWasLive: boolean;
 }
+
+/** What decides whether the mirror comes back when the app is shown again. */
+export interface AvMirrorRestoreConditions {
+  /** Starting a stream now would fail, so the restore waits for the device instead. */
+  deviceOutOfReach: () => boolean;
+  /** A tune rendering on the phone owns the speaker, and the C64's audio starting would stop it. */
+  phoneIsPlaying: () => boolean;
+  restoreWhenDeviceReturns: (state: AvMirrorSuspendedState) => void;
+}
+
+const RESTORE_ALWAYS: AvMirrorRestoreConditions = {
+  deviceOutOfReach: () => false,
+  phoneIsPlaying: () => false,
+  restoreWhenDeviceReturns: () => undefined,
+};
 
 /**
  * HARD27-021: Live View had no lifecycle policy. Hiding the app left the native receiver running,
@@ -35,6 +54,7 @@ export class AvMirrorBackgroundPolicy {
       AvMirrorSession,
       "audioLive" | "videoLive" | "stopAll" | "startAudio" | "startVideo"
     >,
+    private readonly conditions: AvMirrorRestoreConditions = RESTORE_ALWAYS,
   ) {}
 
   /** What is being held for restore, or `null` when the mirror was not live when the app was hidden. */
@@ -87,6 +107,12 @@ export class AvMirrorBackgroundPolicy {
     const state = this.suspended;
     if (!state) return;
     this.suspended = null;
+    // Shown again away from the device: a start fails, and the streams come back with the device.
+    if (this.conditions.deviceOutOfReach()) {
+      addLog("info", "Live View: staying off until the device is back", { service: "streams", ...state });
+      this.conditions.restoreWhenDeviceReturns(state);
+      return;
+    }
     // Only restart what is still stopped. A device retarget, or the user reaching the controls
     // first, can have restarted a stream already, and a second start would open it twice.
     if (state.videoWasLive && !this.session.videoLive) {
@@ -97,7 +123,7 @@ export class AvMirrorBackgroundPolicy {
         });
       });
     }
-    if (state.audioWasLive && !this.session.audioLive) {
+    if (state.audioWasLive && !this.session.audioLive && !this.conditions.phoneIsPlaying()) {
       await this.session.startAudio().catch((error: unknown) => {
         addLog("warn", "Live View: failed to restart audio after the app became visible", {
           service: "streams",
@@ -114,7 +140,11 @@ export class AvMirrorBackgroundPolicy {
  * isolated policy without touching the document.
  */
 export function installAvMirrorBackgroundPolicy(
-  policy: AvMirrorBackgroundPolicy = new AvMirrorBackgroundPolicy(avMirrorSession),
+  policy: AvMirrorBackgroundPolicy = new AvMirrorBackgroundPolicy(avMirrorSession, {
+    deviceOutOfReach: () => isNetworkKnownOffline() || getConnectionSnapshot().state === "OFFLINE_NO_DEMO",
+    phoneIsPlaying: isLocalPlaybackActive,
+    restoreWhenDeviceReturns: restoreMirrorWhenDeviceReturns,
+  }),
 ): () => void {
   const handleVisibilityChange = () => {
     void (document.hidden ? policy.handleHidden() : policy.handleVisible());
