@@ -6,7 +6,18 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Fragment,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { ChevronDown, ChevronRight, Filter, MoreHorizontal, Share2, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -99,9 +110,15 @@ import { ConfigDriftView } from "./ConfigDriftView";
 import { DecisionStateView } from "./DecisionStateView";
 import { HeatMapPopup } from "./HeatMapPopup";
 import { HealthCheckDetailView } from "./HealthCheckDetailView";
-import { HealthHistoryPopup } from "./HealthHistoryPopup";
-import { LatencyAnalysisPopup } from "./LatencyAnalysisPopup";
 import { KeyExplorerPopup } from "./KeyExplorerPopup";
+
+// Opened from the overflow menu only, so loaded then rather than with the startup bundle, which was over budget.
+const LatencyAnalysisPopup = lazy(() =>
+  import("./LatencyAnalysisPopup").then((module) => ({ default: module.LatencyAnalysisPopup })),
+);
+const HealthHistoryPopup = lazy(() =>
+  import("./HealthHistoryPopup").then((module) => ({ default: module.HealthHistoryPopup })),
+);
 
 export type EvidenceType = "Problems" | "Actions" | "Logs" | "Traces";
 type SeverityFilter = "All" | "Errors" | "Warnings" | "Info";
@@ -1974,11 +1991,13 @@ export function DiagnosticsDialog({
         onRepair={onRepair}
         actionSummaries={actionSummaries}
       />
-      {open && latencyOpen ? <LatencyAnalysisPopup open onClose={() => setLatencyOpen(false)} /> : null}
+      <Suspense fallback={null}>
+        {open && latencyOpen ? <LatencyAnalysisPopup open onClose={() => setLatencyOpen(false)} /> : null}
+        {open && historyOpen ? (
+          <HealthHistoryPopup open onClose={() => setHistoryOpen(false)} history={healthHistory} />
+        ) : null}
+      </Suspense>
       {open && keyExplorerOpen ? <KeyExplorerPopup open onClose={() => setKeyExplorerOpen(false)} /> : null}
-      {open && historyOpen ? (
-        <HealthHistoryPopup open onClose={() => setHistoryOpen(false)} history={healthHistory} />
-      ) : null}
       <HeatMapPopup
         open={open && heatMapVariant !== null}
         onClose={() => setHeatMapVariant(null)}

@@ -382,7 +382,7 @@ describe("GlobalDiagnosticsOverlay", () => {
     renderOverlay("/diagnostics/history");
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByTestId("health-history-popup")).toBeVisible();
+    expect(await screen.findByTestId("health-history-popup")).toBeVisible();
   });
 
   it.each([
@@ -400,7 +400,7 @@ describe("GlobalDiagnosticsOverlay", () => {
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     if (surfaceTestId) {
-      expect(screen.getByTestId(surfaceTestId)).toBeVisible();
+      expect(await screen.findByTestId(surfaceTestId)).toBeVisible();
     }
   });
 

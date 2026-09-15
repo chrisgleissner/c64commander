@@ -11,7 +11,6 @@ import { BackgroundExecution, type NowPlayingInfo } from "@/lib/native/backgroun
 import { ensureNotificationPermission } from "@/lib/native/notificationPermission";
 import { getLifecycleState } from "@/lib/appLifecycle";
 import { classifyError } from "@/lib/tracing/failureTaxonomy";
-import { startWebViewKeepAlive, stopWebViewKeepAlive } from "@/lib/native/webViewKeepAlive";
 
 type BackgroundExecutionLogContext = {
   source: string;
@@ -20,11 +19,23 @@ type BackgroundExecutionLogContext = {
 };
 
 let activeCount = 0;
+let keepAliveWanted = false;
+
 let publishedPaused = false;
 /** The last tune the page named, whether or not a session existed to tell at the time. */
 let currentNowPlaying: NowPlayingInfo | null = null;
 /** The last tune the bridge accepted, so an unchanged track costs no bridge call. */
 let publishedNowPlaying: NowPlayingInfo | null = null;
+
+// Loaded when a session first plays rather than with the startup bundle. Each load applies the latest wish, so
+// a stop that lands before an earlier start's load has resolved still wins.
+const keepPageAwake = (wanted: boolean) => {
+  keepAliveWanted = wanted;
+  void import("@/lib/native/webViewKeepAlive").then(({ startWebViewKeepAlive, stopWebViewKeepAlive }) => {
+    if (keepAliveWanted) startWebViewKeepAlive();
+    else stopWebViewKeepAlive();
+  });
+};
 
 const toError = (value: unknown) => (value instanceof Error ? value : new Error(String(value)));
 
@@ -84,7 +95,7 @@ export const startBackgroundExecution = async (logContext: BackgroundExecutionLo
     addLog("error", "Background execution start failed", buildFailureDetails(error, logContext));
     throw buildOperationError("start", error);
   }
-  startWebViewKeepAlive();
+  keepPageAwake(true);
   // The service is new and carries no metadata, and an update the page issued while this start was
   // in flight was dropped by the native side (metadata must never start a service on its own). So
   // this publish is not deduped against that dropped attempt.
@@ -101,7 +112,7 @@ export const stopBackgroundExecution = async (logContext: BackgroundExecutionLog
   publishedPaused = false;
   currentNowPlaying = null;
   publishedNowPlaying = null;
-  stopWebViewKeepAlive();
+  keepPageAwake(false);
   try {
     await BackgroundExecution.stop();
   } catch (error) {
@@ -123,8 +134,7 @@ export const setBackgroundExecutionPaused = async (paused: boolean, logContext: 
   const previouslyPublished = publishedPaused;
   publishedPaused = paused;
   // Nothing has to run while paused, so the page may freeze as the native service may sleep.
-  if (paused) stopWebViewKeepAlive();
-  else startWebViewKeepAlive();
+  keepPageAwake(!paused);
   try {
     await BackgroundExecution.setPlaybackState({ paused });
   } catch (error) {
@@ -150,7 +160,7 @@ export const setBackgroundExecutionNowPlaying = async (
 };
 
 export const resetBackgroundExecutionState = () => {
-  stopWebViewKeepAlive();
+  if (keepAliveWanted) keepPageAwake(false);
   activeCount = 0;
   publishedPaused = false;
   currentNowPlaying = null;

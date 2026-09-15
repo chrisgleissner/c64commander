@@ -69,8 +69,12 @@ vi.mock("@/lib/connection/networkTransitions", () => ({
   installNetworkTransitions: () => () => undefined,
 }));
 // Carrying a tune on to the phone is covered in remoteTuneHandover.test.ts.
+const handover = vi.hoisted(() => ({ uninstall: vi.fn(), install: vi.fn() }));
 vi.mock("@/lib/playback/remoteTuneHandover", () => ({
-  installRemoteTuneHandover: () => () => undefined,
+  installRemoteTuneHandover: () => {
+    handover.install();
+    return handover.uninstall;
+  },
 }));
 vi.mock("@/lib/connection/simulatedDeviceContent", () => ({
   installSimulatedDeviceContentCleanup: () => () => undefined,
@@ -121,6 +125,21 @@ describe("ConnectionController", () => {
     deviceDiscoveryState.acknowledged = false;
     discoverySubscribers.clear();
     setDocumentVisibility(false);
+  });
+
+  it("installs the handover to the phone once its module has loaded, and removes it on unmount", async () => {
+    handover.install.mockClear();
+    handover.uninstall.mockClear();
+    const view = render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ConnectionController />
+      </QueryClientProvider>,
+    );
+
+    await vi.waitFor(() => expect(handover.install).toHaveBeenCalledTimes(1));
+    view.unmount();
+
+    expect(handover.uninstall).toHaveBeenCalledTimes(1);
   });
 
   it("invalidates only on meaningful connection transitions", async () => {

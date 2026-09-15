@@ -209,18 +209,28 @@ describe("backgroundExecutionManager", () => {
   it("keeps the page awake while a session plays, and lets it sleep while paused or stopped", async () => {
     mocks.start.mockRejectedValueOnce(new Error("plugin-failed"));
     await expect(startBackgroundExecution({ source: "test" })).rejects.toThrow();
+    await import("@/lib/native/webViewKeepAlive");
     expect(keepAlive.start).not.toHaveBeenCalled();
 
     await startBackgroundExecution({ source: "test" });
-    expect(keepAlive.start).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(keepAlive.start).toHaveBeenCalledTimes(1));
 
     await setBackgroundExecutionPaused(true, { source: "test" });
-    expect(keepAlive.stop).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(keepAlive.stop).toHaveBeenCalledTimes(1));
     await setBackgroundExecutionPaused(false, { source: "test" });
-    expect(keepAlive.start).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(keepAlive.start).toHaveBeenCalledTimes(2));
 
     await stopBackgroundExecution({ source: "test" });
-    expect(keepAlive.stop).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(keepAlive.stop).toHaveBeenCalledTimes(2));
+  });
+
+  // The module loads after the calls that want it: a stop issued before an earlier start has loaded still wins.
+  it("leaves the page free to sleep when a stop comes before the keep-awake module has loaded", async () => {
+    await startBackgroundExecution({ source: "test" });
+    await stopBackgroundExecution({ source: "test" });
+
+    await vi.waitFor(() => expect(keepAlive.stop).toHaveBeenCalled());
+    expect(keepAlive.start).not.toHaveBeenCalled();
   });
 
   it("HARD27-007: logs and throws when the paused-state update fails", async () => {

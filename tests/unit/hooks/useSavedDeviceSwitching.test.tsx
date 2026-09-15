@@ -1289,7 +1289,7 @@ describe("useSavedDeviceSwitching", () => {
     // Stopped on the OLD device (before the API retarget), restarted on the NEW verified device —
     // so both devices never stream to the shared multicast group at once (clean transition).
     expect(mockAvMirror.stopAll).toHaveBeenCalledTimes(1);
-    expect(mockAvMirror.startVideo).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(mockAvMirror.startVideo).toHaveBeenCalledTimes(1));
     expect(mockAvMirror.startAudio).toHaveBeenCalledTimes(1);
   });
 
@@ -1316,6 +1316,10 @@ describe("useSavedDeviceSwitching", () => {
 
     await act(async () => {
       await result.current("device-cartridge");
+    });
+    await import("@/lib/deviceCapabilities");
+    await act(async () => {
+      await Promise.resolve();
     });
 
     expect(mockAvMirror.stopAll).toHaveBeenCalledTimes(1);
