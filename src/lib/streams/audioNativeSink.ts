@@ -24,6 +24,7 @@
  */
 
 import { addLog } from "@/lib/logging";
+import { claimNativeTrack, isSuperseded, nextSerial, releaseNativeTrack } from "@/lib/audio/nativeTrackOwnership";
 import { StreamUdp } from "@/lib/native/streamUdp";
 
 /** How often to poll the native track's buffer/underrun stats for the governor (ms). */
@@ -86,6 +87,7 @@ export class NativeAudioSink {
   /** AudioTrack buffer capacity (ms) reported at open — the sink's worst-case added latency. */
   private capacityMs = 0;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly serial = nextSerial();
 
   constructor(
     private readonly sampleRate: number,
@@ -107,6 +109,7 @@ export class NativeAudioSink {
       });
       this.capacityMs = result.bufferMs;
       this.opened = true;
+      claimNativeTrack(this.backend, this, this.serial);
       this.pollTimer = setInterval(() => void this.poll(), this.pollMs);
       return true;
     } catch (error) {
@@ -165,6 +168,10 @@ export class NativeAudioSink {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
     }
+    // The on-device SID engine may have taken the track since: closing it then silenced the tune it was playing.
+    const superseded = isSuperseded(this.backend, this.serial);
+    releaseNativeTrack(this.backend, this);
+    if (superseded) return;
     try {
       await this.backend.closeAudioTrack();
     } catch (error) {

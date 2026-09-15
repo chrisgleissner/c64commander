@@ -43,6 +43,7 @@
  * lets the ring overflow.
  */
 
+import { claimNativeTrack, isSuperseded, nextSerial, releaseNativeTrack } from "@/lib/audio/nativeTrackOwnership";
 import { addLog } from "@/lib/logging";
 import { traceLocalSid } from "./localSidTrace";
 import { SilenceDetector } from "./silenceDetector";
@@ -964,6 +965,9 @@ class NativeLocalSidSink implements AudioScheduleSink {
       claimNativeTrack(this.backend, this, this.serial);
       return Promise.resolve(true);
     }
+    // Claimed before the open is sent: a close from the sink this replaces, sent while the open is on its way,
+    // reached the native side after it and closed the new track (Live View's stop as the device went).
+    if (!this.opening) claimNativeTrack(this.backend, this, this.serial);
     this.opening ??= withOpenDeadline(this.backend.openAudioTrack(settings))
       .then(() => {
         this.opened = true;
@@ -1236,44 +1240,6 @@ const openTracks = new WeakMap<object, string>();
  * about 65 ms later, heard on a Pixel 4 as a 50 ms dropout exactly where the crossfade began.
  */
 const pendingTransitionFlush = new WeakSet<object>();
-
-const trackOwners = new WeakMap<object, { sink: object; serial: number }>();
-let nextSinkSerial = 1;
-
-/** A sink's place in the order they were created. Later beats earlier. */
-const nextSerial = (): number => nextSinkSerial++;
-
-/**
- * Take the track, if this sink is not already behind a newer one.
- *
- * Called from the write path rather than from the constructor, and ordered by age rather than by
- * who got there last. Both matter:
- *
- * - Claiming at construction silenced the outgoing tune the moment the incoming sink existed, which
- *   is a second or two before that tune has rendered anything — heard as a gap where the crossfade
- *   should be.
- * - Claiming unconditionally on write let the outgoing sink take the track straight back, so the
- *   two traded it and their slices interleaved.
- *
- * Ordering by serial gives the handover the app actually wants: the outgoing tail keeps the speaker
- * fed right up to the incoming tune's first sample, and from that sample on the older sink is
- * finished.
- */
-const claimNativeTrack = (backend: object, sink: object, serial: number): void => {
-  const owner = trackOwners.get(backend);
-  if (owner && owner.serial > serial) return;
-  trackOwners.set(backend, { sink, serial });
-};
-
-/** Whether a NEWER sink has already begun writing, which is what retires this one. */
-const isSuperseded = (backend: object, serial: number): boolean => {
-  const owner = trackOwners.get(backend);
-  return owner !== undefined && owner.serial > serial;
-};
-
-const releaseNativeTrack = (backend: object, sink: object): void => {
-  if (trackOwners.get(backend)?.sink === sink) trackOwners.delete(backend);
-};
 
 export const createNativeLocalSidSink = (
   sampleRate: number,

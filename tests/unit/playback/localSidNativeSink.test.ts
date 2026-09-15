@@ -12,6 +12,7 @@
  * on hardware first, so the properties worth pinning are the ones that broke.
  */
 
+import { NativeAudioSink } from "@/lib/streams/audioNativeSink";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createNativeLocalSidSink, type NativeLocalAudioBackend } from "@/lib/playback/localSidNativeSink";
 
@@ -931,6 +932,31 @@ describe("a sink that has been replaced", () => {
 
     expect(backend.closes).toBe(closesBefore);
     expect(backend.flushes).toBe(flushesBefore);
+  });
+
+  // Leaving home with Live View's sound on: its stop closed the track after the tune carried on on the phone had
+  // asked for a new one, so the tune was written into a closed track and never heard.
+  it("leaves the track it is opening alone when Live View's audio sink closes meanwhile", async () => {
+    const backend = createBackend();
+    const liveView = new NativeAudioSink(RATE, backend as never, 0, 1_000_000);
+    await liveView.open();
+    let finishOpen: () => void = () => undefined;
+    backend.openAudioTrack = (options) =>
+      new Promise((resolve) => {
+        backend.opens.push(options);
+        finishOpen = () => resolve({ sampleRate: options.sampleRate, bufferMs: options.bufferMs ?? 0 });
+      });
+    const tune = createNativeLocalSidSink(RATE, backend)!;
+    scheduleChunk(tune, 0.2);
+    await settle();
+    expect(backend.opens.length).toBe(2);
+
+    await liveView.close();
+    finishOpen();
+    await settle();
+
+    expect(backend.closes).toBe(0);
+    expect(backend.writes.length).toBeGreaterThan(0);
   });
 
   it("still closes the track when it is the last sink standing", async () => {
