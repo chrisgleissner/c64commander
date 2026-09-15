@@ -594,13 +594,14 @@ describe("runHealthCheck — REST probe failure", () => {
     mockGetConfigItem.mockReset();
     mockGetConfigItem.mockRejectedValue(notReady);
     mockPingFtp.mockReset();
-    mockPingFtp.mockRejectedValue(notReady);
-    mockTelnetConnect.mockRejectedValue(notReady);
+    mockPingFtp.mockRejectedValue(new Error("Device not ready for FTP"));
+    mockTelnetConnect.mockRejectedValue(new Error("Device not ready for Telnet"));
 
-    await runHealthCheck();
+    const result = await runHealthCheck();
 
-    for (const probe of ["JIFFY", "CONFIG", "FTP", "TELNET"]) {
+    for (const probe of ["JIFFY", "CONFIG", "FTP", "TELNET"] as const) {
       expect(addLog).toHaveBeenCalledWith("info", `Health check ${probe} probe failed`, expect.anything());
+      expect(result!.probes[probe].outcome).toBe("Skipped");
     }
     expect(addLog).not.toHaveBeenCalledWith("warn", expect.stringMatching(/probe failed/), expect.anything());
   });

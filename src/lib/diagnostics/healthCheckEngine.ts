@@ -270,8 +270,11 @@ const isAbortLike = (error: unknown) => {
   return name === "AbortError" || isCancellation === true || /aborted/i.test(message);
 };
 
-// Before the app has connected, requests are held back on purpose; that is not the device failing.
-const probeFailureLevel = (message: string) => (/device not ready for requests/i.test(message) ? "info" : "warn");
+// Before the app has connected, requests are held back on purpose; that is not the device failing. Past REST, a
+// held-back probe never reached the device, so it is skipped: counted as failed, the switcher showed a problem.
+const heldBackByApp = (message: string) => /device not ready for (requests|ftp|telnet)/i.test(message);
+const probeFailureLevel = (message: string) => (heldBackByApp(message) ? "info" : "warn");
+const probeFailureOutcome = (message: string) => (heldBackByApp(message) ? "Skipped" : "Fail");
 
 const isTimeoutLike = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? "");
@@ -664,7 +667,7 @@ const probeJiffy = async (
     const msg = (error as Error).message;
     addLog(probeFailureLevel(msg), "Health check JIFFY probe failed", { error: msg });
     return {
-      record: makeRecord("JIFFY", "Fail", Date.now() - startMs, msg.slice(0, 80), startMs),
+      record: makeRecord("JIFFY", probeFailureOutcome(msg), Date.now() - startMs, msg.slice(0, 80), startMs),
       uptimeSeconds: null,
     };
   }
@@ -931,7 +934,7 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
         item: target.item,
         error: msg,
       });
-      return makeRecord("CONFIG", "Fail", Date.now() - startMs, msg.slice(0, 80), startMs);
+      return makeRecord("CONFIG", probeFailureOutcome(msg), Date.now() - startMs, msg.slice(0, 80), startMs);
     }
   }
 
@@ -957,7 +960,7 @@ const probeFtp = async (runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> 
     }
     const msg = (error as Error).message;
     addLog(probeFailureLevel(msg), "Health check FTP probe failed", { error: msg });
-    return makeRecord("FTP", "Fail", Date.now() - startMs, msg.slice(0, 80), startMs);
+    return makeRecord("FTP", probeFailureOutcome(msg), Date.now() - startMs, msg.slice(0, 80), startMs);
   }
 };
 
@@ -1321,7 +1324,7 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
     }
     const msg = (error as Error).message;
     addLog(probeFailureLevel(msg), "Health check TELNET probe failed", { error: msg });
-    return makeRecord("TELNET", "Fail", Date.now() - startMs, msg.slice(0, 80), startMs);
+    return makeRecord("TELNET", probeFailureOutcome(msg), Date.now() - startMs, msg.slice(0, 80), startMs);
   } finally {
     try {
       await transport.disconnect();

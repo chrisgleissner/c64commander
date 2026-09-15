@@ -678,8 +678,9 @@ export const pingFtp = async (
           ),
       );
     } catch (error) {
-      // A queued ping dropped on purpose, as a device switch does, did not fail.
-      if ((error as { isCancellation?: boolean }).isCancellation === true) {
+      // A ping dropped on purpose, as a device switch does, or held back while the app connects, did not fail.
+      const heldBack = /device not ready for ftp/i.test((error as Error).message ?? "");
+      if ((error as { isCancellation?: boolean }).isCancellation === true || heldBack) {
         addLog("debug", "FTP ping cancelled", { host: ftpOptions.host, error: (error as Error).message });
       } else {
         addErrorLog("FTP ping failed", buildErrorLogDetails(error as Error, { host: ftpOptions.host }));

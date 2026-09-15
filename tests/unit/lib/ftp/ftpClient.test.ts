@@ -565,12 +565,14 @@ describe("ftpClient", () => {
     });
 
     // Switching devices drops the queued pings of the switcher's checks, which were each logged as an error.
-    it("does not log a ping the app cancelled as an error", async () => {
+    it("does not log a ping the app cancelled or held back as an error", async () => {
       vi.mocked(FtpClient.pingFtp).mockRejectedValue(
         Object.assign(new Error("ftp queued task cancelled: saved-device-switch"), { isCancellation: true }),
       );
 
       await expect(pingFtp(mockPingOptions)).rejects.toThrow("cancelled");
+      vi.mocked(FtpClient.pingFtp).mockRejectedValue(new Error("Device not ready for FTP"));
+      await expect(pingFtp(mockPingOptions)).rejects.toThrow("not ready");
 
       expect(addErrorLog).not.toHaveBeenCalled();
     });
