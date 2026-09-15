@@ -141,5 +141,7 @@ export type StoredPlaybackSession = {
   randomSeed?: number | null;
   /** The tune was rendering on this phone, which a restart of the app stops. */
   playingOnPhone?: boolean;
+  /** Restored paused after such a restart and not resumed since, so Resume starts the tune again. */
+  resumeStartsAgain?: boolean;
   updatedAt: string;
 };

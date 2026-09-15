@@ -16,6 +16,7 @@ import { addErrorLog, addLog } from "@/lib/logging";
 import { getHvscDurationsByMd5Seconds } from "@/lib/hvsc";
 import { applyConfigFileReference, ensureConfigFileReferenceAccessible } from "@/lib/config/applyConfigFileReference";
 import { markRemotePlaybackStopped } from "@/lib/playback/activePlaybackSession";
+import { noteRestartedPhoneTune, takeRestartedPhoneTune } from "@/lib/playback/playbackSessionStore";
 import { pollingPauseRegistry } from "@/lib/query/c64PollingGovernance";
 import { recordNetworkStatus, resetNetworkStatusWatchForTests } from "@/lib/connection/networkStatusWatch";
 import {
@@ -201,7 +202,7 @@ const renderPlaybackController = (
       isPaused: options?.isPaused ?? false,
       setIsPaused: options?.setIsPaused ?? vi.fn(),
       setIsPlaylistLoading: options?.setIsPlaylistLoading ?? vi.fn(),
-      elapsedMs: 0,
+      elapsedMs: options?.elapsedMs ?? 0,
       setElapsedMs: options?.setElapsedMs ?? vi.fn(),
       playedMs: 0,
       setPlayedMs: options?.setPlayedMs ?? vi.fn(),
@@ -2735,6 +2736,56 @@ describe("usePlaybackController", () => {
     afterEach(() => {
       localStorage.clear();
       vi.restoreAllMocks();
+    });
+
+    // After a force-stop the Play page came back paused over a tune that had played on the phone, and Resume
+    // resumed the C64's machine instead: the page showed the tune playing while nothing could be heard.
+    it("starts a tune restored after a restart again where it was when Resume is pressed", async () => {
+      enableLocal();
+      const controller = {
+        ...fakeController(),
+        positionSeconds: vi.fn(() => 0.1),
+        seekBy: vi.fn(async () => undefined),
+      };
+      const machineResume = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(getC64API).mockReturnValue({ machineResume } as any);
+      const playlist = [sidItem(psid)];
+      noteRestartedPhoneTune("sid-1");
+      const { result } = renderPlaybackController(playlist, {
+        localSidPlaybackController: controller,
+        isPlaying: true,
+        isPaused: true,
+        elapsedMs: 20_000,
+      } as any);
+
+      await result.current.handlePauseResume();
+
+      expect(controller.play).toHaveBeenCalledTimes(1);
+      expect(controller.seekBy).toHaveBeenCalledTimes(1);
+      expect((controller.seekBy.mock.calls[0] as unknown as [number])[0]).toBeCloseTo(19.9, 1);
+      expect(machineResume).not.toHaveBeenCalled();
+    });
+
+    // Away from home the bytes of a tune kept on the Ultimate are gone after a restart, so it cannot start yet.
+    it("keeps a restored tune ready to start again when Resume cannot start it yet", async () => {
+      vi.mocked(executePlayPlan).mockRejectedValueOnce(new Error("Device not connected. Check connection settings."));
+      const machineResume = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(getC64API).mockReturnValue({ machineResume } as any);
+      const playlist = [sidItem(psid)];
+      noteRestartedPhoneTune("sid-1");
+      const { result } = renderPlaybackController(playlist, {
+        isPlaying: true,
+        isPaused: true,
+        elapsedMs: 20_000,
+      } as any);
+
+      await expect(result.current.handlePauseResume()).resolves.toBeUndefined();
+
+      expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+        expect.objectContaining({ operation: "PLAYBACK_RESUME", title: "Resume failed" }),
+      );
+      expect(vi.mocked(executePlayPlan)).toHaveBeenCalledTimes(1);
+      expect(takeRestartedPhoneTune()).toBe("sid-1");
     });
 
     it("routes a ROM-independent PSID to the local engine, not the C64", async () => {

@@ -13,7 +13,12 @@ import { usePlaybackPersistence } from "@/pages/playFiles/hooks/usePlaybackPersi
 import type { PlayableEntry, PlaylistItem } from "@/pages/playFiles/types";
 import { PLAYBACK_SESSION_KEY, buildPlaylistStorageKey } from "@/pages/playFiles/playFilesUtils";
 import { resetPlaylistDataRepositoryForTests } from "@/lib/playlistRepository";
-import { readStoredPlaybackSession, writeStoredPlaybackSession } from "@/lib/playback/playbackSessionStore";
+import {
+  noteRestartedPhoneTune,
+  readStoredPlaybackSession,
+  takeRestartedPhoneTune,
+  writeStoredPlaybackSession,
+} from "@/lib/playback/playbackSessionStore";
 import { getCurrentPlaybackSnapshotLabel } from "@/lib/snapshot/currentPlaybackSnapshotLabel";
 import { getLogs } from "@/lib/logging";
 
@@ -1687,7 +1692,59 @@ describe("usePlaybackPersistence", () => {
     await waitFor(() => expect(result.current.isPlaying).toBe(true));
     await waitFor(() => expect(result.current.isPaused).toBe(!stillPlaying));
     expect(result.current.trackStartedAtRef.current === null).toBe(!stillPlaying);
+    if (!stillPlaying) await waitFor(() => expect(readStoredPlaybackSession()?.resumeStartsAgain).toBe(true));
+    // Resume starts the tune again, since nothing is paused anywhere after a restart.
+    expect(takeRestartedPhoneTune()).toBe(stillPlaying ? null : "hvsc:hvsc-library:/MUSICIANS/Test/phone.sid");
     phone.playing = false;
+  });
+
+  // Opened after a restart and closed again without Resume, the paused session still has nothing paused anywhere.
+  it("keeps Resume starting the tune again when the app is restarted a second time before Resume", async () => {
+    const playlistStorageKey = buildPlaylistStorageKey("device-1");
+    const itemId = "hvsc:hvsc-library:/MUSICIANS/Test/phone.sid";
+    localStorage.setItem(
+      playlistStorageKey,
+      JSON.stringify({
+        items: [
+          {
+            source: "hvsc",
+            path: "/MUSICIANS/Test/phone.sid",
+            name: "phone.sid",
+            sourceId: "hvsc-library",
+            addedAt: new Date().toISOString(),
+            durationMs: 120000,
+          },
+        ],
+        currentIndex: 0,
+      }),
+    );
+    writeStoredPlaybackSession({
+      playlistKey: playlistStorageKey,
+      currentItemId: itemId,
+      currentIndex: 0,
+      isPlaying: true,
+      isPaused: true,
+      elapsedMs: 20000,
+      playedMs: 20000,
+      durationMs: 120000,
+      autoAdvanceDueAtMs: null,
+      playingOnPhone: false,
+      resumeStartsAgain: true,
+      updatedAt: new Date().toISOString(),
+    } as any);
+    noteRestartedPhoneTune(null);
+
+    const { result } = renderHook(() =>
+      usePlaybackPersistenceHarness({
+        playlistStorageKey,
+        localEntriesBySourceId: new Map(),
+        localSourceTreeUris: new Map(),
+      }),
+    );
+
+    await waitFor(() => expect(result.current.isPaused).toBe(true));
+    await waitFor(() => expect(readStoredPlaybackSession()?.resumeStartsAgain).toBe(true));
+    expect(takeRestartedPhoneTune()).toBe(itemId);
   });
 
   it("downgrades a stale playing session restore to paused instead of auto-advancing (HARD9-064)", async () => {
