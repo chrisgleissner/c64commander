@@ -270,6 +270,9 @@ const isAbortLike = (error: unknown) => {
   return name === "AbortError" || isCancellation === true || /aborted/i.test(message);
 };
 
+// Before the app has connected, requests are held back on purpose; that is not the device failing.
+const probeFailureLevel = (message: string) => (/device not ready for requests/i.test(message) ? "info" : "warn");
+
 const isTimeoutLike = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? "");
   return /timed out/i.test(message);
@@ -613,10 +616,7 @@ const probeRest = async (
       throw error;
     }
     const msg = (error as Error).message;
-    // Before the app has connected, requests are held back on purpose; that is not the device failing.
-    addLog(/device not ready for requests/i.test(msg) ? "info" : "warn", "Health check REST probe failed", {
-      error: msg,
-    });
+    addLog(probeFailureLevel(msg), "Health check REST probe failed", { error: msg });
     return {
       record: makeRecord("REST", "Fail", Date.now() - startMs, msg.slice(0, 80), startMs),
       deviceInfo: undefined,
@@ -662,7 +662,7 @@ const probeJiffy = async (
       throw error;
     }
     const msg = (error as Error).message;
-    addLog("warn", "Health check JIFFY probe failed", { error: msg });
+    addLog(probeFailureLevel(msg), "Health check JIFFY probe failed", { error: msg });
     return {
       record: makeRecord("JIFFY", "Fail", Date.now() - startMs, msg.slice(0, 80), startMs),
       uptimeSeconds: null,
@@ -926,7 +926,7 @@ const probeConfig = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
         throw error;
       }
       const msg = (error as Error).message;
-      addLog("warn", "Health check CONFIG probe failed", {
+      addLog(probeFailureLevel(msg), "Health check CONFIG probe failed", {
         category: target.category,
         item: target.item,
         error: msg,
@@ -956,7 +956,7 @@ const probeFtp = async (runtime: ProbeRuntime): Promise<HealthCheckProbeRecord> 
       throw error;
     }
     const msg = (error as Error).message;
-    addLog("warn", "Health check FTP probe failed", { error: msg });
+    addLog(probeFailureLevel(msg), "Health check FTP probe failed", { error: msg });
     return makeRecord("FTP", "Fail", Date.now() - startMs, msg.slice(0, 80), startMs);
   }
 };
@@ -1320,7 +1320,7 @@ const probeTelnet = async (signal: AbortSignal, runtime: ProbeRuntime): Promise<
       throw error;
     }
     const msg = (error as Error).message;
-    addLog("warn", "Health check TELNET probe failed", { error: msg });
+    addLog(probeFailureLevel(msg), "Health check TELNET probe failed", { error: msg });
     return makeRecord("TELNET", "Fail", Date.now() - startMs, msg.slice(0, 80), startMs);
   } finally {
     try {

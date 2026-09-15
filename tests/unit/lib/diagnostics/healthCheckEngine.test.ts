@@ -586,6 +586,25 @@ describe("runHealthCheck — REST probe failure", () => {
     expect(addLog).not.toHaveBeenCalledWith("warn", "Health check REST probe failed", expect.anything());
   });
 
+  // Tapping a device in the switcher sends the app back to discovering while the other devices' checks are running.
+  it("does not warn about the probes after REST held back because the app is reconnecting", async () => {
+    setupAllProbesSuccess();
+    const notReady = new Error("Device not ready for requests");
+    mockReadMemory.mockRejectedValue(notReady);
+    mockGetConfigItem.mockReset();
+    mockGetConfigItem.mockRejectedValue(notReady);
+    mockPingFtp.mockReset();
+    mockPingFtp.mockRejectedValue(notReady);
+    mockTelnetConnect.mockRejectedValue(notReady);
+
+    await runHealthCheck();
+
+    for (const probe of ["JIFFY", "CONFIG", "FTP", "TELNET"]) {
+      expect(addLog).toHaveBeenCalledWith("info", `Health check ${probe} probe failed`, expect.anything());
+    }
+    expect(addLog).not.toHaveBeenCalledWith("warn", expect.stringMatching(/probe failed/), expect.anything());
+  });
+
   // Switching devices drops the requests still queued for the old one; the switcher's checks logged each as a warning.
   it("does not report a REST probe cancelled by a device switch as a failure", async () => {
     const cancelled = Object.assign(new Error("rest queued task cancelled: saved-device-switch"), {
