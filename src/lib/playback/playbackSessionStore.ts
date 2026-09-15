@@ -56,6 +56,22 @@ export const readStoredPlaybackSession = (): StoredPlaybackSession | null => {
   }
 };
 
+// A tune on the phone ends with the app, so after a restart its session comes back paused with nothing paused
+// anywhere: Resume has to start that tune again rather than resume a machine.
+let restartedPhoneTuneItemId: string | null = null;
+
+export const noteRestartedPhoneTune = (itemId: string | null) => {
+  restartedPhoneTuneItemId = itemId;
+};
+
+export const peekRestartedPhoneTune = (): string | null => restartedPhoneTuneItemId;
+
+export const takeRestartedPhoneTune = (): string | null => {
+  const itemId = restartedPhoneTuneItemId;
+  restartedPhoneTuneItemId = null;
+  return itemId;
+};
+
 export const writeStoredPlaybackSession = (session: StoredPlaybackSession): void => {
   if (typeof localStorage === "undefined") return;
   try {

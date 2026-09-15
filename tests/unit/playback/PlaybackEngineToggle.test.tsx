@@ -41,8 +41,20 @@ const mirror = {
 };
 vi.mock("@/hooks/useAvMirror", () => ({ useAvMirror: () => mirror }));
 
+const playback = vi.hoisted(() => ({ local: false, connection: "REAL_CONNECTED" }));
+vi.mock("@/hooks/useActivePlayback", () => ({
+  useActivePlayback: () => ({ local: playback.local, remote: false, any: playback.local }),
+}));
+vi.mock("@/hooks/useConnectionState", () => ({
+  useConnectionState: () => ({ state: playback.connection }),
+}));
+
 describe("PlaybackEngineToggle", () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    playback.local = false;
+    playback.connection = "REAL_CONNECTED";
+  });
   afterEach(() => cleanup());
 
   it("defaults to C64 and marks it pressed", () => {
@@ -72,6 +84,42 @@ describe("PlaybackEngineToggle", () => {
     fireEvent.click(screen.getByTestId("playback-engine-local"));
     expect(screen.getByTestId("playback-engine-toggle")).toHaveAttribute("data-engine", "local");
     expect(screen.queryByTestId("playback-engine-local")).toBeNull();
+  });
+
+  // After the C64 went out of reach the tune played on from the phone while the chip still read "C64".
+  it("shows the sound as here while a tune carried on from the C64 plays on the phone", () => {
+    playback.local = true;
+    playback.connection = "OFFLINE_NO_DEMO";
+    renderChooser();
+
+    const chip = screen.getByTestId("playback-engine-toggle");
+    expect(chip).toHaveTextContent("Here");
+    expect(chip).toHaveAttribute("data-engine", "c64");
+    expect(chip).toHaveAttribute("data-sounding", "local");
+    expect(screen.getByTestId("playback-engine-carried-on-note")).toHaveTextContent(
+      "The C64 is out of reach, so this tune plays here.",
+    );
+    // The setting is untouched and still chooses where the next tune goes.
+    expect(screen.getByTestId("playback-engine-c64")).toHaveAttribute("aria-pressed", "true");
+    expect(loadPlaybackEngine()).toBe("c64");
+  });
+
+  it("says where the next tune goes once the C64 is back while the carried-on tune finishes here", () => {
+    playback.local = true;
+    renderChooser();
+
+    expect(screen.getByTestId("playback-engine-carried-on-note")).toHaveTextContent(
+      "This tune finishes here. The next one plays on the C64.",
+    );
+  });
+
+  it("shows no note for a tune the setting itself sends here", () => {
+    localStorage.setItem("c64u_playback_engine", "local");
+    playback.local = true;
+    renderChooser();
+
+    expect(screen.getByTestId("playback-engine-toggle")).toHaveAttribute("data-sounding", "local");
+    expect(screen.queryByTestId("playback-engine-carried-on-note")).toBeNull();
   });
 
   it("switches back to C64", () => {

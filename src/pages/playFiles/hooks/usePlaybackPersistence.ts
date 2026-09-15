@@ -21,6 +21,8 @@ import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from "@/lib/pla
 import type { PlaybackClock } from "@/lib/playback/playbackClock";
 import {
   clearStoredPlaybackSession,
+  noteRestartedPhoneTune,
+  peekRestartedPhoneTune,
   readStoredPlaybackSession,
   writeStoredPlaybackSession,
 } from "@/lib/playback/playbackSessionStore";
@@ -461,6 +463,9 @@ export function usePlaybackPersistence({
         playlistStorageKey,
       });
     }
+    // A second restart before Resume finds the session paused, and Resume must still start the tune again.
+    const resumeStartsAgain = phoneStoppedRestore || (pending.isPaused && pending.resumeStartsAgain === true);
+    noteRestartedPhoneTune(resumeStartsAgain ? pending.currentItemId : null);
     if (staleActiveRestore) {
       // The designed outcome for a session that is too old to trust, so not a warning.
       addLog("info", "Discarded stale active playback session restore; resuming paused", {
@@ -631,6 +636,7 @@ export function usePlaybackPersistence({
       repeatEnabled,
       randomSeed: shuffleSeed,
       playingOnPhone: isLocalPlaybackActive(),
+      resumeStartsAgain: isPaused && peekRestartedPhoneTune() === currentPlaylistItemId,
       updatedAt: new Date().toISOString(),
     };
     writeStoredPlaybackSession(payload);

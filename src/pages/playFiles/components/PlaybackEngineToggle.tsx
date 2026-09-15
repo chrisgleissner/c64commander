@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 import { addLog } from "@/lib/logging";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { useAvMirror } from "@/hooks/useAvMirror";
+import { useActivePlayback } from "@/hooks/useActivePlayback";
+import { useConnectionState } from "@/hooks/useConnectionState";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
 import { saveMirrorC64Audio } from "@/lib/config/appSettings";
 
@@ -126,7 +128,17 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
     );
   };
 
-  const currentLabel = selected === "local" ? "Here" : selected === "both" ? "Both" : "C64";
+  // A tune carried on here while the C64 was out of reach sounds here whatever the setting says. The chip shows
+  // where the sound is; the options still show, and set, where the next tune goes.
+  const { local: phoneIsPlaying } = useActivePlayback();
+  const { state: connectionState } = useConnectionState();
+  const carriedOnHere = engine !== "local" && phoneIsPlaying;
+  const carriedOnNote = !carriedOnHere
+    ? null
+    : connectionState === "REAL_CONNECTED"
+      ? "This tune finishes here. The next one plays on the C64."
+      : "The C64 is out of reach, so this tune plays here.";
+  const currentLabel = carriedOnHere || selected === "local" ? "Here" : selected === "both" ? "Both" : "C64";
 
   return (
     /*
@@ -154,7 +166,8 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
              aria-pressed, but they exist only while the popover is open, so nothing outside the
              component could otherwise tell where the sound is going. */
           data-engine={selected}
-          aria-label={`Listen on ${currentLabel}. Change where the sound comes out.`}
+          data-sounding={carriedOnHere ? "local" : selected}
+          aria-label={`Listen on ${currentLabel}. ${carriedOnNote ? `${carriedOnNote} ` : ""}Change where the sound comes out.`}
           className={cn("h-11 shrink-0 gap-1 rounded-full bg-muted px-2.5 text-xs font-normal", className)}
         >
           {/* MonitorSpeaker, not Volume2: the mute button sits immediately to the right of this
@@ -166,7 +179,16 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
           <ChevronDown className="h-3 w-3 text-muted-foreground" aria-hidden />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-40 p-1" data-testid="playback-engine-options">
+      <PopoverContent
+        align="start"
+        className={cn("p-1", carriedOnNote ? "w-56" : "w-40")}
+        data-testid="playback-engine-options"
+      >
+        {carriedOnNote ? (
+          <p className="px-2 pb-1.5 pt-1 text-xs text-muted-foreground" data-testid="playback-engine-carried-on-note">
+            {carriedOnNote}
+          </p>
+        ) : null}
         {/* Real buttons, not menu items: the keypad ring walks buttons, and each keeps the testid
             the HIL harness and the unit tests already address. */}
         {option("local", "Here", "playback-engine-local")}

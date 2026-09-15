@@ -129,7 +129,7 @@ export const stopLeftoverDeviceStreams = async (): Promise<void> => {
     entries.map(async ([name, host]) => {
       try {
         await stopStreamAtHost(host, name);
-        addLog("info", `Live View: stopped a ${name} stream left running on the device`, {
+        addLog("info", `Live View: stopped the ${name} stream left running on the device`, {
           service: "streams",
           host,
         });

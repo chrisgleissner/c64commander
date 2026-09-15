@@ -12,6 +12,7 @@ import { getConnectionSnapshot, subscribeConnection } from "@/lib/connection/con
 import { addLog } from "@/lib/logging";
 import { isRemotePlaybackActive, markRemotePlaybackStopped } from "./activePlaybackSession";
 import { getSharedLocalSidPlaybackController, LocalSidPlaybackController } from "./localSidPlaybackController";
+import { isTuneStillPlayingOnC64 } from "./tuneStillPlayingOnC64";
 
 /**
  * A SID playing on the C64 carries on on the phone when the device goes out of reach, and the C64 is reset when
@@ -31,7 +32,7 @@ export type RemoteTune = {
   readBytes: () => Promise<ArrayBuffer | null>;
 };
 
-type HandedOver = { startedAt: number; host: string };
+type HandedOver = { startedAt: number; host: string; readBytes?: RemoteTune["readBytes"] };
 
 const RESET_TIMEOUT_MS = 3000;
 const RESET_SETTLE_MS = 1000;
@@ -57,7 +58,9 @@ export const registerPageHandover = (carryOn: () => void) => {
 };
 
 export const noteTuneHandedOver = (startedAt: number) => {
-  handedOver = { startedAt, host: getC64APIConfigSnapshot().deviceHost };
+  const tune =
+    remoteTune && Math.abs(remoteTune.startedAt - startedAt) < HANDED_OVER_CLOCK_TOLERANCE_MS ? remoteTune : null;
+  handedOver = { startedAt, host: getC64APIConfigSnapshot().deviceHost, readBytes: tune?.readBytes };
 };
 
 // A restored page clock can be a moment off the one the tune was taken over with.
@@ -87,7 +90,7 @@ const carryOnWithoutPage = async () => {
     addLog("info", "Playback: the C64 is out of reach and this tune cannot carry on here", { item: tune.label });
     return;
   }
-  handedOver = { startedAt: tune.startedAt, host: getC64APIConfigSnapshot().deviceHost };
+  handedOver = { startedAt: tune.startedAt, host: getC64APIConfigSnapshot().deviceHost, readBytes: tune.readBytes };
   tuneForPage = tune.itemId;
   addLog("info", "Playback: the C64 is out of reach; carrying on with the tune on this phone", {
     item: tune.label,
@@ -126,6 +129,16 @@ const carryOnWithoutPage = async () => {
 };
 
 // Back home the C64 is still looping the tune it was playing; the phone finishes it, the next track goes back.
+// A check that cannot be made leaves the reset to go ahead, as it did before the check existed.
+const stillPlaysTuneLeft = async (tuneLeft: HandedOver) => {
+  const bytes = tuneLeft.readBytes ? await tuneLeft.readBytes().catch(() => null) : null;
+  if (!bytes) return null;
+  return isTuneStillPlayingOnC64(getC64API(), bytes).catch((error) => {
+    if (isAbortLikeError(error)) throw error;
+    return null;
+  });
+};
+
 const silenceTuneLeftOnDevice = async () => {
   const tuneLeft = handedOver;
   if (!tuneLeft) return;
@@ -136,6 +149,12 @@ const silenceTuneLeftOnDevice = async () => {
     const stillThere = getConnectionSnapshot().state === "REAL_CONNECTED" && isRemotePlaybackActive();
     if (!stillThere || getC64APIConfigSnapshot().deviceHost !== tuneLeft.host) return;
     try {
+      // Somebody at home may have reset the C64 or used it for something else meanwhile; a reset would end that.
+      if ((await stillPlaysTuneLeft(tuneLeft)) === false) {
+        markRemotePlaybackStopped();
+        addLog("info", "Playback: left the C64 as it is; it no longer plays the tune this phone carried on");
+        return;
+      }
       await Promise.race([
         getC64API().machineReset(),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Reset timed out")), RESET_TIMEOUT_MS)),

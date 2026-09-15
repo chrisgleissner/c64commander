@@ -86,6 +86,7 @@ import type { PlaylistItem } from "@/pages/playFiles/types";
 import { mergeStartedPlaylist } from "@/pages/playFiles/startPlaylistMerge";
 import { useRemotePlaybackHandover } from "@/pages/playFiles/hooks/useRemotePlaybackHandover";
 import { firstPlayableWithoutDevice, isDeviceOutOfReach } from "@/pages/playFiles/playableWithoutDevice";
+import { noteRestartedPhoneTune, takeRestartedPhoneTune } from "@/lib/playback/playbackSessionStore";
 import {
   resolveHvscDurationSecondsForSongNr,
   resolveUltimateSidDurationByMd5,
@@ -1456,6 +1457,9 @@ export function usePlaybackController({
       const nextEngine = loadPlaybackEngine();
       if (nextEngine === selectedEngineRef.current) return;
       selectedEngineRef.current = nextEngine;
+      // A tune playing here would only start again here, or not at all with the C64 out of reach; the next tune moves.
+      const playsHere = currentPlaybackIsLocalRef.current || isLocalPlaybackActive();
+      if (playsHere && (nextEngine === "local" || isDeviceOutOfReach())) return;
       const index = currentIndexRef.current;
       const item = playlistRef.current[index];
       // Only a playing SID can move between engines; everything else is a
@@ -1791,6 +1795,8 @@ export function usePlaybackController({
     elapsedMsRef,
   ]);
 
+  // Defined below; read by Resume after a restart, which starts the tune again where it was.
+  const seekByRef = useRef<(deltaSeconds: number) => Promise<void>>(async () => undefined);
   const handlePauseResume = useCallback(
     trace(async function handlePauseResume() {
       // App-wide, not this page's own state. `isPlaying` starts false on a Play
@@ -1798,6 +1804,26 @@ export function usePlaybackController({
       // nothing at all — on a button the UI had (correctly) enabled, which is
       // worse than a disabled one.
       if (!isPlaying && !isAnyPlaybackActive()) return;
+      const restartedItemId = isPaused && !isAnyPlaybackActive() ? takeRestartedPhoneTune() : null;
+      const item = playlistRef.current[currentIndexRef.current];
+      if (restartedItemId && item?.id === restartedItemId) {
+        // Resumed the machine before, which was not playing it, and the page showed a tune playing in silence.
+        const resumeAtSeconds = elapsedMs / 1000;
+        try {
+          await playItem(item, { playlistIndex: currentIndexRef.current });
+        } catch (error) {
+          // A tune kept on the Ultimate cannot start while it is out of reach; a later Resume starts it then.
+          noteRestartedPhoneTune(restartedItemId);
+          if (!isHandledUiError(error)) {
+            reportPlaybackStartFailure({ operation: "PLAYBACK_RESUME", title: "Resume failed", error });
+          }
+          return;
+        }
+        if (currentPlaybackIsLocalRef.current && resumeAtSeconds >= 1) {
+          await seekByRef.current(resumeAtSeconds - getLocalSidPlayback().positionSeconds());
+        }
+        return;
+      }
       // Track B (LE2): a tune playing on the device has no C64 to pause — the
       // machine calls below would be pointless (and hang with no Ultimate
       // connected) while the on-device audio kept playing. Suspend the engine's
@@ -1921,6 +1947,8 @@ export function usePlaybackController({
       trackStartedAtRef,
       autoAdvanceGuardRef,
       cancelPendingUserSkip,
+      playItem,
+      reportPlaybackStartFailure,
     ],
   );
 
@@ -2095,6 +2123,16 @@ export function usePlaybackController({
     [traversalOrdering, shuffleSeed],
   );
 
+  // With nothing playing a skip only chooses the track, which showed the last tune's length and a full bar.
+  const showChosenTrackWhileStopped = useCallback(
+    (index: number) => {
+      if (isPlayingRef.current || isPausedRef.current) return;
+      setElapsedMs(0);
+      setDurationMs(playlistRef.current[index]?.durationMs);
+    },
+    [setDurationMs, setElapsedMs],
+  );
+
   const handleNext = useCallback(
     async (source: "auto" | "user" = "user", expectedTrackInstanceId?: number) => {
       if (source === "user") {
@@ -2112,6 +2150,7 @@ export function usePlaybackController({
           return;
         }
         setVisibleCurrentIndex(nextIndex);
+        showChosenTrackWhileStopped(nextIndex);
         await scheduleUserSkip(nextIndex, false, activeIndex, "PLAYBACK_NEXT", "Playback next failed");
         return;
       }
@@ -2196,6 +2235,7 @@ export function usePlaybackController({
       playedClockRef,
       scheduleUserSkip,
       setVisibleCurrentIndex,
+      showChosenTrackWhileStopped,
       setAutoAdvanceDueAtMs,
       setPlayedMs,
       setIsPlaying,
@@ -2222,6 +2262,7 @@ export function usePlaybackController({
     playedClockRef.current.pause(now);
     setPlayedMs(playedClockRef.current.current(now));
     setVisibleCurrentIndex(prevIndex);
+    showChosenTrackWhileStopped(prevIndex);
     await scheduleUserSkip(prevIndex, false, activeIndex, "PLAYBACK_PREVIOUS", "Playback previous failed");
   }, [
     cancelAutoAdvance,
@@ -2231,6 +2272,7 @@ export function usePlaybackController({
     setPlayedMs,
     scheduleUserSkip,
     setVisibleCurrentIndex,
+    showChosenTrackWhileStopped,
   ]);
 
   const playlistItemDuration = useCallback(
@@ -2450,6 +2492,7 @@ export function usePlaybackController({
     },
     [playedClockRef, setPlayedMs, trackStartedAtRef, rescheduleAutoAdvance],
   );
+  seekByRef.current = handleSeekBy;
 
   useRemotePlaybackHandover({
     playlistRef,

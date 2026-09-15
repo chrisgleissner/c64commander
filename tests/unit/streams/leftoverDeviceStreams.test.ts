@@ -84,6 +84,13 @@ describe("leftover device streams (HARD27-021)", () => {
 
     await vi.waitFor(() => expect(stopAt).toHaveBeenCalledWith("192.168.1.146", "video"));
     await vi.waitFor(() => expect(getLeftoverDeviceStreamsForTests()).toEqual({}));
+    await vi.waitFor(() =>
+      expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+        "info",
+        "Live View: stopped the video stream left running on the device",
+        expect.objectContaining({ host: "192.168.1.146" }),
+      ),
+    );
   });
 
   it("keeps waiting through another offline report, and warns about a stop the device refused", async () => {

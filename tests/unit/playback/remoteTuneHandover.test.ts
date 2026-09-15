@@ -13,6 +13,8 @@ const device = vi.hoisted(() => ({
   host: "c64u",
   remotePlaying: true,
   machineReset: vi.fn(async () => undefined),
+  memory: new Uint8Array(0x10000),
+  readMemoryError: null as Error | null,
 }));
 const engine = vi.hoisted(() => ({
   play: vi.fn(),
@@ -31,7 +33,14 @@ vi.mock("@/lib/connection/connectionManager", () => ({
 }));
 
 vi.mock("@/lib/c64api", () => ({
-  getC64API: () => ({ machineReset: device.machineReset }),
+  getC64API: () => ({
+    machineReset: device.machineReset,
+    readMemory: vi.fn(async (address: string, length: number) => {
+      if (device.readMemoryError) throw device.readMemoryError;
+      const start = Number.parseInt(address, 16);
+      return device.memory.slice(start, start + length);
+    }),
+  }),
   getC64APIConfigSnapshot: () => ({ deviceHost: device.host }),
 }));
 
@@ -77,6 +86,15 @@ const tune = (overrides: Partial<RemoteTune> = {}): RemoteTune => ({
   ...overrides,
 });
 
+/** A PSID whose code loads at $1000, and the code the C64 holds while it plays it. */
+const psidAt1000 = () => {
+  const code = Uint8Array.from({ length: 256 }, (_, index) => (index * 5 + 1) & 0xff);
+  const bytes = new Uint8Array(0x7c + code.length);
+  bytes.set([0x50, 0x53, 0x49, 0x44, 0x00, 0x02, 0x00, 0x7c, 0x10, 0x00, 0x10, 0x00, 0x10, 0x03], 0);
+  bytes.set(code, 0x7c);
+  return { bytes: bytes.buffer, code };
+};
+
 describe("carrying a tune from the C64 on to the phone", () => {
   let uninstall: () => void;
 
@@ -87,6 +105,8 @@ describe("carrying a tune from the C64 on to the phone", () => {
     device.remotePlaying = true;
     device.machineReset.mockReset();
     device.machineReset.mockResolvedValue(undefined);
+    device.memory.fill(0);
+    device.readMemoryError = null;
     engine.play.mockReset();
     engine.play.mockResolvedValue({ started: true });
     engine.seekTo.mockClear();
@@ -260,6 +280,51 @@ describe("carrying a tune from the C64 on to the phone", () => {
 
     await vi.waitFor(() => expect(markRemotePlaybackStopped).toHaveBeenCalled(), { timeout: 4000 });
     expect(device.machineReset).toHaveBeenCalledTimes(2);
+    expect(addLog).not.toHaveBeenCalledWith("warn", expect.anything(), expect.anything());
+  });
+
+  // Somebody at home may have used the C64 for something else while the phone was away.
+  it("leaves a C64 that no longer plays the tune as it is when the device answers again", async () => {
+    const { bytes } = psidAt1000();
+    rememberRemoteTune(tune({ readBytes: vi.fn(async () => bytes) }));
+    setConnection("OFFLINE_NO_DEMO");
+    await vi.waitFor(() => expect(engine.seekTo).toHaveBeenCalled());
+
+    setConnection("REAL_CONNECTED");
+
+    await vi.waitFor(() => expect(markRemotePlaybackStopped).toHaveBeenCalled(), { timeout: 3000 });
+    expect(device.machineReset).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      "info",
+      "Playback: left the C64 as it is; it no longer plays the tune this phone carried on",
+    );
+  });
+
+  it("resets a C64 that still plays the tune the phone carried on", async () => {
+    const { bytes, code } = psidAt1000();
+    device.memory.set(code, 0x1000);
+    device.memory.set([0x89, 0x09], 0x314);
+    const pageCarriesOn = vi.fn(() => noteTuneHandedOver(Date.now() - 30_000));
+    const unregister = registerPageHandover(pageCarriesOn);
+    rememberRemoteTune(tune({ startedAt: Date.now() - 30_000, readBytes: vi.fn(async () => bytes) }));
+    setConnection("OFFLINE_NO_DEMO");
+
+    setConnection("REAL_CONNECTED");
+
+    await vi.waitFor(() => expect(device.machineReset).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    unregister();
+  });
+
+  it("resets the C64 as before when its memory cannot be read to check", async () => {
+    const { bytes } = psidAt1000();
+    device.readMemoryError = new Error("readMemory failed: HTTP 500");
+    rememberRemoteTune(tune({ readBytes: vi.fn(async () => bytes) }));
+    setConnection("OFFLINE_NO_DEMO");
+    await vi.waitFor(() => expect(engine.seekTo).toHaveBeenCalled());
+
+    setConnection("REAL_CONNECTED");
+
+    await vi.waitFor(() => expect(device.machineReset).toHaveBeenCalledTimes(1), { timeout: 3000 });
     expect(addLog).not.toHaveBeenCalledWith("warn", expect.anything(), expect.anything());
   });
 

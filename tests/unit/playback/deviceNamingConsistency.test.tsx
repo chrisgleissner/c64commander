@@ -31,6 +31,10 @@ const mirror = {
   session: { startAudio: vi.fn().mockResolvedValue(undefined), stopAudio: vi.fn().mockResolvedValue(undefined) },
 };
 vi.mock("@/hooks/useAvMirror", () => ({ useAvMirror: () => mirror }));
+vi.mock("@/hooks/useActivePlayback", () => ({
+  useActivePlayback: () => ({ local: false, remote: false, any: false }),
+}));
+vi.mock("@/hooks/useConnectionState", () => ({ useConnectionState: () => ({ state: "REAL_CONNECTED" }) }));
 
 const savedDevice = vi.hoisted(() => ({ current: null as { name?: string } | null }));
 vi.mock("@/lib/savedDevices/store", () => ({
