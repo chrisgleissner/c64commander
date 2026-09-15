@@ -51,7 +51,10 @@ vi.mock("@/lib/native/backgroundExecutionManager", () => ({
   stopBackgroundExecution: mocks.stopBackgroundExecution,
 }));
 vi.mock("@/lib/native/backgroundExecution", () => ({ BackgroundExecution: { setDueAtMs: mocks.setDueAtMs } }));
-vi.mock("@/lib/savedDevices/store", () => ({ getSavedDeviceById: mocks.getSavedDeviceById }));
+vi.mock("@/lib/savedDevices/store", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/savedDevices/store")>()),
+  getSavedDeviceById: mocks.getSavedDeviceById,
+}));
 vi.mock("@/lib/query/queryClientRegistry", () => ({ getRegisteredQueryClient: mocks.getRegisteredQueryClient }));
 vi.mock("@/lib/query/c64QueryInvalidation", () => ({
   invalidateForSavedDeviceSwitch: mocks.invalidateForSavedDeviceSwitch,
@@ -284,6 +287,31 @@ describe("stopAvMirrorForDeviceRetarget / restartAvMirrorAfterDeviceRetarget (HA
 
     expect(mocks.startVideo).toHaveBeenCalledTimes(1);
     expect(mocks.startAudio).not.toHaveBeenCalled();
+  });
+
+  // Switching to an Ultimate II+L with Live View's sound on answered both stream starts with 404 errors.
+  it("leaves Live View off after a switch to a device that does not stream", () => {
+    restartAvMirrorAfterDeviceRetarget({ videoWasLive: true, audioWasLive: true }, "device-b", {
+      product: "Ultimate II+L",
+      firmware_version: "3.15",
+    });
+
+    expect(mocks.startVideo).not.toHaveBeenCalled();
+    expect(mocks.startAudio).not.toHaveBeenCalled();
+    expect(mocks.addLog).toHaveBeenCalledWith(
+      "info",
+      "Live View: the device switched to does not stream, so Live View stays off",
+      { toDeviceId: "device-b" },
+    );
+
+    restartAvMirrorAfterDeviceRetarget({ videoWasLive: true, audioWasLive: true }, "device-c", {
+      product: "Ultimate 64 Elite",
+      firmware_version: "3.15",
+      core_version: "1.4A",
+    });
+
+    expect(mocks.startVideo).toHaveBeenCalledTimes(1);
+    expect(mocks.startAudio).toHaveBeenCalledTimes(1);
   });
 
   it("restarts nothing when the mirror was off", () => {

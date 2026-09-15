@@ -125,6 +125,18 @@ vi.mock("../../../src/lib/streams/leftoverDeviceStreams", async (importOriginal)
   stopLeftoverDeviceStreams: () => leftoverStreams.stop(),
 }));
 
+const retarget = vi.hoisted(() => ({ restart: vi.fn() }));
+vi.mock("../../../src/lib/connection/deviceRetarget", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/lib/connection/deviceRetarget")>();
+  return {
+    ...actual,
+    restartAvMirrorAfterDeviceRetarget: (...args: Parameters<typeof actual.restartAvMirrorAfterDeviceRetarget>) => {
+      retarget.restart(...args);
+      actual.restartAvMirrorAfterDeviceRetarget(...args);
+    },
+  };
+});
+
 const phonePlayback = vi.hoisted(() => ({ active: false }));
 vi.mock("../../../src/lib/playback/activePlaybackSession", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/lib/playback/activePlaybackSession")>()),
@@ -251,6 +263,12 @@ describe("following the phone on and off its network", () => {
 
     setNetwork(true);
     await vi.waitFor(() => expect(mirror.state.video).toBe("live"), { timeout: 2000 });
+    // With the identity of the device that answered, so Live View is not started on one that cannot stream.
+    expect(retarget.restart).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ product: "C64 Ultimate", core_version: "1.0.0" }),
+    );
   });
 
   it("counts Live View as on when its stream closed with the network a moment before the event", async () => {

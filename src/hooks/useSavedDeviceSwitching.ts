@@ -212,7 +212,7 @@ export function useSavedDeviceSwitching() {
         if (verification.ok && verification.deviceInfo) {
           completeSavedDeviceVerification(deviceId, verification.deviceInfo);
           invalidateForSavedDeviceSwitch(queryClient);
-          restartAvMirrorAfterDeviceRetarget(mirrorState, deviceId);
+          restartAvMirrorAfterDeviceRetarget(mirrorState, deviceId, verification.deviceInfo);
           completeSavedDeviceSwitchAttempt(attemptId, {
             outcome: "success",
             verification,

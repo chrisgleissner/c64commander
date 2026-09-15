@@ -275,9 +275,11 @@ describe("startup saved-device reachability sweep (lines 685-696, 728-730, 1042)
     await discoverConnection("startup");
     await flushAsync();
 
+    // With the identity it verified, so Live View is not followed to a device that cannot stream.
     expect(restartAvMirrorAfterDeviceRetargetMock).toHaveBeenCalledWith(
       { videoWasLive: true, audioWasLive: true },
       "other",
+      HEALTHY,
     );
     // The restart must follow the identity stamp, so it binds to the device that just verified.
     expect(completeSavedDeviceVerificationMock.mock.invocationCallOrder[0]).toBeLessThan(

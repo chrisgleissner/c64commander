@@ -931,7 +931,7 @@ const tryReachableSavedDeviceFallback = async (
   if (verification.ok && verification.deviceInfo) {
     completeSavedDeviceVerification(reachable.device.id, verification.deviceInfo);
     // HARD27-010: follow Live View to the device that just verified, as the canonical switch does.
-    restartAvMirrorAfterDeviceRetarget(mirrorState, reachable.device.id);
+    restartAvMirrorAfterDeviceRetarget(mirrorState, reachable.device.id, verification.deviceInfo);
     return true;
   }
   return false;

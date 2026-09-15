@@ -124,6 +124,7 @@ const resumeMirrorAfterOutage = () => {
     restartAvMirrorAfterDeviceRetarget(
       { ...mirror, audioWasLive },
       getSavedDevicesSnapshot().selectedDeviceId ?? "selected",
+      getConnectionSnapshot().deviceInfo,
     );
   })();
 };

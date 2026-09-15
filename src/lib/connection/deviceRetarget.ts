@@ -19,6 +19,7 @@ import { getRegisteredQueryClient } from "@/lib/query/queryClientRegistry";
 import { invalidateForSavedDeviceSwitch } from "@/lib/query/c64QueryInvalidation";
 import { toast } from "@/hooks/use-toast";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
+import { identifiedDeviceStreams } from "@/lib/deviceCapabilities";
 import { hasActivePlaybackToStop, stopActivePlaybackBeforeDeviceSwitch } from "@/lib/playback/activePlaybackSession";
 
 /** What the A/V mirror was doing before a retarget, so the caller can follow it to the new device. */
@@ -66,7 +67,16 @@ export async function stopAvMirrorForDeviceRetarget(fromDeviceId: string | null)
  * Follow the mirror to the newly-verified device. Fire-and-forget so a slow `streams:start` cannot
  * delay the retarget resolving; each start binds a fresh receiver on the new host.
  */
-export function restartAvMirrorAfterDeviceRetarget(state: AvMirrorRetargetState, toDeviceId: string): void {
+export function restartAvMirrorAfterDeviceRetarget(
+  state: AvMirrorRetargetState,
+  toDeviceId: string,
+  deviceInfo?: Parameters<typeof identifiedDeviceStreams>[0],
+): void {
+  // An Ultimate II+L has no /v1/streams: following Live View to it answered both starts with 404 errors.
+  if (hasLiveAvMirror(state) && !identifiedDeviceStreams(deviceInfo)) {
+    addLog("info", "Live View: the device switched to does not stream, so Live View stays off", { toDeviceId });
+    return;
+  }
   if (state.videoWasLive) {
     void avMirrorSession.startVideo().catch((error) => {
       addLog("warn", "Live View: failed to restart video on the new device after retarget", {
