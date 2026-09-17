@@ -10,35 +10,11 @@ FAIL=0
 TEST_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEST_DIR"' EXIT
 
-# Extracted decision logic matching monitor_ios.sh exit-code block.
-# Returns the exit code the monitor would emit.
-decide_exit_code() {
-  local expect_main_pid="$1"
-  local main_seen_once="$2"
-  local main_disappeared_during_flow="$3"
-  local main_disappeared_during_flow_simctl_unreliable="${4:-0}"
-
-  if [[ "$expect_main_pid" == "1" && "$main_seen_once" == "1" && "$main_disappeared_during_flow" == "1" ]]; then
-    if [[ "$main_disappeared_during_flow_simctl_unreliable" == "1" ]]; then
-      return 4
-    fi
-    return 3
-  fi
-  return 0
-}
-
-# Extracted disappearance classification matching monitor_ios.sh flag-check logic.
-# Sets RESULT_DURING_FLOW=1 or 0.
-classify_disappearance() {
-  local flow_active_flag="$1"
-  local flow_complete_flag="$2"
-
-  if [[ -f "$flow_active_flag" && ! -f "$flow_complete_flag" ]]; then
-    RESULT_DURING_FLOW=1
-  else
-    RESULT_DURING_FLOW=0
-  fi
-}
+# The shipped decision, not a copy of it: a test that re-implemented these two functions passed
+# while the monitor itself was changed. See ci/telemetry/ios/lifecycle.sh.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+# shellcheck source=ci/telemetry/ios/lifecycle.sh
+. "$REPO_ROOT/ci/telemetry/ios/lifecycle.sh"
 
 assert_eq() {
   local test_name="$1"
@@ -136,6 +112,27 @@ assert_eq "classified as during-flow" "1" "$RESULT_DURING_FLOW"
 code=0
 decide_exit_code "1" "1" "$RESULT_DURING_FLOW" "0" || code=$?
 assert_eq "exit code" "3" "$code"
+
+# --- Test 10: gone mid-flow but back inside the grace window -> relaunch, exit 0 ---
+# Maestro stops and launches the app at the start of every flow, and SpringBoard reports that kill
+# as "Termination requested by simulator host". Runs 35271936372 attempts 1 and 2 failed on it,
+# with all three flows passing and the app back a second later.
+echo "Test 10: gone 3s of a 15s grace window, then back -> pending, exit 0"
+assert_eq "still pending at 3s" "0" "$(disappearance_is_pending 3 15 && echo 0 || echo 1)"
+code=0
+decide_exit_code "1" "1" "0" || code=$?
+assert_eq "exit code" "0" "$code"
+
+# --- Test 11: gone mid-flow past the grace window -> committed crash, exit 3 ---
+echo "Test 11: gone 16s of a 15s grace window -> committed, exit 3"
+assert_eq "no longer pending at 16s" "1" "$(disappearance_is_pending 16 15 && echo 0 || echo 1)"
+code=0
+decide_exit_code "1" "1" "1" || code=$?
+assert_eq "exit code" "3" "$code"
+
+# --- Test 12: the grace window boundary is inclusive ---
+echo "Test 12: gone exactly 15s of a 15s grace window -> still pending"
+assert_eq "pending at 15s" "0" "$(disappearance_is_pending 15 15 && echo 0 || echo 1)"
 
 # --- Summary ---
 echo ""

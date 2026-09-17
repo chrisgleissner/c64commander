@@ -4,6 +4,7 @@ import { execSync } from "node:child_process";
 import path from "node:path";
 
 const monitorScript = readFileSync(path.resolve(process.cwd(), "ci/telemetry/ios/monitor_ios.sh"), "utf8");
+const lifecycleScript = readFileSync(path.resolve(process.cwd(), "ci/telemetry/ios/lifecycle.sh"), "utf8");
 
 describe("iOS monitor lifecycle state machine", () => {
   it("defines FLOW_ACTIVE_FLAG and FLOW_COMPLETE_FLAG from lifecycle dir", () => {
@@ -22,7 +23,26 @@ describe("iOS monitor lifecycle state machine", () => {
   });
 
   it("checks flow-active.flag and flow-complete.flag on process disappearance", () => {
-    expect(monitorScript).toContain('if [[ -f "$FLOW_ACTIVE_FLAG" && ! -f "$FLOW_COMPLETE_FLAG" ]]; then');
+    expect(lifecycleScript).toContain('if [[ -f "$flow_active_flag" && ! -f "$flow_complete_flag" ]]; then');
+    expect(monitorScript).toContain('classify_disappearance "$FLOW_ACTIVE_FLAG" "$FLOW_COMPLETE_FLAG"');
+  });
+
+  /**
+   * A disappearance is held for the grace window first, because Maestro stops and launches the app
+   * at the start of every flow and SpringBoard reports that as a host termination.
+   */
+  it("holds a mid-flow disappearance until the relaunch grace window passes", () => {
+    expect(monitorScript).toContain('RELAUNCH_GRACE_SEC="${TELEMETRY_IOS_RELAUNCH_GRACE_SEC:-15}"');
+    expect(monitorScript).toContain('log_event "process_disappeared_during_flow_pending"');
+    expect(monitorScript).toContain('log_event "process_relaunched_during_flow"');
+    expect(monitorScript).toContain(
+      '! disappearance_is_pending "$((sample_ts - pending_during_flow_ts))" "$RELAUNCH_GRACE_SEC"',
+    );
+    expect(lifecycleScript).toContain("(( elapsed_sec <= grace_sec ))");
+  });
+
+  it("commits a held disappearance that never came back when the monitor stops", () => {
+    expect(monitorScript).toContain("crash during active flow (never returned)");
   });
 
   it("emits process_disappeared_during_flow event for crash during active flow", () => {
@@ -36,7 +56,10 @@ describe("iOS monitor lifecycle state machine", () => {
   });
 
   it("exits 3 only when main_disappeared_during_flow is set", () => {
-    expect(monitorScript).toContain('main_disappeared_during_flow" == "1"');
+    expect(lifecycleScript).toContain('"$main_disappeared_during_flow" == "1"');
+    expect(monitorScript).toContain(
+      'decide_exit_code "$EXPECT_MAIN_PID" "$main_seen_once" "$main_disappeared_during_flow"',
+    );
     expect(monitorScript).toContain("app process disappeared during active flow");
     expect(monitorScript).not.toContain("app process disappeared unexpectedly");
   });
@@ -57,9 +80,9 @@ describe("iOS monitor lifecycle state machine", () => {
   it("separates the simctl-unreliable disappearance with its own exit code", () => {
     expect(monitorScript).toContain("main_disappeared_during_flow_simctl_unreliable=0");
     expect(monitorScript).toContain("main_disappeared_during_flow_simctl_unreliable=1");
-    expect(monitorScript).toContain('if [[ "$main_disappeared_during_flow_simctl_unreliable" == "1" ]]; then');
+    expect(lifecycleScript).toContain('if [[ "$main_disappeared_during_flow_simctl_unreliable" == "1" ]]; then');
+    expect(lifecycleScript).toContain("return 4");
     expect(monitorScript).toContain("simctl unavailable at detection; reliability reduced");
-    expect(monitorScript).toContain("exit 4");
   });
 
   it("passes shell lifecycle harness (flag-based state transitions)", () => {

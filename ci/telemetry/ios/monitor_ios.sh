@@ -12,6 +12,9 @@ require_cmd xcrun
 require_cmd awk
 require_cmd ps
 
+# shellcheck source=ci/telemetry/ios/lifecycle.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lifecycle.sh"
+
 SAMPLING_INTERVAL_SEC="${TELEMETRY_INTERVAL_SEC:-1}"
 PACKAGE_BUNDLE_ID="${BUNDLE_ID:-${APP_ID:-uk.gleissner.c64commander}}"
 APP_PROCESS_NAME="${TELEMETRY_IOS_APP_PROCESS_NAME:-App}"
@@ -31,6 +34,8 @@ CI_SHA="${GITHUB_SHA:-unknown}"
 FLOW_LIFECYCLE_DIR="${TELEMETRY_FLOW_LIFECYCLE_DIR:-$OUT_DIR}"
 FLOW_ACTIVE_FLAG="$FLOW_LIFECYCLE_DIR/flow-active.flag"
 FLOW_COMPLETE_FLAG="$FLOW_LIFECYCLE_DIR/flow-complete.flag"
+# How long the app may be absent mid-flow before it counts as a crash rather than a relaunch.
+RELAUNCH_GRACE_SEC="${TELEMETRY_IOS_RELAUNCH_GRACE_SEC:-15}"
 
 mkdir -p "$OUT_DIR"
 mkdir -p "$FLOW_LIFECYCLE_DIR"
@@ -161,6 +166,9 @@ main_seen_once=0
 main_disappeared=0
 main_disappeared_during_flow=0
 main_disappeared_during_flow_simctl_unreliable=0
+pending_during_flow_ts=""
+pending_during_flow_pid=""
+pending_during_flow_simctl_unreliable=0
 last_app_pid=""
 last_process_source_at_appearance="simulator"
 last_vmmap_ts=0
@@ -198,29 +206,46 @@ while (( running == 1 )); do
     if [[ -n "$last_app_pid" ]]; then
       log_event "process_disappeared" "$PACKAGE_BUNDLE_ID:event" "$last_app_pid" "app process no longer visible"
       main_disappeared=1
-      if [[ -f "$FLOW_ACTIVE_FLAG" && ! -f "$FLOW_COMPLETE_FLAG" ]]; then
-        main_disappeared_during_flow=1
+      classify_disappearance "$FLOW_ACTIVE_FLAG" "$FLOW_COMPLETE_FLAG"
+      if [[ "$RESULT_DURING_FLOW" == "1" ]]; then
+        # Held, not committed: the app may be coming back, which is what a flow's own relaunch
+        # looks like from here. Committed below once the grace window passes with it still gone.
+        pending_during_flow_ts="$sample_ts"
+        pending_during_flow_pid="$last_app_pid"
         if [[ "$process_source" == "host" ]]; then
-          # Disappearance detected via host ps fallback (simctl unavailable).
-          # Appearance source: $last_process_source_at_appearance.
-          # When simctl was unavailable at detection time, host ps may not
-          # reliably list simulator-internal processes, so classify this as
-          # an infra-level event rather than a confirmed app crash.
-          main_disappeared_during_flow_simctl_unreliable=1
-          log_event "process_disappeared_during_flow" "$PACKAGE_BUNDLE_ID:event" "$last_app_pid" "crash during active flow (simctl unavailable at detection)"
+          # Detected through the host ps fallback, which does not list simulator-internal
+          # processes reliably, so this is an infrastructure event rather than a confirmed crash.
+          pending_during_flow_simctl_unreliable=1
+          log_event "process_disappeared_during_flow_pending" "$PACKAGE_BUNDLE_ID:event" "$last_app_pid" "gone during active flow (simctl unavailable at detection); waiting ${RELAUNCH_GRACE_SEC}s for a relaunch"
         else
-          log_event "process_disappeared_during_flow" "$PACKAGE_BUNDLE_ID:event" "$last_app_pid" "crash during active flow"
+          pending_during_flow_simctl_unreliable=0
+          log_event "process_disappeared_during_flow_pending" "$PACKAGE_BUNDLE_ID:event" "$last_app_pid" "gone during active flow; waiting ${RELAUNCH_GRACE_SEC}s for a relaunch"
         fi
       else
         log_event "process_disappeared_after_flow" "$PACKAGE_BUNDLE_ID:event" "$last_app_pid" "expected teardown"
       fi
       last_app_pid=""
     fi
+    if [[ -n "$pending_during_flow_ts" ]] && ! disappearance_is_pending "$((sample_ts - pending_during_flow_ts))" "$RELAUNCH_GRACE_SEC"; then
+      main_disappeared_during_flow=1
+      if [[ "$pending_during_flow_simctl_unreliable" == "1" ]]; then
+        main_disappeared_during_flow_simctl_unreliable=1
+        log_event "process_disappeared_during_flow" "$PACKAGE_BUNDLE_ID:event" "$pending_during_flow_pid" "crash during active flow (simctl unavailable at detection)"
+      else
+        log_event "process_disappeared_during_flow" "$PACKAGE_BUNDLE_ID:event" "$pending_during_flow_pid" "crash during active flow"
+      fi
+      pending_during_flow_ts=""
+    fi
   else
     if [[ -z "$last_app_pid" ]]; then
       log_event "process_appeared" "$PACKAGE_BUNDLE_ID:event" "$app_pid" "app process detected"
     elif [[ "$last_app_pid" != "$app_pid" ]]; then
       log_event "process_restarted" "$PACKAGE_BUNDLE_ID:event" "$app_pid" "previous_pid=$last_app_pid"
+    fi
+    if [[ -n "$pending_during_flow_ts" ]]; then
+      log_event "process_relaunched_during_flow" "$PACKAGE_BUNDLE_ID:event" "$app_pid" "back after $((sample_ts - pending_during_flow_ts))s; previous_pid=$pending_during_flow_pid was a relaunch, not a crash"
+      pending_during_flow_ts=""
+      pending_during_flow_simctl_unreliable=0
     fi
     last_app_pid="$app_pid"
     last_process_source_at_appearance="$process_source"
@@ -299,6 +324,14 @@ while (( running == 1 )); do
 done
 
 run_end_ts="$(date -u +%s)"
+# A disappearance still held when the monitor stops never came back, so it counts.
+if [[ -n "$pending_during_flow_ts" ]]; then
+  main_disappeared_during_flow=1
+  if [[ "$pending_during_flow_simctl_unreliable" == "1" ]]; then
+    main_disappeared_during_flow_simctl_unreliable=1
+  fi
+  log_event "process_disappeared_during_flow" "$PACKAGE_BUNDLE_ID:event" "$pending_during_flow_pid" "crash during active flow (never returned)"
+fi
 log_event "monitor_stopped" "$PACKAGE_BUNDLE_ID" "" "main_seen_once=$main_seen_once main_disappeared=$main_disappeared"
 
 cat > "$META_PATH" <<EOF
@@ -320,13 +353,13 @@ cat > "$META_PATH" <<EOF
 }
 EOF
 
-if [[ "$EXPECT_MAIN_PID" == "1" && "$main_seen_once" == "1" && "$main_disappeared_during_flow" == "1" ]]; then
-  if [[ "$main_disappeared_during_flow_simctl_unreliable" == "1" ]]; then
-    echo "telemetry(ios): app process disappeared during active flow (simctl unavailable at detection; reliability reduced)" >&2
-    exit 4
-  fi
+monitor_exit_code=0
+decide_exit_code "$EXPECT_MAIN_PID" "$main_seen_once" "$main_disappeared_during_flow" \
+  "$main_disappeared_during_flow_simctl_unreliable" || monitor_exit_code=$?
+if [[ "$monitor_exit_code" == "4" ]]; then
+  echo "telemetry(ios): app process disappeared during active flow (simctl unavailable at detection; reliability reduced)" >&2
+elif [[ "$monitor_exit_code" == "3" ]]; then
   echo "telemetry(ios): app process disappeared during active flow" >&2
-  exit 3
 fi
 
-exit 0
+exit "$monitor_exit_code"
