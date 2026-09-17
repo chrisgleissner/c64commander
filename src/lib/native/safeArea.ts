@@ -29,7 +29,7 @@ const SafeArea = registerPlugin<SafeAreaPlugin>("SafeArea", {
 
 /**
  * Show/hide the Android system bars (full-screen / immersive). No-op off native Android. The
- * `--safe-area-inset-*` properties are left alone: Capacitor's SystemBars plugin rewrites them
+ * `--safe-area-inset-*` properties are left alone: the native SafeArea plugin rewrites them
  * from the window insets listener once the bars have actually gone, later than this call returns.
  */
 export const setSystemBarsVisibility = async (options: SystemBarsVisibility): Promise<void> => {

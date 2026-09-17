@@ -29,8 +29,8 @@
   --display-profile-action-grid-min: 9.5rem;
   --display-profile-modal-max-width: 48rem;
   --display-profile-modal-inset: 1rem;
-  /* Capacitor's SystemBars plugin overwrites these four inline on <html> from the Android
-     window insets listener, and inline beats :root, so nothing composed here survives there.
+  /* The native SafeArea plugin overwrites these four inline on <html> from the Android window
+     insets listener, and inline beats :root, so nothing composed here survives there.
      They are the fallback for iOS, the web, and the first paint before that listener runs. */
   --safe-area-inset-top: env(safe-area-inset-top, 0px);
   --safe-area-inset-right: env(safe-area-inset-right, 0px);

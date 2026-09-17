@@ -8,6 +8,8 @@
 
 package uk.gleissner.c64commander
 
+import android.view.View
+import android.webkit.WebView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -16,10 +18,85 @@ import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
+import com.getcapacitor.WebViewListener
 import com.getcapacitor.annotation.CapacitorPlugin
+import java.util.Locale
+import kotlin.math.ceil
+
+/**
+ * The page's safe-area insets in CSS pixels, and the bottom padding the WebView's parent needs.
+ *
+ * The activity draws edge-to-edge, so the page must keep its own content clear of the bars. While
+ * the keyboard is up, the parent is padded by its height and the page's bottom inset is zero.
+ */
+internal data class SafeAreaLayout(val top: Int, val right: Int, val bottom: Int, val left: Int, val hostPaddingBottom: Int)
+
+internal fun safeAreaLayout(
+        top: Int,
+        right: Int,
+        bottom: Int,
+        left: Int,
+        imeBottom: Int,
+        imeVisible: Boolean,
+        density: Float,
+): SafeAreaLayout {
+  // Rounded up: a fraction of a pixel short would leave the page's top row under the status bar.
+  fun css(px: Int) = ceil(px / density).toInt()
+  return SafeAreaLayout(
+          top = css(top),
+          right = css(right),
+          bottom = if (imeVisible) 0 else css(bottom),
+          left = css(left),
+          hostPaddingBottom = if (imeVisible) imeBottom else 0,
+  )
+}
+
+internal fun safeAreaScript(layout: SafeAreaLayout): String {
+  val style = "document.documentElement.style"
+  return listOf("top" to layout.top, "right" to layout.right, "bottom" to layout.bottom, "left" to layout.left)
+          .joinToString("") { (edge, value) ->
+            String.format(Locale.US, "%s.setProperty(\"--safe-area-inset-%s\", \"%dpx\");", style, edge, value)
+          }
+}
 
 @CapacitorPlugin(name = "SafeArea")
 class SafeAreaPlugin : Plugin() {
+  /**
+   * The only writer of `--safe-area-inset-*` on Android. Capacitor's SystemBars plugin is disabled
+   * in capacitor.config.ts: it reports zero insets on Android 14 and older unless the WebView is
+   * version 140 or newer, which put the page under the status bar there.
+   */
+  override fun load() {
+    val host = bridge?.webView?.parent as? View ?: return
+    ViewCompat.setOnApplyWindowInsetsListener(host) { view, insets -> publishInsets(view, insets) }
+    // The page may load after the last insets pass, and a page load discards the inline properties.
+    bridge.addWebViewListener(
+            object : WebViewListener() {
+              override fun onPageLoaded(webView: WebView) {
+                ViewCompat.requestApplyInsets(host)
+              }
+            }
+    )
+  }
+
+  private fun publishInsets(view: View, insets: WindowInsetsCompat): WindowInsetsCompat {
+    val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+    val ime = WindowInsetsCompat.Type.ime()
+    val layout =
+            safeAreaLayout(
+                    bars.top,
+                    bars.right,
+                    bars.bottom,
+                    bars.left,
+                    insets.getInsets(ime).bottom,
+                    insets.isVisible(ime),
+                    view.resources.displayMetrics.density,
+            )
+    view.setPadding(0, 0, 0, layout.hostPaddingBottom)
+    bridge?.webView?.evaluateJavascript(safeAreaScript(layout), null)
+    return insets
+  }
+
   @PluginMethod
   fun getInsets(call: PluginCall) {
     val activity = activity

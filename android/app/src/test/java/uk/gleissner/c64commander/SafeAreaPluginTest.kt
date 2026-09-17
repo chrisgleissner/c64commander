@@ -45,6 +45,29 @@ class SafeAreaPluginTest {
   }
 
   @Test
+  fun safeAreaLayoutConvertsBarInsetsToCssPixelsRoundedUp() {
+    // A 63 px status bar at density 2.625 is exactly 24 CSS px; a 64 px one must not round down to 24.
+    assertEquals(SafeAreaLayout(24, 0, 48, 0, 0), safeAreaLayout(63, 0, 126, 0, 0, false, 2.625f))
+    assertEquals(25, safeAreaLayout(64, 0, 0, 0, 0, false, 2.625f).top)
+  }
+
+  @Test
+  fun safeAreaLayoutMovesTheBottomInsetToHostPaddingWhileTheKeyboardIsUp() {
+    assertEquals(SafeAreaLayout(24, 0, 0, 0, 840), safeAreaLayout(63, 0, 126, 0, 840, true, 2.625f))
+  }
+
+  @Test
+  fun safeAreaScriptWritesAllFourInsetProperties() {
+    assertEquals(
+            "document.documentElement.style.setProperty(\"--safe-area-inset-top\", \"24px\");" +
+                    "document.documentElement.style.setProperty(\"--safe-area-inset-right\", \"1px\");" +
+                    "document.documentElement.style.setProperty(\"--safe-area-inset-bottom\", \"48px\");" +
+                    "document.documentElement.style.setProperty(\"--safe-area-inset-left\", \"2px\");",
+            safeAreaScript(SafeAreaLayout(24, 1, 48, 2, 0)),
+    )
+  }
+
+  @Test
   fun getInsetsRejectsWhenActivityIsUnavailable() {
     setPluginBridge(plugin, null)
     val call = mock(PluginCall::class.java)

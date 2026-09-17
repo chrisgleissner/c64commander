@@ -58,7 +58,7 @@ describe("page-shell bounded viewport contract", () => {
     expect(swipeNavSource).toContain('height: "calc(100dvh - var(--app-tab-bar-reserved-height))"');
   });
 
-  // Capacitor's SystemBars plugin overwrites these four inline on <html> from the Android window
+  // The native SafeArea plugin overwrites these four inline on <html> from the Android window
   // insets listener, and an inline declaration beats this :root rule. Anything composed here from
   // a property the app maintains itself is therefore discarded on Android; see
   // tests/unit/lib/native/safeAreaOwnership.test.ts.
