@@ -11,9 +11,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * Capacitor's SystemBars plugin writes these as INLINE styles on <html>, which outranks any :root
- * rule: a value the app composes from a property it maintains itself is discarded on Android. The
- * app used to maintain such a property (`--native-safe-area-inset-*`), and it went stale.
+ * The native SafeArea plugin writes these as INLINE styles on <html>, which outranks any :root rule:
+ * a value the app composes from a property it maintains itself is discarded on Android. The app used
+ * to maintain such a property (`--native-safe-area-inset-*`), and it went stale. Capacitor's bundled
+ * SystemBars plugin writes the same four, but reports zero on Android 14 and older with a WebView
+ * below 140, so capacitor.config.ts disables it and SafeAreaPlugin.kt is the only writer.
  */
 
 const repoRoot = process.cwd();
@@ -26,10 +28,17 @@ const capacitorSystemBarsSource = readFileSync(
   "utf8",
 );
 
-/** The property names Capacitor claims, read from the plugin that writes them. */
+/** The property names Capacitor's plugin would write, read from its source. */
 const capacitorOwnedProperties = [...capacitorSystemBarsSource.matchAll(/setProperty\("(--[a-z-]+)"/g)].map(
   (match) => match[1],
 );
+
+const safeAreaPluginSource = readFileSync(
+  path.join(repoRoot, "android/app/src/main/java/uk/gleissner/c64commander/SafeAreaPlugin.kt"),
+  "utf8",
+);
+
+const capacitorConfigSource = readFileSync(path.join(repoRoot, "capacitor.config.ts"), "utf8");
 
 const indexCss = readFileSync(path.join(repoRoot, "src/index.css"), "utf8");
 
@@ -44,7 +53,18 @@ const sourceFiles = (dir: string): string[] =>
 const SECOND_WRITER = /setProperty\(\s*["'`]--(native-)?safe-area-inset-/;
 
 describe("safe-area custom property ownership", () => {
-  it("reads the owned property names out of the Capacitor plugin that writes them", () => {
+  it("disables the bundled SystemBars inset writer, so the app's plugin is the only one", () => {
+    expect(capacitorConfigSource).toMatch(/SystemBars:\s*\{\s*insetsHandling:\s*"disable",?\s*\}/);
+  });
+
+  it("writes every edge from the app's SafeArea plugin", () => {
+    expect(safeAreaPluginSource).toContain('setProperty(\\"--safe-area-inset-%s\\"');
+    for (const edge of ["top", "right", "bottom", "left"]) {
+      expect(safeAreaPluginSource).toContain(`"${edge}" to layout.${edge}`);
+    }
+  });
+
+  it("reads the owned property names out of the Capacitor plugin that would also write them", () => {
     expect(capacitorOwnedProperties).toEqual([
       "--safe-area-inset-top",
       "--safe-area-inset-right",
@@ -91,7 +111,7 @@ describe("safe-area custom property ownership", () => {
     const offenders = sourceFiles(path.join(repoRoot, "src"))
       .filter((file) => SECOND_WRITER.test(readFileSync(file, "utf8")))
       .map((file) => path.relative(repoRoot, file));
-    expect(offenders, "only Capacitor's SystemBars plugin may write the safe-area insets").toEqual([]);
+    expect(offenders, "only the native SafeArea plugin may write the safe-area insets").toEqual([]);
   });
 
   it("keeps no leftover --native-safe-area-inset-* property in the stylesheet", () => {

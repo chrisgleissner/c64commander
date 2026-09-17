@@ -55,6 +55,12 @@ const config: CapacitorConfig = {
     CapacitorCookies: {
       enabled: false,
     },
+    // The app's own SafeArea plugin writes the --safe-area-inset-* properties on Android. The
+    // bundled SystemBars plugin reports zero insets on Android 14 and older with a WebView below
+    // version 140, so it must not write them as well.
+    SystemBars: {
+      insetsHandling: "disable",
+    },
   },
 };
 
