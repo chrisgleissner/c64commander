@@ -536,8 +536,8 @@ const startPlayback = async (options = {}) => {
   if (foreign) return { started: false, why: `${foreign} has focus; the app cannot be driven underneath it` };
   await goto("/play");
   if (options.needSeconds) {
-    const before = await readState(Date.now());
-    if ((remainingSeconds(before.counters) ?? 0) < options.needSeconds) {
+    const start = await readState(Date.now());
+    if ((remainingSeconds(start.counters) ?? 0) < options.needSeconds) {
       const rewound = await rewindToFirstTrack();
       if (rewound !== "clicked") {
         return { started: false, why: `the playlist has under ${options.needSeconds} s left and could not be rewound` };
@@ -553,6 +553,8 @@ const startPlayback = async (options = {}) => {
       }
     }
   }
+  // Read AFTER any rewind above, never before it: a rewind leaves the session playing, and a
+  // stale "stopped" reading here pressed Play on a running session, which stops it.
   const before = await readState(Date.now());
   if (before.elapsed === null) return { started: false, why: "the Play page shows no transport" };
   /*
