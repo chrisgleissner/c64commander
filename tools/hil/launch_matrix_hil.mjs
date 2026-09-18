@@ -167,8 +167,8 @@ const { adb, shell, attach, evaluate, takeConsoleErrors, foreignFocusedWindow } 
  * programmatic click reads as no interaction at all. The expression returns CSS pixels and the
  * device wants physical ones, which is what the page's own `devicePixelRatio` converts.
  */
-const tapFrom = async (expression) => {
-  const spot = await evaluate(`(()=>{
+const spotFor = async (expression) =>
+  evaluate(`(()=>{
     const element = (${expression});
     if (!element) return null;
     element.scrollIntoView({ block: "center" });
@@ -179,6 +179,20 @@ const tapFrom = async (expression) => {
       y: Math.round((rect.y + rect.height / 2) * ratio),
     });
   })()`);
+
+/**
+ * Tap the centre of whatever a page expression returns, looking again if it is not there yet.
+ *
+ * A list that is re-rendering — a playlist finishing its hydration, most often — has its rows out
+ * of the document for a frame or two, and a single look then reports a control the app does draw as
+ * missing.
+ */
+const tapFrom = async (expression) => {
+  let spot = null;
+  for (let attempt = 0; attempt < 3 && !spot; attempt += 1) {
+    if (attempt) await sleep(2000);
+    spot = await spotFor(expression);
+  }
   if (!spot) throw new Error(`nothing to tap for ${expression.slice(0, 60)}`);
   await shell(`input tap ${spot.x} ${spot.y}`);
   await sleep(1200);
@@ -372,6 +386,13 @@ const preflight = async () => {
   await shell("input keyevent KEYCODE_WAKEUP");
   await shell("wm dismiss-keyguard");
   await shell("cmd statusbar collapse").catch(() => undefined);
+  /*
+   * A run spends minutes waiting for the machine, and a phone left alone puts its screen out. Every
+   * tap after that lands on nothing and the stage reports a control that never appeared. Keeping
+   * the screen lit while the phone is on USB is what the release sweep turns OFF for its screen-off
+   * stage; here there is no such stage, so it stays on for the whole run.
+   */
+  await shell("svc power stayon usb");
   await sleep(2000);
   const wakefulness = (await shell("dumpsys power | grep -m1 mWakefulness")).trim();
   if (!/Awake/.test(wakefulness)) throw new Error(`the phone did not wake (${wakefulness})`);
@@ -594,6 +615,7 @@ const launch = async () => {
 const relaunchApp = async () => {
   await shell(`am force-stop ${PACKAGE}`);
   await sleep(2000);
+  await shell("input keyevent KEYCODE_WAKEUP");
   await shell(`monkey -p ${PACKAGE} -c android.intent.category.LAUNCHER 1`);
   await sleep(6000);
   await attach();

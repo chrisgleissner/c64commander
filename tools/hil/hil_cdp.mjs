@@ -160,5 +160,8 @@ export const createHilCdp = ({ serial, packageName, port }) => {
     return window;
   };
 
-  return { adb, shell, attach, ensureAttached, evaluate, send, takeConsoleErrors, foreignFocusedWindow };
+  /** Drop the socket, so a run that is finished does not leave the page attached. */
+  const close = () => socket?.close();
+
+  return { adb, shell, attach, ensureAttached, evaluate, send, close, takeConsoleErrors, foreignFocusedWindow };
 };

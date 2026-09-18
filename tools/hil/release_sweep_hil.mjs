@@ -107,7 +107,7 @@ const MAIN_ROUTES = ["/", "/play", "/disks", "/config", "/settings"];
  * there is nothing live. A relaunch needs the forced one: the replaced WebView leaves a socket that
  * still reads as open and answers nothing.
  */
-const { adb, shell, attach, evaluate, takeConsoleErrors, foreignFocusedWindow } = createHilCdp({
+const { adb, shell, attach, evaluate, send, close, takeConsoleErrors, foreignFocusedWindow } = createHilCdp({
   serial: SERIAL,
   packageName: PACKAGE,
   port: CDP_PORT,
@@ -187,10 +187,19 @@ const preflight = async () => {
   const devices = await execFileAsync("adb", ["devices"]);
   if (!devices.stdout.includes(`${SERIAL}\tdevice`)) throw new Error(`${SERIAL} is not attached and in state device`);
 
-  // A locked phone suspends the page's timers, so every later stage would misread the lock as the
-  // app hanging. The screen is woken and the keyguard dismissed once, here, for the whole run.
+  /*
+   * A locked phone suspends the page's timers, so every later stage would misread the lock as the
+   * app hanging. The screen is woken and the keyguard dismissed once, here, for the whole run.
+   * A sleeping screen also reports NotificationShade as the focused window, which the check further
+   * down reads as somebody's dialog sitting over the app, so the wake has to be confirmed rather
+   * than assumed: the keyevent is delivered before the display has finished coming up.
+   */
   await shell("input keyevent KEYCODE_WAKEUP");
   await shell("wm dismiss-keyguard");
+  await shell("cmd statusbar collapse").catch(() => undefined);
+  await sleep(2000);
+  const wakefulness = (await shell("dumpsys power | grep -m1 mWakefulness")).trim();
+  if (!/Awake/.test(wakefulness)) throw new Error(`the phone did not wake (${wakefulness})`);
 
   const size = (await shell("wm size")).trim();
   if (size.includes("Override")) {
@@ -762,7 +771,7 @@ const main = async () => {
     writeFileSync(JSON_PATH, JSON.stringify({ serial: SERIAL, hosts: HOSTS, results, verdict: final }, null, 2));
     console.log(`wrote ${JSON_PATH}`);
   }
-  socket?.close();
+  close();
   process.exit(final.code);
 };
 
