@@ -902,9 +902,9 @@ export function usePlaybackController({
         }
         // A tune kept on the Ultimate is out of reach without a network, or when a playlist moves on while
         // the device is shown offline: end here rather than through failed FTP and REST calls.
-        const deviceOutOfReach =
-          isNetworkKnownOffline() ||
-          (options?.origin === "auto" && getConnectionSnapshot().state === "OFFLINE_NO_DEMO");
+        // Written through `isDeviceOutOfReach` rather than repeating it, so the simulated device is
+        // exempt here too; the second term keeps its OFFLINE_NO_DEMO half to a playlist moving on.
+        const deviceOutOfReach = isDeviceOutOfReach() && (isNetworkKnownOffline() || options?.origin === "auto");
         // Unless it was read before the device went, which is what lets a tune playing there carry on here.
         if (
           effectiveRequest.source === "ultimate" &&

@@ -43,6 +43,27 @@ export interface MockC64Server {
 
 export type MockC64ServerOptions = {
   timingMode?: MockTimingMode;
+  /**
+   * What `/v1/info` answers, merged over the C64 Ultimate defaults.
+   *
+   * The one that matters is `core_version`: the firmware returns it only for integrated Ultimate
+   * 64-family computers, and `deriveDeviceCapabilities` reads its presence as the runtime marker
+   * for streaming and power-off. Passing `{ product: "Ultimate II+L", core_version: null }` is how
+   * a spec puts the app in front of a cartridge, which is the only device on which the capability
+   * gates are ever unmet.
+   */
+  deviceInfo?: Partial<
+    Record<"product" | "firmware_version" | "core_version" | "hostname" | "unique_id", string | null>
+  >;
+  /**
+   * Config categories this device does not serve.
+   *
+   * A cartridge has no "Data Streams" category, and that absence is what
+   * `detectStreamingFromConfig` reads. Dropping `core_version` alone is not enough to model one:
+   * the config signal is the more precise of the two and overrides it, so a mock that kept the
+   * category still reported a device that streams.
+   */
+  omitConfigCategories?: readonly string[];
 };
 
 export type MockRequestRecord = {
@@ -147,7 +168,11 @@ export async function createMockC64Server(
 
   // Use YAML as source of truth if no initial state provided
   const yamlState = Object.keys(initial).length === 0 ? await buildStateFromYaml() : {};
-  const defaults = Object.keys(initial).length === 0 ? yamlState : normalizeInitialState(initial);
+  const allDefaults = Object.keys(initial).length === 0 ? yamlState : normalizeInitialState(initial);
+  const omitted = new Set(options.omitConfigCategories ?? []);
+  const defaults: CategoryState = Object.fromEntries(
+    Object.entries(allDefaults).filter(([category]) => !omitted.has(category)),
+  );
   let state: CategoryState = clone(defaults);
   const driveState: Record<
     "a" | "b" | "softiec" | "printer",
@@ -373,15 +398,23 @@ export async function createMockC64Server(
     }
 
     if (method === "GET" && parsed.pathname === "/v1/info") {
-      return sendJson(200, {
+      const info: Record<string, unknown> = {
         product: "C64 Ultimate",
         firmware_version: "3.12.0",
         fpga_version: "1.0.0",
         core_version: "1.0.0",
         hostname: "c64u",
         unique_id: "TEST-123",
+        ...(options.deviceInfo ?? {}),
         errors: [],
-      });
+      };
+      // A null override REMOVES the field, which is what a cartridge does with `core_version`.
+      // Sending `core_version: null` instead would still be a field, and the capability model reads
+      // presence, so the device would have kept every U64-family feature.
+      for (const [key, value] of Object.entries(options.deviceInfo ?? {})) {
+        if (value === null) delete info[key];
+      }
+      return sendJson(200, info);
     }
 
     if (method === "GET" && parsed.pathname === "/v1/version") {
@@ -579,6 +612,10 @@ export async function createMockC64Server(
     const catMatch = parsed.pathname.match(/^\/v1\/configs\/([^/]+)$/);
     if (method === "GET" && catMatch) {
       const category = decodeURIComponent(catMatch[1]);
+      // A category this device does not have is a 404, the way a cartridge answers for "Data
+      // Streams". Answering 200 with an empty item list instead is what let a mock that had been
+      // told to omit the category still report a device that streams.
+      if (omitted.has(category)) return sendJson(404, { errors: ["No such category"] });
       const items = state[category] ?? {};
       const details = itemDetails?.[category] ?? {};
       const payloadItems: Record<string, any> = {};
@@ -600,6 +637,7 @@ export async function createMockC64Server(
     if (itemMatch) {
       const category = decodeURIComponent(itemMatch[1]);
       const item = decodeURIComponent(itemMatch[2]);
+      if (omitted.has(category)) return sendJson(404, { errors: ["No such item"] });
 
       if (method === "PUT") {
         const value = parsed.searchParams.get("value");

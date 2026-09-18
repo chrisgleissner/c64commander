@@ -155,7 +155,7 @@ const isDemoModeAvailable = () => featureFlagManager.getSnapshot().flags.demo_mo
 
 const isDemoModeRequested = () => isDemoModeAvailable() && loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
 
-const isSimulatedDeviceTarget = () => Boolean(getActiveMockBaseUrl()) && !isSmokeModeEnabled();
+export const isSimulatedDeviceTarget = () => Boolean(getActiveMockBaseUrl()) && !isSmokeModeEnabled();
 
 type DemoFallbackReason = "setting" | "no-network";
 

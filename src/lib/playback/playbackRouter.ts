@@ -13,6 +13,7 @@ import { getC64APIConfigSnapshot } from "@/lib/c64api";
 import { readFtpFile } from "@/lib/ftp/ftpClient";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
+import { isSimulatedDeviceTarget } from "@/lib/connection/connectionManager";
 import { normalizeFtpHost } from "@/lib/sourceNavigation/ftpSourceAdapter";
 import { getActiveAction } from "@/lib/tracing/actionTrace";
 import { recordDeviceGuard, recordTraceError } from "@/lib/tracing/traceSession";
@@ -341,7 +342,9 @@ export const tryFetchUltimateSidBlob = async (path: string) => {
   const normalizedPath = normalizeUltimatePath(path);
   const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
   const host = normalizeFtpHost(rawHost);
-  if (isNetworkKnownOffline()) return getRememberedUltimateSidBlob(path);
+  // Offline means the device cannot be read from — except in Demo Mode, where "the device" is this
+  // process answering on loopback and the radios are irrelevant.
+  if (isNetworkKnownOffline() && !isSimulatedDeviceTarget()) return getRememberedUltimateSidBlob(path);
   try {
     const response = await readFtpFile({
       host,
