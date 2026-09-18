@@ -210,7 +210,12 @@ const tapTestId = (id) => tapFrom(`document.querySelector('[data-testid=${JSON.s
 const waitFor = async (expression, { timeoutMs = 20_000, label = expression } = {}) => {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    if (await evaluate(`Boolean(${expression})`)) return;
+    // Naming the expression matters: a page expression that will not parse otherwise surfaces as a
+    // bare "SyntaxError" with nothing to say which of a stage's dozen reads produced it.
+    const ready = await evaluate(`Boolean(${expression})`).catch((error) => {
+      throw new Error(`${label}: ${error instanceof Error ? error.message : String(error)}`);
+    });
+    if (ready) return;
     if (Date.now() > deadline) throw new Error(`timed out waiting for ${label}`);
     await sleep(500);
   }
@@ -321,6 +326,25 @@ const openPlayPageWith = async (fileName) => {
     })()`,
     { label: `the ${fileName} row to become playable`, timeoutMs: 120_000 },
   );
+};
+
+/**
+ * Open a row's config sheet and wait for it, tapping again if it did not open.
+ *
+ * The chip is a small target at the right-hand end of a row that can still be settling, and a tap
+ * that lands a frame early hits the row instead. One more tap costs a second; a stage that reports
+ * "the sheet never opened" costs a run.
+ */
+const openConfigSheetAndWait = async (fileName) => {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await openConfigSheet(fileName);
+    await sleep(2500);
+    const open = await evaluate(
+      `Boolean([...document.querySelectorAll('[role="dialog"]')].pop()?.innerText.includes("Playback config"))`,
+    );
+    if (open) return;
+  }
+  throw new Error(`the config sheet for ${fileName} did not open`);
 };
 
 const playFromPlaylist = (fileName) =>
@@ -547,10 +571,7 @@ const discovery = async () => {
   record("discovery", "pass", `all four probe items were added`);
 
   for (const name of PROBE_LAUNCHABLES) {
-    await openConfigSheet(name);
-    await waitFor(`[...document.querySelectorAll('[role="dialog"]')].pop()?.innerText.includes("Playback config")`, {
-      label: `the config sheet for ${name}`,
-    });
+    await openConfigSheetAndWait(name);
     const state = await configSheetState();
     await tapSheetButton("Close");
     await sleep(1500);
@@ -637,10 +658,7 @@ const relaunchApp = async () => {
  * means a stage never depends on the order the stages happened to run in.
  */
 const restoreDiscoveredConfig = async (fileName) => {
-  await openConfigSheet(fileName);
-  await waitFor(`[...document.querySelectorAll('[role="dialog"]')].pop()?.innerText.includes("Playback config")`, {
-    label: `the config sheet for ${fileName}`,
-  });
+  await openConfigSheetAndWait(fileName);
   const before = await configSheetState();
   if (before?.origin !== "Auto: same name") {
     await tapSheetButton("Re-discover");
@@ -679,10 +697,7 @@ const configApply = async () => {
  */
 const configDecline = async () => {
   await openPlayPageWith("hilprobe.prg");
-  await openConfigSheet("hilprobe.prg");
-  await waitFor(`[...document.querySelectorAll('[role="dialog"]')].pop()?.innerText.includes("Playback config")`, {
-    label: "the config sheet",
-  });
+  await openConfigSheetAndWait("hilprobe.prg");
   await tapSheetButton("No config");
   await sleep(2000);
   const state = await configSheetState();
