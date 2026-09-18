@@ -482,9 +482,17 @@ const addProbeItems = async () => {
     await tapButtonLabelled("Clear playlist");
     await sleep(4000);
   }
-  await waitFor(`document.querySelectorAll('[data-testid="playlist-item"]').length === 0`, {
-    label: "the playlist to empty",
-  });
+  if (await evaluate(`document.querySelectorAll('[data-testid="playlist-item"]').length > 0`)) {
+    /*
+     * A dialog over the page takes the tap and the button behind it never hears it, so the count
+     * stays put and the failure otherwise reads as a button that does not work. The app's own words
+     * say what is actually being asked — a settings file it cannot reach, most often.
+     */
+    const dialog = await evaluate(
+      `[...document.querySelectorAll('[role="alertdialog"],[role="dialog"]')].pop()?.innerText.replace(/\n/g, " ") ?? ""`,
+    );
+    throw new Error(dialog ? `a dialog is over the page: ${dialog.slice(0, 120)}` : "the playlist would not empty");
+  }
   await waitForTestId("add-items-to-playlist");
   await tapTestId("add-items-to-playlist");
   /*

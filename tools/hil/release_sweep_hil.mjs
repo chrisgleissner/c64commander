@@ -500,12 +500,19 @@ const rewindToFirstTrack = async () => {
       return "ok";})()`,
   ).catch(() => undefined);
   await sleep(1500);
-  // The row's own Play control, found by its accessible name. `playlist-item-actions-<name>` is the
-  // overflow menu beside it, not the thing that starts the track.
+  /*
+   * The first TUNE, not the first row. These stages are about a tune still playing minutes later,
+   * and a playlist whose first item is a program or a disk gives them a launch that finishes in a
+   * second and a clock that never moves — which the stage then reports as nothing playing.
+   *
+   * The row's own Play control is found by its accessible name; `playlist-item-actions-<name>` is
+   * the overflow menu beside it, not the thing that starts the track.
+   */
   const clicked = await evaluate(
-    `(()=>{const first=document.querySelector('[data-testid="playlist-item"]');
-      if(!first) return "missing";
-      const play=[...first.querySelectorAll('button,[role="button"]')]
+    `(()=>{const rows=[...document.querySelectorAll('[data-testid="playlist-item"]')];
+      if(!rows.length) return "missing";
+      const tune=rows.find((row)=>/SID music|MOD music/.test(row.innerText)) ?? rows[0];
+      const play=[...tune.querySelectorAll('button,[role="button"]')]
         .find((b)=>/^Play /.test(b.getAttribute("aria-label")||""));
       if(!play) return "no-play"; play.click(); return "clicked";})()`,
   ).catch(() => "missing");
