@@ -190,15 +190,23 @@ const buildTree = () => {
   const tunes = TUNES.map((tune) => ({ tune, built: sidFor(tune) }));
   for (const { tune, built } of tunes) put(join("Usb0", "Music", tune.file), built.bytes);
 
-  // A songlengths database in the HVSC format, so the playlist shows a duration for these tunes
-  // the same way it does for a tune from HVSC rather than falling back to a default.
+  /*
+   * A songlengths database in the HVSC format, so the playlist shows a duration for these tunes the
+   * same way it does for a tune from HVSC rather than falling back to a default.
+   *
+   * The path goes on its OWN comment line before the md5 line, which is how HVSC writes it and what
+   * the app's store requires: an md5 line that no comment line has given a path to is dropped, so a
+   * file written as `<md5>=<time> ; <path>` loaded as ZERO entries. Demo Mode then showed
+   * "Songlengths file contains no entries." in red on the Play page and gave every demo tune the
+   * default duration instead of its own.
+   */
   const md5 = (bytes) => createHash("md5").update(bytes).digest("hex");
   const songlengths = [
     "[Database]",
-    ...tunes.map(({ tune, built }) => {
+    ...tunes.flatMap(({ tune, built }) => {
       const total = Math.round(built.seconds);
       const stamp = `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
-      return `${md5(built.bytes)}=${stamp} ; Usb0/Music/${tune.file}`;
+      return [`; /Usb0/Music/${tune.file}`, `${md5(built.bytes)}=${stamp}`];
     }),
     "",
   ].join("\n");
@@ -314,7 +322,8 @@ const main = () => {
   const total = [...wanted.values()].reduce((sum, bytes) => sum + bytes.length, 0);
   console.log(`Wrote ${wanted.size} files (${(total / 1024).toFixed(0)} KiB) to ${FTP_ROOT}`);
   for (const [path, bytes] of wanted) {
-    const kind = bytes.length === D64_BYTES ? "d64" : path.endsWith(".sid") ? "sid" : path.endsWith(".prg") ? "prg" : "";
+    const kind =
+      bytes.length === D64_BYTES ? "d64" : path.endsWith(".sid") ? "sid" : path.endsWith(".prg") ? "prg" : "";
     console.log(`  ${String(bytes.length).padStart(7)}  ${kind.padEnd(3)}  ${path}`);
   }
 };

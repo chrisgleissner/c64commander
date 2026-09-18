@@ -120,7 +120,11 @@ const openCdp = async () => {
   nextId = 1;
   next.addEventListener("message", (event) => {
     const message = JSON.parse(event.data);
-    const waiter = message.id ? pending.get(message.id) : null;
+    if (!message.id) {
+      noteConsoleEvent(message);
+      return;
+    }
+    const waiter = pending.get(message.id);
     if (!waiter) return;
     pending.delete(message.id);
     if (message.error) waiter.reject(new Error(JSON.stringify(message.error)));
@@ -132,6 +136,48 @@ const openCdp = async () => {
   });
   socket = next;
   await send("Runtime.enable", {}, 20_000);
+  // `Log` carries what the browser itself reports — a failed subresource, a violated CSP, a rejected
+  // permission — none of which reaches `console.error` or the app's own log.
+  await send("Log.enable", {}, 20_000).catch(() => undefined);
+};
+
+/**
+ * Everything the page has complained about since the last `takeConsoleErrors()`.
+ *
+ * The app's own log records what the app knows went wrong. It cannot record an uncaught exception,
+ * a React warning, or a subresource that 404ed, and those are exactly the faults a user never
+ * reports because nothing on screen mentions them. This is the second half of the census.
+ */
+let consoleErrors = [];
+
+const noteConsoleEvent = (message) => {
+  if (
+    message.method === "Runtime.consoleAPICalled" &&
+    (message.params.type === "error" || message.params.type === "assert")
+  ) {
+    const text = (message.params.args ?? [])
+      .map((arg) => arg.value ?? arg.description ?? arg.unserializableValue ?? "")
+      .join(" ")
+      .trim();
+    if (text) consoleErrors.push(`console.${message.params.type}: ${text.slice(0, 200)}`);
+    return;
+  }
+  if (message.method === "Runtime.exceptionThrown") {
+    const details = message.params.exceptionDetails ?? {};
+    const text = details.exception?.description ?? details.text ?? "uncaught exception";
+    consoleErrors.push(`uncaught: ${String(text).slice(0, 200)}`);
+    return;
+  }
+  if (message.method === "Log.entryAdded" && message.params.entry?.level === "error") {
+    const entry = message.params.entry;
+    consoleErrors.push(`${entry.source}: ${String(entry.text).slice(0, 200)}`);
+  }
+};
+
+const takeConsoleErrors = () => {
+  const taken = consoleErrors;
+  consoleErrors = [];
+  return taken;
 };
 
 const send = (method, params = {}, timeoutMs = 20_000) =>
@@ -213,6 +259,7 @@ const STATE = (sinceMs) => `(()=>{
     badge: badge ? badge.getAttribute("aria-label") : null,
     elapsed: q("playback-elapsed") ? q("playback-elapsed").innerText : null,
     resumeLabel: q("playlist-pause") ? q("playlist-pause").getAttribute("aria-label") : null,
+    playLabel: q("playlist-play") ? q("playlist-play").getAttribute("aria-label") : null,
     alerts: [...document.querySelectorAll('[role="alert"]')]
       .map((e) => e.innerText.replace(/\\s+/g, " ").trim())
       .filter(Boolean),
@@ -227,6 +274,23 @@ const readState = (sinceMs) => evaluate(STATE(sinceMs));
 
 /** The device clock, because the in-app log is stamped with it and it is hours from the host's. */
 const deviceNowMs = async () => Number((await shell("date +%s%3N")).trim());
+
+/**
+ * The window that has focus, when it is not this app's.
+ *
+ * Nothing read over CDP can see one. The WebView keeps answering while an Android runtime-permission
+ * dialog, a system share sheet or a clipboard editor sits on top of it, so a stage goes on driving a
+ * page the user cannot reach and reports whatever it finds. That is not hypothetical: a
+ * POST_NOTIFICATIONS prompt appeared after an app-data reset, took focus, stopped the tune, and the
+ * network stage blamed the Wi-Fi for it.
+ */
+const foreignFocusedWindow = async () => {
+  const dump = await shell("dumpsys window | grep -m1 mCurrentFocus").catch(() => "");
+  const match = /mCurrentFocus=Window\{[^\s]+ \S+ ([^}]+)\}/.exec(dump.trim());
+  const window = match?.[1]?.trim();
+  if (!window || window.startsWith(PACKAGE)) return null;
+  return window;
+};
 
 const goto = async (route) => {
   await evaluate(
@@ -285,6 +349,9 @@ const preflight = async () => {
   }
   if (unreachable.length) throw new Error(`from this machine: ${unreachable.join("; ")}`);
 
+  const foreign = await foreignFocusedWindow();
+  if (foreign) throw new Error(`another window has focus: ${foreign}. Dismiss it before measuring anything.`);
+
   await attach();
   const state = await readState(await deviceNowMs());
   record("preflight", "pass", `${HOSTS.join(", ")} answering; app on ${state.route}; badge: ${state.badge}`);
@@ -297,24 +364,91 @@ const preflight = async () => {
  * something is genuinely wrong with the device. On a healthy device connected over a healthy
  * network there is nothing genuinely wrong, so there must be no alert and no error in the log.
  */
+/**
+ * Surfaces that open over a route and have their own data, their own requests and their own way of
+ * going wrong. Each is a testid that opens one, and the route it is reached from.
+ *
+ * Openers only. Nothing here resets, powers off, deletes, clears or writes: a census must be able to
+ * run on somebody's device without changing what is on it.
+ */
+const OVERLAYS = [
+  { route: "/", open: "unified-health-badge", name: "Diagnostics" },
+  { route: "/", open: "app-bar-quick-menu", name: "Quick menu" },
+  { route: "/", open: "home-machine-inline-openRemoteInput", name: "Remote Input" },
+  { route: "/play", open: "add-items-to-playlist", name: "Add items" },
+  { route: "/play", open: "play-open-controller", name: "Play controller" },
+  { route: "/settings", open: "settings-device-row-debug-c64u", name: "Saved device editor" },
+];
+
+const closeOverlay = async () => {
+  await evaluate(
+    `(()=>{const close=[...document.querySelectorAll('[role="dialog"] button')]
+      .find((b)=>/^(×|Close|Cancel)$/i.test((b.innerText||"").trim()) || /close/i.test(b.getAttribute("aria-label")||""));
+      if(close){close.click();return "closed";} return "none";})()`,
+  ).catch(() => undefined);
+  await sleep(1200);
+  await shell("input keyevent KEYCODE_BACK");
+  await sleep(1200);
+};
+
 const errorCensus = async () => {
   const since = await deviceNowMs();
   const visited = [];
   const problems = [];
+  takeConsoleErrors();
+
+  const inspect = async (where) => {
+    const foreign = await foreignFocusedWindow();
+    if (foreign) problems.push(`${where}: ${foreign} had focus, so the app was not what the user was looking at`);
+    const state = await readState(since);
+    const fromConsole = takeConsoleErrors();
+    visited.push({
+      where,
+      route: state.route,
+      badge: state.badge,
+      alerts: state.alerts,
+      errors: state.errors.length,
+      console: fromConsole.length,
+    });
+    if (state.alerts.length) problems.push(`${where}: alert "${state.alerts[0]}"`);
+    if (state.errors.length)
+      problems.push(`${where}: ${state.errors.length} logged error(s), first "${state.errors[0]}"`);
+    if (fromConsole.length)
+      problems.push(`${where}: ${fromConsole.length} console error(s), first "${fromConsole[0]}"`);
+    if (state.badge && /unhealthy|degraded/i.test(state.badge)) problems.push(`${where}: badge "${state.badge}"`);
+  };
+
   for (const route of MAIN_ROUTES) {
     await goto(route);
-    const state = await readState(since);
-    visited.push({ route: state.route, badge: state.badge, alerts: state.alerts, errors: state.errors.length });
-    if (state.alerts.length) problems.push(`${route}: alert "${state.alerts[0]}"`);
-    if (state.errors.length) problems.push(`${route}: ${state.errors.length} error(s), first "${state.errors[0]}"`);
-    if (state.badge && /unhealthy|degraded/i.test(state.badge)) problems.push(`${route}: badge "${state.badge}"`);
+    await inspect(route);
   }
+
+  for (const overlay of OVERLAYS) {
+    await goto(overlay.route);
+    const opened = await evaluate(
+      `(()=>{const e=document.querySelector('[data-testid="${overlay.open}"]');
+        if(!e) return "missing"; if(e.disabled) return "disabled"; e.click(); return "clicked";})()`,
+    );
+    if (opened !== "clicked") {
+      visited.push({ where: overlay.name, route: overlay.route, skipped: opened });
+      continue;
+    }
+    await sleep(4000);
+    await inspect(overlay.name);
+    await closeOverlay();
+  }
+
   await goto("/");
   if (problems.length) {
     record("error-census", "fail", problems.join(" | "), { visited });
     return;
   }
-  record("error-census", "pass", `${MAIN_ROUTES.length} routes, no alert and no logged error`, { visited });
+  record(
+    "error-census",
+    "pass",
+    `${MAIN_ROUTES.length} routes and ${OVERLAYS.length} overlays: no alert, no logged error, no console error`,
+    { visited },
+  );
 };
 
 const relaunch = async () => {
@@ -364,19 +498,33 @@ const restartSoak = async () => {
 
 /** Put a tune on, and say plainly when there is none to put on rather than passing on silence. */
 const startPlayback = async () => {
+  const foreign = await foreignFocusedWindow();
+  if (foreign) return { started: false, why: `${foreign} has focus; the app cannot be driven underneath it` };
   await goto("/play");
   const before = await readState(Date.now());
   if (before.elapsed === null) return { started: false, why: "the Play page shows no transport" };
-  // `playlist-pause` reads "Pause" while the session believes it is playing and "Resume" while it
-  // does not, so it is pressed only in the second case. The label is never taken as proof: an
-  // earlier version returned here on "Pause" alone and so stood a stuck session up as a playing
-  // one, which made the stages after it blame the network for a tune that had never started.
-  if (before.resumeLabel !== "Pause") {
+  /*
+   * Two controls, and which one starts a tune depends on where the session is.
+   *
+   * `playlist-play` is the big one: it reads "Play" while the session is stopped and "Stop" while it
+   * is not. `playlist-pause` is the small one beside it and reads "Resume" only while the session is
+   * paused — on a stopped session it reads "Pause" and is disabled. An earlier version pressed only
+   * the small one and skipped it whenever it read "Pause", so after `restart-soak` left a stopped
+   * session it pressed nothing at all and the stages after it reported a tune that never started.
+   */
+  if (before.playLabel === "Play") {
+    const clicked = await evaluate(
+      `(()=>{const b=document.querySelector('[data-testid="playlist-play"]');
+        if(!b || b.disabled) return "missing"; b.click(); return "clicked";})()`,
+    );
+    if (clicked !== "clicked") return { started: false, why: "the Play control is missing or disabled" };
+    await sleep(6000);
+  } else if (before.resumeLabel === "Resume") {
     const clicked = await evaluate(
       `(()=>{const b=document.querySelector('[data-testid="playlist-pause"]');
-        if(!b) return "missing"; b.click(); return "clicked";})()`,
+        if(!b || b.disabled) return "missing"; b.click(); return "clicked";})()`,
     );
-    if (clicked !== "clicked") return { started: false, why: "no transport button on the Play page" };
+    if (clicked !== "clicked") return { started: false, why: "the Resume control is missing or disabled" };
     await sleep(3000);
   }
   // Motion, measured, every time: two reads five seconds apart with the clock in a different place.
@@ -387,8 +535,9 @@ const startPlayback = async () => {
     return {
       started: false,
       why:
-        `the clock sat at ${first.elapsed} for 5 s while the transport read ` +
-        `"${second.resumeLabel}" — an empty playlist, or a session that says it is playing and is not`,
+        `the clock sat at ${first.elapsed} for 5 s with the controls reading ` +
+        `"${second.playLabel}" and "${second.resumeLabel}" — an empty playlist, or a session that ` +
+        `says it is playing and is not`,
     };
   }
   return { started: true };
@@ -414,7 +563,14 @@ const networkDrop = async () => {
     }
     if (offline.alerts.length) problems.push(`cycle ${cycle}: alert while offline "${offline.alerts[0]}"`);
     if (offline.elapsed === beforeOff.elapsed) {
-      problems.push(`cycle ${cycle}: the tune stopped when the network went away (${offline.elapsed})`);
+      // Say what actually stopped it. A window that took focus mid-cycle stops the tune too, and
+      // reporting that as "the network took it down" sent a whole run's diagnosis the wrong way.
+      const stole = await foreignFocusedWindow();
+      problems.push(
+        stole
+          ? `cycle ${cycle}: ${stole} took focus and the tune stopped with it (${offline.elapsed})`
+          : `cycle ${cycle}: the tune stopped when the network went away (${offline.elapsed})`,
+      );
     }
 
     await shell("svc wifi enable");

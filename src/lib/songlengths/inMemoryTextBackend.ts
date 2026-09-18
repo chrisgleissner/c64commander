@@ -271,7 +271,19 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
     const fileNameBuckets = new Map<string, number[]>();
 
     parsed.forEach((entry) => {
-      if (!entry.fullPath || !entry.fileName) return;
+      if (!entry.fullPath || !entry.fileName) {
+        // An md5 line that no `; <path>` comment has given a path to. HVSC always writes that
+        // comment, so a database without one is hand-made or generated — and dropping it in silence
+        // is how such a file came to load as zero entries with nothing saying why.
+        this.rejectedLines += 1;
+        this.options.onRejectedLine?.({
+          sourceFile: entry.sourceFile,
+          line: entry.line,
+          raw: entry.md5 ? `${entry.md5}=…` : "",
+          reason: "no path: an md5 line needs a '; <path>' comment line before it",
+        });
+        return;
+      }
       const fullPathId = this.intern(this.fullPaths, pathIndex, entry.fullPath);
       const fileNameId = this.intern(this.fileNames, fileNameIndex, entry.fileName);
       const durationId = this.internDurations(entry.durations);
