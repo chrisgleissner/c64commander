@@ -18,6 +18,40 @@ physical rig), while the host-deterministic budget checks run in CI.
   search** below.
 - **`demo_mode_hil.ts`** — Demo Mode end to end with no Ultimate involved at all. See **Demo Mode**
   below.
+- **`release_sweep_hil.mjs`** — the four ordinary events the merge gate does not cover: the app is
+  killed and reopened, the Wi-Fi goes away and comes back, the screen locks with a tune playing, and
+  every main route is checked for an error nobody should ever see. See **Release sweep** below.
+
+## Release sweep
+
+`release_sweep_hil.mjs` answers a different question from the merge gate. The gate measures what
+needs a stimulus and a microphone — a held direction, a tone ladder, the latency of the mirror.
+This measures what happens to a phone somebody carries around, and every stage of it is silent, so
+it can run beside someone.
+
+```bash
+node tools/hil/release_sweep_hil.mjs --serial <adb serial> --json artifacts/release-sweep.json
+node tools/hil/release_sweep_hil.mjs --serial <adb serial> --only error-census
+node tools/hil/release_sweep_hil.mjs --serial <adb serial> --hosts c64u,u64,u2
+```
+
+| Stage          | What it asserts                                                                                                                                 |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `preflight`    | Phone attached and awake, no leftover `wm size` override, radios on, and every host in `--hosts` answering `/v1/info` from this machine         |
+| `error-census` | On the device currently selected: every main route shows no alert, logs no error, and leaves the health badge healthy                           |
+| `restart-soak` | Six force-stop/relaunch cycles each reach a route inside 20 s, reconnect to the same device, and log nothing                                    |
+| `network-drop` | Three Wi-Fi off/on cycles: the badge reports offline then healthy again inside 30 s, nothing raises an alert, and a local tune plays throughout |
+| `screen-off`   | The screen sleeps with a tune playing and the tune is still playing just over two minutes later                                                 |
+
+`error-census` reads whichever device is selected in the app, so covering a fleet means selecting
+each device in turn and running that stage again. `network-drop` and `screen-off` need a tune on the
+Play page: both start one themselves and report `pending` rather than `pass` when the playlist is
+empty, because a stage that measured nothing must not read as a stage that passed.
+
+`screen-off` is the one that needs the explanation. Chromium suspends timers and workers in a hidden
+page after about a minute, which is why the stage runs for longer than that and why it clears
+`svc power stayon usb` first — a phone on USB keeps its screen lit, and the stage passed for weeks
+without ever putting the screen out.
 
 ## THE trap: a hidden WebView
 

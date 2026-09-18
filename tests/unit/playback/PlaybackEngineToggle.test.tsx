@@ -41,12 +41,17 @@ const mirror = {
 };
 vi.mock("@/hooks/useAvMirror", () => ({ useAvMirror: () => mirror }));
 
-const playback = vi.hoisted(() => ({ local: false, connection: "REAL_CONNECTED" }));
+const playback = vi.hoisted(() => ({
+  local: false,
+  connection: "REAL_CONNECTED",
+  /** `core_version` is the runtime marker for an integrated computer; a cartridge omits it. */
+  deviceInfo: null as { product: string; core_version?: string } | null,
+}));
 vi.mock("@/hooks/useActivePlayback", () => ({
   useActivePlayback: () => ({ local: playback.local, remote: false, any: playback.local }),
 }));
 vi.mock("@/hooks/useConnectionState", () => ({
-  useConnectionState: () => ({ state: playback.connection }),
+  useConnectionState: () => ({ state: playback.connection, deviceInfo: playback.deviceInfo }),
 }));
 
 describe("PlaybackEngineToggle", () => {
@@ -180,6 +185,7 @@ describe("PlaybackEngineToggle listen targets", () => {
   beforeEach(() => {
     localStorage.clear();
     mirror.audioLive = false;
+    playback.deviceInfo = null;
     mirror.session.startAudio.mockClear();
     mirror.session.stopAudio.mockClear();
   });
@@ -204,6 +210,25 @@ describe("PlaybackEngineToggle listen targets", () => {
     renderChooser();
     expect(screen.getByTestId("playback-listen-both")).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("playback-engine-c64")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  /*
+   * A cartridge serves no `/v1/streams`, so "Both" cannot work on one. It used to be offered
+   * anyway: the first tap took a 404 and only then did the latched failure hide the option.
+   */
+  it("hides Both on a device that cannot stream, without needing a failed start first", () => {
+    playback.deviceInfo = { product: "Ultimate II+L" };
+    renderChooser();
+    expect(screen.getByTestId("playback-engine-c64")).toBeInTheDocument();
+    expect(screen.getByTestId("playback-engine-local")).toBeInTheDocument();
+    expect(screen.queryByTestId("playback-listen-both")).not.toBeInTheDocument();
+    expect(mirror.session.startAudio).not.toHaveBeenCalled();
+  });
+
+  it("offers Both on an integrated Ultimate 64-family computer", () => {
+    playback.deviceInfo = { product: "Ultimate 64 Elite", core_version: "1.50" };
+    renderChooser();
+    expect(screen.getByTestId("playback-listen-both")).toBeInTheDocument();
   });
 
   it("stops the mirror when C64-only is chosen", () => {

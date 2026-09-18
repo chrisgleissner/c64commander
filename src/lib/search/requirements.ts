@@ -64,6 +64,22 @@ const CAPABILITY_REASONS: Readonly<Record<DeviceCapabilityKey, string>> = {
 };
 
 /**
+ * The same five verdicts for a Home tile, which is about 68 CSS px wide.
+ *
+ * `CAPABILITY_REASONS` reads correctly in a full-width search row and is what that row keeps. In a
+ * tile the shortest of them wrapped to six lines of one word each, and because a grid row is as
+ * tall as its tallest tile, the whole top row of Quick Actions grew from 91 px to 204 px on an
+ * Ultimate II+L — the only device on which any of these is ever unmet.
+ */
+const SHORT_CAPABILITY_REASONS: Readonly<Record<DeviceCapabilityKey, string>> = {
+  restReachable: "Not answering",
+  supportsStreaming: "No streaming",
+  supportsMenuInput: "No menu",
+  supportsPowerCycle: "No power off",
+  supportsMachineInput: "No input",
+};
+
+/**
  * One requirement to a verdict. Every member of the union is answered here and nowhere else, which
  * is what `requirements.test.ts` asserts exhaustively — a new kind that is not handled fails the
  * switch's exhaustiveness check at compile time and that test at run time.
@@ -88,7 +104,11 @@ export const resolveRequirement = (requirement: SearchRequirement, ctx: Requirem
       }
       return ctx.capabilities[requirement.capability]
         ? { met: true, reason: "" }
-        : { met: false, reason: CAPABILITY_REASONS[requirement.capability] };
+        : {
+            met: false,
+            reason: CAPABILITY_REASONS[requirement.capability],
+            shortReason: SHORT_CAPABILITY_REASONS[requirement.capability],
+          };
     case "productFamily":
       if (!ctx.deviceConnected) {
         return {
@@ -99,7 +119,7 @@ export const resolveRequirement = (requirement: SearchRequirement, ctx: Requirem
       }
       return requirement.families.includes(ctx.capabilities.family)
         ? { met: true, reason: "" }
-        : { met: false, reason: "Not available on this model" };
+        : { met: false, reason: "Not available on this model", shortReason: "Not on this model" };
     case "telnet":
       if (!ctx.deviceConnected) {
         return {
@@ -126,7 +146,7 @@ export const resolveRequirement = (requirement: SearchRequirement, ctx: Requirem
     case "variant":
       return ctx.variantId === requirement.variant
         ? { met: true, reason: "" }
-        : { met: false, reason: "Not part of this edition of the app" };
+        : { met: false, reason: "Not part of this edition of the app", shortReason: "Not in this edition" };
     case "hvsc":
       return ctx.hvscReady
         ? { met: true, reason: "" }
@@ -154,6 +174,7 @@ export const resolveEntry = (entry: SearchEntry, ctx: RequirementContext): Resol
         entry,
         enabled: false,
         disabledReason: verdict.reason,
+        ...(verdict.shortReason ? { shortDisabledReason: verdict.shortReason } : {}),
         ...(verdict.remedyTarget ? { remedyTarget: verdict.remedyTarget } : {}),
       };
     }

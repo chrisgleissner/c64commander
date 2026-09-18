@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { addLog } from "@/lib/logging";
 import { usePlaybackEngine } from "@/lib/playback/usePlaybackEngine";
 import { useAvMirror } from "@/hooks/useAvMirror";
+import { identifiedDeviceStreams } from "@/lib/deviceCapabilities";
 import { useActivePlayback } from "@/hooks/useActivePlayback";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useFeatureFlag } from "@/hooks/useFeatureFlags";
@@ -52,6 +53,7 @@ type ListenTarget = "c64" | "both" | "local";
 
 export function PlaybackEngineToggle({ className }: { className?: string }) {
   const { engine, setEngine } = usePlaybackEngine();
+  const { deviceInfo } = useConnectionState();
   const { audioLive, session } = useAvMirror();
   const { value: liveViewEnabled } = useFeatureFlag("live_view_enabled");
   const { value: audioMirrorEnabled } = useFeatureFlag("audio_mirror_enabled");
@@ -65,7 +67,10 @@ export function PlaybackEngineToggle({ className }: { className?: string }) {
    * device — an option that cannot work should not occupy a third of the
    * control and invite a tap that does nothing.
    */
-  const canStreamBack = liveViewEnabled && audioMirrorEnabled && !streamingFailed;
+  // A cartridge serves no /v1/streams, so "Both" cannot work there and is not offered. Without this
+  // the option was shown, the first tap took a 404, and only then did `streamingFailed` hide it.
+  const canStreamBack =
+    liveViewEnabled && audioMirrorEnabled && !streamingFailed && identifiedDeviceStreams(deviceInfo);
 
   const selected: ListenTarget = engine === "local" ? "local" : audioLive && canStreamBack ? "both" : "c64";
 

@@ -177,7 +177,11 @@ export const useListenActions = (): ListenAction[] => {
               ? (tile.detail ?? null)
               : SELF_EVIDENT_WHEN_EMPTY.has(tile.entryId)
                 ? null
-                : (entry.disabledReason ?? null),
+                : // The tile is about 68 CSS px wide and its grid row is as tall as its tallest
+                  // tile, so the short form is taken wherever there is one. "This model cannot
+                  // stream picture or sound" under the greyed Live tile wrapped to six lines and
+                  // took the whole top row of Quick Actions from 91 px to 204 px on a cartridge.
+                  (entry.shortDisabledReason ?? entry.disabledReason ?? null),
             disabled: !enabled,
             onSelect: () => void activate(entry),
             testId: `home-tile-${tile.entryId}`,

@@ -125,6 +125,43 @@ describe("search requirement resolver", () => {
     expect(verdict.met).toBe(false);
     expect(verdict.reason).toBe("This model cannot stream picture or sound");
   });
+
+  /*
+   * A Home Quick Actions tile is about 68 CSS px wide and its grid row is as tall as its tallest
+   * tile. The sentence above wrapped to six lines of one word each under the greyed Live tile, so
+   * the whole top row measured 204 px on an Ultimate II+L against 91 px on a C64 Ultimate. The
+   * short form is what a tile shows; the sentence stays on the full-width search row.
+   */
+  it("carries a tile-sized short form for a capability a connected device does not have", () => {
+    const ctx: RequirementContext = {
+      ...satisfyingContext(),
+      capabilities: deriveDeviceCapabilities({ product: "Ultimate-II+", restReachable: true }),
+    };
+    const verdict = resolveRequirement({ kind: "capability", capability: "supportsStreaming" }, ctx);
+    expect(verdict.shortReason).toBe("No streaming");
+    expect(verdict.shortReason!.length).toBeLessThan(verdict.reason.length);
+  });
+
+  it("carries the short form through to the resolved entry", () => {
+    const ctx: RequirementContext = {
+      ...satisfyingContext(),
+      capabilities: deriveDeviceCapabilities({ product: "Ultimate-II+", restReachable: true }),
+    };
+    const resolved = resolveEntry(
+      {
+        id: "test.streaming",
+        titleKey: "test.streaming",
+        titleDefault: "Live",
+        group: "action",
+        target: { kind: "route", path: "/" },
+        requires: [{ kind: "capability", capability: "supportsStreaming" }],
+      },
+      ctx,
+    );
+    expect(resolved.enabled).toBe(false);
+    expect(resolved.disabledReason).toBe("This model cannot stream picture or sound");
+    expect(resolved.shortDisabledReason).toBe("No streaming");
+  });
 });
 
 describe("resolveEntry", () => {
