@@ -16,14 +16,20 @@ import { getPlatform, isNativePlatform } from "@/lib/native/platform";
 
 /**
  * Without this grant Android drops the foreground service's notification (verified on API 36), and
- * that notification is the only sign playback is still running. Android reports "denied" once the
- * user has refused, so checking first is what keeps this to a single prompt.
+ * that notification is the only sign playback is still running.
+ *
+ * Asked at most once. Android does NOT report "denied" after a single refusal — it reports
+ * `prompt-with-rationale`, which means "explain yourself before asking again". Treating that as
+ * askable fired the same system dialog, with no explanation, at the start of the next tune: a user
+ * who refused once on the Play page was asked again the next time they pressed play. Refusing costs
+ * the notification and nothing else — the foreground service still starts and playback is
+ * unaffected — so a refusal is taken as the answer.
  */
 export const ensureNotificationPermission = async (): Promise<PermissionState> => {
   if (!isNativePlatform() || getPlatform() !== "android") return "granted";
   try {
     const current = await BackgroundExecution.checkPermissions();
-    if (current.notifications !== "prompt" && current.notifications !== "prompt-with-rationale") {
+    if (current.notifications !== "prompt") {
       return current.notifications;
     }
     const requested = await BackgroundExecution.requestPermissions({

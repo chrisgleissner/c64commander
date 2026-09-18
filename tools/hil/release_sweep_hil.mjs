@@ -258,6 +258,7 @@ const STATE = (sinceMs) => `(()=>{
     hidden: document.hidden,
     badge: badge ? badge.getAttribute("aria-label") : null,
     elapsed: q("playback-elapsed") ? q("playback-elapsed").innerText : null,
+    counters: q("playback-counters") ? q("playback-counters").innerText.replace(/\s+/g, " ") : null,
     resumeLabel: q("playlist-pause") ? q("playlist-pause").getAttribute("aria-label") : null,
     playLabel: q("playlist-play") ? q("playlist-play").getAttribute("aria-label") : null,
     alerts: [...document.querySelectorAll('[role="alert"]')]
@@ -497,10 +498,61 @@ const restartSoak = async () => {
 };
 
 /** Put a tune on, and say plainly when there is none to put on rather than passing on silence. */
-const startPlayback = async () => {
+/**
+ * Seconds of playlist left to play, read from the Play page's own counters line.
+ *
+ * A stage that measures for two minutes needs at least two minutes of material. Without this the
+ * screen-off stage measured the last twelve seconds of the last track, watched the playlist end
+ * correctly, and reported it as the tune having stopped.
+ */
+const remainingSeconds = (counters) => {
+  const match = /Remaining:\s*(\d+):(\d{2})/.exec(counters ?? "");
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+};
+
+/** Put the playlist back at its first track, so what follows has the whole of it ahead of it. */
+const rewindToFirstTrack = async () => {
+  await evaluate(
+    `(()=>{const stop=document.querySelector('[data-testid="playlist-play"]');
+      if(stop && stop.getAttribute("aria-label")==="Stop") stop.click();
+      return "ok";})()`,
+  ).catch(() => undefined);
+  await sleep(1500);
+  // The row's own Play control, found by its accessible name. `playlist-item-actions-<name>` is the
+  // overflow menu beside it, not the thing that starts the track.
+  const clicked = await evaluate(
+    `(()=>{const first=document.querySelector('[data-testid="playlist-item"]');
+      if(!first) return "missing";
+      const play=[...first.querySelectorAll('button,[role="button"]')]
+        .find((b)=>/^Play /.test(b.getAttribute("aria-label")||""));
+      if(!play) return "no-play"; play.click(); return "clicked";})()`,
+  ).catch(() => "missing");
+  await sleep(6000);
+  return clicked;
+};
+
+const startPlayback = async (options = {}) => {
   const foreign = await foreignFocusedWindow();
   if (foreign) return { started: false, why: `${foreign} has focus; the app cannot be driven underneath it` };
   await goto("/play");
+  if (options.needSeconds) {
+    const before = await readState(Date.now());
+    if ((remainingSeconds(before.counters) ?? 0) < options.needSeconds) {
+      const rewound = await rewindToFirstTrack();
+      if (rewound !== "clicked") {
+        return { started: false, why: `the playlist has under ${options.needSeconds} s left and could not be rewound` };
+      }
+      const after = await readState(Date.now());
+      const total = /Total:\s*(\d+):(\d{2})/.exec(after.counters ?? "");
+      const totalSeconds = total ? Number(total[1]) * 60 + Number(total[2]) : 0;
+      if (totalSeconds < options.needSeconds) {
+        return {
+          started: false,
+          why: `the whole playlist is ${after.counters}, which is under the ${options.needSeconds} s this stage measures`,
+        };
+      }
+    }
+  }
   const before = await readState(Date.now());
   if (before.elapsed === null) return { started: false, why: "the Play page shows no transport" };
   /*
@@ -544,7 +596,7 @@ const startPlayback = async () => {
 };
 
 const networkDrop = async () => {
-  const playing = await startPlayback();
+  const playing = await startPlayback({ needSeconds: NETWORK_CYCLES * 60 });
   if (!playing.started) {
     record("network-drop", "pending", `no tune to keep playing: ${playing.why}`);
     return;
@@ -632,7 +684,9 @@ export const secondsPlayed = (readings) => {
 };
 
 const screenOff = async () => {
-  const playing = await startPlayback();
+  // Enough material to cover the window and then some: a playlist that simply ends is the app
+  // behaving correctly, and this stage must not be able to mistake that for the music stopping.
+  const playing = await startPlayback({ needSeconds: SCREEN_OFF_SECONDS + 30 });
   if (!playing.started) {
     record("screen-off", "pending", `no tune to keep playing: ${playing.why}`);
     return;
