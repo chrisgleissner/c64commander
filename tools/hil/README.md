@@ -74,14 +74,26 @@ node tools/hil/launch_matrix_hil.mjs --serial <adb serial> --host c64u --usb USB
 node tools/hil/launch_matrix_hil.mjs --serial <adb serial> --host u2 --usb USB0 --only launch
 ```
 
-| Stage             | What it asserts                                                                                                                                      |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `preflight`       | Phone attached, app running on the named host, and the probe folder holding all five files                                                           |
-| `firmware-parity` | What the firmware does by itself over REST, with no app involved (see below)                                                                         |
-| `discovery`       | Adding the probe files through the app's own picker resolves the `.cfg` beside them as "same name" for every category                                |
-| `launch`          | Playing each item from the playlist leaves that item's signature in RAM, and the page reports nothing                                                |
-| `config-apply`    | The app applies the resolved `.cfg` before each launch, including for a cartridge, which the firmware applies nothing for                            |
-| `config-decline`  | Declining the settings file means it is not applied — including for a program, where the firmware would otherwise load it after the app had finished |
+| Stage             | What it asserts                                                                                                                                            |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `preflight`       | Phone attached, app running on the named host, and the probe folder holding all five files                                                                 |
+| `firmware-parity` | What the firmware does by itself over REST, with no app involved (see below)                                                                               |
+| `discovery`       | Adding the probe files through the app's own picker resolves the `.cfg` beside them as "same name" for every category                                      |
+| `launch`          | Playing each item from the playlist leaves that item's signature in RAM, and the page reports nothing                                                      |
+| `config-decline`  | Declining the settings file means it is not applied — including for a program, where the firmware would otherwise load it after the app had finished       |
+| `config-apply`    | The app applies the resolved `.cfg` before a launch                                                                                                        |
+| `cartridge`       | Everything that starts a cartridge: the firmware applies no settings file for one, the app starts one, and the app applies the file the firmware would not |
+
+The cartridge stage runs last on purpose. On an Ultimate II+L a cartridge started over
+`runners:run_crt` holds the machine until the host C64 is power-cycled: reset, reboot, the menu
+button, writing the `Cartridge` config item and starting a cartridge that maps nothing all leave it
+in place, and the next `run_prg` resets straight back into it. `machine:poweroff` answers 501 on that
+architecture. Everything that needs the machine free therefore runs before the first cartridge
+starts. On a C64 Ultimate a reboot does clear it, so the ordering costs nothing there.
+
+Measured on this rig: on a C64 Ultimate (1.2RC) a program runs 1 s after the row is pressed and a
+disk 29 s; on an Ultimate II+L (3.15) a program 19 s, a disk 23 s and a cartridge 18 s. Applying the
+settings file is most of that — about 18 seconds of walking the device's own menu over Telnet.
 
 Nothing else may drive the app's DevTools socket while a run is in progress. Attaching a second
 client removes the forward this one is using, and the run then fails with `fetch failed` on whatever
