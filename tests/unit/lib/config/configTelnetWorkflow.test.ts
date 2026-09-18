@@ -351,6 +351,8 @@ describe("configTelnetWorkflow", () => {
 
   it("throws when the requested Load Settings menu entry is missing", async () => {
     const session = createSession([
+      // The first read answers the climb back to the root; the walk starts after it.
+      createScreen({ selectedItem: "Temp" }),
       createScreen({ selectedItem: "Temp" }),
       createScreen({ selectedItem: "capture.cfg" }),
       createScreen({ selectedItem: "capture.cfg" }),

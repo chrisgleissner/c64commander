@@ -174,13 +174,23 @@ export const navigateToFileBrowserEntry = async (
       if (matchLabel(candidate.selectedItem, label)) return true;
       return currentLabel ? !matchLabel(candidate.selectedItem, currentLabel) : true;
     });
-    if (screen.selectedItem && currentLabel && matchLabel(screen.selectedItem, currentLabel)) {
+    /*
+     * Two ways the cursor can fail to move, and both are the end of the list. The device either
+     * repaints the row it is already on, or — at the very end — says nothing at all, which arrives
+     * as a screen with nothing drawn on it. Only the first was counted, so a walk that ran off the
+     * bottom read blank screen after blank screen, reset its stall count every time, and spent its
+     * whole step budget without ever turning round.
+     */
+    const movedNowhere = screen.selectedItem
+      ? Boolean(currentLabel) && matchLabel(screen.selectedItem, currentLabel!)
+      : true;
+    if (movedNowhere) {
       stalledSteps += 1;
       if (stalledSteps >= MAX_STALLED_STEPS) {
         if (turnedRound) {
           throw new TelnetError(`File browser navigation stalled before finding ${label}`, "TIMEOUT", {
             label,
-            current: screen.selectedItem,
+            current: screen.selectedItem ?? currentLabel,
           });
         }
         // The end of the list, not a stuck browser: go back the other way.

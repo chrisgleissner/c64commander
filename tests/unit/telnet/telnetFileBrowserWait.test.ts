@@ -116,6 +116,21 @@ describe("walking the file browser to an entry", () => {
     expect(keys.indexOf("UP")).toBeGreaterThan(keys.indexOf("DOWN"));
   });
 
+  /*
+   * At the very end of a listing the device answers a keypress with nothing at all, which arrives
+   * as a screen with nothing drawn on it rather than as the same row again. Counting only the
+   * second kind let a walk that had run off the bottom reset its stall count on every blank read
+   * and spend its whole step budget without turning round.
+   */
+  it("treats a device that answers nothing as the end of the list", async () => {
+    const session = walkSession([entry("USB2"), ...Array.from({ length: 12 }, () => entry(null)), entry("Temp")]);
+
+    const found = await navigateToFileBrowserEntry(session, "Temp", { maxSteps: 40 });
+
+    expect(found.selectedItem).toBe("Temp");
+    expect(session.sendKey.mock.calls.map(([key]: [string]) => key)).toContain("UP");
+  });
+
   /* A browser that answers the same thing in both directions is stuck, and that is a failure. */
   it("gives up when neither direction moves", async () => {
     const session = walkSession(Array.from({ length: 60 }, () => entry("USB2")));
