@@ -48,6 +48,8 @@ vi.mock("@/lib/telnet/telnetActionExecutor", () => ({
 describe("reuTelnetWorkflow", () => {
   it("navigates to Temp before executing Save REU", async () => {
     const session = createSession([
+      // The first read answers the climb back to the root; the walk starts after it.
+      createScreen({ selectedItem: "Drive A" }),
       createScreen({ selectedItem: "Drive A" }),
       createScreen({ selectedItem: "Temp" }),
       createScreen({ selectedItem: "capture.reu" }),
@@ -55,7 +57,7 @@ describe("reuTelnetWorkflow", () => {
 
     await saveRemoteReuFromTemp(session, "F5");
 
-    expect(session.sendKey).toHaveBeenCalledWith("HOME");
+    expect(session.sendKey).toHaveBeenCalledWith("LEFT");
     expect(session.sendKey).toHaveBeenCalledWith("DOWN");
     expect(session.sendKey).toHaveBeenCalledWith("RIGHT");
     expect(session.sendKey).not.toHaveBeenCalledWith("ENTER");
@@ -137,6 +139,8 @@ describe("reuTelnetWorkflow", () => {
   // root the file was actually uploaded to, not a hardcoded "Temp".
   it("HARD18-014: navigates to the given persistent folder instead of Temp for preload-on-startup", async () => {
     const session = createSession([
+      // The first read answers the climb back to the root; the walk starts after it.
+      createScreen({ selectedItem: "Drive A" }),
       createScreen({ selectedItem: "Drive A" }),
       createScreen({ selectedItem: "USB2" }),
       createScreen({ selectedItem: "c64commander-reu-preload.reu" }),
@@ -174,7 +178,7 @@ describe("reuTelnetWorkflow", () => {
 
     await restoreRemoteReu(session, "c64commander-reu-preload.reu", "preload-on-startup", "USB2");
 
-    expect(session.sendKey).toHaveBeenCalledWith("HOME");
+    expect(session.sendKey).toHaveBeenCalledWith("LEFT");
     expect(session.sendKey).toHaveBeenCalledWith("RIGHT");
     expect(session.sendKey).toHaveBeenCalledWith("DOWN");
     expect(session.sendKey).toHaveBeenCalledWith("ENTER");
@@ -183,6 +187,8 @@ describe("reuTelnetWorkflow", () => {
 
   it("loads into REU when the target menu item is already selected", async () => {
     const session = createSession([
+      // The first read answers the climb back to the root; the walk starts after it.
+      createScreen({ selectedItem: "Temp" }),
       createScreen({ selectedItem: "Temp" }),
       createScreen({ selectedItem: "capture.reu" }),
       createScreen({ selectedItem: "capture.reu" }),
@@ -211,6 +217,8 @@ describe("reuTelnetWorkflow", () => {
 
   it("moves upward in the menu when the requested restore action is above the current selection", async () => {
     const session = createSession([
+      // The first read answers the climb back to the root; the walk starts after it.
+      createScreen({ selectedItem: "Temp" }),
       createScreen({ selectedItem: "Temp" }),
       createScreen({ selectedItem: "capture.reu" }),
       createScreen({ selectedItem: "capture.reu" }),
@@ -265,6 +273,8 @@ describe("reuTelnetWorkflow", () => {
 
   it("finds restore actions by label even when the menu order changes", async () => {
     const session = createSession([
+      // The first read answers the climb back to the root; the walk starts after it.
+      createScreen({ selectedItem: "Temp" }),
       createScreen({ selectedItem: "Temp" }),
       createScreen({ selectedItem: "capture.reu" }),
       createScreen({ selectedItem: "capture.reu" }),
@@ -307,6 +317,8 @@ describe("reuTelnetWorkflow", () => {
 
   it("throws when the context menu is not visible after opening the file menu", async () => {
     const session = createSession([
+      // The first read answers the climb back to the root; the walk starts after it.
+      createScreen({ selectedItem: "Temp" }),
       createScreen({ selectedItem: "Temp" }),
       createScreen({ selectedItem: "capture.reu" }),
       createScreen({ selectedItem: "capture.reu" }),
@@ -323,6 +335,8 @@ describe("reuTelnetWorkflow", () => {
 
   it("throws when the requested context-menu action is missing", async () => {
     const session = createSession([
+      // The first read answers the climb back to the root; the walk starts after it.
+      createScreen({ selectedItem: "Temp" }),
       createScreen({ selectedItem: "Temp" }),
       createScreen({ selectedItem: "capture.reu" }),
       createScreen({ selectedItem: "capture.reu" }),
@@ -356,6 +370,8 @@ describe("reuTelnetWorkflow", () => {
 
   it("throws when the context menu disappears during menu navigation", async () => {
     const session = createSession([
+      // The first read answers the climb back to the root; the walk starts after it.
+      createScreen({ selectedItem: "Temp" }),
       createScreen({ selectedItem: "Temp" }),
       createScreen({ selectedItem: "capture.reu" }),
       createScreen({ selectedItem: "capture.reu" }),

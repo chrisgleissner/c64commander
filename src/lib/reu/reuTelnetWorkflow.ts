@@ -11,6 +11,7 @@ import {
   enterDirectoryUnderCursor,
   findMenuOffering,
   findTopMenu,
+  returnToBrowserRoot,
   navigateToFileBrowserEntry,
   navigateToMenuItem,
   readScreen,
@@ -27,15 +28,18 @@ const REU_RESTORE_ACTION_LABELS: Record<ReuRestoreMode, string> = {
   "preload-on-startup": "Preload on Startup",
 };
 
-// Each walk starts from the top of the current listing.
+// The walk turns round at the end of the listing, so it finds an entry wherever the cursor is.
 const findEntry = (session: TelnetSessionApi, label: string) =>
-  navigateToFileBrowserEntry(session, label, { maxSteps: MAX_BROWSER_STEPS, startAtTop: true });
+  navigateToFileBrowserEntry(session, label, { maxSteps: MAX_BROWSER_STEPS });
 
 export const saveRemoteReuFromTemp = async (
   session: TelnetSessionApi,
   menuKey: TelnetMenuKey,
   resolvedTarget?: TelnetResolvedActionTarget,
 ) => {
+  // From the device root, because "Temp" is only in that listing and the browser keeps whatever
+  // directory the last session left it in.
+  await returnToBrowserRoot(session);
   await findEntry(session, "Temp");
   await enterDirectoryUnderCursor(session);
 
@@ -65,6 +69,7 @@ export const restoreRemoteReu = async (
   mode: ReuRestoreMode,
   folderName: string,
 ) => {
+  await returnToBrowserRoot(session);
   await findEntry(session, folderName);
   await enterDirectoryUnderCursor(session);
   await findEntry(session, fileName);

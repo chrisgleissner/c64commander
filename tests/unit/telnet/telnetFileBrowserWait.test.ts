@@ -14,7 +14,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import { waitForScreen } from "@/lib/telnet/telnetFileBrowser";
+import { navigateToFileBrowserEntry, waitForScreen } from "@/lib/telnet/telnetFileBrowser";
 import type { ParsedMenu, TelnetScreen, TelnetSessionApi } from "@/lib/telnet/telnetTypes";
 
 const menu = (labels: string[]): ParsedMenu => ({
@@ -38,6 +38,18 @@ const screen = (menus: ParsedMenu[]): TelnetScreen =>
 
 const sessionOf = (screens: TelnetScreen[]): TelnetSessionApi =>
   ({ readScreen: vi.fn(async () => screens.shift() ?? screen([])) }) as unknown as TelnetSessionApi;
+
+const entry = (label: string | null): TelnetScreen =>
+  ({ ...screen([]), selectedItem: label }) as unknown as TelnetSessionApi as unknown as TelnetScreen;
+
+const walkSession = (screens: TelnetScreen[]) => {
+  const sendKey = vi.fn(async () => undefined);
+  const queue = [...screens];
+  return {
+    sendKey,
+    readScreen: vi.fn(async () => queue.shift() ?? screens[screens.length - 1]),
+  } as unknown as TelnetSessionApi & { sendKey: ReturnType<typeof vi.fn> };
+};
 
 const offersLoad = (candidate: TelnetScreen) =>
   candidate.menus.some((entry) => entry.items.some((item) => item.label === "Load Settings"));
@@ -74,5 +86,41 @@ describe("waiting for a screen", () => {
     const wanted = screen([menu(["Load Settings"])]);
     const result = await waitForScreen(sessionOf([wanted]), screen([]), offersLoad);
     expect(result).toBe(wanted);
+  });
+});
+
+/*
+ * The listing does not wrap and the cursor does not start at the top: coming back out of a
+ * directory leaves it on the directory it came from, so an entry above that is unreachable by DOWN
+ * alone. On an Ultimate 64 that entry is `Temp`, third in the root listing, and every attempt to
+ * stage a settings file through it walked to the bottom of the list and stopped there.
+ */
+describe("walking the file browser to an entry", () => {
+  it("finds an entry below the cursor without turning round", async () => {
+    const session = walkSession([entry("Flash"), entry("Temp")]);
+    const found = await navigateToFileBrowserEntry(session, "Temp", { maxSteps: 20 });
+    expect(found.selectedItem).toBe("Temp");
+    expect(session.sendKey.mock.calls.map(([key]: [string]) => key)).not.toContain("UP");
+  });
+
+  it("turns round at the end of the list to reach an entry above the cursor", async () => {
+    const stuck = Array.from({ length: 14 }, () => entry("USB2"));
+    const session = walkSession([entry("USB2"), ...stuck, entry("Temp")]);
+
+    const found = await navigateToFileBrowserEntry(session, "Temp", { maxSteps: 40 });
+
+    const keys = session.sendKey.mock.calls.map(([key]: [string]) => key);
+    expect(found.selectedItem).toBe("Temp");
+    expect(keys).toContain("DOWN");
+    expect(keys).toContain("UP");
+    expect(keys.indexOf("UP")).toBeGreaterThan(keys.indexOf("DOWN"));
+  });
+
+  /* A browser that answers the same thing in both directions is stuck, and that is a failure. */
+  it("gives up when neither direction moves", async () => {
+    const session = walkSession(Array.from({ length: 60 }, () => entry("USB2")));
+    await expect(navigateToFileBrowserEntry(session, "Temp", { maxSteps: 40 })).rejects.toMatchObject({
+      code: "TIMEOUT",
+    });
   });
 });

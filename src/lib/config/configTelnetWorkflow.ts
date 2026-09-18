@@ -11,6 +11,7 @@ import {
   enterDirectoryUnderCursor,
   findMenuOffering,
   findTopMenu,
+  returnToBrowserRoot,
   navigateToFileBrowserEntry,
   navigateToMenuItem,
   readScreen,
@@ -27,13 +28,12 @@ const LOAD_SETTINGS_LABEL = "Load Settings";
 // cursor at the top: `openDirectoryPath` sends HOME before its loop, and
 // entering a directory starts that directory's listing at the top.
 const findEntry = (session: TelnetSessionApi, label: string) =>
-  navigateToFileBrowserEntry(session, label, { maxSteps: MAX_BROWSER_STEPS, startAtTop: false });
+  navigateToFileBrowserEntry(session, label, { maxSteps: MAX_BROWSER_STEPS });
 
 const splitRemotePath = (path: string) => path.split("/").filter(Boolean);
 
 const openDirectoryPath = async (session: TelnetSessionApi, path: string) => {
-  await session.sendKey("HOME");
-  await readScreen(session);
+  await returnToBrowserRoot(session);
   const parts = splitRemotePath(path);
   for (const part of parts) {
     await findEntry(session, part);

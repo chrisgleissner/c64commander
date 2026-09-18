@@ -34,6 +34,31 @@ export const enterDirectoryUnderCursor = async (session: TelnetSessionApi) => {
   return readScreen(session);
 };
 
+/** How deep a path the climb to the root has to undo. Nothing on these devices nests this far. */
+const MAX_LEVELS_UP = 8;
+
+/** A read that drew nothing: the device had nothing to say about the key it was just sent. */
+const isBlankScreen = (screen: TelnetScreen) =>
+  screen.cells.every((row) => row.every((cell) => cell.char === " " || cell.char === ""));
+
+/**
+ * Take the browser back to the device root, whatever directory it is sitting in.
+ *
+ * LEFT is `state->level_up()` in the firmware's `tree_browser.cc`, and at the root it does nothing,
+ * so pressing it a bounded number of times lands at the root from anywhere. HOME does NOT do this:
+ * KEY_HOME is `cd(CFG_USERIF_HOME_DIR)` — go to the configured home directory — which is unset on
+ * this rig and silently did nothing, and on a device where it is set would move the browser
+ * somewhere else entirely.
+ */
+export const returnToBrowserRoot = async (session: TelnetSessionApi) => {
+  for (let level = 0; level < MAX_LEVELS_UP; level += 1) {
+    await session.sendKey("LEFT");
+    // Already at the root: the firmware redraws nothing, so nothing comes back. Stopping on that
+    // keeps a browser that is already there to one keypress rather than eight.
+    if (isBlankScreen(await readScreen(session))) return;
+  }
+};
+
 /**
  * The device redraws a step or two behind the keypress, so a read taken right
  * after one can still show the previous screen. Re-read until the caller's
@@ -115,23 +140,35 @@ export const navigateToMenuItem = async (session: TelnetSessionApi, screen: Teln
  * reported as a timeout instead of silently spending the whole step budget.
  *
  * `maxSteps` is per caller because the two callers walk lists of very different
- * length. `startAtTop` sends HOME first, for a caller that has not already
- * placed the cursor at the top of the listing itself.
+ * length.
+ *
+ * The walk turns round at the end of the list rather than giving up there. The listing does not
+ * wrap, and the cursor does not start at the top: entering a directory and coming back out of it
+ * leaves the cursor on the directory it came from, so an entry above that is unreachable by DOWN
+ * alone. On an Ultimate 64 that is `Temp` — third in the root listing, below the entry a returning
+ * cursor sits on — and every attempt to stage a settings file through `/Temp` walked to the bottom
+ * of the list and stopped.
+ *
+ * There is no "start at the top" any more. It used to be a HOME press, and in this firmware
+ * KEY_HOME means "go to the configured home directory" (`tree_browser.cc` calls
+ * `cd(CFG_USERIF_HOME_DIR)`) rather than "top of list", so it either did nothing or moved the
+ * browser somewhere else entirely. Turning round at the end of the list makes it unnecessary.
  */
 export const navigateToFileBrowserEntry = async (
   session: TelnetSessionApi,
   label: string,
-  { maxSteps, startAtTop }: { maxSteps: number; startAtTop: boolean },
+  { maxSteps }: { maxSteps: number },
 ) => {
-  if (startAtTop) await session.sendKey("HOME");
   let screen = await waitForScreen(session, await readScreen(session), (candidate) => Boolean(candidate.selectedItem));
   let currentLabel = screen.selectedItem;
   let stalledSteps = 0;
+  let direction: "DOWN" | "UP" = "DOWN";
+  let turnedRound = false;
   for (let step = 0; step < maxSteps;) {
     if (screen.selectedItem && matchLabel(screen.selectedItem, label)) {
       return screen;
     }
-    await session.sendKey("DOWN");
+    await session.sendKey(direction);
     screen = await waitForScreen(session, await readScreen(session), (candidate) => {
       if (!candidate.selectedItem) return false;
       if (matchLabel(candidate.selectedItem, label)) return true;
@@ -140,10 +177,16 @@ export const navigateToFileBrowserEntry = async (
     if (screen.selectedItem && currentLabel && matchLabel(screen.selectedItem, currentLabel)) {
       stalledSteps += 1;
       if (stalledSteps >= MAX_STALLED_STEPS) {
-        throw new TelnetError(`File browser navigation stalled before finding ${label}`, "TIMEOUT", {
-          label,
-          current: screen.selectedItem,
-        });
+        if (turnedRound) {
+          throw new TelnetError(`File browser navigation stalled before finding ${label}`, "TIMEOUT", {
+            label,
+            current: screen.selectedItem,
+          });
+        }
+        // The end of the list, not a stuck browser: go back the other way.
+        turnedRound = true;
+        direction = direction === "DOWN" ? "UP" : "DOWN";
+        stalledSteps = 0;
       }
       continue;
     }

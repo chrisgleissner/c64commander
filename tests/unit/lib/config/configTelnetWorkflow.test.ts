@@ -61,7 +61,7 @@ describe("configTelnetWorkflow", () => {
 
     await saveRemoteConfigFromTemp(session, "F5");
 
-    expect(session.sendKey).toHaveBeenCalledWith("HOME");
+    expect(session.sendKey).toHaveBeenCalledWith("LEFT");
     expect(session.sendKey).toHaveBeenCalledWith("RIGHT");
     expect(session.sendKey).not.toHaveBeenCalledWith("ENTER");
     expect(executeSpy).toHaveBeenCalledWith("saveConfigToFile");
@@ -77,7 +77,8 @@ describe("configTelnetWorkflow", () => {
     await saveRemoteConfigFromTemp(session, "F5");
 
     const keys = session.sendKey.mock.calls.map(([key]: [string]) => key);
-    expect(keys[0]).toBe("HOME");
+    // The climb back to the root comes first; HOME is not it — see returnToBrowserRoot.
+    expect(keys[0]).toBe("LEFT");
     // The descent comes after the walk that put the cursor on Temp, not before it.
     expect(keys.lastIndexOf("RIGHT")).toBeGreaterThan(keys.lastIndexOf("DOWN"));
     expect(executeSpy).toHaveBeenCalledWith("saveConfigToFile");
@@ -176,7 +177,7 @@ describe("configTelnetWorkflow", () => {
 
     await applyRemoteConfigFromPath(session, "/USB1/test-data/snapshots/config.cfg");
 
-    expect(session.sendKey).toHaveBeenCalledWith("HOME");
+    expect(session.sendKey).toHaveBeenCalledWith("LEFT");
     expect(session.sendKey).toHaveBeenCalledWith("RIGHT");
     expect(session.sendKey).toHaveBeenCalledWith("ENTER");
     expect(session.sendKey).not.toHaveBeenCalledWith("F5");
@@ -205,7 +206,7 @@ describe("configTelnetWorkflow", () => {
 
     await applyRemoteConfigFromPath(session, "/config.cfg");
 
-    expect(session.sendKey).toHaveBeenCalledWith("HOME");
+    expect(session.sendKey).toHaveBeenCalledWith("LEFT");
     expect(session.sendKey).toHaveBeenCalledWith("ENTER");
     expect(session.sendKey).not.toHaveBeenCalledWith("RIGHT");
     expect(session.sendKey).not.toHaveBeenCalledWith("DOWN");
@@ -426,23 +427,15 @@ describe("configTelnetWorkflow", () => {
     });
   });
 
+  /*
+   * A stall in one direction is the end of the list, not a stuck browser, so the walk turns round
+   * and tries the other way; only a second stall is a failure. The fixture therefore has to hold
+   * still for twice as long as it used to.
+   */
   it("throws when file-browser navigation stalls before reaching the target file", async () => {
     const session = createSession([
       createScreen({ selectedItem: "Temp" }),
-      createScreen({ selectedItem: "other.cfg" }),
-      createScreen({ selectedItem: "other.cfg" }),
-      createScreen({ selectedItem: "other.cfg" }),
-      createScreen({ selectedItem: "other.cfg" }),
-      createScreen({ selectedItem: "other.cfg" }),
-      createScreen({ selectedItem: "other.cfg" }),
-      createScreen({ selectedItem: "other.cfg" }),
-      createScreen({ selectedItem: "other.cfg" }),
-      createScreen({ selectedItem: "other.cfg" }),
-      createScreen({ selectedItem: "other.cfg" }),
-      createScreen({ selectedItem: "other.cfg" }),
-      createScreen({ selectedItem: "other.cfg" }),
-      createScreen({ selectedItem: "other.cfg" }),
-      createScreen({ selectedItem: "other.cfg" }),
+      ...Array.from({ length: 40 }, () => createScreen({ selectedItem: "other.cfg" })),
     ]);
 
     await expect(applyRemoteConfigFromTemp(session, "capture.cfg")).rejects.toMatchObject<Partial<TelnetError>>({
