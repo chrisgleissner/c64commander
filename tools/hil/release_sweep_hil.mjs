@@ -49,6 +49,8 @@ import { dirname, resolve } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
+import { createHilCdp, sleep } from "./hil_cdp.mjs";
+
 const execFileAsync = promisify(execFile);
 
 const argv = process.argv.slice(2);
@@ -100,149 +102,16 @@ const LAYOUT_WIDTHS = [320, 360, 393];
 /** Routes a user reaches from the tab bar. Every one is visited by `error-census`. */
 const MAIN_ROUTES = ["/", "/play", "/disks", "/config", "/settings"];
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const adb = async (...args) => {
-  const { stdout } = await execFileAsync("adb", ["-s", SERIAL, ...args], { maxBuffer: 16 * 1024 * 1024 });
-  return stdout;
-};
-const shell = (command) => adb("shell", command);
-
-/* ---------------------------------------------------------------- CDP ---- */
-
-/**
- * A CDP connection that can be rebuilt.
- *
- * Every relaunch replaces the WebView process, which invalidates both the `adb forward` and the
- * socket behind it. A run that connected once and kept the handle read a dead page and reported the
- * app as hung — so the forward is re-established and the socket reopened after every launch.
+/*
+ * `attach` forces the forward and the socket to be rebuilt; `ensureAttached` only connects when
+ * there is nothing live. A relaunch needs the forced one: the replaced WebView leaves a socket that
+ * still reads as open and answers nothing.
  */
-let socket = null;
-let pending = new Map();
-let nextId = 1;
-
-const openCdp = async () => {
-  const targets = await (await fetch(`http://localhost:${CDP_PORT}/json`)).json();
-  const page = targets.find((target) => target.type === "page" && target.webSocketDebuggerUrl) ?? targets[0];
-  if (!page) throw new Error(`no CDP page on port ${CDP_PORT}`);
-  const next = new WebSocket(page.webSocketDebuggerUrl);
-  pending = new Map();
-  nextId = 1;
-  next.addEventListener("message", (event) => {
-    const message = JSON.parse(event.data);
-    if (!message.id) {
-      noteConsoleEvent(message);
-      return;
-    }
-    const waiter = pending.get(message.id);
-    if (!waiter) return;
-    pending.delete(message.id);
-    if (message.error) waiter.reject(new Error(JSON.stringify(message.error)));
-    else waiter.resolve(message.result);
-  });
-  await new Promise((resolve, reject) => {
-    next.addEventListener("open", resolve);
-    next.addEventListener("error", () => reject(new Error("cdp socket refused")));
-  });
-  socket = next;
-  await send("Runtime.enable", {}, 20_000);
-  // `Log` carries what the browser itself reports — a failed subresource, a violated CSP, a rejected
-  // permission — none of which reaches `console.error` or the app's own log.
-  await send("Log.enable", {}, 20_000).catch(() => undefined);
-};
-
-/**
- * Everything the page has complained about since the last `takeConsoleErrors()`.
- *
- * The app's own log records what the app knows went wrong. It cannot record an uncaught exception,
- * a React warning, or a subresource that 404ed, and those are exactly the faults a user never
- * reports because nothing on screen mentions them. This is the second half of the census.
- */
-let consoleErrors = [];
-
-const noteConsoleEvent = (message) => {
-  if (
-    message.method === "Runtime.consoleAPICalled" &&
-    (message.params.type === "error" || message.params.type === "assert")
-  ) {
-    const text = (message.params.args ?? [])
-      .map((arg) => arg.value ?? arg.description ?? arg.unserializableValue ?? "")
-      .join(" ")
-      .trim();
-    if (text) consoleErrors.push(`console.${message.params.type}: ${text.slice(0, 200)}`);
-    return;
-  }
-  if (message.method === "Runtime.exceptionThrown") {
-    const details = message.params.exceptionDetails ?? {};
-    const text = details.exception?.description ?? details.text ?? "uncaught exception";
-    consoleErrors.push(`uncaught: ${String(text).slice(0, 200)}`);
-    return;
-  }
-  if (message.method === "Log.entryAdded" && message.params.entry?.level === "error") {
-    const entry = message.params.entry;
-    consoleErrors.push(`${entry.source}: ${String(entry.text).slice(0, 200)}`);
-  }
-};
-
-const takeConsoleErrors = () => {
-  const taken = consoleErrors;
-  consoleErrors = [];
-  return taken;
-};
-
-const send = (method, params = {}, timeoutMs = 20_000) =>
-  new Promise((resolve, reject) => {
-    const id = nextId++;
-    pending.set(id, { resolve, reject });
-    socket.send(JSON.stringify({ id, method, params }));
-    setTimeout(() => {
-      if (pending.delete(id)) reject(new Error(`cdp timeout: ${method}`));
-    }, timeoutMs);
-  });
-
-/** Point the local port at this package's WebView, resolving its pid the way droidctl does. */
-const forwardWebView = async () => {
-  const sockets = await shell("cat /proc/net/unix");
-  const pid = (await shell(`pidof ${PACKAGE}`)).trim().split(/\s+/)[0];
-  if (!pid) throw new Error(`${PACKAGE} is not running`);
-  const name = `webview_devtools_remote_${pid}`;
-  if (!sockets.includes(name)) throw new Error(`no devtools socket for pid ${pid}; is this a debug build?`);
-  await adb("forward", "--remove-all").catch(() => undefined);
-  await adb("forward", `tcp:${CDP_PORT}`, `localabstract:${name}`);
-};
-
-const attach = async () => {
-  await forwardWebView();
-  await openCdp();
-};
-
-/**
- * Connect if there is no live socket.
- *
- * Two callers need this. `--only network-drop` skips preflight, which is where the first connection
- * used to be made, and every stage after it then failed on a null socket rather than on anything it
- * measured. And a WebView that has been replaced leaves a socket that is open to nothing, which
- * reads the same way.
- */
-const ensureAttached = async () => {
-  if (socket && socket.readyState === WebSocket.OPEN) return;
-  await attach();
-};
-
-const evaluate = async (expression, timeoutMs = 20_000) => {
-  await ensureAttached();
-  const result = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, timeoutMs);
-  if (result.exceptionDetails) {
-    throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text);
-  }
-  const value = result.result.value;
-  if (typeof value !== "string") return value;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
-};
+const { adb, shell, attach, evaluate, takeConsoleErrors, foreignFocusedWindow } = createHilCdp({
+  serial: SERIAL,
+  packageName: PACKAGE,
+  port: CDP_PORT,
+});
 
 /* -------------------------------------------------------------- reads ---- */
 
@@ -285,23 +154,6 @@ const readState = (sinceMs) => evaluate(STATE(sinceMs));
 
 /** The device clock, because the in-app log is stamped with it and it is hours from the host's. */
 const deviceNowMs = async () => Number((await shell("date +%s%3N")).trim());
-
-/**
- * The window that has focus, when it is not this app's.
- *
- * Nothing read over CDP can see one. The WebView keeps answering while an Android runtime-permission
- * dialog, a system share sheet or a clipboard editor sits on top of it, so a stage goes on driving a
- * page the user cannot reach and reports whatever it finds. That is not hypothetical: a
- * POST_NOTIFICATIONS prompt appeared after an app-data reset, took focus, stopped the tune, and the
- * network stage blamed the Wi-Fi for it.
- */
-const foreignFocusedWindow = async () => {
-  const dump = await shell("dumpsys window | grep -m1 mCurrentFocus").catch(() => "");
-  const match = /mCurrentFocus=Window\{[^\s]+ \S+ ([^}]+)\}/.exec(dump.trim());
-  const window = match?.[1]?.trim();
-  if (!window || window.startsWith(PACKAGE)) return null;
-  return window;
-};
 
 const goto = async (route) => {
   await evaluate(

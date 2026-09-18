@@ -21,6 +21,10 @@ physical rig), while the host-deterministic budget checks run in CI.
 - **`release_sweep_hil.mjs`** — the four ordinary events the merge gate does not cover: the app is
   killed and reopened, the Wi-Fi goes away and comes back, the screen locks with a tune playing, and
   every main route is checked for an error nobody should ever see. See **Release sweep** below.
+- **`launch_matrix_hil.mjs`** — starting a tune, a program, a cartridge and a disk, with the machine
+  itself as the witness, and the settings file beside each of them. See **Launch matrix** below.
+  Its probe files are built by **`build_launch_probes.mjs`**.
+- **`hil_cdp.mjs`** — not a harness: the adb and WebView-DevTools plumbing the harnesses share.
 
 ## Release sweep
 
@@ -52,6 +56,64 @@ empty, because a stage that measured nothing must not read as a stage that passe
 page after about a minute, which is why the stage runs for longer than that and why it clears
 `svc power stayon usb` first — a phone on USB keeps its screen lit, and the stage passed for weeks
 without ever putting the screen out.
+
+## Launch matrix
+
+`launch_matrix_hil.mjs` starts each kind of thing the app can start and reads the evidence out of
+the machine rather than off the app's screen. It exists because nothing else started a cartridge,
+and because nothing checked that the settings file next to a launched file is applied.
+
+Every probe writes a four-byte signature into RAM at $C000 — `PRG!`, `CRT!`, `DSK!` — and the
+harness reads it back with `machine:readmem`. "It started" therefore means the 6510 ran the probe's
+own instructions. $C000 is 4 KiB of RAM that neither BASIC nor the KERNAL uses, so the value
+survives the program ending.
+
+```bash
+node tools/hil/build_launch_probes.mjs --host c64u --usb USB2     # needs VICE's c1541 on PATH
+node tools/hil/launch_matrix_hil.mjs --serial <adb serial> --host c64u --usb USB2
+node tools/hil/launch_matrix_hil.mjs --serial <adb serial> --host u2 --usb USB0 --only launch
+```
+
+| Stage             | What it asserts                                                                                                                                      |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `preflight`       | Phone attached, app running on the named host, and the probe folder holding all five files                                                           |
+| `firmware-parity` | What the firmware does by itself over REST, with no app involved (see below)                                                                         |
+| `discovery`       | Adding the probe files through the app's own picker resolves the `.cfg` beside them as "same name" for every category                                |
+| `launch`          | Playing each item from the playlist leaves that item's signature in RAM, and the page reports nothing                                                |
+| `config-apply`    | The app applies the resolved `.cfg` before each launch, including for a cartridge, which the firmware applies nothing for                            |
+| `config-decline`  | Declining the settings file means it is not applied — including for a program, where the firmware would otherwise load it after the app had finished |
+
+Nothing else may drive the app's DevTools socket while a run is in progress. Attaching a second
+client removes the forward this one is using, and the run then fails with `fetch failed` on whatever
+stage it happened to be in — which looks exactly like the app having gone away.
+
+Two things about the phone rather than the app. A sleeping screen reports `NotificationShade` as
+the focused window and answers every tap with nothing, so `preflight` wakes it and dismisses the
+keyguard; a run that started on a dark phone otherwise drove a screen the taps never reached. And
+the on-screen keyboard covers the bottom half of the display while leaving the page laid out at
+full height, so every tap computed from a bounding box lands on a key — the harness types by setting
+the field's value through React's own setter and never opens it.
+
+### What the firmware does on its own
+
+Measured on a C64 Ultimate (firmware 1.2RC), an Ultimate 64 Elite (3.15) and an Ultimate II+L
+(3.15). All three gave the same answers.
+
+| REST call                             | Applies the settings file beside the launched file                |
+| ------------------------------------- | ----------------------------------------------------------------- |
+| `runners:run_prg`, `runners:load_prg` | Yes: `<program>.cfg`, and `<program>.usr` when there is no `.cfg` |
+| `runners:run_crt`                     | No                                                                |
+| `drives:mount`                        | No                                                                |
+
+The menu on the device applies one for disks, cartridges and tapes too; the REST handlers for those
+call the cartridge loader and the mounter directly and load nothing. The app resolves a settings
+file for every category, which is how it is a superset rather than a second opinion.
+
+The program case is the one that needed a change in the app. The firmware loads `<program>.cfg`
+_after_ the app has applied its own choice, so an edited, declined or differently chosen settings
+file was silently undone. A program whose settings choice is not what the firmware would do is now
+launched by uploading its bytes instead of naming its path, which runs it from a temporary file with
+no settings file beside it. `config-decline` is the stage that fails when that regresses.
 
 ## THE trap: a hidden WebView
 

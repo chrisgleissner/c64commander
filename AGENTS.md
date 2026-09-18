@@ -395,6 +395,11 @@ outside `droidctl` is expected, not a loophole.
 **The available rig is exactly: the Pixel 4 (adb), the C64U, the U64, and the U2.** That
 is all of it. Plan every gate, task and acceptance criterion against that list.
 
+**The U64 is reserved and must not be driven.** It is in use for Software IEC work, so
+every gate, sweep and one-off probe runs against `c64u` and `u2` only. Between them those
+two cover what the fleet needs covered: `c64u` is an integrated Ultimate 64-family
+computer and `u2` is the cartridge.
+
 The **U2** is an Ultimate-II+(L) cartridge (hostname `u2`), and it is the only device on
 the rig that is not an integrated Ultimate 64-family computer. It serves no `/v1/streams`
 and reports no `core_version`, so it is the only way to exercise the capability gates —
