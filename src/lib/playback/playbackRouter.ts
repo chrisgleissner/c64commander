@@ -71,6 +71,11 @@ export type PlayPlan = {
   file?: LocalPlayFile;
   songNr?: number;
   durationMs?: number;
+  /**
+   * The firmware would load this program's own settings file after the app applied its own choice,
+   * and that choice is not what the firmware would do. See lib/config/firmwareConfigLaunch.
+   */
+  firmwareOverridesConfig?: boolean;
 };
 
 type PhysicalDriveMode = "1541" | "1571" | "1581";
@@ -98,13 +103,14 @@ const DISK_AUTOPLAY_COMPATIBLE_MODES_BY_EXTENSION: Partial<Record<string, Physic
 };
 const SID_SSL_PROPAGATION_PREFLIGHT_TIMEOUT_MS = 1200;
 
-export const buildPlayPlan = (request: PlayRequest): PlayPlan => {
+export const buildPlayPlan = (request: PlayRequest, firmwareOverridesConfig = false): PlayPlan => {
   const category = getPlayCategory(request.path);
   if (!category) {
     throw new Error("Unsupported file format.");
   }
   return {
     category,
+    firmwareOverridesConfig,
     source: request.source,
     path: request.path,
     origin: request.origin ?? null,
@@ -378,6 +384,33 @@ export const tryFetchUltimateSidBlob = async (path: string) => {
   }
 };
 
+/**
+ * The bytes of a file on the currently selected Ultimate, read over FTP.
+ *
+ * Used when a file that is already on the device still has to be uploaded to it, which is how a
+ * program is launched without the firmware loading the settings file next to it. Returns null when
+ * the read fails, so the caller can fall back to naming the path rather than failing the launch.
+ */
+export const tryFetchSelectedDeviceFileBlob = async (path: string) => {
+  const normalizedPath = normalizeUltimatePath(path);
+  const { deviceHost: rawHost, password = "" } = getC64APIConfigSnapshot();
+  try {
+    const response = await readFtpFile({
+      host: normalizeFtpHost(rawHost),
+      port: getStoredFtpPort(),
+      password,
+      path: normalizedPath,
+    });
+    return new Blob([base64ToUint8(response.data)], { type: "application/octet-stream" });
+  } catch (error) {
+    addLog("warn", "FTP read for a config-preserving launch failed", {
+      path: normalizedPath,
+      error: (error as Error).message,
+    });
+    return null;
+  }
+};
+
 const injectDiskAutostart = async (api: C64API, payload: Uint8Array) => {
   const baseDelayMs = 250;
   const maxAttempts = 4;
@@ -579,6 +612,23 @@ export const executePlayPlan = async (api: C64API, plan: PlayPlan, options: Play
         // launch a freezer cartridge can hijack. Park it around the launch.
         await withCartridgeParked(api, async () => {
           if (plan.source === "ultimate" && selectedDeviceCanAccessOrigin) {
+            /*
+             * Naming the path makes the firmware load the program's own `.cfg`/`.usr` after the app
+             * has applied its settings, which undoes an edited, declined or differently chosen
+             * config. Sending the bytes instead runs the program from a temporary file that has no
+             * settings file beside it, so what the app applied is what the program gets. A failed
+             * read falls through to the path launch rather than failing the launch outright.
+             */
+            const preserved = plan.firmwareOverridesConfig ? await tryFetchSelectedDeviceFileBlob(plan.path) : null;
+            if (preserved) {
+              const filename = plan.path;
+              if (loadMode === "load") {
+                await api.loadPrgUpload(preserved, { filename });
+              } else {
+                await api.runPrgUpload(preserved, { filename });
+              }
+              return;
+            }
             if (loadMode === "load") {
               await api.loadPrg(plan.path);
             } else {

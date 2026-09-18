@@ -92,6 +92,7 @@ import {
   resolveUltimateSidDurationByMd5,
   warmNeighbouringLeadIns,
 } from "@/pages/playFiles/sidBytesAhead";
+import { firmwareOverridesItemConfig } from "@/lib/config/firmwareConfigLaunch";
 import {
   applyConfigFileReference,
   ensureConfigFileReferenceAccessible,
@@ -1077,7 +1078,7 @@ export function usePlaybackController({
           typeof resolvedDurationBase === "number"
             ? { ...effectiveRequest, durationMs: resolvedDurationBase }
             : effectiveRequest;
-        const plan = buildPlayPlan(request);
+        const plan = buildPlayPlan(request, firmwareOverridesItemConfig(item));
         const shouldReboot = options?.rebootBeforePlay ?? item.category === "disk";
         const configOrigin = item.configOrigin ?? resolveStoredConfigOrigin(item.configRef ?? null, null);
         const configOverrides = item.configOverrides ?? null;

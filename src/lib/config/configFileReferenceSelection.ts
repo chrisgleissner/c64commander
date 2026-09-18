@@ -12,6 +12,7 @@ import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import type { SourceEntry } from "@/lib/sourceNavigation/types";
 import type { SelectedItem, SourceLocation } from "@/lib/sourceNavigation/types";
 import type { ConfigFileReference, LocalConfigFileReference } from "./configFileReference";
+import { FIRMWARE_ASSOCIATED_FALLBACK_EXTENSION } from "./firmwareAssociatedConfig";
 
 type LocalEntry = {
   uri?: string | null;
@@ -22,9 +23,12 @@ type LocalEntry = {
 
 export const isConfigFileName = (name: string) => name.trim().toLowerCase().endsWith(".cfg");
 
-const requireConfigFileName = (name?: string | null) => {
+const requireConfigFileName = (name?: string | null, allowFirmwareFallbackExtension = false) => {
   const trimmed = name?.trim() ?? "";
-  if (!trimmed || !isConfigFileName(trimmed)) {
+  const accepted =
+    isConfigFileName(trimmed) ||
+    (allowFirmwareFallbackExtension && trimmed.toLowerCase().endsWith(`.${FIRMWARE_ASSOCIATED_FALLBACK_EXTENSION}`));
+  if (!trimmed || !accepted) {
     throw new Error("Select a .cfg file.");
   }
   return trimmed;
@@ -60,13 +64,16 @@ export const buildConfigReferenceFromSourceEntry = ({
   sourceId,
   entry,
   localEntriesBySourceId,
+  allowFirmwareFallbackExtension = false,
 }: {
   sourceType: "local" | "ultimate";
   sourceId?: string | null;
   entry: Pick<SourceEntry, "name" | "path" | "modifiedAt" | "sizeBytes">;
   localEntriesBySourceId?: Map<string, Map<string, LocalEntry>>;
+  /** Set only for the `.usr` file the firmware falls back to beside a program; see firmwareAssociatedConfig. */
+  allowFirmwareFallbackExtension?: boolean;
 }): ConfigFileReference => {
-  const fileName = requireConfigFileName(entry.name);
+  const fileName = requireConfigFileName(entry.name, allowFirmwareFallbackExtension);
   const normalizedPath = normalizeSourcePath(entry.path);
   if (sourceType === "ultimate") {
     return {

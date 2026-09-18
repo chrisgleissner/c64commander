@@ -57,4 +57,73 @@ describe("discoverConfigCandidates", () => {
     ]);
     expect(listEntries).toHaveBeenCalledTimes(2);
   });
+
+  /*
+   * The firmware falls back to `<program>.usr` when no `<program>.cfg` sits beside a PRG, and it
+   * applies that file with or without the app's knowledge. Discovery has to name it for the app to
+   * be able to show it, edit it or decline it.
+   */
+  it("offers the .usr the firmware falls back to beside a program", async () => {
+    const listEntries = vi.fn(async (path: string): Promise<SourceEntry[]> =>
+      path === "/Usb0/Games/"
+        ? [
+            { type: "file", name: "Game.prg", path: "/Usb0/Games/Game.prg" },
+            { type: "file", name: "Game.usr", path: "/Usb0/Games/Game.usr" },
+          ]
+        : [],
+    );
+
+    const candidates = await discoverConfigCandidates({
+      sourceType: "ultimate",
+      sourceRootPath: "/Usb0",
+      targetFile: { name: "Game.prg", path: "/Usb0/Games/Game.prg" },
+      listEntries,
+    });
+
+    expect(candidates.map((candidate) => [candidate.ref.fileName, candidate.strategy])).toEqual([
+      ["Game.usr", "exact-name"],
+    ]);
+  });
+
+  it("prefers the .cfg and leaves the .usr out when both sit beside the program", async () => {
+    const listEntries = vi.fn(async (path: string): Promise<SourceEntry[]> =>
+      path === "/Usb0/Games/"
+        ? [
+            { type: "file", name: "Game.prg", path: "/Usb0/Games/Game.prg" },
+            { type: "file", name: "Game.cfg", path: "/Usb0/Games/Game.cfg" },
+            { type: "file", name: "Game.usr", path: "/Usb0/Games/Game.usr" },
+          ]
+        : [],
+    );
+
+    const candidates = await discoverConfigCandidates({
+      sourceType: "ultimate",
+      sourceRootPath: "/Usb0",
+      targetFile: { name: "Game.prg", path: "/Usb0/Games/Game.prg" },
+      listEntries,
+    });
+
+    expect(candidates.map((candidate) => candidate.ref.fileName)).toEqual(["Game.cfg"]);
+  });
+
+  /* The firmware only does this for programs, so a cartridge's `.usr` neighbour means nothing. */
+  it("ignores a .usr beside a cartridge", async () => {
+    const listEntries = vi.fn(async (path: string): Promise<SourceEntry[]> =>
+      path === "/Usb0/Games/"
+        ? [
+            { type: "file", name: "Game.crt", path: "/Usb0/Games/Game.crt" },
+            { type: "file", name: "Game.usr", path: "/Usb0/Games/Game.usr" },
+          ]
+        : [],
+    );
+
+    const candidates = await discoverConfigCandidates({
+      sourceType: "ultimate",
+      sourceRootPath: "/Usb0",
+      targetFile: { name: "Game.crt", path: "/Usb0/Games/Game.crt" },
+      listEntries,
+    });
+
+    expect(candidates).toEqual([]);
+  });
 });
