@@ -31,6 +31,7 @@ import { useInRouterContext, useLocation } from "react-router-dom";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
 import { useFocusNavigationContext, type FocusNavigationContextValue } from "@/hooks/useFocusNavigation";
+import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 import {
   accessibleLabelFor,
   classifyFocusKind,
@@ -191,7 +192,14 @@ export const KeypadGuidanceBar = () => {
     const labels = resolveGuidanceLabels(
       buildGuidanceState(context, gameModeAvailable && isGameModeShortcutPath(currentPathname())),
     );
-    if (!labels.visible) {
+    /*
+     * The tour owns the keys while it runs, so this bar would be advertising actions that do not
+     * happen — and on a 320 x 427 screen it is drawn over the tour's own caption, covering the title
+     * of the step being explained. It reads the attribute the tour already sets on <html>, the same
+     * one swipe navigation and Home read.
+     */
+    const duringTour = document.documentElement.hasAttribute(TOUR_ACTIVE_ATTRIBUTE);
+    if (!labels.visible || duringTour) {
       setAttrIfChanged(root, "data-visible", "false");
       reserveGuidanceHeight(false);
       return;
