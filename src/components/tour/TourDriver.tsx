@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { navigateToSearchTarget } from "@/lib/search/navigate";
 import { captionPlacement, scrimRects, unionRect, type Rect } from "@/lib/tour/spotlight";
+import { showsCaptionBody } from "@/lib/tour/captionReveal";
 import { isDeviceBackKey, resolveInputProfile, resolveSemanticAction } from "@/lib/input";
 import { TOUR_STEPS, tourStepIndex } from "@/lib/tour/steps";
 import { TOUR_ACTIVE_ATTRIBUTE, loadTourState, saveTourState, type TourStartRequest } from "@/lib/tour/tourState";
@@ -56,6 +57,13 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
   const { status } = useC64Connection();
 
   const [stepIndex, setStepIndex] = useState(() => tourStepIndex(request.fromStepId ?? null));
+  /*
+   * What the caption is doing: how tall it is, and how long the user has left it alone. Together
+   * they decide whether it steps back and lets the page show through — see `captionReveal`.
+   */
+  const [captionElement, setCaptionElement] = useState<HTMLDivElement | null>(null);
+  const [captionHeight, setCaptionHeight] = useState(0);
+  const [idleMs, setIdleMs] = useState(0);
   /*
    * The run's bounds. A full tour is every step; the offer Home makes after a first connection is
    * the steps that needed a machine and stops there, rather than carrying on through the rest and
@@ -226,10 +234,57 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [back, finish, next]);
 
+  /*
+   * Measured rather than estimated: the panel's height depends on the step's own wording, the text
+   * size the user has chosen and the system inset, none of which this component can predict.
+   *
+   * Two things this has to get right. It keys off the ELEMENT, not the step, because a ref is still
+   * null when an effect keyed on the step first runs — the height then stayed zero and the panel
+   * never gave the page back at all. And it records the height only while the body is showing: the
+   * collapsed panel is under the threshold that collapsed it, so measuring that would put the body
+   * straight back, and the panel would flip between the two sizes for ever.
+   */
+  useEffect(() => {
+    if (captionElement === null || typeof ResizeObserver === "undefined") return undefined;
+    const measure = () => {
+      if (captionElement.dataset.bodyHidden === "true") return;
+      setCaptionHeight(captionElement.getBoundingClientRect().height);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(captionElement);
+    return () => observer.disconnect();
+  }, [captionElement]);
+
+  /*
+   * Anything the user DOES puts the body back. Only real input counts: a key, a press, a wheel.
+   *
+   * `focusin` and `pointermove` were listed here first and had to go. The app moves focus by itself
+   * when a step navigates, so the timer was reset by the tour's own work and the body would never
+   * have come off on a real device — a feature that looks implemented and does nothing. `keydown`
+   * is what covers a keypad handset, where moving the highlight is the whole of the interaction.
+   */
+  useEffect(() => {
+    setIdleMs(0);
+    let start = Date.now();
+    const wake = () => {
+      start = Date.now();
+      setIdleMs(0);
+    };
+    const events = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
+    events.forEach((name) => window.addEventListener(name, wake, { passive: true }));
+    const timer = window.setInterval(() => setIdleMs(Date.now() - start), 500);
+    return () => {
+      events.forEach((name) => window.removeEventListener(name, wake));
+      window.clearInterval(timer);
+    };
+  }, [stepIndex]);
+
   if (!step) return null;
 
   const pieces = scrimRects(hole, viewport);
   const placement = captionPlacement(hole, viewport.height);
+  const showBody = showsCaptionBody({ captionHeight, viewportHeight: viewport.height, idleMs });
 
   return (
     <div
@@ -270,20 +325,30 @@ export const TourDriver = ({ request, onFinished }: TourDriverProps) => {
         the panel still meets the edge instead of leaving a strip of the page showing below it.
       */}
       <div
+        ref={setCaptionElement}
         className="absolute inset-x-0 space-y-2 border-border bg-card p-4 shadow-elev-2"
         style={
           placement === "bottom"
-            ? { bottom: 0, borderTopWidth: 1, paddingBottom: "calc(1rem + var(--safe-area-inset-bottom, 0px))" }
-            : { top: 0, borderBottomWidth: 1, paddingTop: "calc(1rem + var(--safe-area-inset-top, 0px))" }
+            ? {
+                bottom: 0,
+                borderTopWidth: 1,
+                paddingBottom: "calc(1rem + var(--safe-area-inset-bottom, 0px))",
+              }
+            : {
+                top: 0,
+                borderBottomWidth: 1,
+                paddingTop: "calc(1rem + var(--safe-area-inset-top, 0px))",
+              }
         }
         data-testid="tour-caption"
         data-placement={placement}
+        data-body-hidden={showBody ? undefined : "true"}
       >
         <p className="text-xs text-muted-foreground" data-testid="tour-progress">
           Step {stepIndex - firstIndex + 1} of {stepCount}
         </p>
         <h2 className="text-base font-semibold">{step.title}</h2>
-        <p className="text-sm text-muted-foreground">{step.body}</p>
+        {showBody ? <p className="text-sm text-muted-foreground">{step.body}</p> : null}
         <div className="flex flex-wrap gap-2">
           <Button variant="ghost" onClick={() => finish("skipped")} className="min-h-11" data-testid="tour-skip">
             Skip
