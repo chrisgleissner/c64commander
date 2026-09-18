@@ -17,6 +17,24 @@ const MAX_STALLED_STEPS = 3;
 export const readScreen = async (session: TelnetSessionApi) => session.readScreen(BROWSER_STEP_TIMEOUT_MS);
 
 /**
+ * Step into the directory under the cursor.
+ *
+ * RIGHT, not ENTER. The device's tree browser maps ENTER to opening the entry's context menu — the
+ * one offering Enter, Copy to..., Move to..., Rename and Delete — and RIGHT to descending into it:
+ * `handle_key` in the firmware's `tree_browser.cc` sends KEY_RETURN to `context(0)` and KEY_RIGHT
+ * to `state->into2()`. Confirmed against a C64 Ultimate on 1.2RC, where RIGHT on `Temp` answered
+ * with the contents of `/Temp/` and ENTER answered with that five-item menu.
+ *
+ * Sending ENTER left the context menu open over the listing. The next search for a path segment
+ * then walked that menu's five items looking for a directory name, never found one, and ran to its
+ * step limit before failing — once for every segment of the path.
+ */
+export const enterDirectoryUnderCursor = async (session: TelnetSessionApi) => {
+  await session.sendKey("RIGHT");
+  return readScreen(session);
+};
+
+/**
  * The device redraws a step or two behind the keypress, so a read taken right
  * after one can still show the previous screen. Re-read until the caller's
  * predicate holds, then give up and return whatever the last read produced —
@@ -26,21 +44,41 @@ export const waitForScreen = async (
   session: TelnetSessionApi,
   initialScreen: TelnetScreen,
   predicate: (screen: TelnetScreen) => boolean,
+  /*
+   * What to hand back when the wait runs out: the last screen that satisfied this, in preference to
+   * the last screen read. A caller waiting for the menu that offers a particular action wants the
+   * menu it did get rather than whatever the device drew next, so the failure can name what that
+   * menu offered instead.
+   */
+  fallbackPredicate?: (screen: TelnetScreen) => boolean,
 ) => {
   let screen = initialScreen;
+  let fallback: TelnetScreen | null = null;
   for (let attempt = 0; attempt < MAX_SETTLE_READS; attempt += 1) {
     if (predicate(screen)) return screen;
+    if (!fallback && fallbackPredicate?.(screen)) fallback = screen;
     screen = await readScreen(session);
   }
-  return screen;
+  if (predicate(screen)) return screen;
+  return fallback ?? screen;
 };
 
 export const findTopMenu = (screen: TelnetScreen): ParsedMenu | null =>
   screen.menus.find((menu) => menu.level === 0) ?? screen.menus[0] ?? null;
 
+/**
+ * The menu that actually offers `label`.
+ *
+ * The frame a file listing is drawn in parses as a menu too, so "a menu is on screen" is not the
+ * same question as "the menu that was just opened is on screen". A caller that waits for the first
+ * and then reads the second gets whichever box happened to be found first.
+ */
+export const findMenuOffering = (screen: TelnetScreen, label: string): ParsedMenu | null =>
+  screen.menus.find((menu) => menu.items.some((item) => matchLabel(item.label, label))) ?? null;
+
 /** Move the context menu's selection onto `label` with UP/DOWN keypresses. */
 export const navigateToMenuItem = async (session: TelnetSessionApi, screen: TelnetScreen, label: string) => {
-  const menu = findTopMenu(screen);
+  const menu = findMenuOffering(screen, label) ?? findTopMenu(screen);
   if (!menu) {
     throw new TelnetError("Context menu not visible", "MENU_NOT_FOUND");
   }

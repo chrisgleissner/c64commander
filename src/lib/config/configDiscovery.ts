@@ -51,6 +51,14 @@ const shouldContinueAscending = (currentParent: string, rootPath: string) => {
   return normalizedCurrent.startsWith(normalizedRoot);
 };
 
+/**
+ * A directory's files, from the caller's map when it has them and from the source otherwise.
+ *
+ * A folder that cannot be listed means this file has no settings file discoverable beside it, not
+ * that adding the file failed. An archive entry's parent, a folder whose permission has lapsed and
+ * a device that dropped off all read the same way, and none of them is a reason to refuse the add.
+ * The empty result is remembered so the same folder is not asked for again in the same batch.
+ */
 const resolveEntriesForPath = async (
   path: string,
   listEntries: (path: string) => Promise<SourceEntry[]>,
@@ -59,7 +67,7 @@ const resolveEntriesForPath = async (
   const normalizedPath = normalizeSourcePath(path);
   const prefetched = prefetchedEntriesByPath?.get(normalizedPath);
   if (prefetched) return prefetched;
-  const entries = await listEntries(normalizedPath);
+  const entries = await listEntries(normalizedPath).catch(() => [] as SourceEntry[]);
   prefetchedEntriesByPath?.set(normalizedPath, entries);
   return entries;
 };

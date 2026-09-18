@@ -239,7 +239,14 @@ export function createTelnetSession(transport: TelnetTransport): TelnetSessionAp
       try {
         const data = await transport.read(timeout);
         if (data.length === 0) {
+          // A quiet socket AFTER the device has sent something is the end of that frame, so this
+          // is where the read stops. Waiting out the full empty-read budget every time tripled the
+          // cost of every screen, and a screen is read once per keypress: walking the file browser
+          // to a settings file spent most of its time waiting for bytes that had already arrived.
+          // With nothing received yet the budget still applies — that is the device being slow to
+          // answer, which is what it is there for.
           emptyReads++;
+          if (chunks.length > 0) break;
           continue;
         }
         emptyReads = 0;

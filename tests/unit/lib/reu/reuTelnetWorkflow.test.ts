@@ -40,6 +40,11 @@ vi.mock("@/lib/telnet/telnetActionExecutor", () => ({
   },
 }));
 
+/*
+ * The device's tree browser opens an entry's context menu on ENTER and descends into it on RIGHT.
+ * This test asserted ENTER, so it passed while the workflow sent the key that opened a menu over
+ * the listing instead of entering /Temp. See telnetFileBrowser's enterDirectoryUnderCursor.
+ */
 describe("reuTelnetWorkflow", () => {
   it("navigates to Temp before executing Save REU", async () => {
     const session = createSession([
@@ -52,7 +57,8 @@ describe("reuTelnetWorkflow", () => {
 
     expect(session.sendKey).toHaveBeenCalledWith("HOME");
     expect(session.sendKey).toHaveBeenCalledWith("DOWN");
-    expect(session.sendKey).toHaveBeenCalledWith("ENTER");
+    expect(session.sendKey).toHaveBeenCalledWith("RIGHT");
+    expect(session.sendKey).not.toHaveBeenCalledWith("ENTER");
     expect(executeSpy).toHaveBeenCalledWith("saveReuMemory");
   });
 
@@ -119,11 +125,12 @@ describe("reuTelnetWorkflow", () => {
       createScreen({ selectedItem: "capture.reu" }),
     ]);
 
-    await restoreRemoteReu(session, "F5", "capture.reu", "preload-on-startup", "Temp");
+    await restoreRemoteReu(session, "capture.reu", "preload-on-startup", "Temp");
 
-    expect(session.sendKey).toHaveBeenCalledWith("F5");
+    expect(session.sendKey).toHaveBeenCalledWith("RIGHT");
     expect(session.sendKey).toHaveBeenCalledWith("DOWN");
     expect(session.sendKey).toHaveBeenCalledWith("ENTER");
+    expect(session.sendKey).not.toHaveBeenCalledWith("F5");
   });
 
   // HARD18-014: "Preload on Startup" must navigate to the persistent storage
@@ -165,12 +172,13 @@ describe("reuTelnetWorkflow", () => {
       createScreen({ selectedItem: "c64commander-reu-preload.reu" }),
     ]);
 
-    await restoreRemoteReu(session, "F5", "c64commander-reu-preload.reu", "preload-on-startup", "USB2");
+    await restoreRemoteReu(session, "c64commander-reu-preload.reu", "preload-on-startup", "USB2");
 
     expect(session.sendKey).toHaveBeenCalledWith("HOME");
-    expect(session.sendKey).toHaveBeenCalledWith("F5");
+    expect(session.sendKey).toHaveBeenCalledWith("RIGHT");
     expect(session.sendKey).toHaveBeenCalledWith("DOWN");
     expect(session.sendKey).toHaveBeenCalledWith("ENTER");
+    expect(session.sendKey).not.toHaveBeenCalledWith("F5");
   });
 
   it("loads into REU when the target menu item is already selected", async () => {
@@ -195,10 +203,10 @@ describe("reuTelnetWorkflow", () => {
       createScreen({ selectedItem: "capture.reu" }),
     ]);
 
-    await restoreRemoteReu(session, "F5", "capture.reu", "load-into-reu", "Temp");
+    await restoreRemoteReu(session, "capture.reu", "load-into-reu", "Temp");
 
-    expect(session.sendKey).toHaveBeenCalledWith("F5");
     expect(session.sendKey).toHaveBeenCalledWith("ENTER");
+    expect(session.sendKey).not.toHaveBeenCalledWith("F5");
   });
 
   it("moves upward in the menu when the requested restore action is above the current selection", async () => {
@@ -237,7 +245,7 @@ describe("reuTelnetWorkflow", () => {
       createScreen({ selectedItem: "capture.reu" }),
     ]);
 
-    await restoreRemoteReu(session, "F5", "capture.reu", "load-into-reu", "Temp");
+    await restoreRemoteReu(session, "capture.reu", "load-into-reu", "Temp");
 
     expect(session.sendKey).toHaveBeenCalledWith("UP");
   });
@@ -291,7 +299,7 @@ describe("reuTelnetWorkflow", () => {
       createScreen({ selectedItem: "capture.reu" }),
     ]);
 
-    await restoreRemoteReu(session, "F5", "capture.reu", "load-into-reu", "Temp");
+    await restoreRemoteReu(session, "capture.reu", "load-into-reu", "Temp");
 
     expect(session.sendKey).toHaveBeenCalledWith("DOWN");
     expect(session.sendKey).toHaveBeenCalledWith("ENTER");
@@ -306,7 +314,7 @@ describe("reuTelnetWorkflow", () => {
       createScreen({ selectedItem: "capture.reu" }),
     ]);
 
-    await expect(restoreRemoteReu(session, "F5", "capture.reu", "load-into-reu", "Temp")).rejects.toMatchObject<
+    await expect(restoreRemoteReu(session, "capture.reu", "load-into-reu", "Temp")).rejects.toMatchObject<
       Partial<TelnetError>
     >({
       code: "MENU_NOT_FOUND",
@@ -331,7 +339,7 @@ describe("reuTelnetWorkflow", () => {
       }),
     ]);
 
-    await expect(restoreRemoteReu(session, "F5", "capture.reu", "load-into-reu", "Temp")).rejects.toMatchObject<
+    await expect(restoreRemoteReu(session, "capture.reu", "load-into-reu", "Temp")).rejects.toMatchObject<
       Partial<TelnetError>
     >({
       code: "ITEM_NOT_FOUND",
@@ -368,7 +376,7 @@ describe("reuTelnetWorkflow", () => {
       createScreen({ menus: [], selectedItem: null }),
     ]);
 
-    await expect(restoreRemoteReu(session, "F5", "capture.reu", "preload-on-startup", "Temp")).rejects.toMatchObject<
+    await expect(restoreRemoteReu(session, "capture.reu", "preload-on-startup", "Temp")).rejects.toMatchObject<
       Partial<TelnetError>
     >({
       code: "DESYNC",

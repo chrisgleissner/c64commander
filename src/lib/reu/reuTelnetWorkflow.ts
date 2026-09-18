@@ -8,6 +8,8 @@
 
 import { createActionExecutor } from "@/lib/telnet/telnetActionExecutor";
 import {
+  enterDirectoryUnderCursor,
+  findMenuOffering,
   findTopMenu,
   navigateToFileBrowserEntry,
   navigateToMenuItem,
@@ -35,8 +37,7 @@ export const saveRemoteReuFromTemp = async (
   resolvedTarget?: TelnetResolvedActionTarget,
 ) => {
   await findEntry(session, "Temp");
-  await session.sendKey("ENTER");
-  await readScreen(session);
+  await enterDirectoryUnderCursor(session);
 
   const executor = createActionExecutor(session, {
     menuKey,
@@ -49,22 +50,34 @@ export const saveRemoteReuFromTemp = async (
 // actually uploaded to for "preload-on-startup" (never "Temp" - see
 // resolvePersistentReuStorageRoot); "load-into-reu" keeps navigating to
 // "Temp" as before.
+/**
+ * ENTER on the file, not the menu key: the entry's own context menu is where "Load into REU" and
+ * "Preload on Startup" live. Measured against a C64 Ultimate on 1.2RC, where ENTER on a `.reu`
+ * answered with exactly those two labels followed by View Hex, View, Copy to..., Move to..., Rename
+ * and Delete, and the menu key answered with the device's main menu instead.
+ *
+ * The load reports itself with a popup — "Bytes loaded: 1024 ($00000400)" with an Ok button — and
+ * the session sits on it until it is dismissed, which is the second ENTER.
+ */
 export const restoreRemoteReu = async (
   session: TelnetSessionApi,
-  menuKey: TelnetMenuKey,
   fileName: string,
   mode: ReuRestoreMode,
   folderName: string,
 ) => {
   await findEntry(session, folderName);
-  await session.sendKey("ENTER");
-  await readScreen(session);
+  await enterDirectoryUnderCursor(session);
   await findEntry(session, fileName);
-  await session.sendKey(menuKey);
-  const screen = await waitForScreen(session, await readScreen(session), (candidate) =>
-    Boolean(findTopMenu(candidate)),
+  await session.sendKey("ENTER");
+  const screen = await waitForScreen(
+    session,
+    await readScreen(session),
+    (candidate) => Boolean(findMenuOffering(candidate, REU_RESTORE_ACTION_LABELS[mode])),
+    (candidate) => Boolean(findTopMenu(candidate)),
   );
   await navigateToMenuItem(session, screen, REU_RESTORE_ACTION_LABELS[mode]);
+  await session.sendKey("ENTER");
+  await readScreen(session);
   await session.sendKey("ENTER");
   await readScreen(session);
 };

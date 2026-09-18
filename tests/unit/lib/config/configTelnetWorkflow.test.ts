@@ -44,6 +44,12 @@ vi.mock("@/lib/telnet/telnetActionExecutor", () => ({
   },
 }));
 
+/*
+ * The device's tree browser opens an entry's context menu on ENTER and descends into it on RIGHT:
+ * `handle_key` in the firmware's `tree_browser.cc` sends KEY_RETURN to `context(0)` and KEY_RIGHT
+ * to `state->into2()`. These tests asserted ENTER, so they passed for as long as the workflow sent
+ * the key that opened a menu over the listing instead of entering the directory.
+ */
 describe("configTelnetWorkflow", () => {
   it("waits for the file browser selection before opening Temp for saves", async () => {
     const session = createSession([
@@ -56,7 +62,8 @@ describe("configTelnetWorkflow", () => {
     await saveRemoteConfigFromTemp(session, "F5");
 
     expect(session.sendKey).toHaveBeenCalledWith("HOME");
-    expect(session.sendKey).toHaveBeenCalledWith("ENTER");
+    expect(session.sendKey).toHaveBeenCalledWith("RIGHT");
+    expect(session.sendKey).not.toHaveBeenCalledWith("ENTER");
     expect(executeSpy).toHaveBeenCalledWith("saveConfigToFile");
   });
 
@@ -69,8 +76,10 @@ describe("configTelnetWorkflow", () => {
 
     await saveRemoteConfigFromTemp(session, "F5");
 
-    expect(session.sendKey).toHaveBeenCalledWith("HOME");
-    expect(session.sendKey).toHaveBeenCalledWith("ENTER");
+    const keys = session.sendKey.mock.calls.map(([key]: [string]) => key);
+    expect(keys[0]).toBe("HOME");
+    // The descent comes after the walk that put the cursor on Temp, not before it.
+    expect(keys.lastIndexOf("RIGHT")).toBeGreaterThan(keys.lastIndexOf("DOWN"));
     expect(executeSpy).toHaveBeenCalledWith("saveConfigToFile");
   });
 
@@ -124,10 +133,17 @@ describe("configTelnetWorkflow", () => {
       createScreen({ selectedItem: "capture.cfg" }),
     ]);
 
-    await applyRemoteConfigFromTemp(session, "F5", "capture.cfg");
+    await applyRemoteConfigFromTemp(session, "capture.cfg");
 
-    expect(session.sendKey).toHaveBeenCalledWith("F5");
+    /*
+     * Loading reports itself with a popup carrying an Ok button. The session sits on it until it is
+     * dismissed, so the sequence ends with two ENTERs: one on Load Settings, one on the popup.
+     */
+    const keys = session.sendKey.mock.calls.map(([key]: [string]) => key);
+    expect(keys.slice(-2)).toEqual(["ENTER", "ENTER"]);
+    expect(session.sendKey).toHaveBeenCalledWith("RIGHT");
     expect(session.sendKey).toHaveBeenCalledWith("ENTER");
+    expect(session.sendKey).not.toHaveBeenCalledWith("F5");
   });
 
   it("walks nested directories before applying a remote config", async () => {
@@ -158,10 +174,12 @@ describe("configTelnetWorkflow", () => {
       createScreen({ selectedItem: "config.cfg" }),
     ]);
 
-    await applyRemoteConfigFromPath(session, "F5", "/USB1/test-data/snapshots/config.cfg");
+    await applyRemoteConfigFromPath(session, "/USB1/test-data/snapshots/config.cfg");
 
     expect(session.sendKey).toHaveBeenCalledWith("HOME");
-    expect(session.sendKey).toHaveBeenCalledWith("F5");
+    expect(session.sendKey).toHaveBeenCalledWith("RIGHT");
+    expect(session.sendKey).toHaveBeenCalledWith("ENTER");
+    expect(session.sendKey).not.toHaveBeenCalledWith("F5");
   });
 
   it("loads configs stored at the browser root without descending into directories", async () => {
@@ -185,10 +203,11 @@ describe("configTelnetWorkflow", () => {
       createScreen({ selectedItem: "config.cfg" }),
     ]);
 
-    await applyRemoteConfigFromPath(session, "F5", "/config.cfg");
+    await applyRemoteConfigFromPath(session, "/config.cfg");
 
     expect(session.sendKey).toHaveBeenCalledWith("HOME");
-    expect(session.sendKey).toHaveBeenCalledWith("F5");
+    expect(session.sendKey).toHaveBeenCalledWith("ENTER");
+    expect(session.sendKey).not.toHaveBeenCalledWith("RIGHT");
     expect(session.sendKey).not.toHaveBeenCalledWith("DOWN");
   });
 
@@ -219,7 +238,7 @@ describe("configTelnetWorkflow", () => {
       createScreen({ selectedItem: "config.cfg" }),
     ]);
 
-    await applyRemoteConfigFromPath(session, "F5", "/USB1/test-data/snapshots/config.cfg");
+    await applyRemoteConfigFromPath(session, "/USB1/test-data/snapshots/config.cfg");
 
     expect(session.sendKey).toHaveBeenCalledWith("ENTER");
   });
@@ -278,7 +297,7 @@ describe("configTelnetWorkflow", () => {
       createScreen({ selectedItem: "capture.cfg" }),
     ]);
 
-    await applyRemoteConfigFromTemp(session, "F5", "capture.cfg");
+    await applyRemoteConfigFromTemp(session, "capture.cfg");
 
     expect(session.sendKey).toHaveBeenCalledWith("DOWN");
     expect(session.sendKey).toHaveBeenCalledWith("ENTER");
@@ -323,7 +342,7 @@ describe("configTelnetWorkflow", () => {
       createScreen({ selectedItem: "capture.cfg" }),
     ]);
 
-    await applyRemoteConfigFromTemp(session, "F5", "capture.cfg");
+    await applyRemoteConfigFromTemp(session, "capture.cfg");
 
     expect(session.sendKey).toHaveBeenCalledWith("UP");
     expect(session.sendKey).toHaveBeenCalledWith("ENTER");
@@ -347,7 +366,7 @@ describe("configTelnetWorkflow", () => {
       }),
     ]);
 
-    await expect(applyRemoteConfigFromTemp(session, "F5", "capture.cfg")).rejects.toMatchObject<Partial<TelnetError>>({
+    await expect(applyRemoteConfigFromTemp(session, "capture.cfg")).rejects.toMatchObject<Partial<TelnetError>>({
       code: "ITEM_NOT_FOUND",
     });
   });
@@ -363,7 +382,7 @@ describe("configTelnetWorkflow", () => {
       createScreen({ selectedItem: "capture.cfg" }),
     ]);
 
-    await expect(applyRemoteConfigFromTemp(session, "F5", "capture.cfg")).rejects.toMatchObject<Partial<TelnetError>>({
+    await expect(applyRemoteConfigFromTemp(session, "capture.cfg")).rejects.toMatchObject<Partial<TelnetError>>({
       code: "MENU_NOT_FOUND",
     });
   });
@@ -394,7 +413,7 @@ describe("configTelnetWorkflow", () => {
       createScreen({ selectedItem: "capture.cfg" }),
     ]);
 
-    await expect(applyRemoteConfigFromTemp(session, "F5", "capture.cfg")).rejects.toMatchObject<Partial<TelnetError>>({
+    await expect(applyRemoteConfigFromTemp(session, "capture.cfg")).rejects.toMatchObject<Partial<TelnetError>>({
       code: "DESYNC",
     });
   });
@@ -402,7 +421,7 @@ describe("configTelnetWorkflow", () => {
   it("throws when a remote config path does not include a file name", async () => {
     const session = createSession([]);
 
-    await expect(applyRemoteConfigFromPath(session, "F5", "/")).rejects.toMatchObject<Partial<TelnetError>>({
+    await expect(applyRemoteConfigFromPath(session, "/")).rejects.toMatchObject<Partial<TelnetError>>({
       code: "ITEM_NOT_FOUND",
     });
   });
@@ -426,7 +445,7 @@ describe("configTelnetWorkflow", () => {
       createScreen({ selectedItem: "other.cfg" }),
     ]);
 
-    await expect(applyRemoteConfigFromTemp(session, "F5", "capture.cfg")).rejects.toMatchObject<Partial<TelnetError>>({
+    await expect(applyRemoteConfigFromTemp(session, "capture.cfg")).rejects.toMatchObject<Partial<TelnetError>>({
       code: "TIMEOUT",
     });
   });

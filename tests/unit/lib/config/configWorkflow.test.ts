@@ -157,17 +157,42 @@ describe("configWorkflow", () => {
     ]);
   });
 
-  it("applies a remote config without uploading when the file is already on the Ultimate", async () => {
-    const runApplyRemoteConfigByPath = vi.fn().mockResolvedValue(undefined);
+  /*
+   * Applying a settings file means walking the device's own file browser to it over Telnet, one
+   * keypress and one screen read at a time. On hardware that walk did not finish inside seven
+   * minutes for a file two directories deep on a USB stick holding thirty-one entries. Copying the
+   * file to /Temp first makes the walk a handful of keypresses whatever the user's folders hold.
+   */
+  it("copies a config that is on the Ultimate to /Temp and applies it from there", async () => {
+    const readRemoteFile = vi.fn().mockResolvedValue(new Uint8Array([4, 5, 6]));
+    const writeRemoteFile = vi.fn().mockResolvedValue(undefined);
+    const runApplyRemoteConfig = vi.fn().mockResolvedValue(undefined);
     const onProgress = vi.fn();
     const workflow = createConfigWorkflow({
-      runApplyRemoteConfigByPath,
+      readRemoteFile,
+      writeRemoteFile,
+      runApplyRemoteConfig,
     });
 
     await workflow.applyRemoteSnapshot("/USB1/test-data/snapshots/config.cfg", onProgress);
 
-    expect(runApplyRemoteConfigByPath).toHaveBeenCalledWith("/USB1/test-data/snapshots/config.cfg");
-    expect(onProgress.mock.calls.map(([state]) => state.step)).toEqual(["restoring", "complete"]);
+    expect(readRemoteFile).toHaveBeenCalledWith("/USB1/test-data/snapshots/config.cfg");
+    expect(writeRemoteFile).toHaveBeenCalledWith("/Temp/config.cfg", new Uint8Array([4, 5, 6]));
+    expect(runApplyRemoteConfig).toHaveBeenCalledWith("config.cfg");
+    expect(onProgress.mock.calls.map(([state]) => state.step)).toEqual(["uploading", "restoring", "complete"]);
+  });
+
+  it("applies a config that is already in /Temp where it lies", async () => {
+    const readRemoteFile = vi.fn();
+    const writeRemoteFile = vi.fn();
+    const runApplyRemoteConfig = vi.fn().mockResolvedValue(undefined);
+    const workflow = createConfigWorkflow({ readRemoteFile, writeRemoteFile, runApplyRemoteConfig });
+
+    await workflow.applyRemoteSnapshot("/Temp/config.cfg");
+
+    expect(readRemoteFile).not.toHaveBeenCalled();
+    expect(writeRemoteFile).not.toHaveBeenCalled();
+    expect(runApplyRemoteConfig).toHaveBeenCalledWith("config.cfg");
   });
 
   it("fails cleanly when save never produces a new /Temp config file", async () => {
@@ -222,7 +247,9 @@ describe("configWorkflow", () => {
 
   it("fails cleanly when applyRemoteSnapshot throws during apply", async () => {
     const workflow = createConfigWorkflow({
-      runApplyRemoteConfigByPath: vi.fn().mockRejectedValue(new Error("apply error")),
+      readRemoteFile: vi.fn().mockResolvedValue(new Uint8Array([1])),
+      writeRemoteFile: vi.fn().mockResolvedValue(undefined),
+      runApplyRemoteConfig: vi.fn().mockRejectedValue(new Error("apply error")),
     });
 
     await expect(workflow.applyRemoteSnapshot("/USB1/snapshots/config.cfg")).rejects.toThrow("apply error");

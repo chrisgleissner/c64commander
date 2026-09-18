@@ -126,4 +126,25 @@ describe("discoverConfigCandidates", () => {
 
     expect(candidates).toEqual([]);
   });
+
+  /*
+   * A folder that cannot be listed means this file has no settings file beside it, not that adding
+   * the file failed. An archive entry's parent, a lapsed folder permission and a device that
+   * dropped off all read the same way.
+   */
+  it("reports no candidates when the folder cannot be listed", async () => {
+    const listEntries = vi.fn(async () => {
+      throw new Error("permission denied");
+    });
+
+    await expect(
+      discoverConfigCandidates({
+        sourceType: "local",
+        sourceId: "phone",
+        sourceRootPath: "/",
+        targetFile: { name: "Game.prg", path: "/Games/Game.prg" },
+        listEntries,
+      }),
+    ).resolves.toEqual([]);
+  });
 });

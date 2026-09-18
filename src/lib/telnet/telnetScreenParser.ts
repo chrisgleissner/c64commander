@@ -34,8 +34,16 @@ const LINE_DRAW_CHARS = new Set([
   "n", // ┼ crossing
 ]);
 
-const MENU_LABEL_EDGE_NOISE = /^[lkmjqx]+\s*|\s*[lkmjqx]+$/gi;
-const MENU_LABEL_INTERNAL_NOISE = /q{4,}/gi;
+/*
+ * The box a menu is drawn in is made of the alternate charset's line glyphs, which arrive as the
+ * ASCII letters l k m j q x, and they have to come off the ends of a label. Case matters: the
+ * glyphs are lowercase, and matching case-insensitively ate the first letter of every menu item
+ * that began with one of them. "Load Settings" came back as "oad Settings" and "Move to..." as
+ * "ove to...", so the config workflow could never find Load Settings in the menu it had just
+ * opened, and the REU workflow could never find its own actions either.
+ */
+const MENU_LABEL_EDGE_NOISE = /^[lkmjqx]+\s*|\s*[lkmjqx]+$/g;
+const MENU_LABEL_INTERNAL_NOISE = /q{4,}/g;
 
 const replaceControlCharacters = (value: string) =>
   Array.from(value, (char) => (char.charCodeAt(0) < 32 ? " " : char)).join("");
@@ -60,6 +68,7 @@ interface ParserState {
   cursorRow: number;
   cursorCol: number;
   reverseVideo: boolean;
+  boldText: boolean;
   currentColor: number;
   altCharset: boolean;
   pos: number;
@@ -67,7 +76,7 @@ interface ParserState {
 
 /** Create an empty screen cell */
 function emptyCell(): ScreenCell {
-  return { char: " ", reverse: false, color: 7 };
+  return { char: " ", reverse: false, color: 7, bold: false };
 }
 
 /** Create a fresh 60×24 cell grid */
@@ -91,6 +100,7 @@ export function parseTelnetScreen(data: Uint8Array): TelnetScreen {
     cursorRow: 0,
     cursorCol: 0,
     reverseVideo: false,
+    boldText: false,
     currentColor: 7,
     altCharset: false,
     pos: 0,
@@ -272,7 +282,13 @@ function applySgr(param: number, state: ParserState): void {
   if (param === 0) {
     // Reset
     state.reverseVideo = false;
+    state.boldText = false;
     state.currentColor = 7;
+  } else if (param === 1) {
+    state.boldText = true;
+  } else if (param === 2 || param === 22) {
+    // Faint and "normal intensity" both end bold; the device paints unselected rows faint.
+    state.boldText = false;
   } else if (param === 7) {
     state.reverseVideo = true;
   } else if (param === 27) {
@@ -352,6 +368,7 @@ function putChar(state: ParserState, ch: string): void {
     char: displayChar,
     reverse: state.reverseVideo,
     color: state.currentColor,
+    bold: state.boldText,
   };
 
   state.cursorCol++;
@@ -566,7 +583,38 @@ function extractMenuItems(cells: ScreenCell[][], bounds: MenuBounds, childBounds
   return items;
 }
 
-/** Find the currently selected (reverse-video) item text across all menus */
+/**
+ * The name of the entry under the cursor, or the selected menu item.
+ *
+ * A file browser row is a name column followed by a description and a status, padded apart, so the
+ * whole row reads "USB2    Verbatim STORE N GO    Ready" and the entry is called "USB2". The name
+ * is what a caller asks for, so what is returned is the first field — the text before the first run
+ * of two or more spaces. A menu item is a single field and comes back unchanged.
+ */
+const entryNameFromRow = (cells: ScreenCell[]) => {
+  const raw = replaceControlCharacters(cells.map((cell) => cell.char).join(""));
+  const glyphs = [...LINE_DRAW_CHARS].join("");
+  const [firstField] = raw
+    .replace(new RegExp(`^[${glyphs}\\s]+`), "")
+    .replace(new RegExp(`[${glyphs}\\s]+$`), "")
+    .split(/\s{2,}/);
+  const label = (firstField ?? "").replace(/\s+/g, " ").trim();
+  // A box border is drawn bold as well, and it is made only of the alternate charset's line glyphs.
+  return [...label].some((char) => !LINE_DRAW_CHARS.has(char)) ? label : "";
+};
+
+/**
+ * Find the entry under the cursor.
+ *
+ * Two ways a row can be marked, because two firmwares mark it differently. Reverse video is the one
+ * this was written for. The C64 Ultimate's tree browser instead repaints the row under the cursor
+ * bold white and the row it left dim red — no reverse video anywhere on the screen — which made
+ * every walk through the file browser run to its step limit without ever matching a name.
+ *
+ * The title line is bold too, so the bold pass starts below it. The green "Ready" and "No media"
+ * status words are bold on every row, so what counts is the row's own first character cell being
+ * bold, which is only true of the row under the cursor.
+ */
 function findSelectedItem(cells: ScreenCell[][], menus: ParsedMenu[]): string | null {
   for (const menu of menus) {
     const selected = menu.items.find((item) => item.selected);
@@ -575,14 +623,18 @@ function findSelectedItem(cells: ScreenCell[][], menus: ParsedMenu[]): string | 
 
   for (let row = 0; row < TELNET_SCREEN_HEIGHT - 1; row += 1) {
     const line = cells[row];
-    const hasReverse = line.some((cell) => cell.reverse);
-    if (!hasReverse) continue;
-    const label = replaceControlCharacters(line.map((cell) => cell.char).join(""))
-      .replace(/\s+/g, " ")
-      .trim();
-    if (label.length > 0) {
-      return label;
-    }
+    if (!line.some((cell) => cell.reverse)) continue;
+    const label = entryNameFromRow(line);
+    if (label.length > 0) return label;
+  }
+
+  for (let row = 1; row < TELNET_SCREEN_HEIGHT - 1; row += 1) {
+    const line = cells[row];
+    // Past the box's own vertical bar, which is drawn in the frame's colour rather than the row's.
+    const firstText = line.find((cell) => cell.char.trim().length > 0 && !LINE_DRAW_CHARS.has(cell.char));
+    if (!firstText?.bold) continue;
+    const label = entryNameFromRow(line);
+    if (label.length > 0) return label;
   }
   return null;
 }

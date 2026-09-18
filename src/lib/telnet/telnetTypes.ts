@@ -39,6 +39,12 @@ export interface ScreenCell {
   char: string;
   reverse: boolean;
   color: number;
+  /**
+   * Bold (SGR 1), which is how the device's file browser marks the row under the cursor: the
+   * selected row is repainted bold white and the row it left is repainted dim red. Optional so the
+   * many fixtures that build cells by hand keep working; absent reads as not bold.
+   */
+  bold?: boolean;
 }
 
 /** Screen types the parser can classify */
