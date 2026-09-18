@@ -328,4 +328,124 @@ describe("TourDriver", () => {
     });
     expect(covered, "at least one scrim rectangle must have a size").toBe(true);
   });
+
+  /*
+   * The caption steps back once it has been left alone on a screen it crowds, so the app it is
+   * describing can be seen. What must not happen is the title, the progress line or the buttons
+   * going with it — see lib/tour/captionReveal for the rule and the numbers behind it.
+   */
+  describe("when the caption gives the page back", () => {
+    /*
+     * jsdom has no ResizeObserver, and the panel's height is only ever read through one, so with no
+     * stand-in the measured height stays zero and the caption is never in the way of anything.
+     */
+    const observers: Array<() => void> = [];
+    const installResizeObserver = () => {
+      observers.length = 0;
+      (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+        private readonly callback: () => void;
+        constructor(callback: () => void) {
+          this.callback = callback;
+        }
+        observe() {
+          observers.push(this.callback);
+        }
+        disconnect() {}
+        unobserve() {}
+      };
+    };
+
+    const crowdTheCaption = () => {
+      const caption = screen.getByTestId("tour-caption");
+      caption.getBoundingClientRect = () =>
+        ({
+          height: 400,
+          width: 320,
+          top: 0,
+          left: 0,
+          right: 320,
+          bottom: 400,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        }) as DOMRect;
+      observers.forEach((callback) => callback());
+      return caption;
+    };
+
+    it("keeps the body while the caption is not in the way", async () => {
+      installResizeObserver();
+      renderDriver();
+      await startTour();
+      const caption = screen.getByTestId("tour-caption");
+      expect(caption.getAttribute("data-body-hidden")).toBeNull();
+      expect(caption.textContent).toContain(TOUR_STEPS[0].body);
+    });
+
+    it("drops the body, and nothing else, once a crowding caption has been left alone", async () => {
+      installResizeObserver();
+      vi.useFakeTimers();
+      try {
+        renderDriver();
+        await act(async () => {
+          requestTourStart();
+          await Promise.resolve();
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(50);
+        });
+        await act(async () => {
+          crowdTheCaption();
+          await vi.advanceTimersByTimeAsync(12_000);
+        });
+
+        const caption = screen.getByTestId("tour-caption");
+        expect(caption.getAttribute("data-body-hidden")).toBe("true");
+        expect(caption.textContent).not.toContain(TOUR_STEPS[0].body);
+        expect(screen.getByTestId("tour-progress")).toBeTruthy();
+        expect(screen.getByTestId("tour-next")).toBeTruthy();
+        expect(caption.textContent).toContain(TOUR_STEPS[0].title);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    /*
+     * Anything the user does puts the body straight back. On a keypad handset moving the highlight
+     * is the whole of the interaction, which is why a key counts as well as a press.
+     */
+    it("puts the body back as soon as the user does anything", async () => {
+      installResizeObserver();
+      vi.useFakeTimers();
+      try {
+        renderDriver();
+        await act(async () => {
+          requestTourStart();
+          await Promise.resolve();
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(50);
+        });
+        await act(async () => {
+          crowdTheCaption();
+          await vi.advanceTimersByTimeAsync(12_000);
+        });
+        expect(screen.getByTestId("tour-caption").getAttribute("data-body-hidden")).toBe("true");
+
+        await act(async () => {
+          // The panel is measured again while the body is hidden; the collapsed height must not be
+          // the one that decides, or it would put the body back and take it away for ever.
+          crowdTheCaption();
+          window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+          await vi.advanceTimersByTimeAsync(600);
+        });
+
+        const caption = screen.getByTestId("tour-caption");
+        expect(caption.getAttribute("data-body-hidden")).toBeNull();
+        expect(caption.textContent).toContain(TOUR_STEPS[0].body);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });

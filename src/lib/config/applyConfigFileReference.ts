@@ -74,9 +74,9 @@ export const isConfigReferenceUnavailableError = (error: unknown): error is Conf
 export const CONFIG_APPLICATION_DEADLINE_MS = 90_000;
 
 export class ConfigApplicationStalledError extends Error {
-  constructor(fileName: string | null) {
+  constructor(fileName: string) {
     super(
-      `Applying ${fileName ?? "the playback config"} did not finish in ` +
+      `Applying ${fileName} did not finish in ` +
         `${Math.round(CONFIG_APPLICATION_DEADLINE_MS / 1000)}s. The device stopped answering its menu.`,
     );
     this.name = "ConfigApplicationStalledError";
@@ -90,7 +90,7 @@ export class ConfigApplicationStalledError extends Error {
  * being torn down here: what matters is that the caller stops waiting, so the page it disabled
  * becomes usable again and says what went wrong.
  */
-const withDeadline = async <T>(work: Promise<T>, fileName: string | null) => {
+const withDeadline = async <T>(work: Promise<T>, fileName: string) => {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([

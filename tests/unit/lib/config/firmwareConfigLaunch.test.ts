@@ -98,3 +98,18 @@ describe("deciding how a program has to reach the machine", () => {
     ).toBe(false);
   });
 });
+
+/* A path with no directory in it still has a file name, which is the whole path. */
+describe("reading the file name out of an item's path", () => {
+  it("handles a bare file name", () => {
+    expect(
+      firmwareOverridesItemConfig({
+        category: "prg",
+        path: "Game.prg",
+        configRef: null,
+        configOverrides: null,
+        configCandidates: [candidate("Game.cfg")],
+      }),
+    ).toBe(true);
+  });
+});

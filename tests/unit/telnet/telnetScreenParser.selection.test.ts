@@ -88,4 +88,12 @@ describe("finding the entry under the cursor", () => {
     expect(labels).toContain("Load Settings");
     expect(labels).toContain("Move to...");
   });
+
+  /* Every row sits inside the box, so the frame's vertical bar closes it as well as opens it. */
+  it("strips the box frame from both ends of the row it reads", () => {
+    const framedRow =
+      "\x1b[4;1H\x1b[0;37;2m\x1b(0x\x1b(B\x1b[4;2H\x1b[0;37;1m\x1b[27mUSB0    Verbatim STORE N GO                       Ready    " +
+      "\x1b[0;37;2m\x1b(0x\x1b(B";
+    expect(parseTelnetScreen(encode(framedRow)).selectedItem).toBe("USB0");
+  });
 });

@@ -594,11 +594,11 @@ function extractMenuItems(cells: ScreenCell[][], bounds: MenuBounds, childBounds
 const entryNameFromRow = (cells: ScreenCell[]) => {
   const raw = replaceControlCharacters(cells.map((cell) => cell.char).join(""));
   const glyphs = [...LINE_DRAW_CHARS].join("");
-  const [firstField] = raw
+  const [firstField = ""] = raw
     .replace(new RegExp(`^[${glyphs}\\s]+`), "")
     .replace(new RegExp(`[${glyphs}\\s]+$`), "")
     .split(/\s{2,}/);
-  const label = (firstField ?? "").replace(/\s+/g, " ").trim();
+  const label = firstField.replace(/\s+/g, " ").trim();
   // A box border is drawn bold as well, and it is made only of the alternate charset's line glyphs.
   return [...label].some((char) => !LINE_DRAW_CHARS.has(char)) ? label : "";
 };

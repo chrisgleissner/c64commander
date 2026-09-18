@@ -36,7 +36,8 @@ export type FirmwareConfigLaunchItem = {
   configCandidates?: ConfigCandidate[] | null;
 };
 
-const fileNameOf = (path: string) => path.split("/").pop() ?? path;
+/** `split` on a non-empty separator always yields at least one part, so the last one is the name. */
+const fileNameOf = (path: string) => path.split("/").at(-1) as string;
 
 export const firmwareOverridesItemConfig = (item: FirmwareConfigLaunchItem) =>
   firmwareOverridesAppConfig({
