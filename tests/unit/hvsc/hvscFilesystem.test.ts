@@ -537,6 +537,40 @@ describe("readDataFileText", () => {
     expect(await readDataFileText("hvsc/index/missing.json")).toBeNull();
   });
 
+  /*
+   * The file server answers a missing file with a 404, and a 404 is a failed network request. The
+   * browse-index snapshot is absent on every device that has not persisted one, so Play and Disks
+   * each logged "Failed to load resource: the server responded with a status of 404" on every visit
+   * — an error in the log of an app with nothing wrong with it. The error below is the one an
+   * Android Pixel 4 on API 36 really raises.
+   */
+  it("does not fetch a file `stat` says is not there", async () => {
+    setNative(true);
+    const missing = Object.assign(new Error("'stat' failed because file at '/data/.../absent.json' does not exist."), {
+      code: "OS-PLUG-FILE-0008",
+    });
+    vi.mocked(Filesystem.stat).mockRejectedValueOnce(missing);
+    const fetchMock = vi.fn(async () => ({ ok: false, status: 404, text: async () => "" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await readDataFileText("hvsc/index/absent.json")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  /*
+   * `stat` failing for any other reason must not be read as absence, or one platform quirk would
+   * turn every read on that platform into a silent "there is nothing here".
+   */
+  it("still fetches when `stat` fails for a reason other than the file being absent", async () => {
+    setNative(true);
+    vi.mocked(Filesystem.stat).mockRejectedValueOnce(new Error("permission denied"));
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, text: async () => "read anyway" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await readDataFileText("hvsc/index/odd.json")).toBe("read anyway");
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
   it("falls back to the bridge when the file server fails for any other reason", async () => {
     await writeStilFile("fallback.json", "from the bridge");
     setNative(true);
