@@ -37,6 +37,7 @@ import type { SonglengthResolutionOptions } from "@/pages/playFiles/songlengthsR
 import { isSonglengthsFileName, mayHoldSonglengthsFile } from "@/lib/sid/songlengthsDiscovery";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import { discoverConfigCandidates } from "@/lib/config/configDiscovery";
+import { createConfigEntryPrefetch, directoryListingKey } from "@/pages/playFiles/handlers/configEntryPrefetch";
 import { resolvePlaybackConfig } from "@/lib/config/configResolution";
 import { parseModifiedAt } from "@/pages/playFiles/playFilesUtils";
 import { commitPlaylistSnapshot, markPlaylistRepositoryPhase } from "@/pages/playFiles/playlistRepositorySync";
@@ -352,6 +353,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       }));
     };
 
+    /** Full directory listings, keyed by {@link directoryListingKey}. */
     const listingCache = new Map<string, SourceEntry[]>();
 
     const collectRecursive = async (rootPath: string, onDiscoveredFiles?: (files: SourceEntry[]) => Promise<void>) => {
@@ -377,7 +379,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         visited.add(path);
         const entries = await source.listEntries(path);
         throwIfAborted();
-        listingCache.set(path, entries);
+        listingCache.set(directoryListingKey(path), entries);
         entries.forEach((entry) => {
           if (entry.type === "dir") {
             queue.push(entry.path);
@@ -562,7 +564,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
       };
       const getDirectoryEntries = (parentPath: string) => {
         const selectedEntries = selectedFilesByParent.get(parentPath) ?? [];
-        const cachedEntries = listingCache.get(parentPath) ?? [];
+        const cachedEntries = listingCache.get(directoryListingKey(parentPath)) ?? [];
         const merged = new Map<string, SourceEntry>();
         [...selectedEntries, ...cachedEntries].forEach((entry) => {
           if (entry.type === "file") {
@@ -571,37 +573,13 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         });
         return [...merged.values()];
       };
-      // HARD12-015: build the per-parent prefetched entry map once per parent
-      // (on first need) and cache it. Previously the map was rebuilt wholesale
-      // inside every getPrefetchedConfigEntriesByPath call (one call per file
-      // in the per-file loop), making the cumulative merge work quadratic in
-      // the per-folder file count for single-folder batch adds. The merged
-      // content is unchanged; only the rebuild cadence drops from O(calls).
-      const prefetchedConfigEntriesByPath = new Map<string, SourceEntry[]>();
-      const getPrefetchedConfigEntriesByPath = () => {
-        selectedFilesByParent.forEach((_, path) => {
-          const normalizedPath = normalizeSourcePath(path);
-          if (!prefetchedConfigEntriesByPath.has(normalizedPath)) {
-            prefetchedConfigEntriesByPath.set(normalizedPath, getDirectoryEntries(path));
-          }
-        });
-        // Also include parents that came from listingCache alone (no selected
-        // files), so discoverConfigCandidates can resolve sibling entries
-        // without round-tripping through source.listEntries again.
-        listingCache.forEach((entries, path) => {
-          const normalizedPath = normalizeSourcePath(path);
-          if (!prefetchedConfigEntriesByPath.has(normalizedPath)) {
-            const merged = new Map<string, SourceEntry>();
-            entries.forEach((entry) => {
-              if (entry.type === "file") merged.set(normalizeSourcePath(entry.path), entry);
-            });
-            prefetchedConfigEntriesByPath.set(normalizedPath, [...merged.values()]);
-          }
-        });
-        return prefetchedConfigEntriesByPath;
-      };
+      const getPrefetchedConfigEntriesByPath = createConfigEntryPrefetch({
+        listingCache,
+        selectedFilesByParent,
+        directoryEntriesFor: getDirectoryEntries,
+      });
       const resolveSelectionEntry = async (filePath: string) => {
-        const parent = getParentPath(filePath);
+        const parent = directoryListingKey(getParentPath(filePath));
         if (!listingCache.has(parent)) {
           try {
             listingCache.set(parent, await source.listEntries(parent));
@@ -813,7 +791,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
             const entries = await source.listEntries(selection.path);
             throwIfAborted();
             const files = entries.filter((entry) => entry.type === "file");
-            listingCache.set(selection.path, entries);
+            listingCache.set(directoryListingKey(selection.path), entries);
             files.forEach(registerSelectedFile);
             selectedFiles.push(...files);
             updateProgress(files.length);
@@ -913,7 +891,7 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
           // service can stall the whole control plane).
           const directorySelections = selections.filter((selection) => selection.type === "dir");
           for (const selection of directorySelections) {
-            const directChildren = listingCache.get(selection.path) ?? [];
+            const directChildren = listingCache.get(directoryListingKey(selection.path)) ?? [];
             directChildren
               .filter((entry) => entry.type === "file" && isSonglengthsFileName(entry.name))
               .forEach((entry) => {
