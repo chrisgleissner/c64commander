@@ -10,11 +10,7 @@ import { getC64API, resolveDeviceHostFromStorage } from "@/lib/c64api";
 import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import type { ConfigValueOverride } from "@/lib/config/playbackConfig";
-import {
-  applyRemoteConfigFromPath,
-  applyRemoteConfigFromTemp,
-  saveRemoteConfigFromTemp,
-} from "@/lib/config/configTelnetWorkflow";
+import { applyRemoteConfigFromTemp, saveRemoteConfigFromTemp } from "@/lib/config/configTelnetWorkflow";
 import { createConfigWorkflow } from "@/lib/config/configWorkflow";
 import { getStoredFtpPort } from "@/lib/ftp/ftpConfig";
 import { listFtpDirectory, readFtpFile, writeFtpFile } from "@/lib/ftp/ftpClient";
@@ -59,6 +55,54 @@ export class ConfigReferenceUnavailableError extends Error {
 export const isConfigReferenceUnavailableError = (error: unknown): error is ConfigReferenceUnavailableError =>
   error instanceof ConfigReferenceUnavailableError ||
   (error instanceof Error && Boolean((error as Error & { c64uConfigUnavailable?: boolean }).c64uConfigUnavailable));
+
+/**
+ * How long the whole application of a settings file may take before it is treated as stuck.
+ *
+ * There is no REST endpoint that loads a `.cfg`, so the app drives the device's own menu over
+ * Telnet: connect, walk the file browser to the file, load it. Every step has its own read timeout
+ * and the browser walk is bounded in steps, but the sequence as a whole had no deadline, and a
+ * device whose menu stops answering part-way through leaves it waiting forever. The Play page is
+ * disabled while a launch is in flight, so on this rig that showed up as every control on the page
+ * dead, with nothing on screen saying why, until the app was restarted. Rebooting the machine from
+ * elsewhere while a settings file is being applied is enough to produce it.
+ *
+ * A successful application takes about 18 seconds against a C64 Ultimate on 1.2RC over this rig's
+ * Wi-Fi, measured from "Applying playback config base file" to "Config workflow complete" in the
+ * app's own log, so this is generous enough not to cut a slow one short.
+ */
+export const CONFIG_APPLICATION_DEADLINE_MS = 90_000;
+
+export class ConfigApplicationStalledError extends Error {
+  constructor(fileName: string) {
+    super(
+      `Applying ${fileName} did not finish in ` +
+        `${Math.round(CONFIG_APPLICATION_DEADLINE_MS / 1000)}s. The device stopped answering its menu.`,
+    );
+    this.name = "ConfigApplicationStalledError";
+  }
+}
+
+/**
+ * Whichever settles first, the work or the deadline.
+ *
+ * The Telnet session behind a timed-out application is left to its own idle timeout rather than
+ * being torn down here: what matters is that the caller stops waiting, so the page it disabled
+ * becomes usable again and says what went wrong.
+ */
+const withDeadline = async <T>(work: Promise<T>, fileName: string) => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new ConfigApplicationStalledError(fileName)), CONFIG_APPLICATION_DEADLINE_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
 
 const buildOverridePayload = (overrides: ConfigValueOverride[]) => {
   return overrides.reduce<Record<string, Record<string, string | number>>>((payload, override) => {
@@ -217,14 +261,7 @@ export const applyConfigFileReference = async ({
       await runTelnetWorkflow("config-reference-save-remote", (session) => saveRemoteConfigFromTemp(session, menuKey));
     },
     runApplyRemoteConfig: async (fileName) => {
-      await runTelnetWorkflow("config-reference-apply-temp", (session) =>
-        applyRemoteConfigFromTemp(session, menuKey, fileName),
-      );
-    },
-    runApplyRemoteConfigByPath: async (path) => {
-      await runTelnetWorkflow("config-reference-apply-path", (session) =>
-        applyRemoteConfigFromPath(session, menuKey, path),
-      );
+      await runTelnetWorkflow("config-reference-apply-temp", (session) => applyRemoteConfigFromTemp(session, fileName));
     },
   });
 
@@ -236,7 +273,7 @@ export const applyConfigFileReference = async ({
           path: configRef.path,
           fileName: configRef.fileName,
         });
-        await workflow.applyRemoteSnapshot(configRef.path);
+        await withDeadline(workflow.applyRemoteSnapshot(configRef.path), configRef.fileName);
       } else {
         addLog("info", "Applying playback config base file", {
           transport: "local",
@@ -245,7 +282,7 @@ export const applyConfigFileReference = async ({
           sourceId: configRef.sourceId ?? null,
         });
         const bytes = await resolveLocalConfigBytes(configRef, localEntriesBySourceId, localSourceTreeUris);
-        await workflow.applyLocalSnapshot(configRef.fileName, bytes);
+        await withDeadline(workflow.applyLocalSnapshot(configRef.fileName, bytes), configRef.fileName);
       }
     }
 

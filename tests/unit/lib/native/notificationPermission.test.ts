@@ -79,6 +79,17 @@ describe("the notification permission the foreground service needs", () => {
     expect(mocks.requestPermissions).not.toHaveBeenCalled();
   });
 
+  /*
+   * This is the state Android really reports after ONE refusal; "denied" only arrives after the
+   * second. While this counted as askable, the same system dialog — with no explanation of its own —
+   * appeared again at the start of the next tune, which is what a user on the Play page saw.
+   */
+  it("does not prompt again while Android is asking for a rationale", async () => {
+    mocks.checkPermissions.mockResolvedValue({ notifications: "prompt-with-rationale" });
+    await expect(ensureNotificationPermission()).resolves.toBe("prompt-with-rationale");
+    expect(mocks.requestPermissions).not.toHaveBeenCalled();
+  });
+
   it("does not prompt off native Android", async () => {
     mocks.getPlatform.mockReturnValue("ios");
     await expect(ensureNotificationPermission()).resolves.toBe("granted");

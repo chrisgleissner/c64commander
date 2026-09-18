@@ -128,6 +128,14 @@ export function QuickActionCard({
         <span
           className={cn(
             "text-muted-foreground max-w-full",
+            // Deliberately NOT clamped. A grid row is as tall as its tallest tile, so a long caption
+            // here sets the height of every tile beside it — one 41-character sentence under a
+            // greyed tile took Home's top row from 91 px to 204 px on a cartridge. Clipping it to a
+            // fixed number of lines would hide that rather than fix it, and would put this span in
+            // breach of `actionTileLabels.spec.ts`, which measures every tile span at every profile
+            // and width and fails on any text the tile does not draw whole. Callers pass a caption
+            // short enough to read in a ~68 px tile, and that spec is what holds them to it.
+            //
             // A word wider than the tile still has to split, but at a syllable with a hyphen, not as "connecte d".
             compact ? "text-xs leading-tight text-center whitespace-normal break-words hyphens-auto" : "text-xs",
           )}

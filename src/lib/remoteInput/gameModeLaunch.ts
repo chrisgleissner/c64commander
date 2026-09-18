@@ -8,6 +8,8 @@
 
 import { featureFlagManager } from "@/lib/config/featureFlags";
 import { loadMirrorC64Audio, loadMirrorC64Video } from "@/lib/config/appSettings";
+import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
+import { identifiedDeviceStreams } from "@/lib/deviceCapabilities";
 import { avMirrorSession, type AvMirrorSession } from "@/lib/streams/avMirrorSession";
 import type { PlayFileCategory } from "@/lib/playback/fileTypes";
 import { variant } from "@/generated/variant";
@@ -36,11 +38,19 @@ const flagEnabled = (id: "live_view_enabled" | "audio_mirror_enabled" | "video_m
  * Both stream calls are idempotent, so a feed already running is left as it is
  * and is reported as not started by this launch.
  */
-export const startGameMode = async (opts?: { session?: AvMirrorSession }): Promise<GameModeStartResult> => {
+export const startGameMode = async (opts?: {
+  session?: AvMirrorSession;
+  /** Test seam: the capability answer, so a case does not need a connection snapshot. */
+  deviceStreams?: boolean;
+}): Promise<GameModeStartResult> => {
   const session = opts?.session ?? avMirrorSession;
   const liveView = flagEnabled("live_view_enabled");
-  const wantsVideo = liveView && flagEnabled("video_mirror_enabled") && loadMirrorC64Video();
-  const wantsAudio = liveView && flagEnabled("audio_mirror_enabled") && loadMirrorC64Audio();
+  // A cartridge serves no /v1/streams, so starting the feeds there answered 404 twice, put a red
+  // "Could not tell the device to start streaming audio." under the toggles, and counted two device
+  // problems against a device with nothing wrong with it. Asked once, before either feed.
+  const deviceStreams = opts?.deviceStreams ?? identifiedDeviceStreams(getConnectionSnapshot().deviceInfo);
+  const wantsVideo = deviceStreams && liveView && flagEnabled("video_mirror_enabled") && loadMirrorC64Video();
+  const wantsAudio = deviceStreams && liveView && flagEnabled("audio_mirror_enabled") && loadMirrorC64Audio();
 
   const startedVideo = wantsVideo && !session.videoLive;
   const startedAudio = wantsAudio && !session.audioLive;

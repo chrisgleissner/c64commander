@@ -850,7 +850,6 @@ describe("HomePage RAM actions", () => {
 
     expect(restoreRemoteReu).toHaveBeenCalledWith(
       fakeSession,
-      expect.any(String),
       "c64commander-reu-preload.reu",
       "preload-on-startup",
       "SD2",

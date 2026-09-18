@@ -12,6 +12,7 @@ import { buildPlayPlan, executePlayPlan } from "@/lib/playback/playbackRouter";
 import { loadFirstDiskPrgViaDma } from "@/lib/playback/diskFirstPrg";
 import { mountDiskToDrive } from "@/lib/disks/diskMount";
 import { enqueueKeyboardBufferInjection } from "@/lib/remoteInput/kernalFallbackInjector";
+import { readFtpFile } from "@/lib/ftp/ftpClient";
 
 vi.mock("@/lib/logging", () => ({
   addErrorLog: vi.fn(),
@@ -271,5 +272,66 @@ describe("executePlayPlan disk autoplay drive configuration", () => {
     );
 
     vi.useRealTimers();
+  });
+});
+
+/*
+ * `runners:run_prg` makes the firmware load the program's own `.cfg` (or `.usr`) AFTER the app has
+ * applied its settings, so on that endpoint the firmware has the last word — measured on a C64
+ * Ultimate running firmware 1.2RC. Uploading the bytes runs the program from a temporary file with
+ * no settings file beside it, which is how an edited or declined choice survives the launch.
+ */
+describe("launching a program whose settings the firmware would reload", () => {
+  const createPrgApi = () =>
+    ({
+      runPrg: vi.fn(async () => ({ errors: [] })),
+      loadPrg: vi.fn(async () => ({ errors: [] })),
+      runPrgUpload: vi.fn(async () => ({ errors: [] })),
+      loadPrgUpload: vi.fn(async () => ({ errors: [] })),
+    }) as unknown as C64API;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(readFtpFile).mockResolvedValue({ data: btoa("\x01\x08"), sizeBytes: 2 } as never);
+  });
+
+  it("names the path when the app is applying what the firmware would apply anyway", async () => {
+    const api = createPrgApi();
+    const plan = buildPlayPlan({ source: "ultimate", path: "/Usb0/Games/Game.prg" }, false);
+    await executePlayPlan(api, plan);
+
+    expect(vi.mocked(api.runPrg)).toHaveBeenCalledWith("/Usb0/Games/Game.prg");
+    expect(vi.mocked(api.runPrgUpload)).not.toHaveBeenCalled();
+    expect(vi.mocked(readFtpFile)).not.toHaveBeenCalled();
+  });
+
+  it("uploads the bytes when the firmware would otherwise reload the settings file", async () => {
+    const api = createPrgApi();
+    const plan = buildPlayPlan({ source: "ultimate", path: "/Usb0/Games/Game.prg" }, true);
+    await executePlayPlan(api, plan);
+
+    expect(vi.mocked(api.runPrg)).not.toHaveBeenCalled();
+    expect(vi.mocked(api.runPrgUpload)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.runPrgUpload).mock.calls[0][1]).toEqual({ filename: "/Usb0/Games/Game.prg" });
+  });
+
+  it("uses the same upload for a load that does not run", async () => {
+    const api = createPrgApi();
+    const plan = buildPlayPlan({ source: "ultimate", path: "/Usb0/Games/Game.prg" }, true);
+    await executePlayPlan(api, plan, { loadMode: "load" });
+
+    expect(vi.mocked(api.loadPrgUpload)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.loadPrg)).not.toHaveBeenCalled();
+  });
+
+  /* A device that will not hand the bytes back still has to start the program. */
+  it("falls back to the path launch when the file cannot be read back", async () => {
+    const api = createPrgApi();
+    vi.mocked(readFtpFile).mockRejectedValue(new Error("530 Not logged in"));
+    const plan = buildPlayPlan({ source: "ultimate", path: "/Usb0/Games/Game.prg" }, true);
+    await executePlayPlan(api, plan);
+
+    expect(vi.mocked(api.runPrg)).toHaveBeenCalledWith("/Usb0/Games/Game.prg");
+    expect(vi.mocked(api.runPrgUpload)).not.toHaveBeenCalled();
   });
 });

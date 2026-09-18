@@ -10,6 +10,8 @@ import type { ConfigFileReference } from "@/lib/config/configFileReference";
 import { isConfigFileName } from "@/lib/config/configFileReferenceSelection";
 import { buildConfigReferenceFromSourceEntry } from "@/lib/config/configFileReferenceSelection";
 import { dedupeConfigCandidates, type ConfigCandidate } from "@/lib/config/playbackConfig";
+import { firmwareAssociatedConfigFor } from "@/lib/config/firmwareAssociatedConfig";
+import { getPlayCategory } from "@/lib/playback/fileTypes";
 import { getParentPath } from "@/lib/playback/localFileBrowser";
 import { normalizeSourcePath } from "@/lib/sourceNavigation/paths";
 import type { SourceEntry } from "@/lib/sourceNavigation/types";
@@ -49,6 +51,14 @@ const shouldContinueAscending = (currentParent: string, rootPath: string) => {
   return normalizedCurrent.startsWith(normalizedRoot);
 };
 
+/**
+ * A directory's files, from the caller's map when it has them and from the source otherwise.
+ *
+ * A folder that cannot be listed means this file has no settings file discoverable beside it, not
+ * that adding the file failed. An archive entry's parent, a folder whose permission has lapsed and
+ * a device that dropped off all read the same way, and none of them is a reason to refuse the add.
+ * The empty result is remembered so the same folder is not asked for again in the same batch.
+ */
 const resolveEntriesForPath = async (
   path: string,
   listEntries: (path: string) => Promise<SourceEntry[]>,
@@ -57,7 +67,7 @@ const resolveEntriesForPath = async (
   const normalizedPath = normalizeSourcePath(path);
   const prefetched = prefetchedEntriesByPath?.get(normalizedPath);
   if (prefetched) return prefetched;
-  const entries = await listEntries(normalizedPath);
+  const entries = await listEntries(normalizedPath).catch(() => [] as SourceEntry[]);
   prefetchedEntriesByPath?.set(normalizedPath, entries);
   return entries;
 };
@@ -76,12 +86,13 @@ export const discoverConfigCandidates = async ({
   const baseName = stripExtension(targetFile.name).toLowerCase();
   const discovered: ConfigCandidate[] = [];
 
-  const buildRef = (entry: SourceEntry) =>
+  const buildRef = (entry: SourceEntry, allowFirmwareFallbackExtension = false) =>
     buildConfigReferenceFromSourceEntry({
       sourceType,
       sourceId,
       entry,
       localEntriesBySourceId,
+      allowFirmwareFallbackExtension,
     });
 
   const sameDirectoryEntries = await resolveEntriesForPath(sameDirectoryPath, listEntries, prefetchedEntriesByPath);
@@ -92,6 +103,26 @@ export const discoverConfigCandidates = async ({
     const confidence = strategy === "exact-name" ? "high" : "medium";
     discovered.push(buildCandidate(buildRef(entry), strategy, 0, confidence));
   });
+
+  /*
+   * The firmware falls back to `<program>.usr` when no `<program>.cfg` sits beside a PRG, and it
+   * applies that file whether or not the app knows about it. Offering it as the same kind of
+   * candidate is what lets the app name it, edit it and decline it; firmwareAssociatedConfigFor
+   * returns the `.cfg` first, so this only ever adds the fallback the firmware would really use.
+   */
+  const firmwareFallbackName = firmwareAssociatedConfigFor({
+    fileName: targetFile.name,
+    category: getPlayCategory(targetPath),
+    siblingFileNames: sameDirectoryEntries.filter((entry) => entry.type === "file").map((entry) => entry.name),
+  });
+  if (firmwareFallbackName && !isConfigFileName(firmwareFallbackName)) {
+    const fallbackEntry = sameDirectoryEntries.find(
+      (entry) => entry.type === "file" && entry.name.toLowerCase() === firmwareFallbackName.toLowerCase(),
+    );
+    if (fallbackEntry) {
+      discovered.push(buildCandidate(buildRef(fallbackEntry, true), "exact-name", 0, "high"));
+    }
+  }
 
   let distance = 1;
   let currentPath = getParentPath(sameDirectoryPath);

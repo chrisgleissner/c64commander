@@ -22,6 +22,7 @@ import { PlaybackConfigOverrideEditor } from "@/pages/playFiles/components/Playb
 import type { ConfigCandidate } from "@/lib/config/playbackConfig";
 import {
   describeConfigOrigin,
+  describeConfigOutcome,
   resolvePlaybackConfigUiState,
   summarizeConfigChangeCategories,
 } from "@/lib/config/playbackConfig";
@@ -48,7 +49,7 @@ const strategyLabel: Record<ConfigCandidate["strategy"], string> = {
 
 const stateLabel: Record<ReturnType<typeof resolvePlaybackConfigUiState>, string> = {
   none: "No config",
-  candidates: "Candidates found",
+  candidates: "Found nearby, none chosen",
   resolved: "Config resolved",
   edited: "Config edited",
   declined: "Config declined",
@@ -98,6 +99,15 @@ export const PlaybackConfigSheet = ({
             <>
               <section className="space-y-2 rounded-lg border border-border bg-card/60 p-3">
                 <div className="text-sm font-medium text-foreground">Current state</div>
+                {/* What happens, before the rows that say how it was decided. */}
+                <p className="text-sm text-foreground" data-testid="playback-config-outcome">
+                  {describeConfigOutcome({
+                    uiState,
+                    fileName: item.configRef?.fileName ?? null,
+                    overrideCount: item.configOverrides?.length ?? 0,
+                    candidateCount: item.configCandidates?.length ?? 0,
+                  })}
+                </p>
                 <dl className="space-y-2 text-sm text-muted-foreground">
                   <div className="flex items-start justify-between gap-3">
                     <dt>Status</dt>
@@ -124,7 +134,7 @@ export const PlaybackConfigSheet = ({
                     </dd>
                   </div>
                   <div className="flex items-start justify-between gap-3">
-                    <dt>Candidates</dt>
+                    <dt>Found nearby</dt>
                     <dd className="text-right text-foreground">{item.configCandidates?.length ?? 0}</dd>
                   </div>
                   <div className="flex items-start justify-between gap-3">
@@ -143,9 +153,9 @@ export const PlaybackConfigSheet = ({
               {item.configCandidates?.length ? (
                 <section className="space-y-3 rounded-lg border border-border bg-card/60 p-3">
                   <div>
-                    <div className="text-sm font-medium text-foreground">Discovered candidates</div>
+                    <div className="text-sm font-medium text-foreground">Config files found nearby</div>
                     <div className="text-xs text-muted-foreground">
-                      Choose one to make it the manual playback config for this playlist item.
+                      Choose one to apply it to this item every time it plays.
                     </div>
                   </div>
                   <div className="space-y-2">

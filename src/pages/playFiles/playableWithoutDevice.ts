@@ -7,15 +7,22 @@
  */
 
 import { getCachedArchivePlayback } from "@/lib/archive/archivePlaybackCache";
-import { getConnectionSnapshot } from "@/lib/connection/connectionManager";
+import { getConnectionSnapshot, isSimulatedDeviceTarget } from "@/lib/connection/connectionManager";
 import { isNetworkKnownOffline } from "@/lib/connection/networkStatusWatch";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { getRememberedUltimateSidBlob } from "@/lib/playback/playbackRouter";
 import type { PlaylistItem } from "@/pages/playFiles/types";
 
-/** Away from the device, a playlist carries on with the tracks the phone can play itself. */
-
-export const isDeviceOutOfReach = () => isNetworkKnownOffline() || getConnectionSnapshot().state === "OFFLINE_NO_DEMO";
+/**
+ * Away from the device, a playlist carries on with the tracks the phone can play itself.
+ *
+ * Demo Mode's device is simulated inside this process and served over loopback, so a phone with its
+ * radios off is not away from it — and that is the state every Demo Mode session on a phone with no
+ * connection starts in. Without this exclusion, pressing play on a demo tune ended at "Device not
+ * connected. Check connection settings." and the demo played nothing at all.
+ */
+export const isDeviceOutOfReach = () =>
+  !isSimulatedDeviceTarget() && (isNetworkKnownOffline() || getConnectionSnapshot().state === "OFFLINE_NO_DEMO");
 
 /** Whether a track can play on the phone while the Ultimate is out of reach. */
 export const canPlayWithoutDevice = (item: PlaylistItem | undefined): boolean => {

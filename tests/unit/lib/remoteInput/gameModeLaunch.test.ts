@@ -120,6 +120,29 @@ describe("startGameMode", () => {
     expect(result).toEqual({ startedVideo: true, startedAudio: false });
   });
 
+  /*
+   * A cartridge (Ultimate II+L) serves no `/v1/streams`, so both starts answered 404. Each 404 was
+   * recorded as a failed API request, which put "Could not tell the device to start streaming
+   * audio." under the toggles and reported the device unhealthy — on a device with nothing wrong
+   * with it. The sheet still has to open: driving the machine works there, only the feeds do not.
+   */
+  it("starts no feed on a device that cannot stream, and still opens the sheet", async () => {
+    const handler = vi.fn();
+    const unsubscribe = subscribeGameModeRequest(handler);
+    const session = fakeSession();
+
+    const result = await startGameMode({
+      session: session as unknown as AvMirrorSession,
+      deviceStreams: false,
+    });
+
+    expect(session.startVideo).not.toHaveBeenCalled();
+    expect(session.startAudio).not.toHaveBeenCalled();
+    expect(result).toEqual({ startedVideo: false, startedAudio: false });
+    expect(handler).toHaveBeenCalledWith({ startedVideo: false, startedAudio: false });
+    unsubscribe();
+  });
+
   it("asks the mounted sheet to open, even when no stream needed starting", async () => {
     const handler = vi.fn();
     const unsubscribe = subscribeGameModeRequest(handler);

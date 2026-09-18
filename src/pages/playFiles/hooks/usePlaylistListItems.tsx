@@ -12,7 +12,7 @@ import { FileOriginIcon } from "@/components/FileOriginIcon";
 import { SidChipBadge } from "@/components/playback/SidChipBadge";
 import { resolveTrackDisplayName } from "@/lib/playback/sidDisplayName";
 import { useFriendlySidNames } from "@/lib/playback/useFriendlySidNames";
-import { describeConfigOrigin, resolvePlaybackConfigUiState } from "@/lib/config/playbackConfig";
+import { describeConfigOrigin, describeConfigOutcome, resolvePlaybackConfigUiState } from "@/lib/config/playbackConfig";
 import { beginHvscPerfScope, endHvscPerfScope } from "@/lib/hvsc/hvscPerformance";
 import { recordSmokeBenchmarkSnapshot } from "@/lib/smoke/smokeMode";
 import { LOCAL_DEVICE_LABEL, connectedDeviceLabel } from "@/lib/sourceNavigation/sourceTerms";
@@ -147,7 +147,7 @@ export const usePlaylistListItems = ({
               : configUiState === "resolved"
                 ? "Resolved"
                 : configUiState === "candidates"
-                  ? "Candidates found"
+                  ? "Found nearby, none chosen"
                   : configUiState === "declined"
                     ? "Declined"
                     : "No config",
@@ -251,7 +251,15 @@ export const usePlaylistListItems = ({
         onAction: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
         secondaryActionLabel: configStatusLabel,
         onSecondaryAction: configStatusLabel ? () => onOpenConfig(item) : undefined,
-        secondaryActionAriaLabel: configStatusLabel ? `Open config details for ${display.title}` : undefined,
+        // The chip is four letters; its accessible name is what actually says what will happen.
+        secondaryActionAriaLabel: configStatusLabel
+          ? `${display.title} config: ${describeConfigOutcome({
+              uiState: configUiState,
+              fileName: item.configRef?.fileName ?? null,
+              overrideCount: item.configOverrides?.length ?? 0,
+              candidateCount: item.configCandidates?.length ?? 0,
+            })} Open config details.`
+          : undefined,
         onTitleClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
         onRowClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
         disableActions: isPlaylistLoading,

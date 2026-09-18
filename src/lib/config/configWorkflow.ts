@@ -25,7 +25,6 @@ type ConfigWorkflowDependencies = {
   persistLocalSnapshot: (fileName: string, bytes: Uint8Array) => Promise<ConfigSnapshotFileLocation>;
   runSaveRemoteConfig: () => Promise<void>;
   runApplyRemoteConfig: (fileName: string) => Promise<void>;
-  runApplyRemoteConfigByPath: (path: string) => Promise<void>;
   sleep: (ms: number) => Promise<void>;
   now: () => Date;
 };
@@ -50,7 +49,6 @@ const defaultDependencies: ConfigWorkflowDependencies = {
   persistLocalSnapshot: async (fileName) => ({ kind: "native-data", path: fileName }),
   runSaveRemoteConfig: async () => undefined,
   runApplyRemoteConfig: async () => undefined,
-  runApplyRemoteConfigByPath: async () => undefined,
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   now: () => new Date(),
 };
@@ -360,11 +358,39 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
     }
   };
 
+  /**
+   * Apply a settings file that is already on the device.
+   *
+   * The file is copied to `/Temp` and applied from there rather than applied where it lies. There
+   * is no REST endpoint that loads a `.cfg`, so applying one means driving the device's own file
+   * browser over Telnet, one keypress and one screen read at a time, from the device root down to
+   * the file. On this rig that walk did not finish inside seven minutes for a file two directories
+   * deep on a USB stick holding thirty-one entries, and the Play page is disabled for the whole of
+   * it. `/Temp` is a RAM disk the app already stages config snapshots through, and it holds only
+   * what the app puts there, so the walk is a handful of keypresses whatever the user's folders
+   * look like.
+   *
+   * A file already in `/Temp` is applied where it is.
+   */
   const applyRemoteSnapshot = async (remotePath: string, onProgress?: (state: ConfigProgressState) => void) => {
     const reporter = createProgressReporter("apply-remote", onProgress);
     const remoteFileName = normalizeConfigFileName(remotePath.split("/").pop() ?? "config.cfg");
     const logContext: ConfigWorkflowLogContext = { remoteFileName, remotePath };
+    const stagedPath = `/Temp/${remoteFileName}`;
+    const alreadyStaged = remotePath.toLowerCase() === stagedPath.toLowerCase();
     try {
+      if (!alreadyStaged) {
+        reporter.emit(
+          {
+            step: "uploading",
+            title: "Staging config snapshot",
+            description: `Copying ${remoteFileName} to /Temp.`,
+            progress: 60,
+          },
+          logContext,
+        );
+        await deps.writeRemoteFile(stagedPath, await deps.readRemoteFile(remotePath));
+      }
       reporter.emit(
         {
           step: "restoring",
@@ -374,7 +400,7 @@ export const createConfigWorkflow = (overrides: Partial<ConfigWorkflowDependenci
         },
         logContext,
       );
-      await deps.runApplyRemoteConfigByPath(remotePath);
+      await deps.runApplyRemoteConfig(remoteFileName);
       reporter.emit(
         {
           step: "complete",

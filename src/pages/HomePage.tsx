@@ -63,11 +63,7 @@ import { useHomeActions } from "./home/hooks/useHomeActions";
 import { useSharedConfigActions } from "./home/hooks/ConfigActionsContext";
 import { ConfigActionsProvider } from "./home/hooks/ConfigActionsContext";
 import { createConfigWorkflow } from "@/lib/config/configWorkflow";
-import {
-  applyRemoteConfigFromPath,
-  applyRemoteConfigFromTemp,
-  saveRemoteConfigFromTemp,
-} from "@/lib/config/configTelnetWorkflow";
+import { applyRemoteConfigFromTemp, saveRemoteConfigFromTemp } from "@/lib/config/configTelnetWorkflow";
 import { persistConfigSnapshotFile, pickConfigSnapshotFile } from "@/lib/config/configSnapshotStorage";
 import { SaveRamDialog } from "./home/dialogs/SaveRamDialog";
 import { RestoreSnapshotDialog } from "./home/dialogs/RestoreSnapshotDialog";
@@ -450,9 +446,7 @@ function HomePageContent() {
           saveRemoteReuFromTemp(session, menuKey, getRequiredTelnetTarget("saveReuMemory")),
         ),
       runRestoreRemoteReu: (fileName, mode, folderName) =>
-        withConnectedReuTelnetSession((session, menuKey) =>
-          restoreRemoteReu(session, menuKey, fileName, mode, folderName),
-        ),
+        withConnectedReuTelnetSession((session, menuKey) => restoreRemoteReu(session, fileName, mode, folderName)),
     });
 
   const withConnectedConfigTelnetSession = async <T,>(
@@ -529,9 +523,7 @@ function HomePageContent() {
           saveRemoteConfigFromTemp(session, menuKey, getRequiredTelnetTarget("saveConfigToFile")),
         ),
       runApplyRemoteConfig: (fileName) =>
-        withConnectedConfigTelnetSession((session, menuKey) => applyRemoteConfigFromTemp(session, menuKey, fileName)),
-      runApplyRemoteConfigByPath: (path) =>
-        withConnectedConfigTelnetSession((session, menuKey) => applyRemoteConfigFromPath(session, menuKey, path)),
+        withConnectedConfigTelnetSession((session) => applyRemoteConfigFromTemp(session, fileName)),
     });
 
   const runReuWorkflow = async <T,>(

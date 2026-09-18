@@ -146,6 +146,66 @@ test.describe("Action tile labels are drawn whole", () => {
     }
   }
 
+  /*
+   * The cartridge case, which nothing here covered and which shipped broken.
+   *
+   * An Ultimate II+L reports no `core_version`, so `supportsStreaming` is false and Home greys the
+   * Live tile and prints the reason under it. That reason used to be the full sentence "This model
+   * cannot stream picture or sound" — 41 characters in a tile about 68 px wide. It wrapped to six
+   * lines of one word each, and because a grid row is as tall as its tallest tile, the whole top
+   * row of Quick Actions measured 204 px on a cartridge against 91 px on a C64 Ultimate.
+   *
+   * The sweep above would not have caught it: wrapped text is not clipped text. The row height is,
+   * so it is what this measures. 140 px is above the 114 px the fixed short caption produces at
+   * this profile and width, and far below the 204 px the defect produced.
+   */
+  test("a device that cannot stream does not stretch the Quick Actions row @layout", async ({ page }) => {
+    // No `core_version` and no "Data Streams" category is what a real Ultimate-II+L answers, and
+    // between them they are what `deriveDeviceCapabilities` reads to decide the device does not
+    // stream. The config signal is the more precise of the two and overrides the other, so both are
+    // needed: dropping `core_version` alone left the Live tile enabled.
+    const cartridge = await createMockC64Server(
+      {},
+      {},
+      {
+        deviceInfo: { product: "Ultimate II+L", core_version: null },
+        omitConfigCategories: ["Data Streams"],
+      },
+    );
+    try {
+      await seedUiMocks(page, cartridge.baseUrl);
+      await page.addInitScript((flags: string[]) => {
+        localStorage.setItem("c64u_display_profile_override", "medium");
+        for (const flag of flags) localStorage.setItem(`c64u_feature_flag:${flag}`, "1");
+      }, FLAGS);
+      // The tightest track in the app: four columns of 69.6px.
+      await page.setViewportSize({ width: 393, height: 800 });
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      const machineControls = page.getByTestId("home-machine-controls");
+      await machineControls.waitFor({ timeout: 30_000 });
+
+      const live = page.getByTestId("home-tile-home.section.live-view");
+      await expect(live).toBeDisabled();
+
+      // The height first, because it is what this case is named for: with the long reason restored
+      // the caption assertion below also fails, and a run that stopped there would not have said
+      // what the defect was.
+      const tallest = await machineControls.evaluate((grid) =>
+        Math.max(
+          ...[...grid.querySelectorAll<HTMLElement>("button.quick-action")].map(
+            (tile) => tile.getBoundingClientRect().height,
+          ),
+        ),
+      );
+      expect(tallest, `tallest Quick Actions tile on a cartridge: ${Math.round(tallest)}px`).toBeLessThan(140);
+
+      await expect(live).toHaveText(/No streaming/);
+      expectNoClippedLabel(await sweepTileLabels(page), "cartridge at 393px");
+    } finally {
+      await cartridge.close();
+    }
+  });
+
   test('the paused Pause tile reads "Resume" without clipping it @layout', async ({ page }) => {
     await seedUiMocks(page, server.baseUrl);
     await page.addInitScript((flags: string[]) => {

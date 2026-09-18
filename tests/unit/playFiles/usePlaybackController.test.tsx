@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlaybackController } from "@/pages/playFiles/hooks/usePlaybackController";
 import { seededShuffleIds } from "@/pages/playFiles/playFilesUtils";
 import type { PlaylistItem } from "@/pages/playFiles/types";
-import { executePlayPlan, getRememberedUltimateSidBlob, tryFetchUltimateSidBlob } from "@/lib/playback/playbackRouter";
+import {
+  buildPlayPlan,
+  executePlayPlan,
+  getRememberedUltimateSidBlob,
+  tryFetchUltimateSidBlob,
+} from "@/lib/playback/playbackRouter";
 import { LocalSidPlaybackController } from "@/lib/playback/localSidPlaybackController";
 import { saveMirrorC64Audio, savePlaybackEngine } from "@/lib/config/appSettings";
 import { avMirrorSession } from "@/lib/streams/avMirrorSession";
@@ -3532,5 +3537,61 @@ describe("playback and the Listen-on choice", () => {
     const { result } = renderPlaybackController([sidItem()], { currentIndex: 0 });
     await result.current.handlePlay();
     expect(avMirrorSession.startAudio).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * `runners:run_prg` makes the firmware load the program's own `.cfg` after the app has applied its
+ * settings, so an edited or declined choice is undone unless the launch avoids naming the path.
+ * The controller is where the item's settings decision is known, so it is what tells the router.
+ */
+describe("telling the router when the firmware would reload a program's settings", () => {
+  const prgItem = (overrides: Partial<PlaylistItem> = {}) =>
+    createPlaylistItem({
+      category: "prg",
+      path: "/Usb0/Games/Game.prg",
+      request: { source: "ultimate", path: "/Usb0/Games/Game.prg" },
+      configCandidates: [
+        {
+          ref: {
+            kind: "ultimate",
+            fileName: "Game.cfg",
+            path: "/Usb0/Games/Game.cfg",
+            modifiedAt: null,
+            sizeBytes: null,
+          },
+          strategy: "exact-name",
+          distance: 0,
+          confidence: "high",
+        },
+      ],
+      ...overrides,
+    });
+
+  it("leaves the path launch alone when the app applies the file the firmware would", async () => {
+    const item = prgItem({
+      configOrigin: "auto-exact",
+      configRef: {
+        kind: "ultimate",
+        fileName: "Game.cfg",
+        path: "/Usb0/Games/Game.cfg",
+        modifiedAt: null,
+        sizeBytes: null,
+      },
+    });
+    const { result } = renderPlaybackController([item]);
+
+    await result.current.playItem(item, { playlistIndex: 0 });
+
+    expect(vi.mocked(buildPlayPlan).mock.calls.at(-1)?.[1]).toBe(false);
+  });
+
+  it("asks for the upload launch when the user declined that file", async () => {
+    const item = prgItem({ configOrigin: "manual-none", configRef: null });
+    const { result } = renderPlaybackController([item]);
+
+    await result.current.playItem(item, { playlistIndex: 0 });
+
+    expect(vi.mocked(buildPlayPlan).mock.calls.at(-1)?.[1]).toBe(true);
   });
 });

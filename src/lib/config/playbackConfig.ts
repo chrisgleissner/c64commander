@@ -130,6 +130,44 @@ export const resolvePlaybackConfigUiState = ({
   return "none";
 };
 
+/**
+ * One sentence saying what the machine will be told before this item plays.
+ *
+ * The state rows underneath it are accurate and answer the wrong question first: "Origin:
+ * Unresolved / Resolved file: None / Found nearby: 1" is three facts a reader has to combine to
+ * learn that nothing is going to happen — while the row still carries a config chip. The wording
+ * is the sheet's own ("config file"), so one screen does not use two names for one thing.
+ */
+export const describeConfigOutcome = ({
+  uiState,
+  fileName,
+  overrideCount,
+  candidateCount,
+}: {
+  uiState: PlaybackConfigUiState;
+  fileName: string | null;
+  overrideCount: number;
+  candidateCount: number;
+}) => {
+  const changes = `${overrideCount} changed setting${overrideCount === 1 ? "" : "s"}`;
+  switch (uiState) {
+    case "edited":
+      return fileName
+        ? `${fileName} will be applied before this plays, with ${changes}.`
+        : `${changes} will be applied before this plays.`;
+    case "resolved":
+      return `${fileName} will be applied before this plays.`;
+    case "candidates":
+      return candidateCount === 1
+        ? "No config file will be applied. One was found nearby — choose it below to use it."
+        : `No config file will be applied. ${candidateCount} were found nearby — choose one below to use it.`;
+    case "declined":
+      return "No config file will be applied, because you asked for none.";
+    case "none":
+      return "No config file will be applied. None was found beside this one.";
+  }
+};
+
 export const describeConfigOrigin = (origin: ConfigResolutionOrigin) => {
   switch (origin) {
     case "manual":

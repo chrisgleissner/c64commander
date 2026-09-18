@@ -16,6 +16,37 @@ const makeInput = (content: string, path = "test.md5") => ({
 });
 
 describe("InMemoryTextBackend", () => {
+  /*
+   * A database whose md5 lines carry no `; <path>` comment before them loaded as zero entries and
+   * said nothing about why. HVSC always writes that comment, so such a file is hand-made or
+   * generated — and one of them was ours: the Demo Mode library shipped with
+   * `<md5>=<time> ; <path>` on one line, which put a red "Songlengths file contains no entries." on
+   * the Play page of a first-run Demo Mode session and gave every demo tune the default duration.
+   */
+  describe("a line the store cannot place", () => {
+    it("drops an md5 line that no comment line gave a path to", async () => {
+      const backend = new InMemoryTextBackend();
+      await backend.load(makeInput("[Database]\nabc123=1:30"));
+      expect(backend.exportSnapshot().md5ToSeconds.size).toBe(0);
+    });
+
+    it("counts that drop as a rejected line and says what is missing", async () => {
+      const rejected: string[] = [];
+      const backend = new InMemoryTextBackend({ onRejectedLine: ({ reason }) => rejected.push(reason) });
+      await backend.load(makeInput("[Database]\nabc123=1:30"));
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0]).toContain("no path");
+      expect(backend.stats().rejectedLines).toBe(1);
+    });
+
+    it("keeps the same line once a comment line gives it a path", async () => {
+      const backend = new InMemoryTextBackend();
+      await backend.load(makeInput("[Database]\n; /DEMOS/Song.sid\nabc123=1:30"));
+      expect(backend.exportSnapshot().md5ToSeconds.size).toBe(1);
+      expect(backend.stats().rejectedLines).toBe(0);
+    });
+  });
+
   describe("resolve", () => {
     it("returns unavailable when no records loaded", async () => {
       const backend = new InMemoryTextBackend();

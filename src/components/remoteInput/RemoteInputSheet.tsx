@@ -61,6 +61,8 @@ import { TypeKeyboard } from "@/components/remoteInput/TypeKeyboard";
 import { QuickKeysBar } from "@/components/remoteInput/QuickKeysBar";
 import { useFeatureFlagValue } from "@/hooks/useFeatureFlags";
 import { useAvMirror } from "@/hooks/useAvMirror";
+import { useConnectionState } from "@/hooks/useConnectionState";
+import { identifiedDeviceStreams } from "@/lib/deviceCapabilities";
 import { AvMirrorControls } from "@/components/streams/AvMirrorControls";
 import {
   AvMirrorImmersive,
@@ -114,11 +116,17 @@ export const RemoteInputSheet = ({ open, onOpenChange }: RemoteInputSheetProps) 
 
   // Content Explorer A/V mirror: pair the live screen with driving the machine. The Live View
   // master flag hides the mirror everywhere when off; audio/video pick which feeds are offered.
+  const connection = useConnectionState();
   const liveViewEnabled = useFeatureFlagValue("live_view_enabled");
   const audioMirrorFlag = useFeatureFlagValue("audio_mirror_enabled");
   const videoMirrorFlag = useFeatureFlagValue("video_mirror_enabled");
-  const audioMirrorEnabled = liveViewEnabled && audioMirrorFlag;
-  const videoMirrorEnabled = liveViewEnabled && videoMirrorFlag;
+  // A device that serves no /v1/streams (an Ultimate II+L cartridge) must not be offered Listen and
+  // Watch here. Home already hides its Live View card for such a device and the playback controller
+  // already gates its own mirror start the same way; this sheet did not, so Game Mode started both
+  // feeds, took two 404s, and reported a device with nothing wrong with it as unhealthy.
+  const deviceStreams = identifiedDeviceStreams(connection.deviceInfo);
+  const audioMirrorEnabled = deviceStreams && liveViewEnabled && audioMirrorFlag;
+  const videoMirrorEnabled = deviceStreams && liveViewEnabled && videoMirrorFlag;
   const mirrorEnabled = audioMirrorEnabled || videoMirrorEnabled;
   const mirror = useAvMirror();
   const mirrorRef = useRef<AvMirrorImmersiveHandle>(null);

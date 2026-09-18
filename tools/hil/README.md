@@ -18,6 +18,114 @@ physical rig), while the host-deterministic budget checks run in CI.
   search** below.
 - **`demo_mode_hil.ts`** — Demo Mode end to end with no Ultimate involved at all. See **Demo Mode**
   below.
+- **`release_sweep_hil.mjs`** — the four ordinary events the merge gate does not cover: the app is
+  killed and reopened, the Wi-Fi goes away and comes back, the screen locks with a tune playing, and
+  every main route is checked for an error nobody should ever see. See **Release sweep** below.
+- **`launch_matrix_hil.mjs`** — starting a tune, a program, a cartridge and a disk, with the machine
+  itself as the witness, and the settings file beside each of them. See **Launch matrix** below.
+  Its probe files are built by **`build_launch_probes.mjs`**.
+- **`hil_cdp.mjs`** — not a harness: the adb and WebView-DevTools plumbing the harnesses share.
+
+## Release sweep
+
+`release_sweep_hil.mjs` answers a different question from the merge gate. The gate measures what
+needs a stimulus and a microphone — a held direction, a tone ladder, the latency of the mirror.
+This measures what happens to a phone somebody carries around, and every stage of it is silent, so
+it can run beside someone.
+
+```bash
+node tools/hil/release_sweep_hil.mjs --serial <adb serial> --json artifacts/release-sweep.json
+node tools/hil/release_sweep_hil.mjs --serial <adb serial> --only error-census
+node tools/hil/release_sweep_hil.mjs --serial <adb serial> --hosts c64u,u64,u2
+```
+
+| Stage          | What it asserts                                                                                                                                 |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `preflight`    | Phone attached and awake, no leftover `wm size` override, radios on, and every host in `--hosts` answering `/v1/info` from this machine         |
+| `error-census` | On the device currently selected: every main route shows no alert, logs no error, and leaves the health badge healthy                           |
+| `restart-soak` | Six force-stop/relaunch cycles each reach a route inside 20 s, reconnect to the same device, and log nothing                                    |
+| `network-drop` | Three Wi-Fi off/on cycles: the badge reports offline then healthy again inside 30 s, nothing raises an alert, and a local tune plays throughout |
+| `screen-off`   | The screen sleeps with a tune playing and the tune is still playing just over two minutes later                                                 |
+
+`error-census` reads whichever device is selected in the app, so covering a fleet means selecting
+each device in turn and running that stage again. `network-drop` and `screen-off` need a tune on the
+Play page: both start one themselves and report `pending` rather than `pass` when the playlist is
+empty, because a stage that measured nothing must not read as a stage that passed.
+
+`screen-off` is the one that needs the explanation. Chromium suspends timers and workers in a hidden
+page after about a minute, which is why the stage runs for longer than that and why it clears
+`svc power stayon usb` first — a phone on USB keeps its screen lit, and the stage passed for weeks
+without ever putting the screen out.
+
+## Launch matrix
+
+`launch_matrix_hil.mjs` starts each kind of thing the app can start and reads the evidence out of
+the machine rather than off the app's screen. It exists because nothing else started a cartridge,
+and because nothing checked that the settings file next to a launched file is applied.
+
+Every probe writes a four-byte signature into RAM at $C000 — `PRG!`, `CRT!`, `DSK!` — and the
+harness reads it back with `machine:readmem`. "It started" therefore means the 6510 ran the probe's
+own instructions. $C000 is 4 KiB of RAM that neither BASIC nor the KERNAL uses, so the value
+survives the program ending.
+
+```bash
+node tools/hil/build_launch_probes.mjs --host c64u --usb USB2     # needs VICE's c1541 on PATH
+node tools/hil/launch_matrix_hil.mjs --serial <adb serial> --host c64u --usb USB2
+node tools/hil/launch_matrix_hil.mjs --serial <adb serial> --host u2 --usb USB0 --only launch
+```
+
+| Stage             | What it asserts                                                                                                                                            |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `preflight`       | Phone attached, app running on the named host, and the probe folder holding all five files                                                                 |
+| `firmware-parity` | What the firmware does by itself over REST, with no app involved (see below)                                                                               |
+| `discovery`       | Adding the probe files through the app's own picker resolves the `.cfg` beside them as "same name" for every category                                      |
+| `launch`          | Playing each item from the playlist leaves that item's signature in RAM, and the page reports nothing                                                      |
+| `config-decline`  | Declining the settings file means it is not applied — including for a program, where the firmware would otherwise load it after the app had finished       |
+| `config-apply`    | The app applies the resolved `.cfg` before a launch                                                                                                        |
+| `cartridge`       | Everything that starts a cartridge: the firmware applies no settings file for one, the app starts one, and the app applies the file the firmware would not |
+
+The cartridge stage runs last on purpose. On an Ultimate II+L a cartridge started over
+`runners:run_crt` holds the machine until the host C64 is power-cycled: reset, reboot, the menu
+button, writing the `Cartridge` config item and starting a cartridge that maps nothing all leave it
+in place, and the next `run_prg` resets straight back into it. `machine:poweroff` answers 501 on that
+architecture. Everything that needs the machine free therefore runs before the first cartridge
+starts. On a C64 Ultimate a reboot does clear it, so the ordering costs nothing there.
+
+Measured on this rig: on a C64 Ultimate (1.2RC) a program runs 1 s after the row is pressed and a
+disk 29 s; on an Ultimate II+L (3.15) a program 19 s, a disk 23 s and a cartridge 18 s. Applying the
+settings file is most of that — about 18 seconds of walking the device's own menu over Telnet.
+
+Nothing else may drive the app's DevTools socket while a run is in progress. Attaching a second
+client removes the forward this one is using, and the run then fails with `fetch failed` on whatever
+stage it happened to be in — which looks exactly like the app having gone away.
+
+Two things about the phone rather than the app. A sleeping screen reports `NotificationShade` as
+the focused window and answers every tap with nothing, so `preflight` wakes it and dismisses the
+keyguard; a run that started on a dark phone otherwise drove a screen the taps never reached. And
+the on-screen keyboard covers the bottom half of the display while leaving the page laid out at
+full height, so every tap computed from a bounding box lands on a key — the harness types by setting
+the field's value through React's own setter and never opens it.
+
+### What the firmware does on its own
+
+Measured on a C64 Ultimate (firmware 1.2RC), an Ultimate 64 Elite (3.15) and an Ultimate II+L
+(3.15). All three gave the same answers.
+
+| REST call                             | Applies the settings file beside the launched file                |
+| ------------------------------------- | ----------------------------------------------------------------- |
+| `runners:run_prg`, `runners:load_prg` | Yes: `<program>.cfg`, and `<program>.usr` when there is no `.cfg` |
+| `runners:run_crt`                     | No                                                                |
+| `drives:mount`                        | No                                                                |
+
+The menu on the device applies one for disks, cartridges and tapes too; the REST handlers for those
+call the cartridge loader and the mounter directly and load nothing. The app resolves a settings
+file for every category, which is how it is a superset rather than a second opinion.
+
+The program case is the one that needed a change in the app. The firmware loads `<program>.cfg`
+_after_ the app has applied its own choice, so an edited, declined or differently chosen settings
+file was silently undone. A program whose settings choice is not what the firmware would do is now
+launched by uploading its bytes instead of naming its path, which runs it from a temporary file with
+no settings file beside it. `config-decline` is the stage that fails when that regresses.
 
 ## THE trap: a hidden WebView
 

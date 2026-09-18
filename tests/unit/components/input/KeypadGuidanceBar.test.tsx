@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { KeypadGuidanceBar } from "@/components/input/KeypadGuidanceBar";
 import { FocusNavigationProvider } from "@/hooks/useFocusNavigation";
 import { resetInputModality } from "@/lib/input";
+import { TOUR_ACTIVE_ATTRIBUTE } from "@/lib/tour/tourState";
 
 /**
  * Integration coverage for the guidance bar — the keypad-first device's soft-key +
@@ -89,6 +90,33 @@ describe("KeypadGuidanceBar", () => {
     expect(screen.getByTestId("keypad-guidance-left")).toHaveTextContent("Back");
     expect(actionText("keypad-guidance-left")).toBe("");
     expect(screen.getByTestId("keypad-guidance-right")).toHaveAttribute("hidden");
+  });
+
+  /*
+   * The tour owns the keys while it runs, so this bar advertises actions that do not happen — and
+   * on a 320 x 427 screen it is drawn over the tour's own caption, covering the title of the step
+   * being explained. Seen on the Pixel 4 at that geometry.
+   */
+  it("keeps out of the way while the tour is running", () => {
+    render(
+      <FocusNavigationProvider enabled>
+        <button>Home</button>
+        <button>Settings</button>
+      </FocusNavigationProvider>,
+    );
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(bar()).toHaveAttribute("data-visible", "true");
+
+    document.documentElement.setAttribute(TOUR_ACTIVE_ATTRIBUTE, "true");
+    try {
+      fireEvent.keyDown(document.body, { code: "ArrowDown" });
+      expect(bar()).toHaveAttribute("data-visible", "false");
+    } finally {
+      document.documentElement.removeAttribute(TOUR_ACTIVE_ATTRIBUTE);
+    }
+
+    fireEvent.keyDown(document.body, { code: "ArrowDown" });
+    expect(bar()).toHaveAttribute("data-visible", "true");
   });
 
   it("exposes the Menu soft key when the focused item has a context menu", () => {

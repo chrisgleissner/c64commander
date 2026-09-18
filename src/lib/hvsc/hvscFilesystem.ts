@@ -87,10 +87,18 @@ const decodeBase64Text = (raw: string) => {
  * A missing file answers `null`, which is how absence is reported everywhere else here. Anything
  * else falls back to the bridge, so a platform without the file server (the web build, tests)
  * behaves exactly as it did.
+ *
+ * Absence is settled by {@link dataFileExists} BEFORE the fetch. The file server answers a missing
+ * file with a 404, and a 404 is a failed network request: the browse-index snapshot is absent on
+ * every device that has not persisted one, so Play and Disks each logged
+ * "Failed to load resource: the server responded with a status of 404" on every visit, on an app
+ * with nothing wrong with it. `stat` carries no body, so the reason this read goes through the file
+ * server at all is untouched.
  */
 export const readDataFileText = async (path: string): Promise<string | null> => {
   const url = await localFileUrl(path);
   if (url) {
+    if ((await dataFileExists(path)) === false) return null;
     try {
       const response = await fetch(url);
       if (response.status === 404) return null;
@@ -105,6 +113,35 @@ export const readDataFileText = async (path: string): Promise<string | null> => 
   }
   const result = await Filesystem.readFile({ directory: Directory.Data, path });
   return typeof result.data === "string" ? decodeBase64Text(result.data) : null;
+};
+
+/**
+ * Whether a Data-directory file is there: `true`, `false`, or `null` when `stat` could not say.
+ *
+ * `null` is not `false`. A `stat` that fails for any reason other than the file being missing must
+ * leave the read to go ahead exactly as it did before, or a permission or platform quirk would turn
+ * every read into a silent "absent".
+ */
+const dataFileExists = async (path: string): Promise<boolean | null> => {
+  try {
+    await Filesystem.stat({ directory: Directory.Data, path });
+    return true;
+  } catch (error) {
+    return isMissingFileError(error) ? false : null;
+  }
+};
+
+/**
+ * What Capacitor's Filesystem says when the file is not there.
+ *
+ * The code is checked first because it is the stable half. Read off the Pixel 4, API 36:
+ * `OS-PLUG-FILE-0008`, message "'stat' failed because file at '…' does not exist." The wordings
+ * cover the same answer on the platforms that do not set a code.
+ */
+const isMissingFileError = (error: unknown) => {
+  const code = (error as { code?: unknown })?.code;
+  if (typeof code === "string" && /OS-PLUG-FILE-0008|ENOENT|NOT_FOUND/i.test(code)) return true;
+  return /does not exist|no such file|ENOENT|NSCocoaErrorDomain Code=260|file not found/i.test(getErrorMessage(error));
 };
 
 /**

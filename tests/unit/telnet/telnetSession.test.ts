@@ -319,5 +319,51 @@ describe("createTelnetSession", () => {
       expect(transport.connect).toHaveBeenCalledTimes(2);
       expect(session.isConnected()).toBe(true);
     });
+
+    /*
+     * A screen is read once per keypress, so the cost of one read is the cost of walking the file
+     * browser. Waiting out the whole empty-read budget after the device had already answered made
+     * every step three times longer than the device needed.
+     */
+    it("stops reading once the device has answered and then gone quiet", async () => {
+      const read = vi
+        .fn()
+        .mockResolvedValueOnce(new Uint8Array(0)) // connect's auth-check read
+        .mockResolvedValueOnce(new TextEncoder().encode("hello"))
+        .mockResolvedValue(new Uint8Array(0));
+      const transport = {
+        connect: vi.fn().mockResolvedValue(undefined),
+        disconnect: vi.fn().mockResolvedValue(undefined),
+        send: vi.fn().mockResolvedValue(undefined),
+        read,
+        isConnected: vi.fn().mockReturnValue(true),
+      };
+      const session = createTelnetSession(transport);
+      await session.connect("localhost", 23);
+      read.mockClear();
+
+      await session.readScreen(100);
+
+      // One read that returns data, one that returns nothing, and that is the frame.
+      expect(read).toHaveBeenCalledTimes(2);
+    });
+
+    it("still waits out its budget when the device has not answered at all", async () => {
+      const read = vi.fn().mockResolvedValue(new Uint8Array(0));
+      const transport = {
+        connect: vi.fn().mockResolvedValue(undefined),
+        disconnect: vi.fn().mockResolvedValue(undefined),
+        send: vi.fn().mockResolvedValue(undefined),
+        read,
+        isConnected: vi.fn().mockReturnValue(true),
+      };
+      const session = createTelnetSession(transport);
+      await session.connect("localhost", 23);
+      read.mockClear();
+
+      await session.readScreen(100);
+
+      expect(read.mock.calls.length).toBeGreaterThan(1);
+    });
   });
 });
