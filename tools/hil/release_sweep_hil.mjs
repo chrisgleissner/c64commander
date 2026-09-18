@@ -370,7 +370,9 @@ const preflight = async () => {
  * going wrong. Each is a testid that opens one, and the route it is reached from.
  *
  * Openers only. Nothing here resets, powers off, deletes, clears or writes: a census must be able to
- * run on somebody's device without changing what is on it.
+ * run on somebody's device without changing what is on it. That rule is easy to break by accident —
+ * `settings-device-row-<id>` looks like it opens an editor and in fact SELECTS that device, so a
+ * census of the cartridge silently continued against the C64 Ultimate from the moment it ran.
  */
 const OVERLAYS = [
   { route: "/", open: "unified-health-badge", name: "Diagnostics" },
@@ -378,7 +380,7 @@ const OVERLAYS = [
   { route: "/", open: "home-machine-inline-openRemoteInput", name: "Remote Input" },
   { route: "/play", open: "add-items-to-playlist", name: "Add items" },
   { route: "/play", open: "play-open-controller", name: "Play controller" },
-  { route: "/settings", open: "settings-device-row-debug-c64u", name: "Saved device editor" },
+  { route: "/play", open: "hvsc-search-open", name: "Find a tune" },
 ];
 
 const closeOverlay = async () => {
