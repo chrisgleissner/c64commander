@@ -326,7 +326,7 @@ describe("usePlaylistListItems", () => {
     expect(candidateStatuses?.[1]).toEqual({
       type: "info",
       label: "Status",
-      value: "Candidates found",
+      value: "Found nearby, none chosen",
     });
     expect(declinedStatuses?.[1]).toEqual({
       type: "info",
