@@ -317,6 +317,14 @@ android {
         // NotFoundException even for resources that compile fine.
         unitTests.includeAndroidResources = true
         unitTests.all {
+            // Robolectric 4.17 sets up ApplicationSharedMemory, which reaches the raw file
+            // descriptor through jdk.internal.access.SharedSecrets. java.base does not export that
+            // package, so every Robolectric test failed with "Failed to interact with raw
+            // FileDescriptor internals; perhaps JRE has changed?" and, underneath it, an
+            // IllegalAccessException naming jdk.internal.access. Both arguments are accepted by
+            // 4.16.1 as well, so this is not coupled to the version that needs them.
+            jvmArgs "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED",
+                    "--add-opens=java.base/java.io=ALL-UNNAMED"
             jacoco {
                 enabled = true
                 includeNoLocationClasses = true
