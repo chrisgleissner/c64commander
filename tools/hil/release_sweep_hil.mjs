@@ -85,7 +85,17 @@ const RECOVERY_BUDGET_MS = 30_000;
 /** How long a relaunched app may take to put a route on screen before that counts as a hang. */
 const RELAUNCH_BUDGET_MS = 20_000;
 
-export const STAGE_NAMES = ["preflight", "error-census", "restart-soak", "network-drop", "screen-off"];
+export const STAGE_NAMES = ["preflight", "error-census", "layout", "restart-soak", "network-drop", "screen-off"];
+
+/**
+ * The CSS widths the app is drawn at, narrowest first.
+ *
+ * 320 is the narrowest screen the app supports and 393 is this phone's own width. They are applied
+ * through CDP's device-metrics override rather than `adb shell wm size`, which stays in force until
+ * something resets it and then makes every touch land where the control is not — a leftover
+ * override has cost two merge-gate runs.
+ */
+const LAYOUT_WIDTHS = [320, 360, 393];
 
 /** Routes a user reaches from the tab bar. Every one is visited by `error-census`. */
 const MAIN_ROUTES = ["/", "/play", "/disks", "/config", "/settings"];
@@ -454,6 +464,115 @@ const errorCensus = async () => {
   );
 };
 
+/**
+ * What the page draws outside itself, or draws and then cuts.
+ *
+ * The swipe layer is excluded by name, not by guessing: it lays the neighbouring routes out in a
+ * strip that is deliberately three viewports wide, so it is outside the viewport by construction and
+ * says nothing about the page the user is on.
+ */
+const LAYOUT_SWEEP = `(() => {
+  const SWIPE = ["swipe-navigation-runway", "swipe-navigation-container", "swipe-slot-home",
+    "swipe-slot-play", "swipe-slot-disks", "swipe-slot-config", "swipe-slot-settings", "swipe-slot-docs"];
+  const inSwipe = (el) => {
+    for (let node = el; node; node = node.parentElement) {
+      const id = node.getAttribute && node.getAttribute("data-testid");
+      if (id && SWIPE.indexOf(id) >= 0) return true;
+    }
+    return false;
+  };
+  const name = (el) => el.getAttribute("data-testid")
+    || (el.closest("[data-testid]") && el.closest("[data-testid]").getAttribute("data-testid"))
+    || el.tagName.toLowerCase();
+  /*
+   * The viewport is documentElement.clientWidth, never window.innerWidth. This WebView WIDENS the
+   * visual viewport to contain content that sticks out, so innerWidth grows to match the overflow
+   * and a comparison against it can never fire — the check would pass on a page the user has to
+   * scroll sideways. Measured here: an injected 900px box left clientWidth at 392 and took
+   * innerWidth to 900.
+   */
+  const viewport = document.documentElement.clientWidth;
+  const overflow = [];
+  const clipped = [];
+  const seen = new Set();
+  for (const el of document.querySelectorAll("body *")) {
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) continue;
+    if (inSwipe(el)) continue;
+    const id = name(el);
+    if (rect.right > viewport + 1 || rect.left < -1) {
+      if (!seen.has("o:" + id)) {
+        seen.add("o:" + id);
+        overflow.push({ id, left: Math.round(rect.left), right: Math.round(rect.right) });
+      }
+    }
+    // Horizontal clipping only. A vertically scrollable box is the normal way to hold a long list.
+    if (el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX !== "auto"
+        && getComputedStyle(el).overflowX !== "scroll" && (el.innerText || "").trim()) {
+      if (!seen.has("c:" + id)) {
+        seen.add("c:" + id);
+        clipped.push({ id, needs: el.scrollWidth, has: el.clientWidth, text: (el.innerText || "").replace(/\s+/g, " ").slice(0, 40) });
+      }
+    }
+  }
+  return JSON.stringify({
+    width: viewport,
+    // What the user would feel: a page that scrolls sideways at all.
+    scrollsSideways: document.documentElement.scrollWidth > viewport + 1,
+    overflow,
+    clipped,
+  });
+})()`;
+
+const layout = async () => {
+  const findings = [];
+  const inspected = [];
+  try {
+    for (const width of LAYOUT_WIDTHS) {
+      await send("Emulation.setDeviceMetricsOverride", {
+        width,
+        height: 800,
+        deviceScaleFactor: 0,
+        mobile: true,
+      });
+      await sleep(1200);
+      for (const route of MAIN_ROUTES) {
+        await goto(route);
+        const sweep = await evaluate(LAYOUT_SWEEP);
+        inspected.push({
+          width,
+          route,
+          overflow: sweep.overflow.length,
+          clipped: sweep.clipped.length,
+          scrollsSideways: sweep.scrollsSideways,
+        });
+        if (sweep.scrollsSideways) findings.push(`${width}px ${route}: the page scrolls sideways`);
+        sweep.overflow.forEach((item) => findings.push(`${width}px ${route}: ${item.id} runs to ${item.right}px`));
+        sweep.clipped.forEach((item) =>
+          findings.push(
+            `${width}px ${route}: ${item.id} cuts "${item.text}" (needs ${item.needs}px, has ${item.has}px)`,
+          ),
+        );
+      }
+    }
+  } finally {
+    await send("Emulation.clearDeviceMetricsOverride", {}).catch(() => undefined);
+    await goto("/");
+  }
+  if (findings.length) {
+    record("layout", "fail", findings.slice(0, 8).join(" | "), { findings, inspected });
+    return;
+  }
+  record(
+    "layout",
+    "pass",
+    `${LAYOUT_WIDTHS.length} widths x ${MAIN_ROUTES.length} routes, nothing outside the page and nothing cut`,
+    {
+      inspected,
+    },
+  );
+};
+
 const relaunch = async () => {
   await shell(`am force-stop ${PACKAGE}`);
   await sleep(1200);
@@ -775,6 +894,7 @@ const main = async () => {
   }
 
   await stage("error-census", errorCensus);
+  await stage("layout", layout);
   await stage("restart-soak", restartSoak);
   await stage("network-drop", networkDrop);
   await stage("screen-off", screenOff);
