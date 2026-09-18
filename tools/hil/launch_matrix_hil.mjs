@@ -41,6 +41,8 @@
  *                    categories the firmware does not apply one for.
  *   config-decline   declining the settings file means it is not applied, including for a program,
  *                    where the firmware would otherwise load it after the app had finished.
+ *   cartridge        everything that starts a cartridge, last, because on an Ultimate II+L one
+ *                    holds the machine until it is power-cycled.
  */
 
 import { execFile } from "node:child_process";
@@ -381,6 +383,25 @@ const preflight = async () => {
     `document.querySelector('[data-testid="unified-health-badge"]')?.dataset.connectedDevice ?? ""`,
   );
   if (!connected) throw new Error("the app reports no connected device");
+  /*
+   * The app has to be on the device this run measures, not merely on some device. A saved device
+   * that is momentarily unreachable — a machine rebooting, say — lets startup connect to another
+   * configured one instead, and the run then drives one device while asserting against another.
+   * The badge shows a name or an address, so identity is settled by the unique id behind it.
+   */
+  if (connected !== HOST) {
+    const target = (await (await rest("/v1/info")).json()).unique_id;
+    const shown = await fetch(`http://${connected}/v1/info`, {
+      headers: { "X-Password": PASSWORD },
+      signal: AbortSignal.timeout(8000),
+    })
+      .then((response) => response.json())
+      .then((body) => body.unique_id)
+      .catch(() => null);
+    if (!target || shown !== target) {
+      throw new Error(`the app is connected to ${connected}, not to ${HOST}`);
+    }
+  }
   record("preflight", "pass", `app is on /play, connected to ${connected}`);
 };
 
@@ -391,15 +412,16 @@ const preflight = async () => {
  * firmware release can change it. On a C64 Ultimate (1.2RC) and an Ultimate 64 and an Ultimate II+L
  * (both 3.15) the three answers below were identical.
  */
-const firmwareParity = async () => {
-  const run = async (what, path) => {
-    await writeConfigItem(PROBE_BASELINE);
-    await clearSignature();
-    await rest(`/v1/runners:${what}?file=${encodeURIComponent(path)}`, { method: "PUT" });
-    await sleep(4000);
-    return { item: await readConfigItem(), signature: await readSignature() };
-  };
+const restRunAndRead = async (what, path) => {
+  await writeConfigItem(PROBE_BASELINE);
+  await clearSignature();
+  await rest(`/v1/runners:${what}?file=${encodeURIComponent(path)}`, { method: "PUT" });
+  await sleep(4000);
+  return { item: await readConfigItem(), signature: await readSignature() };
+};
 
+const firmwareParity = async () => {
+  const run = restRunAndRead;
   await reboot();
   const withCfg = await run("run_prg", probePath("hilprobe.prg"));
   if (withCfg.signature !== SIGNATURES.prg) throw new Error(`run_prg left ${withCfg.signature} at $C000`);
@@ -414,12 +436,6 @@ const firmwareParity = async () => {
   }
   record("firmware-parity", "pass", `run_prg with no sibling .cfg leaves ${PROBE_ITEM} at ${withoutCfg.item}`);
 
-  const cart = await run("run_crt", probePath("hilprobe.crt"));
-  if (cart.signature !== SIGNATURES.crt) throw new Error(`run_crt left ${cart.signature} at $C000`);
-  if (cart.item !== PROBE_BASELINE) {
-    throw new Error(`firmware now applies a settings file on run_crt: ${PROBE_ITEM} is ${cart.item}`);
-  }
-  record("firmware-parity", "pass", `run_crt applies nothing, so the app is the only actor there`);
   await reboot();
   await writeConfigItem(PROBE_RESTORE);
 };
@@ -434,13 +450,20 @@ const addProbeItems = async () => {
   await goto("/play");
   await dismissTour();
   // Start from an empty playlist so the stage measures this add rather than a previous run's.
-  const queued = await evaluate(`document.querySelectorAll('[data-testid="playlist-item"]').length`);
-  if (queued) {
+  /*
+   * Clearing is a plain button with no confirmation, so a press that leaves rows behind means the
+   * press did not land — a toast or the keypad guidance bar over it, most often. Pressing again
+   * costs a second and is the difference between a run and a run lost to a swallowed tap.
+   */
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const queued = await evaluate(`document.querySelectorAll('[data-testid="playlist-item"]').length`);
+    if (!queued) break;
     await tapButtonLabelled("Clear playlist");
-    await waitFor(`document.querySelectorAll('[data-testid="playlist-item"]').length === 0`, {
-      label: "the playlist to empty",
-    });
+    await sleep(4000);
   }
+  await waitFor(`document.querySelectorAll('[data-testid="playlist-item"]').length === 0`, {
+    label: "the playlist to empty",
+  });
   await waitForTestId("add-items-to-playlist");
   await tapTestId("add-items-to-playlist");
   /*
@@ -541,7 +564,6 @@ const launch = async () => {
   await launchSong();
   for (const [name, signature] of [
     ["hilprobe.prg", SIGNATURES.prg],
-    ["hilprobe.crt", SIGNATURES.crt],
     ["hilprobe.d64", SIGNATURES.disk],
   ]) {
     await clearSignature();
@@ -603,7 +625,7 @@ const restoreDiscoveredConfig = async (fileName) => {
 };
 
 const configApply = async () => {
-  for (const name of ["hilprobe.prg", "hilprobe.crt"]) {
+  for (const name of ["hilprobe.prg"]) {
     await reboot();
     await relaunchApp();
     await openPlayPageWith(name);
@@ -660,6 +682,40 @@ const configDecline = async () => {
   await writeConfigItem(PROBE_RESTORE);
 };
 
+/**
+ * Everything that starts a cartridge, in the order the machine allows.
+ *
+ * Last of all, because on some devices a cartridge started this way holds the machine until it is
+ * power-cycled. Three checks in one place: what the firmware does with a settings file beside a
+ * cartridge (nothing), that the app can start one at all, and that the app applies the settings
+ * file the firmware would not.
+ */
+const cartridge = async () => {
+  await reboot();
+  const parity = await restRunAndRead("run_crt", probePath("hilprobe.crt"));
+  if (parity.signature !== SIGNATURES.crt) throw new Error(`run_crt left ${parity.signature} at $C000`);
+  if (parity.item !== PROBE_BASELINE) {
+    throw new Error(`firmware now applies a settings file on run_crt: ${PROBE_ITEM} is ${parity.item}`);
+  }
+  record("cartridge", "pass", "run_crt applies nothing, so the app is the only actor there");
+
+  await clearSignature();
+  await writeConfigItem(PROBE_BASELINE);
+  await relaunchApp();
+  await openPlayPageWith("hilprobe.crt");
+  await restoreDiscoveredConfig("hilprobe.crt");
+  takeConsoleErrors();
+  await playFromPlaylist("hilprobe.crt");
+  const { ms } = await pollUntil(readSignature, SIGNATURES.crt, "hilprobe.crt: $C000 reads");
+  const errors = takeConsoleErrors();
+  if (errors.length) throw new Error(`hilprobe.crt started but the page reported ${errors[0]}`);
+  record("cartridge", "pass", `hilprobe.crt ran on the machine after ${Math.round(ms / 1000)}s`);
+
+  await pollUntil(readConfigItem, PROBE_APPLIED, `hilprobe.crt: ${PROBE_ITEM} is`);
+  record("cartridge", "pass", `hilprobe.crt applied hilprobe.cfg (${PROBE_ITEM} -> ${PROBE_APPLIED})`);
+  await writeConfigItem(PROBE_RESTORE);
+};
+
 /* ---------------------------------------------------------------- main ---- */
 
 const verdict = () => {
@@ -677,8 +733,9 @@ const main = async () => {
   await stage("firmware-parity", firmwareParity);
   await stage("discovery", discovery);
   await stage("launch", launch);
-  await stage("config-apply", configApply);
   await stage("config-decline", configDecline);
+  await stage("config-apply", configApply);
+  await stage("cartridge", cartridge);
 
   const { code, line } = verdict();
   console.log(`\n${line}`);
