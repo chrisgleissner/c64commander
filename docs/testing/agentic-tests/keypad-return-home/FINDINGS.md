@@ -84,15 +84,22 @@ the witness for the ones that reach it.
 | Reset the machine | Down x3, OK, Left x2, OK, OK on the dialog's Confirm | 8 | A sentinel written into screen RAM at `$0400` was gone 537 ms after the final press, with `READY.` back at `$042A` |
 | Pause the machine | Down x3, OK, Left x5, OK | 10 | — |
 | Start the current tune | F1 | 1 | After the fix below; before it, the key did nothing |
+| Type a line on the C64 keyboard | Down x3, OK, Right x3, OK to open Remote Input, then the Keys tab, then the character | 10 | Pressing the sheet's "2" wrote screen code `$32` at offset 241 of the C64's screen RAM |
 
 The arrival criterion is three presses to the first control that reaches the machine, and the S6
 criterion is five for any of them. Reset at eight and Pause at ten are both over. The transport key
 is the one that meets it, and it did not work at all until this branch: see
 `defects/S6-TRANSPORT-SHORTCUT-NEVER-FIRES.md`.
 
-Two of the four controls the scenario names were not measured. "Type a line on the C64 keyboard"
-and "change the volume" need their own ring walks on the Remote Input and Play pages, and the
-session ran out of rig time before them. They are not asserted either way here.
+One of the four controls the scenario names was not measured: "change the volume" needs its own
+ring walk on the Play page, and it is not asserted either way here.
+
+Typing on the C64 costs ten presses and is worth spelling out, because two of them are not
+navigation. The Remote Input sheet opens in **Joystick** mode, so the handset's own letter keys go
+to the joystick and not to the machine — `KEYCODE_A` pressed there changed nothing anywhere in the
+C64's screen RAM. Reaching the keyboard means switching to the **Keys** tab first and then pressing
+the character on the sheet. Once there it does reach the machine: pressing "2" changed screen RAM
+at offset 241 from `$a0` to `$32`.
 
 The probe written for this, `tools/hil/arrival_probe.mjs`, searches for the control rather than
 replaying a path, so its press count is the cost of a search and not the cost of the shortest path:
