@@ -117,11 +117,23 @@ const STATE_EXPR = String.raw`(() => {
     const cs = getComputedStyle(e);
     return cs.visibility !== 'hidden' && cs.display !== 'none' && Number(cs.opacity) > 0.05;
   };
+  // An element with no test id is identified by its position in the DOM, not by where it happens
+  // to be on screen. The discriminator used to be the element's viewport top, which changes when
+  // the page scrolls: the same button was then counted once as reached and again, at a different
+  // offset, as unreachable.
+  const pathOf = (e) => {
+    const parts = [];
+    for (let node = e; node && node !== document.body; node = node.parentElement) {
+      const siblings = node.parentElement ? [...node.parentElement.children] : [];
+      parts.unshift(siblings.indexOf(node));
+    }
+    return parts.join('.');
+  };
   const idOf = (e) => {
     const t = e.getAttribute('data-testid');
     if (t) return '#' + t;
     const txt = (e.innerText || e.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 32);
-    return e.tagName.toLowerCase() + (txt ? ':' + txt : '') + '@' + Math.round(e.getBoundingClientRect().top);
+    return e.tagName.toLowerCase() + (txt ? ':' + txt : '') + '@' + pathOf(e);
   };
   const hitBox = (e) => {
     const label = e.closest('label');
@@ -140,6 +152,14 @@ const STATE_EXPR = String.raw`(() => {
     // A control inside a label is represented by its label; the ring stops on one of them.
     .map((e) => ({ id: idOf(e), tag: e.tagName, box: hitBox(e) }));
 
+  // What the app itself leaves for content: the viewport less the scroll margins the keypad anchor
+  // class reserves for the app bar above and the guidance and tab bars below.
+  const usableHeight = (el) => {
+    const cs = getComputedStyle(el);
+    const top = parseFloat(cs.scrollMarginTop) || 0;
+    const bottom = parseFloat(cs.scrollMarginBottom) || 0;
+    return innerHeight - top - bottom;
+  };
   const sel = document.querySelector('[data-key-selected="true"]');
   let current = null;
   if (sel) {
@@ -153,14 +173,17 @@ const STATE_EXPR = String.raw`(() => {
       rect: { top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right) },
       vh: innerHeight,
       editable: sel.matches('input,textarea,[contenteditable="true"]'),
-      // A card selected as one ring stop can be taller than the 218 px content area; the user then
-      // descends into it. What must be true is that its START is on screen and it is not off to one
-      // side — requiring the whole box would report every long card as a fault.
+      // A card selected as one ring stop can be taller than the area left between the app bar and
+      // the tab bar; the user then descends into it. What must be true is that its START is on
+      // screen and it is not off to one side — requiring the whole box would report every long
+      // card as a fault. The area is the app's own: the selected element carries the keypad scroll
+      // anchor class, whose resolved scroll margins are exactly the chrome it reserves. Comparing
+      // against the raw viewport instead reported five cards on Home that cannot fit at all.
       inView:
         r.top >= -1 &&
         r.left >= -1 &&
         r.right <= innerWidth + 1 &&
-        (r.bottom <= innerHeight + 1 || r.height > innerHeight - 1),
+        (r.bottom <= innerHeight + 1 || r.height > usableHeight(sel) - 1),
       isGroup: [...sel.querySelectorAll(INTERACTIVE)].filter(visible).filter((e) => !e.disabled).length > 0,
       descendants: [...sel.querySelectorAll(INTERACTIVE)]
         .filter(visible)
@@ -235,25 +258,32 @@ async function walkScope(evaluate, { maxSteps = MAX_STEPS, settleMs = 260 } = {}
  * Navigation here is "OK to go in, Back to go out": the top-level ring traverses cards, and a
  * card's own controls only join the ring once it has been descended into. A sweep that never
  * pressed OK would report every one of those controls as unreachable.
+ *
+ * This makes ONE forward pass over the ring and descends into each card as it arrives at it. An
+ * earlier version searched for each card from wherever the ring had stopped, pressing Down up to
+ * MAX_STEPS times per card with a settle and a CDP read on every press. That re-walked the whole
+ * ring once per card — quadratic in the number of cards, and on Home it visibly scrolled the same
+ * Quick Actions grid over and over for tens of minutes without finishing a single route.
  */
 async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
   const reached = new Set();
-  for (const stop of stops) {
-    if (!stop.isGroup || !stop.id) continue;
-    // Re-select this card: the ring has moved on since it was recorded.
-    let landed = false;
-    for (let attempt = 0; attempt < MAX_STEPS && !landed; attempt += 1) {
-      const state = await evaluate(STATE_EXPR);
-      if (state.current?.id === stop.id) {
-        landed = true;
-        break;
-      }
+  const pending = new Set(stops.filter((stop) => stop.isGroup && stop.id).map((stop) => stop.id));
+  if (pending.size === 0) return reached;
+
+  // One lap plus a margin: the ring may have moved on since walkScope recorded it, and a descend
+  // and Back can land a stop away from where it started.
+  const budget = stops.length * 2 + 8;
+  for (let step = 0; step < budget && pending.size > 0; step += 1) {
+    const state = await evaluate(STATE_EXPR);
+    const id = state.current?.id;
+    if (!id || !pending.has(id)) {
       key(KEY.DOWN);
       await sleep(settleMs);
+      continue;
     }
-    if (!landed) continue;
+    pending.delete(id);
 
-    const before = await evaluate(STATE_EXPR);
+    const before = state;
     key(KEY.CENTER);
     await sleep(settleMs + 240);
     const inside = await evaluate(STATE_EXPR);
@@ -267,13 +297,24 @@ async function walkDescendants(evaluate, stops, { settleMs = 260 } = {}) {
       await sleep(settleMs + 200);
       continue;
     }
-    for (let step = 0; step < 40; step += 1) {
-      const state = await evaluate(STATE_EXPR);
-      if (state.current?.id) reached.add(state.current.id);
+    // Per card, so a child this sweep already saw under a different card does not end the descent
+    // before it has started.
+    const seenHere = new Set();
+    for (let child = 0; child < 40; child += 1) {
+      const current = await evaluate(STATE_EXPR);
+      if (current.current?.id) {
+        reached.add(current.current.id);
+        seenHere.add(current.current.id);
+        // A row whose only interactive child is its own field or button is activated by OK rather
+        // than descended into, so the ring never stops on that child. It is reached, through its
+        // row. `grade` applies the same rule to the top-level stops; without it here, every field
+        // in Settings' Connection card and every select in Config read as unreachable.
+        if (current.current.descendants?.length === 1) reached.add(current.current.descendants[0]);
+      }
       key(KEY.DOWN);
       await sleep(settleMs);
       const next = await evaluate(STATE_EXPR);
-      if (!next.current?.id || reached.has(next.current.id)) break;
+      if (!next.current?.id || seenHere.has(next.current.id)) break;
     }
     key(KEY.BACK);
     await sleep(settleMs + 200);

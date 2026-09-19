@@ -15,6 +15,7 @@ import {
   subscribeConnection,
   type ConnectionState,
 } from "@/lib/connection/connectionManager";
+import { beginConnectionRevalidation, endConnectionRevalidation } from "@/lib/connection/connectionRevalidation";
 import {
   hasLiveAvMirror,
   readAvMirrorRetargetState,
@@ -160,6 +161,26 @@ const handleNetworkEdge = (edge: "online" | "offline") => {
   void reconnectWhenNetworkReturns();
 };
 
+/**
+ * Check a connection the app has come back to, rather than carrying on asserting it. Nothing
+ * probes the device while the state reads REAL_CONNECTED — the background schedule stops there and
+ * only a failing request corrects it — so a phone that spent an hour in a pocket came back
+ * claiming the machine was reachable, and stayed wrong until the user pressed something that failed.
+ */
+export const revalidateConnectionOnResume = async () => {
+  if (getConnectionSnapshot().state !== "REAL_CONNECTED") return;
+  if (!beginConnectionRevalidation()) return;
+  try {
+    // No separate branch for a radio that is already off: reaching here at all means the state
+    // still reads connected, which the network edge would have cleared, and confirmDeviceUnreachable
+    // asks that question itself before it probes anything.
+    if (await probeOnce()) return;
+    await confirmDeviceUnreachable();
+  } finally {
+    endConnectionRevalidation();
+  }
+};
+
 // A hidden WebView may not run the listener when the network changes, so the answer is read again on return.
 const handleVisibilityChange = () => {
   if (document.visibilityState !== "visible") return;
@@ -167,11 +188,14 @@ const handleVisibilityChange = () => {
     const { state } = getConnectionSnapshot();
     if (!isNetworkKnownOffline() && (state === "OFFLINE_NO_DEMO" || state === "DEMO_ACTIVE")) {
       void reconnectWhenNetworkReturns();
+      return;
     }
+    if (state === "REAL_CONNECTED") void revalidateConnectionOnResume();
   });
 };
 
 export const installNetworkTransitions = () => {
+  endConnectionRevalidation();
   lastConnectionState = getConnectionSnapshot().state;
   const unsubscribeEdges = subscribeNetworkEdges(handleNetworkEdge);
   const unsubscribeConnection = subscribeConnection(resumeMirrorAfterOutage);

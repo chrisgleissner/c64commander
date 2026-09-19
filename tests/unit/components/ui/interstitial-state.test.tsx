@@ -112,81 +112,13 @@ describe("interstitial-state", () => {
     expect(appListenerState.addListener).not.toHaveBeenCalled();
   });
 
-  it("dismisses the topmost interstitial on Android Back", async () => {
-    function DialogHarness() {
-      const [open, setOpen] = React.useState(true);
-      return (
-        <InterstitialStateProvider>
-          <DepthProbe />
-          <AppDialog open={open} onOpenChange={setOpen}>
-            <AppDialogContent>
-              <AppDialogHeader>
-                <AppDialogTitle>Confirm reset</AppDialogTitle>
-              </AppDialogHeader>
-              <AppDialogBody>Reset the machine?</AppDialogBody>
-            </AppDialogContent>
-          </AppDialog>
-        </InterstitialStateProvider>
-      );
-    }
-
-    render(<DialogHarness />);
-
-    await waitFor(() => {
-      expect(appListenerState.backButtonListener).not.toBeNull();
-      expect(screen.getByTestId("stack-depth")).toHaveTextContent("1");
-    });
-
-    act(() => {
-      appListenerState.backButtonListener?.();
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByText("Confirm reset")).not.toBeInTheDocument();
-      expect(screen.getByTestId("stack-depth")).toHaveTextContent("0");
-    });
-  });
-
-  it("keeps one Android Back interceptor while the active interstitial stack changes", async () => {
-    function StackHarness() {
-      const [showSheet, setShowSheet] = React.useState(false);
-      return (
-        <InterstitialStateProvider>
-          <OverlayProbe active kind="modal" label="dialog" />
-          <OverlayProbe active={showSheet} kind="sheet" label="sheet" />
-          <button type="button" onClick={() => setShowSheet(true)}>
-            Show sheet
-          </button>
-        </InterstitialStateProvider>
-      );
-    }
-
-    render(<StackHarness />);
-
-    await waitFor(() => {
-      expect(appListenerState.addListener).toHaveBeenCalledTimes(1);
-    });
-
-    await act(async () => {
-      screen.getByRole("button", { name: "Show sheet" }).click();
-    });
-
-    expect(screen.getByTestId("sheet")).toHaveAttribute("data-depth", "2");
-    expect(appListenerState.addListener).toHaveBeenCalledTimes(1);
-
-    act(() => {
-      appListenerState.backButtonListener?.();
-    });
-
-    expect(addLogMock).toHaveBeenCalledWith("debug", "Android Back dismissed topmost interstitial", {
-      depth: 2,
-      topKind: "sheet",
-    });
-  });
-
-  it("logs a warning when Android Back listener registration fails", async () => {
-    appListenerState.addListener.mockRejectedValueOnce(new Error("listener unavailable"));
-
+  /*
+   * The three Android-Back cases that stood here moved to
+   * tests/unit/lib/input/deviceBackButton.test.ts. This provider no longer registers a listener of
+   * its own: Back is turned into an Escape keydown once, for the whole app, because on an ordinary
+   * page there was no listener at all and the key did nothing.
+   */
+  it("registers no Android Back listener of its own", async () => {
     render(
       <InterstitialStateProvider>
         <OverlayProbe active kind="modal" label="dialog" />
@@ -194,9 +126,8 @@ describe("interstitial-state", () => {
     );
 
     await waitFor(() => {
-      expect(addLogMock).toHaveBeenCalledWith("warn", "Failed to register Android Back interstitial handler", {
-        error: "listener unavailable",
-      });
+      expect(screen.getByTestId("dialog")).toHaveAttribute("data-depth", "1");
     });
+    expect(appListenerState.addListener).not.toHaveBeenCalled();
   });
 });

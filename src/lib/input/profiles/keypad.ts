@@ -88,8 +88,14 @@ const keypadBindings: KeyBinding[] = [
    * key that already works. The Key Explorer under Diagnostics exists to read the real code off
    * hardware; once someone has, `{ code: "<that>", action: "openSearch" }` here is the whole change.
    */
-  { code: "F1", action: "mediaPlayPause" },
-  { code: "F3", action: "mediaNext" },
+  /*
+   * Matched on `key`, not `code`. Measured on the rig: F1, F2 and F3 reach the WebView as
+   * `{key:"F1", code:"", keyCode:112}` and so on, so a `code` discriminator never matched and
+   * neither shortcut fired on the handset. `key` carries the same name and is populated, so this
+   * is what the device sends rather than a guess at what it might send.
+   */
+  { key: "F1", action: "mediaPlayPause" },
+  { key: "F3", action: "mediaNext" },
 ];
 
 export const keypadProfile = mergeKeymaps(defaultKeyboardProfile, {

@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useC64Connection } from "@/hooks/useC64Connection";
 import { useSavedDevices } from "@/hooks/useSavedDevices";
 import { getTraceEvents } from "@/lib/tracing/traceSession";
@@ -14,6 +14,7 @@ import type { TraceEvent } from "@/lib/tracing/types";
 import { getConfiguredHost } from "@/lib/connection/hostEdit";
 import { useConnectionState } from "@/hooks/useConnectionState";
 import { AUTH_REQUIRED_PROBE_ERROR } from "@/lib/connection/connectionManager";
+import { isRevalidatingConnection, subscribeConnectionRevalidation } from "@/lib/connection/connectionRevalidation";
 import { useHealthCheckState } from "@/lib/diagnostics/healthCheckState";
 import { stripPortFromDeviceHost } from "@/lib/c64api/hostConfig";
 import type { HealthCheckProbeOutcome } from "@/lib/diagnostics/healthHistory";
@@ -176,6 +177,13 @@ const PROBLEM_WINDOW_RECHECK_MS = 10_000;
 
 export function useHealthState(): OverallHealthState {
   const connectionSnapshot = useConnectionState();
+  // The same getter serves the server snapshot: the flag starts false and only a resume probe sets
+  // it, so there is nothing a second reader could say differently.
+  const revalidatingConnection = useSyncExternalStore(
+    subscribeConnectionRevalidation,
+    isRevalidatingConnection,
+    isRevalidatingConnection,
+  );
   const healthCheckState = useHealthCheckState();
   const savedDevices = useSavedDevices();
   const {
@@ -194,6 +202,7 @@ export function useHealthState(): OverallHealthState {
     const connectivity = deriveConnectivityState(
       connectionSnapshot.state,
       connectionSnapshot.lastProbeError === AUTH_REQUIRED_PROBE_ERROR,
+      revalidatingConnection,
     );
     const host = getConfiguredHost();
     const hostScopedTraceEvents = filterTraceEventsForConfiguredHost(traceEvents, host);

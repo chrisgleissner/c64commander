@@ -254,6 +254,29 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     expect(document.activeElement).toBe(note);
   });
 
+  /*
+   * Escape and the device's Back key have to be able to leave a field, and where they leave it to
+   * matters: a bare blur put DOM focus on the body, which is nowhere for a keypad user. When the
+   * ring has a stop it goes back to it; with nothing selected there is nothing to go back to, and
+   * blurring is all that is left.
+   */
+  it("blurs a field on Escape when the ring has no stop to go back to", () => {
+    const LoneField = () => <input aria-label="host" />;
+    const { getByLabelText } = render(
+      <FocusNavigationProvider>
+        <LoneField />
+      </FocusNavigationProvider>,
+    );
+
+    const input = getByLabelText("host") as HTMLInputElement;
+    input.focus();
+    expect(document.activeElement).toBe(input);
+
+    fireEvent.keyDown(input, { key: "Escape", code: "", keyCode: 0 });
+
+    expect(document.activeElement).not.toBe(input);
+  });
+
   it("prevents default only for actions it consumes", () => {
     const Custom = () => {
       const ref = useFocusItem<HTMLButtonElement>({ id: "x", order: 10 });
@@ -377,6 +400,28 @@ describe("FocusNavigationProvider + useFocusItem", () => {
     // At the top level, Down moves to the card's sibling.
     fireEvent.keyDown(document.body, { code: "ArrowDown" });
     expect(document.activeElement).toBe(button("After"));
+  });
+
+  /*
+   * The device's own Back key carries no key code, so it matches none of the keymap's back
+   * bindings and used to fall through the "no binding" return without ascending. On the handset
+   * that meant a user who pressed OK into a card could not get out of it again: the rest of the
+   * page stayed out of reach until they left the route with a digit.
+   */
+  it("climbs out of a card on the device's own Back key, which matches no keymap binding", () => {
+    render(
+      <FocusNavigationProvider>
+        <NestedToolbar />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "Enter" });
+    expect(document.activeElement).toBe(button("Primary"));
+
+    fireEvent.keyDown(document.body, { key: "Escape", code: "", keyCode: 0 });
+
+    expect(document.activeElement).toBe(button("Card"));
+    expect(button("Card")).toHaveAttribute(SELECTED, "true");
   });
 
   it("exposes the controller via useFocusNavigation (null outside a provider)", () => {
@@ -608,6 +653,45 @@ describe("FocusNavigationProvider global shortcuts", () => {
 
     fireEvent.keyDown(document.body, { key: "#" });
     expect(openDeviceSwitcher).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+   * 8 and 9 exist because the same two actions cost ten and eight presses through Home's Quick
+   * Actions grid from a cold arrival, measured on the handset. The grid is not moving; these are a
+   * shorter way to it. 7 is search and 0 is Game Mode, so these were the digits going spare.
+   */
+  it("fires the machine controls on 8 and 9", () => {
+    const machinePauseResume = vi.fn();
+    const machineReset = vi.fn();
+    render(
+      <FocusNavigationProvider shortcuts={{ machinePauseResume, machineReset }}>
+        <Toolbar onA={vi.fn()} onB={vi.fn()} />
+      </FocusNavigationProvider>,
+    );
+
+    fireEvent.keyDown(document.body, { code: "Digit8" });
+    expect(machinePauseResume).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(document.body, { code: "Digit9" });
+    expect(machineReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the machine keys to T9 while editing a text field", () => {
+    const machinePauseResume = vi.fn();
+    const machineReset = vi.fn();
+    const { getByLabelText } = render(
+      <FocusNavigationProvider shortcuts={{ machinePauseResume, machineReset }}>
+        <input aria-label="host" />
+      </FocusNavigationProvider>,
+    );
+
+    const input = getByLabelText("host") as HTMLInputElement;
+    input.focus();
+    fireEvent.keyDown(input, { code: "Digit8" });
+    fireEvent.keyDown(input, { code: "Digit9" });
+
+    expect(machinePauseResume).not.toHaveBeenCalled();
+    expect(machineReset).not.toHaveBeenCalled();
   });
 
   it("leaves digits/star/hash to T9 while editing a text field (no shortcut hijack)", () => {

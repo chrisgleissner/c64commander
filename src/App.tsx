@@ -36,11 +36,12 @@ import { createTransportShortcut } from "@/lib/input/transportShortcuts";
 import { installNativeMediaButtons } from "@/lib/input/nativeMediaButtons";
 import { installAudioFocusPolicy } from "@/lib/audio/audioFocusPolicy";
 import { KeypadQuickMenu } from "@/components/input/KeypadQuickMenu";
+import { KeypadMachineShortcuts } from "@/components/input/KeypadMachineShortcuts";
 import { SearchKeyListener } from "@/components/search/SearchKeyListener";
 import { SearchOverlayHost } from "@/components/search/SearchOverlayHost";
 import { TourHost } from "@/components/tour/TourHost";
 import { requestDiagnosticsOpen } from "@/lib/diagnostics/diagnosticsOverlay";
-import { requestDeviceSwitcherOpen, requestQuickMenuOpen } from "@/lib/input/keypadCommands";
+import { requestDeviceSwitcherOpen, requestMachineCommand, requestQuickMenuOpen } from "@/lib/input/keypadCommands";
 import { GAME_MODE_HOST_PATHS, startGameMode } from "@/lib/remoteInput/gameModeLaunch";
 import { InterstitialStateProvider } from "@/components/ui/interstitial-state";
 import { createActionContext, getActiveAction } from "@/lib/tracing/actionTrace";
@@ -274,6 +275,8 @@ const KeypadFocusNavigation = ({ children }: { children: React.ReactNode }) => {
       // F1 and F3, built by the shared factory so the test drives this wiring and not a copy.
       mediaPlayPause: createTransportShortcut("playPause", transportShortcutOptions),
       mediaNext: createTransportShortcut("next", transportShortcutOptions),
+      machinePauseResume: () => requestMachineCommand("pauseResume"),
+      machineReset: () => requestMachineCommand("reset"),
       openGameMode: flags.remote_input_enabled
         ? () => {
             // The sheet is mounted by Home and Play, so a request raised anywhere
@@ -319,6 +322,7 @@ const AppRoutes = () => {
             <TraceContextBridge />
             <GlobalDiagnosticsOverlay />
             <KeypadQuickMenu />
+            <KeypadMachineShortcuts />
             {/* The search key has its OWN window listener rather than a keypad shortcut, so it
                 still works when FocusNavigationProvider is mounted disabled — which is what
                 keypad_input_enabled: false does (spec.md D11). */}

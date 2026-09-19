@@ -2,7 +2,9 @@ name: fuzz
 
 on:
   schedule:
-    - cron: "0 3 * * *"
+    # Weekly, not nightly: a 2h fuzz run every night costs more runner time than the findings
+    # justify, and the same seed space is covered by running it once a week.
+    - cron: "0 3 * * 0"
   workflow_dispatch:
     inputs:
       time_budget:
@@ -89,7 +91,10 @@ jobs:
           FUZZ_RUN_MODE: ci
           VITE_FUZZ_MODE: "1"
         run: |
-          node scripts/run-fuzz.mjs --fuzz-seed 4242 --fuzz-time-budget 5m --fuzz-concurrency 1 --fuzz-platform android-phone
+          # 7m, not 5m: the budget now covers the build (~25s here) and a reserve for merging, so
+          # 5m would leave the shards about 200s where they used to get the whole 300s. The step
+          # still finishes far inside the 30 minute job cap.
+          node scripts/run-fuzz.mjs --fuzz-seed 4242 --fuzz-time-budget 7m --fuzz-concurrency 1 --fuzz-platform android-phone
 
       - name: Stop telemetry monitor
         if: always()
@@ -277,6 +282,9 @@ jobs:
           VITE_FUZZ_MODE: "1"
         run: |
           SEED=${{ inputs.seed || github.run_id }}
+          # The budget is a deadline for the whole run: fuzzing, teardown, merge
+          # and report writing. 2h + ~106s setup + ~20s upload leaves ~28min
+          # under the 150min job cap.
           if [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
             TIME_BUDGET="2h"
           else

@@ -68,6 +68,8 @@ import { emitKeyInputDiagnostics } from "@/lib/diagnostics/keyInputDiagnostics";
 import { KeypadGuidanceBar } from "@/components/input/KeypadGuidanceBar";
 import { isEditableTarget, OPEN_OVERLAY_ANCESTOR_SELECTOR } from "@/lib/input/eventTargets";
 import { isDeviceBackKey } from "@/lib/input/keyEvent";
+import { installDeviceBackButton } from "@/lib/input/deviceBackButton";
+import { resolveRingScrollAlignment } from "@/lib/input/ringScroll";
 import { TAB_ROUTES } from "@/lib/navigation/tabRoutes";
 
 /** DOM attribute marking the current focus-ring item while in key-navigation modality. */
@@ -192,7 +194,17 @@ const focusRingElement = (element: HTMLElement | null): void => {
     // element the ring left rather than the one it is on.
     document.activeElement.blur();
   }
-  element.scrollIntoView({ block: "nearest", inline: "nearest" });
+  const rect = element.getBoundingClientRect();
+  const style = getComputedStyle(element);
+  const block = resolveRingScrollAlignment({
+    top: rect.top,
+    bottom: rect.bottom,
+    height: rect.height,
+    viewportHeight: window.innerHeight,
+    marginTop: parseFloat(style.scrollMarginTop) || 0,
+    marginBottom: parseFloat(style.scrollMarginBottom) || 0,
+  });
+  element.scrollIntoView({ block, inline: "nearest" });
 };
 
 /**
@@ -217,6 +229,10 @@ export interface KeypadShortcutHandlers {
   readonly mediaPlayPause?: () => void;
   /** Next tune (F3). Same latch. */
   readonly mediaNext?: () => void;
+  /** Pause or resume the machine (8) — ten presses away through Home's grid. */
+  readonly machinePauseResume?: () => void;
+  /** Reset the machine (9), which still asks before it runs. */
+  readonly machineReset?: () => void;
 }
 
 export interface FocusNavigationProviderProps {
@@ -427,6 +443,11 @@ export const FocusNavigationProvider = ({
     }
   }, [controller]);
 
+  // Android's Back key reaches Capacitor, not the WebView; this turns it into the keydown the
+  // handler below already knows how to read. Its own effect, because registering with the native
+  // bridge is asynchronous and the handler's effect re-runs whenever the keymap or controller does.
+  useEffect(() => (enabled ? installDeviceBackButton() : undefined), [enabled]);
+
   useEffect(() => {
     if (!enabled) {
       // Flag turned off: drop any lingering highlight / scope outline and reset
@@ -444,7 +465,11 @@ export const FocusNavigationProvider = ({
     }
     const handleKeyDown = (event: KeyboardEvent) => {
       const normalized = normalizeKeyEvent(event, keymap);
-      const { action } = normalized;
+      // Android's hardware Back carries no key code, so it matches no keymap binding and used to
+      // fall through the `action === null` return below without ascending. It means what Escape
+      // means here: dismiss, disengage, come back out of the card.
+      const isDeviceBackButton = isDeviceBackKey(event);
+      const action = normalized.action ?? (isDeviceBackButton ? "escape" : null);
       // Before any branch below reads the ring, so the first key navigates.
       if (action !== null) startEngine();
       // Destructive toasts persist until dismissed (ERROR_POLICY §4) and render in their own
@@ -452,7 +477,6 @@ export const FocusNavigationProvider = ({
       // an error toast covered the screen with no key able to dismiss it. Reuse the toast's own
       // tap handler (dismiss + open Diagnostics), but let an open dialog win. The Pixel 4 hardware
       // Back key arrives as {key:"Escape",code:"",keyCode:0}, matching no declared "back" binding.
-      const isDeviceBackButton = isDeviceBackKey(event);
       if ((action === "back" || isDeviceBackButton) && !document.querySelector(OPEN_OVERLAY_ANCESTOR_SELECTOR)) {
         const toast = document.querySelector<HTMLElement>('[data-testid="app-toast"]');
         if (toast) {
@@ -495,7 +519,12 @@ export const FocusNavigationProvider = ({
         // the reader means "close this". Consuming it there left the dialog open with nothing but
         // a blurred field to show for the press.
         if (isWithinOpenOverlay(event.target)) return;
-        if (event.target instanceof HTMLElement) event.target.blur();
+        // Back out of the field to the ring stop that owns it, rather than to nothing. A bare blur
+        // left DOM focus on the body, which is where a keypad user has no row to carry on from;
+        // the field's own row is what they came from and what Down should move on from.
+        const ringElement = engineRef.current?.elementForId(controller.focus.current()?.id ?? "") ?? null;
+        if (ringElement && ringElement !== event.target) focusRingElement(ringElement);
+        else if (event.target instanceof HTMLElement) event.target.blur();
         event.preventDefault();
         return;
       }
@@ -562,6 +591,21 @@ export const FocusNavigationProvider = ({
       // comes out" rule; a key that did both would be ambiguous the moment the
       // sheet has focus — and inside the sheet `0` is a joystick direction, which
       // the open-overlay exclusion above already keeps this handler away from.
+      // 8 and 9: the two machine controls this user opens the app for. They sit in Home's Quick
+      // Actions grid, which is where they read best and is not moving; these are a shorter way to
+      // the same actions. 7 is search and 0 is Game Mode, so these were the digits going spare.
+      if (action === "digit8" && shortcuts.machinePauseResume) {
+        shortcuts.machinePauseResume();
+        setInputModality("key-navigation");
+        event.preventDefault();
+        return;
+      }
+      if (action === "digit9" && shortcuts.machineReset) {
+        shortcuts.machineReset();
+        setInputModality("key-navigation");
+        event.preventDefault();
+        return;
+      }
       if (action === "digit0" && shortcuts.openGameMode) {
         shortcuts.openGameMode();
         setInputModality("key-navigation");

@@ -235,10 +235,17 @@ export const selectPreferredBadgeHealth = (
 // recorded as a "Password required" probe error) from a genuinely unreachable
 // one: both settle to OFFLINE_NO_DEMO, but only the former should prompt for a
 // password rather than a reconnect. See HARD10-007 / HARD9-001.
-export const deriveConnectivityState = (connectionState: string, authRequired = false): ConnectivityState => {
+// `revalidating` is the app re-checking a connection it has just come back to. Until that probe
+// answers, the only evidence for "Online" is however long ago the app last spoke to the device, so
+// the badge says it is checking instead of asserting a connection nothing has confirmed.
+export const deriveConnectivityState = (
+  connectionState: string,
+  authRequired = false,
+  revalidating = false,
+): ConnectivityState => {
   switch (connectionState) {
     case "REAL_CONNECTED":
-      return "Online";
+      return revalidating ? "Checking" : "Online";
     case "DEMO_ACTIVE":
       return "Demo";
     case "OFFLINE_NO_DEMO":
