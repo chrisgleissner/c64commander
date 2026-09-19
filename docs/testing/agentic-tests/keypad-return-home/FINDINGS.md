@@ -85,14 +85,19 @@ the witness for the ones that reach it.
 | Pause the machine | Down x3, OK, Left x5, OK | 10 | — |
 | Start the current tune | F1 | 1 | After the fix below; before it, the key did nothing |
 | Type a line on the C64 keyboard | Down x3, OK, Right x3, OK to open Remote Input, then the Keys tab, then the character | 10 | Pressing the sheet's "2" wrote screen code `$32` at offset 241 of the C64's screen RAM |
+| Change the volume | Digit 2, Down x8, OK, Down x6, then Left | 17 | The slider moved 24 to 21 and its label `0 dB` to `-3 dB` |
 
 The arrival criterion is three presses to the first control that reaches the machine, and the S6
 criterion is five for any of them. Reset at eight and Pause at ten are both over. The transport key
 is the one that meets it, and it did not work at all until this branch: see
 `defects/S6-TRANSPORT-SHORTCUT-NEVER-FIRES.md`.
 
-One of the four controls the scenario names was not measured: "change the volume" needs its own
-ring walk on the Play page, and it is not asserted either way here.
+All four controls the scenario names are now measured, and every one of them is over the five-press
+bar: one at 1, then 8, 10 and 17. The transport key is the only one that meets it, and it did not
+work at all until this branch.
+
+The volume measured here is the app's own playback volume, which is what the Play page carries. The
+Ultimate's master volume is a Config item and was not walked; it is further away, not nearer.
 
 Typing on the C64 costs ten presses and is worth spelling out, because two of them are not
 navigation. The Remote Input sheet opens in **Joystick** mode, so the handset's own letter keys go
