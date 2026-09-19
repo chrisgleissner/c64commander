@@ -117,11 +117,23 @@ const STATE_EXPR = String.raw`(() => {
     const cs = getComputedStyle(e);
     return cs.visibility !== 'hidden' && cs.display !== 'none' && Number(cs.opacity) > 0.05;
   };
+  // An element with no test id is identified by its position in the DOM, not by where it happens
+  // to be on screen. The discriminator used to be the element's viewport top, which changes when
+  // the page scrolls: the same button was then counted once as reached and again, at a different
+  // offset, as unreachable.
+  const pathOf = (e) => {
+    const parts = [];
+    for (let node = e; node && node !== document.body; node = node.parentElement) {
+      const siblings = node.parentElement ? [...node.parentElement.children] : [];
+      parts.unshift(siblings.indexOf(node));
+    }
+    return parts.join('.');
+  };
   const idOf = (e) => {
     const t = e.getAttribute('data-testid');
     if (t) return '#' + t;
     const txt = (e.innerText || e.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 32);
-    return e.tagName.toLowerCase() + (txt ? ':' + txt : '') + '@' + Math.round(e.getBoundingClientRect().top);
+    return e.tagName.toLowerCase() + (txt ? ':' + txt : '') + '@' + pathOf(e);
   };
   const hitBox = (e) => {
     const label = e.closest('label');
@@ -140,6 +152,14 @@ const STATE_EXPR = String.raw`(() => {
     // A control inside a label is represented by its label; the ring stops on one of them.
     .map((e) => ({ id: idOf(e), tag: e.tagName, box: hitBox(e) }));
 
+  // What the app itself leaves for content: the viewport less the scroll margins the keypad anchor
+  // class reserves for the app bar above and the guidance and tab bars below.
+  const usableHeight = (el) => {
+    const cs = getComputedStyle(el);
+    const top = parseFloat(cs.scrollMarginTop) || 0;
+    const bottom = parseFloat(cs.scrollMarginBottom) || 0;
+    return innerHeight - top - bottom;
+  };
   const sel = document.querySelector('[data-key-selected="true"]');
   let current = null;
   if (sel) {
@@ -153,14 +173,17 @@ const STATE_EXPR = String.raw`(() => {
       rect: { top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right) },
       vh: innerHeight,
       editable: sel.matches('input,textarea,[contenteditable="true"]'),
-      // A card selected as one ring stop can be taller than the 218 px content area; the user then
-      // descends into it. What must be true is that its START is on screen and it is not off to one
-      // side — requiring the whole box would report every long card as a fault.
+      // A card selected as one ring stop can be taller than the area left between the app bar and
+      // the tab bar; the user then descends into it. What must be true is that its START is on
+      // screen and it is not off to one side — requiring the whole box would report every long
+      // card as a fault. The area is the app's own: the selected element carries the keypad scroll
+      // anchor class, whose resolved scroll margins are exactly the chrome it reserves. Comparing
+      // against the raw viewport instead reported five cards on Home that cannot fit at all.
       inView:
         r.top >= -1 &&
         r.left >= -1 &&
         r.right <= innerWidth + 1 &&
-        (r.bottom <= innerHeight + 1 || r.height > innerHeight - 1),
+        (r.bottom <= innerHeight + 1 || r.height > usableHeight(sel) - 1),
       isGroup: [...sel.querySelectorAll(INTERACTIVE)].filter(visible).filter((e) => !e.disabled).length > 0,
       descendants: [...sel.querySelectorAll(INTERACTIVE)]
         .filter(visible)

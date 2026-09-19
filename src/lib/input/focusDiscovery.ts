@@ -365,13 +365,17 @@ export class FocusDiscoveryEngine {
           : "dom";
         return { element, id, isGroup, source, registration };
       })
-      .filter((node, _index, all) => {
-        if (!node.isGroup) return true;
-        // Keep a group only if it has ≥1 in-scope descendant ring node (else it is
-        // empty chrome). A group element that is itself interactive falls through
-        // to a leaf via the next pass (isGroup recomputed in assemble()).
-        return all.some((other) => other !== node && node.element.contains(other.element));
-      });
+      .map((node, _index, all): RingNode | null => {
+        if (!node.isGroup) return node;
+        if (all.some((other) => other !== node && node.element.contains(other.element))) return node;
+        // A group with no in-scope descendant is either empty chrome, which is not a ring stop, or
+        // a control that happens to carry a section label and has no interactive children of its
+        // own. Dropping both took Home's System info button out of the ring entirely, with no key
+        // able to reach it; the second kind is a leaf.
+        if (isNativelyFocusable(node.element) || node.registration) return { ...node, isGroup: false };
+        return null;
+      })
+      .filter((node): node is RingNode => node !== null);
   }
 
   private assemble(

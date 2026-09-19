@@ -145,6 +145,34 @@ describe("FocusDiscoveryEngine", () => {
     engine.stop();
   });
 
+  /*
+   * Home's System info is a <button> that carries data-section-label and has no interactive
+   * children. It was discovered as a group, found to be empty, and dropped from the ring, so no
+   * key could reach it: the ring went from the Config card straight to the tab bar.
+   */
+  it("keeps a labelled section that is itself a control and has no children", () => {
+    mount(`
+      <section id="streams" data-section-label="Streams">
+        <button id="edit">edit</button>
+      </section>
+      <button id="system-info" data-section-label="System info">App 1.0.5</button>
+      <div id="decoration" data-section-label="Decoration"></div>
+    `);
+    const { controller, engine } = makeEngine();
+    engine.start();
+
+    const ids = controller.list().map((item) => engine.elementForId(item.id)?.id);
+    expect(ids).toContain("system-info");
+    // Still a leaf, not a card to descend into, and the decorative container is still dropped.
+    expect(
+      controller.hasEnabledChildren(
+        controller.list().find((item) => engine.elementForId(item.id)?.id === "system-info")!.id,
+      ),
+    ).toBe(false);
+    expect(ids).not.toContain("decoration");
+    engine.stop();
+  });
+
   it("promotes only the innermost labelled section when sections nest (no needless descend)", () => {
     // Mirrors Home: an outer "Quick Config" wrapper around inner cards. The outer
     // wrapper must NOT become a focus stop that swallows the whole section and
