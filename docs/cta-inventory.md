@@ -943,10 +943,18 @@ the Menu key (when the focused item has no context menu) or by the app bar's
 
 What it holds depends on how it was opened. From the keypad it lists jump-to-page
 (×6), and each entry names the key that reaches it directly — `1`–`6` for the
-pages, `0` for Game Mode, `✱` for Diagnostics, `#` for Switch device — which puts
-those shortcuts somewhere they can be discovered without reading the manual. From
+pages, `8` for Pause / Resume machine, `9` for Reset machine, `0` for Game Mode,
+`✱` for Diagnostics, `#` for Switch device — which puts those shortcuts somewhere
+they can be discovered without reading the manual. From
 the app-bar button the page jumps are omitted: a reader who tapped it is holding
 a touchscreen and has the TabBar in front of them.
+
+The two machine entries (`keypad-quick-menu-machine-pause`,
+`keypad-quick-menu-machine-reset`) are keypad-only, and are listed here rather
+than moved out of Home's Quick Actions grid: the grid is where they read best on
+screen, and it was ten and eight presses from a cold arrival. They raise the same
+requests the `8` and `9` keys do, so both paths run one implementation — the same
+SID-mixer handling before a pause, and the same confirmation before a reset.
 
 Always present: Game Mode (flag `remote_input_enabled`), Diagnostics, Switch
 device (when >1 saved device), and — on a page that has collapsible cards —
@@ -957,6 +965,7 @@ would do nothing is disabled) and
 under each card title).
 
 Per-entry testids `keypad-quick-menu-tab-<label>`, `keypad-quick-menu-game-mode`,
+`keypad-quick-menu-machine-pause`, `keypad-quick-menu-machine-reset`,
 `keypad-quick-menu-diagnostics`, `keypad-quick-menu-switch-device`,
 `keypad-quick-menu-sections-expand`, `keypad-quick-menu-sections-collapse`,
 `keypad-quick-menu-section-descriptions`.
